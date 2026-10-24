@@ -69,6 +69,14 @@ class ManagerDeploymentTest(unittest.TestCase):
         )
         self.assertIn("MERGERON_INSTALL_ENABLED=false", self.development_env)
 
+    def test_dockerman_inherits_the_images_exec_healthcheck_without_a_shell(self) -> None:
+        root = ET.parse(
+            ROOT / "deployment/docker-man/my-mergeron-manager.xml"
+        ).getroot()
+        # Docker CLI --health-cmd creates CMD-SHELL, but distroless has no /bin/sh.
+        self.assertNotIn("--health-", root.findtext("ExtraParams"))
+        self.assertIn('CMD ["/nodejs/bin/node", "src/healthcheck.mjs"]', self.dockerfile)
+
     def test_workflow_builds_and_promotes_the_manager_by_digest(self) -> None:
         self.assertIn("manager-build:", self.workflow)
         self.assertIn("file: ./Dockerfile.manager", self.workflow)
