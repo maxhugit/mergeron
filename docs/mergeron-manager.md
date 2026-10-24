@@ -96,10 +96,22 @@ reste `false`. Les fichiers de configuration nginx et Squid et les secrets
 internes ne sont créés que s'ils sont absents. Si les deux copies du jeton
 interne existent avec des valeurs différentes, l'installation est bloquée.
 
-Le réseau externe `net_standard` doit préexister. Le Manager crée uniquement
+Le réseau externe choisi par `MERGERON_PROXY_NETWORK` (`mergeron-proxy` par
+défaut) doit préexister. Pour une installation historique, renseigner son nom
+actuel avant de mettre à jour le Manager (par exemple `net_standard`) ; il
+n’est jamais renommé automatiquement. Le Manager crée uniquement
 les trois réseaux appartenant à la pile : `isolated`, `external` et `admin`.
 Les images absentes sont téléchargées explicitement dans le plan avant la
 création des conteneurs.
+
+Les valeurs génériques sont `/srv/<préfixe>/state` pour les données et son
+sous-dossier `appdata` pour les dossiers accessibles aux agents. Les XML Unraid
+proposent `/mnt/user/appdata` et permettent de choisir d’autres montages.
+`MERGERON_APPDATA_ROOT` remplace le nom spécifique
+`MERGERON_UNRAID_APPDATA_ROOT`, conservé comme alias de compatibilité.
+`MERGERON_AUTH_MODE=authentik|native` choisit le modèle ingress uniquement à sa
+création. Voir [l’installation portable](installation-portable.md) pour les
+prérequis d’authentification native et les proxys alternatifs.
 
 ## Adoption d'une installation existante
 

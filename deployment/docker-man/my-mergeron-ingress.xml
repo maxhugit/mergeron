@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/maxhugit/mergeron/issues</Support>
   <Project>https://github.com/maxhugit/mergeron</Project>
-  <Overview>Passerelle Nginx entre Traefik/Authentik et Mergeron. Elle injecte le jeton backend sans l'exposer au navigateur.</Overview>
+  <Overview>Passerelle Nginx entre votre reverse proxy et Mergeron. Modèle manuel historique ; préférer la création par le Manager pour une nouvelle installation.</Overview>
   <Category>Network:Proxy</Category>
   <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/maxhugit/mergeron/main/deployment/docker-man/my-mergeron-ingress.xml</TemplateURL>
@@ -19,8 +19,8 @@
   <DateInstalled/>
   <DonateText/>
   <DonateLink/>
-  <Requires>Le réconciliateur réseau doit être installé. Les réseaux mergeron-isolated et net_standard ainsi que mergeron-ui doivent être présents.</Requires>
-  <Config Name="Configuration Nginx" Target="/etc/nginx/templates-secure/nginx.conf.template" Default="/mnt/pool/appdata/mergeron/config/nginx.conf.template" Mode="ro" Description="Routage, Authentik, WebSocket et OnlyOffice." Type="Path" Display="always" Required="true" Mask="false">/mnt/pool/appdata/mergeron/config/nginx.conf.template</Config>
-  <Config Name="Jeton backend Nginx" Target="/run/secrets/backend_token" Default="/mnt/pool/appdata/mergeron/state/backend-token-nginx.txt" Mode="ro" Description="Copie du secret partagé avec le backend." Type="Path" Display="always" Required="true" Mask="true">/mnt/pool/appdata/mergeron/state/backend-token-nginx.txt</Config>
-  <Config Name="Script de démarrage" Target="/opt/codex/start-ingress.sh" Default="/mnt/pool/appdata/mergeron/config/start-ingress.sh" Mode="ro" Description="Génère la configuration Nginx avec le jeton interne." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/pool/appdata/mergeron/config/start-ingress.sh</Config>
+  <Requires>Le réconciliateur réseau doit être installé. Les réseaux mergeron-isolated et mergeron-proxy ainsi que mergeron-ui doivent être présents.</Requires>
+  <Config Name="Configuration Nginx" Target="/etc/nginx/templates-secure/nginx.conf.template" Default="/mnt/user/appdata/mergeron/config/nginx.conf.template" Mode="ro" Description="Routage, Authentik, WebSocket et OnlyOffice." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mergeron/config/nginx.conf.template</Config>
+  <Config Name="Jeton backend Nginx" Target="/run/secrets/backend_token" Default="/mnt/user/appdata/mergeron/state/backend-token-nginx.txt" Mode="ro" Description="Copie du secret partagé avec le backend." Type="Path" Display="always" Required="true" Mask="true">/mnt/user/appdata/mergeron/state/backend-token-nginx.txt</Config>
+  <Config Name="Script de démarrage" Target="/opt/codex/start-ingress.sh" Default="/mnt/user/appdata/mergeron/config/start-ingress.sh" Mode="ro" Description="Génère la configuration Nginx avec le jeton interne." Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/mergeron/config/start-ingress.sh</Config>
 </Container>

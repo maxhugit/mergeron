@@ -248,6 +248,9 @@ jobs:
       - name: Verify corrected OpenSSH sources and retain raw scan findings
         run: python3 scripts/audit-openssh-backport.py trivy-quality-results.raw.json ssh-client-evidence.json
 
+      - name: Validate both ingress authentication templates
+        run: sh scripts/smoke-test-ingress.sh
+
       - name: Build the minimal Manager image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:

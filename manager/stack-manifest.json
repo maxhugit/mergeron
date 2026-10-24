@@ -13,7 +13,7 @@
     },
     {
       "id": "proxy",
-      "name": "net_standard",
+      "name": "mergeron-proxy",
       "external": true
     }
   ],
@@ -45,7 +45,7 @@
       "canonicalName": "mergeron-ingress",
       "legacyNames": ["codex-web-ingress"],
       "allowedImageRepositories": ["nginx"],
-      "requiredNetworks": ["mergeron-isolated", "net_standard"],
+      "requiredNetworks": ["mergeron-isolated", "mergeron-proxy"],
       "protectedMounts": []
     },
     {

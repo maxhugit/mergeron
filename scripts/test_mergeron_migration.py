@@ -35,7 +35,7 @@ exit 1
 
 
 class MigrationTests(unittest.TestCase):
-    def reconcile(self, containers, attached=False, aliases="missing"):
+    def reconcile(self, containers, attached=False, aliases="missing", proxy="mergeron-proxy"):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             docker = path / "docker"
@@ -46,7 +46,8 @@ class MigrationTests(unittest.TestCase):
                 ["sh", str(ROOT / "deployment/docker-man/reconcile-networks.sh"), "once"],
                 env={**os.environ, "PATH": f"{directory}:{os.environ['PATH']}",
                      "CONTAINERS": ",".join(containers), "CALLS": str(calls),
-                     "ATTACHED": "yes" if attached else "no", "ALIASES": aliases},
+                     "ATTACHED": "yes" if attached else "no", "ALIASES": aliases,
+                     "MERGERON_PROXY_NETWORK": proxy},
                 capture_output=True, text=True, check=True,
             )
             return calls.read_text().splitlines() if calls.exists() else [], result.stdout
@@ -55,8 +56,13 @@ class MigrationTests(unittest.TestCase):
         calls, _ = self.reconcile(CONTAINERS)
         self.assertEqual(len(calls), 6)
         self.assertIn("network connect --alias mergeron --alias mergeron-ui mergeron-admin mergeron-ui", calls)
-        self.assertIn("network connect --alias mergeron-ingress net_standard mergeron-ingress", calls)
+        self.assertIn("network connect --alias mergeron-ingress mergeron-proxy mergeron-ingress", calls)
         self.assertIn("network connect --alias mergeron-squid mergeron-external mergeron-squid", calls)
+
+    def test_legacy_external_network_is_explicitly_configurable(self):
+        calls, _ = self.reconcile(CONTAINERS, proxy="net_standard")
+        self.assertIn("network connect --alias mergeron-ingress net_standard mergeron-ingress", calls)
+        self.assertNotIn("network connect --alias mergeron-ingress mergeron-proxy mergeron-ingress", calls)
 
     def test_mixed_names_and_idempotent_connected_networks(self):
         calls, _ = self.reconcile(CONTAINERS)
@@ -67,8 +73,8 @@ class MigrationTests(unittest.TestCase):
     def test_attached_networks_with_missing_aliases_are_repaired(self):
         calls, _ = self.reconcile(CONTAINERS, attached=True)
         self.assertEqual(len(calls), 12)
-        self.assertIn("network disconnect net_standard mergeron-ingress", calls)
-        self.assertIn("network connect --alias mergeron-ingress net_standard mergeron-ingress", calls)
+        self.assertIn("network disconnect mergeron-proxy mergeron-ingress", calls)
+        self.assertIn("network connect --alias mergeron-ingress mergeron-proxy mergeron-ingress", calls)
 
     def test_intermediate_mergeron_ui_name_is_supported(self):
         calls, _ = self.reconcile(["mergeron-ui", "mergeron-ingress", "mergeron-squid"])
@@ -84,7 +90,7 @@ class MigrationTests(unittest.TestCase):
             if name == "mergeron":
                 self.assertEqual(root.findtext("Repository"), "ghcr.io/maxhugit/mergeron:latest")
                 configs = {entry.attrib['Target']: entry.text for entry in root.findall('Config')}
-                self.assertEqual(configs['/home/codex'], '/mnt/pool/appdata/mergeron/state/home')
+                self.assertEqual(configs['/home/codex'], '/mnt/user/appdata/mergeron/state/home')
                 self.assertEqual(configs['WEBUI_DB_PATH'], '/home/codex/.codex/codex-webui.sqlite')
 
         squid = ET.parse(ROOT / "deployment/docker-man/my-mergeron-squid.xml").getroot()

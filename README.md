@@ -50,10 +50,10 @@ La plateforme utilise trois conteneurs applicatifs et un gestionnaire local :
 
 ```mermaid
 flowchart LR
-    U[Utilisateur] -->|HTTPS| T[Traefik]
-    T -->|SSO| A[Authentik]
+    U[Utilisateur] -->|HTTPS| T[Reverse proxy au choix]
     T --> N[mergeron-ingress]
     N --> C[mergeron]
+    N -.-> A[Authentik facultatif]
     C --> S[mergeron-squid]
     S --> I[Internet autorisé]
     C --> H[HA-MCP / Home Assistant]
@@ -71,11 +71,15 @@ La conception progressive du gestionnaire local est décrite dans
 ## Reconstruire la plateforme
 
 Le [sommaire de la documentation](docs/README.md) permet de comprendre le dépôt
-et de reconstruire toute la plateforme. Le
+et de reconstruire toute la plateforme. Commencer par
+[l’installation portable](docs/installation-portable.md) : réseau configurable,
+chemins Linux ou Unraid, Traefik/Caddy/Nginx Proxy Manager, authentification
+native ou Authentik. Aucun réseau personnel ni nom de pool n’est imposé. Le
 [comparatif des modes d’installation](docs/choisir-mode-installation.md) explique
 les différences de gestion des réseaux, mises à jour et retours arrière. La
-[procédure DockerMan](docs/installation-unraid-dockerman.md) est recommandée
-pour une gestion native dans l'onglet Docker. La
+[procédure DockerMan historique](docs/installation-unraid-dockerman.md) reste
+disponible ; sur Unraid, privilégier désormais un seul formulaire Manager,
+qui gère ses dépendances sans formulaires supplémentaires. La
 [procédure Compose](docs/installation-unraid.md) reste disponible. Elles couvrent
 la préparation des secrets, les réseaux, Traefik, Authentik, OnlyOffice, SSH et
 MCP.

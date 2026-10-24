@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+PROXY_NETWORK="${MERGERON_PROXY_NETWORK:-mergeron-proxy}"
 
 ensure_network() {
   name="$1"
@@ -43,10 +44,10 @@ ensure_network mergeron-isolated true
 ensure_network mergeron-external false
 ensure_network mergeron-admin false 172.30.44.0/28
 
-if ! docker network inspect net_standard >/dev/null 2>&1; then
-  echo "Le réseau partagé net_standard est absent." >&2
-  echo "Créez-le et raccordez-y Traefik et Authentik avant de continuer." >&2
+if ! docker network inspect "$PROXY_NETWORK" >/dev/null 2>&1; then
+  echo "Le réseau partagé $PROXY_NETWORK est absent." >&2
+  echo "Créez-le et raccordez-y le reverse proxy choisi avant de continuer." >&2
   exit 1
 fi
 
-echo "Réseau partagé présent: net_standard"
+echo "Réseau partagé présent: $PROXY_NETWORK"

@@ -63,7 +63,8 @@ chemin avant d'écrire. Une session révoquée ne redevient pas valide après un
 réinscription au projet. Les anciens éditeurs OnlyOffice devront être rouverts
 après déploiement, car leurs anciens jetons ne suffisent plus.
 
-Le backend et sa clé de service doivent rester privés derrière l'ingress Authentik,
+Le backend et sa clé de service doivent rester privés derrière l’ingress configuré
+avec une authentification (sessions natives ou contrôle Authentik),
 qui remplace les en-têtes d'identité. Le mode de service conserve son accès
 administrateur pour les opérations internes et les contrôles de santé.
 

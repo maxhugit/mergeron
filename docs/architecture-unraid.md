@@ -1,4 +1,8 @@
-# Architecture Codex sur Unraid
+# Architecture Docker de Mergeron
+
+Cette architecture est commune à Linux et Unraid. Les noms de réseaux ci-dessous
+sont les valeurs par défaut ; le raccordement extérieur est configurable par
+`MERGERON_PROXY_NETWORK`. Voir [l’installation portable](installation-portable.md).
 
 ## Vue d’ensemble
 
@@ -6,8 +10,8 @@
 flowchart LR
     B[Navigateur ou PWA]
     V[VPS / accès public]
-    T[Traefik]
-    A[Authentik]
+    T[Reverse proxy HTTPS au choix]
+    A[Authentik facultatif]
     N[Nginx ingress]
     C[Mergeron]
     S[Squid egress]
@@ -19,8 +23,8 @@ flowchart LR
     B -->|HTTPS| V
     V --> T
     T --> N
-    N --> A
-    N -->|jeton interne| C
+    N -.-> A
+    N -->|session native ou identité vérifiée| C
     C --> S
     S --> O
     C --> H
@@ -37,21 +41,22 @@ L’application est joignable uniquement depuis Nginx sur le réseau interne.
 
 Montages persistants :
 
-| Montage | Usage | Accès |
-|---|---|---|
-| `/home/codex` | configuration, OAuth, MCP, base SQLite | lecture/écriture |
-| `/workspaces` | espaces de travail | lecture/écriture |
-| `/appdata` | configurations Unraid | lecture/écriture |
-| `/app/logs` | journaux | lecture/écriture |
-| `/home/codex/.ssh` | clés et configuration SSH | lecture seule |
-| `/run/secrets/*` | jetons internes et clé OpenAI | lecture seule |
+| Montage            | Usage                                  | Accès            |
+| ------------------ | -------------------------------------- | ---------------- |
+| `/home/codex`      | configuration, OAuth, MCP, base SQLite | lecture/écriture |
+| `/workspaces`      | espaces de travail                     | lecture/écriture |
+| `/appdata`         | configurations Unraid                  | lecture/écriture |
+| `/app/logs`        | journaux                               | lecture/écriture |
+| `/home/codex/.ssh` | clés et configuration SSH              | lecture seule    |
+| `/run/secrets/*`   | jetons internes et clé OpenAI          | lecture seule    |
 
 ### `mergeron-ingress`
 
-Passerelle Nginx entre Traefik et l’application. Elle est l’unique point de
-contrôle Authentik, propage au navigateur les cookies de session renouvelés,
-remplace tout en-tête `Authorization` fourni par le client et injecte le jeton
-interne attendu par Mergeron.
+Passerelle Nginx entre le reverse proxy choisi et l’application. En mode
+historique, elle contrôle Authentik, renouvelle les cookies et injecte le jeton
+interne avec l’identité vérifiée. En mode `native`, elle n’injecte aucun jeton de
+service dans les requêtes navigateur : Mergeron vérifie ses sessions locales ou
+OIDC. Les en-têtes d’identité du navigateur sont effacés dans ce mode.
 
 Les exceptions machine-à-machine sont limitées au retour OAuth MCP et aux deux
 routes OnlyOffice. Les contrôles applicatifs OnlyOffice restent obligatoires.
@@ -64,23 +69,23 @@ de domaines Internet.
 
 ## Réseaux
 
-| Réseau | Type | Membres | Fonction |
-|---|---|---|---|
-| `mergeron-isolated` | bridge interne | les trois conteneurs | trafic privé entre les composants |
-| `mergeron-external` | bridge | Squid | sortie Internet du proxy |
-| `mergeron-admin` | bridge `/28` | application | SSH, MCP et services administratifs |
-| `net_standard` | bridge externe | Nginx, Traefik, Authentik | entrée HTTPS et SSO |
+| Réseau                                      | Type           | Membres                                     | Fonction                            |
+| ------------------------------------------- | -------------- | ------------------------------------------- | ----------------------------------- |
+| `mergeron-isolated`                         | bridge interne | les trois conteneurs                        | trafic privé entre les composants   |
+| `mergeron-external`                         | bridge         | Squid                                       | sortie Internet du proxy            |
+| `mergeron-admin`                            | bridge `/28`   | application                                 | SSH, MCP et services administratifs |
+| `MERGERON_PROXY_NETWORK` (`mergeron-proxy`) | réseau externe | ingress, proxy choisi, Authentik si utilisé | entrée HTTPS                        |
 
 `mergeron-isolated` possède `internal: true` : il ne fournit pas de route Internet.
 
 ## Flux entrant
 
-1. Traefik termine TLS pour le domaine public choisi par l’administrateur.
-2. Traefik transmet à `mergeron-ingress:8080`.
-3. Nginx valide ou renouvelle la session auprès d’Authentik.
-4. Une session absente ou expirée est redirigée vers le flux de connexion de
-   l’outpost, puis vers l’URL initiale.
-5. Nginx transmet vers `mergeron:8172` avec le jeton interne.
+1. Le reverse proxy choisi termine TLS pour le domaine public.
+2. Il transmet à `mergeron-ingress:8080`, jamais au backend.
+3. L’ingress contrôle Authentik dans le mode historique ; en mode natif,
+   l’application vérifie la session Mergeron/OIDC.
+4. Une identité absente ou non autorisée ne donne aucun accès aux API.
+5. Le backend reste sur son réseau privé, sans port hôte publié.
 
 ## Flux sortant
 
@@ -94,7 +99,8 @@ pare-feu absolu pour un programme qui ignorerait volontairement le proxy.
 ## Durcissement Docker
 
 - `privileged: false` ;
-- aucun socket Docker ;
+- aucun socket Docker dans les trois dépendances ; seul le Manager dispose
+  de l’API Docker locale, avec les privilèges importants que cela implique ;
 - `read_only: true` ;
 - `cap_drop: ALL` ;
 - `no-new-privileges:true` ;

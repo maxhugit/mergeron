@@ -1,5 +1,6 @@
 #!/bin/sh
 set -u
+PROXY_NETWORK="${MERGERON_PROXY_NETWORK:-mergeron-proxy}"
 
 PID_FILE="${MERGERON_NETWORK_PID_FILE:-/var/run/mergeron-network-reconciler.pid}"
 RETRY_DELAY="${MERGERON_NETWORK_RETRY_DELAY:-5}"
@@ -85,7 +86,7 @@ reconcile_container() {
     mergeron-ingress)
       required_aliases="mergeron-ingress"
       ensure_connection "$1" mergeron-isolated || container_result=1
-      ensure_connection "$1" net_standard || container_result=1
+      ensure_connection "$1" "$PROXY_NETWORK" || container_result=1
       ;;
     mergeron-squid)
       required_aliases="mergeron-squid"

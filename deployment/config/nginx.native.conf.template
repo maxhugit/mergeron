@@ -1,0 +1,93 @@
+# Native Mergeron sessions / OIDC. No proxy identity or service credential is
+# injected into browser requests. Until authentication is provisioned, API
+# access remains denied. Keep WEBUI_REQUIRE_IDENTITY=true in the application.
+user nginx;
+worker_processes 1;
+pid /var/run/nginx.pid;
+events { worker_connections 512; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    access_log /dev/stdout;
+    error_log /dev/stderr warn;
+    server_tokens off;
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+    server {
+        listen 8080;
+        client_max_body_size 100m;
+        set $mergeron_backend http://mergeron-ui:8172;
+        set $mergeron_oauth_callback http://mergeron-ui:12345;
+
+        # Overwrite browser-supplied identity assertions, including on special
+        # routes. Cookie authentication is verified by Mergeron itself.
+        proxy_set_header X-Webui-Auth-Source "";
+        proxy_set_header X-Webui-Auth-Subject "";
+        proxy_set_header X-Webui-Auth-Email "";
+
+        location = /_health {
+            allow 127.0.0.1;
+            deny all;
+            proxy_pass $mergeron_backend/api/status;
+            proxy_set_header Authorization "Bearer ${MERGERON_BACKEND_TOKEN}";
+            proxy_set_header X-Webui-Auth-Source service;
+            proxy_set_header X-Webui-Auth-Subject "";
+            proxy_set_header X-Webui-Auth-Email "";
+        }
+        location = /mcp/oauth/callback {
+            proxy_pass $mergeron_oauth_callback;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Webui-Auth-Source "";
+            proxy_set_header X-Webui-Auth-Subject "";
+            proxy_set_header X-Webui-Auth-Email "";
+            proxy_read_timeout 300s;
+        }
+        # Only these server-to-server endpoints receive the internal token.
+        # The application additionally verifies the signed file token/JWT/state.
+        location = /api/files/serve {
+            proxy_pass $mergeron_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header Authorization "Bearer ${MERGERON_BACKEND_TOKEN}";
+            proxy_set_header X-Webui-Auth-Source document;
+            proxy_set_header X-Webui-Auth-Subject "";
+            proxy_set_header X-Webui-Auth-Email "";
+            proxy_buffering off;
+            proxy_read_timeout 300s;
+        }
+        location = /api/onlyoffice/callback {
+            proxy_pass $mergeron_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header Authorization "Bearer ${MERGERON_BACKEND_TOKEN}";
+            proxy_set_header X-Webui-Auth-Source service;
+            proxy_set_header X-Webui-Auth-Subject "";
+            proxy_set_header X-Webui-Auth-Email "";
+            proxy_buffering off;
+            proxy_request_buffering off;
+            proxy_read_timeout 300s;
+        }
+        location / {
+            proxy_pass $mergeron_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Webui-Auth-Source "";
+            proxy_set_header X-Webui-Auth-Subject "";
+            proxy_set_header X-Webui-Auth-Email "";
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_buffering off;
+            proxy_request_buffering off;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+    }
+}

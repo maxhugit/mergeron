@@ -24,7 +24,7 @@ Une copie brute pendant une écriture peut être incohérente.
 Procédure prudente :
 
 ```bash
-cd /mnt/pool/appdata/mergeron
+cd /mnt/user/appdata/mergeron
 docker compose --env-file images.env -f docker-compose.yml stop app-v4
 # lancer ici la sauvegarde de STATE_ROOT
 docker compose --env-file images.env -f docker-compose.yml start app-v4
@@ -32,11 +32,13 @@ docker compose --env-file images.env -f docker-compose.yml start app-v4
 
 ## Restauration après perte du serveur
 
-1. réinstaller Docker, Traefik et Authentik ;
+1. réinstaller Docker et le reverse proxy choisi, ainsi que le fournisseur
+   d’identité si vous en utilisez un ;
 2. cloner ce dépôt et préparer `mergeron/images.env` ;
 3. restaurer `STATE_ROOT` aux chemins indiqués dans `.env` ;
 4. restaurer les permissions des secrets et des clés SSH ;
-5. recréer `net_standard` et la route Traefik ;
+5. recréer le réseau externe portant le nom enregistré dans
+   `MERGERON_PROXY_NETWORK` et restaurer la route du proxy HTTPS ;
 6. démarrer les trois services ;
 7. exécuter la liste de tests du guide d’installation.
 
