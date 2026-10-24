@@ -106,6 +106,17 @@ export function ManagerStatusCard() {
     retry: false,
   });
   const data = query.data;
+  const nativelyManaged =
+    data?.components.length === 3 &&
+    new Set(data.components.map((component) => component.id)).size === 3 &&
+    data.components.every((component) => component.adoption === 'managed');
+  const canAdopt =
+    !!data?.available &&
+    data.adoption?.state === 'eligible' &&
+    data.adoption.canAdopt &&
+    !nativelyManaged &&
+    data.dataSafety.status === 'protected' &&
+    !data.update?.busy;
   const error = query.error?.message ?? data?.error;
   const adoption = useMutation({
     mutationFn: requestManagerAdoption,
@@ -182,6 +193,18 @@ export function ManagerStatusCard() {
             </div>
           )}
 
+          {nativelyManaged &&
+            data.adoption?.state !== 'adopted' &&
+            data.adoption?.state !== 'drifted' &&
+            data.dataSafety.status === 'protected' && (
+              <p
+                role="status"
+                className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"
+              >
+                {tm('managerInstallationAlreadyManaged')}
+              </p>
+            )}
+
           {data.adoption?.state === 'drifted' && !data.update?.busy && (
             <div
               role="alert"
@@ -223,7 +246,7 @@ export function ManagerStatusCard() {
             </p>
           )}
 
-          {data.adoption?.canAdopt && (
+          {canAdopt && (
             <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
                 {t('managerAdoptionReadyDescription')}
@@ -246,7 +269,10 @@ export function ManagerStatusCard() {
         </>
       )}
 
-      <AlertDialog open={confirmAdoption} onOpenChange={setConfirmAdoption}>
+      <AlertDialog
+        open={confirmAdoption && canAdopt}
+        onOpenChange={setConfirmAdoption}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -259,10 +285,13 @@ export function ManagerStatusCard() {
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!data?.adoption?.fingerprint || adoption.isPending}
+              disabled={
+                !canAdopt || !data?.adoption?.fingerprint || adoption.isPending
+              }
               onClick={() => {
                 const fingerprint = data?.adoption?.fingerprint;
-                if (fingerprint) adoption.mutate(fingerprint);
+                if (canAdopt && fingerprint && !adoption.isPending)
+                  adoption.mutate(fingerprint);
               }}
             >
               {t('confirmAdoption')}

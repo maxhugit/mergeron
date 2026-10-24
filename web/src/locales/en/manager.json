@@ -1,4 +1,5 @@
 {
+  "managerInstallationAlreadyManaged": "This installation is already managed by Mergeron Manager. No additional adoption is needed.",
   "managerAutomaticDetection": "Automatically checks for new images on the current channel (edge or latest) every five minutes. Updates are never installed without confirmation.",
   "managerRefreshDetection": "Refresh detection",
   "managerAvailableImage": "Available channel image",

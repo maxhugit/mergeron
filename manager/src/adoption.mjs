@@ -68,6 +68,11 @@ function adoptionBlockers(inventory) {
 export function evaluateAdoption(inventory, record = null) {
   const fingerprint = inventoryFingerprint(inventory);
   const blockers = adoptionBlockers(inventory);
+  const alreadyManaged =
+    !record &&
+    inventory.components.length === 3 &&
+    new Set(inventory.components.map((component) => component.id)).size === 3 &&
+    inventory.components.every((component) => component.adoption === 'managed');
   let state = blockers.length === 0 ? 'eligible' : 'blocked';
   if (record) {
     const currentRecordMatches =
@@ -98,7 +103,7 @@ export function evaluateAdoption(inventory, record = null) {
       fingerprint,
       adoptedAt: state === 'adopted' ? record.adoptedAt : null,
       blockers: [...new Set(blockers)].sort(),
-      canAdopt: state === 'eligible',
+      canAdopt: state === 'eligible' && !alreadyManaged,
     },
   };
 }

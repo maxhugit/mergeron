@@ -1,9 +1,10 @@
-import { screen } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { catalogFixture, json } from './catalog/catalog.testing';
 import { ManagerStatusCard } from './manager-status-card';
+import { managerStatusQueryKey } from './manager-status-api';
 
 let fixture: ReturnType<typeof catalogFixture>;
 
@@ -138,6 +139,85 @@ it('adopts only after confirmation and sends the verified fingerprint', async ()
       expectedFingerprint: 'verified-fingerprint',
     }),
   );
+  expect(
+    screen.queryByRole('button', { name: 'Adopt this installation' }),
+  ).not.toBeInTheDocument();
+});
+
+it.each([false, true])(
+  'does not offer adoption of an adopted installation even if canAdopt is %s',
+  async (canAdopt) => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(
+        json({
+          ...protectedStatus,
+          adoption: { ...protectedStatus.adoption, state: 'adopted', canAdopt },
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    fixture.render(<ManagerStatusCard />);
+    await screen.findByText('Existing installation adopted');
+    expect(
+      screen.queryByRole('button', { name: 'Adopt this installation' }),
+    ).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('does not offer adoption for containers already managed by an older Manager', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        json({
+          ...protectedStatus,
+          components: ['application', 'ingress', 'egress'].map((id) => ({
+            ...protectedStatus.components[0],
+            id,
+            adoption: 'managed',
+          })),
+          // Older Managers can still report eligible/canAdopt for their own containers.
+          adoption: protectedStatus.adoption,
+        }),
+      ),
+    ),
+  );
+  fixture.render(<ManagerStatusCard />);
+  await screen.findByText(
+    'This installation is already managed by Mergeron Manager. No additional adoption is needed.',
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Adopt this installation' }),
+  ).not.toBeInTheDocument();
+});
+
+it('closes a stale confirmation if polling reports that the installation was adopted elsewhere', async () => {
+  const fetch = vi.fn(() => Promise.resolve(json(protectedStatus)));
+  vi.stubGlobal('fetch', fetch);
+  fixture.render(<ManagerStatusCard />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'Adopt this installation' }),
+  );
+  expect(screen.getByRole('alertdialog')).toBeVisible();
+  await act(async () => {
+    fixture.queryClient.setQueryData(managerStatusQueryKey, {
+      ...protectedStatus,
+      adoption: {
+        ...protectedStatus.adoption,
+        state: 'adopted',
+        canAdopt: false,
+      },
+    });
+  });
+  await waitFor(() =>
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Confirm adoption' }),
+  ).not.toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 it('makes a missing manager non-blocking for the current installation', async () => {
