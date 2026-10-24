@@ -1,4 +1,5 @@
 {
+  "managerInstallationAlreadyManaged": "Cette installation est déjà gérée par Mergeron Manager. Aucune adoption supplémentaire n’est nécessaire.",
   "managerAutomaticDetection": "Détection automatique des nouvelles images du canal utilisé (edge ou latest), toutes les cinq minutes. Aucune mise à jour n’est installée sans confirmation.",
   "managerRefreshDetection": "Actualiser la détection",
   "managerAvailableImage": "Image disponible sur le canal",

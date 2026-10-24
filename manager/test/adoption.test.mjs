@@ -114,6 +114,34 @@ test('marks one complete and protected installation as eligible', () => {
   assert.match(result.adoption.fingerprint, /^[a-f0-9]{64}$/);
 });
 
+test('does not offer adoption when all three components are already managed', async () => {
+  const value = inventory();
+  for (const component of value.components) component.adoption = 'managed';
+  assert.equal(evaluateAdoption(value).adoption.canAdopt, false);
+  const directory = await mkdtemp(join(tmpdir(), 'mergeron-managed-adoption-'));
+  const path = join(directory, 'adoption.json');
+  try {
+    await assert.rejects(
+      confirmAdoption({
+        inventory: value,
+        confirmation: ADOPTION_CONFIRMATION,
+        expectedFingerprint: evaluateAdoption(value).adoption.fingerprint,
+        path,
+      }),
+      /adoptionBlocked/,
+    );
+    await assert.rejects(readFile(path), { code: 'ENOENT' });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('still offers adoption for a legacy installation with a mix of managed and unmanaged components', () => {
+  const value = inventory();
+  value.components[1].adoption = 'managed';
+  assert.equal(evaluateAdoption(value).adoption.canAdopt, true);
+});
+
 test('blocks adoption when a required network or protected mount is missing', () => {
   const value = inventory();
   value.components[1].missingNetworks = ['net_standard'];
