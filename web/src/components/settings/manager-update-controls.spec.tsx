@@ -53,6 +53,58 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('can close and reopen progress without cancelling or starting a second update', async () => {
+  const update = {
+    busy: true,
+    operation: {
+      id: 'active',
+      status: 'running',
+      phase: 'preparing',
+      events: [],
+      images: {},
+      previousImages: {},
+      backupRetained: false,
+    },
+  };
+  const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+    Promise.resolve(
+      json(
+        init?.method === 'POST'
+          ? String(input).endsWith('/plan')
+            ? {
+                applicable: true,
+                fingerprint: 'reviewed',
+                blockers: [],
+                images: { application: 'ghcr.io/maxhugit/mergeron:0.1.1' },
+              }
+            : update
+          : { ...status, update },
+      ),
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  fixture.render(<ManagerUpdateControls status={status} />);
+  const user = userEvent.setup();
+  await screen.findByDisplayValue('ghcr.io/maxhugit/mergeron:0.1.1');
+  await user.click(screen.getByRole('button', { name: 'Mettre à jour' }));
+  await screen.findByRole('alertdialog');
+  await user.click(
+    screen.getByRole('button', { name: 'Installer et redémarrer' }),
+  );
+  await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' });
+  await user.click(screen.getByRole('button', { name: 'Fermer' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await user.click(
+    screen.getByRole('button', { name: 'Voir le suivi et les logs' }),
+  );
+  expect(
+    await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' }),
+  ).toBeVisible();
+  expect(
+    fetch.mock.calls.filter(([, init]) => init?.method === 'POST'),
+  ).toHaveLength(2);
+});
+
 it('previews without applying and requires a second explicit confirmation', async () => {
   const user = userEvent.setup();
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -80,7 +132,12 @@ it('previews without applying and requires a second explicit confirmation', asyn
   await user.click(
     screen.getByRole('button', { name: 'Installer et redémarrer' }),
   );
-  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(
+    fetch.mock.calls.filter(([, init]) => init?.method === 'POST'),
+  ).toHaveLength(2);
+  expect(
+    await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' }),
+  ).toBeVisible();
   expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toMatchObject({
     confirmation: 'UPDATE_WITH_ROLLBACK',
     expectedFingerprint: 'checked',

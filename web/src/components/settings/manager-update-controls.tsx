@@ -19,7 +19,9 @@ import {
   requestManagerUpdate,
   type ManagerStatus,
   type ManagerUpdatePlan,
+  type ManagerUpdateOperation,
 } from './manager-status-api';
+import { ManagerUpdateProgressDialog } from './manager-update-progress-dialog';
 import { defaultManagerUpdateImage } from './manager-update-image';
 import {
   requestServerRelease,
@@ -45,7 +47,7 @@ const statuses: Record<string, string> = {
 };
 
 export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
-  const { t, i18n } = useTranslation('manager');
+  const { t } = useTranslation('manager');
   const { t: common } = useTranslation();
   const client = useQueryClient();
   const release = useQuery({
@@ -62,6 +64,15 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
   const [plan, setPlan] = useState<ManagerUpdatePlan | null>(null);
   const [confirm, setConfirm] = useState<'apply' | 'rollback' | null>(null);
   const operation = status.update?.operation;
+  const [progressOpen, setProgressOpen] = useState(
+    Boolean(status.update?.busy),
+  );
+  const [progressSession, setProgressSession] = useState(0);
+  const [progressOperation, setProgressOperation] =
+    useState<ManagerUpdateOperation | null>(operation ?? null);
+  const [excludedOperationId, setExcludedOperationId] = useState<string | null>(
+    null,
+  );
   const mutation = useMutation({
     mutationFn: ({
       action,
@@ -71,15 +82,31 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
       input: Record<string, unknown>;
     }) => requestManagerUpdate(action, input),
     onSuccess: (result, variables) => {
-      setPlan(variables.action === 'plan' ? result : null);
-      setConfirm(
-        variables.action === 'plan' && result.applicable ? 'apply' : null,
-      );
+      const reviewed =
+        variables.action === 'plan' && 'applicable' in result ? result : null;
+      setPlan(reviewed);
+      setConfirm(reviewed?.applicable ? 'apply' : null);
+      if ('operation' in result) setProgressOperation(result.operation);
       void client.invalidateQueries({ queryKey: managerStatusQueryKey });
     },
   });
-  const busy = status.update?.busy || mutation.isPending;
+  const launch = (
+    action: 'apply' | 'rollback' | 'recover',
+    input: Record<string, unknown>,
+  ) => {
+    setProgressOperation(null);
+    setExcludedOperationId(action === 'apply' ? (operation?.id ?? null) : null);
+    setProgressSession((session) => session + 1);
+    setProgressOpen(true);
+    mutation.mutate({ action, input });
+  };
+  const busy =
+    status.update?.busy ||
+    mutation.isPending ||
+    (progressOperation?.status === 'running' &&
+      operation?.id !== progressOperation.id);
   const blocked = operation?.status === 'recoveryRequired';
+  if (!status.available && !progressOpen && !progressOperation) return null;
   return (
     <div className="space-y-3 border-t border-border pt-4">
       <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
@@ -115,23 +142,6 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
               {t(translationKey(operation.error))}
             </p>
           )}
-          <details className="text-xs">
-            <summary className="cursor-pointer">
-              {t('managerUpdateJournal')}
-            </summary>
-            <ol className="mt-2 space-y-1">
-              {operation.events.map((event, index) => (
-                <li key={index}>
-                  {new Date(event.at).toLocaleString(i18n.language)} ·{' '}
-                  {t(
-                    translationKey(
-                      phases[event.phase] ?? 'managerUpdatePreparing',
-                    ),
-                  )}
-                </li>
-              ))}
-            </ol>
-          </details>
           {operation.status === 'succeeded' && (
             <Button
               variant="outline"
@@ -145,16 +155,22 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
             <Button
               disabled={busy}
               onClick={() =>
-                mutation.mutate({
-                  action: 'recover',
-                  input: { confirmation: 'RETRY_RECOVERY' },
-                })
+                launch('recover', { confirmation: 'RETRY_RECOVERY' })
               }
             >
               {t('managerRetryRecovery')}
             </Button>
           )}
         </div>
+      )}
+      {(operation || progressOperation || progressSession > 0) && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setProgressOpen(true)}
+        >
+          {t('managerViewUpdateProgress')}
+        </Button>
       )}
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
@@ -185,6 +201,7 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
           type="button"
           disabled={
             busy ||
+            !status.available ||
             blocked ||
             !image.trim() ||
             (!manualSelection &&
@@ -225,7 +242,7 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
           )}
         </div>
       )}
-      {mutation.error && (
+      {mutation.error && mutation.variables?.action === 'plan' && (
         <p role="alert" className="text-sm text-destructive">
           {t(translationKey(mutation.error.message))}
         </p>
@@ -264,21 +281,15 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
               disabled={busy}
               onClick={() => {
                 if (confirm === 'apply' && plan)
-                  mutation.mutate({
-                    action: 'apply',
-                    input: {
-                      images: plan.images,
-                      confirmation: 'UPDATE_WITH_ROLLBACK',
-                      expectedFingerprint: plan.fingerprint,
-                    },
+                  launch('apply', {
+                    images: plan.images,
+                    confirmation: 'UPDATE_WITH_ROLLBACK',
+                    expectedFingerprint: plan.fingerprint,
                   });
                 if (confirm === 'rollback' && operation)
-                  mutation.mutate({
-                    action: 'rollback',
-                    input: {
-                      operationId: operation.id,
-                      confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
-                    },
+                  launch('rollback', {
+                    operationId: operation.id,
+                    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
                   });
               }}
             >
@@ -289,6 +300,22 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <ManagerUpdateProgressDialog
+        open={progressOpen}
+        onOpenChange={setProgressOpen}
+        operation={
+          progressOperation ??
+          (operation?.id !== excludedOperationId ? (operation ?? null) : null)
+        }
+        pending={mutation.isPending && mutation.variables?.action !== 'plan'}
+        requestError={
+          mutation.variables?.action !== 'plan'
+            ? (mutation.error?.message ?? null)
+            : null
+        }
+        session={progressSession}
+        excludedOperationId={excludedOperationId}
+      />
     </div>
   );
 }
