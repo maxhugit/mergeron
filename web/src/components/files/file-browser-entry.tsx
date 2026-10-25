@@ -13,6 +13,7 @@ type EntryType = 'file' | 'directory';
 interface FileBrowserEntryProps {
   icon: EntryType;
   name: string;
+  displayName?: string;
   path: string;
   selected: boolean;
   onClick: () => void;
@@ -35,6 +36,7 @@ interface FileBrowserEntryProps {
 export function FileBrowserEntry({
   icon,
   name,
+  displayName,
   path: entryPath,
   selected,
   onClick,
@@ -154,7 +156,12 @@ export function FileBrowserEntry({
               onCancel={() => setEdit(null)}
             />
           ) : (
-            <span className="min-w-0 truncate">{name}</span>
+            <span
+              className="min-w-0 truncate"
+              title={displayName ? entryPath : undefined}
+            >
+              {displayName ?? name}
+            </span>
           )}
           {isDir && (
             <ChevronRight className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/50" />

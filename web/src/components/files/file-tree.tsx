@@ -23,6 +23,8 @@ import { FileToolbar } from './file-toolbar';
 import { DeleteConfirmDialog, FilePathDialog } from './file-dialogs';
 import { DirectorySelectionTree } from './directory-selection-tree';
 import { InlineEntryEditor } from './inline-entry-editor';
+import { useDeliverableDirectoryAliases } from '@/hooks/use-deliverable-directory-aliases';
+import type { ProjectSummary } from '@/lib/projects-api';
 
 type EntryType = 'file' | 'directory';
 type InlineEdit = InlineFileEdit;
@@ -47,10 +49,12 @@ const CLOSED: DialogState = {
 
 interface FileTreeProps {
   onFileClick?: (filePath: string) => void;
+  project?: ProjectSummary;
 }
 
 /** Owns flat navigation and delegates layout-independent edits and entry actions. */
-export function FileTree({ onFileClick }: FileTreeProps = {}) {
+export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
+  const directoryAliases = useDeliverableDirectoryAliases(project);
   const browserStore = useFileBrowserStoreApi();
   const { t } = useTranslation();
   const rootDir = useFilesStore((s) => s.rootDir);
@@ -173,6 +177,7 @@ export function FileTree({ onFileClick }: FileTreeProps = {}) {
   return (
     <>
       <FileToolbar
+        directoryAliases={directoryAliases}
         onUpload={handleUpload}
         onNewFile={() => startBackgroundCreate('newFile')}
         onNewFolder={() => startBackgroundCreate('newFolder')}
@@ -217,6 +222,7 @@ export function FileTree({ onFileClick }: FileTreeProps = {}) {
           <ScrollArea className="h-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
               <FlatDirectory
+                directoryAliases={directoryAliases}
                 dirPath={rootDir}
                 selectedFile={selectedFile}
                 onFileClick={handleClick}
@@ -351,6 +357,7 @@ export function FileTree({ onFileClick }: FileTreeProps = {}) {
 }
 
 interface FlatDirectoryProps {
+  directoryAliases: Record<string, string>;
   dirPath: string;
   selectedFile: string | null;
   onFileClick: (path: string) => void;
@@ -443,6 +450,11 @@ function FlatDirectory(props: FlatDirectoryProps) {
           key={entry.path}
           icon={entry.type === 'directory' ? 'directory' : 'file'}
           name={entry.name}
+          displayName={
+            entry.type === 'directory'
+              ? props.directoryAliases[entry.path.replace(/\/+$/, '')]
+              : undefined
+          }
           path={entry.path}
           selected={entry.path === props.selectedFile}
           onClick={() => entry.type === 'file' && props.onFileClick(entry.path)}
