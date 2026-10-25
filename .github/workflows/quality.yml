@@ -108,7 +108,6 @@ jobs:
           src/database/database.service.spec.ts
           src/database/pending-request-migration.spec.ts
           src/http-stack.spec.ts
-
           src/archive
           src/document-publication
           src/projects/project-workspace-layout.spec.ts
