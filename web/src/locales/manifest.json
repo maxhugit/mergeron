@@ -6,6 +6,7 @@
     { "code": "fr", "nativeLabel": "Français" }
   ],
   "namespaces": [
+    "guide",
     "authentication",
     "common",
     "codexSettings",

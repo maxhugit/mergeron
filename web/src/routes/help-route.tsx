@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
   Bot,
@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { translationKey } from '@/locales/translation-key';
 import { cn } from '@/lib/utils';
 import { useTimelineStore } from '@/stores/timeline-store';
+import { withBasePath } from '@/base-path';
 
 const generalTopics = [
   {
@@ -158,30 +159,29 @@ const guideTabs = [
 type GuideTabId = (typeof guideTabs)[number]['id'];
 
 export function HelpRoute() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { t: guideT } = useTranslation('guide');
   const [activeTab, setActiveTab] = useState<GuideTabId>('general');
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (panelRef.current) panelRef.current.scrollTop = 0;
+  }, [activeTab]);
+  const topicPrefix =
+    activeTab === 'project-administration'
+      ? 'projectAdministration'
+      : activeTab;
   const selectThread = useTimelineStore((state) => state.selectThread);
   useEffect(() => {
     selectThread(null);
   }, [selectThread]);
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-      <article className="mx-auto w-full max-w-4xl space-y-6 pb-8">
-        <header className="space-y-3">
-          <BookOpen aria-hidden="true" className="h-7 w-7 text-primary" />
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('howThePlatformWorks')}
-          </h1>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {t('platformGuideIntroduction')}
-          </p>
-        </header>
-
-        <div className="overflow-hidden rounded-xl border bg-background">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <article className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="contents">
           <div
             role="tablist"
             aria-label={t('guideSections')}
-            className="flex h-10 min-w-0 items-center overflow-x-auto border-b"
+            className="flex h-10 min-w-0 shrink-0 items-center overflow-x-auto border-b bg-background"
             onKeyDown={(event) => {
               if (
                 !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
@@ -217,6 +217,8 @@ export function HelpRoute() {
                 role="tab"
                 aria-selected={activeTab === id}
                 aria-controls="guide-panel"
+                aria-label={t(translationKey(titleKey))}
+                title={t(translationKey(titleKey))}
                 tabIndex={activeTab === id ? 0 : -1}
                 onClick={() => setActiveTab(id)}
                 className={cn(
@@ -227,55 +229,147 @@ export function HelpRoute() {
                 )}
               >
                 <Icon aria-hidden="true" className="h-4 w-4" />
-                <span>{t(translationKey(titleKey))}</span>
+                <span className="hidden sm:inline">
+                  {t(translationKey(titleKey))}
+                </span>
               </button>
             ))}
           </div>
 
           <div
             id="guide-panel"
+            ref={panelRef}
             role="tabpanel"
             aria-labelledby={`guide-tab-${activeTab}`}
-            className="space-y-4 bg-muted/20 p-4 sm:p-6"
+            tabIndex={0}
+            className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
           >
-            {activeTab === 'general' && (
-              <section
-                aria-labelledby="getting-started"
-                className="rounded-xl border bg-card p-4 sm:p-6"
-              >
-                <h2 id="getting-started" className="text-lg font-semibold">
-                  {t('gettingStarted')}
-                </h2>
-                <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-                  <li>{t('guideGettingStartedCreate')}</li>
-                  <li>{t('guideGettingStartedOrganize')}</li>
-                  <li>{t('guideGettingStartedConfigure')}</li>
-                  <li>{t('guideGettingStartedWork')}</li>
-                  <li>{t('guideGettingStartedReview')}</li>
-                </ol>
-              </section>
-            )}
-            {guideTabs
-              .find((tab) => tab.id === activeTab)
-              ?.topics.map((topic) => (
+            <div className="mx-auto w-full max-w-5xl space-y-4 pb-8">
+              <header className="space-y-3 pb-2">
+                <BookOpen aria-hidden="true" className="h-7 w-7 text-primary" />
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  {t('howThePlatformWorks')}
+                </h1>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {t('platformGuideIntroduction')}
+                </p>
+              </header>
+              {activeTab === 'general' && (
                 <section
-                  key={topic.id}
-                  aria-labelledby={topic.id}
+                  aria-labelledby="getting-started"
                   className="rounded-xl border bg-card p-4 sm:p-6"
                 >
-                  <h2 id={topic.id} className="text-lg font-semibold">
-                    {t(translationKey(topic.titleKey))}
+                  <h2 id="getting-started" className="text-lg font-semibold">
+                    {t('gettingStarted')}
                   </h2>
-                  {topic.paragraphs.map((paragraphKey) => (
-                    <p
-                      key={paragraphKey}
-                      className="mt-3 text-sm leading-relaxed text-muted-foreground"
-                    >
-                      {t(translationKey(paragraphKey))}
-                    </p>
-                  ))}
+                  <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
+                    <li>{t('guideGettingStartedCreate')}</li>
+                    <li>{t('guideGettingStartedOrganize')}</li>
+                    <li>{t('guideGettingStartedConfigure')}</li>
+                    <li>{t('guideGettingStartedWork')}</li>
+                    <li>{t('guideGettingStartedReview')}</li>
+                  </ol>
                 </section>
-              ))}
+              )}
+              <section className="rounded-xl border bg-card p-4 sm:p-6">
+                <h2 className="text-lg font-semibold">
+                  {guideT('walkthrough')}
+                </h2>
+                <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm leading-relaxed">
+                  {[1, 2, 3].map((number) => (
+                    <li key={number}>
+                      {guideT(translationKey(`${topicPrefix}Step${number}`))}
+                    </li>
+                  ))}
+                </ol>
+                <h3 className="mt-6 font-semibold">{guideT('buttons')}</h3>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b">
+                      <tr>
+                        <th scope="col" className="min-w-40 py-2 pr-4">
+                          {guideT('button')}
+                        </th>
+                        <th scope="col" className="py-2">
+                          {guideT('effect')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[1, 2, 3].map((number) => (
+                        <tr key={number} className="border-b last:border-0">
+                          <th
+                            scope="row"
+                            className="py-3 pr-4 align-top font-medium"
+                          >
+                            {guideT(
+                              translationKey(`${topicPrefix}Button${number}`),
+                            )}
+                          </th>
+                          <td className="py-3 leading-relaxed text-muted-foreground">
+                            {guideT(
+                              translationKey(`${topicPrefix}Effect${number}`),
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              {(activeTab === 'tasks' || activeTab === 'deliverables') && (
+                <section className="space-y-3 rounded-xl border bg-card p-4 sm:p-6">
+                  <h2 className="text-lg font-semibold">
+                    {guideT('screenshots')}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {guideT('captureNotice')}
+                  </p>
+                  <figure className="space-y-3">
+                    <img
+                      className="h-auto w-full rounded-lg border"
+                      loading="lazy"
+                      src={withBasePath(
+                        `/guide/${activeTab}-${i18n.language.startsWith('fr') ? 'fr' : 'en'}.png`,
+                      )}
+                      alt={guideT(
+                        activeTab === 'tasks'
+                          ? 'tasksCaption'
+                          : 'lifecycleCaption',
+                      )}
+                    />
+                    <figcaption className="text-sm leading-relaxed text-muted-foreground">
+                      {guideT(
+                        activeTab === 'tasks'
+                          ? 'tasksCaption'
+                          : 'lifecycleCaption',
+                      )}
+                    </figcaption>
+                  </figure>
+                </section>
+              )}
+              {guideTabs
+                .find((tab) => tab.id === activeTab)
+                ?.topics.map((topic) => (
+                  <section
+                    key={topic.id}
+                    aria-labelledby={topic.id}
+                    className="rounded-xl border bg-card p-4 sm:p-6"
+                  >
+                    <h2 id={topic.id} className="text-lg font-semibold">
+                      {t(translationKey(topic.titleKey))}
+                    </h2>
+                    {topic.paragraphs.map((paragraphKey) => (
+                      <p
+                        key={paragraphKey}
+                        className="mt-3 text-sm leading-relaxed text-muted-foreground"
+                      >
+                        {t(translationKey(paragraphKey))}
+                      </p>
+                    ))}
+                  </section>
+                ))}
+            </div>
           </div>
         </div>
       </article>
