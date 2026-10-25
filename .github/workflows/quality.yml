@@ -216,8 +216,21 @@ jobs:
       - name: Verify protected document execution on Linux
         run: bash scripts/smoke-test-document-isolation.sh "mergeron:quality-${{ github.sha }}"
 
+      # The production image deliberately contains no Codex installation. Use
+      # the build-only pinned dependency, never add the test CLI to that image.
+      - name: Build the isolated native MCP test runtime
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          target: backend-builder
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: mergeron:project-mcp-${{ github.sha }}
+
       - name: Verify project MCP policy on an existing native conversation
-        run: bash scripts/smoke-test-project-mcp.sh "mergeron:quality-${{ github.sha }}"
+        run: bash scripts/smoke-test-project-mcp.sh "mergeron:project-mcp-${{ github.sha }}"
 
       - name: Scan production image dependencies
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
