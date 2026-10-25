@@ -4,8 +4,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { FileTree } from './file-tree';
 import { useFilesStore } from '@/stores/files-store';
+import type { ProjectSummary } from '@/lib/projects-api';
 
 const api = vi.hoisted(() => ({ read: vi.fn(), create: vi.fn() }));
+const projects = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/projects-api', () => ({ projectsApi: projects }));
 vi.mock('@/socket', () => ({
   getSocket: () => ({
     connected: false,
@@ -37,6 +40,7 @@ beforeEach(() => {
   );
   api.read.mockReset();
   api.create.mockReset();
+  projects.mockReset();
   useFilesStore.setState({
     rootDir: '/work',
     selectedFile: '/work/selected.ts',
@@ -47,6 +51,46 @@ beforeEach(() => {
           data: [{ path: '/work/a', name: 'a', type: 'directory' }],
         })
       : Promise.reject(new Error('Listing denied')),
+  );
+});
+
+it('shows deliverable aliases but navigates and renames using the real directory', async () => {
+  projects.mockResolvedValue({
+    deliverables: [{ directory: '/work/a', title: 'Architecture' }],
+  });
+  api.read.mockImplementation(({ query }: { query: { root: string } }) =>
+    Promise.resolve({
+      data:
+        query.root === '/work'
+          ? [{ path: '/work/a', name: 'a', type: 'directory' }]
+          : [],
+    }),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <FileTree
+        project={
+          {
+            id: 'p',
+            resources: [{ id: 'r', type: 'deliverable_board' }],
+          } as ProjectSummary
+        }
+      />
+    </QueryClientProvider>,
+  );
+  const alias = await screen.findByText('Architecture');
+  expect(alias).toHaveAttribute('title', '/work/a');
+  fireEvent.contextMenu(alias);
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+  expect(
+    await screen.findByRole('textbox', { name: 'File or directory name' }),
+  ).toHaveValue('a');
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+  fireEvent.doubleClick(await screen.findByText('Architecture'));
+  await waitFor(() => expect(useFilesStore.getState().rootDir).toBe('/work/a'));
+  expect(await screen.findByText('Architecture')).toHaveAttribute(
+    'title',
+    '/work/a',
   );
 });
 

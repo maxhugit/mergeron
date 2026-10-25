@@ -148,6 +148,7 @@ export function WorkspaceTree({
         >
           {cwd && adoptedCwd === cwd && currentRoot ? (
             <FileTree
+              project={project}
               onFileClick={(path) => {
                 onFile(path);
                 onMobileClose();

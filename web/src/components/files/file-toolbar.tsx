@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useFileBrowserState as useFilesStore } from './file-browser-context';
 
 interface FileToolbarProps {
+  directoryAliases?: Record<string, string>;
   /** Called when user selects files or folder to upload into current root. */
   onUpload: (files: FileList, destinationPath: string) => void;
   onNewFile: () => void;
@@ -22,6 +23,7 @@ interface FileToolbarProps {
 }
 
 export function FileToolbar({
+  directoryAliases,
   onUpload,
   onNewFile,
   onNewFolder,
@@ -35,7 +37,9 @@ export function FileToolbar({
 
   if (!rootDir) return null;
 
-  const dirName = rootDir.split('/').pop() || rootDir;
+  const dirName =
+    directoryAliases?.[rootDir.replace(/\/+$/, '')] ??
+    (rootDir.split('/').pop() || rootDir);
 
   const refreshAll = () => {
     void queryClient.invalidateQueries({
