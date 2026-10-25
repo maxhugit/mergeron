@@ -100,6 +100,22 @@ describe('project deliverables', () => {
     expect(updated.createdByName).toBe(item.createdByName);
     expect(updated.updatedByName).toBe('System');
     expect(updated.updatedAt).toBeGreaterThanOrEqual(item.createdAt);
+    expect(service.board('p', 'r').deliverables[0].activityEvents).toEqual([
+      expect.objectContaining({
+        action: 'deliverable_updated',
+        actorName: 'System',
+        details: { fields: ['title'] },
+      }),
+    ]);
+    expect(() =>
+      service.update('p', 'r', item.id, {
+        title: 'Stale',
+        version: item.version,
+      }),
+    ).toThrow('Reload');
+    expect(service.board('p', 'r').deliverables[0].activityEvents).toHaveLength(
+      1,
+    );
     const required = service.setValidationRequirement(
       'p',
       'r',
@@ -109,6 +125,68 @@ describe('project deliverables', () => {
     );
     expect(required.createdByName).toBe('System');
     expect(required.updatedByName).toBe('Bob');
+  });
+  it('retains document deletion and restoration events across repeated cycles', async () => {
+    const item = await service.create('p', 'r', { title: 'Audited documents' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Report');
+    const created = await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    service.setDocumentDeleted('p', 'r', item.id, created.document.id, 1, true);
+    service.setDocumentDeleted('p', 'r', item.id, created.document.id, 1, true);
+    service.setDocumentDeleted(
+      'p',
+      'r',
+      item.id,
+      created.document.id,
+      1,
+      false,
+    );
+    service.setDocumentDeleted('p', 'r', item.id, created.document.id, 1, true);
+    const result = service.board('p', 'r').deliverables[0];
+    expect(
+      result.activityEvents.filter(
+        (event) => event.action === 'deliverable_document_deleted',
+      ),
+    ).toHaveLength(2);
+    expect(
+      result.activityEvents.filter(
+        (event) => event.action === 'deliverable_document_restored',
+      ),
+    ).toHaveLength(1);
+    expect(
+      result.activityEvents.every(
+        (event) => event.details.documentId === created.document.id,
+      ),
+    ).toBe(true);
+    expect(result.documents[0].versions[0].authorName).toBe('Alice');
+    const projectsService = new ProjectsService(
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      database.db,
+    );
+    expect(
+      projectsService
+        .activity('p')
+        .some((event) => event.entityType === 'deliverable_history'),
+    ).toBe(false);
+    expect(await fs.readFile(source, 'utf8')).toBe('Report');
+    const other = await service.create('p', 'r', { title: 'Unrelated' });
+    expect(
+      service
+        .board('p', 'r')
+        .deliverables.find((entry) => entry.id === other.id)?.activityEvents,
+    ).toEqual([]);
   });
   it('associates one main task from the project and clears it when the task is deleted', async () => {
     const now = Date.now();

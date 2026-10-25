@@ -30,6 +30,7 @@ import {
   projectPersonGroupMembers,
   people,
   projectTasks,
+  projectActivity,
   projectTaskActivity,
   projectTaskStatuses,
   projectAgentThreads,
@@ -538,11 +539,31 @@ export class DeliverablesService {
           .orderBy(desc(validationEvents.createdAt))
           .all()
       : [];
+    const activityHistory = records.length
+      ? this.db
+          .select()
+          .from(projectActivity)
+          .where(
+            and(
+              eq(projectActivity.projectId, projectId),
+              eq(projectActivity.entityType, 'deliverable_history'),
+              inArray(
+                projectActivity.entityId,
+                records.map((row) => row.id),
+              ),
+            ),
+          )
+          .orderBy(desc(projectActivity.createdAt))
+          .all()
+      : [];
     return {
       ...context,
       ...this.options(projectId),
       deliverables: records.map((item) => ({
         ...item,
+        activityEvents: activityHistory.filter(
+          (event) => event.entityId === item.id,
+        ),
         activeFolder: this.activeFolders.get('deliverable', item.id),
         validationStatus: this.effectiveValidationStatus(
           item,
@@ -876,20 +897,47 @@ export class DeliverablesService {
       throw new ConflictException('Archived deliverables are read-only');
     if (input.version !== current.version)
       throw new ConflictException('Deliverable changed. Reload before saving.');
-    const changed = this.db
-      .update(items)
-      .set({
-        updatedByName: this.actor().name,
-        ...this.changes(projectId, input, current),
-        version: current.version + 1,
-        updatedAt: Date.now(),
-      })
-      .where(and(eq(items.id, id), eq(items.version, current.version)))
-      .returning()
-      .get();
-    if (!changed)
-      throw new ConflictException('Deliverable changed. Reload before saving.');
-    return changed;
+    const actor = this.actor();
+    const changes = this.changes(projectId, input, current);
+    const now = Date.now();
+    return this.db.transaction((tx) => {
+      const changed = tx
+        .update(items)
+        .set({
+          updatedByName: actor.name,
+          ...changes,
+          version: current.version + 1,
+          updatedAt: now,
+        })
+        .where(and(eq(items.id, id), eq(items.version, current.version)))
+        .returning()
+        .get();
+      if (!changed)
+        throw new ConflictException(
+          'Deliverable changed. Reload before saving.',
+        );
+      const fields = Object.keys(changes).filter(
+        (key) =>
+          JSON.stringify(current[key as keyof Item]) !==
+          JSON.stringify(changes[key as keyof typeof changes]),
+      );
+      if (fields.length)
+        tx.insert(projectActivity)
+          .values({
+            id: randomUUID(),
+            projectId,
+            entityType: 'deliverable_history',
+            entityId: id,
+            action: 'deliverable_updated',
+            label: changed.title,
+            details: { fields },
+            actorPersonId: actor.personId,
+            actorName: actor.name,
+            createdAt: now,
+          })
+          .run();
+      return changed;
+    });
   }
 
   transitionLifecycle(
@@ -1619,7 +1667,9 @@ export class DeliverablesService {
     if (!document) throw new NotFoundException('Document not found');
     if (document.currentVersionNumber !== expectedVersion)
       throw new ConflictException('Document changed. Reload before saving.');
+    if ((document.deletedAt !== null) === deleted) return { ok: true };
     const now = Date.now();
+    const actor = this.actor();
     this.db.transaction((tx) => {
       tx.update(documents)
         .set({ deletedAt: deleted ? now : null, updatedAt: now })
@@ -1632,6 +1682,22 @@ export class DeliverablesService {
           version: sql`${items.version} + 1`,
         })
         .where(eq(items.id, deliverableId))
+        .run();
+      tx.insert(projectActivity)
+        .values({
+          id: randomUUID(),
+          projectId,
+          entityType: 'deliverable_history',
+          entityId: deliverableId,
+          action: deleted
+            ? 'deliverable_document_deleted'
+            : 'deliverable_document_restored',
+          label: document.name,
+          details: { documentId },
+          actorPersonId: actor.personId,
+          actorName: actor.name,
+          createdAt: now,
+        })
         .run();
     });
     return { ok: true };
