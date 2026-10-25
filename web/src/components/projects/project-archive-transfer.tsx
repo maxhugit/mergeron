@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Loader2, Upload } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -60,8 +60,19 @@ async function archiveRequest(path: string, init?: RequestInit) {
   return response;
 }
 
-export function ProjectArchiveExport({ projectId }: { projectId: string }) {
-  const { t } = useTranslation();
+export function ProjectArchiveExportDialog({
+  projectId,
+  open,
+  onOpenChange,
+}: {
+  projectId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const session = usePlatformSession();
+  const { t } = useTranslation(['common', 'projectArchives'], {
+    nsMode: 'fallback',
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const download = async () => {
@@ -87,39 +98,68 @@ export function ProjectArchiveExport({ projectId }: { projectId: string }) {
       setBusy(false);
     }
   };
+  if (!session.isAdministrator) return null;
   return (
-    <section className="space-y-3 rounded-xl border bg-card p-5">
-      <h3 className="font-semibold">{t('projectArchiveTitle')}</h3>
-      <p className="text-sm text-muted-foreground">
-        {t('projectArchiveExportDescription')}
-      </p>
-      <p className="text-sm text-muted-foreground">
-        {t('projectArchiveSensitive')}
-      </p>
-      <Button variant="outline" disabled={busy} onClick={() => void download()}>
-        {busy ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Download className="mr-2 h-4 w-4" />
-        )}
-        {t(busy ? 'projectArchiveExporting' : 'projectArchiveExport')}
-      </Button>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+    <Dialog open={open} onOpenChange={(value) => !busy && onOpenChange(value)}>
+      {open && (
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t('projectArchiveTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('projectArchiveSensitive')}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('projectArchiveExportDescription')}
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => onOpenChange(false)}
+            >
+              {t('cancel')}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => void download()}
+            >
+              {busy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              {t(busy ? 'projectArchiveExporting' : 'projectArchiveExport')}
+            </Button>
+          </DialogFooter>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </DialogContent>
       )}
-    </section>
+    </Dialog>
   );
 }
 
 /** Available without creating a destination project first. */
-export function ProjectArchiveImportButton() {
+export function ProjectArchiveImportForm({
+  onBusyChange,
+  onImported,
+  onCancel,
+}: {
+  onBusyChange: (busy: boolean) => void;
+  onImported: () => void;
+  onCancel: () => void;
+}) {
   const session = usePlatformSession();
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'projectArchives'], {
+    nsMode: 'fallback',
+  });
   const navigate = useNavigate();
   const client = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<'preview' | 'import' | null>(null);
   const [preview, setPreview] = useState<ArchivePreview | null>(null);
   const [name, setName] = useState('');
@@ -133,6 +173,7 @@ export function ProjectArchiveImportButton() {
       return;
     }
     setBusy('preview');
+    onBusyChange(true);
     try {
       const form = new FormData();
       form.append('archive', file);
@@ -149,6 +190,7 @@ export function ProjectArchiveImportButton() {
       setError(archiveError(reason, t('projectArchivePreviewError')));
     } finally {
       setBusy(null);
+      onBusyChange(false);
     }
   };
   useEffect(() => {
@@ -163,6 +205,7 @@ export function ProjectArchiveImportButton() {
   const restore = async () => {
     if (!preview) return;
     setBusy('import');
+    onBusyChange(true);
     setError('');
     try {
       const response = await archiveRequest('/import', {
@@ -173,8 +216,8 @@ export function ProjectArchiveImportButton() {
       const result = (await response.json()) as { projectId: string };
       await client.invalidateQueries({ queryKey: projectsQueryKey });
       await client.invalidateQueries({ queryKey: ['threads'] });
-      setOpen(false);
       setPreview(null);
+      onImported();
       void navigate({
         to: '/projects/$projectId',
         params: { projectId: result.projectId },
@@ -184,123 +227,98 @@ export function ProjectArchiveImportButton() {
       setError(archiveError(reason, t('projectArchiveImportError')));
     } finally {
       setBusy(null);
+      onBusyChange(false);
     }
   };
   if (!session.isAdministrator) return null;
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!busy) {
-          setOpen(value);
-          if (!value) {
-            setPreview(null);
-            setError('');
-          }
-        }
-      }}
+    <div
+      className="space-y-4"
+      role="tabpanel"
+      id="project-import-panel"
+      aria-labelledby="project-import-tab"
     >
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-6 w-6"
-        aria-label={t('projectArchiveImport')}
-        title={t('projectArchiveImport')}
-        onClick={() => setOpen(true)}
-      >
-        <Upload className="h-3.5 w-3.5" />
-      </Button>
-      {open && (
-        <DialogContent className="max-h-[85dvh] max-w-xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t('projectArchiveImport')}</DialogTitle>
-            <DialogDescription>
-              {t('projectArchiveImportDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          <label className="space-y-2 text-sm">
-            <span>{t('projectArchiveChooseZip')}</span>
+      <label className="space-y-2 text-sm">
+        <span>{t('projectArchiveChooseZip')}</span>
+        <Input
+          type="file"
+          accept=".zip,application/zip"
+          disabled={!!busy}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            void inspect(file);
+          }}
+        />
+      </label>
+      <p className="text-sm text-muted-foreground">
+        {t('projectArchiveLimit')}
+      </p>
+      {busy && (
+        <p role="status" className="flex items-center gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {t(
+            busy === 'preview'
+              ? 'projectArchiveAnalyzing'
+              : 'projectArchiveImporting',
+          )}
+        </p>
+      )}
+      {preview && (
+        <div className="space-y-3 text-sm">
+          <p className="font-medium">{t('projectArchiveCompatible')}</p>
+          <p>
+            {t('projectArchiveVersions', {
+              source: preview.sourceVersion,
+              target: preview.targetVersion,
+            })}
+          </p>
+          <p>
+            {t('projectArchiveContents', {
+              count: preview.files,
+              size: (preview.bytes / 1024 / 1024).toFixed(1),
+            })}
+          </p>
+          <label className="block space-y-2">
+            <span>{t('projectArchiveProjectName')}</span>
             <Input
-              type="file"
-              accept=".zip,application/zip"
+              value={name}
+              maxLength={200}
               disabled={!!busy}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                void inspect(file);
-              }}
+              onChange={(event) => setName(event.target.value)}
             />
           </label>
-          <p className="text-sm text-muted-foreground">
-            {t('projectArchiveLimit')}
-          </p>
-          {busy && (
-            <p role="status" className="flex items-center gap-2 text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t(
-                busy === 'preview'
-                  ? 'projectArchiveAnalyzing'
-                  : 'projectArchiveImporting',
-              )}
-            </p>
-          )}
-          {preview && (
-            <div className="space-y-3 text-sm">
-              <p className="font-medium">{t('projectArchiveCompatible')}</p>
-              <p>
-                {t('projectArchiveVersions', {
-                  source: preview.sourceVersion,
-                  target: preview.targetVersion,
-                })}
-              </p>
-              <p>
-                {t('projectArchiveContents', {
-                  count: preview.files,
-                  size: (preview.bytes / 1024 / 1024).toFixed(1),
-                })}
-              </p>
-              <label className="block space-y-2">
-                <span>{t('projectArchiveProjectName')}</span>
-                <Input
-                  value={name}
-                  maxLength={200}
-                  disabled={!!busy}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-              <p>{t('projectArchiveSafety')}</p>
-              <p>{t('projectArchiveContacts')}</p>
-              <p>{t('projectArchiveExpiry')}</p>
-            </div>
-          )}
-          {error && (
-            <p
-              role="alert"
-              className="whitespace-pre-wrap text-sm text-destructive"
-            >
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={!!busy}
-              onClick={() => {
-                setOpen(false);
-                setPreview(null);
-              }}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              disabled={!preview || !!busy || !name.trim()}
-              onClick={() => void restore()}
-            >
-              {t('projectArchiveConfirmImport')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+          <p>{t('projectArchiveSafety')}</p>
+          <p>{t('projectArchiveContacts')}</p>
+          <p>{t('projectArchiveExpiry')}</p>
+        </div>
       )}
-    </Dialog>
+      {error && (
+        <p
+          role="alert"
+          className="whitespace-pre-wrap text-sm text-destructive"
+        >
+          {error}
+        </p>
+      )}
+      <DialogFooter>
+        <Button
+          variant="outline"
+          disabled={!!busy}
+          onClick={() => {
+            setPreview(null);
+            onCancel();
+          }}
+        >
+          {t('cancel')}
+        </Button>
+        <Button
+          disabled={!preview || !!busy || !name.trim()}
+          onClick={() => void restore()}
+        >
+          {t('projectArchiveConfirmImport')}
+        </Button>
+      </DialogFooter>
+    </div>
   );
 }

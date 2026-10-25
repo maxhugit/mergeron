@@ -9,10 +9,12 @@ Elle ne remplace pas la [sauvegarde complète de l’installation](sauvegarde-re
 L’export et l’import sont réservés aux administrateurs : un projet peut contenir
 des conversations privées, des documents restreints et des coordonnées personnelles.
 
-1. Ouvrir le projet, onglet **Informations générales**.
-2. Dans **Export du projet**, choisir **Exporter tout le projet en ZIP**.
-3. Sur l’autre installation, utiliser le bouton d’import à côté du **+** de la
-   rubrique **Projets**. Aucun projet vide n’est nécessaire au préalable.
+1. Ouvrir le menu contextuel du projet dans la barre latérale (clic droit sur le
+   projet ou bouton **Actions du projet**).
+2. Choisir **Exporter tout le projet en ZIP**, puis confirmer dans la fenêtre d’export.
+3. Sur l’autre installation, cliquer sur **+** dans la rubrique **Projets**, puis
+   choisir **Importer un projet depuis un ZIP** dans la fenêtre de création.
+   Aucun projet vide n’est nécessaire au préalable.
 4. Sélectionner le ZIP. L’application vérifie l’inventaire, les empreintes des
    fichiers, les données liées et la compatibilité avec la destination.
 5. Si l’analyse réussit, vérifier le nom du nouveau projet et confirmer.

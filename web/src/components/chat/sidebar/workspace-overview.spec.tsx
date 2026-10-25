@@ -1,10 +1,77 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DragDropProvider } from '@dnd-kit/react';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceOverview } from './workspace-overview';
 
 describe('WorkspaceOverview creation menu', () => {
+  it.each([true, false])(
+    'offers project export only when authorized (%s)',
+    async (authorized) => {
+      const exportProject = vi.fn();
+      const group = {
+        projectId: 'selected-project',
+        cwd: '/workspaces/selected-project',
+        name: 'Selected project',
+        threads: [],
+        simpleChats: [],
+      };
+      render(
+        <DragDropProvider>
+          <WorkspaceOverview
+            projectsHeader={<h2>Projects</h2>}
+            workspaceGroups={[group]}
+            collapsedGroups={new Set()}
+            isLoading={false}
+            onToggleCollapse={vi.fn()}
+            onOpenProject={vi.fn()}
+            onOpenArchivedDetail={vi.fn()}
+            onOpenWorkspaceDetail={vi.fn()}
+            onCreateAgentInWorkspace={vi.fn()}
+            onCreateSimpleChatInWorkspace={vi.fn()}
+            onCreateTaskBoard={vi.fn()}
+            onOpenResource={vi.fn()}
+            resourceActionPending={false}
+            onRenameResource={vi.fn()}
+            onDeleteResource={vi.fn()}
+            onExportProject={authorized ? exportProject : undefined}
+            renderThreadRow={() => null}
+            renderSimpleChatRow={() => null}
+            movingThread={false}
+          />
+        </DragDropProvider>,
+      );
+      expect(
+        screen.queryByRole('button', {
+          name: 'Export the entire project as ZIP',
+        }),
+      ).not.toBeInTheDocument();
+      fireEvent.contextMenu(screen.getByText('Selected project'));
+      if (!authorized) {
+        expect(
+          screen.getByRole('button', { name: 'Work agent' }),
+        ).toBeVisible();
+        expect(
+          screen.queryByRole('button', {
+            name: 'Export the entire project as ZIP',
+          }),
+        ).not.toBeInTheDocument();
+        return;
+      }
+      const user = userEvent.setup();
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Export the entire project as ZIP',
+        }),
+      );
+      expect(exportProject).toHaveBeenCalledWith(group);
+      expect(
+        screen.queryByRole('button', {
+          name: 'Export the entire project as ZIP',
+        }),
+      ).not.toBeInTheDocument();
+    },
+  );
   it.each([
     ['Automations', 'automation_board'],
     ['Deliverables management', 'deliverable_board'],

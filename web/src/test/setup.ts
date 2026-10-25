@@ -7,6 +7,7 @@ import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import enAuthentication from '@/locales/en/authentication.json';
 import enCommon from '@/locales/en/common.json';
+import enProjectArchives from '@/locales/en/projectArchives.json';
 import i18n, { i18nReady } from '@/i18n';
 
 const flatten = (
@@ -27,6 +28,7 @@ const flatten = (
 const english = {
   ...flatten(enCommon),
   ...flatten(enAuthentication),
+  ...flatten(enProjectArchives),
 };
 
 declare global {

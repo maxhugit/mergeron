@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ProjectArchiveImportButton } from './project-archive-transfer';
+import { ProjectArchiveExportDialog } from './project-archive-transfer';
+import { CreateProjectDialog } from '@/components/chat/sidebar/create-project-dialog';
 
 const navigate = vi.fn();
 const session = { isAdministrator: true };
@@ -15,14 +16,23 @@ afterEach(() => {
   navigate.mockClear();
 });
 
+const createProps = {
+  open: true,
+  pending: false,
+  name: '',
+  onNameChange: vi.fn(),
+  onSave: vi.fn(),
+  onClose: vi.fn(),
+};
+
 function openDialog() {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ProjectArchiveImportButton />
+      <CreateProjectDialog {...createProps} />
     </QueryClientProvider>,
   );
   fireEvent.click(
-    screen.getByRole('button', { name: 'Import a project from ZIP' }),
+    screen.getByRole('tab', { name: 'Import a project from ZIP' }),
   );
 }
 
@@ -40,12 +50,90 @@ it('is available without an existing project but hidden from non-administrators'
   session.isAdministrator = false;
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ProjectArchiveImportButton />
+      <CreateProjectDialog {...createProps} />
     </QueryClientProvider>,
   );
   expect(
-    screen.queryByRole('button', { name: 'Import a project from ZIP' }),
+    screen.queryByRole('tab', { name: 'Import a project from ZIP' }),
   ).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Project name')).toBeVisible();
+});
+
+it('creates a blank project by default and offers import inside the same dialog', () => {
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CreateProjectDialog {...createProps} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByLabelText('Project name')).toBeVisible();
+  fireEvent.click(
+    screen.getByRole('tab', { name: 'Import a project from ZIP' }),
+  );
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.getByLabelText('Project archive')).toBeVisible();
+  expect(screen.queryByLabelText('Project name')).not.toBeInTheDocument();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('prevents closing or switching creation mode while inspecting the ZIP', async () => {
+  let complete!: (response: Response) => void;
+  vi.spyOn(globalThis, 'fetch').mockReturnValue(
+    new Promise<Response>((resolve) => {
+      complete = resolve;
+    }),
+  );
+  createProps.onClose.mockClear();
+  openDialog();
+  fireEvent.change(screen.getByLabelText('Project archive'), {
+    target: { files: [new File(['zip'], 'project.zip')] },
+  });
+  expect(screen.getByRole('tab', { name: 'New project' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  expect(createProps.onClose).not.toHaveBeenCalled();
+  complete(
+    new Response(JSON.stringify(preview), {
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
+  await screen.findByText('Archive compatible with this installation');
+  expect(screen.getByRole('tab', { name: 'New project' })).toBeEnabled();
+});
+
+it('confirms export before requesting a ZIP and shows localized network errors', async () => {
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockRejectedValue(new TypeError('Failed to fetch'));
+  render(
+    <ProjectArchiveExportDialog
+      projectId="selected-project"
+      open
+      onOpenChange={vi.fn()}
+    />,
+  );
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Export the entire project as ZIP' }),
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Unable to download the project archive',
+  );
+  expect(fetch.mock.calls[0][0]).toBe(
+    '/api/project-archives/selected-project/export',
+  );
+});
+
+it('hides the export dialog from non-administrators', () => {
+  session.isAdministrator = false;
+  render(
+    <ProjectArchiveExportDialog
+      projectId="selected-project"
+      open
+      onOpenChange={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
 it('requires a successful compatibility analysis before import', async () => {
