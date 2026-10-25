@@ -5,8 +5,8 @@
 import { Logger } from '@nestjs/common';
 import { ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
-import { join } from 'node:path';
+import type { Writable } from 'node:stream';
+import { createCodexAuditStream } from '../logs/log-retention';
 /**
  * JSON replacer that converts BigInt to Number for serialization.
  * Targeted fix — does not change undefined/null semantics like toJsonSafe.
@@ -111,14 +111,6 @@ export interface CodexJsonRpcClientEvents {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-const LOG_DIR = join(globalThis.process.cwd(), 'logs');
-
-function createJsonlStream(): WriteStream {
-  mkdirSync(LOG_DIR, { recursive: true });
-  return createWriteStream(join(LOG_DIR, 'codex-jsonrpc.jsonl'), {
-    flags: 'a',
-  });
-}
 
 export class CodexJsonRpcClient extends EventEmitter<CodexJsonRpcClientEvents> {
   /** Sole ingress owner; observer registration never confers response authority. */
@@ -138,14 +130,17 @@ export class CodexJsonRpcClient extends EventEmitter<CodexJsonRpcClientEvents> {
   private readonly pending = new Map<RequestId, PendingRequest>();
   private buffer = '';
   private closed = false;
-  private readonly jsonlStream: WriteStream;
+  private readonly jsonlStream: Writable;
 
   constructor(
     private readonly process: ChildProcess,
     private readonly requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   ) {
     super();
-    this.jsonlStream = createJsonlStream();
+    this.jsonlStream = createCodexAuditStream();
+    this.jsonlStream.on('error', () =>
+      this.logger.warn('Codex audit logging unavailable'),
+    );
     this.setupStdio();
   }
 

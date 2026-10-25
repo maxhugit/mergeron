@@ -1,5 +1,6 @@
 /** REST controller for structured logs and sanitized diagnostics export. */
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
+import { LogRetentionService } from './log-retention.service';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -25,7 +26,20 @@ import {
 @ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
 @Controller('logs')
 export class LogsController {
-  constructor(private readonly logsService: LogsService) {}
+  constructor(
+    private readonly logsService: LogsService,
+    private readonly retention: LogRetentionService,
+  ) {}
+
+  @Get('storage')
+  storage() {
+    return this.retention.storage();
+  }
+
+  @Put('retention')
+  retentionPolicy(@Body() body: unknown) {
+    return this.retention.update(body);
+  }
 
   /** Reads paginated structured application logs. */
   @Get()
