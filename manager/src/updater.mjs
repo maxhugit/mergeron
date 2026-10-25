@@ -158,6 +158,21 @@ async function treeSize(path) {
   return value.isFile() ? value.size : 0;
 }
 
+// Allocated disk space, like du: do not follow symlinks or count hardlinks twice.
+async function allocatedTreeSize(path, deadline, seen = new Set()) {
+  if (Date.now() > deadline) throw new Error('backupSizeTimeout');
+  const value = await lstat(path);
+  const inode = `${value.dev}:${value.ino}`;
+  if (seen.has(inode)) return 0;
+  seen.add(inode);
+  let bytes = value.blocks * 512;
+  if (value.isDirectory()) {
+    for (const name of await readdir(path))
+      bytes += await allocatedTreeSize(join(path, name), deadline, seen);
+  }
+  return bytes;
+}
+
 export async function restorePersistentEntry(stateRoot, base, id, name) {
   const source = join(stateRoot, name);
   // Linux requires write permission on a directory when changing its parent.
@@ -250,6 +265,26 @@ export class TransactionalUpdater {
       throw error;
     });
     const backups = [];
+    const sizeDeadline = Date.now() + 10_000;
+    this.backupSizeCache ??= new Map();
+    // Expose the Docker-host path only when the two mounts identify the same directory.
+    const alias = join(
+      this.configuration.hostStatePath,
+      'manager-state',
+      'updates',
+    );
+    const [localRoot, aliasRoot] = await Promise.all([
+      lstat(this.directory).catch(() => null),
+      lstat(alias).catch(() => null),
+    ]);
+    const hostDirectory =
+      localRoot?.isDirectory() &&
+      aliasRoot?.isDirectory() &&
+      !aliasRoot.isSymbolicLink() &&
+      localRoot.dev === aliasRoot.dev &&
+      localRoot.ino === aliasRoot.ino
+        ? join(this.configuration.stateRoot, 'manager-state', 'updates')
+        : null;
     for (const id of entries.filter((name) =>
       /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
         name,
@@ -283,8 +318,24 @@ export class TransactionalUpdater {
         operation.environment === this.manifest.environment;
       const blocked =
         this.busy || (this.current && !terminal.has(this.current.status));
+      const cached = this.backupSizeCache.get(id);
+      const sizeBytes =
+        cached && cached.expires > Date.now()
+          ? cached.bytes
+          : await allocatedTreeSize(
+              join(directory, 'backup'),
+              sizeDeadline,
+            ).catch(() => null);
+      if (sizeBytes !== null && valid && terminal.has(operation.status))
+        this.backupSizeCache.set(id, {
+          bytes: sizeBytes,
+          expires: Date.now() + 60_000,
+        });
       backups.push({
         id,
+        path: hostDirectory ? join(hostDirectory, id, 'backup') : null,
+        managerPath: join(directory, 'backup'),
+        sizeBytes,
         createdAt:
           valid && Number.isFinite(Date.parse(operation.startedAt))
             ? operation.startedAt
@@ -304,6 +355,9 @@ export class TransactionalUpdater {
       });
     }
     return {
+      totalSizeBytes: backups.every((backup) => backup.sizeBytes !== null)
+        ? backups.reduce((total, backup) => total + backup.sizeBytes, 0)
+        : null,
       backups: backups.sort(
         (a, b) =>
           b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),

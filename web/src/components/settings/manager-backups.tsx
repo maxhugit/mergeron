@@ -45,6 +45,18 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
   });
   const busy = Boolean(status.update?.busy || deletion.isPending);
   const date = (value: string) => new Date(value).toLocaleString(i18n.language);
+  const size = (value: number | null | undefined) => {
+    if (value == null || !Number.isFinite(value))
+      return t('managerBackupSizeUnknown');
+    const unit =
+      value < 1024
+        ? 0
+        : Math.min(3, Math.floor(Math.log(value) / Math.log(1024)));
+    const units = i18n.language.startsWith('fr')
+      ? ['o', 'Kio', 'Mio', 'Gio']
+      : ['B', 'KiB', 'MiB', 'GiB'];
+    return `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(value / 1024 ** unit)} ${units[unit]}`;
+  };
   return (
     <section
       className="space-y-3 border-t pt-4"
@@ -52,6 +64,13 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
     >
       <h3 className="font-medium">{t('managerBackupsTitle')}</h3>
       <p className="text-xs text-muted-foreground">{t('managerBackupsHelp')}</p>
+      {query.data && (
+        <p className="text-sm font-medium">
+          {t('managerBackupsTotalSize', {
+            size: size(query.data.totalSizeBytes),
+          })}
+        </p>
+      )}
       {!supported ? (
         <p className="text-sm text-muted-foreground">
           {t('managerBackupsUpgradeRequired')}
@@ -86,6 +105,22 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                   </time>
                   <p className="break-all font-mono text-xs text-muted-foreground">
                     {backup.id}
+                  </p>
+                  <p className="break-all font-mono text-xs text-muted-foreground">
+                    {t(
+                      backup.path
+                        ? 'managerBackupHostPath'
+                        : 'managerBackupManagerPath',
+                    )}
+                    :{' '}
+                    {backup.path ||
+                      backup.managerPath ||
+                      t('managerBackupSizeUnknown')}
+                  </p>
+                  <p className="text-xs">
+                    {t('managerBackupDiskSize', {
+                      size: size(backup.sizeBytes),
+                    })}
                   </p>
                   {backup.current && (
                     <p className="text-xs">{t('managerBackupsLatest')}</p>

@@ -1,4 +1,9 @@
 {
+  "managerBackupSizeUnknown": "Indisponible",
+  "managerBackupsTotalSize": "Espace disque total des sauvegardes : {{size}}",
+  "managerBackupHostPath": "Chemin sur le serveur",
+  "managerBackupManagerPath": "Chemin dans le Manager (chemin serveur indisponible)",
+  "managerBackupDiskSize": "Espace disque occupé : {{size}}",
   "serverSettingsTabs": "Réglages du serveur",
   "serverCurrentVersionTab": "Version actuelle",
   "serverUpdateTab": "Mise à jour",

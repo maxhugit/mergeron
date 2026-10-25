@@ -1,4 +1,9 @@
 {
+  "managerBackupSizeUnknown": "Unavailable",
+  "managerBackupsTotalSize": "Total backup disk usage: {{size}}",
+  "managerBackupHostPath": "Server path",
+  "managerBackupManagerPath": "Manager path (server path unavailable)",
+  "managerBackupDiskSize": "Disk usage: {{size}}",
   "serverSettingsTabs": "Server settings",
   "serverCurrentVersionTab": "Current version",
   "serverUpdateTab": "Update",
