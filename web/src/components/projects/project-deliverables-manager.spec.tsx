@@ -203,6 +203,18 @@ async function setupList(data = board) {
   await screen.findByRole('button', { name: /Report/ });
 }
 
+it('aligns all compact badges to the right and preserves desktop column alignment', async () => {
+  await setupList();
+  for (const badge of [
+    screen.getByTestId('deliverable-status-d'),
+    screen.getByText('Not required', { selector: 'span' }),
+    screen.getByText('Standard access', { selector: 'span' }),
+  ]) {
+    expect(badge).toHaveClass('justify-self-end');
+    expect(badge).toHaveClass('@min-[68rem]:justify-self-auto');
+  }
+});
+
 it('asks for a title only after opening the creation dialog and cancels without saving', async () => {
   await setupList();
   expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
