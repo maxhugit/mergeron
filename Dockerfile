@@ -128,6 +128,8 @@ COPY package.json pnpm-lock.yaml* ./
 COPY --from=backend-builder /app/dist ./dist/
 COPY --from=backend-builder /app/public ./public/
 COPY drizzle/ ./drizzle/
+COPY scripts/project_archive.py ./scripts/project_archive.py
+COPY scripts/project_archive_native.py ./scripts/project_archive_native.py
 COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
 
 RUN chmod +x /usr/local/bin/codex-cli-dispatch

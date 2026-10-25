@@ -26,6 +26,7 @@ import {
 } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import { useParticipants } from '@/lib/people-api';
+import { ProjectArchiveExport } from '@/components/projects/project-archive-transfer';
 import {
   projectAppsQueryOptions,
   projectMcpServersQueryOptions,
@@ -245,6 +246,9 @@ export function ProjectRoute() {
                   </dl>
                 </section>
               </div>
+              {session.isAdministrator && (
+                <ProjectArchiveExport projectId={project.id} />
+              )}
             </>
           ) : visibleTab === 'journal' ? (
             <ProjectJournal

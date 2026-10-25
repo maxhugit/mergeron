@@ -15,6 +15,8 @@ import { WorkspaceResourcesController } from './workspace-resources.controller';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceTransfersService } from './workspace-transfers.service';
+import { ProjectArchivesController } from './project-archives.controller';
+import { ProjectArchivesService } from './project-archives.service';
 
 @Module({
   imports: [
@@ -28,12 +30,14 @@ import { WorkspaceTransfersService } from './workspace-transfers.service';
     ProjectKnowledgeModule,
   ],
   controllers: [
+    ProjectArchivesController,
     ProjectsController,
     ProjectKnowledgeController,
     DeliverablesController,
     WorkspaceResourcesController,
   ],
   providers: [
+    ProjectArchivesService,
     ProjectsService,
     WorkspaceResourcesService,
     WorkspaceCopiesService,

@@ -342,6 +342,23 @@ export const projects = sqliteTable(
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
 
+/** Import provenance preserves contact details without importing login rights. */
+export const projectArchiveImports = sqliteTable(
+  'project_archive_imports',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sourceVersion: text('source_version').notNull(),
+    importedAt: integer('imported_at').notNull(),
+    provenance: text('provenance', { mode: 'json' })
+      .$type<Record<string, unknown>>()
+      .notNull(),
+  },
+  (table) => [index('idx_project_archive_imports_project').on(table.projectId)],
+);
+
 /** Immutable versions sent to agents, retained so delayed proposals have a base. */
 export const projectKnowledgeSnapshots = sqliteTable(
   'project_knowledge_snapshots',

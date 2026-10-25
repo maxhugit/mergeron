@@ -19,6 +19,9 @@ dans cet ordre :
 
 ## Guide d’utilisation
 
+- [Export et import des projets en ZIP](export-import-projets.md) : transfert
+  production/development, contenu, sécurité et compatibilité entre versions.
+
 - [Migration vers Mergeron](migration-mergeron.md) : image GHCR, noms des
   conteneurs, formulaires Unraid et conservation des données existantes.
 

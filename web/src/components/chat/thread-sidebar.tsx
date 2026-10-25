@@ -61,6 +61,7 @@ import { SimpleChatRow } from './sidebar/simple-chat-row';
 import { RenameDialog, ConfirmDialog } from './sidebar/sidebar-dialogs';
 import { ForkGoalDialog } from './sidebar/fork-goal-dialog';
 import { CreateProjectDialog } from './sidebar/create-project-dialog';
+import { ProjectArchiveImportButton } from '@/components/projects/project-archive-transfer';
 import { useForkWithGoal } from '@/hooks/use-fork-with-goal';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
@@ -1053,16 +1054,19 @@ export function ThreadSidebar() {
         <FolderKanban aria-hidden="true" className="h-4 w-4 shrink-0" />
         {t('projects')}
       </span>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-6 w-6"
-        aria-label={t('newProject')}
-        title={t('newProject')}
-        onClick={() => setCreateProjectOpen(true)}
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </Button>
+      <div className="flex items-center gap-1">
+        <ProjectArchiveImportButton />
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6"
+          aria-label={t('newProject')}
+          title={t('newProject')}
+          onClick={() => setCreateProjectOpen(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 
