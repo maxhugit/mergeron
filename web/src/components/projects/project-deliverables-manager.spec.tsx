@@ -291,6 +291,9 @@ it('includes required validation and highlights the waiting stage', async () => 
   expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
     'Awaiting validation',
   );
+  expect(flow.querySelectorAll('[data-stage-state="complete"]')).toHaveLength(2);
+  expect(flow.querySelectorAll('[data-stage-state="upcoming"]')).toHaveLength(2);
+  expect(flow.querySelectorAll('[data-stage-state="current"]')).toHaveLength(1);
 });
 it('keeps modal content local and protects unsaved changes when closing', async () => {
   const slot = document.createElement('div');
@@ -567,6 +570,8 @@ it.each([
     for (const badge of screen.getAllByText(lifecycleLabel, {
       selector: 'span',
     })) {
+      // The lifecycle ribbon is a stepper, not a status badge.
+      if (badge.closest('[data-stage-state]')) continue;
       expect(colors(badge)).toEqual(lifecycleColors);
     }
   },
