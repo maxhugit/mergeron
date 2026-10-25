@@ -215,6 +215,122 @@ it('aligns all compact badges to the right and preserves desktop column alignmen
   }
 });
 
+it.each([
+  {
+    validationStatus: 'not_required',
+    validationRequired: false,
+    lifecycleStatus: 'draft',
+    confidentiality: 'standard',
+    label: 'Not required',
+    validationColor: 'bg-muted',
+    lifecycleColor: 'bg-amber-500/15',
+  },
+  {
+    validationStatus: 'not_required',
+    validationRequired: true,
+    lifecycleStatus: 'in_constitution',
+    confidentiality: 'restricted',
+    label: 'Required',
+    validationColor: 'bg-muted',
+    lifecycleColor: 'bg-blue-500/15',
+  },
+  {
+    validationStatus: 'pending',
+    validationRequired: true,
+    lifecycleStatus: 'finalized',
+    confidentiality: 'restricted',
+    label: 'Pending',
+    validationColor: 'bg-violet-500/15',
+    lifecycleColor: 'bg-violet-500/15',
+  },
+  {
+    validationStatus: 'approved',
+    validationRequired: true,
+    lifecycleStatus: 'finalized',
+    confidentiality: 'standard',
+    label: 'Approved',
+    validationColor: 'bg-emerald-500/15',
+    lifecycleColor: 'bg-emerald-500/15',
+  },
+  {
+    validationStatus: 'rejected',
+    validationRequired: true,
+    lifecycleStatus: 'finalized',
+    confidentiality: 'restricted',
+    label: 'Rejected',
+    validationColor: 'bg-red-500/15',
+    lifecycleColor: 'bg-violet-500/15',
+  },
+  {
+    validationStatus: 'outdated',
+    validationRequired: true,
+    lifecycleStatus: 'finalized',
+    confidentiality: 'standard',
+    label: 'Outdated',
+    validationColor: 'bg-amber-500/15',
+    lifecycleColor: 'bg-violet-500/15',
+  },
+  {
+    validationStatus: 'not_required',
+    validationRequired: false,
+    lifecycleStatus: 'archived',
+    confidentiality: 'restricted',
+    label: 'Not required',
+    validationColor: 'bg-muted',
+    lifecycleColor: 'bg-muted',
+  },
+] as const)(
+  'shares list and detail badge colors for $label / $confidentiality',
+  async (state) => {
+    const data: DeliverablesBoard = {
+      ...board,
+      deliverables: [
+        {
+          ...item,
+          validationStatus: state.validationStatus,
+          validationRequired: state.validationRequired,
+          lifecycleStatus: state.lifecycleStatus,
+          confidentiality: state.confidentiality,
+        },
+      ],
+    };
+    const accessLabel =
+      state.confidentiality === 'restricted'
+        ? 'Restricted access'
+        : 'Standard access';
+    const colors = (element: Element) =>
+      Array.from(element.classList)
+        .filter((name) => /^(bg-|text-|dark:text-)/.test(name))
+        .sort();
+    await setupList(data);
+    const listValidation = screen.getByText(state.label, { selector: 'span' });
+    const listAccess = screen.getByText(accessLabel, { selector: 'span' });
+    const lifecycle = screen
+      .getByTestId('deliverable-status-d')
+      .querySelector('span')!;
+    expect(listValidation).toHaveClass(state.validationColor);
+    expect(lifecycle).toHaveClass(state.lifecycleColor);
+    expect(listAccess).toHaveClass(
+      state.confidentiality === 'restricted' ? 'bg-rose-500/15' : 'bg-muted',
+    );
+    const validationColors = colors(listValidation);
+    const accessColors = colors(listAccess);
+    const lifecycleColors = colors(lifecycle);
+    const lifecycleLabel = lifecycle.textContent!;
+    cleanup();
+    await setup(data);
+    expect(colors(screen.getByText(state.label, { selector: 'span' }))).toEqual(
+      validationColors,
+    );
+    expect(colors(screen.getByText(accessLabel, { selector: 'span' }))).toEqual(
+      accessColors,
+    );
+    expect(
+      colors(screen.getByText(lifecycleLabel, { selector: 'span' })),
+    ).toEqual(lifecycleColors);
+  },
+);
+
 it('asks for a title only after opening the creation dialog and cancels without saving', async () => {
   await setupList();
   expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
@@ -268,9 +384,7 @@ it('keeps the creation dialog and entered title on failure, allowing a retry', a
   fireEvent.click(screen.getByRole('button', { name: 'Create' }));
   expect(await screen.findByRole('alert')).toBeInTheDocument();
   expect(screen.getByLabelText('Title')).toHaveValue('Retry report');
-  expect(
-    screen.getByRole('button', { name: 'Create' }),
-  ).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled();
 });
 
 it('groups the primary task, its assignee and its due date in one card', async () => {
