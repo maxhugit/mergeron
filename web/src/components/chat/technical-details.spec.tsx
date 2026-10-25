@@ -1,10 +1,4 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAgentDisplayStore } from '@/stores/agent-display-store';
 import { useTimelineStore } from '@/stores/timeline-store';
@@ -57,15 +51,14 @@ function mount(
   return render(<TurnBlock entry={entry} />);
 }
 
-it('groups hidden technical activity without shortening prose and lets the user reveal every log', () => {
+it('fully hides routine technical activity without shortening prose or deleting history', () => {
   useAgentDisplayStore.getState().record('a', 'hidden');
   mount();
   expect(screen.getByText(message.content)).toBeVisible();
   expect(screen.queryByText('technical log output')).not.toBeInTheDocument();
-  const summary = screen.getByText('Technical details (2)');
-  const details = summary.closest('details')!;
-  details.open = true;
-  fireEvent(details, new Event('toggle'));
+  expect(document.querySelectorAll('details')).toHaveLength(0);
+  expect(screen.queryByText(/echo private-details/)).not.toBeInTheDocument();
+  act(() => useAgentDisplayStore.getState().record('a', 'expanded'));
   expect(screen.getAllByText('technical log output')).toHaveLength(2);
   expect(screen.getAllByText(/echo private-details/)).toHaveLength(2);
 });
@@ -78,9 +71,27 @@ it('shows one collapsed row per operation and switches the existing transcript i
   expect(screen.getAllByText('technical log output')).toHaveLength(2);
   act(() => useAgentDisplayStore.getState().record('a', 'hidden'));
   expect(screen.queryByText('technical log output')).not.toBeInTheDocument();
+  expect(document.querySelectorAll('details')).toHaveLength(0);
   expect(screen.getByText(message.content)).toBeVisible();
   act(() => useTimelineStore.setState({ threadId: 'b' }));
   expect(document.querySelectorAll('details')).toHaveLength(2);
+});
+
+it('renders no empty bubble for completed turns containing only hidden technical activity and a diff', () => {
+  useAgentDisplayStore.getState().record('a', 'hidden');
+  const entry: Extract<TimelineEntry, { kind: 'turn' }> = {
+    kind: 'turn',
+    turnId: 'turn',
+    completed: true,
+    items: [command],
+    diff: 'diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new',
+  };
+  const view = render(<TurnBlock entry={entry} />);
+  expect(view.container).toBeEmptyDOMElement();
+  act(() => useAgentDisplayStore.getState().record('a', 'collapsed'));
+  expect(document.querySelectorAll('details')).toHaveLength(2);
+  act(() => useAgentDisplayStore.getState().record('a', 'hidden'));
+  expect(view.container).toBeEmptyDOMElement();
 });
 
 it('keeps failed commands visible even in hidden mode', () => {
