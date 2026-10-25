@@ -99,8 +99,8 @@ export function readInstallConfiguration(manifest, env = process.env) {
       'MERGERON_WEBUI_URL',
     ),
     iconUrl: webUrl(
-      env.MERGERON_ICON_URL ??
-        'https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png',
+      env.MERGERON_ICON_URL?.trim() ||
+        `https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/${production ? 'pwa-icon-192.png' : 'pwa-dev-icon-192.png'}`,
       'MERGERON_ICON_URL',
     ),
     images: {
@@ -494,6 +494,7 @@ export function containerSpecification(manifest, component, configuration) {
       ],
       Env: [
         `NODE_ENV=${manifest.environment}`,
+        `MERGERON_STACK_ENVIRONMENT=${manifest.environment}`,
         'PORT=8172',
         'HOME=/home/codex',
         'CODEX_HOME=/home/codex/.codex',

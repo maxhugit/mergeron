@@ -16,6 +16,33 @@ const sourceManifest = JSON.parse(
 );
 const manifest = scopeManifest(sourceManifest, 'mergeron', 'production');
 
+test('selects icons from the declared environment and preserves custom overrides', () => {
+  const dev = scopeManifest(sourceManifest, 'mergeron-dev', 'development');
+  const production = readInstallConfiguration(manifest, {});
+  const development = readInstallConfiguration(dev, {
+    MERGERON_HOST_INTEGRATION: 'unraid',
+  });
+  assert.match(production.iconUrl, /\/pwa-icon-192\.png$/);
+  assert.match(development.iconUrl, /\/pwa-dev-icon-192\.png$/);
+  assert.equal(
+    readInstallConfiguration(dev, { MERGERON_ICON_URL: '' }).iconUrl,
+    development.iconUrl,
+  );
+  assert.equal(
+    readInstallConfiguration(dev, {
+      MERGERON_ICON_URL: 'https://example.test/custom.png',
+    }).iconUrl,
+    'https://example.test/custom.png',
+  );
+  const app = containerSpecification(
+    dev,
+    dev.components.find((c) => c.id === 'application'),
+    development,
+  );
+  assert.equal(app.Labels['net.unraid.docker.icon'], development.iconUrl);
+  assert.ok(app.Env.includes('MERGERON_STACK_ENVIRONMENT=development'));
+});
+
 class FixtureDocker {
   constructor({ proxy = true } = {}) {
     this.networks = proxy

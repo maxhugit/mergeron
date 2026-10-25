@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'mergeron-static-v3';
+const STATIC_CACHE = 'mergeron-static-v4';
 const STATIC_FILES = [
   './manifest.webmanifest',
   './favicon.svg',
@@ -7,6 +7,12 @@ const STATIC_FILES = [
   './pwa-icon-512.png',
   './pwa-icon-maskable-512.png',
   './mergeron-icon.svg',
+  './manifest-dev.webmanifest',
+  './mergeron-dev-icon.svg',
+  './pwa-dev-icon-180.png',
+  './pwa-dev-icon-192.png',
+  './pwa-dev-icon-512.png',
+  './pwa-dev-icon-maskable-512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -37,7 +43,7 @@ self.addEventListener('fetch', (event) => {
   // eligible for caching.
   const isStaticAsset =
     url.pathname.includes('/assets/') ||
-    /\/(?:favicon\.svg|mergeron-icon\.svg|manifest\.webmanifest|pwa-icon-(?:180|192|512|maskable-512)\.png)$/.test(url.pathname);
+    /\/(?:favicon\.svg|mergeron-(?:dev-)?icon\.svg|manifest(?:-dev)?\.webmanifest|pwa-(?:dev-)?icon-(?:180|192|512|maskable-512)\.png)$/.test(url.pathname);
   if (!isStaticAsset) return;
 
   event.respondWith(

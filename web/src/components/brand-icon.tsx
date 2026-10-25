@@ -8,7 +8,11 @@ export function BrandIcon({
 }) {
   return (
     <img
-      src={withBasePath('/mergeron-icon.svg')}
+      src={withBasePath(
+        document.documentElement.dataset.mergeronEnvironment === 'development'
+          ? '/mergeron-dev-icon.svg'
+          : '/mergeron-icon.svg',
+      )}
       alt=""
       aria-hidden="true"
       className={className}
