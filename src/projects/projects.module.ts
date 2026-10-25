@@ -17,6 +17,8 @@ import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceTransfersService } from './workspace-transfers.service';
 import { ProjectArchivesController } from './project-archives.controller';
 import { ProjectArchivesService } from './project-archives.service';
+import { WorkspaceGitController } from './workspace-git.controller';
+import { WorkspaceGitService } from './workspace-git.service';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { ProjectArchivesService } from './project-archives.service';
     ProjectKnowledgeModule,
   ],
   controllers: [
+    WorkspaceGitController,
     ProjectArchivesController,
     ProjectsController,
     ProjectKnowledgeController,
@@ -37,6 +40,7 @@ import { ProjectArchivesService } from './project-archives.service';
     WorkspaceResourcesController,
   ],
   providers: [
+    WorkspaceGitService,
     ProjectArchivesService,
     ProjectsService,
     WorkspaceResourcesService,

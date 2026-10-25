@@ -11,6 +11,7 @@ import { useLayoutStore } from '@/stores/layout-store';
 import { filesAddRoot } from '@/generated/api';
 import { pathIsWithin } from '@/lib/file-change-events';
 import { type ProjectSummary } from '@/lib/projects-api';
+import { WorkspaceGitPanel } from './workspace-git-panel';
 
 interface Props {
   cwd: string | null;
@@ -37,6 +38,7 @@ export function WorkspaceTree({
   const { t } = useTranslation();
   const currentRoot = useFilesStore((s) => s.rootDir);
   const [adoptedCwd, setAdoptedCwd] = useState<string | null>(null);
+  const [gitResourceId, setGitResourceId] = useState<string | null>(null);
   const collapsed = useLayoutStore((s) => s.workspaceTreeCollapsed);
   const width = useLayoutStore((s) => s.workspaceTreeWidth);
   const setCollapsed = useLayoutStore((s) => s.setWorkspaceTreeCollapsed);
@@ -91,9 +93,10 @@ export function WorkspaceTree({
                   size="sm"
                   className="h-7 min-w-0 flex-1 justify-start gap-2 px-2 text-xs"
                   title={workspace.path}
-                  onClick={() =>
-                    useFilesStore.getState().setRootDir(workspace.path)
-                  }
+                  onClick={() => {
+                    setGitResourceId(null);
+                    useFilesStore.getState().setRootDir(workspace.path);
+                  }}
                 >
                   <Folder className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">
@@ -129,7 +132,38 @@ export function WorkspaceTree({
       {/* Never compare the browsed root to cwd: entering folders and going up
           both change it. The adoption receipt prevents showing a prior
           conversation's tree while this one's metadata/request is pending. */}
-      {cwd && adoptedCwd === cwd && currentRoot ? (
+      {project ? (
+        <WorkspaceGitPanel
+          key={project.id}
+          projectId={project.id}
+          resourceId={gitResourceId}
+          onSelect={setGitResourceId}
+          cwd={cwd}
+          activeWorkspacePending={activeWorkspacePending}
+          onActiveWorkspaceChange={onActiveWorkspaceChange}
+          onFile={(path) => {
+            onFile(path);
+            onMobileClose();
+          }}
+        >
+          {cwd && adoptedCwd === cwd && currentRoot ? (
+            <FileTree
+              onFileClick={(path) => {
+                onFile(path);
+                onMobileClose();
+              }}
+            />
+          ) : (
+            <div
+              role="status"
+              className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t('loadingb04ba49f')}
+            </div>
+          )}
+        </WorkspaceGitPanel>
+      ) : cwd && adoptedCwd === cwd && currentRoot ? (
         <FileTree
           onFileClick={(path) => {
             onFile(path);
@@ -137,12 +171,8 @@ export function WorkspaceTree({
           }}
         />
       ) : (
-        <div
-          role="status"
-          className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground"
-        >
+        <div role="status" className="p-4">
           <Loader2 className="h-4 w-4 animate-spin" />
-          {t('loadingb04ba49f')}
         </div>
       )}
     </div>
