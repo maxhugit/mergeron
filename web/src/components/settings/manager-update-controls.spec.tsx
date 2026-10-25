@@ -6,6 +6,10 @@ import { catalogFixture, deferred, json } from './catalog/catalog.testing';
 import { ManagerUpdateControls } from './manager-update-controls';
 import type { ManagerStatus } from './manager-status-api';
 import {
+  readManagerUpdateReceipt,
+  saveManagerUpdateReceipt,
+} from './manager-update-recovery';
+import {
   requestServerRelease,
   type ServerReleaseStatus,
 } from './server-release-api';
@@ -43,14 +47,56 @@ const status: ManagerStatus = {
   update: { busy: false, operation: null },
 };
 beforeEach(async () => {
+  sessionStorage.clear();
   fixture = catalogFixture();
   vi.mocked(requestServerRelease).mockReset();
   vi.mocked(requestServerRelease).mockResolvedValue(release);
   await i18n.changeLanguage('fr');
 });
 afterEach(() => {
+  sessionStorage.clear();
   fixture.dispose();
   vi.unstubAllGlobals();
+});
+
+it('reopens the completed update after the authenticated workspace was remounted without replaying it', async () => {
+  const completed: ManagerStatus = {
+    ...status,
+    update: {
+      busy: false,
+      operation: {
+        id: 'update-surviving-restart',
+        status: 'succeeded',
+        phase: 'complete',
+        events: [],
+        images: {},
+        previousImages: {},
+        backupRetained: true,
+      },
+    },
+  };
+  saveManagerUpdateReceipt({
+    startedAt: Date.now(),
+    operationId: 'update-surviving-restart',
+    excludedOperationId: 'previous-update',
+  });
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    void input;
+    void init;
+    return json(completed);
+  });
+  vi.stubGlobal('fetch', fetch);
+  fixture.render(<ManagerUpdateControls status={completed} />);
+  expect(
+    await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' }),
+  ).toBeVisible();
+  expect(screen.getAllByText('Mise à jour réussie').length).toBeGreaterThan(0);
+  expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(
+    false,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Fermer' }));
+  expect(readManagerUpdateReceipt()).toBeNull();
 });
 
 it('can close and reopen progress without cancelling or starting a second update', async () => {
@@ -92,6 +138,9 @@ it('can close and reopen progress without cancelling or starting a second update
     screen.getByRole('button', { name: 'Installer et redémarrer' }),
   );
   await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' });
+  await waitFor(() =>
+    expect(readManagerUpdateReceipt()?.operationId).toBe('active'),
+  );
   await user.click(screen.getByRole('button', { name: 'Fermer' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   await user.click(

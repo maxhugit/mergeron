@@ -9,6 +9,7 @@ import enAuthentication from '@/locales/en/authentication.json';
 import enCommon from '@/locales/en/common.json';
 import enProjectArchives from '@/locales/en/projectArchives.json';
 import enLogs from '@/locales/en/logs.json';
+import enDeliverables from '@/locales/en/deliverables.json';
 import i18n, { i18nReady } from '@/i18n';
 
 const flatten = (
@@ -31,6 +32,7 @@ const english = {
   ...flatten(enAuthentication),
   ...flatten(enProjectArchives),
   ...flatten(enLogs),
+  ...flatten(enDeliverables),
 };
 
 declare global {

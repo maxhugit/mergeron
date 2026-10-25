@@ -1,6 +1,7 @@
 import type {
   ActiveFolderSummary,
   ProjectResourceSummary,
+  ProjectActivitySummary,
 } from './projects-api';
 export interface DeliverableFile {
   name: string;
@@ -47,6 +48,7 @@ export interface DeliverableDocument {
   versions: DeliverableDocumentVersion[];
 }
 export interface Deliverable {
+  activityEvents?: ProjectActivitySummary[];
   id: string;
   title: string;
   description: string;

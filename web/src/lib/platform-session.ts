@@ -17,6 +17,7 @@ export interface PlatformSession {
 
 const SESSION_RETRY_DELAYS_MS = [500, 1_500, 3_000] as const;
 export const AUTH_REQUEST_TIMEOUT_MS = 12_000;
+export const SESSION_RECOVERY_INTERVAL_MS = 5_000;
 
 export class AuthResourceError extends Error {
   readonly status: number;
@@ -139,7 +140,8 @@ export function usePlatformSession() {
     queryKey: platformSessionKey,
     queryFn: ({ signal }) => readAuthResource<PlatformSession>('me', signal),
     staleTime: 10_000,
-    refetchInterval: 30_000,
+    refetchInterval: (current) =>
+      isSessionTransportError(current.state.error) ? false : 30_000,
     refetchIntervalInBackground: false,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
@@ -152,6 +154,17 @@ export function usePlatformSession() {
   // This must survive the workspace being hidden after a failed identity probe.
   // Do not replay mutations, and do not keep rendering a cached active identity.
   const { refetch } = query;
+  useEffect(() => {
+    if (!isSessionTransportError(query.error)) return;
+    // A server restart does not trigger the browser's `online`/focus events.
+    // Keep this timer outside the protected workspace and avoid overlapping
+    // probes or replaying the update mutation. Never grant access from cache.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine)
+        void refetch({ cancelRefetch: false });
+    }, SESSION_RECOVERY_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [query.error, refetch]);
   useEffect(() => {
     let lastRecovery = 0;
     const recover = () => {

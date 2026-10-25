@@ -8,6 +8,7 @@
   "namespaces": [
     "authentication",
     "common",
+    "deliverables",
     "logs",
     "manager",
     "projectArchives"

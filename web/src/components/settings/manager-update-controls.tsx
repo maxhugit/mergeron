@@ -24,6 +24,10 @@ import {
 import { ManagerUpdateProgressDialog } from './manager-update-progress-dialog';
 import { defaultManagerUpdateImage } from './manager-update-image';
 import {
+  readManagerUpdateReceipt,
+  saveManagerUpdateReceipt,
+} from './manager-update-recovery';
+import {
   requestServerRelease,
   serverReleaseQueryKey,
 } from './server-release-api';
@@ -64,14 +68,22 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
   const [plan, setPlan] = useState<ManagerUpdatePlan | null>(null);
   const [confirm, setConfirm] = useState<'apply' | 'rollback' | null>(null);
   const operation = status.update?.operation;
+  const [receipt] = useState(readManagerUpdateReceipt);
   const [progressOpen, setProgressOpen] = useState(
-    Boolean(status.update?.busy),
+    Boolean(status.update?.busy || receipt),
   );
-  const [progressSession, setProgressSession] = useState(0);
+  const [progressSession, setProgressSession] = useState(
+    receipt?.startedAt ?? 0,
+  );
   const [progressOperation, setProgressOperation] =
-    useState<ManagerUpdateOperation | null>(operation ?? null);
+    useState<ManagerUpdateOperation | null>(
+      operation?.id !== receipt?.excludedOperationId &&
+        (!receipt?.operationId || operation?.id === receipt.operationId)
+        ? (operation ?? null)
+        : null,
+    );
   const [excludedOperationId, setExcludedOperationId] = useState<string | null>(
-    null,
+    receipt?.excludedOperationId ?? null,
   );
   const mutation = useMutation({
     mutationFn: ({
@@ -86,7 +98,15 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
         variables.action === 'plan' && 'applicable' in result ? result : null;
       setPlan(reviewed);
       setConfirm(reviewed?.applicable ? 'apply' : null);
-      if ('operation' in result) setProgressOperation(result.operation);
+      if ('operation' in result) {
+        setProgressOperation(result.operation);
+        const saved = readManagerUpdateReceipt();
+        if (saved && result.operation)
+          saveManagerUpdateReceipt({
+            ...saved,
+            operationId: result.operation.id,
+          });
+      }
       void client.invalidateQueries({ queryKey: managerStatusQueryKey });
     },
   });
@@ -94,9 +114,15 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
     action: 'apply' | 'rollback' | 'recover',
     input: Record<string, unknown>,
   ) => {
+    const startedAt = Date.now();
+    saveManagerUpdateReceipt({
+      startedAt,
+      operationId: action === 'apply' ? null : (operation?.id ?? null),
+      excludedOperationId: action === 'apply' ? (operation?.id ?? null) : null,
+    });
     setProgressOperation(null);
     setExcludedOperationId(action === 'apply' ? (operation?.id ?? null) : null);
-    setProgressSession((session) => session + 1);
+    setProgressSession(startedAt);
     setProgressOpen(true);
     mutation.mutate({ action, input });
   };
@@ -302,7 +328,10 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
       </AlertDialog>
       <ManagerUpdateProgressDialog
         open={progressOpen}
-        onOpenChange={setProgressOpen}
+        onOpenChange={(open) => {
+          setProgressOpen(open);
+          if (!open) saveManagerUpdateReceipt(null);
+        }}
         operation={
           progressOperation ??
           (operation?.id !== excludedOperationId ? (operation ?? null) : null)
@@ -315,6 +344,10 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
         }
         session={progressSession}
         excludedOperationId={excludedOperationId}
+        expectedOperationId={
+          progressOperation?.id ??
+          (progressSession === receipt?.startedAt ? receipt.operationId : null)
+        }
       />
     </div>
   );

@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ProjectDeliverablesManager } from './project-deliverables-manager';
 import type { Deliverable, DeliverablesBoard } from '@/lib/deliverables-api';
+import type { ProjectWorkspaceSummary } from '@/lib/projects-api';
 const api = vi.hoisted(() => vi.fn());
 vi.mock('@/components/files/file-viewer', () => ({
   FileViewer: ({ readOnly }: { readOnly?: boolean }) => (
@@ -99,6 +100,198 @@ beforeEach(() => {
   api.mockImplementation((_path, input) => Promise.resolve(input ? {} : board));
 });
 afterEach(cleanup);
+it('selects an existing active folder from the deliverable without moving documents', async () => {
+  await setup(
+    board,
+    [],
+    [
+      {
+        id: 'w',
+        projectId: 'p',
+        name: 'Local workspace',
+        path: '/workspaces/p',
+        primary: true,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select active folder' }));
+  const dialog = screen.getByRole('dialog', { name: 'Select active folder' });
+  await within(dialog).findByRole('option', { name: 'Local workspace' });
+  fireEvent.change(within(dialog).getByRole('combobox'), {
+    target: { value: 'w' },
+  });
+  fireEvent.change(
+    within(dialog).getByLabelText('Relative subfolder (empty for the root)'),
+    { target: { value: 'livrables/d' } },
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith('/p/active-folders/deliverable/d', {
+      method: 'PUT',
+      body: JSON.stringify({ resourceId: 'w', relativePath: 'livrables/d' }),
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Select active folder' }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(
+    api.mock.calls.filter(([, input]) => input && input.method !== 'PUT'),
+  ).toHaveLength(0);
+});
+it('keeps the folder dialog open and shows an error on an invalid selection', async () => {
+  await setup(
+    board,
+    [],
+    [
+      {
+        id: 'w',
+        projectId: 'p',
+        name: 'Local workspace',
+        path: '/workspaces/p',
+        primary: true,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select active folder' }));
+  const dialog = screen.getByRole('dialog', { name: 'Select active folder' });
+  await within(dialog).findByRole('option', { name: 'Local workspace' });
+  fireEvent.change(within(dialog).getByRole('combobox'), {
+    target: { value: 'w' },
+  });
+  api.mockRejectedValueOnce(new Error('Folder unavailable'));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    'Could not select this folder',
+  );
+  expect(dialog).toBeInTheDocument();
+});
+it('merges document versions, removals, restorations and deliverable edits in history', async () => {
+  const version = {
+    id: 'v1',
+    documentId: 'doc',
+    number: 1,
+    fileName: 'report.docx',
+    sourcePath: '/report.docx',
+    snapshotPath: '/history/report.docx',
+    size: 1,
+    sha256: 'sha',
+    authorPersonId: null,
+    authorName: 'Alice',
+    comment: 'Initial contents',
+    restoredFromVersionId: null,
+    createdAt: 10,
+  };
+  await setup({
+    ...board,
+    deliverables: [
+      {
+        ...item,
+        documents: [
+          {
+            id: 'doc',
+            deliverableId: 'd',
+            name: 'report.docx',
+            format: 'docx',
+            sourcePath: '/report.docx',
+            currentVersionNumber: 3,
+            deletedAt: 40,
+            createdAt: 10,
+            updatedAt: 40,
+            versions: [
+              version,
+              { ...version, id: 'v2', number: 2, createdAt: 20 },
+              {
+                ...version,
+                id: 'v3',
+                number: 3,
+                restoredFromVersionId: 'v1',
+                createdAt: 30,
+              },
+            ],
+          },
+        ],
+        activityEvents: [
+          {
+            id: 'removed',
+            projectId: 'p',
+            entityType: 'deliverable',
+            entityId: 'd',
+            action: 'deliverable_document_deleted',
+            label: 'report.docx',
+            details: { documentId: 'doc' },
+            actorPersonId: null,
+            actorName: 'Bob',
+            createdAt: 40,
+          },
+          {
+            id: 'edited',
+            projectId: 'p',
+            entityType: 'deliverable',
+            entityId: 'd',
+            action: 'deliverable_updated',
+            label: 'Report',
+            details: { fields: ['description'] },
+            actorPersonId: null,
+            actorName: 'Alice',
+            createdAt: 50,
+          },
+        ],
+      },
+    ],
+  });
+  fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+  const rows = screen.getAllByRole('row');
+  expect(rows).toHaveLength(6);
+  expect(rows[1]).toHaveTextContent('Deliverable modified — Report');
+  expect(rows[2]).toHaveTextContent(
+    'Document removed from deliverable — report.docx',
+  );
+  expect(rows[2]).toHaveTextContent('Bob');
+  expect(rows[3]).toHaveTextContent(
+    'Document version restored — report.docx · V3',
+  );
+  expect(rows[4]).toHaveTextContent('Document modified — report.docx · V2');
+  expect(rows[5]).toHaveTextContent('Document added — report.docx · V1');
+});
+it('shows the lifecycle flow above the overview with the current stage', async () => {
+  await setup();
+  const flow = screen.getByRole('region', {
+    name: 'Deliverable and document lifecycle',
+  });
+  expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
+    'Draft',
+  );
+  expect(
+    within(flow).queryByText('Awaiting validation'),
+  ).not.toBeInTheDocument();
+  expect(within(flow).getByText('Finalized')).toBeInTheDocument();
+  expect(within(flow).getByText('Archived')).toBeInTheDocument();
+});
+it('includes required validation and highlights the waiting stage', async () => {
+  await setup({
+    ...board,
+    deliverables: [
+      {
+        ...item,
+        lifecycleStatus: 'finalized',
+        validationRequired: true,
+        validationStatus: 'pending',
+      },
+    ],
+  });
+  const flow = screen.getByRole('region', {
+    name: 'Deliverable and document lifecycle',
+  });
+  expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
+    'Awaiting validation',
+  );
+});
 it('keeps modal content local and protects unsaved changes when closing', async () => {
   const slot = document.createElement('div');
   slot.id = 'deliverable-header-p-r';
@@ -158,11 +351,12 @@ it('opens a deep-linked deliverable directly and returns to the list', async () 
 async function setup(
   data = board,
   agentThreads: Array<{ threadId: string; title: string }> = [],
+  workspaces: ProjectWorkspaceSummary[] = [],
 ) {
   api.mockImplementation((_path, input) =>
     Promise.resolve(
       _path === undefined
-        ? { projects: [{ id: 'p', agentThreads }] }
+        ? { projects: [{ id: 'p', agentThreads, workspaces }] }
         : input
           ? {}
           : data,
@@ -213,6 +407,51 @@ it('aligns all compact badges to the right and preserves desktop column alignmen
     expect(badge).toHaveClass('justify-self-end');
     expect(badge).toHaveClass('@min-[68rem]:justify-self-auto');
   }
+});
+it('shows active document names only outside compact mode and keeps card rows explicit', async () => {
+  const document = {
+    id: 'doc',
+    deliverableId: 'd',
+    name: 'Design.docx',
+    format: 'docx',
+    sourcePath: '/Design.docx',
+    currentVersionNumber: 1,
+    deletedAt: null,
+    createdAt: 1,
+    updatedAt: 1,
+    versions: [],
+  };
+  await setupList({
+    ...board,
+    deliverables: [
+      {
+        ...item,
+        documents: [
+          document,
+          { ...document, id: 'removed', name: 'Removed.docx', deletedAt: 2 },
+        ],
+      },
+    ],
+  });
+  const names = screen.getByRole('list', { name: 'Documents' });
+  expect(names).toHaveClass('hidden', '@min-[36rem]:block');
+  expect(within(names).getByText('Design.docx')).toHaveAttribute(
+    'title',
+    'Design.docx',
+  );
+  expect(screen.queryByText('Removed.docx')).not.toBeInTheDocument();
+  expect(screen.getByTestId('deliverable-status-d')).toHaveClass(
+    'col-start-2',
+    'row-start-1',
+  );
+  expect(screen.getByText('Not required', { selector: 'span' })).toHaveClass(
+    'col-start-2',
+    'row-start-2',
+  );
+  expect(screen.getByText('Standard access', { selector: 'span' })).toHaveClass(
+    'col-start-2',
+    'row-start-3',
+  );
 });
 
 it.each([
@@ -325,9 +564,11 @@ it.each([
     expect(colors(screen.getByText(accessLabel, { selector: 'span' }))).toEqual(
       accessColors,
     );
-    expect(
-      colors(screen.getByText(lifecycleLabel, { selector: 'span' })),
-    ).toEqual(lifecycleColors);
+    for (const badge of screen.getAllByText(lifecycleLabel, {
+      selector: 'span',
+    })) {
+      expect(colors(badge)).toEqual(lifecycleColors);
+    }
   },
 );
 
@@ -545,11 +786,12 @@ it('keeps the table search visible and exposes filters through a mobile toggle',
   await setupList();
 
   expect(screen.getByRole('button', { name: /Report/ })).toHaveClass(
-    'order-1',
-    '@min-[36rem]:col-span-2',
+    'col-start-1',
+    'row-start-1',
   );
   expect(screen.getByTestId('deliverable-status-d')).toHaveClass(
-    'order-2',
+    'col-start-2',
+    'row-start-1',
     'justify-self-end',
   );
   expect(screen.getByLabelText('Search deliverables')).toBeInTheDocument();
@@ -864,6 +1106,17 @@ it('only offers detachment for an associated main task and displays its subtasks
   expect(
     screen.getByRole('button', { name: 'Review figures' }),
   ).toBeInTheDocument();
+  const subtask = screen.getByRole('button', { name: 'Review figures' });
+  expect(subtask).toHaveClass('min-w-0', 'flex-1', 'truncate', 'text-left');
+  expect(subtask).toHaveAttribute('title', 'Review figures');
+  expect(subtask.parentElement).toHaveClass('flex', 'min-w-0');
+  expect(within(subtask.parentElement!).getByText('0%')).toHaveClass(
+    'shrink-0',
+    'whitespace-nowrap',
+  );
+  fireEvent.click(subtask);
+  expect(screen.getByRole('dialog', { name: 'child' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close task' }));
   fireEvent.click(screen.getByRole('button', { name: 'Detach task' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d', {
