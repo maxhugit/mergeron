@@ -303,8 +303,8 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
       (approvalsByItemId.get(item.itemId)?.length ?? 0) > 0 ||
       inputRequestItemIds.has(item.itemId),
   );
-  // Preserve chronology: group only adjacent routine technical items. Never put
-  // approvals, questions, failures or assistant prose inside a hidden disclosure.
+  // Hidden means absent from the transcript, not another collapsed disclosure.
+  // Requests, failures, media results and assistant prose remain visible.
   const displayGroups: Array<{ technical: boolean; items: TurnItem[] }> = [];
   for (const item of visibleItems) {
     const needsAttention =
@@ -323,15 +323,13 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
       ) ||
       isFailedTechnicalItem(item);
     const technical = isTechnicalItem(item) && !needsAttention;
-    const previous = displayGroups.at(-1);
-    if (displayMode === 'hidden' && technical && previous?.technical)
-      previous.items.push(item);
-    else displayGroups.push({ technical, items: [item] });
+    if (displayMode === 'hidden' && technical) continue;
+    displayGroups.push({ technical, items: [item] });
   }
   // Both mirror their renderers, which refuse an empty plan and an empty diff
   // string; testing the fields for mere presence would readmit both.
   const planVisible = isPlanDisplayable(entry.plan);
-  const diffVisible = Boolean(entry.diff);
+  const diffVisible = displayMode !== 'hidden' && Boolean(entry.diff);
 
   // A turn that is genuinely running, with nothing to show yet, gets the
   // streaming placeholder — informative, unlike the empty surface it replaces.
@@ -348,13 +346,13 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
   const isRunning = activeTurnId === entry.turnId;
   const showPlaceholder =
     isRunning &&
-    visibleItems.length === 0 &&
+    displayGroups.length === 0 &&
     !planVisible &&
     !diffVisible &&
     unattachedApprovals.length === 0 &&
     unattachedInputs.length === 0;
   const hasContent =
-    visibleItems.length > 0 ||
+    displayGroups.length > 0 ||
     planVisible ||
     diffVisible ||
     unattachedApprovals.length > 0 ||
@@ -389,9 +387,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
               key={`${displayMode}:${group.items[0].itemId}`}
               expanded={displayMode === 'expanded'}
               label={
-                (displayMode === 'hidden'
-                  ? `${t('technicalDetails')} (${group.items.length})`
-                  : group.items[0].type === 'commandExecution'
+                (group.items[0].type === 'commandExecution'
                     ? t('terminal')
                     : group.items[0].type === 'reasoning'
                       ? t('thinking')
@@ -416,7 +412,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
           <UserInputCard key={pendingRequestKey(req)} request={req} />
         ))}
 
-        {entry.diff && (
+        {diffVisible && entry.diff && (
           <TechnicalDetails
             key={`diff:${displayMode}`}
             label={t('technicalDetails')}
