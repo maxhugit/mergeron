@@ -18,6 +18,8 @@ http {
     }
     server {
         listen 8080;
+        # Preserve the browser's public scheme/host/port behind any reverse proxy.
+        absolute_redirect off;
         client_max_body_size 100m;
         set $mergeron_backend http://mergeron-ui:8172;
         set $mergeron_oauth_callback http://mergeron-ui:12345;

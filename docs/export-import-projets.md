@@ -17,7 +17,31 @@ des conversations privées, des documents restreints et des coordonnées personn
    Aucun projet vide n’est nécessaire au préalable.
 4. Sélectionner le ZIP. L’application vérifie l’inventaire, les empreintes des
    fichiers, les données liées et la compatibilité avec la destination.
-5. Si l’analyse réussit, vérifier le nom du nouveau projet et confirmer.
+5. Si l’analyse réussit, choisir les ensembles à importer dans la fenêtre,
+   vérifier le nom du nouveau projet et confirmer. Tout est sélectionné par défaut.
+
+### Sélection et dépendances
+
+Les informations du projet, participants, groupes et configurations des espaces
+de travail sont toujours inclus. Trois catégories volontairement larges sont proposées :
+
+- **Fichiers et dossiers** : contenu de tous les espaces locaux, sans sélection fichier par fichier.
+- **Agents et conversations** : discussions simples, agents, branches, historiques et pièces jointes.
+  Cette catégorie inclut automatiquement les fichiers, nécessaires aux chemins et références des conversations.
+- **Activité métier complète** : tâches, sous-tâches, dépendances, livrables, documents,
+  versions, validations, automatisations, connaissances et journal. Ce bloc inclut
+  automatiquement les deux catégories précédentes, afin de conserver les liens avec les agents et documents.
+
+Les dépendances sont cochées et verrouillées tant qu’une catégorie sélectionnée
+les utilise. Pour les retirer, décocher d’abord les catégories qui en dépendent.
+Tout décocher crée uniquement la structure du projet et ses contacts inactifs,
+sans fichiers, conversations ni activité métier. Les définitions des espaces
+distants restent désactivées, comme pour un import complet.
+La sélection est aussi appliquée côté serveur : envoyer uniquement le bloc métier
+inclut malgré tout toutes ses dépendances. Les références sont revérifiées avant
+toute restauration ; une incohérence bloque l’import sans publier de projet partiel.
+L’archive complète doit rester compatible, même si certaines catégories ne sont
+pas retenues. Le volume affiché reste celui du ZIP complet, pas une estimation filtrée.
 
 L’import crée toujours une nouvelle identité de projet. Il ne fusionne pas les
 données et ne remplace ni un projet existant, ni ses fichiers. Importer le même

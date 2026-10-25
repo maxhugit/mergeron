@@ -120,6 +120,7 @@ export function ProjectDeliverablesManager({
     refetchOnWindowFocus: false,
   });
   const [title, setTitle] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(
     initialDeliverableId ?? null,
   );
@@ -161,10 +162,11 @@ export function ProjectDeliverablesManager({
     mutationFn: () =>
       projectsApi<Deliverable>(base, {
         method: 'POST',
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title: title.trim() }),
       }),
     onSuccess: async (item) => {
       setTitle('');
+      setCreateOpen(false);
       setSelected(item.id);
       await client.invalidateQueries({ queryKey: key });
     },
@@ -255,32 +257,18 @@ export function ProjectDeliverablesManager({
               })}
             </p>
           </div>
-          <form
-            className="flex w-full gap-2 sm:w-auto"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (title.trim()) create.mutate();
+          <Button
+            type="button"
+            onClick={() => {
+              setTitle('');
+              create.reset();
+              setCreateOpen(true);
             }}
           >
-            <Input
-              aria-label={t('newDeliverableTitle')}
-              className="sm:w-64"
-              value={title}
-              maxLength={160}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder={t('newDeliverableTitle')}
-            />
-            <Button disabled={!title.trim() || create.isPending}>
-              <Plus className="h-4 w-4" />
-              {t('newDeliverable')}
-            </Button>
-          </form>
+            <Plus className="h-4 w-4" />
+            {t('newDeliverable')}
+          </Button>
         </div>
-        {create.error && (
-          <p role="alert" className="text-sm text-destructive">
-            {t('unableToSaveDeliverable')}
-          </p>
-        )}
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="border-b bg-muted/20 p-3">
             <div className="flex gap-2">
@@ -402,6 +390,62 @@ export function ProjectDeliverablesManager({
           )}
         </div>
       </div>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (create.isPending) return;
+          setCreateOpen(open);
+          setTitle('');
+          create.reset();
+        }}
+      >
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>{t('newDeliverable')}</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (title.trim() && !create.isPending) create.mutate();
+            }}
+          >
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">{t('title')}</span>
+              <Input
+                autoFocus
+                value={title}
+                maxLength={160}
+                disabled={create.isPending}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder={t('newDeliverableTitle')}
+              />
+            </label>
+            {create.error && (
+              <p role="alert" className="text-sm text-destructive">
+                {t('unableToSaveDeliverable')}
+              </p>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={create.isPending}
+                onClick={() => {
+                  setCreateOpen(false);
+                  setTitle('');
+                  create.reset();
+                }}
+              >
+                {t('cancel')}
+              </Button>
+              <Button type="submit" disabled={!title.trim() || create.isPending}>
+                {t('create')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
@@ -1214,12 +1258,12 @@ function Overview({
             onChange={(event) => set('criteria', event.target.value)}
           />
         </label>
-        <p className="text-xs text-muted-foreground">
-          {t('planningInheritedFromPrimaryTask')}
-        </p>
       </section>
       <aside className="grid min-w-0 content-start gap-2 sm:grid-cols-2">
-        <div className="rounded-xl border bg-card p-3 text-sm">
+        <section
+          aria-label={t('primaryTask')}
+          className="col-span-full min-w-0 rounded-xl border bg-card p-3 text-sm"
+        >
           <p className="mb-1 flex items-center gap-2 text-muted-foreground">
             <ListTodo className="h-4 w-4 shrink-0" />
             {t('primaryTask')}
@@ -1234,7 +1278,34 @@ function Overview({
           ) : (
             <span>{t('noPrimaryTask')}</span>
           )}
-        </div>
+          <dl className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-2">
+            <div className="min-w-0">
+              <dt className="mb-1 flex items-center gap-2 text-muted-foreground">
+                <UserRound className="h-4 w-4 shrink-0" />
+                {t('responsiblePerson')}
+              </dt>
+              <dd className="break-words font-medium">
+                {primaryTask?.assigneeName ?? t('unassigned')}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="mb-1 flex items-center gap-2 text-muted-foreground">
+                <CalendarDays className="h-4 w-4 shrink-0" />
+                {t('dueDate')}
+              </dt>
+              <dd className="font-medium">
+                {primaryTask?.dueAt
+                  ? new Date(primaryTask.dueAt).toLocaleDateString(undefined, {
+                      timeZone: 'UTC',
+                    })
+                  : t('notDefined')}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {t('planningInheritedFromPrimaryTask')}
+          </p>
+        </section>
         <div className="rounded-xl border bg-card p-3 text-sm">
           <p className="mb-1 flex items-center gap-2 text-muted-foreground">
             <Bot className="h-4 w-4 shrink-0" />
@@ -1280,22 +1351,6 @@ function Overview({
             item.confidentiality === 'restricted'
               ? t('restrictedAccessShort')
               : t('standardAccessShort')
-          }
-        />
-        <Summary
-          icon={UserRound}
-          title={t('responsiblePerson')}
-          value={primaryTask?.assigneeName ?? t('unassigned')}
-        />
-        <Summary
-          icon={CalendarDays}
-          title={t('dueDate')}
-          value={
-            primaryTask?.dueAt
-              ? new Date(primaryTask.dueAt).toLocaleDateString(undefined, {
-                  timeZone: 'UTC',
-                })
-              : t('notDefined')
           }
         />
         <div className="col-span-full min-w-0 rounded-xl border bg-card p-4">

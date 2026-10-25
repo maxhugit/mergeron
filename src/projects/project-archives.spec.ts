@@ -106,12 +106,14 @@ describe('staged ZIP imports', () => {
       await instance.importProject('alice', 'person', {
         token: preview.token,
         name: 'Copy',
+        selection: ['files'],
       }),
     ).toEqual({ projectId: 'new-project' });
     expect(run.mock.calls[1][0]).toMatchObject({
       action: 'import',
       personId: 'person',
       name: 'Copy',
+      selection: ['files'],
     });
     await expect(access(file)).rejects.toThrow();
     await expect(

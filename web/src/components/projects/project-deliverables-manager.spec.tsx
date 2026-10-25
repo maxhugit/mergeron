@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -212,6 +213,115 @@ it('aligns all compact badges to the right and preserves desktop column alignmen
     expect(badge).toHaveClass('justify-self-end');
     expect(badge).toHaveClass('@min-[68rem]:justify-self-auto');
   }
+});
+
+it('asks for a title only after opening the creation dialog and cancels without saving', async () => {
+  await setupList();
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  const dialog = screen.getByRole('dialog', { name: 'New deliverable' });
+  expect(within(dialog).getByLabelText('Title')).toHaveFocus();
+  expect(within(dialog).getByRole('button', { name: 'Create' })).toBeDisabled();
+  fireEvent.change(within(dialog).getByLabelText('Title'), {
+    target: { value: 'Draft' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(api.mock.calls.some(([, input]) => input?.method === 'POST')).toBe(
+    false,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  expect(screen.getByLabelText('Title')).toHaveValue('');
+});
+
+it('creates the deliverable from the dialog with a trimmed name and opens its details', async () => {
+  await setupList();
+  const created = { ...item, id: 'new', title: 'New report' };
+  api.mockImplementation((_path, input) =>
+    Promise.resolve(
+      input
+        ? created
+        : { ...board, deliverables: [...board.deliverables, created] },
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  const input = screen.getByLabelText('Title');
+  fireEvent.change(input, { target: { value: '  New report  ' } });
+  fireEvent.submit(input.closest('form')!);
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+  );
+  expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables', {
+    method: 'POST',
+    body: JSON.stringify({ title: 'New report' }),
+  });
+  expect(await screen.findByLabelText('Title')).toHaveValue('New report');
+});
+
+it('keeps the creation dialog and entered title on failure, allowing a retry', async () => {
+  await setupList();
+  api.mockRejectedValue(new Error('Unavailable'));
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  fireEvent.change(screen.getByLabelText('Title'), {
+    target: { value: 'Retry report' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect(screen.getByLabelText('Title')).toHaveValue('Retry report');
+  expect(
+    screen.getByRole('button', { name: 'Create' }),
+  ).toBeEnabled();
+});
+
+it('groups the primary task, its assignee and its due date in one card', async () => {
+  const dueAt = Date.UTC(2026, 10, 15);
+  await setup({
+    ...board,
+    deliverables: [
+      { ...item, primaryTaskId: 'primary', dueAt: Date.UTC(2027, 0, 1) },
+    ],
+    tasks: [
+      {
+        id: 'primary',
+        title: 'Primary planning task',
+        resourceId: 'tm',
+        parentTaskId: null,
+        status: 'Todo',
+        progress: 0,
+        dueAt,
+        assigneeId: 'person',
+        assigneeName: 'Task owner',
+      },
+    ],
+  });
+  const card = screen.getByRole('region', { name: 'Primary task' });
+  expect(card).toHaveClass('col-span-full', 'border');
+  expect(
+    within(card).getByRole('button', { name: 'Primary planning task' }),
+  ).toBeVisible();
+  expect(within(card).getByText('Task owner')).toBeVisible();
+  expect(
+    within(card).getByText(
+      new Date(dueAt).toLocaleDateString(undefined, { timeZone: 'UTC' }),
+    ),
+  ).toBeVisible();
+  expect(screen.getAllByText('Responsible person')).toHaveLength(1);
+  expect(screen.getAllByText('Due date')).toHaveLength(1);
+  fireEvent.click(
+    within(card).getByRole('button', { name: 'Primary planning task' }),
+  );
+  expect(screen.getByRole('dialog', { name: 'primary' })).toBeInTheDocument();
+});
+
+it('keeps missing task and planning values together without inheriting legacy deliverable dates', async () => {
+  await setup({
+    ...board,
+    deliverables: [{ ...item, dueAt: Date.UTC(2027, 0, 1) }],
+  });
+  const card = screen.getByRole('region', { name: 'Primary task' });
+  expect(within(card).getByText('No primary task')).toBeVisible();
+  expect(within(card).getByText('Unassigned')).toBeVisible();
+  expect(within(card).getByText('Not defined')).toBeVisible();
 });
 
 it('filters the deliverables list and resets all filters', async () => {
@@ -791,7 +901,7 @@ it('creates an independent version from the current document file', async () => 
   });
 });
 
-it('opens a detailed document sheet with versions and information', async () => {
+it('offers Preview instead of Open and opens a read-only document sheet', async () => {
   const document = {
     id: 'doc',
     deliverableId: 'd',
@@ -833,10 +943,15 @@ it('opens a detailed document sheet with versions and information', async () => 
   fireEvent.keyDown(window.document, { key: 'Escape' });
   expect(menu.open).toBe(false);
   expect(screen.getByLabelText('Actions')).toHaveFocus();
-  fireEvent.click(screen.getByRole('button', { name: 'History' }));
-
-  expect(screen.getByRole('dialog')).toHaveTextContent('Reviewed version');
-  fireEvent.click(screen.getByRole('tab', { name: 'Preview' }));
+  menu.open = true;
+  expect(
+    screen.queryByRole('button', { name: 'Open' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  expect(screen.getByRole('tab', { name: 'Preview' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   expect(screen.getByTestId('document-preview')).toHaveAttribute(
     'data-read-only',
     'true',
@@ -846,6 +961,7 @@ it('opens a detailed document sheet with versions and information', async () => 
     'aria-selected',
     'true',
   );
+  expect(screen.getByRole('dialog')).toHaveTextContent('Reviewed version');
   fireEvent.click(screen.getByRole('tab', { name: 'Information' }));
   expect(screen.getByRole('dialog')).toHaveTextContent('2.0 KB');
   expect(screen.getByRole('dialog')).toHaveTextContent('document-hash');

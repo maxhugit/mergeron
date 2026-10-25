@@ -86,7 +86,7 @@ export function readInstallConfiguration(manifest, env = process.env) {
       readAppdataRoot(env, stateRoot),
       'MERGERON_APPDATA_ROOT',
     ),
-    authMode: env.MERGERON_AUTH_MODE ?? 'authentik',
+    authMode: env.MERGERON_AUTH_MODE ?? 'native',
     hostIntegration: readHostIntegration(env),
     adminSubnet:
       env.MERGERON_ADMIN_SUBNET ??

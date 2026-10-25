@@ -110,8 +110,10 @@ sous-dossier `appdata` pour les dossiers accessibles aux agents.
 restent isolés dans le module d’intégration ; voir les [adaptations](adapters/README.md).
 Les métadonnées d’une interface hôte ne sont générées qu’avec son intégration
 explicitement activée ; `MERGERON_HOST_INTEGRATION=none` est le défaut.
-`MERGERON_AUTH_MODE=authentik|native` choisit le modèle ingress uniquement à sa
-création. Voir [l’installation portable](installation-portable.md) pour les
+`MERGERON_AUTH_MODE=native|authentik` choisit le modèle ingress uniquement à sa
+création. `native` est le défaut des nouvelles installations, avec compte et mot
+de passe actifs et OIDC désactivé, sans fournisseur d’identité imposé ; un modèle
+existant n’est jamais remplacé. Voir [l’installation portable](installation-portable.md) pour les
 prérequis d’authentification native et les proxys alternatifs.
 
 ## Adoption d'une installation existante

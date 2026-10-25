@@ -21,5 +21,12 @@
   "projectArchiveSafety": "Agents and automations do not start. External connections must be reconfigured: their secrets are not transferred.",
   "projectArchiveContacts": "Imported contacts are inactive and are not automatically linked to accounts on this installation. Their original contact details remain in the project's provenance.",
   "projectArchiveExpiry": "This analysis is valid for 15 minutes. Compatibility is checked again on confirmation.",
-  "projectArchiveConfirmImport": "Create project from ZIP"
+  "projectArchiveConfirmImport": "Create project from ZIP",
+  "projectArchiveSelection": "What would you like to import?",
+  "projectArchiveCore": "Always included: project information, participants, groups and workspace configuration. Contacts remain inactive.",
+  "projectArchiveBundleFiles": "Files and folders from all workspaces",
+  "projectArchiveBundleConversations": "Agents and conversations, including histories and attachments",
+  "projectArchiveBundleWork": "Complete project activity: tasks, deliverables, documents and versions, automations, knowledge and journal",
+  "projectArchiveRequired": "Automatically included: required by a selected category.",
+  "projectArchiveDependencies": "Project activity includes conversations and files; conversations include files. Linked data stays together, without per-document selection. Uncheck dependent categories first. The size above refers to the complete ZIP."
 }

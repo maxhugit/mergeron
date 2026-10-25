@@ -14,10 +14,12 @@ ou réseau propre à un homelab n’est imposé. Le fichier standard est
 - Le réseau partagé de ce proxy est une dépendance externe, sélectionnée par
   `MERGERON_PROXY_NETWORK`. Le Manager ne le crée, ne le supprime ni ne
   reconfigure votre proxy. Il refuse l’installation s’il manque.
-- L’authentification est un choix distinct : contrôle Authentik dans l’ingress
-  (mode historique), ou sessions Mergeron avec comptes locaux / fournisseur
-  OpenID Connect (mode `native`). Changer de proxy HTTPS n’impose pas de changer
-  de fournisseur d’identité.
+- L’authentification est un choix distinct : **compte et mot de passe par défaut**,
+  fournisseur **OpenID Connect au choix uniquement sur activation explicite**,
+  mode `native` par défaut
+  pour une nouvelle installation. L’adaptateur historique Authentik est
+  facultatif et s’active explicitement. Changer de proxy HTTPS n’impose pas de
+  changer de fournisseur d’identité.
 - OnlyOffice, Home Assistant, MCP et SSH sont des intégrations facultatives.
   Ils ne sont pas requis pour démarrer le Manager.
 
@@ -66,6 +68,9 @@ Voir [le fonctionnement du Manager](mergeron-manager.md).
 Le mode d’authentification sélectionne le **premier** fichier Nginx créé dans
 `STATE_ROOT/config/nginx.conf.template`. Un fichier existant n’est jamais
 remplacé : changer seulement la variable ne fait pas basculer une installation.
+Le défaut `native` n’ouvre pas l’accès anonyme : provisionner les comptes ou le
+fournisseur avant l’exposition publique. Une installation existante reste sur
+son modèle sauvegardé, y compris si celui-ci utilise Authentik.
 
 ### Docker Compose
 
@@ -105,6 +110,14 @@ Cibler chaque ingress par son nom complet (`mergeron-ingress` ou
 `mergeron-dev-ingress`), jamais une IP éphémère.
 
 ## Choisir le reverse proxy
+
+Le contrat entre le proxy et Mergeron est HTTP/WebSocket, pas une API propre
+à un fournisseur. Conserver l’en-tête `Host` public, y compris un éventuel port
+HTTPS non standard, et transmettre les en-têtes proxy habituels. Les ports
+internes `8080`/`8172` ne doivent jamais devenir l’adresse du navigateur.
+Les deux modèles ingress utilisent `absolute_redirect off` : les redirections
+locales conservent ainsi l’origine publique, indépendamment de Traefik, Caddy,
+Nginx Proxy Manager, HAProxy ou d’un autre proxy conforme à ce contrat.
 
 Tous les exemples ci-dessous supposent un proxy conteneurisé raccordé au réseau
 choisi et un domaine HTTPS valide. Le proxy est installé et sauvegardé séparément.
@@ -149,6 +162,28 @@ de l’ingress. Aucune étiquette Traefik n’est nécessaire au fonctionnement 
 Manager. Éviter une deuxième vérification Authentik devant celle de l’ingress.
 
 ## Authentification sans Authentik
+
+### Par défaut : compte et mot de passe
+
+Sans fichier d’authentification préexistant, la méthode locale est activée et
+OIDC, ainsi que sa redirection automatique, sont désactivés. Aucun compte ni mot
+de passe par défaut n’est créé : provisionner le premier compte administrateur
+par le canal privilégié décrit dans
+[l’initialisation administrateur](configuration-integrations.md#initialisation-et-récupération-administrateur).
+Un identifiant non provisionné est refusé, même si la méthode locale est active.
+Un fichier de configuration existant garde ses choix explicites ; cette évolution
+ne bascule pas une installation déjà configurée en SSO.
+
+### Fournisseur externe facultatif
+
+Le mode standard repose sur des sessions locales ou le protocole OpenID Connect,
+sans nom de fournisseur codé dans son parcours. Un fournisseur exposant une
+découverte OIDC, des clés de signature et l’échange de code peut être configuré.
+LDAP, SAML et les en-têtes d’identité arbitraires ne sont pas des protocoles
+natifs interchangeables : utiliser une passerelle OIDC pour ces systèmes,
+plutôt que faire confiance à des en-têtes déclarés par un navigateur.
+L’adaptateur Authentik reste disponible avec `MERGERON_AUTH_MODE=authentik` et,
+pour Compose, `MERGERON_NGINX_TEMPLATE=nginx.conf.template`.
 
 Le modèle `nginx.native.conf.template` transmet les cookies au backend, efface
 les en-têtes d’identité déclarés par le navigateur et **n’injecte pas le jeton
@@ -212,7 +247,11 @@ exemples ne sont pas une instruction de migration. Les alias et chemins
 historiques sont décrits dans [les adaptations](adapters/README.md).
 
 Dans Compose, conserver également `STATE_ROOT`, `DEPLOY_ROOT` et les montages
-actuels. Conserver les chemins des trois montages du Manager.
+actuels. Le choix `MERGERON_NGINX_TEMPLATE` est désormais obligatoire : si cette
+variable manque, Compose refuse de démarrer plutôt que sélectionner implicitement
+un autre mode d’authentification lors d’une recréation. Pour une installation
+historique Authentik, conserver explicitement `nginx.conf.template` et
+`MERGERON_AUTH_MODE=authentik`. Conserver les chemins des trois montages du Manager.
 Ne pas remplacer aveuglément une définition enregistrée par les nouvelles valeurs par
 défaut. Ne déplacer aucun fichier et ne renommer aucun réseau pour suivre un
 exemple documentaire. Une dérive vis-à-vis de l’adoption bloque les opérations ;

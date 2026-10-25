@@ -215,5 +215,56 @@ it('imports only after confirmation using the opaque preview token', async () =>
   expect(JSON.parse(call?.[1]?.body as string)).toEqual({
     token: 'preview-token',
     name: 'Production project (imported)',
+    selection: ['files', 'conversations', 'work'],
   });
+});
+
+it('keeps macro dependencies selected and sends the chosen import categories', async () => {
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (url) =>
+      new Response(
+        JSON.stringify(
+          String(url).endsWith('/preview') ? preview : { projectId: 'copy' },
+        ),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+  );
+  openDialog();
+  fireEvent.change(screen.getByLabelText('Project archive'), {
+    target: { files: [new File(['zip'], 'project.zip')] },
+  });
+  await screen.findByText('Archive compatible with this installation');
+  const work = screen.getByRole('checkbox', {
+    name: /Complete project activity/,
+  });
+  const conversations = screen.getByRole('checkbox', {
+    name: /Agents and conversations/,
+  });
+  const files = screen.getByRole('checkbox', { name: /Files and folders/ });
+  expect(conversations).toBeDisabled();
+  expect(files).toBeDisabled();
+  fireEvent.click(work);
+  expect(conversations).toBeEnabled();
+  fireEvent.click(conversations);
+  expect(files).toBeEnabled();
+  fireEvent.click(files);
+  fireEvent.click(work);
+  expect(conversations).toBeChecked();
+  expect(files).toBeChecked();
+  fireEvent.click(work);
+  fireEvent.click(conversations);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Create project from ZIP' }),
+  );
+  await waitFor(() =>
+    expect(
+      fetch.mock.calls.some(([url]) => String(url).endsWith('/import')),
+    ).toBe(true),
+  );
+  const call = fetch.mock.calls.find(([url]) =>
+    String(url).endsWith('/import'),
+  );
+  expect(JSON.parse(call?.[1]?.body as string).selection).toEqual(['files']);
 });
