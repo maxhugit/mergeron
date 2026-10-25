@@ -120,6 +120,7 @@ export function ProjectDeliverablesManager({
     refetchOnWindowFocus: false,
   });
   const [title, setTitle] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(
     initialDeliverableId ?? null,
   );
@@ -161,10 +162,11 @@ export function ProjectDeliverablesManager({
     mutationFn: () =>
       projectsApi<Deliverable>(base, {
         method: 'POST',
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title: title.trim() }),
       }),
     onSuccess: async (item) => {
       setTitle('');
+      setCreateOpen(false);
       setSelected(item.id);
       await client.invalidateQueries({ queryKey: key });
     },
@@ -255,32 +257,18 @@ export function ProjectDeliverablesManager({
               })}
             </p>
           </div>
-          <form
-            className="flex w-full gap-2 sm:w-auto"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (title.trim()) create.mutate();
+          <Button
+            type="button"
+            onClick={() => {
+              setTitle('');
+              create.reset();
+              setCreateOpen(true);
             }}
           >
-            <Input
-              aria-label={t('newDeliverableTitle')}
-              className="sm:w-64"
-              value={title}
-              maxLength={160}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder={t('newDeliverableTitle')}
-            />
-            <Button disabled={!title.trim() || create.isPending}>
-              <Plus className="h-4 w-4" />
-              {t('newDeliverable')}
-            </Button>
-          </form>
+            <Plus className="h-4 w-4" />
+            {t('newDeliverable')}
+          </Button>
         </div>
-        {create.error && (
-          <p role="alert" className="text-sm text-destructive">
-            {t('unableToSaveDeliverable')}
-          </p>
-        )}
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="border-b bg-muted/20 p-3">
             <div className="flex gap-2">
@@ -402,6 +390,62 @@ export function ProjectDeliverablesManager({
           )}
         </div>
       </div>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (create.isPending) return;
+          setCreateOpen(open);
+          setTitle('');
+          create.reset();
+        }}
+      >
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>{t('newDeliverable')}</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (title.trim() && !create.isPending) create.mutate();
+            }}
+          >
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">{t('title')}</span>
+              <Input
+                autoFocus
+                value={title}
+                maxLength={160}
+                disabled={create.isPending}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder={t('newDeliverableTitle')}
+              />
+            </label>
+            {create.error && (
+              <p role="alert" className="text-sm text-destructive">
+                {t('unableToSaveDeliverable')}
+              </p>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={create.isPending}
+                onClick={() => {
+                  setCreateOpen(false);
+                  setTitle('');
+                  create.reset();
+                }}
+              >
+                {t('cancel')}
+              </Button>
+              <Button type="submit" disabled={!title.trim() || create.isPending}>
+                {t('create')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

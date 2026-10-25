@@ -203,6 +203,64 @@ async function setupList(data = board) {
   await screen.findByRole('button', { name: /Report/ });
 }
 
+it('asks for a title only after opening the creation dialog and cancels without saving', async () => {
+  await setupList();
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  const dialog = screen.getByRole('dialog', { name: 'New deliverable' });
+  expect(within(dialog).getByLabelText('Title')).toHaveFocus();
+  expect(within(dialog).getByRole('button', { name: 'Create' })).toBeDisabled();
+  fireEvent.change(within(dialog).getByLabelText('Title'), {
+    target: { value: 'Draft' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(api.mock.calls.some(([, input]) => input?.method === 'POST')).toBe(
+    false,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  expect(screen.getByLabelText('Title')).toHaveValue('');
+});
+
+it('creates the deliverable from the dialog with a trimmed name and opens its details', async () => {
+  await setupList();
+  const created = { ...item, id: 'new', title: 'New report' };
+  api.mockImplementation((_path, input) =>
+    Promise.resolve(
+      input
+        ? created
+        : { ...board, deliverables: [...board.deliverables, created] },
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  const input = screen.getByLabelText('Title');
+  fireEvent.change(input, { target: { value: '  New report  ' } });
+  fireEvent.submit(input.closest('form')!);
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+  );
+  expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables', {
+    method: 'POST',
+    body: JSON.stringify({ title: 'New report' }),
+  });
+  expect(await screen.findByLabelText('Title')).toHaveValue('New report');
+});
+
+it('keeps the creation dialog and entered title on failure, allowing a retry', async () => {
+  await setupList();
+  api.mockRejectedValue(new Error('Unavailable'));
+  fireEvent.click(screen.getByRole('button', { name: 'New deliverable' }));
+  fireEvent.change(screen.getByLabelText('Title'), {
+    target: { value: 'Retry report' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect(screen.getByLabelText('Title')).toHaveValue('Retry report');
+  expect(
+    screen.getByRole('button', { name: 'Create' }),
+  ).toBeEnabled();
+});
+
 it('groups the primary task, its assignee and its due date in one card', async () => {
   const dueAt = Date.UTC(2026, 10, 15);
   await setup({
