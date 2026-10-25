@@ -39,6 +39,7 @@ export interface ManagerComponent {
 }
 
 export interface ManagerStatus {
+  capabilities?: { backupManagement?: boolean };
   available: boolean;
   schemaVersion?: number;
   stack?: string;
@@ -118,6 +119,49 @@ export async function requestManagerUpdate(
 }
 
 export const managerStatusQueryKey = ['administration', 'manager-status'];
+
+export interface ManagerBackup {
+  id: string;
+  createdAt: string;
+  status: string;
+  current: boolean;
+  restorable: boolean;
+  canDelete: boolean;
+  protectionReason: string | null;
+}
+export const managerBackupsQueryKey = ['administration', 'manager-backups'];
+async function backupRequest<T>(
+  path: 'backups' | 'backups/delete',
+  body?: Record<string, unknown>,
+): Promise<T> {
+  const authorization = getAuthorizationHeader();
+  const response = await fetch(withBasePath(`/api/settings/manager/${path}`), {
+    method: body ? 'POST' : 'GET',
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(authorization ? { Authorization: authorization } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const result = (await response.json()) as T & {
+    message?: string;
+    error?: string;
+  };
+  if (!response.ok)
+    throw new Error(
+      result.message ?? result.error ?? 'managerBackupsUnavailable',
+    );
+  return result;
+}
+export function requestManagerBackups() {
+  return backupRequest<{ backups: ManagerBackup[] }>('backups');
+}
+export function deleteManagerBackup(id: string) {
+  return backupRequest<{ ok: boolean }>('backups/delete', {
+    operationId: id,
+    confirmation: 'DELETE_UPDATE_BACKUP',
+  });
+}
 
 export async function requestManagerStatus(): Promise<ManagerStatus> {
   const authorization = getAuthorizationHeader();

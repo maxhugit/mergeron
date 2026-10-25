@@ -28,7 +28,7 @@ export class ManagerStatusService {
           method,
           path,
           socketPath: this.socketPath(),
-          timeout: 3_000,
+          timeout: path === '/v1/backups/delete' ? 120_000 : 3_000,
           headers: {
             Accept: 'application/json',
             ...(body
@@ -101,6 +101,17 @@ export class ManagerStatusService {
         error: 'mergeronManagerUnavailable',
       };
     }
+  }
+
+  async backups() {
+    return this.requestManager('/v1/backups');
+  }
+
+  async deleteBackup(input: { operationId?: unknown; confirmation?: unknown }) {
+    return this.requestManager('/v1/backups/delete', 'POST', {
+      operationId: input?.operationId,
+      confirmation: input?.confirmation,
+    });
   }
 
   async adopt(input: {

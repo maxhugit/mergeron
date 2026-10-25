@@ -22,6 +22,7 @@ import {
   type ManagerUpdateOperation,
 } from './manager-status-api';
 import { ManagerUpdateProgressDialog } from './manager-update-progress-dialog';
+import { ManagerBackups } from './manager-backups';
 import { defaultManagerUpdateImage } from './manager-update-image';
 import {
   readManagerUpdateReceipt,
@@ -168,7 +169,7 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
               {t(translationKey(operation.error))}
             </p>
           )}
-          {operation.status === 'succeeded' && (
+          {operation.status === 'succeeded' && operation.backupRetained && (
             <Button
               variant="outline"
               disabled={busy}
@@ -326,6 +327,7 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <ManagerBackups status={status} />
       <ManagerUpdateProgressDialog
         open={progressOpen}
         onOpenChange={(open) => {

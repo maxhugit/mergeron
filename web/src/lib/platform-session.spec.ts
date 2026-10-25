@@ -24,6 +24,56 @@ afterEach(() => {
 });
 
 describe('platform session recovery', () => {
+  it('recovers a transient failure when returning after two hours in a hidden tab', async () => {
+    vi.useFakeTimers();
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden');
+    const client = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity } },
+    });
+    const identity = {
+      active: true,
+      kind: 'person',
+      personId: 'person',
+      role: 'administrator',
+      name: 'Person',
+    };
+    client.setQueryData(platformSessionKey, identity);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(identity), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const hook = renderHook(() => usePlatformSession(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
+    });
+    await act(async () => {
+      await client
+        .fetchQuery({
+          queryKey: platformSessionKey,
+          queryFn: () => {
+            throw new AuthResourceError('Restarting', 503);
+          },
+          retry: false,
+        })
+        .catch(() => {});
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60_000);
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(hook.result.current.isError).toBe(true);
+    visibility.mockReturnValue('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('pageshow'));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(hook.result.current.isSuccess).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    hook.unmount();
+    client.clear();
+  });
   it('rechecks identity after server downtime without any focus or online event', async () => {
     vi.useFakeTimers();
     const identity = {
@@ -37,14 +87,12 @@ describe('platform session recovery', () => {
       defaultOptions: { queries: { gcTime: Infinity } },
     });
     client.setQueryData(platformSessionKey, identity);
-    const fetch = vi
-      .spyOn(globalThis, 'fetch')
-      .mockImplementation(
-        async () =>
-          new Response(JSON.stringify(identity), {
-            headers: { 'Content-Type': 'application/json' },
-          }),
-      );
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        new Response(JSON.stringify(identity), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
     const hook = renderHook(() => usePlatformSession(), {
       wrapper: ({ children }: { children: ReactNode }) =>
         createElement(QueryClientProvider, { client }, children),

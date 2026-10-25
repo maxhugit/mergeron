@@ -15,6 +15,34 @@ class FixtureManagerStatusService extends ManagerStatusService {
 }
 
 describe('ManagerStatusService', () => {
+  it('uses fixed backup endpoints and discards arbitrary input fields', async () => {
+    class BackupFixture extends ManagerStatusService {
+      requests: unknown[][] = [];
+      protected override requestManager(
+        path?: string,
+        method?: 'GET' | 'POST',
+        payload?: Record<string, unknown>,
+      ) {
+        this.requests.push([path, method, payload]);
+        return Promise.resolve({ backups: [] });
+      }
+    }
+    const service = new BackupFixture(new ConfigService());
+    await service.backups();
+    await service.deleteBackup({
+      operationId: 'backup',
+      confirmation: 'DELETE_UPDATE_BACKUP',
+      path: '/home',
+    } as { operationId: string; confirmation: string });
+    expect(service.requests).toEqual([
+      ['/v1/backups', undefined, undefined],
+      [
+        '/v1/backups/delete',
+        'POST',
+        { operationId: 'backup', confirmation: 'DELETE_UPDATE_BACKUP' },
+      ],
+    ]);
+  });
   it('forwards asynchronous update commands only to fixed local endpoints', async () => {
     class UpdateFixture extends ManagerStatusService {
       requests: unknown[][] = [];
