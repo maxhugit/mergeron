@@ -1,10 +1,11 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { catalogFixture, json } from './catalog/catalog.testing';
 import { ServerVersionCard } from './server-version-card';
 import { managerStatusQueryKey } from './manager-status-api';
+import { GeneralSettings } from './general-settings';
 
 let fixture: ReturnType<typeof catalogFixture>;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -66,6 +67,60 @@ it('shows the installed channel, latest stable version and cumulative changes', 
   expect(screen.getByText('Mergeron 0.2.1')).toBeVisible();
   expect(screen.getByText('Ajoute la recherche.')).toBeVisible();
   expect(await screen.findByText('Corrige le mobile.')).toBeVisible();
+});
+
+it('separates current version, updates, backups and socket settings with keyboard navigation', async () => {
+  fixture.render(<GeneralSettings />);
+  expect(await screen.findByText('0.1.0')).toBeVisible();
+  expect(screen.getByRole('tab', { name: 'Current version' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.getByText('Mergeron 0.2.1')).not.toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Update' }));
+  expect(screen.getByText('Mergeron 0.2.1')).toBeVisible();
+  expect(screen.getByText('0.1.0')).not.toBeVisible();
+  expect(screen.getByText('Update backups')).not.toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Backup' }));
+  expect(screen.getByText('Update backups')).toBeVisible();
+  expect(screen.getByText('Mergeron 0.2.1')).not.toBeVisible();
+  const backup = screen.getByRole('tab', { name: 'Backup' });
+  backup.focus();
+  fireEvent.keyDown(backup, { key: 'ArrowRight' });
+  expect(screen.getByRole('tab', { name: 'Socket' })).toHaveFocus();
+  expect(screen.getByRole('tabpanel')).toHaveAttribute(
+    'aria-labelledby',
+    'server-tab-socket',
+  );
+  expect(screen.getByText('Update backups')).not.toBeVisible();
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Socket' }), {
+    key: 'Home',
+  });
+  expect(screen.getByRole('tab', { name: 'Current version' })).toHaveFocus();
+  expect(screen.getByText('0.1.0')).toBeVisible();
+});
+
+it('shows running update progress even when the update panel is hidden', async () => {
+  fixture.queryClient.setQueryData(managerStatusQueryKey, {
+    available: true,
+    components: [],
+    update: {
+      busy: true,
+      operation: {
+        id: 'tab-update',
+        status: 'running',
+        phase: 'backingUp',
+        backupRetained: false,
+        images: {},
+        previousImages: {},
+        events: [],
+      },
+    },
+  });
+  fixture.render(<ServerVersionCard view="backups" />);
+  const dialog = await screen.findByRole('dialog', { name: 'Update progress' });
+  expect(dialog).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
 });
 
 it('keeps the update dialog mounted when the application cannot reach its Manager during restart', async () => {
