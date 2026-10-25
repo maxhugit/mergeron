@@ -1219,7 +1219,7 @@ function DeliverableFolderSelector({
   base: string;
   busy: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['deliverables', 'common']);
   const client = useQueryClient();
   const projectId = base.split('/')[1];
   const [editing, setEditing] = useState(false);
@@ -1831,7 +1831,7 @@ function DeliverableHistory({
   item: Deliverable;
   download: (version: DeliverableVersion, index: number) => Promise<void>;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['deliverables', 'common']);
   const events: Array<{
     id: string;
     date: number;
