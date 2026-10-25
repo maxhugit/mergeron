@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
@@ -66,6 +66,45 @@ it('shows the installed channel, latest stable version and cumulative changes', 
   expect(screen.getByText('Mergeron 0.2.1')).toBeVisible();
   expect(screen.getByText('Ajoute la recherche.')).toBeVisible();
   expect(await screen.findByText('Corrige le mobile.')).toBeVisible();
+});
+
+it('keeps the update dialog mounted when the application cannot reach its Manager during restart', async () => {
+  fixture.queryClient.setQueryData(managerStatusQueryKey, {
+    available: true,
+    components: [],
+    update: {
+      busy: true,
+      operation: {
+        id: 'active',
+        status: 'running',
+        phase: 'backingUp',
+        backupRetained: false,
+        images: {},
+        previousImages: {},
+        events: [
+          { at: '2026-10-25T09:00:00Z', phase: 'backingUp', status: 'running' },
+        ],
+      },
+    },
+  });
+  fetchMock.mockImplementation((input: RequestInfo | URL) =>
+    Promise.resolve(
+      json(String(input).includes('/release/') ? status : { available: false }),
+    ),
+  );
+  fixture.render(<ServerVersionCard />);
+  const dialog = await screen.findByRole('dialog', { name: 'Update progress' });
+  await act(async () => {
+    fixture.queryClient.setQueryData(managerStatusQueryKey, {
+      available: false,
+      components: [],
+    });
+  });
+  expect(dialog).toBeVisible();
+  expect(
+    await screen.findByText(/Connection temporarily unavailable/),
+  ).toBeVisible();
+  expect(screen.getByRole('log')).toHaveTextContent('Saving application data');
 });
 
 it('refreshes only after the administrator requests it', async () => {

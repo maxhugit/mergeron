@@ -197,6 +197,19 @@ mise à jour. L'opération continue dans le Manager lorsque l'application est
 arrêtée ; son suivi reste disponible sur le socket local. Seuls les
 administrateurs accèdent aux routes applicatives `/api/settings/manager/update`.
 
+Après confirmation, une fenêtre **Suivi de la mise à jour** affiche l’étape
+courante, un indicateur par étapes et le journal horodaté du Manager.
+Elle interroge l’état toutes les deux secondes pendant l’opération. Il ne
+s’agit pas d’un pourcentage de durée ni du flux brut des logs Docker : seules
+les transitions journalisées, sans secrets, sont affichées.
+Pendant l’arrêt de l’application, les dernières informations restent visibles
+avec un message de reconnexion. Le journal est récupéré automatiquement après
+redémarrage, y compris en cas de restauration ou d’intervention nécessaire.
+Une coupure de connexion n’entraîne jamais une nouvelle demande d’installation.
+Fermer la fenêtre n’annule rien ; **Voir le suivi et les logs** permet de la
+rouvrir. Les restaurations et nouvelles tentatives de récupération utilisent
+la même fenêtre, sans supprimer leurs confirmations de sécurité.
+
 1. `POST /v1/update/plan` avec `images` sélectionne des images des seuls dépôts
    autorisés. Les trois services doivent être sains, gérés ou explicitement
    adoptés, avec des noms canoniques et des montages compatibles. Une dérive
