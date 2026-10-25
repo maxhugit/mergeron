@@ -105,7 +105,7 @@ services:
       - -c
       - export MERGERON_BACKEND_TOKEN="$$(cat /run/secrets/backend_token)"; envsubst '$${MERGERON_BACKEND_TOKEN}' < /etc/nginx/templates-secure/nginx.conf.template > /tmp/nginx.conf; exec nginx -c /tmp/nginx.conf -g 'daemon off;'
     volumes:
-      - ${DEPLOY_ROOT}/config/${MERGERON_NGINX_TEMPLATE:-nginx.conf.template}:/etc/nginx/templates-secure/nginx.conf.template:ro
+      - ${DEPLOY_ROOT}/config/${MERGERON_NGINX_TEMPLATE:?Set MERGERON_NGINX_TEMPLATE explicitly for the chosen authentication mode}:/etc/nginx/templates-secure/nginx.conf.template:ro
       - ${STATE_ROOT}/backend-token-nginx.txt:/run/secrets/backend_token:ro
     networks:
       mergeron-isolated:
@@ -195,7 +195,7 @@ services:
       MERGERON_STACK_PREFIX: ${MERGERON_STACK_PREFIX:-mergeron}
       MERGERON_STACK_ENVIRONMENT: ${MERGERON_STACK_ENVIRONMENT:-production}
       MERGERON_PROXY_NETWORK: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}
-      MERGERON_AUTH_MODE: ${MERGERON_AUTH_MODE:-authentik}
+      MERGERON_AUTH_MODE: ${MERGERON_AUTH_MODE:-native}
       MERGERON_MANAGER_SOCKET: /run/mergeron-manager/manager.sock
       MERGERON_MANAGER_SOCKET_GID: '11002'
       MERGERON_MANAGER_POLL_MS: '20000'

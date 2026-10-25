@@ -77,6 +77,36 @@ les comptes et les données de l’application n’ont pas été modifiés.
 
 ## Vérification d’une installation
 
+### Redirection vers le port interne
+
+Un contrôle HTTP ultérieur a révélé un défaut distinct : le `return 302` relatif
+du point de connexion était transformé par Nginx en URL absolue HTTP avec son
+port d’écoute interne `8080`. HSTS pouvait ensuite transformer le schéma en
+HTTPS sans retirer ce port. Ce n’était pas une erreur DNS ou une URL de retour
+configurée dans le compte utilisateur.
+
+Les deux modèles ingress fixent désormais `absolute_redirect off` dans leur
+bloc `server`. Cela garde les redirections locales relatives et conserve le
+schéma, l’hôte et le port public du navigateur, quel que soit le proxy externe.
+Les URL absolues renvoyées par un fournisseur d’identité ne sont pas réécrites.
+Voir la [directive officielle Nginx](https://nginx.org/en/docs/http/ngx_http_core_module.html#absolute_redirect).
+
+Pour une installation existante, sauvegarder le modèle privé, ajouter la
+directive dans son bloc `server`, régénérer la configuration avec la méthode
+habituelle (sans afficher le jeton), valider le même fichier avec `nginx -t -c`
+et effectuer un rechargement gracieux. Un simple `nginx -s reload` ne régénère
+pas un modèle envsubst. Ne pas remplacer tout le fichier par un modèle du dépôt :
+il peut contenir des noms d’upstream propres à la pile.
+
+En development, la correction a été appliquée le 25 octobre à 09:19 UTC, après
+sauvegarde du modèle privé et test de syntaxe. `/` et `/api/auth/me` ont conservé
+leur refus anonyme `302`, avec un `Location` relatif sans `8080`. La chaîne de
+connexion a ensuite atteint la page du fournisseur en `200`, et le contrôle de
+santé interne est resté en `200`. Seul l’ingress development a été rechargé ;
+production, données et politique d’authentification n’ont pas été modifiées.
+
+### Contrôles du parcours complet
+
 Avec le mode proxy Authentik de ce dépôt, Nginx est le point de contrôle unique.
 Ne pas réintroduire un middleware d’authentification sur la route Traefik du
 navigateur ou sur les routes `/outpost.goauthentik.io` : le parcours de connexion

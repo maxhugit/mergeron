@@ -44,6 +44,11 @@ class AuthentikIngressConfigurationTest(unittest.TestCase):
             "error_page 401 = @goauthentik_proxy_signin;", self.nginx
         )
 
+    def test_browser_redirects_do_not_expose_the_internal_listener(self) -> None:
+        for template in (self.nginx, self.native):
+            self.assertIn('absolute_redirect off;', template)
+        self.assertIn('return 302 /outpost.goauthentik.io/start?', self.nginx)
+
     def test_refreshed_session_cookie_reaches_the_browser(self) -> None:
         self.assertIn(
             "auth_request_set $auth_cookie $upstream_http_set_cookie;",

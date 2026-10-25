@@ -106,7 +106,11 @@ peut provisionner la première fiche depuis un fichier JSON **privé, hors Git**
   "email": "admin@example.com",
   "phone": "+33600000000",
   "role": "administrator",
-  "active": true
+  "active": true,
+  "localAccount": {
+    "username": "administrateur",
+    "password": "REMPLACER_PAR_UN_MOT_DE_PASSE_UNIQUE_D_AU_MOINS_12_CARACTERES"
+  }
 }
 ```
 
@@ -115,11 +119,16 @@ docker exec -i mergeron-ui node /app/scripts/provision-person.cjs < personne-pri
 ```
 
 Ce programme requiert un accès privilégié au conteneur et réutilise la validation
-du serveur. Il ne journalise pas les coordonnées. Sauvegarder d’abord la base et
+du serveur, y compris Argon2id et les protections des comptes locaux. Le mot de
+passe ci-dessus est un emplacement de saisie, pas un secret livré ou un compte
+créé automatiquement. Choisir un identifiant unique et un vrai mot de passe
+privé. Fiche et compte sont créés atomiquement ; un échec annule les deux.
+Le programme ne change pas les méthodes d’authentification déjà configurées.
+Il ne journalise pas les coordonnées ou le mot de passe. Sauvegarder d’abord la base et
 protéger puis retirer le fichier privé après utilisation. En cas de différence
 entre l’e-mail de la fiche et celui d’Authentik, ne pas forcer une correspondance
 depuis le navigateur : un administrateur peut fournir au même programme le champ
-`identitySubject`, lu sur la page `/api/auth/me` après authentification. Cette
+`identitySubject`, sans `localAccount`, lu sur la page `/api/auth/me` après authentification. Cette
 liaison explicite doit être vérifiée humainement. Un identifiant déjà lié à une
 autre personne est refusé.
 

@@ -39,7 +39,7 @@ export type PublicAuthConfiguration = Omit<AuthConfiguration, 'oidc'> & {
 const DEFAULT_CONFIGURATION: AuthConfiguration = {
   version: 1,
   local: {
-    enabled: false,
+    enabled: true,
     sessionTtlHours: 24,
     maxFailedAttempts: 5,
     lockoutMinutes: 15,

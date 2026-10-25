@@ -27,8 +27,15 @@ mais ne remplace jamais un fichier ou un dossier existant. Le réseau externe
 sélectionné par `MERGERON_PROXY_NETWORK` doit être créé au préalable
 (`mergeron-proxy` par défaut). Aucun nom de réseau personnel n’est imposé.
 
+Le parcours standard utilise `native` (compte/mot de passe activé, OIDC désactivé),
+sans Authentik imposé. Provisionner cette authentification avant exposition ;
+aucun accès anonyme ni administrateur par défaut n’est créé.
 Traefik n’est qu’un exemple de reverse proxy. Le modèle `nginx.conf.template`
 conserve le contrôle Authentik historique ; `nginx.native.conf.template`
 utilise les sessions Mergeron/OIDC sans Authentik. La sélection du Manager
 (`MERGERON_AUTH_MODE`) ne remplace jamais un modèle déjà présent. Compose
-sélectionne explicitement son modèle via `MERGERON_NGINX_TEMPLATE`.
+exige un choix explicite via `MERGERON_NGINX_TEMPLATE` : une valeur manquante
+bloque la configuration, sans remonter silencieusement un modèle différent.
+Les modèles conservent les redirections locales relatives pour ne pas exposer
+le port interne à travers le proxy choisi. Les fichiers d’une installation
+existante ne sont pas migrés automatiquement.

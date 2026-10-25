@@ -138,6 +138,15 @@ test('plans only missing declared resources and exposes zero destructive actions
   }
 });
 
+test('new installations default to native sessions/OIDC without imposing an identity vendor', () => {
+  assert.equal(readInstallConfiguration(manifest, {}).authMode, 'native');
+  assert.equal(
+    readInstallConfiguration(manifest, { MERGERON_AUTH_MODE: 'authentik' })
+      .authMode,
+    'authentik',
+  );
+});
+
 test('blocks installation when the external proxy network is absent', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'mergeron-install-'));
   try {
@@ -388,39 +397,52 @@ test('uses isolated development names and runtime configuration', async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
-test('creates development nginx upstreams without changing existing configuration', async () => {
-  const development = scopeManifest(
-    sourceManifest,
-    'mergeron-dev',
-    'development',
-  );
-  const directory = await mkdtemp(join(tmpdir(), 'mergeron-install-'));
-  try {
-    const configuration = await fixtureConfiguration(directory);
-    configuration.stackPrefix = development.stack;
-    await writeFile(
-      join(configuration.defaultsPath, 'nginx.conf.template'),
-      'set $backend http://mergeron-ui:8172; set $oauth http://mergeron-ui:12345;',
+for (const authMode of ['native', 'authentik'])
+  test(`creates development nginx upstreams without changing existing configuration (${authMode})`, async () => {
+    const development = scopeManifest(
+      sourceManifest,
+      'mergeron-dev',
+      'development',
     );
-    const docker = new FixtureDocker();
-    const plan = await createInstallPlan(development, docker, configuration);
-    await applyInstallPlan({
-      manifest: development,
-      docker,
-      configuration,
-      expectedFingerprint: plan.fingerprint,
-      confirmation: 'INSTALL',
-    });
-    const generated = await readFile(
-      join(directory, 'config/nginx.conf.template'),
-      'utf8',
-    );
-    assert.ok(generated.includes('http://mergeron-dev-ui:8172'));
-    assert.ok(generated.includes('http://mergeron-dev-ui:12345'));
-    assert.ok(!generated.includes('http://mergeron-ui:'));
-    const second = await createInstallPlan(development, docker, configuration);
-    assert.deepEqual(second.actions, []);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
+    const directory = await mkdtemp(join(tmpdir(), 'mergeron-install-'));
+    try {
+      const configuration = await fixtureConfiguration(directory);
+      configuration.stackPrefix = development.stack;
+      configuration.authMode = authMode;
+      const template =
+        authMode === 'native'
+          ? 'nginx.native.conf.template'
+          : 'nginx.conf.template';
+      await writeFile(
+        join(configuration.defaultsPath, template),
+        await readFile(
+          new URL(`../../deployment/config/${template}`, import.meta.url),
+          'utf8',
+        ),
+      );
+      const docker = new FixtureDocker();
+      const plan = await createInstallPlan(development, docker, configuration);
+      await applyInstallPlan({
+        manifest: development,
+        docker,
+        configuration,
+        expectedFingerprint: plan.fingerprint,
+        confirmation: 'INSTALL',
+      });
+      const generated = await readFile(
+        join(directory, 'config/nginx.conf.template'),
+        'utf8',
+      );
+      assert.ok(generated.includes('http://mergeron-dev-ui:8172'));
+      assert.ok(generated.includes('http://mergeron-dev-ui:12345'));
+      assert.ok(!generated.includes('http://mergeron-ui:'));
+      const second = await createInstallPlan(
+        development,
+        docker,
+        configuration,
+      );
+      assert.deepEqual(second.actions, []);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });

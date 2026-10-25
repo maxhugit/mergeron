@@ -115,6 +115,8 @@ jobs:
           src/deliverables/deliverables.service.spec.ts
           src/files/files.service.spec.ts
           src/auth/project-authorization.spec.ts
+          src/auth/auth-config.service.spec.ts
+          src/auth/local-auth.service.spec.ts
 
       - name: Run frontend tests
         if: matrix.part == 'frontend'
@@ -127,6 +129,10 @@ jobs:
       - name: Test built archive adapters with real 7-Zip
         if: matrix.part == 'backend'
         run: node scripts/smoke-test-archives.cjs
+
+      - name: Test local administrator bootstrap on an isolated database
+        if: matrix.part == 'backend'
+        run: node scripts/smoke-test-local-bootstrap.cjs
 
       - name: Build frontend
         if: matrix.part == 'frontend'
