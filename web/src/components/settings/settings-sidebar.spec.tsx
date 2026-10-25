@@ -52,7 +52,9 @@ beforeEach(() => {
 
 it('separates server settings from operations and closes the mobile drawer on section selection', () => {
   renderSidebar();
-  expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Account' }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Administration' })).toBeTruthy();
   expect(
     screen.getByRole('heading', { name: 'Operations tools' }),
@@ -109,6 +111,15 @@ it('routes Infrastructure to its own section and marks it selected', () => {
     search: { section: 'infrastructure' },
   });
   expect(useLayoutStore.getState().sidebarOpen).toBe(false);
+});
+it('keeps legacy CLI links within Codex and removes the standalone navigation entry', () => {
+  routing.location.search.section = 'codexCli';
+  renderSidebar();
+  expect(screen.queryByRole('button', { name: 'Codex CLI' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Codex' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
 });
 it('shows a server update indicator from the shared discovery and removes it when current', async () => {
   renderSidebar();

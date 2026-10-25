@@ -122,6 +122,9 @@ export const managerStatusQueryKey = ['administration', 'manager-status'];
 
 export interface ManagerBackup {
   id: string;
+  path?: string | null;
+  managerPath?: string;
+  sizeBytes?: number | null;
   createdAt: string;
   status: string;
   current: boolean;
@@ -154,7 +157,10 @@ async function backupRequest<T>(
   return result;
 }
 export function requestManagerBackups() {
-  return backupRequest<{ backups: ManagerBackup[] }>('backups');
+  return backupRequest<{
+    backups: ManagerBackup[];
+    totalSizeBytes?: number | null;
+  }>('backups');
 }
 export function deleteManagerBackup(id: string) {
   return backupRequest<{ ok: boolean }>('backups/delete', {

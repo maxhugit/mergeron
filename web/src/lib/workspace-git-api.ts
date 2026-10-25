@@ -53,6 +53,7 @@ export interface GitDiff {
   path: string;
   diff: string;
   untracked: boolean;
+  stagedOnly?: boolean;
 }
 
 export const gitInventoryKey = (projectId: string) =>

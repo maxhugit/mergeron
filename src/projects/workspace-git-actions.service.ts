@@ -8,14 +8,17 @@ import {
 import { mkdtemp, readFile, writeFile, rm, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { currentAccess, requireExecutionAccess } from '../auth/access-context';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { projectActivity } from '../database/schema';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
-import { WorkspaceGitService } from './workspace-git.service';
+import {
+  WorkspaceGitService,
+  gitStateFingerprint,
+} from './workspace-git.service';
 
 @Injectable()
 export class WorkspaceGitActionsService {
@@ -107,13 +110,7 @@ export class WorkspaceGitActionsService {
         // Freeze the reviewed index, not the worktree. Never run add/clean filters,
         // and never overwrite an index that a terminal user changes concurrently.
         const index = await readFile(path.join(cwd, '.git/index'));
-        if (
-          createHash('sha256')
-            .update(`${state.head}\n`)
-            .update(`${branch}\n`)
-            .update(index)
-            .digest('hex') !== body.fingerprint
-        )
+        if (gitStateFingerprint(state.head, branch, index) !== body.fingerprint)
           throw new ConflictException('GIT_STALE');
         const frozenIndex = path.join(folder, 'index');
         await writeFile(frozenIndex, index, { mode: 0o600 });
@@ -133,8 +130,7 @@ export class WorkspaceGitActionsService {
               'commit.gpgsign=false',
               'commit-tree',
               tree,
-              '-p',
-              state.head,
+              ...(state.head ? ['-p', state.head] : []),
               '-m',
               message,
             ],
@@ -155,7 +151,7 @@ export class WorkspaceGitActionsService {
           'Mergeron: commit confirmed staged changes',
           `refs/heads/${branch}`,
           sha,
-          state.head,
+          state.head || '0'.repeat(sha.length),
         ]);
         this.audit(projectId, copyId, 'git_commit', { branch, sha });
         return { sha, branch };
@@ -174,6 +170,7 @@ export class WorkspaceGitActionsService {
         copyId,
         body.fingerprint,
       );
+      if (!state.head) throw new ConflictException('GIT_NO_COMMIT');
       if (body.address !== source.resource.address)
         throw new ConflictException('GIT_STALE');
       if (/[\r\n]/.test(cwd)) throw new ConflictException('GIT_UNAVAILABLE');

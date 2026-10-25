@@ -36,11 +36,6 @@ const CodexSettings = lazy(() =>
     default: module.CodexSettings,
   })),
 );
-const CodexCliSettings = lazy(() =>
-  import('./codex-cli-settings').then((module) => ({
-    default: module.CodexCliSettings,
-  })),
-);
 const TerminalSettings = lazy(() =>
   import('./terminal-settings').then((module) => ({
     default: module.TerminalSettings,
@@ -96,8 +91,13 @@ export function SettingsPage() {
   const [integrationSection, setIntegrationSection] =
     useState<IntegrationSection>('plugins');
   const integrationPanelId = useId();
-  const usesFullHeightLayout =
-    section === 'database' || section === 'codex' || section === 'account';
+  const usesFullHeightLayout = [
+    'database',
+    'codex',
+    'account',
+    'codexCli',
+    'general',
+  ].includes(section);
 
   return (
     <div
@@ -125,8 +125,14 @@ export function SettingsPage() {
           {section === 'infrastructure' && <InfrastructureSettings />}
           {section === 'onlyOffice' && <OnlyOfficeSettings />}
           {section === 'people' && <PeopleManager showHeading={false} />}
-          {(section === 'codex' || section === 'account') && <CodexSettings />}
-          {section === 'codexCli' && <CodexCliSettings />}
+          {(section === 'codex' ||
+            section === 'account' ||
+            section === 'codexCli') && (
+            <CodexSettings
+              key={section}
+              initialTab={section === 'codexCli' ? 'cli' : 'account'}
+            />
+          )}
           {section === 'simpleChat' && <SimpleChatSettings />}
           {section === 'terminal' && <TerminalSettings />}
           {section === 'files' && <FilesSettings />}

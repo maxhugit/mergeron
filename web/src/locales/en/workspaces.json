@@ -1,4 +1,7 @@
 {
+  "gitNoCommit": "No commits yet",
+  "gitCloneFailed": "Could not create the copy. Check repository access and the requested branch.",
+  "gitUnbornDiffHelp": "Before the first commit, only staged changes are displayed. Unstaged changes are not included.",
   "detachFromProject": "Detach from project",
   "detachResourceTitle": "Detach “{{name}}” from this project?",
   "detachResourceDescription": "This only removes the resource connection from the project. The remote repository and all remote and local files will NOT be deleted. Associated working copies will be marked as revoked and will no longer be available to agents; their files will be kept.",

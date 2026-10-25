@@ -277,21 +277,30 @@ export class WorkspaceResourcesService {
     const cloneArgs = ['clone', '--single-branch'];
     if (branch) cloneArgs.push('--branch', branch);
     cloneArgs.push('--', resource.address!, target);
-    await this.runGit(cloneArgs, secret, 120_000);
-    const revision = (
-      await this.runGit(['-C', target, 'rev-parse', 'HEAD'], null, 10_000)
-    ).stdout.trim();
-    const effectiveBranch = (
-      await this.runGit(
-        ['-C', target, 'branch', '--show-current'],
-        null,
-        10_000,
-      )
-    ).stdout.trim();
-    return {
-      branch: effectiveBranch || branch || 'detached',
-      revision,
-    };
+    try {
+      await this.runGit(cloneArgs, secret, 120_000);
+      const revision = (
+        await this.runGit(
+          ['-C', target, 'rev-parse', '--verify', '--quiet', 'HEAD'],
+          null,
+          10_000,
+          [0, 1],
+        )
+      ).stdout.trim();
+      const effectiveBranch = (
+        await this.runGit(
+          ['-C', target, 'branch', '--show-current'],
+          null,
+          10_000,
+        )
+      ).stdout.trim();
+      if (!revision && !effectiveBranch) throw new Error('Invalid HEAD');
+      // An empty revision denotes an unborn branch, not a failed clone.
+      return { branch: effectiveBranch || branch || 'detached', revision };
+    } catch {
+      // Never expose credentials or raw Git diagnostics to HTTP clients.
+      throw new ConflictException('WORKSPACE_GIT_CLONE_FAILED');
+    }
   }
 
   get(projectId: string, id: string): WorkspaceResourceView {
@@ -544,6 +553,7 @@ export class WorkspaceResourcesService {
     args: string[],
     secret: ConnectionSecret | null,
     timeoutMs: number,
+    acceptedExitCodes: number[] = [0],
   ): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
       let askpassDirectory: string | null = null;
@@ -591,7 +601,8 @@ export class WorkspaceResourcesService {
         clearTimeout(timeout);
         if (askpassDirectory)
           rmSync(askpassDirectory, { recursive: true, force: true });
-        if (code === 0) resolve({ stdout: output, stderr: error });
+        if (code !== null && acceptedExitCodes.includes(code))
+          resolve({ stdout: output, stderr: error });
         else
           reject(
             new Error(

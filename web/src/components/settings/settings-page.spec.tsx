@@ -15,7 +15,9 @@ vi.mock('./server-version-card', () => ({
   ServerVersionCard: () => <div>Application updates</div>,
 }));
 vi.mock('./codex-settings', () => ({
-  CodexSettings: () => <div>Codex account tabs</div>,
+  CodexSettings: ({ initialTab }: { initialTab?: string }) => (
+    <div>Codex {initialTab} tabs</div>
+  ),
 }));
 vi.mock('./use-category-settings', () => ({
   useCategorySettings: () => ({
@@ -37,6 +39,14 @@ it('keeps application updates on Server without the infrastructure inventory', a
   expect(await screen.findByText('Application updates')).toBeVisible();
   expect(screen.queryByText('Manager infrastructure inventory')).toBeNull();
   expect(settingsPageLabel('general')).toBe('Server');
+  const tabs = screen.getByRole('tablist', { name: 'Server settings' });
+  expect(tabs.parentElement).toHaveClass('h-10', 'shrink-0', 'border-b');
+  expect(tabs.closest('.max-w-4xl')).toBeNull();
+});
+it('opens CLI inside Codex through the legacy URL', async () => {
+  route.section = 'codexCli';
+  render(<SettingsPage />);
+  expect(await screen.findByText('Codex cli tabs')).toBeVisible();
 });
 it('loads the Manager on the Infrastructure route without duplicating update controls', async () => {
   route.section = 'infrastructure';

@@ -263,7 +263,7 @@ function RepositoryPanel({
                     <p className="break-all">
                       <GitBranch className="mr-1 inline h-3.5 w-3.5" />
                       {snapshot.data.branch ?? t('gitDetached')} ·{' '}
-                      {snapshot.data.head.slice(0, 7)}
+                      {snapshot.data.head.slice(0, 7) || t('gitNoCommit')}
                     </p>
                     <p>
                       {t('gitTracking', {
@@ -321,7 +321,7 @@ function RepositoryPanel({
         )}
         {clone.error && (
           <p role="alert" className="text-destructive">
-            {clone.error.message}
+            {t('gitCloneFailed')}
           </p>
         )}
         {snapshot.error && (
@@ -428,7 +428,7 @@ function RepositoryPanel({
                   </p>
                   <p className="text-muted-foreground">
                     {t(item.remote ? 'gitRemoteBranch' : 'gitLocalBranch')} ·{' '}
-                    {item.revision.slice(0, 7)}
+                    {item.revision.slice(0, 7) || t('gitNoCommit')}
                   </p>
                   {item.remote && !item.name.endsWith('/HEAD') && (
                     <Button
@@ -529,7 +529,9 @@ function Changes({
       >
         <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-4xl">
           <DialogTitle className="break-all pr-6">{selected}</DialogTitle>
-          <DialogDescription>{t('gitDiffHelp')}</DialogDescription>
+          <DialogDescription>
+            {diff.data?.stagedOnly ? t('gitUnbornDiffHelp') : t('gitDiffHelp')}
+          </DialogDescription>
           {diff.isPending ? (
             <p role="status">{t('gitLoading')}</p>
           ) : diff.error ? (

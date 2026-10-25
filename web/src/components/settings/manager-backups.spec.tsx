@@ -22,6 +22,8 @@ const status = {
 } as ManagerStatus;
 const backup = {
   id: 'backup',
+  path: '/srv/mergeron/manager-state/updates/backup/backup',
+  sizeBytes: 2048,
   createdAt: '2026-10-25T17:19:18Z',
   current: true,
   status: 'succeeded',
@@ -30,7 +32,7 @@ const backup = {
   protectionReason: null,
 };
 beforeEach(() => {
-  api.list.mockResolvedValue({ backups: [backup] });
+  api.list.mockResolvedValue({ backups: [backup], totalSizeBytes: 2048 });
   api.remove.mockResolvedValue({ ok: true });
 });
 afterEach(() => {
@@ -53,6 +55,13 @@ function setup(value = status) {
     </QueryClientProvider>,
   );
 }
+
+it('shows the verified server path, disk usage and total usage', async () => {
+  setup();
+  expect(await screen.findByText(/Server path: \/srv\/mergeron/)).toBeVisible();
+  expect(screen.getByText('Disk usage: 2 KiB')).toBeVisible();
+  expect(screen.getByText('Total backup disk usage: 2 KiB')).toBeVisible();
+});
 it('lists backup dates and requires confirmation before deletion', async () => {
   setup();
   expect(await screen.findByText('backup')).toBeInTheDocument();

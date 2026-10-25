@@ -127,6 +127,65 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+it('clones an empty repository and supports the first staged commit without changing unstaged files', async () => {
+  const remote = path.join(root, 'empty');
+  await exec('git', ['init', '--initial-branch=main', remote]);
+  database.sqlite
+    .prepare(
+      'UPDATE project_workspace_resources SET address = ?, access_mode = ? WHERE id = ?',
+    )
+    .run(remote, 'read_write', 'remote');
+  const copy = await copies.create('p', 'remote', {});
+  cwd = copy.localPath!;
+  copyId = copy.id;
+  expect(copy.revision).toBe('');
+  const empty = await service.snapshot('p', copyId);
+  expect(empty).toMatchObject({ head: '', branch: 'main', changes: [] });
+  expect(empty.branches).toContainEqual(
+    expect.objectContaining({ name: 'main', revision: '' }),
+  );
+  expect((await service.stagedDiff('p', copyId)).diff).toBe('');
+  await expect(
+    actions.push('p', copyId, {
+      fingerprint: empty.fingerprint,
+      address: remote,
+    }),
+  ).rejects.toThrow('GIT_NO_COMMIT');
+  await writeFile(path.join(cwd, 'first.txt'), 'staged first\n');
+  await git(['add', 'first.txt']);
+  await writeFile(path.join(cwd, 'first.txt'), 'unstaged next\n');
+  const diff = await service.diff('p', copyId, 'first.txt');
+  expect(diff.stagedOnly).toBe(true);
+  expect(diff.diff).toContain('+staged first');
+  expect(diff.diff).not.toContain('unstaged next');
+  const state = await service.snapshot('p', copyId);
+  const result = await actions.commit('p', copyId, {
+    fingerprint: state.fingerprint,
+    message: 'First commit',
+    authorName: 'Test',
+    authorEmail: 'test@example.invalid',
+  });
+  expect(
+    (await git(['rev-list', '--parents', '-n', '1', 'HEAD'])).stdout.trim(),
+  ).toBe(result.sha);
+  expect((await git(['show', 'HEAD:first.txt'])).stdout).toBe('staged first\n');
+  expect(await readFile(path.join(cwd, 'first.txt'), 'utf8')).toBe(
+    'unstaged next\n',
+  );
+});
+
+it('returns a safe conflict for a nonexistent clone branch rather than an internal error', async () => {
+  await expect(
+    copies.create('p', 'remote', { branch: 'missing-branch' }),
+  ).rejects.toMatchObject({
+    response: expect.objectContaining({
+      statusCode: 409,
+      message: 'WORKSPACE_GIT_CLONE_FAILED',
+    }),
+  });
+  expect(copies.list('p')).toHaveLength(1);
+});
+
 it('inspects a registered read-only copy without modifying the index or worktree', async () => {
   const index = await readFile(path.join(cwd, '.git/index'));
   const result = await service.snapshot('p', copyId);

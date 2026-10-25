@@ -8,6 +8,8 @@ import {
   rm,
   lstat,
   symlink,
+  truncate,
+  link,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -190,6 +192,19 @@ test('lists dated backups without transaction secrets and deletes only the selec
   const list = await updater.listBackups();
   assert.equal(list.backups.length, 2);
   assert.equal(
+    list.backups[0].path,
+    join(options.directory, list.backups[0].id, 'backup'),
+  );
+  assert.ok(
+    list.backups.every(
+      (backup) => Number.isFinite(backup.sizeBytes) && backup.sizeBytes >= 0,
+    ),
+  );
+  assert.equal(
+    list.totalSizeBytes,
+    list.backups.reduce((sum, backup) => sum + backup.sizeBytes, 0),
+  );
+  assert.equal(
     list.backups.every(
       (backup) =>
         backup.canDelete && !Number.isNaN(Date.parse(backup.createdAt)),
@@ -213,6 +228,32 @@ test('lists dated backups without transaction secrets and deletes only the selec
     (await lstat(join(options.directory, second, 'backup'))).isDirectory(),
     true,
   );
+});
+
+test('measures allocated backup blocks without following links or counting hardlinks twice', async (t) => {
+  const { root, updater, options } = await fixture(t);
+  await begin(updater);
+  const directory = join(options.directory, updater.current.id, 'backup');
+  const sparse = join(directory, 'sparse');
+  await writeFile(sparse, '');
+  await truncate(sparse, 32 * 1024 * 1024);
+  const outside = join(root, 'outside');
+  await writeFile(outside, Buffer.alloc(2 * 1024 * 1024));
+  await symlink(outside, join(directory, 'external'));
+  await writeFile(join(directory, 'one'), Buffer.alloc(1024 * 1024));
+  await link(join(directory, 'one'), join(directory, 'two'));
+  const result = await updater.listBackups();
+  assert.ok(result.totalSizeBytes >= 1024 * 1024);
+  assert.ok(result.totalSizeBytes < 2 * 1024 * 1024);
+});
+
+test('does not invent a server path when the host mount cannot be verified', async (t) => {
+  const { updater } = await fixture(t);
+  await begin(updater);
+  updater.configuration.hostStatePath = '/unavailable-host-state';
+  const result = await updater.listBackups();
+  assert.equal(result.backups[0].path, null);
+  assert.ok(result.backups[0].managerPath.endsWith('/backup'));
 });
 
 test('deleting the latest backup preserves quarantine and disables rollback durably', async (t) => {

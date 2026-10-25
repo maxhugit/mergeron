@@ -79,7 +79,9 @@ export function WorkspaceTree({
         <div className="shrink-0 space-y-1 border-b p-2">
           {project.workspaces.map((workspace) => {
             const selected = Boolean(
-              currentRoot && pathIsWithin(currentRoot, workspace.path),
+              !gitResourceId &&
+              currentRoot &&
+              pathIsWithin(currentRoot, workspace.path),
             );
             const isActive = workspace.path === cwd;
             return (
@@ -90,6 +92,7 @@ export function WorkspaceTree({
                 <Button
                   type="button"
                   variant={selected ? 'secondary' : 'ghost'}
+                  aria-pressed={selected}
                   size="sm"
                   className="h-7 min-w-0 flex-1 justify-start gap-2 px-2 text-xs"
                   title={workspace.path}

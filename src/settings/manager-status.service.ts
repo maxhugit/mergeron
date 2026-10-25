@@ -28,7 +28,12 @@ export class ManagerStatusService {
           method,
           path,
           socketPath: this.socketPath(),
-          timeout: path === '/v1/backups/delete' ? 120_000 : 3_000,
+          timeout:
+            path === '/v1/backups/delete'
+              ? 120_000
+              : path === '/v1/backups'
+                ? 30_000
+                : 3_000,
           headers: {
             Accept: 'application/json',
             ...(body
