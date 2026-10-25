@@ -52,6 +52,7 @@ beforeEach(() => {
 
 it('separates server settings from operations and closes the mobile drawer on section selection', () => {
   renderSidebar();
+  expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Administration' })).toBeTruthy();
   expect(
     screen.getByRole('heading', { name: 'Operations tools' }),

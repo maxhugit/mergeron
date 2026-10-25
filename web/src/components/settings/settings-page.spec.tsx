@@ -14,6 +14,9 @@ vi.mock('./manager-status-card', () => ({
 vi.mock('./server-version-card', () => ({
   ServerVersionCard: () => <div>Application updates</div>,
 }));
+vi.mock('./codex-settings', () => ({
+  CodexSettings: () => <div>Codex account tabs</div>,
+}));
 vi.mock('./use-category-settings', () => ({
   useCategorySettings: () => ({
     settings: [],
@@ -23,6 +26,11 @@ vi.mock('./use-category-settings', () => ({
   }),
 }));
 afterEach(cleanup);
+it('opens the new Codex account tab from the old account URL', async () => {
+  route.section = 'account';
+  render(<SettingsPage />);
+  expect(await screen.findByText('Codex account tabs')).toBeVisible();
+});
 it('keeps application updates on Server without the infrastructure inventory', async () => {
   route.section = 'general';
   render(<SettingsPage />);

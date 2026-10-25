@@ -125,7 +125,7 @@
   "technicalDetailsHidden": "Sans détails techniques",
   "technicalDetailsCollapsed": "Détails repliés",
   "technicalDetailsExpanded": "Tout afficher",
-  "responseDetailHint": "Affichage propre à cet agent. Réponses inchangées ; commandes et logs restent dépliables. Alertes et demandes de validation restent visibles.",
+  "serviceTierDescription": "Priorité et vitesse de traitement, pas effort de raisonnement. Peut modifier la consommation ou le coût selon le modèle et le compte.",
   "webSearch": "Recherche sur le Web",
   "valueCannotBeEmpty": "La valeur ne peut pas être vide",
   "valueMustBeAValidNumber": "La valeur doit être un nombre valide",

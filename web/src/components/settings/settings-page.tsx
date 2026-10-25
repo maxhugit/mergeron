@@ -31,11 +31,6 @@ const OnlyOfficeSettings = lazy(() =>
     default: module.OnlyOfficeSettings,
   })),
 );
-const AccountSettings = lazy(() =>
-  import('./account/account-settings').then((module) => ({
-    default: module.AccountSettings,
-  })),
-);
 const CodexSettings = lazy(() =>
   import('./codex-settings').then((module) => ({
     default: module.CodexSettings,
@@ -101,7 +96,8 @@ export function SettingsPage() {
   const [integrationSection, setIntegrationSection] =
     useState<IntegrationSection>('plugins');
   const integrationPanelId = useId();
-  const usesFullHeightLayout = section === 'database' || section === 'codex';
+  const usesFullHeightLayout =
+    section === 'database' || section === 'codex' || section === 'account';
 
   return (
     <div
@@ -128,9 +124,8 @@ export function SettingsPage() {
           {section === 'general' && <GeneralSettings />}
           {section === 'infrastructure' && <InfrastructureSettings />}
           {section === 'onlyOffice' && <OnlyOfficeSettings />}
-          {section === 'account' && <AccountSettings />}
           {section === 'people' && <PeopleManager showHeading={false} />}
-          {section === 'codex' && <CodexSettings />}
+          {(section === 'codex' || section === 'account') && <CodexSettings />}
           {section === 'codexCli' && <CodexCliSettings />}
           {section === 'simpleChat' && <SimpleChatSettings />}
           {section === 'terminal' && <TerminalSettings />}

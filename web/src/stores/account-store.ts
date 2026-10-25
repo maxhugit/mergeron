@@ -62,8 +62,14 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   setAccount: (account) =>
     set({
       account,
-      authMode: account?.account?.type === 'chatgpt' ? 'chatgpt' : null,
-      planType: account?.account?.type === 'chatgpt' ? account.account.planType : null,
+      authMode:
+        account?.account?.type === 'chatgpt'
+          ? 'chatgpt'
+          : account?.account?.type === 'apiKey'
+            ? 'apikey'
+            : null,
+      planType:
+        account?.account?.type === 'chatgpt' ? account.account.planType : null,
     }),
 
   setAccountUpdated: (payload) =>
@@ -84,7 +90,8 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   setLoginStarted: (response) =>
     set({
       login: {
-        inProgress: response.type === 'chatgpt' || response.type === 'chatgptDeviceCode',
+        inProgress:
+          response.type === 'chatgpt' || response.type === 'chatgptDeviceCode',
         loginId: loginIdFromResponse(response),
         method: response.type,
         response,
