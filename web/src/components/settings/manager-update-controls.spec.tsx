@@ -99,7 +99,7 @@ it('reopens the completed update after the authenticated workspace was remounted
   expect(readManagerUpdateReceipt()).toBeNull();
 });
 
-it('can close and reopen progress without cancelling or starting a second update', async () => {
+it('keeps progress locked during an active update without cancelling or replaying it', async () => {
   const update = {
     busy: true,
     operation: {
@@ -141,11 +141,8 @@ it('can close and reopen progress without cancelling or starting a second update
   await waitFor(() =>
     expect(readManagerUpdateReceipt()?.operationId).toBe('active'),
   );
+  expect(screen.getByRole('button', { name: 'Fermer' })).toBeDisabled();
   await user.click(screen.getByRole('button', { name: 'Fermer' }));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  await user.click(
-    screen.getByRole('button', { name: 'Voir le suivi et les logs' }),
-  );
   expect(
     await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' }),
   ).toBeVisible();

@@ -102,7 +102,7 @@ it('keeps the update dialog mounted when the application cannot reach its Manage
   });
   expect(dialog).toBeVisible();
   expect(
-    await screen.findByText(/Connection temporarily unavailable/),
+    await screen.findByText(/The server is temporarily unavailable/),
   ).toBeVisible();
   expect(screen.getByRole('log')).toHaveTextContent('Saving application data');
 });

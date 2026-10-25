@@ -2,7 +2,8 @@
  * Authenticated layout: sidebar + header + main content outlet.
  * Replaces the old App.tsx conditional rendering.
  */
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { readManagerUpdateReceipt } from '@/components/settings/manager-update-recovery';
 import { LoaderCircle } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
@@ -47,6 +48,11 @@ import { MobileRefresh } from '@/components/mobile-refresh';
  */
 const DEFAULT_MAX_IDLE_SUBSCRIPTIONS = 30;
 const IDLE_SUBSCRIPTION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const ManagerUpdateReconnecting = lazy(() =>
+  import('@/components/settings/manager-update-reconnecting').then(
+    (module) => ({ default: module.ManagerUpdateReconnecting }),
+  ),
+);
 
 export function AuthenticatedLayout() {
   const session = usePlatformSession();
@@ -54,6 +60,18 @@ export function AuthenticatedLayout() {
   const navigate = useNavigate();
   const reconnecting = isSessionTransportError(session.error);
   const proxyExpired = session.error instanceof AuthRedirectError;
+  // A local receipt only restores progress display, never the authenticated workspace.
+  if (session.isPending || (session.isError && reconnecting)) {
+    const receipt = readManagerUpdateReceipt();
+    if (receipt)
+      return (
+        <Suspense
+          fallback={<div className="p-6">{t('access.reconnecting')}</div>}
+        >
+          <ManagerUpdateReconnecting receipt={receipt} />
+        </Suspense>
+      );
+  }
   if (session.isPending)
     return <div className="p-6">{t('access.verifying')}</div>;
   if (session.isError || !session.data?.active)

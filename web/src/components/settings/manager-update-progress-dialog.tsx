@@ -1,4 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { retainManagerUpdateSnapshot } from './manager-update-recovery';
 import { useTranslation } from 'react-i18next';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,6 +48,7 @@ export function ManagerUpdateProgressDialog({
   session,
   excludedOperationId,
   expectedOperationId,
+  monitoringPaused = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -55,6 +58,8 @@ export function ManagerUpdateProgressDialog({
   session: number;
   excludedOperationId: string | null;
   expectedOperationId?: string | null;
+  /** No protected requests while session verification is temporarily unavailable. */
+  monitoringPaused?: boolean;
 }) {
   const { t, i18n } = useTranslation('manager');
   const { t: common } = useTranslation();
@@ -70,10 +75,11 @@ export function ManagerUpdateProgressDialog({
       client.setQueryData(managerStatusQueryKey, result);
       return result;
     },
-    enabled: open && !pending,
+    enabled: open && !pending && !monitoringPaused,
     refetchInterval: (current) => {
       const operation = current.state.data?.update?.operation;
       return open &&
+        !monitoringPaused &&
         (!operation ||
           operation.id === excludedOperationId ||
           (expectedId && operation.id !== expectedId) ||
@@ -84,7 +90,7 @@ export function ManagerUpdateProgressDialog({
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const latest = query.data?.update?.operation;
+  const latest = monitoringPaused ? undefined : query.data?.update?.operation;
   const operation = pending
     ? null
     : latest &&
@@ -95,6 +101,11 @@ export function ManagerUpdateProgressDialog({
   const phase = operation?.phase ?? 'preparing';
   const running =
     pending || (!operation && !requestError) || operation?.status === 'running';
+  const locked = monitoringPaused || running;
+  useEffect(() => {
+    if (operation && !monitoringPaused)
+      retainManagerUpdateSnapshot(session, operation);
+  }, [operation, session, monitoringPaused]);
   const stage = stages.indexOf(phase);
   const completed = operation?.status === 'succeeded';
   const interrupted = operation?.status === 'recoveryRequired';
@@ -111,10 +122,21 @@ export function ManagerUpdateProgressDialog({
             : 'managerUpdateRunning';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next || !locked) onOpenChange(next);
+      }}
+    >
       <DialogContent
         className="flex max-h-[85dvh] flex-col sm:max-w-2xl"
         showCloseButton={false}
+        onEscapeKeyDown={(event) => {
+          if (locked) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (locked) event.preventDefault();
+        }}
       >
         <DialogHeader>
           <DialogTitle>{t('managerUpdateProgressTitle')}</DialogTitle>
@@ -172,7 +194,7 @@ export function ManagerUpdateProgressDialog({
             )}
             {t('managerUpdateStageProgress')}
           </p>
-          {query.isError && (
+          {(monitoringPaused || query.isError) && (
             <p className="text-sm text-amber-700 dark:text-amber-300">
               {t('managerUpdateReconnecting')}
             </p>
@@ -226,7 +248,11 @@ export function ManagerUpdateProgressDialog({
           </p>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            disabled={locked}
+            onClick={() => onOpenChange(false)}
+          >
             {common('close')}
           </Button>
         </DialogFooter>

@@ -1,4 +1,10 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -93,7 +99,7 @@ it('keeps the journal during downtime and retrieves the final result without rep
     });
   });
   expect(
-    await screen.findByText(/Connexion temporairement indisponible/),
+    await screen.findByText(/Le serveur est temporairement indisponible/),
   ).toBeVisible();
   expect(within(log).getAllByRole('listitem')).toHaveLength(2);
   value = response({
@@ -114,7 +120,7 @@ it('keeps the journal during downtime and retrieves the final result without rep
   expect(await screen.findByText('Mise à jour réussie')).toBeVisible();
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '6');
   expect(
-    screen.queryByText(/Connexion temporairement indisponible/),
+    screen.queryByText(/Le serveur est temporairement indisponible/),
   ).not.toBeInTheDocument();
   expect(within(log).getAllByRole('listitem')).toHaveLength(3);
   expect(
@@ -123,6 +129,46 @@ it('keeps the journal during downtime and retrieves the final result without rep
         input === '/api/settings/manager/status' && !init?.method,
     ),
   ).toBe(true);
+});
+
+it('retains progress without any protected request and blocks dismissal while session verification is unavailable', async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  const close = vi.fn();
+  fixture.render(
+    <ManagerUpdateProgressDialog
+      {...props}
+      onOpenChange={close}
+      monitoringPaused
+    />,
+  );
+  const dialog = await screen.findByRole('dialog');
+  expect(screen.getByRole('log')).toHaveTextContent('Sauvegarde des données');
+  expect(screen.getByText(/votre identité vérifiée/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Fermer' })).toBeDisabled();
+  fireEvent.keyDown(dialog, { key: 'Escape' });
+  expect(close).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('allows closing only once the operation has reached a terminal state', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        json(
+          response({ ...operation, status: 'succeeded', phase: 'complete' }),
+        ),
+      ),
+    ),
+  );
+  const close = vi.fn();
+  fixture.render(
+    <ManagerUpdateProgressDialog {...props} onOpenChange={close} />,
+  );
+  await screen.findByText('Mise à jour réussie');
+  fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+  expect(close).toHaveBeenCalledWith(false);
 });
 
 it.each([
