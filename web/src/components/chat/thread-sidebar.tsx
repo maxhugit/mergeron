@@ -61,6 +61,8 @@ import { SimpleChatRow } from './sidebar/simple-chat-row';
 import { RenameDialog, ConfirmDialog } from './sidebar/sidebar-dialogs';
 import { ForkGoalDialog } from './sidebar/fork-goal-dialog';
 import { CreateProjectDialog } from './sidebar/create-project-dialog';
+import { ProjectArchiveExportDialog } from '@/components/projects/project-archive-transfer';
+import { usePlatformSession } from '@/lib/platform-session';
 import { useForkWithGoal } from '@/hooks/use-fork-with-goal';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
@@ -126,6 +128,8 @@ function useActiveView():
 }
 
 export function ThreadSidebar() {
+  const session = usePlatformSession();
+  const [exportProjectId, setExportProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
   const activeView = useActiveView();
   const activeSimpleThreadId = useRouterState({
@@ -1053,16 +1057,18 @@ export function ThreadSidebar() {
         <FolderKanban aria-hidden="true" className="h-4 w-4 shrink-0" />
         {t('projects')}
       </span>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-6 w-6"
-        aria-label={t('newProject')}
-        title={t('newProject')}
-        onClick={() => setCreateProjectOpen(true)}
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </Button>
+      <div className="flex items-center gap-1">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6"
+          aria-label={t('newProject')}
+          title={t('newProject')}
+          onClick={() => setCreateProjectOpen(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 
@@ -1164,6 +1170,13 @@ export function ThreadSidebar() {
                 setRenameResourceValue(resource.name);
               }}
               onDeleteResource={setDeleteResource}
+              onExportProject={
+                session.isAdministrator
+                  ? (group) => {
+                      if (group.projectId) setExportProjectId(group.projectId);
+                    }
+                  : undefined
+              }
               onDeleteProject={(group) => {
                 if (!group.projectId) return;
                 setDeleteProjectError('');
@@ -1235,6 +1248,15 @@ export function ThreadSidebar() {
           a control pinned to the sidebar's own bottom edge disappears with the
           sidebar, which forced expanding to live somewhere else entirely. */}
 
+      {exportProjectId && (
+        <ProjectArchiveExportDialog
+          projectId={exportProjectId}
+          open
+          onOpenChange={(open) => {
+            if (!open) setExportProjectId(null);
+          }}
+        />
+      )}
       <CreateProjectDialog
         open={createProjectOpen}
         pending={createProject.isPending}

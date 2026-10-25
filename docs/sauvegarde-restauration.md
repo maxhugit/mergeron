@@ -1,5 +1,10 @@
 # Sauvegarde et restauration
 
+Pour transférer ou conserver un projet isolé, utiliser aussi
+l’[export/import ZIP des projets](export-import-projets.md). Ce ZIP ne contient
+pas les comptes ni la configuration globale et ne remplace pas la sauvegarde
+complète décrite ci-dessous.
+
 ## Éléments indispensables
 
 Sauvegarder régulièrement :

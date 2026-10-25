@@ -11,6 +11,7 @@ import {
   Trash2,
   Package,
   Plus,
+  Download,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useDroppable } from '@dnd-kit/react';
@@ -69,6 +70,7 @@ interface Props {
   onRenameResource: (resource: ProjectResourceSummary) => void;
   onDeleteResource: (resource: ProjectResourceSummary) => void;
   onDeleteProject?: (group: WorkspaceGroup) => void;
+  onExportProject?: (group: WorkspaceGroup) => void;
   renderThreadRow: (
     thread: ThreadDto,
     archived: boolean,
@@ -101,11 +103,14 @@ export function WorkspaceOverview({
   onRenameResource,
   onDeleteResource,
   onDeleteProject,
+  onExportProject,
   renderThreadRow,
   renderSimpleChatRow,
   movingThread,
 }: Props) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'projectArchives'], {
+    nsMode: 'fallback',
+  });
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   if (isLoading) {
@@ -145,6 +150,10 @@ export function WorkspaceOverview({
                 group.projectId === activeProjectId && 'bg-accent',
               )}
               title={group.cwd}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setOpenMenu(group.cwd);
+              }}
             >
               <button
                 type="button"
@@ -261,6 +270,19 @@ export function WorkspaceOverview({
                       >
                         <Package className="h-3.5 w-3.5" />
                         {t('deliverablesManagement')}
+                      </Button>
+                    )}
+                    {onExportProject && group.projectId && (
+                      <Button
+                        variant="ghost"
+                        className="h-8 w-full justify-start gap-2 px-2 text-xs"
+                        onClick={() => {
+                          setOpenMenu(null);
+                          onExportProject(group);
+                        }}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {t('projectArchiveExport')}
                       </Button>
                     )}
                     <Button

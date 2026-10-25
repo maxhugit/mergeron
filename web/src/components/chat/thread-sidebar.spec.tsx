@@ -36,6 +36,11 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => transport.navigate,
   useRouterState: () => '/t/branch',
 }));
+// These orchestration tests invalidate every query: keep authentication local,
+// rather than waiting for a real session request unrelated to archive membership.
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({ isAdministrator: false }),
+}));
 vi.mock('@/generated/api/sdk.gen', async (original) => ({
   ...(await original<typeof import('@/generated/api/sdk.gen')>()),
   threadsArchiveThread: transport.archive,
