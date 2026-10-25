@@ -13,10 +13,9 @@
 | Interface             | Configuration serveur, sans déduire le système hôte d’une clé externe                       |
 | Documentation         | Installation Docker standard ; adaptations isolées dans `docs/adapters/`                    |
 
-`scripts/test_deployment_portability.py` vérifie les noms des workflows, les
-fichiers canoniques, les documents génériques et l’absence de référence à un
-produit hôte dans le code d’exécution ou les traductions. Le contrôle est
-exécuté dans le pipeline de qualité pour les PR et les fusions.
+Cet audit ponctuel a porté sur les noms des workflows, les fichiers canoniques,
+les documents génériques, le code d’exécution et les traductions. Aucun contrôle
+automatique spécifique de neutralité n’est ajouté au pipeline.
 Les tests du Manager vérifient également l’absence de labels hôtes par défaut
 et leur activation uniquement par une intégration explicite.
 
