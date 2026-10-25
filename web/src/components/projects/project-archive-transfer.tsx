@@ -330,7 +330,11 @@ export function ProjectArchiveImportForm({
                     }}
                   />
                   <span>
-                    {t(`projectArchiveBundle_${category}`)}
+                    {category === 'files'
+                      ? t('projectArchiveBundleFiles')
+                      : category === 'conversations'
+                        ? t('projectArchiveBundleConversations')
+                        : t('projectArchiveBundleWork')}
                     {required && (
                       <span className="block text-xs text-muted-foreground">
                         {t('projectArchiveRequired')}

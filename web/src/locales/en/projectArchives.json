@@ -24,9 +24,9 @@
   "projectArchiveConfirmImport": "Create project from ZIP",
   "projectArchiveSelection": "What would you like to import?",
   "projectArchiveCore": "Always included: project information, participants, groups and workspace configuration. Contacts remain inactive.",
-  "projectArchiveBundle_files": "Files and folders from all workspaces",
-  "projectArchiveBundle_conversations": "Agents and conversations, including histories and attachments",
-  "projectArchiveBundle_work": "Complete project activity: tasks, deliverables, documents and versions, automations, knowledge and journal",
+  "projectArchiveBundleFiles": "Files and folders from all workspaces",
+  "projectArchiveBundleConversations": "Agents and conversations, including histories and attachments",
+  "projectArchiveBundleWork": "Complete project activity: tasks, deliverables, documents and versions, automations, knowledge and journal",
   "projectArchiveRequired": "Automatically included: required by a selected category.",
   "projectArchiveDependencies": "Project activity includes conversations and files; conversations include files. Linked data stays together, without per-document selection. Uncheck dependent categories first. The size above refers to the complete ZIP."
 }
