@@ -109,9 +109,6 @@ jobs:
           src/database/pending-request-migration.spec.ts
           src/http-stack.spec.ts
 
-      - name: Test release-pair compensation
-        if: matrix.part == 'backend'
-        run: node --test scripts/promote-image-pair.test.mjs
           src/archive
           src/document-publication
           src/projects/project-workspace-layout.spec.ts
@@ -123,6 +120,10 @@ jobs:
           src/auth/project-authorization.spec.ts
           src/auth/auth-config.service.spec.ts
           src/auth/local-auth.service.spec.ts
+
+      - name: Test release-pair compensation
+        if: matrix.part == 'backend'
+        run: node --test scripts/promote-image-pair.test.mjs
 
       - name: Run frontend tests
         if: matrix.part == 'frontend'
