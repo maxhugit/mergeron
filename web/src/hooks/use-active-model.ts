@@ -13,6 +13,7 @@ import {
 } from '@/generated/api/@tanstack/react-query.gen';
 import type { ModelDto } from '@/generated/api';
 import { useModelStore } from '@/stores/model-store';
+import { useCurrentProject } from './use-current-project';
 
 export interface ActiveModel {
   /** Models the picker lists by default, in catalog order. */
@@ -36,6 +37,7 @@ export interface ActiveModel {
 /** Returns the resolved active model and the catalog it came from. */
 export function useActiveModel(): ActiveModel {
   const modelOverride = useModelStore((s) => s.modelOverride);
+  const project = useCurrentProject();
 
   // Config model from status (lightweight, cached)
   const { data: statusData } = useQuery({
@@ -55,7 +57,15 @@ export function useActiveModel(): ActiveModel {
   )?.model;
   const all = modelsData?.data ?? [];
   const models = all.filter((m) => !m.hidden);
-  const activeModelId = modelOverride ?? configModel ?? null;
+  // The server enforces the project's model before any per-turn override.
+  // An unset server model also means the catalog default, not "no model".
+  const activeModelId =
+    project?.agentModel ||
+    modelOverride ||
+    configModel ||
+    statusData?.models.defaultModel ||
+    all.find((model) => model.isDefault)?.model ||
+    null;
 
   return {
     models,

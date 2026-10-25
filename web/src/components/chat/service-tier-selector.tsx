@@ -46,9 +46,23 @@ export function ServiceTierSelector({
   );
   const activeTier = serviceTiers.find((tier) => tier.id === activeTierId);
 
-  // Nothing to choose between when the model advertises no tiers, and an
-  // always-visible control would imply speed is configurable when it is not.
-  if (serviceTiers.length === 0) return null;
+  // Keep its place in Capabilities when the catalog is unavailable or the
+  // model has no extra tiers. Never invent selectable speed options.
+  if (serviceTiers.length === 0)
+    return menuItem ? (
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled
+        className="h-7 w-full justify-start gap-1 rounded-lg px-2 text-xs"
+        title={!activeModel ? t('noModelsAvailable') : t('unavailable')}
+      >
+        <Zap className="h-3.5 w-3.5" />
+        <span>
+          {t('speed')} · {t('unavailable')}
+        </span>
+      </Button>
+    ) : null;
 
   return (
     <Popover>
