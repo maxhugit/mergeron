@@ -85,8 +85,8 @@ jobs:
       - name: Install reviewed 7-Zip for archive tests
         if: matrix.part == 'backend'
         run: |
-          version="$(sed -n 's/^ARG SEVENZIP_VERSION=//p' Dockerfile.unraid)"
-          checksum="$(sed -n 's/^ARG SEVENZIP_LINUX_X64_SHA256=//p' Dockerfile.unraid)"
+          version="$(sed -n 's/^ARG SEVENZIP_VERSION=//p' Dockerfile)"
+          checksum="$(sed -n 's/^ARG SEVENZIP_LINUX_X64_SHA256=//p' Dockerfile)"
           bash scripts/install-sevenzip.sh "$version" "$checksum" "$RUNNER_TEMP/7zip"
           echo "$RUNNER_TEMP/7zip" >> "$GITHUB_PATH"
 
@@ -176,13 +176,12 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: ./Dockerfile.unraid
+          file: ./Dockerfile
           push: false
           load: true
           tags: mergeron:quality-${{ github.sha }}
           cache-from: |
             type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache
-            type=registry,ref=ghcr.io/maxhugit/codex-webui-unraid:buildcache
             type=gha
           cache-to: type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache,mode=max,compression=zstd,compression-level=3,oci-mediatypes=true,image-manifest=true
 
@@ -190,7 +189,7 @@ jobs:
         env:
           IMAGE_REF: mergeron:quality-${{ github.sha }}
         run: |
-          docker buildx build --file Dockerfile.unraid --target ssh-test-server --cache-from type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache --load --tag webui-ssh-fixture .
+          docker buildx build --file Dockerfile --target ssh-test-server --cache-from type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache --load --tag webui-ssh-fixture .
           scripts/smoke-test-ssh-image.sh "$IMAGE_REF" webui-ssh-fixture > ssh-client-evidence.json
 
       - name: Start the production image and wait for its health check

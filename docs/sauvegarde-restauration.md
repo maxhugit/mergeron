@@ -17,8 +17,9 @@ Sauvegarder régulièrement :
 - le fichier `.env` de production, hors du dépôt public ;
 - les données OnlyOffice ou HA-MCP si elles doivent aussi être reconstruites.
 
-Les images Docker, journaux et caches peuvent être recréés. `/appdata` est
-normalement couvert par le plugin de sauvegarde Appdata d’Unraid.
+Les images Docker, journaux et caches peuvent être recréés. Sauvegarder aussi
+les dossiers hôtes exposés via `/appdata`, avec l’outil de sauvegarde de votre
+choix ; aucun plugin de panneau d’administration n’est requis.
 
 ## Sauvegarde cohérente
 
@@ -29,10 +30,10 @@ Une copie brute pendant une écriture peut être incohérente.
 Procédure prudente :
 
 ```bash
-cd /mnt/user/appdata/mergeron
-docker compose --env-file images.env -f docker-compose.yml stop app-v4
+cd /srv/mergeron
+docker compose --env-file .env -f compose.yml stop mergeron-ui
 # lancer ici la sauvegarde de STATE_ROOT
-docker compose --env-file images.env -f docker-compose.yml start app-v4
+docker compose --env-file .env -f compose.yml start mergeron-ui
 ```
 
 ## Restauration après perte du serveur

@@ -23,6 +23,8 @@ http:
       tls:
         certResolver: tls
 
+    # Nginx already enforces Authentik and serves its browser login endpoints.
+    # A second forwardAuth middleware here can intercept session renewal.
     mergeron-web:
       rule: "Host(`mergeron.example.com`)"
       entryPoints:

@@ -2,11 +2,11 @@
 
 > Cette procédure est un exemple Unraid avec Compose, Traefik et Authentik,
 > pas une liste de dépendances imposées. Voir d’abord
-> [l’installation portable](installation-portable.md) pour un autre hôte,
+> [l’installation portable](../installation-portable.md) pour un autre hôte,
 > reverse proxy ou mode d’authentification. Sur Unraid, le parcours Manager
 > utilise uniquement son XML et ne nécessite pas Compose Manager.
 
-Lire le [comparatif des deux modes](choisir-mode-installation.md) avant de
+Lire le [comparatif des deux modes](../choisir-mode-installation.md) avant de
 choisir cette variante. Avec Compose Manager, `docker-compose.yml` et
 `images.env` sont la source de vérité : volumes, réseaux, limites, options de
 sécurité et versions d’images doivent y être modifiés, puis appliqués avec
@@ -40,7 +40,7 @@ Appdata unique :
 ```bash
 git clone https://github.com/maxhugit/mergeron.git /tmp/mergeron-install
 mkdir -p /mnt/user/appdata/mergeron/config
-cp /tmp/mergeron-install/deployment/compose.unraid.yml \
+cp /tmp/mergeron-install/deployment/compose.yml \
   /mnt/user/appdata/mergeron/docker-compose.yml
 cp -a /tmp/mergeron-install/deployment/config/. \
   /mnt/user/appdata/mergeron/config/
@@ -118,6 +118,8 @@ des secrets :
 chown -R 11002:11002 "$STATE/home" "$STATE/workspace" "$STATE/logs"
 chown -R 11002:11002 "$STATE/ssh"
 chmod 700 "$STATE/ssh"
+chown 11002:11002 "$STATE/backend-token.txt"
+chown 0:0 "$STATE/backend-token-nginx.txt"
 chmod 400 "$STATE/backend-token.txt" "$STATE/backend-token-nginx.txt"
 chmod 440 "$STATE/openai-api-key.txt"
 ```
@@ -323,7 +325,7 @@ Conserver dans l’Appdata :
 - le dossier `config/` ;
 - le dossier `state/` sauvegardé selon sa sensibilité.
 
-Lorsqu’une nouvelle version du dépôt modifie `deployment/compose.unraid.yml` ou
+Lorsqu’une nouvelle version du dépôt modifie `deployment/compose.yml` ou
 `deployment/config/`, comparer ces fichiers avec les copies de production avant
 la mise à jour. Un simple changement de tag d’image ne met pas à jour les fichiers
 Compose, Nginx, Squid ou seccomp déjà copiés dans l’Appdata.

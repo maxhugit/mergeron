@@ -83,7 +83,7 @@ describe('WorkspaceOverview creation menu', () => {
         <WorkspaceOverview
           projectsHeader={<h2>Projects</h2>}
           workspaceGroups={[
-            { cwd: '/workspaces/Unraid', threads: [], simpleChats: [] },
+            { cwd: '/workspaces/ExampleProject', threads: [], simpleChats: [] },
           ]}
           collapsedGroups={new Set()}
           isLoading={false}
@@ -129,7 +129,7 @@ describe('WorkspaceOverview creation menu', () => {
               ? createAutomation
               : createDeliverables,
     ).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: '/workspaces/Unraid' }),
+      expect.objectContaining({ cwd: '/workspaces/ExampleProject' }),
     );
   });
 

@@ -1,4 +1,4 @@
-name: Build and publish Unraid image
+name: Build and publish Mergeron images
 
 on:
   push:
@@ -82,7 +82,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: ./Dockerfile.unraid
+          file: ./Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.candidate.outputs.tags }}
@@ -103,7 +103,6 @@ jobs:
           # on large toolchain layers while retaining intermediate build stages.
           cache-from: |
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-            type=registry,ref=ghcr.io/maxhugit/codex-webui-unraid:buildcache
             type=gha
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,compression=zstd,compression-level=3,oci-mediatypes=true,image-manifest=true
           provenance: mode=max
@@ -154,7 +153,7 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.candidate.outputs.tags }}
         run: |
-          docker buildx build --file Dockerfile.unraid --target ssh-test-server --cache-from type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache --load --tag webui-ssh-fixture .
+          docker buildx build --file Dockerfile --target ssh-test-server --cache-from type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache --load --tag webui-ssh-fixture .
           scripts/smoke-test-ssh-image.sh "$IMAGE_REF" webui-ssh-fixture > ssh-client-evidence.json
 
       - name: Verify patched libxml2 and real Office conversions

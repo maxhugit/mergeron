@@ -54,7 +54,7 @@ def main():
                 f"- Actionable HIGH: **{result['actionable_high']}**\n"
                 f"- CRITICAL retained: **{result['critical']}**\n\n"
                 "Raw and VEX-filtered reports are both retained as artifacts. "
-                "This assessment does not establish the security of the running Unraid/host kernel.\n"
+                "This assessment does not establish the security of the running host kernel.\n"
             )
 
 

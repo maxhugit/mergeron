@@ -107,7 +107,7 @@ de la même version. Un répartiteur stable dans `~/.local/bin` applique cette m
 sélection au serveur géré, à `codex` dans les terminaux et aux outils auxiliaires.
 Une mise à jour de l'image ne change donc pas la version active du CLI.
 
-Sur une installation Unraid existante, l'ancien CLI global reste utilisable comme
+Sur une installation existante, l'ancien CLI global reste utilisable comme
 solution de repli. La première mise à jour effectuée depuis l'interface active le
 stockage persistant géré, sans interrompre la disponibilité pendant la migration.
 

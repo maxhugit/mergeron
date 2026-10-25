@@ -1,6 +1,6 @@
 # Architecture Docker de Mergeron
 
-Cette architecture est commune à Linux et Unraid. Les noms de réseaux ci-dessous
+Cette architecture fonctionne sur les hôtes Docker Linux pris en charge. Les noms de réseaux ci-dessous
 sont les valeurs par défaut ; le raccordement extérieur est configurable par
 `MERGERON_PROXY_NETWORK`. Voir [l’installation portable](installation-portable.md).
 
@@ -17,7 +17,7 @@ flowchart LR
     S[Squid egress]
     O[OpenAI / GitHub / PyPI]
     H[HA-MCP]
-    U[Unraid]
+    U[Serveur administré]
     R[VPS SSH]
 
     B -->|HTTPS| V
@@ -45,7 +45,7 @@ Montages persistants :
 | ------------------ | -------------------------------------- | ---------------- |
 | `/home/codex`      | configuration, OAuth, MCP, base SQLite | lecture/écriture |
 | `/workspaces`      | espaces de travail                     | lecture/écriture |
-| `/appdata`         | configurations Unraid                  | lecture/écriture |
+| `/appdata`         | dossiers hôtes explicitement autorisés | lecture/écriture |
 | `/app/logs`        | journaux                               | lecture/écriture |
 | `/home/codex/.ssh` | clés et configuration SSH              | lecture seule    |
 | `/run/secrets/*`   | jetons internes et clé OpenAI          | lecture seule    |

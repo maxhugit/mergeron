@@ -105,10 +105,11 @@ Les images absentes sont téléchargées explicitement dans le plan avant la
 création des conteneurs.
 
 Les valeurs génériques sont `/srv/<préfixe>/state` pour les données et son
-sous-dossier `appdata` pour les dossiers accessibles aux agents. Les XML Unraid
-proposent `/mnt/user/appdata` et permettent de choisir d’autres montages.
-`MERGERON_APPDATA_ROOT` remplace le nom spécifique
-`MERGERON_UNRAID_APPDATA_ROOT`, conservé comme alias de compatibilité.
+sous-dossier `appdata` pour les dossiers accessibles aux agents.
+`MERGERON_APPDATA_ROOT` choisit ce montage explicitement. Les alias historiques
+restent isolés dans le module d’intégration ; voir les [adaptations](adapters/README.md).
+Les métadonnées d’une interface hôte ne sont générées qu’avec son intégration
+explicitement activée ; `MERGERON_HOST_INTEGRATION=none` est le défaut.
 `MERGERON_AUTH_MODE=authentik|native` choisit le modèle ingress uniquement à sa
 création. Voir [l’installation portable](installation-portable.md) pour les
 prérequis d’authentification native et les proxys alternatifs.
@@ -130,7 +131,7 @@ différence ultérieure entre Docker et l'enregistrement passe l'installation en
 
 ## Production et recette isolées
 
-Dans Unraid, le Manager de recette doit utiliser le dépôt
+Le Manager de recette doit utiliser le dépôt
 `ghcr.io/maxhugit/mergeron-manager:edge`, avec `MERGERON_APP_IMAGE` pointant
 sur `ghcr.io/maxhugit/mergeron:edge`. Un tag `sha-…` reste volontairement
 épinglé : « Forcer la mise à jour » retélécharge ce même tag, sans sélectionner
@@ -141,7 +142,7 @@ Le contrôle de santé du Manager doit être hérité de l'image, en forme exec
 (`CMD` avec `/nodejs/bin/node`). Ne pas ajouter `--health-cmd` aux paramètres
 supplémentaires du XML : Docker le transforme en `CMD-SHELL`, alors que
 l'image distroless ne contient pas `/bin/sh`. Cela marque à tort un Manager
-fonctionnel comme défaillant après une recréation par Unraid.
+fonctionnel comme défaillant après une recréation par l’outil hôte.
 
 `MERGERON_STACK_ENVIRONMENT` déclare explicitement `production` ou
 `development`. `MERGERON_STACK_PREFIX` sélectionne exclusivement les
