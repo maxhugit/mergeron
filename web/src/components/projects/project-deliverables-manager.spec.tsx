@@ -99,6 +99,39 @@ beforeEach(() => {
   api.mockImplementation((_path, input) => Promise.resolve(input ? {} : board));
 });
 afterEach(cleanup);
+it('shows the lifecycle flow above the overview with the current stage', async () => {
+  await setup();
+  const flow = screen.getByRole('region', {
+    name: 'Deliverable and document lifecycle',
+  });
+  expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
+    'Draft',
+  );
+  expect(
+    within(flow).queryByText('Awaiting validation'),
+  ).not.toBeInTheDocument();
+  expect(within(flow).getByText('Finalized')).toBeInTheDocument();
+  expect(within(flow).getByText('Archived')).toBeInTheDocument();
+});
+it('includes required validation and highlights the waiting stage', async () => {
+  await setup({
+    ...board,
+    deliverables: [
+      {
+        ...item,
+        lifecycleStatus: 'finalized',
+        validationRequired: true,
+        validationStatus: 'pending',
+      },
+    ],
+  });
+  const flow = screen.getByRole('region', {
+    name: 'Deliverable and document lifecycle',
+  });
+  expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
+    'Awaiting validation',
+  );
+});
 it('keeps modal content local and protects unsaved changes when closing', async () => {
   const slot = document.createElement('div');
   slot.id = 'deliverable-header-p-r';
@@ -325,9 +358,11 @@ it.each([
     expect(colors(screen.getByText(accessLabel, { selector: 'span' }))).toEqual(
       accessColors,
     );
-    expect(
-      colors(screen.getByText(lifecycleLabel, { selector: 'span' })),
-    ).toEqual(lifecycleColors);
+    for (const badge of screen.getAllByText(lifecycleLabel, {
+      selector: 'span',
+    })) {
+      expect(colors(badge)).toEqual(lifecycleColors);
+    }
   },
 );
 
