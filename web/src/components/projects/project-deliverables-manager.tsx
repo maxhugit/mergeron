@@ -467,7 +467,7 @@ function DeliverablesList({
                 <LifecycleBadge status={displayedLifecycle(item)} />
               </span>
               <span
-                className={`order-4 flex w-fit items-center gap-2 rounded-md px-2 py-1 text-xs font-medium @min-[68rem]:order-none ${
+                className={`order-4 flex w-fit items-center justify-self-end gap-2 rounded-md px-2 py-1 text-xs font-medium @min-[68rem]:order-none @min-[68rem]:justify-self-auto ${
                   item.validationStatus === 'approved'
                     ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                     : item.validationStatus === 'rejected'
@@ -504,7 +504,7 @@ function DeliverablesList({
                 )}
               </span>
               <span
-                className={`order-6 w-fit rounded-md px-2 py-1 text-xs font-medium @min-[68rem]:order-none ${item.confidentiality === 'restricted' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}
+                className={`order-6 w-fit justify-self-end rounded-md px-2 py-1 text-xs font-medium @min-[68rem]:order-none @min-[68rem]:justify-self-auto ${item.confidentiality === 'restricted' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}
               >
                 {item.confidentiality === 'restricted'
                   ? t('restrictedAccessShort')
