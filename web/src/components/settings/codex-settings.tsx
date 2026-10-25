@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   UserCog,
   UserCircle,
+  PackageOpen,
 } from 'lucide-react';
 import {
   ApprovalReviewerControl,
@@ -29,6 +30,7 @@ import { SettingsSaveBar } from './settings-save-bar';
 import { loadAdminModels } from './admin-model-options';
 import { CatalogSettings } from './catalog/catalog-settings';
 import { AccountSettings } from './account/account-settings';
+import { CodexCliSettings } from './codex-cli-settings';
 import { useAccountStore } from '@/stores/account-store';
 import {
   catalogStateQueryKey,
@@ -72,6 +74,7 @@ const SECURITY_READONLY_KEYS = ['sandbox_workspace_write'] as const;
 
 type CodexSettingsTab =
   | 'account'
+  | 'cli'
   | 'profile'
   | 'model'
   | 'instructions'
@@ -81,6 +84,7 @@ type CodexSettingsTab =
 
 const CODEX_SETTINGS_TABS = [
   { id: 'account', label: 'Account', icon: UserCircle },
+  { id: 'cli', label: 'Codex CLI', icon: PackageOpen },
   { id: 'profile', label: 'Profile', icon: UserCog },
   { id: 'model', label: 'Model', icon: Bot },
   { id: 'instructions', label: 'Instructions', icon: FileText },
@@ -139,11 +143,13 @@ const isSandboxModeValue = (value: unknown): value is SandboxModeValue =>
 // Main component
 // ---------------------------------------------------------------------------
 
-export function CodexSettings() {
+export function CodexSettings({
+  initialTab = 'account',
+}: { initialTab?: 'account' | 'cli' } = {}) {
   const { t, i18n } = useTranslation();
   const isNonEnglish = !i18n.language.startsWith('en');
   const queryClient = useQueryClient();
-  const [requestedTab, setActiveTab] = useState<CodexSettingsTab>('account');
+  const [requestedTab, setActiveTab] = useState<CodexSettingsTab>(initialTab);
   const accountQuery = useQuery({
     queryKey: accountReadAccountQueryKey(),
     queryFn: async () => {
@@ -159,7 +165,8 @@ export function CodexSettings() {
     Boolean(accountQuery.data?.account) &&
     !accountQuery.isError &&
     Boolean(authMode);
-  const activeTab = connected ? requestedTab : 'account';
+  const activeTab =
+    connected || requestedTab === 'cli' ? requestedTab : 'account';
 
   // ---- Queries ----
   const configQuery = useQuery({
@@ -401,7 +408,7 @@ export function CodexSettings() {
   const activeFields = activeGroup
     ? (groupedFields.get(activeGroup) ?? [])
     : [];
-  const needsStructuredConfig = activeTab !== 'raw' && activeTab !== 'account';
+  const needsStructuredConfig = !['raw', 'account', 'cli'].includes(activeTab);
   const activeKeys =
     activeTab === 'security'
       ? ['approval_policy', 'sandbox_mode', 'approvals_reviewer']
@@ -488,7 +495,7 @@ export function CodexSettings() {
               key={id}
               type="button"
               role="tab"
-              disabled={id !== 'account' && !connected}
+              disabled={id !== 'account' && id !== 'cli' && !connected}
               aria-selected={activeTab === id}
               aria-controls="codex-settings-panel"
               tabIndex={activeTab === id ? 0 : -1}
@@ -509,6 +516,11 @@ export function CodexSettings() {
       </div>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
+        {activeTab === 'cli' && (
+          <div id="codex-settings-panel" role="tabpanel">
+            <CodexCliSettings />
+          </div>
+        )}
         {activeTab === 'account' && (
           <div id="codex-settings-panel" role="tabpanel">
             <AccountSettings />

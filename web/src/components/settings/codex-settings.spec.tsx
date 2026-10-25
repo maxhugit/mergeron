@@ -40,7 +40,9 @@ it('puts Account first, disables other tabs without a connection and responds to
   const tabs = screen.getAllByRole('tab');
   expect(tabs[0]).toHaveTextContent('Account');
   expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
-  for (const tab of tabs.slice(1)) expect(tab).toBeDisabled();
+  expect(tabs[1]).toHaveTextContent('Codex CLI');
+  expect(tabs[1]).toBeEnabled();
+  for (const tab of tabs.slice(2)) expect(tab).toBeDisabled();
   expect(
     screen.queryByRole('heading', { name: 'Model catalog' }),
   ).not.toBeInTheDocument();
@@ -63,8 +65,22 @@ it('puts Account first, disables other tabs without a connection and responds to
     'aria-selected',
     'true',
   );
-  for (const tab of screen.getAllByRole('tab').slice(1))
+  for (const tab of screen.getAllByRole('tab').slice(2))
     expect(tab).toBeDisabled();
+});
+it('can open CLI management even before an account is connected', async () => {
+  const disconnected = { account: null, requiresOpenaiAuth: true };
+  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), disconnected);
+  fixture.server.overrides.set('GET /api/account', () => json(disconnected));
+  useAccountStore.getState().setAccount(null);
+  fixture.render(<CodexSettings initialTab="cli" />);
+  expect(screen.getByRole('tab', { name: 'Codex CLI' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(
+    await screen.findByRole('heading', { name: 'Codex CLI on this server' }),
+  ).toBeVisible();
 });
 beforeEach(() => {
   fixture = catalogFixture();

@@ -148,36 +148,40 @@ export function SettingsSidebar() {
           <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {t('administration')}
           </h2>
-          {SETTINGS_SECTIONS.filter((entry) => entry !== 'account').map(
-            (entry) => {
-              const Icon = sectionIcons[entry];
-              return (
-                <button
-                  key={entry}
-                  aria-current={
-                    pathname === '/settings' && section === entry
-                      ? 'page'
-                      : undefined
-                  }
-                  className={itemClass(
-                    pathname === '/settings' && section === entry,
-                  )}
-                  onClick={() => {
-                    close(false);
-                    void navigate({
-                      to: '/settings',
-                      search: { section: entry },
-                    });
-                  }}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {t(translationKey(settingsPageLabel(entry)))}
-                  {entry === 'general' && <ServerUpdateIndicator />}
-                  {entry === 'codexCli' && <CodexCliUpdateIndicator />}
-                </button>
-              );
-            },
-          )}
+          {SETTINGS_SECTIONS.filter(
+            (entry) => entry !== 'account' && entry !== 'codexCli',
+          ).map((entry) => {
+            const Icon = sectionIcons[entry];
+            return (
+              <button
+                key={entry}
+                aria-current={
+                  pathname === '/settings' &&
+                  (section === entry ||
+                    (entry === 'codex' && section === 'codexCli'))
+                    ? 'page'
+                    : undefined
+                }
+                className={itemClass(
+                  pathname === '/settings' &&
+                    (section === entry ||
+                      (entry === 'codex' && section === 'codexCli')),
+                )}
+                onClick={() => {
+                  close(false);
+                  void navigate({
+                    to: '/settings',
+                    search: { section: entry },
+                  });
+                }}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {t(translationKey(settingsPageLabel(entry)))}
+                {entry === 'general' && <ServerUpdateIndicator />}
+                {entry === 'codex' && <CodexCliUpdateIndicator />}
+              </button>
+            );
+          })}
         </section>
         <section>
           <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
