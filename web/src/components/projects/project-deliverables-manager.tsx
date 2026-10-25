@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   Bot,
+  Check,
   ListTodo,
   CalendarDays,
   CheckCircle2,
@@ -1600,39 +1601,60 @@ export function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
   ).filter(
     (stage) => stage !== 'awaiting_validation' || item.validationRequired,
   );
+  const currentIndex = stages.indexOf(current);
   return (
     <section
       className="col-span-full min-w-0"
       aria-label={t('deliverableLifecycleFlow')}
     >
       <TooltipProvider>
-        <ol className="flex w-full items-center justify-between gap-3 overflow-x-auto p-1">
-          {stages.map((stage, index) => (
-            <li
-              key={stage}
-              className={`flex shrink-0 items-center gap-3 ${index > 0 ? 'grow justify-between' : ''}`}
-              aria-current={stage === current ? 'step' : undefined}
-            >
-              {index > 0 && <span aria-hidden="true">→</span>}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    tabIndex={0}
-                    className={
-                      stage === current
-                        ? 'shrink-0 whitespace-nowrap rounded-full ring-2 ring-primary ring-offset-2 ring-offset-background focus-visible:outline-none'
-                        : 'shrink-0 whitespace-nowrap rounded-full opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-                    }
-                  >
-                    <LifecycleBadge status={stage} />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t(translationKey(definitions[stage]))}
-                </TooltipContent>
-              </Tooltip>
-            </li>
-          ))}
+        <ol className="flex w-full overflow-x-auto py-1">
+          {stages.map((stage, index) => {
+            const active = stage === current;
+            const completed = index < currentIndex;
+            const shape =
+              index === 0
+                ? 'polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%)'
+                : 'polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)';
+            return (
+              <li
+                key={stage}
+                className={`min-w-48 flex-1 bg-background p-0.5 ${index > 0 ? '-ml-4' : ''}`}
+                style={{ clipPath: shape }}
+                aria-current={active ? 'step' : undefined}
+                data-stage-state={
+                  active ? 'current' : completed ? 'complete' : 'upcoming'
+                }
+              >
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      tabIndex={0}
+                      style={{ clipPath: shape }}
+                      className={`flex h-16 items-center justify-center gap-2 pr-7 text-sm font-medium outline-none transition-colors focus-visible:brightness-125 ${index === 0 ? 'pl-3' : 'pl-7'} ${active ? 'bg-violet-400 text-violet-950' : completed ? 'bg-violet-500 text-white' : 'bg-violet-500/15 text-violet-900 dark:text-violet-200'}`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${completed ? 'bg-emerald-300 text-emerald-950' : active ? 'bg-violet-950 text-violet-100' : 'bg-background/60 text-violet-700 dark:text-violet-200'}`}
+                      >
+                        {completed ? (
+                          <Check className="size-4" strokeWidth={3} />
+                        ) : (
+                          index + 1
+                        )}
+                      </span>
+                      <span className="leading-tight">
+                        {t(translationKey(lifecycleStatuses[stage]))}
+                      </span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t(translationKey(definitions[stage]))}
+                  </TooltipContent>
+                </Tooltip>
+              </li>
+            );
+          })}
         </ol>
       </TooltipProvider>
     </section>

@@ -179,7 +179,7 @@ test('translates history headings and lifecycle events in French across namespac
 });
 
 test.each([390, 1001])(
-  'spreads the unframed lifecycle flow and exposes definitions at %ipx',
+  'keeps the chevron lifecycle inside the viewport and exposes definitions at %ipx',
   async (width) => {
     await page.viewport(width, 900);
     await i18nReady;
@@ -199,6 +199,10 @@ test.each([390, 1001])(
     expect(flow.classList.contains('bg-card')).toBe(false);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     const list = within(flow).getByRole('list');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+    expect(
+      getComputedStyle(within(list).getAllByRole('listitem')[0]).clipPath,
+    ).toContain('polygon');
     expect(
       Math.abs(
         list.getBoundingClientRect().width - flow.getBoundingClientRect().width,
