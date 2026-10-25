@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -16,7 +17,7 @@ afterEach(() => {
   useTimelineStore.setState({ threadId: null });
 });
 
-function mount() {
+function mount(disabled = false) {
   useTimelineStore.setState({ threadId: 'a' });
   return render(
     <QueryClientProvider
@@ -29,7 +30,7 @@ function mount() {
         })
       }
     >
-      <ResponseDetailSelector />
+      <ResponseDetailSelector disabled={disabled} />
     </QueryClientProvider>,
   );
 }
@@ -45,25 +46,53 @@ it('offers three modes, saves per agent and restores them after remounting', asy
       return new Response(JSON.stringify({ mode: modes[id] ?? 'collapsed' }));
     });
   const view = mount();
-  const select = screen.getByRole('combobox', { name: 'Technical details' });
+  const select = screen.getByRole('button', { name: /^Technical details/ });
   await waitFor(() => expect(select).toBeEnabled());
-  expect(select).toHaveValue('collapsed');
-  expect(screen.getAllByRole('option')).toHaveLength(3);
-  fireEvent.change(select, { target: { value: 'hidden' } });
-  await waitFor(() => expect(select).toHaveValue('hidden'));
-  useTimelineStore.setState({ threadId: 'b' });
+  expect(select).toHaveTextContent('Collapsed details');
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Display setting for this agent/),
+  ).not.toBeInTheDocument();
+  fireEvent.click(select);
+  const dialog = screen.getByRole('dialog', { name: 'Technical details' });
+  expect(dialog.querySelectorAll('button')).toHaveLength(3);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Hide technical details' }),
+  );
+  await waitFor(() =>
+    expect(select).toHaveTextContent('Hide technical details'),
+  );
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  act(() => useTimelineStore.setState({ threadId: 'b' }));
   await waitFor(() => expect(select).toBeEnabled());
-  expect(select).toHaveValue('collapsed');
-  fireEvent.change(select, { target: { value: 'expanded' } });
-  await waitFor(() => expect(select).toHaveValue('expanded'));
+  expect(select).toHaveTextContent('Collapsed details');
+  fireEvent.click(select);
+  fireEvent.click(screen.getByRole('button', { name: 'Show everything' }));
+  await waitFor(() => expect(select).toHaveTextContent('Show everything'));
   view.unmount();
   mount();
   await waitFor(() =>
-    expect(screen.getByRole('combobox')).toHaveValue('hidden'),
+    expect(
+      screen.getByRole('button', { name: /^Technical details/ }),
+    ).toHaveTextContent('Hide technical details'),
   );
   expect(
     fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH'),
   ).toHaveLength(2);
+});
+
+it('keeps the menu disabled while loading, explicitly disabled, or without an agent', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify({ mode: 'collapsed' })),
+  );
+  mount(true);
+  const trigger = screen.getByRole('button', { name: /^Technical details/ });
+  expect(trigger).toBeDisabled();
+  await waitFor(() => expect(trigger).toHaveTextContent('Collapsed details'));
+  fireEvent.click(trigger);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  act(() => useTimelineStore.setState({ threadId: null }));
+  expect(trigger).toBeDisabled();
 });
 
 it('does not claim a preference was saved when the server rejects it', async () => {
@@ -74,10 +103,11 @@ it('does not claim a preference was saved when the server rejects it', async () 
       }),
   );
   mount();
-  const select = screen.getByRole('combobox');
+  const select = screen.getByRole('button', { name: /^Technical details/ });
   await waitFor(() => expect(select).toBeEnabled());
-  fireEvent.change(select, { target: { value: 'expanded' } });
+  fireEvent.click(select);
+  fireEvent.click(screen.getByRole('button', { name: 'Show everything' }));
   expect(await screen.findByRole('alert')).toBeInTheDocument();
-  expect(select).toHaveValue('collapsed');
+  expect(select).toHaveTextContent('Collapsed details');
   expect(select).toBeEnabled();
 });
