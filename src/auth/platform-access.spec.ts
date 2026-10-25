@@ -222,6 +222,8 @@ it.each([
   '/account',
   '/mcp-servers',
   '/logs/export',
+  '/logs/storage',
+  '/logs/retention',
   '/database/status',
   '/plugins',
   '/simple-chat/api-key',

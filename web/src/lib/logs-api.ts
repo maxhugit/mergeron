@@ -1,6 +1,51 @@
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 
+export interface LogRetentionRule {
+  enabled: boolean;
+  maxAgeDays: number;
+  maxFiles: number;
+}
+export interface LogRetentionPolicy {
+  application: LogRetentionRule;
+  codex: LogRetentionRule & { maxFileMiB: number };
+}
+export interface LogStorage {
+  estimatedBytes: number;
+  files: Array<{
+    name: string;
+    bytes: number;
+    modifiedAt: number;
+    family: 'application' | 'codex' | 'other';
+    active: boolean;
+  }>;
+  policy: LogRetentionPolicy;
+}
+async function storageRequest<T>(
+  path: string,
+  input?: RequestInit,
+): Promise<T> {
+  const authorization = getAuthorizationHeader();
+  const response = await fetch(withBasePath(`/api/logs/${path}`), {
+    ...input,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authorization ? { Authorization: authorization } : {}),
+    },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<T>;
+}
+export function readLogStorage() {
+  return storageRequest<LogStorage>('storage');
+}
+export function saveLogRetention(policy: LogRetentionPolicy) {
+  return storageRequest<{ policy: LogRetentionPolicy }>('retention', {
+    method: 'PUT',
+    body: JSON.stringify(policy),
+  });
+}
+
 export interface LogEntry {
   timestamp: string;
   level: string;

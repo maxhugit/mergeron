@@ -42,7 +42,7 @@ const rollTarget = {
     file: join(process.cwd(), 'logs', 'app'),
     size: '10m',
     mkdir: true,
-    limit: { count: 5 },
+    // Closed archives are retained by LogRetentionService across restarts.
   },
 };
 

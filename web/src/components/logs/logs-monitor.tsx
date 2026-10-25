@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCw,
   Search,
+  Settings2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,9 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { readLogs, type LogEntry } from '@/lib/logs-api';
+import { readLogs, readLogStorage, type LogEntry } from '@/lib/logs-api';
+import { LogRetentionDialog } from './log-retention-dialog';
+import { logSizeLabel } from '@/lib/log-storage-size';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 100;
@@ -34,6 +37,13 @@ export function LogsMonitor() {
   const [sources, setSources] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [live, setLive] = useState(true);
+  const [retentionOpen, setRetentionOpen] = useState(false);
+  const storage = useQuery({
+    queryKey: ['log-storage'],
+    queryFn: readLogStorage,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
   const query = useQuery({
     queryKey: ['logs-monitor', offset, levels, sources],
     queryFn: () => readLogs({ offset, limit: PAGE_SIZE, levels, sources }),
@@ -73,6 +83,12 @@ export function LogsMonitor() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
+      {retentionOpen && storage.data && (
+        <LogRetentionDialog
+          storage={storage.data}
+          onClose={() => setRetentionOpen(false)}
+        />
+      )}
       <div className="shrink-0 space-y-3 border-b px-4 py-3">
         <div className="flex flex-wrap items-start gap-3">
           <div className="mr-auto">
@@ -87,6 +103,15 @@ export function LogsMonitor() {
               {t('monitorMergeAndFilterApplicationLogsInRealTime')}
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!storage.data}
+            onClick={() => setRetentionOpen(true)}
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            {t('logRetentionSettings')}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -146,6 +171,16 @@ export function LogsMonitor() {
                 onClick={() => toggle(level, levels, setLevels)}
               />
             ))}
+            <span
+              className="ml-auto text-xs text-muted-foreground"
+              title={t('logStorageEstimateHelp')}
+            >
+              {storage.data
+                ? t('logStorageEstimate', {
+                    size: logSizeLabel(storage.data.estimatedBytes),
+                  })
+                : t('logStorageUnavailable')}
+            </span>
           </div>
         </div>
 

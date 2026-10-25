@@ -93,6 +93,17 @@ export const DEFAULT_EXCLUDED_DIRS =
  */
 export const SETTINGS_DEFINITIONS = [
   {
+    key: 'general.logRetention',
+    type: 'json',
+    category: 'general',
+    description:
+      'Log archive retention by fixed file family. Managed in the Logs retention dialog. Active logs are protected.',
+    defaultValue: {
+      application: { enabled: true, maxAgeDays: 30, maxFiles: 5 },
+      codex: { enabled: false, maxAgeDays: 30, maxFiles: 5, maxFileMiB: 50 },
+    },
+  },
+  {
     key: GENERAL_SETTING_KEYS.maxIdleSubscriptions,
     type: 'number',
     category: 'general',
