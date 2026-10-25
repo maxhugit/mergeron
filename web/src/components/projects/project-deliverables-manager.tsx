@@ -1182,8 +1182,8 @@ function DeliverableDetail({
           </div>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="w-full space-y-4 p-4 md:p-6">
+      <div className={tab === 'history' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'}>
+        <div className={tab === 'history' ? 'flex min-h-0 w-full flex-1 flex-col p-4 md:p-6' : 'w-full space-y-4 p-4 md:p-6'}>
           {tab === 'overview' && (
             <Overview
               item={item}
@@ -2295,12 +2295,12 @@ export function DeliverableHistory({
   ];
   events.sort((a, b) => b.date - a.date || a.id.localeCompare(b.id));
   return (
-    <section className="overflow-x-auto rounded-xl border bg-card">
+    <section aria-label={t('history')} tabIndex={0} className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card">
       <table className="w-full text-left text-sm">
         <caption className="p-4 text-left font-semibold">
           {t('history')}
         </caption>
-        <thead className="border-y bg-muted/40">
+        <thead className="sticky top-0 z-10 border-y bg-card shadow-sm">
           <tr>
             <th className="px-4 py-2">{t('date')}</th>
             <th className="px-4 py-2">{t('author')}</th>

@@ -246,6 +246,11 @@ it('merges document versions, removals, restorations and deliverable edits in hi
     ],
   });
   fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+  const historyRegion = screen.getByRole('region', { name: 'History' });
+  expect(historyRegion).toHaveClass('min-h-0', 'overflow-auto');
+  expect(historyRegion).toHaveAttribute('tabindex', '0');
+  expect(screen.getByRole('columnheader', { name: 'History' }).closest('thead')).toHaveClass('sticky', 'top-0', 'bg-card');
+  expect(historyRegion.parentElement?.parentElement).toHaveClass('overflow-hidden');
   const rows = screen.getAllByRole('row');
   expect(rows).toHaveLength(6);
   expect(rows[1]).toHaveTextContent('Deliverable modified — Report');
