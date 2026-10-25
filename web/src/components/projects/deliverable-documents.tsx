@@ -476,7 +476,7 @@ function DocumentRow({ document, busy, onView, onHistory, onDownload, onFile, on
           <MoreVertical className="h-4 w-4" />
         </summary>
         <div className="absolute right-0 z-20 mt-1 grid min-w-52 gap-1 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
-          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onView}><Eye className="h-4 w-4" /> {t('open')}</button>
+          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onView}><Eye className="h-4 w-4" /> {t('preview')}</button>
           <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onDownload}><Download className="h-4 w-4" /> {t('download')}</button>
           <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onHistory}><History className="h-4 w-4" /> {t('history')}</button>
           <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted">
