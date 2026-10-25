@@ -311,6 +311,159 @@ class ProjectArchiveTest(unittest.TestCase):
             self.import_project()
         self.assertEqual(list(self.target_root.iterdir()), [])
 
+    def test_outgoing_branch_is_not_a_reason_to_export_another_project(self):
+        agent = self.add_agent()
+        with sqlite3.connect(self.source_db) as db:
+            db.execute('INSERT INTO conversation_branch_edges VALUES(?,?,?,?,?,?,?,?)', ('private-child', agent, agent, '__end__', 'turn', '[]', 1, 'local'))
+            db.execute('INSERT INTO conversation_branch_active_members VALUES(?,?,?)', (agent, 'private-child', 2))
+            before = list(db.iterdump())
+        self.export()
+        _, manifest = self.load()
+        self.assertNotIn(b'private-child', engine.json_bytes(manifest))
+        self.assertIn('autonomous-branches-v1', manifest['requiredCapabilities'])
+        self.assertTrue(any('extérieures' in warning for warning in manifest['warnings']))
+        self.assertEqual(manifest['tables']['conversation_branch_active_members'][0]['active_thread_id'], agent)
+        self.import_project()
+        with sqlite3.connect(self.source_db) as db:
+            self.assertEqual(list(db.iterdump()), before)
+
+    def test_shared_parent_is_cut_without_losing_child_rollout(self):
+        agent = self.add_agent()
+        rollout = self.home / 'sessions/rollout.jsonl'
+        event = json.loads(rollout.read_text())
+        event['payload']['forked_from_id'] = 'outside-parent'
+        rollout.write_bytes(engine.json_bytes(event) + b'\n')
+        with sqlite3.connect(self.home / 'thread_history_1.sqlite') as db:
+            db.execute('UPDATE thread_history_projection_state SET next_rollout_byte_offset=?', (rollout.stat().st_size,))
+        with sqlite3.connect(self.source_db) as db:
+            db.execute('INSERT INTO conversation_branch_edges VALUES(?,?,?,?,?,?,?,?)', (agent, 'outside-parent', 'outside-root', '__end__', 'prefix', '[]', 1, 'local'))
+            db.execute('INSERT INTO conversation_branch_groups VALUES(?,?,?,?,?)', ('group', 'outside-root', 'prefix', 1, 1))
+            db.execute('INSERT INTO conversation_branch_versions(version_id,group_id,thread_id,version_index,kind,preview_text,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)', ('v-local', 'group', agent, 2, 'branch', 'Child message', 1, 1))
+            db.execute('INSERT INTO conversation_branch_versions(version_id,group_id,thread_id,version_index,kind,preview_text,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)', ('v-external', 'group', 'outside-parent', 1, 'original', 'PRIVATE OTHER PROJECT', 1, 1))
+        self.export()
+        _, manifest = self.load()
+        self.assertNotIn(b'PRIVATE OTHER PROJECT', engine.json_bytes(manifest))
+        self.assertNotIn(b'outside-parent', engine.json_bytes(manifest))
+        self.assertEqual(manifest['tables']['conversation_branch_groups'][0]['tree_root_thread_id'], agent)
+        self.assertEqual(manifest['tables']['conversation_branch_versions'][0]['version_index'], 1)
+        self.import_project()
+        with engine.connect(self.target_home / 'state_5.sqlite') as db:
+            thread = db.execute('SELECT * FROM threads').fetchone()
+            restored = json.loads(Path(thread['rollout_path']).read_text())
+            self.assertIsNone(restored['payload']['forked_from_id'])
+            self.assertEqual(restored['payload']['id'], thread['id'])
+
+    def test_current_codec_transfers_162_to_164_and_rejects_unverified_versions(self):
+        self.add_agent()
+        self.source['codexVersion'] = '0.162.1'
+        self.target['codexVersion'] = '0.164.0'
+        self.export()
+        _, manifest = self.load()
+        self.assertIn('codex-history-state5-v2', manifest['requiredCapabilities'])
+        self.assertNotIn('codex-history-0.153', manifest['requiredCapabilities'])
+        self.import_project()
+        for version in ('0.163.0', '0.165.0', '1.0.0', ''):
+            with self.subTest(version=version), self.assertRaises(engine.ArchiveError):
+                engine.validate_agent_versions('0.162.1', version)
+        with self.assertRaises(engine.ArchiveError):
+            engine.validate_agent_versions('0.164.0', '0.162.1')
+
+    def test_current_codec_still_rejects_unknown_target_fields_without_loss(self):
+        self.add_agent()
+        self.source['codexVersion'] = '0.162.1'
+        self.target['codexVersion'] = '0.164.0'
+        self.export()
+        _, manifest = self.load()
+        manifest['agents']['schemas']['threads'].append(dict(name='future_native_data', type='TEXT', notnull=0, dflt_value=None, pk=0))
+        manifest['agents']['tables']['threads'][0]['future_native_data'] = 'must not disappear'
+        with self.assertRaisesRegex(engine.ArchiveError, 'threads.future_native_data'):
+            engine.preview(self.target, manifest)
+        self.assertEqual(list(self.target_root.iterdir()), [])
+
+    def test_older_reader_must_not_accept_the_new_native_codec(self):
+        self.add_agent()
+        self.source['codexVersion'] = '0.162.1'
+        self.export()
+        with patch.object(engine, 'CAPABILITIES', engine.CAPABILITIES - {'codex-history-state5-v2'}):
+            with self.assertRaisesRegex(engine.ArchiveError, 'codex-history-state5-v2'):
+                self.load()
+
+    def test_operational_workspace_outside_project_is_relocated_without_copying_it(self):
+        outside = self.base / 'private-other-workspace'
+        outside.mkdir()
+        (outside / 'private.txt').write_text('OTHER PROJECT SECRET')
+        with sqlite3.connect(self.source_db) as db:
+            db.execute('UPDATE project_tasks SET workspace_path=? WHERE id=?', (str(outside), 'task'))
+        self.export()
+        _, manifest = self.load()
+        self.assertIn('operational-path-relocation-v1', manifest['requiredCapabilities'])
+        task = next(r for r in manifest['tables']['project_tasks'] if r['id'] == 'task')
+        self.assertEqual(task['workspace_path'], str(self.project))
+        self.assertFalse(any(r['source'] == str(outside) for r in manifest['roots']))
+        result = self.import_project()
+        with engine.connect(self.target_db, True) as db:
+            task = db.execute("SELECT workspace_path FROM project_tasks WHERE title='Parent'").fetchone()
+            self.assertEqual(task[0], str(self.target_root.resolve() / result['projectId']))
+            provenance = json.loads(db.execute('SELECT provenance FROM project_archive_imports').fetchone()[0])
+            self.assertEqual(provenance['relocatedOperationalPaths'][0]['source'], str(outside))
+        with sqlite3.connect(self.source_db) as db:
+            self.assertEqual(db.execute("SELECT workspace_path FROM project_tasks WHERE id='task'").fetchone()[0], str(outside))
+
+    def test_internal_branch_prefix_offsets_follow_rewritten_parent(self):
+        parent = self.add_agent()
+        child = '018f0000-0000-7000-8000-000000000002'
+        parent_file = self.home / 'sessions/rollout.jsonl'
+        child_file = self.home / 'sessions/child.jsonl'
+        payload = {'id': child, 'cwd': str(self.project), 'forked_from_id': parent,
+                   'history_base': {'thread_id': parent, 'end_byte_offset': parent_file.stat().st_size, 'end_ordinal_exclusive': 1}}
+        child_file.write_bytes(engine.json_bytes({'type': 'session_meta', 'payload': payload}) + b'\n')
+        with sqlite3.connect(self.home / 'state_5.sqlite') as db:
+            db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,NULL,NULL)', (child, str(child_file), '0.153.2', str(self.project), '{}', 'never'))
+        with sqlite3.connect(self.source_db) as db:
+            db.execute('INSERT INTO project_agent_threads VALUES(?,?,?,?,?)', (child, 'project-source', str(self.project), 1, 1))
+            db.execute('INSERT INTO conversation_branch_edges VALUES(?,?,?,?,?,?,?,?)', (child, parent, parent, '__end__', 'prefix', '[]', 1, 'local'))
+        self.export()
+        zip_file, manifest = self.load()
+        manifest['agents']['tables']['threads'].sort(key=lambda r: r['id'] != child)
+        engine.import_archive(self.target, zip_file, manifest)
+        with engine.connect(self.target_home / 'state_5.sqlite') as db:
+            restored = [dict(r) for r in db.execute('SELECT * FROM threads')]
+        by_id = {r['id']: r for r in restored}
+        headers = [json.loads(Path(r['rollout_path']).read_text())['payload'] for r in restored]
+        child_header = next(h for h in headers if h.get('history_base'))
+        base = child_header['history_base']
+        self.assertNotEqual(base['thread_id'], parent)
+        self.assertEqual(base['end_byte_offset'], Path(by_id[base['thread_id']]['rollout_path']).stat().st_size)
+        self.assertEqual(child_header['forked_from_id'], base['thread_id'])
+
+    def test_external_history_prefix_is_never_silently_discarded(self):
+        self.add_agent()
+        file = self.home / 'sessions/rollout.jsonl'
+        event = json.loads(file.read_text())
+        event['payload']['history_base'] = {'thread_id': 'external', 'end_byte_offset': 200, 'end_ordinal_exclusive': 1}
+        file.write_bytes(engine.json_bytes(event) + b'\n')
+        with self.assertRaisesRegex(engine.ArchiveError, 'préfixe d’historique stocké'):
+            self.export()
+        self.assertFalse(self.archive.exists())
+
+    def test_import_rejects_topology_with_foreign_threads_even_if_target_has_them(self):
+        agent = self.add_agent()
+        self.export()
+        _, manifest = self.load()
+        with engine.connect(self.source_db, True) as db:
+            manifest['schemas']['conversation_branch_edges'] = engine.columns(db, 'conversation_branch_edges')
+        manifest['tables']['conversation_branch_edges'] = [dict(child_thread_id=agent, parent_thread_id='foreign', tree_root_thread_id=agent, fork_before_turn_id='__end__', common_prefix_turn_id='prefix', inherited_turn_ids='[]', created_at=1, source='local')]
+        with self.assertRaisesRegex(engine.ArchiveError, 'conversation hors du ZIP'):
+            engine.preview(self.target, manifest)
+        self.assertEqual(list(self.target_root.iterdir()), [])
+
+    def test_export_rejects_cycles_instead_of_following_them_forever(self):
+        agent = self.add_agent()
+        with sqlite3.connect(self.source_db) as db:
+            db.execute('INSERT INTO conversation_branch_edges VALUES(?,?,?,?,?,?,?,?)', (agent, agent, agent, '__end__', 'prefix', '[]', 1, 'local'))
+        with self.assertRaisesRegex(engine.ArchiveError, 'cycle'):
+            self.export()
+
     def test_deliverable_documents_versions_and_snapshots_are_relinked(self):
         live = self.project / 'livrables/deliverable/report.docx'
         snapshot = self.project / '.mergeron/history/deliverable/document/1.docx'
