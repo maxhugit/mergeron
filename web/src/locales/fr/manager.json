@@ -1,4 +1,9 @@
 {
+  "serverSettingsTabs": "Réglages du serveur",
+  "serverCurrentVersionTab": "Version actuelle",
+  "serverUpdateTab": "Mise à jour",
+  "serverBackupTab": "Sauvegarde",
+  "serverSocketTab": "Socket",
   "managerBackupsTitle": "Sauvegardes des mises à jour",
   "managerBackupsHelp": "Les sauvegardes s’accumulent après les mises à jour. Leur suppression est définitive et désactive le retour arrière utilisant cette copie. Les données actuelles des projets et les fichiers en quarantaine ne sont pas supprimés.",
   "managerBackupsUpgradeRequired": "Mettez à jour Mergeron Manager pour gérer les sauvegardes.",

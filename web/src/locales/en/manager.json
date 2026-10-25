@@ -1,4 +1,9 @@
 {
+  "serverSettingsTabs": "Server settings",
+  "serverCurrentVersionTab": "Current version",
+  "serverUpdateTab": "Update",
+  "serverBackupTab": "Backup",
+  "serverSocketTab": "Socket",
   "managerBackupsTitle": "Update backups",
   "managerBackupsHelp": "Backups accumulate after updates. Deleting a backup is permanent and disables rollback using that copy. Current project data and quarantined files are not deleted.",
   "managerBackupsUpgradeRequired": "Update Mergeron Manager to enable backup management.",

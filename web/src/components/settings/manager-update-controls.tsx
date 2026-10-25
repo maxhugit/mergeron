@@ -54,9 +54,11 @@ const statuses: Record<string, string> = {
 export function ManagerUpdateControls({
   status,
   trailingActions,
+  showBackups = true,
 }: {
   status: ManagerStatus;
   trailingActions?: ReactNode;
+  showBackups?: boolean;
 }) {
   const { t } = useTranslation('manager');
   const { t: common } = useTranslation();
@@ -338,7 +340,7 @@ export function ManagerUpdateControls({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <ManagerBackups status={status} />
+      {showBackups && <ManagerBackups status={status} />}
       <ManagerUpdateProgressDialog
         open={progressOpen}
         onOpenChange={(open) => {
