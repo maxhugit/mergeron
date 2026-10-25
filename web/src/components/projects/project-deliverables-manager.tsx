@@ -1210,6 +1210,47 @@ function DeliverableDetail({
   );
 }
 
+function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
+  const { t } = useTranslation();
+  const current = displayedLifecycle(item);
+  const stages = (
+    Object.keys(lifecycleStatuses) as Array<keyof typeof lifecycleStatuses>
+  ).filter(
+    (stage) => stage !== 'awaiting_validation' || item.validationRequired,
+  );
+  return (
+    <section
+      className="col-span-full min-w-0 rounded-xl border bg-card p-4"
+      aria-label={t('deliverableLifecycleFlow')}
+    >
+      <h2 className="mb-3 font-semibold">{t('deliverableLifecycleFlow')}</h2>
+      <ol className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {stages.map((stage, index) => (
+          <li
+            key={stage}
+            className="flex items-center gap-3"
+            aria-current={stage === current ? 'step' : undefined}
+          >
+            {index > 0 && <span aria-hidden="true">→</span>}
+            <span
+              className={
+                stage === current
+                  ? 'rounded-full ring-2 ring-primary ring-offset-2 ring-offset-card'
+                  : 'opacity-60'
+              }
+            >
+              <LifecycleBadge status={stage} />
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {t('deliverableLifecycleFlowDescription')}
+      </p>
+    </section>
+  );
+}
+
 function Overview({
   item,
   board,
@@ -1261,6 +1302,7 @@ function Overview({
   );
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <DeliverableLifecycleFlow item={item} />
       <section className="min-w-0 space-y-3 rounded-xl border bg-card p-4">
         <h2 className="font-semibold">{t('generalInformation')}</h2>
         <label className="block text-sm">

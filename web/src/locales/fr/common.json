@@ -1,4 +1,6 @@
 {
+  "deliverableLifecycleFlow": "Cycle de vie du livrable et de ses documents",
+  "deliverableLifecycleFlowDescription": "L’étape actuelle est entourée. La validation, lorsqu’elle est obligatoire, porte sur les versions des documents. Une réouverture permet de reprendre la constitution du livrable.",
   "saveRuntimeSettings": "Enregistrer les paramètres de fonctionnement",
   "agentLinkedTo": "Lié à",
   "agentDirectTask": "Tâche affectée",
