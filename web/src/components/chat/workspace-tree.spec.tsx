@@ -15,8 +15,20 @@ import { useLayoutStore } from '@/stores/layout-store';
 
 const addRoot = vi.hoisted(() => vi.fn());
 vi.mock('./workspace-git-panel', () => ({
-  WorkspaceGitPanel: ({ children }: { children: import('react').ReactNode }) =>
+  WorkspaceGitPanel: ({
     children,
+    resourceId,
+    onSelect,
+  }: {
+    children: import('react').ReactNode;
+    resourceId: string | null;
+    onSelect: (id: string) => void;
+  }) => (
+    <>
+      <button onClick={() => onSelect('git')}>Git fixture</button>
+      {resourceId ? <div>Git view</div> : children}
+    </>
+  ),
 }));
 vi.mock('@/generated/api', () => ({ filesAddRoot: addRoot }));
 vi.mock('@/components/files/file-tree', () => ({
@@ -179,5 +191,23 @@ describe('project workspaces', () => {
     expect(screen.getByTestId('file-tree')).toHaveTextContent('/appdata/docs');
     fireEvent.click(screen.getByLabelText('Use for this conversation'));
     expect(onActiveWorkspaceChange).toHaveBeenCalledWith('/appdata/docs');
+
+    const primary = screen.getByTitle('/workspaces/main');
+    fireEvent.click(primary);
+    expect(primary).toHaveAttribute('aria-pressed', 'true');
+    expect(primary).toHaveAttribute('data-variant', 'secondary');
+    fireEvent.click(screen.getByRole('button', { name: 'Git fixture' }));
+    expect(screen.getByText('Git view')).toBeInTheDocument();
+    expect(primary).toHaveAttribute('aria-pressed', 'false');
+    expect(primary).toHaveAttribute('data-variant', 'ghost');
+    expect(screen.getByText('Active workspace')).toBeInTheDocument();
+    expect(useFilesStore.getState().rootDir).toBe('/workspaces/main');
+    expect(onActiveWorkspaceChange).toHaveBeenCalledTimes(1);
+    fireEvent.click(primary);
+    expect(primary).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('file-tree')).toHaveTextContent(
+      '/workspaces/main',
+    );
+    expect(onActiveWorkspaceChange).toHaveBeenCalledTimes(1);
   });
 });
