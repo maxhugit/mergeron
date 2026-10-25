@@ -6,10 +6,16 @@ import { useCategorySettings } from './use-category-settings';
 import { ONLYOFFICE_SETTING_KEYS } from './settings-sections';
 import { ServerVersionCard } from './server-version-card';
 
+// Retention is edited exclusively through the structured dialog on the Logs page.
+const EXCLUDED_RUNTIME_SETTINGS = [
+  ...ONLYOFFICE_SETTING_KEYS,
+  'general.logRetention',
+] as const;
+
 export function GeneralSettings() {
   const { t } = useTranslation();
   const runtimeSettings = useCategorySettings('general', {
-    excludeKeys: ONLYOFFICE_SETTING_KEYS,
+    excludeKeys: EXCLUDED_RUNTIME_SETTINGS,
   });
 
   return (
