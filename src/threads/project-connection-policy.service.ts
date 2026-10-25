@@ -10,6 +10,7 @@ import type { JsonValue } from '../codex/codex-schema/serde_json/JsonValue';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   projectActivity,
+  projectAgentThreads,
   projects,
   projectWorkspaceCopies,
   projectWorkspaceResources,
@@ -19,6 +20,7 @@ import {
 type JsonObject = { [key: string]: JsonValue };
 
 export interface ProjectExecutionPolicy {
+  executionCwd?: string;
   projectId: string;
   config: JsonObject;
   model: string | null;
@@ -36,6 +38,24 @@ export class ProjectConnectionPolicyService {
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
   ) {}
 
+  /** A conversation's project binding cannot be bypassed by a turn cwd. */
+  async policyForThread(threadId: string, cwd?: string | null) {
+    const binding = this.db
+      .select()
+      .from(projectAgentThreads)
+      .where(eq(projectAgentThreads.threadId, threadId))
+      .get();
+    const policy = await this.policyForCwd(
+      cwd ?? binding?.workspacePath,
+      binding?.projectId,
+    );
+    if (binding && policy?.projectId !== binding.projectId)
+      throw new ConflictException(
+        'Le dossier de cette conversation ne correspond pas à son projet.',
+      );
+    return policy;
+  }
+
   /** Returns no override when the cwd is not attached to a WebUI project. */
   async configForCwd(
     cwd: string | null | undefined,
@@ -46,6 +66,7 @@ export class ProjectConnectionPolicyService {
   /** Resolves every project-owned execution setting from an exact workspace. */
   async policyForCwd(
     cwd: string | null | undefined,
+    expectedProjectId?: string,
   ): Promise<ProjectExecutionPolicy | null> {
     if (!cwd) return null;
     let workspace = this.db
@@ -74,6 +95,10 @@ export class ProjectConnectionPolicyService {
         .sort((a, b) => b.path.length - a.path.length)[0];
     }
     if (!workspace) return null;
+    if (expectedProjectId && workspace.projectId !== expectedProjectId)
+      throw new ConflictException(
+        'Le dossier de cette conversation ne correspond pas à son projet.',
+      );
     const copy = workspace.id
       ? this.db
           .select()
@@ -104,19 +129,27 @@ export class ProjectConnectionPolicyService {
       .get();
     if (!project) return null;
 
-    // Listing apps can initialize connector-backed MCP authentication. Avoid
-    // doing that when the project selects no app: the deny-by-default override
-    // is already sufficient and an unrelated stale OAuth token must not block
-    // starting a turn.
-    const [apps, mcpServers] = await Promise.all([
+    // Never treat an empty selection as an empty override: config merges retain
+    // global per-app enables and configured MCP servers. Discovery failures are
+    // deliberately fatal rather than falling back to unrestricted execution.
+    const [apps, mcpServers, effective] = await Promise.all([
       project.appIds.length > 0 ? this.listApps() : Promise.resolve([]),
-      project.mcpServerIds.length > 0
-        ? this.listMcpServers()
-        : Promise.resolve([]),
+      this.listMcpServers(),
+      this.codex.request<v2.ConfigReadResponse>('config/read', {
+        includeLayers: false,
+        cwd,
+      }),
     ]);
+    const object = (value: unknown): JsonObject =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as JsonObject)
+        : {};
+    const global = effective.config;
 
     const selectedApps = new Set(project.appIds);
     const appConfig: JsonObject = { _default: { enabled: false } };
+    for (const id of Object.keys(object(global.apps)))
+      if (id !== '_default') appConfig[id] = { enabled: false };
     for (const app of apps) {
       appConfig[app.id] = {
         enabled: selectedApps.has(app.id) && app.isAccessible && app.isEnabled,
@@ -126,6 +159,25 @@ export class ProjectConnectionPolicyService {
     const selectedMcpServers = new Set(project.mcpServerIds);
     const directMcpConfig: JsonObject = {};
     const pluginConfig: JsonObject = {};
+    for (const [name, value] of Object.entries(object(global.mcp_servers))) {
+      if (name === 'codex_apps') continue;
+      const server = object(value);
+      directMcpConfig[name] = {
+        ...server,
+        enabled: selectedMcpServers.has(name) && server.enabled !== false,
+      };
+    }
+    for (const [id, value] of Object.entries(object(global.plugins))) {
+      const plugin = object(value);
+      const servers: JsonObject = {};
+      for (const [name, raw] of Object.entries(object(plugin.mcp_servers)))
+        servers[name] = {
+          ...object(raw),
+          enabled:
+            selectedMcpServers.has(name) && object(raw).enabled !== false,
+        };
+      pluginConfig[id] = { ...plugin, mcp_servers: servers };
+    }
     for (const server of mcpServers) {
       // codex_apps is the built-in connector catalog, not a configured MCP
       // transport. Passing it through mcp_servers makes thread/start reject
@@ -133,17 +185,24 @@ export class ProjectConnectionPolicyService {
       if (server.name === 'codex_apps') continue;
       const enabled = selectedMcpServers.has(server.name);
       if (!server.pluginId) {
-        directMcpConfig[server.name] = { enabled };
+        // Preserve the full transport configuration returned by config/read.
+        if (!directMcpConfig[server.name])
+          directMcpConfig[server.name] = { enabled: false };
         continue;
       }
       const plugin = (pluginConfig[server.pluginId] ?? {}) as JsonObject;
       const pluginServers = (plugin.mcp_servers ?? {}) as JsonObject;
-      pluginServers[server.name] = { enabled };
+      pluginServers[server.name] = {
+        ...object(pluginServers[server.name]),
+        enabled:
+          enabled && object(pluginServers[server.name]).enabled !== false,
+      };
       plugin.mcp_servers = pluginServers;
       pluginConfig[server.pluginId] = plugin;
     }
 
     return {
+      executionCwd: cwd,
       projectId: workspace.projectId,
       workspaceId: workspace.id || workspace.path || cwd,
       readOnly: source?.accessMode === 'read_only',
@@ -152,6 +211,7 @@ export class ProjectConnectionPolicyService {
       model: project.agentModel,
       reasoningEffort: project.agentReasoningEffort,
       config: {
+        ...(project.appIds.length === 0 ? { features: { apps: false } } : {}),
         apps: appConfig,
         mcp_servers: directMcpConfig,
         plugins: pluginConfig,

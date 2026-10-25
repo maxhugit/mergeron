@@ -56,6 +56,7 @@ import { ThreadMetadataService } from '../threads/thread-metadata.service';
 import { ThreadWorkspaceOverridesService } from '../threads/thread-workspace-overrides.service';
 import { ThreadsDeletionService } from '../threads/threads-deletion.service';
 import { ThreadsService } from '../threads/threads.service';
+import { ProjectConnectionRuntimeService } from '../threads/project-connection-runtime.service';
 import { SimpleChatService } from '../simple-chat/simple-chat.service';
 import { WorkspaceTransfersService } from './workspace-transfers.service';
 import {
@@ -138,6 +139,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     @Optional() private readonly activeFolders?: ActiveFoldersService,
     @Optional() private readonly workspaceTransfers?: WorkspaceTransfersService,
+    @Optional() private readonly connections?: ProjectConnectionRuntimeService,
   ) {}
 
   private get folders(): ActiveFoldersService {
@@ -214,7 +216,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       .run();
   }
 
-  configureMcpServers(
+  async configureMcpServers(
     projectId: string,
     names: unknown,
     actor?: ProjectActivityActor,
@@ -232,24 +234,34 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     )
       throw new BadRequestException('Invalid MCP server selection');
     const updatedAt = Date.now();
-    this.db
-      .update(projects)
-      .set({ mcpServerIds, updatedAt })
-      .where(eq(projects.id, projectId))
-      .run();
-    this.recordActivity(
-      projectId,
-      'mcp_configuration_updated',
-      'mcp',
-      null,
-      'Connecteurs MCP',
-      { before: project.mcpServerIds, after: mcpServerIds },
-      actor,
-    );
-    return { ...project, mcpServerIds, updatedAt };
+    if (JSON.stringify(mcpServerIds) === JSON.stringify(project.mcpServerIds))
+      return project;
+    const write = () =>
+      this.db.transaction(() => {
+        this.db
+          .update(projects)
+          .set({ mcpServerIds, updatedAt })
+          .where(eq(projects.id, projectId))
+          .run();
+        this.recordActivity(
+          projectId,
+          'mcp_configuration_updated',
+          'mcp',
+          null,
+          'Connecteurs MCP',
+          { before: project.mcpServerIds, after: mcpServerIds },
+          actor,
+        );
+        return { ...project, mcpServerIds, updatedAt };
+      });
+    return this.connections ? this.connections.change(write) : write();
   }
 
-  configureApps(projectId: string, ids: unknown, actor?: ProjectActivityActor) {
+  async configureApps(
+    projectId: string,
+    ids: unknown,
+    actor?: ProjectActivityActor,
+  ) {
     const project = this.get(projectId);
     if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string'))
       throw new BadRequestException('Invalid app selection');
@@ -260,21 +272,27 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     if (appIds.length > 100 || appIds.some((id) => id.length > 160))
       throw new BadRequestException('Invalid app selection');
     const updatedAt = Date.now();
-    this.db
-      .update(projects)
-      .set({ appIds, updatedAt })
-      .where(eq(projects.id, projectId))
-      .run();
-    this.recordActivity(
-      projectId,
-      'app_configuration_updated',
-      'app',
-      null,
-      'Applications',
-      { before: project.appIds, after: appIds },
-      actor,
-    );
-    return { ...project, appIds, updatedAt };
+    if (JSON.stringify(appIds) === JSON.stringify(project.appIds))
+      return project;
+    const write = () =>
+      this.db.transaction(() => {
+        this.db
+          .update(projects)
+          .set({ appIds, updatedAt })
+          .where(eq(projects.id, projectId))
+          .run();
+        this.recordActivity(
+          projectId,
+          'app_configuration_updated',
+          'app',
+          null,
+          'Applications',
+          { before: project.appIds, after: appIds },
+          actor,
+        );
+        return { ...project, appIds, updatedAt };
+      });
+    return this.connections ? this.connections.change(write) : write();
   }
 
   configureAgent(

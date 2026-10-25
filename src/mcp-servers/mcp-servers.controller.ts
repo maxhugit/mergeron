@@ -9,6 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { BusinessException } from '../common/business.exception';
+import { requireThreadAccess } from '../auth/access-context';
 import { ErrorCode } from '../common/error-codes';
 import {
   ApiBadRequestResponse,
@@ -43,6 +44,12 @@ export class McpServersController {
   @Get()
   @ApiOperation({ summary: 'List MCP server status' })
   @ApiQuery({ name: 'cursor', required: false })
+  @ApiQuery({
+    name: 'threadId',
+    required: false,
+    description:
+      'Inspect actual conversation MCP connections rather than the global catalog.',
+  })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({
     name: 'detail',
@@ -54,8 +61,11 @@ export class McpServersController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
     @Query('detail') detail?: string,
+    @Query('threadId') threadId?: string,
   ): Promise<v2.ListMcpServerStatusResponse> {
+    if (threadId) requireThreadAccess(threadId);
     return this.mcpServersService.listServers({
+      ...(threadId ? { threadId } : {}),
       cursor: cursor?.trim() || undefined,
       limit: this.parseLimit(limit),
       detail: this.parseDetail(detail),

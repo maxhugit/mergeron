@@ -14,6 +14,24 @@ function httpContext(method: string, url: string): ExecutionContext {
 }
 
 describe('catalog admission', () => {
+  it.each(['apps', 'mcp-servers'])(
+    'delegates project %s updates to their exclusive integration gate',
+    (route) => {
+      const admission = new CatalogAdmissionService();
+      const interceptor = new CatalogMutationInterceptor(admission);
+      interceptor
+        .intercept(httpContext('PATCH', '/api/projects/p/' + route), {
+          handle: () => {
+            const release = admission.begin();
+            expect(() => admission.enter('turn')).toThrow();
+            release();
+            return of({});
+          },
+        })
+        .subscribe();
+      expect(admission.pending()).toEqual([]);
+    },
+  );
   it('refuses application throughout a multi-step mutation and refuses a second application', () => {
     const admission = new CatalogAdmissionService();
     const release = admission.enter('fork');

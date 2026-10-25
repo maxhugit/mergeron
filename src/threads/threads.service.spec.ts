@@ -30,6 +30,7 @@ describe('ThreadsService', () => {
   let service: ThreadsService;
   const mockCodex = { request: vi.fn() };
   const mockResumeRegistry = {
+    isResumed: vi.fn(() => true),
     ensureOpened: vi.fn(),
     markResumed: vi.fn(),
     cacheResponse: vi.fn(),
@@ -118,6 +119,7 @@ describe('ThreadsService', () => {
     mockActiveFolders.resolveAgent.mockReset();
     mockKnowledge.contextForConversation.mockResolvedValue(null);
     Object.values(mockResumeRegistry).forEach((mock) => mock.mockReset());
+    mockResumeRegistry.isResumed.mockReturnValue(true);
     Object.values(mockBranches).forEach((mock) => mock.mockReset());
     mockBranchMutations.recordLocalFork.mockReset();
     mockBranching.createMessageBranch.mockReset();
@@ -358,6 +360,44 @@ describe('ThreadsService', () => {
       'turn1',
       'hello',
     );
+  });
+
+  it('reopens an existing thread after MCP connection replacement before dispatching a turn', async () => {
+    const order: string[] = [];
+    Object.assign(service, {
+      connections: {
+        assertOpen: vi.fn(),
+        assertGeneration: vi.fn(),
+        beforeTurn: vi
+          .fn()
+          .mockResolvedValue({ policy: null, restarted: true }),
+      },
+    });
+    mockResumeRegistry.ensureOpened.mockImplementation(() => {
+      order.push('resume');
+      return Promise.resolve({});
+    });
+    mockCodex.request.mockImplementation(() => {
+      order.push('turn');
+      return Promise.resolve({ turn: { id: 'turn1' } });
+    });
+    await service.startTurn({ threadId: 't1', input: [] });
+    expect(order).toEqual(['resume', 'turn']);
+  });
+
+  it('does not dispatch a turn when the project integration policy cannot be enforced', async () => {
+    Object.assign(service, {
+      connections: {
+        assertOpen: vi.fn(),
+        beforeTurn: vi
+          .fn()
+          .mockRejectedValue(new Error('Cannot establish idle')),
+      },
+    });
+    await expect(
+      service.startTurn({ threadId: 't1', input: [] }),
+    ).rejects.toThrow('Cannot establish idle');
+    expect(mockCodex.request).not.toHaveBeenCalled();
   });
 
   it.each(['workspaceWrite', 'readOnly', 'dangerFullAccess'])(

@@ -58,4 +58,16 @@ describe('McpServersService', () => {
       'config/mcpServer/reload',
     );
   });
+
+  it('inspects actual conversation connections when threadId is supplied', async () => {
+    codexService.request.mockResolvedValueOnce({ data: [], nextCursor: null });
+    await service.listServers({
+      threadId: 'old-thread',
+      detail: 'toolsAndAuthOnly',
+    });
+    expect(codexService.request).toHaveBeenCalledWith('mcpServerStatus/list', {
+      threadId: 'old-thread',
+      detail: 'toolsAndAuthOnly',
+    });
+  });
 });

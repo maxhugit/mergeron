@@ -1,5 +1,6 @@
 /** Experimental paged thread-history access isolated from stable Codex types. */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
 import type { v2 } from '../codex/codex-schema';
 import { CodexService } from '../codex/codex.service';
 import { isUnmaterializedTurnsListError } from './thread-errors';
@@ -105,7 +106,10 @@ const TURN_COUNT_MAX_PAGES = 50;
 export class ThreadHistoryService {
   private readonly logger = new Logger(ThreadHistoryService.name);
 
-  constructor(private readonly codex: CodexService) {}
+  constructor(
+    private readonly codex: CodexService,
+    @Optional() private readonly connections?: ProjectConnectionRuntimeService,
+  ) {}
 
   /**
    * Acquires writer ownership without materializing the entire history.
@@ -117,8 +121,13 @@ export class ThreadHistoryService {
   async resumeMetadataFirst(
     params: MetadataFirstResumeParams,
   ): Promise<MetadataFirstResumeResponse> {
+    const generation = this.connections?.generation();
+    const policy = await this.connections?.forResume(params.threadId);
+    this.connections?.assertGeneration(generation);
     const request: ExperimentalResumeParams = {
       threadId: params.threadId,
+      ...(policy ? { config: policy.config } : {}),
+      ...(policy?.executionCwd ? { cwd: policy.executionCwd } : {}),
       excludeTurns: true,
       initialTurnsPage: {
         limit: params.initialTurnsLimit,
@@ -130,6 +139,7 @@ export class ThreadHistoryService {
       'thread/resume',
       request,
     );
+    this.connections?.record(params.threadId, policy ?? null, generation);
     assertPaginatedThread(response.thread, 'thread/resume');
     // An absent page is not an empty page. `excludeTurns` empties `thread.turns`
     // unconditionally, so if the server ever stops honouring `initialTurnsPage`
