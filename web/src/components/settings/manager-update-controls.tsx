@@ -86,8 +86,8 @@ export function ManagerUpdateControls({
     useState<ManagerUpdateOperation | null>(
       operation?.id !== receipt?.excludedOperationId &&
         (!receipt?.operationId || operation?.id === receipt.operationId)
-        ? (operation ?? null)
-        : null,
+        ? (operation ?? receipt?.snapshot ?? null)
+        : (receipt?.snapshot ?? null),
     );
   const [excludedOperationId, setExcludedOperationId] = useState<string | null>(
     receipt?.excludedOperationId ?? null,
