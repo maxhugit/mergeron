@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fsp from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -15,12 +15,26 @@ import {
   projectWorkspaces,
 } from '../database/schema';
 import { ProjectsService } from './projects.service';
+import {
+  PROJECT_PLAN_SCHEMA,
+  PROJECT_TASKS_SCHEMA,
+} from './project-ai-schemas';
 
 describe('people and task responsibility', () => {
   let database: TestDatabase;
   let service: ProjectsService;
   let workspacePath: string;
+  const runProjectStructuredPrompt =
+    vi.fn<
+      (input: {
+        instructions: string;
+        outputSchema: unknown;
+        prompt: string;
+        cwd: string;
+      }) => Promise<string>
+    >();
   beforeEach(async () => {
+    runProjectStructuredPrompt.mockReset();
     database = createTestDatabase();
     workspacePath = await fsp.mkdtemp(
       path.join(os.tmpdir(), 'people-project-'),
@@ -31,7 +45,7 @@ describe('people and task responsibility', () => {
       null as never,
       null as never,
       null as never,
-      null as never,
+      { runProjectStructuredPrompt } as never,
       null as never,
       database.db,
     );
@@ -88,6 +102,96 @@ describe('people and task responsibility', () => {
   afterEach(async () => {
     database.sqlite.close();
     await fsp.rm(workspacePath, { recursive: true, force: true });
+  });
+  it('plans only manual top-level tasks and preserves their dependencies without creating them', async () => {
+    runProjectStructuredPrompt.mockResolvedValue(
+      JSON.stringify({
+        tasks: [
+          {
+            title: 'Cadrer',
+            parentTitle: '',
+            executionMode: 'agent',
+            dependsOnTitles: [],
+          },
+          {
+            title: 'Concevoir',
+            parentTitle: '',
+            executionMode: 'manual',
+            dependsOnTitles: ['Cadrer'],
+          },
+        ],
+      }),
+    );
+    const plan = await service.suggestTasks(
+      'p',
+      'r',
+      'Préparer un projet avec ses sous-tâches',
+    );
+    expect(runProjectStructuredPrompt.mock.calls[0][0].outputSchema).toBe(
+      PROJECT_PLAN_SCHEMA,
+    );
+    expect(runProjectStructuredPrompt.mock.calls[0][0].instructions).toContain(
+      'Ne crée aucune sous-tâche',
+    );
+    expect(
+      plan.tasks.map((task) => ({
+        title: task.title,
+        parentTitle: task.parentTitle,
+        executionMode: task.executionMode,
+        dependsOnTitles: task.dependsOnTitles,
+      })),
+    ).toEqual([
+      {
+        title: 'Cadrer',
+        parentTitle: '',
+        executionMode: 'manual',
+        dependsOnTitles: [],
+      },
+      {
+        title: 'Concevoir',
+        parentTitle: '',
+        executionMode: 'manual',
+        dependsOnTitles: ['Cadrer'],
+      },
+    ]);
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+  });
+  it('rejects a nested AI plan rather than silently promoting subtasks to main tasks', async () => {
+    runProjectStructuredPrompt.mockResolvedValue(
+      JSON.stringify({
+        tasks: [{ title: 'Détailler', parentTitle: 'Cadrer' }],
+      }),
+    );
+    await expect(
+      service.suggestTasks('p', 'r', 'Préparer un projet'),
+    ).rejects.toThrow('uniquement des tâches principales');
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+  });
+  it('still allows explicit decomposition of a task into agent subtasks in a second step', async () => {
+    const task = service.createTask('p', 'r', { title: 'Cadrer' });
+    runProjectStructuredPrompt.mockResolvedValue(
+      JSON.stringify({
+        tasks: [
+          {
+            title: 'Rechercher',
+            executionMode: 'agent',
+            parentTitle: '',
+            dependsOnTitles: [],
+          },
+        ],
+      }),
+    );
+    const result = await service.suggestSubtasks('p', 'r', task.id, {});
+    expect(runProjectStructuredPrompt.mock.calls[0][0].outputSchema).toBe(
+      PROJECT_TASKS_SCHEMA,
+    );
+    expect(result.tasks[0]).toMatchObject({
+      title: 'Rechercher',
+      parentTitle: 'Cadrer',
+      executionMode: 'agent',
+      dependsOnTitles: [],
+    });
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(1);
   });
   const person = (reference = 'MD-001', name = 'Marie Dupont') => ({
     reference,

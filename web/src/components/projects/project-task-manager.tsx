@@ -894,11 +894,16 @@ export function ProjectTaskManager({
   const generatePlan = async () => {
     setAiLoading(true);
     setAiError('');
+    setAiSuggestions([]);
     try {
       const result = await projectsApi<{ tasks: Suggestion[] }>(
         `/${projectId}/resources/${resourceId}/ai-plan`,
         { method: 'POST', body: JSON.stringify({ prompt: aiPrompt }) },
       );
+      if (result.tasks.some((task) => task.parentTitle?.trim()))
+        throw new Error(
+          'Le plan doit contenir uniquement des tâches principales. Relancez la génération ; vous pourrez ensuite découper chaque tâche en sous-tâches.',
+        );
       setAiSuggestions(result.tasks);
       if (!result.tasks.length) setAiError('L’IA n’a proposé aucune tâche.');
     } catch (error) {
@@ -1006,6 +1011,10 @@ export function ProjectTaskManager({
   const addSuggestions = async () => {
     setAiLoading(true);
     try {
+      if (aiSuggestions.some((task) => task.parentTitle?.trim()))
+        throw new Error(
+          'Seules les tâches principales peuvent être créées par la planification.',
+        );
       const created = new Map<string, string>();
       const plannedDates = new Map<
         string,
@@ -1044,30 +1053,8 @@ export function ProjectTaskManager({
         visiting.delete(item.title);
         return result;
       };
-      // Dates are initially calculated independently. Expand every parent
-      // before creation so that attaching its children cannot violate the
-      // server-side date-range invariant.
+      // Planning schedules main tasks only. Subtasks are proposed later from a task.
       for (const suggestion of aiSuggestions) schedule(suggestion);
-      for (const parent of aiSuggestions.filter((item) => !item.parentTitle)) {
-        const children = aiSuggestions.filter(
-          (item) => item.parentTitle === parent.title,
-        );
-        if (!children.length) continue;
-        const parentDates = plannedDates.get(parent.title)!;
-        const childDates = children.map(
-          (child) => plannedDates.get(child.title)!,
-        );
-        plannedDates.set(parent.title, {
-          startAt: Math.min(
-            parentDates.startAt,
-            ...childDates.map((dates) => dates.startAt),
-          ),
-          dueAt: Math.max(
-            parentDates.dueAt,
-            ...childDates.map((dates) => dates.dueAt),
-          ),
-        });
-      }
       for (const suggestion of aiSuggestions) {
         const dates = plannedDates.get(suggestion.title)!;
         const result = await projectsApi<{ task: ProjectTaskSummary }>(
@@ -1076,6 +1063,7 @@ export function ProjectTaskManager({
             method: 'POST',
             body: JSON.stringify({
               ...suggestion,
+              executionMode: 'manual',
               estimateMinutes: Math.round(suggestion.estimateHours * 60),
               workspacePath: board.project.workspacePath,
               ...dates,
@@ -1087,17 +1075,14 @@ export function ProjectTaskManager({
       for (const suggestion of aiSuggestions) {
         const id = created.get(suggestion.title);
         if (!id) continue;
-        const parentTaskId = created.get(suggestion.parentTitle) ?? null;
         await projectsApi(`/${projectId}/resources/${resourceId}/tasks/${id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            parentTaskId,
-            executionMode: parentTaskId ? suggestion.executionMode : 'manual',
-            dependencyIds: parentTaskId
-              ? []
-              : suggestion.dependsOnTitles
-                  .map((title) => created.get(title))
-                  .filter(Boolean),
+            parentTaskId: null,
+            executionMode: 'manual',
+            dependencyIds: suggestion.dependsOnTitles
+              .map((title) => created.get(title))
+              .filter(Boolean),
           }),
         });
       }
@@ -3423,6 +3408,11 @@ export function ProjectTaskManager({
               Replanifier le projet
             </Button>
           </div>
+          <p className="text-sm text-muted-foreground">
+            {aiMode === 'create'
+              ? 'Le plan définit d’abord les tâches principales et leurs dépendances. Vous pourrez ensuite découper chaque tâche en sous-tâches depuis sa fiche.'
+              : 'La replanification ajuste uniquement les tâches principales existantes. Leurs sous-tâches sont conservées.'}
+          </p>
           <DictatedTextarea
             rows={5}
             placeholder={
