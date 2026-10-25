@@ -34,6 +34,15 @@ export interface ServerReleaseStatus {
 
 export const serverReleaseQueryKey = ['administration', 'server-release'];
 
+/** Shared cache and polling: sidebar and version card observe the same discovery. */
+export const serverReleaseQueryOptions = {
+  queryKey: serverReleaseQueryKey,
+  queryFn: () => requestServerRelease(),
+  staleTime: 60_000,
+  refetchInterval: 60_000,
+  retry: false,
+};
+
 export async function requestServerRelease(
   refresh = false,
 ): Promise<ServerReleaseStatus> {

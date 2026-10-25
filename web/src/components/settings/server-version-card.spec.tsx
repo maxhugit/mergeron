@@ -166,6 +166,10 @@ it('shows one update action alongside the detected image and descriptions', asyn
   fixture.render(<ServerVersionCard />);
   expect(await screen.findByRole('button', { name: 'Update' })).toBeVisible();
   expect(screen.getAllByRole('button', { name: 'Update' })).toHaveLength(1);
+  const update = screen.getByRole('button', { name: 'Update' });
+  const refresh = screen.getByRole('button', { name: 'Refresh detection' });
+  expect(refresh.parentElement).toBe(update.parentElement);
+  expect(update.nextElementSibling).toBe(refresh);
   expect(await screen.findByText('Corrige le mobile.')).toBeVisible();
   expect(
     screen.queryByRole('button', { name: 'Save' }),

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,7 +51,13 @@ const statuses: Record<string, string> = {
   recoveryRequired: 'managerUpdateRecoveryRequired',
 };
 
-export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
+export function ManagerUpdateControls({
+  status,
+  trailingActions,
+}: {
+  status: ManagerStatus;
+  trailingActions?: ReactNode;
+}) {
   const { t } = useTranslation('manager');
   const { t: common } = useTranslation();
   const client = useQueryClient();
@@ -133,7 +139,8 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
     (progressOperation?.status === 'running' &&
       operation?.id !== progressOperation.id);
   const blocked = operation?.status === 'recoveryRequired';
-  if (!status.available && !progressOpen && !progressOperation) return null;
+  if (!status.available && !progressOpen && !progressOperation)
+    return <>{trailingActions}</>;
   return (
     <div className="space-y-3 border-t border-border pt-4">
       <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
@@ -224,37 +231,41 @@ export function ManagerUpdateControls({ status }: { status: ManagerStatus }) {
             />
           </div>
         </details>
-        <Button
-          type="button"
-          disabled={
-            busy ||
-            !status.available ||
-            blocked ||
-            !image.trim() ||
-            (!manualSelection &&
-              (!release.data ||
-                release.isError ||
-                (!!release.data.targetImage && !release.data.updateAvailable)))
-          }
-          onClick={() => {
-            // Keep the reviewed target fixed if release discovery finishes later.
-            setImage(image.trim());
-            const target =
-              !manualSelection &&
-              release.data?.targetDigest &&
-              release.data.targetImage === image
-                ? `ghcr.io/maxhugit/mergeron@${release.data.targetDigest}`
-                : image.trim();
-            mutation.mutate({
-              action: 'plan',
-              input: { images: { application: target } },
-            });
-          }}
-        >
-          {mutation.isPending
-            ? t('managerCheckingPrerequisites')
-            : t('managerPrepareUpdate')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            disabled={
+              busy ||
+              !status.available ||
+              blocked ||
+              !image.trim() ||
+              (!manualSelection &&
+                (!release.data ||
+                  release.isError ||
+                  (!!release.data.targetImage &&
+                    !release.data.updateAvailable)))
+            }
+            onClick={() => {
+              // Keep the reviewed target fixed if release discovery finishes later.
+              setImage(image.trim());
+              const target =
+                !manualSelection &&
+                release.data?.targetDigest &&
+                release.data.targetImage === image
+                  ? `ghcr.io/maxhugit/mergeron@${release.data.targetDigest}`
+                  : image.trim();
+              mutation.mutate({
+                action: 'plan',
+                input: { images: { application: target } },
+              });
+            }}
+          >
+            {mutation.isPending
+              ? t('managerCheckingPrerequisites')
+              : t('managerPrepareUpdate')}
+          </Button>
+          {trailingActions}
+        </div>
       </div>
       {plan && (
         <div className="space-y-2 text-sm">

@@ -21,6 +21,11 @@ const GeneralSettings = lazy(() =>
     default: module.GeneralSettings,
   })),
 );
+const InfrastructureSettings = lazy(() =>
+  import('./infrastructure-settings').then((module) => ({
+    default: module.InfrastructureSettings,
+  })),
+);
 const OnlyOfficeSettings = lazy(() =>
   import('./onlyoffice-settings').then((module) => ({
     default: module.OnlyOfficeSettings,
@@ -121,6 +126,7 @@ export function SettingsPage() {
           }
         >
           {section === 'general' && <GeneralSettings />}
+          {section === 'infrastructure' && <InfrastructureSettings />}
           {section === 'onlyOffice' && <OnlyOfficeSettings />}
           {section === 'account' && <AccountSettings />}
           {section === 'people' && <PeopleManager showHeading={false} />}

@@ -41,6 +41,8 @@
   "managerCheckingPrerequisites": "Checking prerequisites…",
   "managerConfirmUpdate": "Install and restart",
   "managerInfrastructureDetails": "Infrastructure and Mergeron Manager status",
+  "managerInfrastructure": "Infrastructure",
+  "managerInfrastructureDescription": "Review Mergeron Manager, service health and protected persistent storage.",
   "managerTransactionalUpdate": "Transactional update",
   "managerUpdateSafetyDescription": "The Manager saves the stopped application state, checks service health and restores the previous version if an update fails.",
   "managerUpdatePreparing": "Preparing images and checking prerequisites",

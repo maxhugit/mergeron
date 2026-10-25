@@ -70,7 +70,8 @@ export function sectionLabel(section: string): string {
 }
 
 export function settingsPageLabel(section: string): string {
-  if (section === 'general') return 'Server general settings';
+  if (section === 'general') return 'Server';
+  if (section === 'infrastructure') return 'managerInfrastructure';
   if (section === 'files') return 'File settings';
   if (section === 'terminal') return 'Terminal settings';
   return sectionLabel(section);
@@ -81,6 +82,7 @@ export function settingsPageDescription(section: string): string {
   const descriptions: Record<string, string> = {
     general:
       'Manage server runtime settings. Personal appearance and session logout are available from My account.',
+    infrastructure: 'managerInfrastructureDescription',
     onlyOffice: 'onlyOfficeSettingsDescription',
     people:
       'Create people before they connect. The manual reference uniquely identifies each person.',

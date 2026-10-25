@@ -109,7 +109,7 @@ function MobileOverflowMenu({
 export function ChatHeader() {
   const session = usePlatformSession();
   const { isAdministrator } = session;
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'manager'], { nsMode: 'fallback' });
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const resourceRoute = /^\/projects\/([^/]+)\/resources\/([^/]+)\/?$/.exec(
