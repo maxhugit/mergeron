@@ -26,6 +26,10 @@ import {
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { parseGitChanges, WorkspaceGitService } from './workspace-git.service';
+import { WorkspaceGitActionsService } from './workspace-git-actions.service';
+import { GitMutationGateService } from '../threads/git-mutation-gate.service';
+import type { ThreadExecutionInventoryService } from '../threads/thread-execution-inventory.service';
+import type { CodexProcessManager } from '../codex/codex-process-manager.service';
 
 const exec = promisify(execFile);
 let root: string;
@@ -33,6 +37,8 @@ let database: TestDatabase;
 let resources: WorkspaceResourcesService;
 let copies: WorkspaceCopiesService;
 let service: WorkspaceGitService;
+let actions: WorkspaceGitActionsService;
+let active: string[];
 let copyId: string;
 let cwd: string;
 const git = (args: string[]) => exec('git', ['-C', cwd, ...args]);
@@ -96,6 +102,20 @@ beforeEach(async () => {
   );
   copies = new WorkspaceCopiesService(database.db, resources);
   service = new WorkspaceGitService(copies, resources);
+  active = [];
+  const gate = new GitMutationGateService(
+    {
+      snapshot: () => active,
+    } as ThreadExecutionInventoryService,
+    { getClient: () => ({}) } as CodexProcessManager,
+  );
+  actions = new WorkspaceGitActionsService(
+    database.db,
+    service,
+    copies,
+    resources,
+    gate,
+  );
   const copy = await copies.create('p', 'remote', {});
   copyId = copy.id;
   cwd = copy.localPath!;
@@ -299,4 +319,229 @@ it('parses porcelain without splitting whitespace or renames into phantom change
     { path: 'new', originalPath: 'old', status: 'R ' },
     { path: 'new\nfile', status: '??' },
   ]);
+});
+
+describe('confirmed actions', () => {
+  const writable = () =>
+    resources.update('p', 'remote', {
+      accessMode: 'read_write',
+      address: 'https://github.com/example/demo.git',
+    });
+  const staged = async () => {
+    await writeFile(path.join(cwd, 'README.md'), 'staged\n');
+    await git(['add', 'README.md']);
+    return service.snapshot('p', copyId);
+  };
+  const identity = {
+    message: 'Reviewed commit',
+    authorName: 'Reviewer',
+    authorEmail: 'reviewer@example.invalid',
+  };
+
+  it('commits the frozen reviewed index and preserves unstaged changes and the real index', async () => {
+    writable();
+    const state = await staged();
+    await writeFile(path.join(cwd, 'README.md'), 'unstaged\n');
+    const index = await readFile(path.join(cwd, '.git/index'));
+    const preview = await service.stagedDiff('p', copyId);
+    expect(preview.diff).toContain('+staged');
+    expect(preview.diff).not.toContain('+unstaged');
+    expect(preview.fingerprint).toBe(state.fingerprint);
+    const result = await actions.commit('p', copyId, {
+      ...identity,
+      fingerprint: state.fingerprint,
+    });
+    expect((await git(['show', 'HEAD:README.md'])).stdout).toBe('staged\n');
+    expect((await git(['rev-parse', 'HEAD^'])).stdout.trim()).toBe(state.head);
+    expect(result.sha).toBe((await git(['rev-parse', 'HEAD'])).stdout.trim());
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'unstaged\n',
+    );
+    expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+  });
+  it('blocks stale index, read-only resource, busy agent and empty commits', async () => {
+    let state = await staged();
+    await expect(
+      actions.commit('p', copyId, {
+        ...identity,
+        fingerprint: state.fingerprint,
+      }),
+    ).rejects.toThrow('GIT_READ_ONLY');
+    writable();
+    await git(['reset', 'HEAD', '--', 'README.md']);
+    await expect(
+      actions.commit('p', copyId, {
+        ...identity,
+        fingerprint: state.fingerprint,
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    state = await service.snapshot('p', copyId);
+    await expect(
+      actions.commit('p', copyId, {
+        ...identity,
+        fingerprint: state.fingerprint,
+      }),
+    ).rejects.toThrow('GIT_NOTHING_STAGED');
+    active = ['running-agent'];
+    await expect(
+      actions.commit('p', copyId, {
+        ...identity,
+        fingerprint: state.fingerprint,
+      }),
+    ).rejects.toThrow('GIT_BUSY');
+  });
+  it('does not run local hooks or signing when committing', async () => {
+    writable();
+    const state = await staged();
+    const marker = path.join(root, 'hook-executed');
+    await writeFile(
+      path.join(cwd, '.git/hooks/pre-commit'),
+      `#!/bin/sh\ntouch '${marker}'\n`,
+      { mode: 0o700 },
+    );
+    await git(['config', 'commit.gpgsign', 'true']);
+    await git(['config', 'gpg.program', `/not/a/program`]);
+    await actions.commit('p', copyId, {
+      ...identity,
+      fingerprint: state.fingerprint,
+    });
+    await expect(readFile(marker)).rejects.toThrow();
+  });
+  it('pushes only the reviewed SHA to the registered HTTPS source, with isolated config and no force', async () => {
+    writable();
+    resources.update('p', 'remote', {
+      address: 'https://github.com/example/demo.git',
+      secret: { password: 'test-password' },
+    });
+    const state = await service.snapshot('p', copyId);
+    const original = service.git.bind(service) as WorkspaceGitService['git'];
+    const pushed: string[][] = [];
+    vi.spyOn(service, 'git').mockImplementation(
+      async (directory, args, env, timeout) => {
+        if (args.includes('push')) {
+          pushed.push(args);
+          expect(directory).not.toBe(cwd);
+          expect(args).toContain(`${state.head}:refs/heads/main`);
+          expect(args).not.toContain('--force');
+          expect(args).not.toContain('--force-with-lease');
+          expect(env?.MERGERON_GIT_PASSWORD).toBe('test-password');
+          expect(args).toContain('http.followRedirects=false');
+          expect(args).toContain('credential.helper=');
+          return '';
+        }
+        return original(directory, args, env, timeout);
+      },
+    );
+    await actions.push('p', copyId, {
+      fingerprint: state.fingerprint,
+      address: 'https://github.com/example/demo.git',
+    });
+    expect(pushed).toHaveLength(1);
+  });
+  it('refuses SSH pushes from this panel rather than using uncontrolled SSH configuration', async () => {
+    writable();
+    resources.update('p', 'remote', {
+      address: 'git@github.com:example/demo.git',
+    });
+    const state = await service.snapshot('p', copyId);
+    await expect(
+      actions.push('p', copyId, {
+        fingerprint: state.fingerprint,
+        address: 'git@github.com:example/demo.git',
+      }),
+    ).rejects.toThrow('GIT_HTTPS_REQUIRED');
+  });
+  it('rechecks PR checks and both revisions, then sends the expected head to GitHub', async () => {
+    const resource = resources.create('p', {
+      type: 'git',
+      name: 'GitHub',
+      address: 'https://github.com/example/demo.git',
+      rootPath: '/',
+      accessMode: 'read_write',
+      secret: { password: 'token' },
+    });
+    const state = {
+      address: 'https://github.com/example/demo.git',
+      head: 'a'.repeat(40),
+      baseHead: 'b'.repeat(40),
+      draft: false,
+      mergeable: true,
+      mergeableState: 'clean',
+      limited: false,
+      items: [{ id: 'build', name: 'build', status: 'success' }],
+      inspectedAt: 1,
+    };
+    const checks = vi.spyOn(service, 'checks').mockResolvedValue(state);
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ merged: true, sha: 'c'.repeat(40) }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      actions.merge('p', resource.id, '12', {
+        head: state.head,
+        baseHead: 'old',
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    expect(fetch).not.toHaveBeenCalled();
+    checks.mockResolvedValueOnce({
+      ...state,
+      items: [{ id: 'build', name: 'build', status: 'pending' }],
+    });
+    await expect(actions.merge('p', resource.id, '12', state)).rejects.toThrow(
+      'GIT_MERGE_BLOCKED',
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(
+      actions.merge('p', resource.id, '12', state),
+    ).resolves.toMatchObject({ merged: true });
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.github.com/repos/example/demo/pulls/12/merge',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ sha: state.head, merge_method: 'merge' }),
+        redirect: 'error',
+      }),
+    );
+  });
+
+  it('rejects changed push destinations and treats lost merge confirmation as uncertain', async () => {
+    writable();
+    const state = await service.snapshot('p', copyId);
+    await expect(
+      actions.push('p', copyId, {
+        fingerprint: state.fingerprint,
+        address: 'https://other.example/repo.git',
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    const resource = resources.create('p', {
+      type: 'git',
+      name: 'GitHub',
+      address: 'https://github.com/example/demo.git',
+      rootPath: '/',
+      accessMode: 'read_write',
+      secret: { password: 'token' },
+    });
+    const checks = {
+      head: 'a'.repeat(40),
+      baseHead: 'b'.repeat(40),
+      draft: false,
+      mergeable: true,
+      mergeableState: 'clean',
+      limited: false,
+      items: [{ id: 'build', name: 'build', status: 'success' }],
+      inspectedAt: 1,
+    };
+    vi.spyOn(service, 'checks').mockResolvedValue(checks);
+    const fetch = vi.fn().mockRejectedValue(new Error('network lost'));
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      actions.merge('p', resource.id, '12', {
+        ...checks,
+        address: resource.address,
+      }),
+    ).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
 });

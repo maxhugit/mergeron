@@ -234,9 +234,7 @@ it('never interprets absent checks or unknown mergeability as approval', async (
       'Aucun check signalé. Cela ne signifie pas que la fusion est autorisée.',
     ),
   ).toBeInTheDocument();
-  expect(
-    screen.queryByRole('button', { name: /fusionner/i }),
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /fusionner/i })).toBeDisabled();
 });
 it('shows failed inspection instead of a stale clean state', async () => {
   inventory.copies = [copy];

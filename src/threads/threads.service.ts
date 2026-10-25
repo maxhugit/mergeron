@@ -58,6 +58,7 @@ import {
 import { ThreadWorkspaceOverridesService } from './thread-workspace-overrides.service';
 import { ThreadMetadataService } from './thread-metadata.service';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
+import { GitMutationGateService } from './git-mutation-gate.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
@@ -91,6 +92,7 @@ export class ThreadsService {
     private readonly activeFolders: ActiveFoldersService,
     @Optional() private readonly knowledge?: ProjectKnowledgeService,
     @Optional() private readonly deliverables?: DeliverablesService,
+    @Optional() private readonly gitMutations?: GitMutationGateService,
     @Optional() private readonly processManager?: CodexProcessManager,
     @Optional()
     private readonly documentPublication?: DocumentPublicationService,
@@ -492,12 +494,13 @@ export class ThreadsService {
         effectiveCwd,
         params.threadId,
       );
+    const send = () =>
+      this.codex.request<v2.TurnStartResponse>('turn/start', effectiveParams);
     let response: v2.TurnStartResponse;
     try {
-      response = await this.codex.request<v2.TurnStartResponse>(
-        'turn/start',
-        effectiveParams,
-      );
+      response = await (this.gitMutations
+        ? this.gitMutations.startTurn(send)
+        : send());
       publication?.bind(response.turn.id);
     } catch (error) {
       publication?.abort();

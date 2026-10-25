@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { GitMutationGateService } from './git-mutation-gate.service';
 import { ThreadResponseDetailService } from './thread-response-detail.service';
 import { ThreadResponseDetailController } from './thread-response-detail.controller';
 import { DeliverablesModule } from '../deliverables/deliverables.module';
@@ -60,6 +61,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     WorkspacesManagementController,
   ],
   providers: [
+    GitMutationGateService,
     ThreadResponseDetailService,
     KnowledgeProposalsObserverService,
     ThreadsService,
@@ -80,6 +82,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     ProjectConnectionPolicyService,
   ],
   exports: [
+    GitMutationGateService,
     ThreadsService,
     ThreadsBranchingService,
     ThreadsDeletePlannerService,

@@ -360,6 +360,19 @@ describe('ThreadsService', () => {
     );
   });
 
+  it('does not send turn/start while the Git mutation gate refuses admission', async () => {
+    const startTurn = vi.fn().mockRejectedValue(new Error('GIT_BUSY'));
+    Object.assign(service, { gitMutations: { startTurn } });
+    await expect(
+      service.startTurn({ threadId: 't1', input: [] }),
+    ).rejects.toThrow('GIT_BUSY');
+    expect(startTurn).toHaveBeenCalledOnce();
+    expect(mockCodex.request).not.toHaveBeenCalledWith(
+      'turn/start',
+      expect.anything(),
+    );
+  });
+
   it('refreshes shared knowledge on subsequent turns without changing the cwd, user input or branch preview', async () => {
     mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
     mockKnowledge.contextForConversation

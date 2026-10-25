@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { GitBranch, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import {
   Dialog,
   DialogContent,
@@ -328,6 +329,19 @@ function RepositoryPanel({
             {t('gitInspectionError')}
           </p>
         )}
+        {copy &&
+          copy.accessMode === 'read_write' &&
+          resource.accessMode === 'read_write' &&
+          snapshot.data &&
+          !snapshot.error && (
+            <GitCopyActions
+              key={copy.id}
+              projectId={projectId}
+              copyId={copy.id}
+              snapshot={snapshot.data}
+              address={resource.address}
+            />
+          )}
       </div>
       {resource.enabled && (
         <Tabs
@@ -437,7 +451,12 @@ function RepositoryPanel({
             {snapshot.data?.branchesLimited && <p>{t('gitLimited')}</p>}
           </TabsContent>
           <TabsContent value="prs" className="min-h-0 flex-1 overflow-auto">
-            <PullRequests projectId={projectId} resourceId={resource.id} />
+            <PullRequests
+              projectId={projectId}
+              resourceId={resource.id}
+              canWrite={resource.accessMode === 'read_write'}
+              resourceAddress={resource.address}
+            />
           </TabsContent>
         </Tabs>
       )}
@@ -547,12 +566,18 @@ function Changes({
 function PullRequests({
   projectId,
   resourceId,
+  canWrite,
+  resourceAddress,
 }: {
   projectId: string;
   resourceId: string;
+  canWrite: boolean;
+  resourceAddress: string | null;
 }) {
   const { t } = useTranslation('workspaces');
   const [number, setNumber] = useState<number | null>(null);
+  const [lastMerged, setLastMerged] = useState<number | null>(null);
+  const refreshButton = useRef<HTMLButtonElement | null>(null);
   const statusLabels: Record<string, string> = {
     success: t('gitCheckSuccess'),
     failure: t('gitCheckFailure'),
@@ -595,6 +620,7 @@ function PullRequests({
   return (
     <div className="space-y-3 p-3 text-xs">
       <Button
+        ref={refreshButton}
         size="sm"
         variant="outline"
         disabled={prs.isFetching || checks.isFetching}
@@ -605,6 +631,11 @@ function PullRequests({
       >
         {t('gitRefresh')}
       </Button>
+      {lastMerged !== null && (
+        <p role="status">
+          #{lastMerged} · {t('gitActionMerged')}
+        </p>
+      )}
       {prs.isPending ? (
         <p role="status">{t('gitLoading')}</p>
       ) : prs.error ? (
@@ -688,6 +719,18 @@ function PullRequests({
                       <p className="text-muted-foreground">
                         {t('gitMergeHelp')}
                       </p>
+                      {canWrite && (
+                        <GitMergeAction
+                          key={pr.number}
+                          projectId={projectId}
+                          resourceId={resourceId}
+                          number={pr.number}
+                          checks={checks.data}
+                          address={resourceAddress}
+                          onMerged={() => setLastMerged(pr.number)}
+                          onCloseFocus={() => refreshButton.current?.focus()}
+                        />
+                      )}
                     </div>
                   )
                 ))}
