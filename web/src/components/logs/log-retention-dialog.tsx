@@ -204,10 +204,10 @@ export function LogRetentionDialog({
               disabled={mutation.isPending}
               onClick={onClose}
             >
-              {t('cancel')}
+              {t('cancel', { ns: 'common' })}
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {t('save')}
+              {t('save', { ns: 'common' })}
             </Button>
           </DialogFooter>
         </form>
