@@ -14,6 +14,10 @@ import { useFilesStore } from '@/stores/files-store';
 import { useLayoutStore } from '@/stores/layout-store';
 
 const addRoot = vi.hoisted(() => vi.fn());
+vi.mock('./workspace-git-panel', () => ({
+  WorkspaceGitPanel: ({ children }: { children: import('react').ReactNode }) =>
+    children,
+}));
 vi.mock('@/generated/api', () => ({ filesAddRoot: addRoot }));
 vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => (
