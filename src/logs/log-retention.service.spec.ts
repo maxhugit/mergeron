@@ -31,18 +31,18 @@ describe('log retention administration', () => {
   it('never deletes files when reading storage or saving settings', async () => {
     const { settings, service } = create();
     expect(await service.storage()).toMatchObject({ estimatedBytes: 25 });
-    await service.update(DEFAULT_LOG_RETENTION);
+    service.update(DEFAULT_LOG_RETENTION);
     expect(settings.updateSetting).toHaveBeenCalledWith(
       LOG_RETENTION_KEY,
       DEFAULT_LOG_RETENTION,
     );
     expect(io.prune).not.toHaveBeenCalled();
   });
-  it('rejects invalid settings without persisting them', async () => {
+  it('rejects invalid settings without persisting them', () => {
     const { settings, service } = create();
-    await expect(
+    expect(() =>
       service.update({ application: { enabled: true, maxFiles: 0 } }),
-    ).rejects.toThrow('Invalid');
+    ).toThrow('Invalid');
     expect(settings.updateSetting).not.toHaveBeenCalled();
   });
   it('disables cleanup if stored settings are malformed', () => {

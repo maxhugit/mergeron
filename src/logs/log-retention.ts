@@ -129,8 +129,8 @@ export interface LogStorageFile {
 export async function logStorageInventory(
   directory = LOG_DIRECTORY,
 ): Promise<LogStorageFile[]> {
-  const entries = await readdir(directory).catch((error) => {
-    if (error.code === 'ENOENT') return [];
+  const entries = await readdir(directory).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw error;
   });
   const files: LogStorageFile[] = [];
@@ -192,8 +192,8 @@ export async function pruneLogArchives(
         stat.mtimeMs === file.modifiedAt &&
         stat.size === file.bytes
       )
-        await unlink(path).catch((error) => {
-          if (error.code !== 'ENOENT') throw error;
+        await unlink(path).catch((error: unknown) => {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         });
     }
   }

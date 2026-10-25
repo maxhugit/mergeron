@@ -31,7 +31,7 @@ const PAGE_SIZE = 100;
 const LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
 export function LogsMonitor() {
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useTranslation(['logs', 'common']);
   const [offset, setOffset] = useState(0);
   const [levels, setLevels] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);

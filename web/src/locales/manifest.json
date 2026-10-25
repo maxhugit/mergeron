@@ -5,5 +5,11 @@
     { "code": "en", "nativeLabel": "English" },
     { "code": "fr", "nativeLabel": "Français" }
   ],
-  "namespaces": ["authentication", "common", "manager", "projectArchives"]
+  "namespaces": [
+    "authentication",
+    "common",
+    "logs",
+    "manager",
+    "projectArchives"
+  ]
 }

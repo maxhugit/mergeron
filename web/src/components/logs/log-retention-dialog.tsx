@@ -25,7 +25,7 @@ export function LogRetentionDialog({
   storage: LogStorage;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['logs', 'common']);
   const client = useQueryClient();
   const [policy, setPolicy] = useState<LogRetentionPolicy>(() =>
     structuredClone(storage.policy),

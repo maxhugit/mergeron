@@ -14,6 +14,7 @@ import {
   logStorageInventory,
   pruneLogArchives,
   validateLogRetention,
+  type LogRetentionPolicy,
 } from './log-retention';
 
 @Injectable()
@@ -59,9 +60,9 @@ export class LogRetentionService implements OnModuleInit, OnModuleDestroy {
       policy: this.policy(),
     };
   }
-  async update(value: unknown) {
+  update(value: unknown) {
     requireExecutionAccess();
-    let policy;
+    let policy: LogRetentionPolicy;
     try {
       policy = validateLogRetention(value);
     } catch {
