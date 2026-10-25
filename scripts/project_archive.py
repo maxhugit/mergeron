@@ -25,11 +25,12 @@ import zipfile
 from datetime import datetime, timezone
 
 FORMAT = 1
-AGENT_CODEC = '0.153'
+AGENT_CODECS = {'0.153': 'codex-history-0.153', '0.162': 'codex-history-state5-v2',
+                '0.164': 'codex-history-state5-v2'}
 CAPABILITIES = {'relational-v1', 'workspace-tree-v1', 'simple-chat-v1',
                 'tasks-v1', 'deliverables-v1', 'knowledge-v1', 'automation-v1',
                 'workspace-connections-v1', 'conversation-branches-v1', 'codex-history-0.153',
-                'agent-display-detail-v1'}
+                'agent-display-detail-v1', 'codex-history-state5-v2', 'autonomous-branches-v1'}
 MAX_BYTES = 1024 ** 3
 MAX_ZIP = 96 * 1024 ** 2
 MAX_ENTRY = 256 * 1024 ** 2
@@ -162,7 +163,140 @@ def allowed_table(name):
             name in THREAD_TABLES or name in {'simple_chat_threads', 'simple_chat_messages', 'people', 'settings'}) and name not in EXCLUDED
 
 
-def select_project(db, project_id):
+def agent_codec(version):
+    if not isinstance(version, str) or not re.fullmatch(r'\d+\.\d+\.\d+', version):
+        fail('Version du moteur d’agents indisponible ou invalide.')
+    minor = '.'.join(version.split('.')[:2])
+    if minor not in AGENT_CODECS:
+        fail('Moteur Codex ' + version + ' non pris en charge par les codecs de transport vérifiés (0.153.x, 0.162.x, 0.164.x).')
+    return minor, AGENT_CODECS[minor]
+
+
+def history_base(payload):
+    base = payload.get('history_base', payload.get('historyBase'))
+    if base is None:
+        return None
+    if not isinstance(base, dict):
+        fail('La base d’historique d’une branche est invalide.')
+    parent = base.get('thread_id', base.get('threadId'))
+    offset = base.get('end_byte_offset', base.get('endByteOffset'))
+    ordinal = base.get('end_ordinal_exclusive', base.get('endOrdinalExclusive'))
+    if not isinstance(parent, str) or not parent or type(offset) is not int or offset < 0 or type(ordinal) is not int or ordinal < 0:
+        fail('La base d’historique d’une branche est invalide.')
+    return parent, offset, ordinal
+
+
+def history_header(stream):
+    line = stream.readline(MAX_JSON + 1)
+    if len(line) > MAX_JSON:
+        fail('L’en-tête d’historique dépasse les limites de transport.')
+    event = json.loads(line)
+    if not isinstance(event, dict) or event.get('type') != 'session_meta' or not isinstance(event.get('payload'), dict):
+        fail('L’historique d’un agent ne possède pas d’en-tête reconnu.')
+    return event['payload']
+
+
+def validate_branch_topology(data, thread_ids):
+    for table in THREAD_TABLES:
+        for record in data.get(table, []):
+            if any(v and k.endswith('thread_id') and v not in thread_ids for k, v in record.items()):
+                fail('Une branche référence une conversation hors du ZIP : ' + table)
+    groups = {g['group_id'] for g in data.get('conversation_branch_groups', [])}
+    if any(v['group_id'] not in groups for v in data.get('conversation_branch_versions', [])):
+        fail('Groupe de branche absent du ZIP.')
+    edges = {e['child_thread_id']: e['parent_thread_id'] for e in data.get('conversation_branch_edges', [])}
+    for thread in edges:
+        seen = set()
+        while thread in edges:
+            if len(seen) > 400:
+                fail('La profondeur des branches dépasse la limite de transport.')
+            if thread in seen:
+                fail('Le graphe de branches contient un cycle.')
+            seen.add(thread)
+            thread = edges[thread]
+
+
+def validate_agent_versions(source, destination):
+    try:
+        origin, source_codec = agent_codec(source)
+        target, target_codec = agent_codec(destination)
+    except ArchiveError as error:
+        fail('Historique d’agent créé avec Codex ' + source + ', moteur cible ' + destination + '. ' + str(error))
+    if source_codec != target_codec or int(origin.split('.')[1]) > int(target.split('.')[1]):
+        fail('Historique d’agent créé avec Codex ' + source + ', moteur cible ' + destination + '. Cette conversion n’est pas prise en charge ; mettez la destination à jour avec un moteur compatible.')
+
+
+def autonomous_branches(db, selected, thread_ids, warnings):
+    """An induced graph: never traverse an outside conversation to export its data."""
+    names = tables(db)
+    if 'conversation_branch_edges' not in names:
+        return
+    candidates = {}
+    for column in ('child_thread_id', 'parent_thread_id', 'tree_root_thread_id'):
+        for edge in scoped_rows(db, 'conversation_branch_edges', column, thread_ids):
+            candidates[edge['child_thread_id']] = edge
+    edges = {key: edge for key, edge in candidates.items()
+             if edge['child_thread_id'] in thread_ids and edge['parent_thread_id'] in thread_ids}
+
+    def root(thread_id):
+        seen = set()
+        while thread_id in edges:
+            if len(seen) > 400:
+                fail('La profondeur des branches dépasse la limite de transport.')
+            if thread_id in seen:
+                fail('Le graphe de branches contient un cycle ; export impossible.')
+            seen.add(thread_id)
+            thread_id = edges[thread_id]['parent_thread_id']
+        return thread_id
+
+    boundary = any(e['child_thread_id'] not in thread_ids or e['parent_thread_id'] not in thread_ids
+                   or e['tree_root_thread_id'] not in thread_ids for e in candidates.values())
+    for edge in edges.values():
+        edge['tree_root_thread_id'] = root(edge['child_thread_id'])
+    selected['conversation_branch_edges'] = list(edges.values())
+    if 'conversation_branch_versions' in names and 'conversation_branch_groups' in names:
+        versions = scoped_rows(db, 'conversation_branch_versions', 'thread_id', thread_ids)
+        groups = {g['group_id']: g for g in scoped_rows(db, 'conversation_branch_groups', 'group_id', {v['group_id'] for v in versions})}
+        rebuilt, grouped = {}, {}
+        for version in versions:
+            original = groups.get(version['group_id'])
+            if original is None:
+                fail('Groupe de branche manquant ; export impossible.')
+            local_root = root(version['thread_id'])
+            group = dict(original)
+            if original['tree_root_thread_id'] != local_root:
+                boundary = True
+                group['group_id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, 'mergeron-archive-group:' + original['group_id'] + ':' + local_root))
+                group['tree_root_thread_id'] = local_root
+            rebuilt[group['group_id']] = group
+            version['group_id'] = group['group_id']
+            grouped.setdefault(group['group_id'], []).append(version)
+        for versions_in_group in grouped.values():
+            for position, version in enumerate(sorted(versions_in_group, key=lambda v: (v['version_index'], v['version_id'])), 1):
+                version['version_index'] = position
+        selected['conversation_branch_groups'] = list(rebuilt.values())
+        selected['conversation_branch_versions'] = versions
+    if 'conversation_branch_active_members' in names:
+        members = {}
+        for record in selected.get('conversation_branch_active_members', []):
+            if record['active_thread_id'] in thread_ids:
+                local_root = root(record['active_thread_id'])
+                boundary |= record['tree_root_thread_id'] != local_root
+                candidate = dict(record, tree_root_thread_id=local_root)
+            elif record['tree_root_thread_id'] in thread_ids:
+                boundary = True
+                local_root = root(record['tree_root_thread_id'])
+                candidate = dict(record, tree_root_thread_id=local_root, active_thread_id=local_root)
+            else:
+                continue
+            if local_root not in members or members[local_root]['updated_at'] < candidate['updated_at']:
+                members[local_root] = candidate
+        selected['conversation_branch_active_members'] = list(members.values())
+    if boundary:
+        warnings.append('Des liens de branches vers des conversations extérieures au projet ne sont pas transférés. Les conversations du projet conservent leur propre historique et deviennent autonomes ; aucune association de production n’est modifiée.')
+
+
+def select_project(db, project_id, warnings=None):
     """FK closure, excluding people as a traversal root (people span projects)."""
     names = {name for name in tables(db) if allowed_table(name)}
     selected = {name: [] for name in names}
@@ -202,11 +336,7 @@ def select_project(db, project_id):
             for record in scoped_rows(db, name, column, thread_ids | (simple_ids if name == 'conversation_owners' else set())):
                 records[json_bytes(record)] = record
         selected[name] = list(records.values())
-    # Never pull another project's conversations in through a cross-project edge.
-    for name in ('conversation_branch_edges', 'conversation_branch_active_members'):
-        for record in selected.get(name, []):
-            if any(v not in thread_ids for k, v in record.items() if 'thread_id' in k and v):
-                fail('Une branche d’agent appartient aussi à un autre projet. Dissociez cette dépendance avant l’export.')
+    autonomous_branches(db, selected, thread_ids, warnings if warnings is not None else [])
     person_ids = {v for records in selected.values() for r in records for k, v in r.items()
                   if (k.endswith('person_id') or k == 'assignee_id') and isinstance(v, str)}
     selected['people'] = scoped_rows(db, 'people', 'id', person_ids)
@@ -222,7 +352,7 @@ def native_database(home):
     return max(paths, key=lambda p: int(re.search(r'state_(\d+)', p.name)[1])) if paths else None
 
 
-def native_export(home, ids):
+def native_export(home, ids, warnings=None):
     if not ids:
         return None
     for file in Path(home).glob('*.sqlite'):
@@ -243,6 +373,12 @@ def native_export(home, ids):
         found = {r['id'] for r in selected.get('threads', [])}
         if found != ids:
             fail('Certains agents ne possèdent pas d’historique durable. Terminez leurs échanges avant l’export.')
+        for thread in selected['threads']:
+            with open_project_file(thread['rollout_path'], home) as stream:
+                payload = history_header(stream)
+            base = history_base(payload)
+            if base and base[0] not in ids and (base[1] or base[2]):
+                fail('Une branche dépend d’un préfixe d’historique stocké dans une conversation extérieure au projet. Ce préfixe doit être matérialisé avant un export autonome ; aucun historique ne sera supprimé et aucune association ne sera modifiée.')
         project_ids = {r.get('project_id') for r in selected['threads']}
         section_ids = {r.get('thread_section_id') for r in selected['threads']}
         for name, key, values in [('projects', 'id', project_ids), ('project_roots', 'project_id', project_ids), ('thread_sections', 'id', section_ids)]:
@@ -252,9 +388,11 @@ def native_export(home, ids):
             cols = {c['name'] for c in columns(db, name)}
             if 'thread_id' in cols and scoped_rows(db, name, 'thread_id', ids):
                 fail('Ce moteur d’agents utilise une section non prise en charge : ' + name)
-        for record in selected.get('thread_spawn_edges', []):
-            if record['parent_thread_id'] not in ids or record['child_thread_id'] not in ids:
-                fail('Un sous-agent est rattaché hors du projet : l’export ne peut pas être complet.')
+        if 'thread_spawn_edges' in selected:
+            spawn = selected['thread_spawn_edges']
+            selected['thread_spawn_edges'] = [r for r in spawn if r['parent_thread_id'] in ids and r['child_thread_id'] in ids]
+            if len(selected['thread_spawn_edges']) != len(spawn) and warnings is not None:
+                warnings.append('Des liens de sous-agents extérieurs au projet ne sont pas transférés. Aucun historique appartenant à une autre conversation n’est ajouté au ZIP.')
         auxiliary = {}
         for filename, allowed in AUXILIARY.items():
             if not (Path(home) / filename).is_file():
@@ -333,11 +471,11 @@ def export_archive(options):
 
 def export_snapshot(options, source_db):
     source_db.execute('BEGIN')
-    data, thread_ids = select_project(source_db, options['projectId'])
-    native = native_export(options['codexHome'], thread_ids)
+    warnings = []
+    data, thread_ids = select_project(source_db, options['projectId'], warnings)
+    native = native_export(options['codexHome'], thread_ids, warnings)
     if native:
-        if '.'.join(options.get('codexVersion', '').split('.')[:2]) != AGENT_CODEC:
-            fail('Le codec de transport des agents comprend Codex ' + AGENT_CODEC + '.x ; moteur source : ' + (options.get('codexVersion') or 'indisponible') + '. Aucun historique ne sera ignoré : installez un moteur ou un codec compatible avant l’export.')
+        _, codec = agent_codec(options.get('codexVersion', ''))
         native['engineVersion'] = options.get('codexVersion', '')
     roots = []
     for workspace in data.get('project_workspaces', []):
@@ -377,14 +515,14 @@ def export_snapshot(options, source_db):
         safe_file(file, upload_root)
         roots.append({'key': 'attachment-' + str(len(roots)), 'source': file, 'kind': 'attachment'})
     manifest = {'kind': 'mergeron.project', 'formatVersion': FORMAT,
-                'requiredCapabilities': sorted(CAPABILITIES - ({'codex-history-0.153'} if not native else set())),
+                'requiredCapabilities': sorted((CAPABILITIES - set(AGENT_CODECS.values()) - {'autonomous-branches-v1'}) | ({codec} if native else set()) | ({'autonomous-branches-v1'} if warnings else set())),
                 'applicationVersion': options.get('version', 'unknown'), 'exportedAt': int(time.time() * 1000),
                 'project': {'id': options['projectId'], 'name': data['projects'][0]['name']},
                 'tables': data, 'schemas': {n: columns(source_db, n) for n in data},
                 'agents': native, 'roots': roots, 'files': [], 'directories': [],
                 'warnings': ['Les identifiants de connexion ne sont pas transférés. Les agents et automatisations importés restent arrêtés.',
                              'Les fichiers du projet peuvent contenir des données confidentielles. Le ZIP n’est pas chiffré.',
-                             'Les connexions externes sont conservées comme définitions désactivées, sans leurs secrets ni une copie de leurs serveurs distants.']}
+                             'Les connexions externes sont conservées comme définitions désactivées, sans leurs secrets ni une copie de leurs serveurs distants.'] + warnings}
     if not any(r['key'].startswith('thread-response-detail:') for r in data.get('settings', [])):
         manifest['requiredCapabilities'].remove('agent-display-detail-v1')
     size = 0
@@ -597,6 +735,7 @@ def preview(options, manifest):
     if manifest['project']['id'] != project_id:
         fail('L’identité du projet ne correspond pas à l’inventaire.')
     thread_ids = {r['thread_id'] for r in manifest['tables'].get('project_agent_threads', [])}
+    validate_branch_topology(manifest['tables'], thread_ids)
     if any(r['key'] not in {prefix + tid for tid in thread_ids for prefix in ('thread-workspace:', 'thread-response-detail:')} for r in manifest['tables'].get('settings', [])):
         fail('Le ZIP ne peut pas contenir de réglages globaux de l’installation.')
     if any(r['key'].startswith('thread-response-detail:') and r['value'] not in ('hidden', 'collapsed', 'expanded') for r in manifest['tables'].get('settings', [])):
@@ -652,6 +791,11 @@ def preview(options, manifest):
             if not any(r['key'] == 'agent-' + record['id'] and r['source'] == record['rollout_path'] for r in manifest['roots']):
                 fail('Le chemin d’historique ne correspond pas à son agent.')
         native_ids = {r['id'] for r in native['tables']['threads']}
+        if native_ids != thread_ids:
+            fail('L’inventaire natif ne correspond pas aux agents associés au projet.')
+        for edge in native['tables'].get('thread_spawn_edges', []):
+            if edge['parent_thread_id'] not in native_ids or edge['child_thread_id'] not in native_ids:
+                fail('Un lien de sous-agent pointe hors du ZIP.')
         for name in native.get('sessionIndex', []):
             if set(name) != {'id', 'thread_name', 'updated_at'} or name['id'] not in native_ids or not isinstance(name['thread_name'], str) or len(json_bytes(name)) > 4000 or not isinstance(name['updated_at'], str):
                 fail('L’index des noms d’agents utilise un format incompatible.')
@@ -669,11 +813,10 @@ def preview(options, manifest):
             with connect(Path(options['codexHome']) / filename, True) as db:
                 validate_tables(db, section['tables'], section['schemas'], True, AUXILIARY[filename])
         # Raw history storage is a native versioned contract, independent of app releases.
-        versions = {native.get('engineVersion', '')}
-        destination = options.get('codexVersion', '')
-        for version in versions:
-            if '.'.join(version.split('.')[:2]) != AGENT_CODEC or not re.match(r'^\d+\.\d+\.', version) or version.split('.')[:2] != destination.split('.')[:2]:
-                fail('Historique d’agent créé avec Codex ' + version + ', moteur cible ' + (destination or 'indisponible') + '. Les versions majeure et mineure du moteur doivent correspondre ; les versions de Mergeron peuvent différer.')
+        validate_agent_versions(native.get('engineVersion', ''), options.get('codexVersion', ''))
+        _, capability = agent_codec(native['engineVersion'])
+        if capability not in manifest['requiredCapabilities']:
+            fail('Le ZIP ne déclare pas le codec requis pour son historique d’agents.')
     return {'compatible': True, 'projectName': manifest['project']['name'],
             'sourceVersion': manifest['applicationVersion'], 'targetVersion': options.get('version', 'unknown'),
             'formatVersion': FORMAT, 'files': len(manifest['files']),
@@ -904,7 +1047,37 @@ def import_archive(options, archive, manifest):
             if isinstance(record.get('mtimeNs'), int):
                 os.utime(destination, ns=(record['mtimeNs'], record['mtimeNs']))
         if native_records:
-            for record in native_records['threads']:
+            # Parents must be rewritten before children: history_base stores byte
+            # offsets into the parent's rollout, not into the child's file.
+            by_id = {r['id']: r for r in native_records['threads']}
+            bases = {}
+            for thread_id, thread in by_id.items():
+                with (agent_dir / Path(thread['rollout_path']).name).open('rb') as stream:
+                    bases[thread_id] = history_base(remap(history_header(stream), ids, paths))
+            ordered, visiting, visited = [], set(), set()
+
+            def visit(thread_id):
+                if len(visiting) > 400:
+                    fail('La profondeur des branches dépasse la limite de transport.')
+                if thread_id in visiting:
+                    fail('Le graphe natif d’historiques contient un cycle.')
+                if thread_id in visited:
+                    return
+                visiting.add(thread_id)
+                base = bases[thread_id]
+                if base:
+                    if base[0] in by_id:
+                        visit(base[0])
+                    elif base[1] or base[2]:
+                        fail('Un préfixe d’historique natif est absent du ZIP ; aucun agent ne sera publié.')
+                visiting.remove(thread_id)
+                visited.add(thread_id)
+                ordered.append(by_id[thread_id])
+
+            for thread_id in by_id:
+                visit(thread_id)
+            rewritten_offsets = {}
+            for record in ordered:
                 if not any(Path(record['rollout_path']).is_relative_to(Path(options['codexHome']).resolve() / part) for part in ('sessions', 'archived_sessions')):
                     fail('Le chemin de l’agent importé ne se trouve pas dans son dossier réservé.')
                 file = agent_dir / Path(record['rollout_path']).name
@@ -925,10 +1098,27 @@ def import_archive(options, archive, manifest):
                                 context = event['payload']
                                 if not Path(context.get('cwd', '/')).is_relative_to(target):
                                     context['cwd'] = record['cwd']
+                                if event['type'] == 'session_meta':
+                                    for key in ('forked_from_id', 'forkedFromId'):
+                                        if context.get(key) and context[key] not in by_id:
+                                            context[key] = None
+                                    base = history_base(context)
+                                    if base:
+                                        if base[0] not in by_id:
+                                            context.pop('history_base', None)
+                                            context.pop('historyBase', None)
+                                        else:
+                                            parent_offsets = rewritten_offsets[base[0]]
+                                            if base[1] not in parent_offsets:
+                                                fail('Le préfixe d’une branche ne correspond pas à une limite d’enregistrement de son parent.')
+                                            raw_base = context.get('history_base', context.get('historyBase'))
+                                            offset_key = 'end_byte_offset' if 'end_byte_offset' in raw_base else 'endByteOffset'
+                                            raw_base[offset_key] = parent_offsets[base[1]]
                             output.write(json_bytes(event) + b'\n')
                             offsets[source.tell()] = output.tell()
                         output.flush()
                         os.fsync(output.fileno())
+                    rewritten_offsets[record['id']] = offsets
                     for section in auxiliary_records.values():
                         for items in section.values():
                             for item in items:
@@ -1109,7 +1299,8 @@ def run(options):
         if manifest.get('agents') and action in ('preview', 'import'):
             source_minor = '.'.join(manifest['agents'].get('engineVersion', '').split('.')[:2])
             target_minor = '.'.join(options.get('codexVersion', '').split('.')[:2])
-            if source_minor == target_minor == AGENT_CODEC:
+            validate_agent_versions(manifest['agents'].get('engineVersion', ''), options.get('codexVersion', ''))
+            if source_minor in AGENT_CODECS and target_minor in AGENT_CODECS:
                 from project_archive_native import initialize_stores
                 required = set(manifest['agents'].get('auxiliary', {}))
                 if not required <= set(AUXILIARY):

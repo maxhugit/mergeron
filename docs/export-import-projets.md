@@ -70,6 +70,23 @@ Les
 historiques d’agents conservent leurs identifiants de tours/items, mais reçoivent
 de nouveaux identifiants de conversation. Les index paginés sont recalculés en
 fonction des nouveaux chemins et des nouvelles positions dans les fichiers JSONL.
+Les positions de préfixes partagés entre branches internes sont également
+recalculées après réécriture de l’historique parent.
+
+### Branches et liens vers d’autres projets
+
+L’export ne parcourt pas le graphe pour ajouter les conversations d’autres projets.
+Les agents associés au projet sont copiés avec leur historique propre ; les liens
+de navigation vers des branches ou sous-agents extérieurs sont retirés de la copie,
+avec un avertissement dans la fenêtre d’export et à l’analyse du ZIP. Les groupes
+de versions et la branche active sont réancrés sur les conversations incluses.
+Les messages et fichiers propres aux autres conversations ne sont pas ajoutés.
+**Aucune association ni donnée de la source n’est modifiée.**
+
+Si une branche ne possède pas son historique complet et dépend d’un préfixe
+stocké uniquement dans une conversation extérieure, l’export refuse explicitement
+de supprimer ce préfixe. Cette forme de dépendance nécessite encore une
+matérialisation dédiée ; la retirer manuellement ne garantit pas un export complet.
 
 ## Sécurité d’un transfert production → development
 
@@ -128,11 +145,15 @@ version de document absente/altérée. Le message indique la section ou le champ
 concerné. Une mise à jour du lecteur ou un convertisseur est alors nécessaire.
 
 Les agents possèdent leur propre format de stockage, distinct de Mergeron.
-Le premier codec est prévu pour **Codex 0.153.x**, vérifié avec **0.153.2**.
-Les versions majeure et mineure des moteurs source et destination doivent
-correspondre, et les structures réelles doivent rester compatibles. Une autre
-génération du moteur ou une nouvelle base d’historique est refusée explicitement,
-pas importée partiellement. Cela n’impose pas la même version de Mergeron.
+Le codec historique reste prévu pour **Codex 0.153.x**, vérifié avec **0.153.2**.
+Un second codec prend en charge **0.162.x** et **0.164.x**, avec un transfert réel
+vérifié de **0.162.1 vers 0.164.0** : création d’un historique paginé et d’une
+branche, import avec nouveaux identifiants puis relecture des tours par le moteur
+cible, sans compte ni appel de modèle. Le retour de 0.164 vers 0.162 est refusé.
+Les générations non vérifiées (y compris 0.163) et les nouvelles sections inconnues
+restent refusées. Les structures réelles, types et champs sont toujours contrôlés :
+une version reconnue n’autorise aucune perte de données. Cela n’impose pas la même
+version de Mergeron. Les nouvelles capacités du ZIP demandent un lecteur à jour.
 Un projet sans agents n’a pas cette dépendance au moteur.
 
 Sur une destination vide, les bases natives absentes sont initialisées par le
