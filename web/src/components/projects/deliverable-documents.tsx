@@ -119,7 +119,7 @@ export function DeliverableDocuments({
   const mutationError = request.error || addDocument.error || addVersion.error;
 
   return (
-    <section className="space-y-3 border-t pt-4">
+    <section className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold">{t('deliverableDocuments')}</h2>
@@ -131,17 +131,6 @@ export function DeliverableDocuments({
           <Plus className="h-4 w-4" /> {t('addDocument')}
         </Button>
       </div>
-      <label className="grid gap-1 text-sm" htmlFor={`document-version-comment-${item.id}`}>
-        {t('versionComment')}
-        <Input
-          id={`document-version-comment-${item.id}`}
-          value={comment}
-          disabled={busy}
-          maxLength={4000}
-          onChange={(event) => setComment(event.target.value)}
-          placeholder={t('optionalComment')}
-        />
-      </label>
       {!active.length && (
         <p className="text-sm text-muted-foreground">{t('noDocumentYet')}</p>
       )}
