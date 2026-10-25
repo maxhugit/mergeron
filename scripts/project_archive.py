@@ -30,7 +30,8 @@ AGENT_CODECS = {'0.153': 'codex-history-0.153', '0.162': 'codex-history-state5-v
 CAPABILITIES = {'relational-v1', 'workspace-tree-v1', 'simple-chat-v1',
                 'tasks-v1', 'deliverables-v1', 'knowledge-v1', 'automation-v1',
                 'workspace-connections-v1', 'conversation-branches-v1', 'codex-history-0.153',
-                'agent-display-detail-v1', 'codex-history-state5-v2', 'autonomous-branches-v1'}
+                'agent-display-detail-v1', 'codex-history-state5-v2', 'autonomous-branches-v1',
+                'operational-path-relocation-v1'}
 MAX_BYTES = 1024 ** 3
 MAX_ZIP = 96 * 1024 ** 2
 MAX_ENTRY = 256 * 1024 ** 2
@@ -296,7 +297,7 @@ def autonomous_branches(db, selected, thread_ids, warnings):
         warnings.append('Des liens de branches vers des conversations extérieures au projet ne sont pas transférés. Les conversations du projet conservent leur propre historique et deviennent autonomes ; aucune association de production n’est modifiée.')
 
 
-def select_project(db, project_id, warnings=None):
+def select_project(db, project_id, warnings=None, relocations=None):
     """FK closure, excluding people as a traversal root (people span projects)."""
     names = {name for name in tables(db) if allowed_table(name)}
     selected = {name: [] for name in names}
@@ -344,6 +345,20 @@ def select_project(db, project_id, warnings=None):
     for person in selected['people']:
         person['identity_subject'] = None
     selected['settings'] = scoped_rows(db, 'settings', 'key', {prefix + tid for tid in thread_ids for prefix in ('thread-workspace:', 'thread-response-detail:')})
+    primary = selected['projects'][0]['workspace_path']
+    workspace_paths = [r['path'] for r in selected.get('project_workspaces', [])]
+    for table, column, identity in [('project_tasks', 'workspace_path', 'id'),
+                                    ('project_agent_threads', 'workspace_path', 'thread_id'),
+                                    ('simple_chat_threads', 'cwd', 'id')]:
+        for record in selected.get(table, []):
+            path = record.get(column)
+            if isinstance(path, str) and path.startswith('/') and not any(path == root or path.startswith(root.rstrip('/') + '/') for root in workspace_paths):
+                if relocations is not None:
+                    relocations.append({'table': table, 'id': record[identity], 'column': column, 'source': path})
+                record[column] = primary
+                warning = 'Des chemins de travail extérieurs aux espaces du projet sont réaffectés au projet importé. Les chemins d’origine sont conservés dans sa provenance ; aucun dossier extérieur n’est copié.'
+                if warnings is not None and warning not in warnings:
+                    warnings.append(warning)
     return {name: records for name, records in selected.items() if records}, thread_ids
 
 
@@ -472,7 +487,8 @@ def export_archive(options):
 def export_snapshot(options, source_db):
     source_db.execute('BEGIN')
     warnings = []
-    data, thread_ids = select_project(source_db, options['projectId'], warnings)
+    relocations = []
+    data, thread_ids = select_project(source_db, options['projectId'], warnings, relocations)
     native = native_export(options['codexHome'], thread_ids, warnings)
     if native:
         _, codec = agent_codec(options.get('codexVersion', ''))
@@ -515,11 +531,12 @@ def export_snapshot(options, source_db):
         safe_file(file, upload_root)
         roots.append({'key': 'attachment-' + str(len(roots)), 'source': file, 'kind': 'attachment'})
     manifest = {'kind': 'mergeron.project', 'formatVersion': FORMAT,
-                'requiredCapabilities': sorted((CAPABILITIES - set(AGENT_CODECS.values()) - {'autonomous-branches-v1'}) | ({codec} if native else set()) | ({'autonomous-branches-v1'} if warnings else set())),
+                'requiredCapabilities': sorted((CAPABILITIES - set(AGENT_CODECS.values()) - {'autonomous-branches-v1', 'operational-path-relocation-v1'}) | ({codec} if native else set()) | ({'autonomous-branches-v1'} if warnings else set()) | ({'operational-path-relocation-v1'} if relocations else set())),
                 'applicationVersion': options.get('version', 'unknown'), 'exportedAt': int(time.time() * 1000),
                 'project': {'id': options['projectId'], 'name': data['projects'][0]['name']},
                 'tables': data, 'schemas': {n: columns(source_db, n) for n in data},
                 'agents': native, 'roots': roots, 'files': [], 'directories': [],
+                'relocatedOperationalPaths': relocations,
                 'warnings': ['Les identifiants de connexion ne sont pas transférés. Les agents et automatisations importés restent arrêtés.',
                              'Les fichiers du projet peuvent contenir des données confidentielles. Le ZIP n’est pas chiffré.',
                              'Les connexions externes sont conservées comme définitions désactivées, sans leurs secrets ni une copie de leurs serveurs distants.'] + warnings}
@@ -1146,6 +1163,7 @@ def import_archive(options, archive, manifest):
                 'exportedAt': manifest['exportedAt'],
                 'contacts': manifest['tables'].get('people', []),
                 'mcpServerIds': source_project.get('mcp_server_ids'), 'appIds': source_project.get('app_ids'),
+                'relocatedOperationalPaths': manifest.get('relocatedOperationalPaths', []),
                 'safetyOverrides': {'automationsPaused': True, 'contactsInactive': True, 'externalConnectionsDisabled': True},
             }
             db.execute('INSERT INTO project_archive_imports(id,project_id,source_version,imported_at,provenance) VALUES(?,?,?,?,?)',

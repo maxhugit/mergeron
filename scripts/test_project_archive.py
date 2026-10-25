@@ -388,6 +388,27 @@ class ProjectArchiveTest(unittest.TestCase):
             with self.assertRaisesRegex(engine.ArchiveError, 'codex-history-state5-v2'):
                 self.load()
 
+    def test_operational_workspace_outside_project_is_relocated_without_copying_it(self):
+        outside = self.base / 'private-other-workspace'
+        outside.mkdir()
+        (outside / 'private.txt').write_text('OTHER PROJECT SECRET')
+        with sqlite3.connect(self.source_db) as db:
+            db.execute('UPDATE project_tasks SET workspace_path=? WHERE id=?', (str(outside), 'task'))
+        self.export()
+        _, manifest = self.load()
+        self.assertIn('operational-path-relocation-v1', manifest['requiredCapabilities'])
+        task = next(r for r in manifest['tables']['project_tasks'] if r['id'] == 'task')
+        self.assertEqual(task['workspace_path'], str(self.project))
+        self.assertFalse(any(r['source'] == str(outside) for r in manifest['roots']))
+        result = self.import_project()
+        with engine.connect(self.target_db, True) as db:
+            task = db.execute("SELECT workspace_path FROM project_tasks WHERE title='Parent'").fetchone()
+            self.assertEqual(task[0], str(self.target_root.resolve() / result['projectId']))
+            provenance = json.loads(db.execute('SELECT provenance FROM project_archive_imports').fetchone()[0])
+            self.assertEqual(provenance['relocatedOperationalPaths'][0]['source'], str(outside))
+        with sqlite3.connect(self.source_db) as db:
+            self.assertEqual(db.execute("SELECT workspace_path FROM project_tasks WHERE id='task'").fetchone()[0], str(outside))
+
     def test_internal_branch_prefix_offsets_follow_rewritten_parent(self):
         parent = self.add_agent()
         child = '018f0000-0000-7000-8000-000000000002'

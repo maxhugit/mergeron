@@ -83,6 +83,13 @@ de versions et la branche active sont réancrés sur les conversations incluses.
 Les messages et fichiers propres aux autres conversations ne sont pas ajoutés.
 **Aucune association ni donnée de la source n’est modifiée.**
 
+Si une tâche ou conversation utilise un chemin de travail situé hors des espaces
+associés au projet, la copie est réaffectée à l’espace principal importé. Le ZIP
+signale cette adaptation et conserve le chemin d’origine dans la provenance
+(`relocatedOperationalPaths`). Il ne copie pas le contenu du dossier extérieur.
+Les documents et versions, eux, doivent toujours disposer de leurs fichiers dans
+l’inventaire ; leur absence reste bloquante.
+
 Si une branche ne possède pas son historique complet et dépend d’un préfixe
 stocké uniquement dans une conversation extérieure, l’export refuse explicitement
 de supprimer ce préfixe. Cette forme de dépendance nécessite encore une
