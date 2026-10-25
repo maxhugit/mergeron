@@ -35,12 +35,15 @@ class DeploymentPortabilityTest(unittest.TestCase):
                 self.assertNotIn('unraid', path.read_text().lower())
 
     def test_runtime_and_ui_keep_platform_names_in_explicit_adapters_only(self):
-        paths = list((ROOT / 'src').rglob('*.ts')) + list((ROOT / 'web/src').rglob('*.tsx')) + list((ROOT / 'web/src').rglob('*.ts')) + list((ROOT / 'web/src/locales').rglob('*.json')) + list((ROOT / 'manager/src').glob('*.mjs'))
+        paths = list((ROOT / 'src').rglob('*.ts')) + list((ROOT / 'web/src').rglob('*.tsx')) + list((ROOT / 'web/src').rglob('*.ts')) + list((ROOT / 'web/src/locales').rglob('*.json')) + list((ROOT / 'manager/src').rglob('*.mjs'))
         for path in paths:
-            if '.spec.' in path.name or 'codex-schema' in path.parts:
+            if '.spec.' in path.name or 'codex-schema' in path.parts or path == ROOT / 'manager/src/integrations/host-platform.mjs':
                 continue
             with self.subTest(path=path.relative_to(ROOT)):
                 self.assertNotIn('unraid', path.read_text().lower())
+        manifest = (ROOT / 'manager/stack-manifest.json').read_text()
+        # The historical repository is an adoption alias, not a default or a cache.
+        self.assertNotIn('unraid', manifest.replace('ghcr.io/maxhugit/codex-webui-unraid', '').lower())
 
 
 if __name__ == '__main__':
