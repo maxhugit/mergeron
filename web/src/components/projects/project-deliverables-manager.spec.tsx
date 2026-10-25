@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -201,6 +202,57 @@ async function setupList(data = board) {
   );
   await screen.findByRole('button', { name: /Report/ });
 }
+
+it('groups the primary task, its assignee and its due date in one card', async () => {
+  const dueAt = Date.UTC(2026, 10, 15);
+  await setup({
+    ...board,
+    deliverables: [
+      { ...item, primaryTaskId: 'primary', dueAt: Date.UTC(2027, 0, 1) },
+    ],
+    tasks: [
+      {
+        id: 'primary',
+        title: 'Primary planning task',
+        resourceId: 'tm',
+        parentTaskId: null,
+        status: 'Todo',
+        progress: 0,
+        dueAt,
+        assigneeId: 'person',
+        assigneeName: 'Task owner',
+      },
+    ],
+  });
+  const card = screen.getByRole('region', { name: 'Primary task' });
+  expect(card).toHaveClass('col-span-full', 'border');
+  expect(
+    within(card).getByRole('button', { name: 'Primary planning task' }),
+  ).toBeVisible();
+  expect(within(card).getByText('Task owner')).toBeVisible();
+  expect(
+    within(card).getByText(
+      new Date(dueAt).toLocaleDateString(undefined, { timeZone: 'UTC' }),
+    ),
+  ).toBeVisible();
+  expect(screen.getAllByText('Responsible person')).toHaveLength(1);
+  expect(screen.getAllByText('Due date')).toHaveLength(1);
+  fireEvent.click(
+    within(card).getByRole('button', { name: 'Primary planning task' }),
+  );
+  expect(screen.getByRole('dialog', { name: 'primary' })).toBeInTheDocument();
+});
+
+it('keeps missing task and planning values together without inheriting legacy deliverable dates', async () => {
+  await setup({
+    ...board,
+    deliverables: [{ ...item, dueAt: Date.UTC(2027, 0, 1) }],
+  });
+  const card = screen.getByRole('region', { name: 'Primary task' });
+  expect(within(card).getByText('No primary task')).toBeVisible();
+  expect(within(card).getByText('Unassigned')).toBeVisible();
+  expect(within(card).getByText('Not defined')).toBeVisible();
+});
 
 it('filters the deliverables list and resets all filters', async () => {
   await setupList({

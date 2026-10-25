@@ -1214,12 +1214,12 @@ function Overview({
             onChange={(event) => set('criteria', event.target.value)}
           />
         </label>
-        <p className="text-xs text-muted-foreground">
-          {t('planningInheritedFromPrimaryTask')}
-        </p>
       </section>
       <aside className="grid min-w-0 content-start gap-2 sm:grid-cols-2">
-        <div className="rounded-xl border bg-card p-3 text-sm">
+        <section
+          aria-label={t('primaryTask')}
+          className="col-span-full min-w-0 rounded-xl border bg-card p-3 text-sm"
+        >
           <p className="mb-1 flex items-center gap-2 text-muted-foreground">
             <ListTodo className="h-4 w-4 shrink-0" />
             {t('primaryTask')}
@@ -1234,7 +1234,34 @@ function Overview({
           ) : (
             <span>{t('noPrimaryTask')}</span>
           )}
-        </div>
+          <dl className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-2">
+            <div className="min-w-0">
+              <dt className="mb-1 flex items-center gap-2 text-muted-foreground">
+                <UserRound className="h-4 w-4 shrink-0" />
+                {t('responsiblePerson')}
+              </dt>
+              <dd className="break-words font-medium">
+                {primaryTask?.assigneeName ?? t('unassigned')}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="mb-1 flex items-center gap-2 text-muted-foreground">
+                <CalendarDays className="h-4 w-4 shrink-0" />
+                {t('dueDate')}
+              </dt>
+              <dd className="font-medium">
+                {primaryTask?.dueAt
+                  ? new Date(primaryTask.dueAt).toLocaleDateString(undefined, {
+                      timeZone: 'UTC',
+                    })
+                  : t('notDefined')}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {t('planningInheritedFromPrimaryTask')}
+          </p>
+        </section>
         <div className="rounded-xl border bg-card p-3 text-sm">
           <p className="mb-1 flex items-center gap-2 text-muted-foreground">
             <Bot className="h-4 w-4 shrink-0" />
@@ -1280,22 +1307,6 @@ function Overview({
             item.confidentiality === 'restricted'
               ? t('restrictedAccessShort')
               : t('standardAccessShort')
-          }
-        />
-        <Summary
-          icon={UserRound}
-          title={t('responsiblePerson')}
-          value={primaryTask?.assigneeName ?? t('unassigned')}
-        />
-        <Summary
-          icon={CalendarDays}
-          title={t('dueDate')}
-          value={
-            primaryTask?.dueAt
-              ? new Date(primaryTask.dueAt).toLocaleDateString(undefined, {
-                  timeZone: 'UTC',
-                })
-              : t('notDefined')
           }
         />
         <div className="col-span-full min-w-0 rounded-xl border bg-card p-4">
