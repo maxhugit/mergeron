@@ -14,11 +14,9 @@ import {
   Brain,
   FileCode2,
   FileText,
-  Library,
   ShieldCheck,
-  SlidersHorizontal,
   UserCog,
-  Wrench,
+  UserCircle,
 } from 'lucide-react';
 import {
   ApprovalReviewerControl,
@@ -30,8 +28,11 @@ import { RawConfigEditor } from './raw-config-editor';
 import { SettingsSaveBar } from './settings-save-bar';
 import { loadAdminModels } from './admin-model-options';
 import { CatalogSettings } from './catalog/catalog-settings';
+import { AccountSettings } from './account/account-settings';
+import { useAccountStore } from '@/stores/account-store';
 import {
   catalogStateQueryKey,
+  accountReadAccountQueryKey,
   codexConfigReadConfigOptions,
   codexConfigUpdateConfigMutation,
   codexStatusGetStatusOptions,
@@ -41,6 +42,7 @@ import type {
   CatalogWarningDto,
   ConfigEditDto,
 } from '@/generated/api/types.gen';
+import { accountReadAccount } from '@/generated/api/sdk.gen';
 import { showSnackbar } from '@/stores/snackbar-store';
 import {
   APPROVAL_REVIEWER_VALUES,
@@ -69,25 +71,21 @@ import {
 const SECURITY_READONLY_KEYS = ['sandbox_workspace_write'] as const;
 
 type CodexSettingsTab =
+  | 'account'
   | 'profile'
   | 'model'
   | 'instructions'
   | 'reasoning'
-  | 'tools'
   | 'security'
-  | 'advanced'
-  | 'catalog'
   | 'raw';
 
 const CODEX_SETTINGS_TABS = [
+  { id: 'account', label: 'Account', icon: UserCircle },
   { id: 'profile', label: 'Profile', icon: UserCog },
   { id: 'model', label: 'Model', icon: Bot },
   { id: 'instructions', label: 'Instructions', icon: FileText },
   { id: 'reasoning', label: 'Reasoning', icon: Brain },
-  { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'security', label: 'Security', icon: ShieldCheck },
-  { id: 'advanced', label: 'Advanced', icon: SlidersHorizontal },
-  { id: 'catalog', label: 'Catalog', icon: Library },
   { id: 'raw', label: 'Raw configuration', icon: FileCode2 },
 ] as const;
 
@@ -96,8 +94,6 @@ const TAB_GROUPS: Partial<Record<CodexSettingsTab, string>> = {
   model: 'Model',
   instructions: 'Instructions',
   reasoning: 'Reasoning',
-  tools: 'Tools',
-  advanced: 'Advanced',
 };
 
 const SECURITY_FIELD_LABELS: Record<
@@ -147,10 +143,29 @@ export function CodexSettings() {
   const { t, i18n } = useTranslation();
   const isNonEnglish = !i18n.language.startsWith('en');
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<CodexSettingsTab>('model');
+  const [requestedTab, setActiveTab] = useState<CodexSettingsTab>('account');
+  const accountQuery = useQuery({
+    queryKey: accountReadAccountQueryKey(),
+    queryFn: async () => {
+      const { data } = await accountReadAccount({ throwOnError: true });
+      useAccountStore.getState().setAccount(data);
+      return data;
+    },
+    retry: false,
+    refetchOnWindowFocus: true,
+  });
+  const authMode = useAccountStore((state) => state.authMode);
+  const connected =
+    Boolean(accountQuery.data?.account) &&
+    !accountQuery.isError &&
+    Boolean(authMode);
+  const activeTab = connected ? requestedTab : 'account';
 
   // ---- Queries ----
-  const configQuery = useQuery(codexConfigReadConfigOptions());
+  const configQuery = useQuery({
+    ...codexConfigReadConfigOptions(),
+    enabled: connected,
+  });
 
   const config = configQuery.data?.config as ConfigRecord | undefined;
   const origins = configQuery.data?.origins as ConfigRecord | undefined;
@@ -277,6 +292,7 @@ export function CodexSettings() {
   // set. Any tier already written to config is kept so an existing value is
   // never silently dropped from the list.
   const modelsQuery = useQuery({
+    enabled: connected,
     ...modelsListModelsOptions(),
     queryFn: ({ signal }) => loadAdminModels(signal),
     staleTime: 60_000,
@@ -385,7 +401,7 @@ export function CodexSettings() {
   const activeFields = activeGroup
     ? (groupedFields.get(activeGroup) ?? [])
     : [];
-  const needsStructuredConfig = !['catalog', 'raw'].includes(activeTab);
+  const needsStructuredConfig = activeTab !== 'raw' && activeTab !== 'account';
   const activeKeys =
     activeTab === 'security'
       ? ['approval_policy', 'sandbox_mode', 'approvals_reviewer']
@@ -447,7 +463,7 @@ export function CodexSettings() {
               return;
             const tabs = [
               ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                '[role="tab"]',
+                '[role="tab"]:not(:disabled)',
               ),
             ];
             const current = tabs.indexOf(
@@ -472,13 +488,14 @@ export function CodexSettings() {
               key={id}
               type="button"
               role="tab"
+              disabled={id !== 'account' && !connected}
               aria-selected={activeTab === id}
               aria-controls="codex-settings-panel"
               tabIndex={activeTab === id ? 0 : -1}
               title={t(translationKey(label))}
               onClick={() => setActiveTab(id)}
               className={cn(
-                'flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]',
+                'flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] disabled:cursor-not-allowed disabled:opacity-50',
                 activeTab === id
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -492,6 +509,13 @@ export function CodexSettings() {
       </div>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
+        {activeTab === 'account' && (
+          <div id="codex-settings-panel" role="tabpanel">
+            <AccountSettings />
+          </div>
+        )}
+        {/* Keep catalog repair available even when structured config cannot load. */}
+        {activeTab === 'model' && <CatalogSettings />}
         {needsStructuredConfig &&
         (!config || configQuery.isError || configQuery.isLoading) ? (
           unavailable
@@ -515,7 +539,7 @@ export function CodexSettings() {
                 className="space-y-3"
               >
                 {modelsQuery.isError &&
-                  ['model', 'reasoning', 'advanced'].includes(activeTab) && (
+                  ['model', 'reasoning'].includes(activeTab) && (
                     <p role="alert" className="text-xs text-amber-500">
                       {t(
                         'liveModelChoicesAreUnavailableExistingValuesArePreservedCustomModelIdentifiersCb466fb89',
@@ -657,17 +681,12 @@ export function CodexSettings() {
           </>
         )}
 
-        {activeTab === 'catalog' && (
-          <div id="codex-settings-panel" role="tabpanel">
-            <CatalogSettings />
-          </div>
-        )}
         <div
           id={activeTab === 'raw' ? 'codex-settings-panel' : undefined}
           role={activeTab === 'raw' ? 'tabpanel' : undefined}
           className={activeTab === 'raw' ? undefined : 'hidden'}
         >
-          <RawConfigEditor onSaved={invalidate} />
+          {connected && <RawConfigEditor onSaved={invalidate} />}
         </div>
         {needsStructuredConfig && config && !configQuery.isError && (
           <>

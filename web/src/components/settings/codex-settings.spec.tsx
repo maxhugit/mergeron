@@ -9,6 +9,8 @@ import {
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CodexSettings } from './codex-settings';
+import { useAccountStore } from '@/stores/account-store';
+import { accountReadAccountQueryKey } from '@/generated/api/@tanstack/react-query.gen';
 import { catalogFixture, deferred, json } from './catalog/catalog.testing';
 import { codexConfigReadConfigQueryKey } from '@/generated/api/@tanstack/react-query.gen';
 
@@ -21,11 +23,70 @@ vi.mock('@/stores/theme-store', () => ({
 }));
 
 let fixture: ReturnType<typeof catalogFixture>;
+async function renderModel() {
+  fixture.render(<CodexSettings />);
+  const tab = screen.getByRole('tab', { name: 'Model' });
+  await waitFor(() => expect(tab).toBeEnabled());
+  fireEvent.click(tab);
+}
+
+it('puts Account first, disables other tabs without a connection and responds to login/logout without reloading', async () => {
+  const connected = useAccountStore.getState().account!;
+  const disconnected = { ...connected, account: null };
+  fixture.server.overrides.set('GET /api/account', () => json(disconnected));
+  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), disconnected);
+  useAccountStore.getState().setAccount(disconnected);
+  fixture.render(<CodexSettings />);
+  const tabs = screen.getAllByRole('tab');
+  expect(tabs[0]).toHaveTextContent('Account');
+  expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+  for (const tab of tabs.slice(1)) expect(tab).toBeDisabled();
+  expect(
+    screen.queryByRole('heading', { name: 'Model catalog' }),
+  ).not.toBeInTheDocument();
+  fixture.server.overrides.set('GET /api/account', () => json(connected));
+  act(() => {
+    fixture.queryClient.setQueryData(accountReadAccountQueryKey(), connected);
+    useAccountStore.getState().setAccount(connected);
+  });
+  const model = screen.getByRole('tab', { name: 'Model' });
+  await waitFor(() => expect(model).toBeEnabled());
+  fireEvent.click(model);
+  expect(screen.getByRole('heading', { name: 'Model catalog' })).toBeVisible();
+  fixture.server.overrides.set('GET /api/account', () => json(disconnected));
+  act(() =>
+    useAccountStore
+      .getState()
+      .setAccountUpdated({ authMode: null, planType: null }),
+  );
+  expect(screen.getByRole('tab', { name: 'Account' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  for (const tab of screen.getAllByRole('tab').slice(1))
+    expect(tab).toBeDisabled();
+});
 beforeEach(() => {
   fixture = catalogFixture();
+  const account = {
+    account: { type: 'apiKey' as const },
+    requiresOpenaiAuth: true,
+    provider: {
+      ok: true,
+      id: 'openai',
+      name: 'OpenAI',
+      baseUrlMasked: null,
+      envKey: null,
+      envPresent: null,
+    },
+  };
+  fixture.server.overrides.set('GET /api/account', () => json(account));
+  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), account);
+  useAccountStore.getState().setAccount(account);
 });
 afterEach(() => {
   fixture.dispose();
+  useAccountStore.getState().setAccount(null);
 });
 
 it('preserves unsaved TOML through loading, failure and success, then exposes the required restart', async () => {
@@ -47,7 +108,8 @@ it('preserves unsaved TOML through loading, failure and success, then exposes th
     };
     return json({ restartRequired: true, reloaded: false, warnings: [] });
   });
-  fixture.render(<CodexSettings />);
+  await renderModel();
+  expect(screen.getByRole('heading', { name: 'Model catalog' })).toBeVisible();
   await user.click(screen.getByRole('tab', { name: 'Raw configuration' }));
   await user.click(screen.getByRole('button', { name: 'Edit config.toml' }));
   const raw = await screen.findByRole('textbox', { name: 'Raw TOML' });
@@ -79,7 +141,7 @@ it('preserves unsaved TOML through loading, failure and success, then exposes th
     }),
   );
   expect(screen.getByRole('textbox', { name: 'Raw TOML' })).toHaveValue(edited);
-  await user.click(screen.getByRole('tab', { name: 'Catalog' }));
+  await user.click(screen.getByRole('tab', { name: 'Model' }));
   expect(
     await screen.findByRole('button', { name: 'Restart Codex' }),
   ).toBeEnabled();
@@ -103,7 +165,7 @@ it('shows Codex setting groups as tabs instead of one long page', async () => {
     json({ content: '', filePath: 'config.toml' }),
   );
 
-  fixture.render(<CodexSettings />);
+  await renderModel();
 
   expect(
     await screen.findByRole('tab', { name: 'Model', selected: true }),
@@ -119,6 +181,15 @@ it('shows Codex setting groups as tabs instead of one long page', async () => {
     'flex-col',
   );
   expect(await screen.findByText('Default model name')).toBeVisible();
+  expect(
+    screen.queryByRole('tab', { name: 'Catalog' }),
+  ).not.toBeInTheDocument();
+  const catalogHeading = screen.getByRole('heading', { name: 'Model catalog' });
+  expect(
+    catalogHeading.compareDocumentPosition(
+      screen.getByText('Default model name'),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   expect(screen.getByRole('tabpanel').parentElement).toHaveClass(
     'flex-1',
     'overflow-y-auto',
@@ -140,6 +211,19 @@ it('shows Codex setting groups as tabs instead of one long page', async () => {
     ),
   ).toBeVisible();
   expect(screen.queryByText('Default model name')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('heading', { name: 'Model catalog' }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Tools' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('tab', { name: 'Advanced' }),
+  ).not.toBeInTheDocument();
+  await user.click(screen.getByRole('tab', { name: 'Reasoning' }));
+  expect(screen.getByText('Web Search')).toBeVisible();
+  expect(screen.getByText('Service Tier')).toBeVisible();
+  expect(
+    screen.getByText(/Processing priority and speed, not reasoning effort/),
+  ).toBeVisible();
 });
 
 function editableConfig() {
@@ -184,7 +268,7 @@ function editableConfig() {
 it('loads live model pages and saves only the active tab in one request', async () => {
   editableConfig();
   const user = userEvent.setup();
-  fixture.render(<CodexSettings />);
+  await renderModel();
   const model = await screen.findByRole('combobox', { name: 'Model' });
   await waitFor(() =>
     expect(
@@ -227,7 +311,7 @@ it('keeps drafts on save failure and uses advertised reasoning choices', async (
     json({ message: 'Cannot write' }, 500),
   );
   const user = userEvent.setup();
-  fixture.render(<CodexSettings />);
+  await renderModel();
   const model = await screen.findByRole('combobox', { name: 'Model' });
   await waitFor(() =>
     expect(
@@ -253,7 +337,7 @@ it('keeps drafts on save failure and uses advertised reasoning choices', async (
 it('stages security choices and discards them without a backend mutation', async () => {
   editableConfig();
   const user = userEvent.setup();
-  fixture.render(<CodexSettings />);
+  await renderModel();
   await screen.findByRole('combobox', { name: 'Model' });
   await user.click(screen.getByRole('tab', { name: 'Security' }));
   const policy = screen.getAllByRole('combobox')[0];

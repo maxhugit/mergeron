@@ -34,6 +34,8 @@ export function AccountSettings() {
     queryKey: accountReadAccountQueryKey(),
     queryFn: async () => {
       const { data } = await accountReadAccount({ throwOnError: true });
+      // Only a fresh server read may restore authentication after logout.
+      setAccount(data);
       return data;
     },
     refetchOnWindowFocus: true,
@@ -52,10 +54,6 @@ export function AccountSettings() {
     enabled: isChatGpt,
     retry: false,
   });
-
-  useEffect(() => {
-    if (accountQuery.data) setAccount(accountQuery.data);
-  }, [accountQuery.data, setAccount]);
 
   useEffect(() => {
     if (rateLimitsQuery.data) setRateLimits(rateLimitsQuery.data);

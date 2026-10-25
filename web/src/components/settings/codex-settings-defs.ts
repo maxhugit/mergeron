@@ -124,14 +124,15 @@ export const FIELD_DEFS: FieldDef[] = [
   {
     key: 'web_search',
     label: 'Web Search',
-    group: 'Tools',
+    group: 'Reasoning',
     control: 'select',
     options: ['disabled', 'cached', 'live'],
   },
   {
     key: 'service_tier',
     label: 'Service Tier',
-    group: 'Advanced',
+    group: 'Reasoning',
+    description: 'serviceTierDescription',
     control: 'select',
     // Options are supplied at render time from the model catalog; see
     // `serviceTierOptions`. No static list can be correct here.
@@ -144,8 +145,6 @@ export const GROUP_ORDER = [
   'Model',
   'Instructions',
   'Reasoning',
-  'Tools',
-  'Advanced',
 ];
 
 type ParseResult =

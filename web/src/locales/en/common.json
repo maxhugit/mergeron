@@ -125,7 +125,7 @@
   "technicalDetailsHidden": "Hide technical details",
   "technicalDetailsCollapsed": "Collapsed details",
   "technicalDetailsExpanded": "Show everything",
-  "responseDetailHint": "Display setting for this agent. Responses stay unchanged; commands and logs can be expanded. Alerts and approval requests stay visible.",
+  "serviceTierDescription": "Processing priority and speed, not reasoning effort. May affect usage or cost depending on the model and account.",
   "webSearch": "Web Search",
   "valueCannotBeEmpty": "Value cannot be empty",
   "valueMustBeAValidNumber": "Value must be a valid number",
