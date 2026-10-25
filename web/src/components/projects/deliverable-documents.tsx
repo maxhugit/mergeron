@@ -29,6 +29,10 @@ type Props = {
   onError: () => void;
 };
 
+function currentDocumentVersion(document?: DeliverableDocument | null) {
+  return document?.versions.find((version) => version.number === document.currentVersionNumber);
+}
+
 export function DeliverableDocuments({
   item,
   base,
@@ -96,9 +100,11 @@ export function DeliverableDocuments({
   const addVersion = useMutation({
     mutationFn: async ({ document, file }: { document: DeliverableDocument; file: File }) => {
       if (file.name !== document.name) throw new Error('filename');
+      // Keep the retained source untouched until the version check succeeds.
       const separator = document.sourcePath.lastIndexOf('/');
-      const directory = separator > 0 ? document.sourcePath.slice(0, separator) : item.directory;
-      const path = await uploadFile(file, directory, true);
+      const destination = document.protectedSource ? item.directory :
+        separator > 0 ? document.sourcePath.slice(0, separator) : item.directory;
+      const path = await uploadFile(file, destination, true);
       await projectsApi(`${base}/${item.id}/documents/${document.id}/versions`, {
         method: 'POST',
         body: JSON.stringify({
@@ -160,7 +166,11 @@ export function DeliverableDocuments({
               busy={busy}
               onView={() => setDetail({ document, tab: 'preview' })}
               onHistory={() => setDetail({ document, tab: 'versions' })}
-              onDownload={() => void downloadVersion(base, item.id, document, document.versions.at(-1)!, onError)}
+              onDownload={() => {
+                const version = currentDocumentVersion(document);
+                if (version) void downloadVersion(base, item.id, document, version, onError);
+                else onError();
+              }}
               onFile={(file) => addVersion.mutate({ document, file })}
               onSnapshot={() =>
                 request.mutate({
@@ -299,7 +309,7 @@ function DocumentDetailDialog({
 }) {
   const { t } = useTranslation();
   const document = detail?.document;
-  const latest = document?.versions.at(-1);
+  const latest = currentDocumentVersion(document);
   const tabs = [
     { id: 'versions' as const, label: t('versions'), icon: History },
     { id: 'preview' as const, label: t('preview'), icon: Eye },
@@ -429,7 +439,7 @@ function DocumentRow({ document, busy, onView, onHistory, onDownload, onFile, on
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
-  const latest = document.versions.at(-1);
+  const latest = currentDocumentVersion(document);
   const menuRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const closeOutside = (event: Event) => {

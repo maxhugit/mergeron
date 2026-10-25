@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ThreadResponseDetailService } from './thread-response-detail.service';
 import { ThreadResponseDetailController } from './thread-response-detail.controller';
 import { DeliverablesModule } from '../deliverables/deliverables.module';
+import { DocumentPublicationModule } from '../document-publication/document-publication.module';
 import { KnowledgeProposalsObserverService } from './knowledge-proposals-observer.service';
 import { ProjectKnowledgeModule } from '../project-knowledge/project-knowledge.module';
 import { ThreadSecurityPolicyController } from './thread-security-policy.controller';
@@ -39,6 +40,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
   imports: [
     ActiveFoldersModule,
     DeliverablesModule,
+    DocumentPublicationModule,
     ProjectKnowledgeModule,
     AuthModule,
     ChatModule,

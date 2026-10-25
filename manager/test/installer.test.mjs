@@ -415,9 +415,25 @@ test('uses isolated development names and runtime configuration', async () => {
       ['mergeron-dev-admin', 'mergeron-dev-isolated'],
     );
     assert.equal(specification.Image, 'ghcr.io/maxhugit/mergeron:edge');
-    assert.deepEqual(specification.HostConfig.SecurityOpt, [
+    assert.equal(
+      specification.HostConfig.SecurityOpt[0],
       'no-new-privileges:true',
-    ]);
+    );
+    const seccomp = JSON.parse(
+      specification.HostConfig.SecurityOpt[1].slice('seccomp='.length),
+    );
+    assert.equal(seccomp.defaultAction, 'SCMP_ACT_ERRNO');
+    assert.ok(
+      seccomp.syscalls.some(
+        (rule) =>
+          rule.action === 'SCMP_ACT_ALLOW' && rule.names.includes('unshare'),
+      ),
+    );
+    assert.ok(
+      specification.Env.includes(
+        'MERGERON_PUBLISHED_DOCUMENT_PROTECTION=required',
+      ),
+    );
     assert.deepEqual(specification.HostConfig.MaskedPaths, []);
     assert.deepEqual(specification.HostConfig.ReadonlyPaths, []);
   } finally {

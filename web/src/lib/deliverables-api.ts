@@ -36,6 +36,7 @@ export interface DeliverableDocumentVersion {
   createdAt: number;
 }
 export interface DeliverableDocument {
+  protectedSource?: boolean;
   id: string;
   deliverableId: string;
   name: string;

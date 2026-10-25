@@ -1534,7 +1534,7 @@
   "versionNumber": "Version {{number}}",
   "file": "Fichier",
   "history": "Historique",
-  "uploadNewVersion": "Déposer une nouvelle version",
+  "uploadNewVersion": "Enregistrer une nouvelle version",
   "createVersionFromCurrentFile": "Créer une version depuis le fichier courant",
   "deliverablesListDescription": "Consultez et gérez les livrables de {{resource}}.",
   "newDeliverable": "Nouveau livrable",

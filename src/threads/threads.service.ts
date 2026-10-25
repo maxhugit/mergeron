@@ -11,6 +11,8 @@ import {
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { CodexService } from '../codex/codex.service';
+import { CodexProcessManager } from '../codex/codex-process-manager.service';
+import { DocumentPublicationService } from '../document-publication/document-publication.service';
 import type { ServerNotification, v2 } from '../codex/codex-schema';
 import { BusinessException } from '../common/business.exception';
 import { ErrorCode } from '../common/error-codes';
@@ -89,6 +91,9 @@ export class ThreadsService {
     private readonly activeFolders: ActiveFoldersService,
     @Optional() private readonly knowledge?: ProjectKnowledgeService,
     @Optional() private readonly deliverables?: DeliverablesService,
+    @Optional() private readonly processManager?: CodexProcessManager,
+    @Optional()
+    private readonly documentPublication?: DocumentPublicationService,
   ) {}
 
   /**
@@ -101,6 +106,7 @@ export class ThreadsService {
     params: v2.ThreadStartParams,
   ): Promise<v2.ThreadStartResponse> {
     requireExecutionAccess();
+    await this.processManager?.ensureDocumentIsolation();
     const projectPolicy = await this.projectConnections.policyForCwd(
       params.cwd,
     );
@@ -418,6 +424,7 @@ export class ThreadsService {
    */
   async startTurn(params: v2.TurnStartParams): Promise<v2.TurnStartResponse> {
     requireExecutionAccess();
+    await this.processManager?.ensureDocumentIsolation();
     this.deletionRegistry.assertMutable(params.threadId);
     const beforeTurn = this.metadata.getHeldThread(params.threadId);
     const shouldAutoName = Boolean(
@@ -441,6 +448,10 @@ export class ThreadsService {
     const deliverableContext = this.deliverables?.contextForConversation(
       params.threadId,
     );
+    const publication = await this.documentPublication?.prepare(
+      params.threadId,
+      beforeTurn?.name,
+    );
     const effectiveParams: v2.TurnStartParams = {
       ...params,
       ...(projectPolicy?.readOnly
@@ -451,12 +462,16 @@ export class ThreadsService {
             },
           }
         : {}),
-      ...(sharedKnowledge || deliverableContext
+      ...(sharedKnowledge || deliverableContext || publication?.context
         ? {
             input: [
               {
                 type: 'text' as const,
-                text: [sharedKnowledge, deliverableContext]
+                text: [
+                  sharedKnowledge,
+                  deliverableContext,
+                  publication?.context,
+                ]
                   .filter(Boolean)
                   .join('\n\n'),
                 text_elements: [],
@@ -477,10 +492,17 @@ export class ThreadsService {
         effectiveCwd,
         params.threadId,
       );
-    const response = await this.codex.request<v2.TurnStartResponse>(
-      'turn/start',
-      effectiveParams,
-    );
+    let response: v2.TurnStartResponse;
+    try {
+      response = await this.codex.request<v2.TurnStartResponse>(
+        'turn/start',
+        effectiveParams,
+      );
+      publication?.bind(response.turn.id);
+    } catch (error) {
+      publication?.abort();
+      throw error;
+    }
     this.branches.attachPendingVersionTurn(
       params.threadId,
       response.turn.id,
