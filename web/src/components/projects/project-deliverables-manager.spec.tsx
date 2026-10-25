@@ -259,6 +259,39 @@ it('merges document versions, removals, restorations and deliverable edits in hi
   expect(rows[4]).toHaveTextContent('Document modified — report.docx · V2');
   expect(rows[5]).toHaveTextContent('Document added — report.docx · V1');
 });
+it('shows the lifecycle flow above the overview with the current stage', async () => {
+  await setup();
+  const flow = screen.getByRole('region', {
+    name: 'Deliverable and document lifecycle',
+  });
+  expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
+    'Draft',
+  );
+  expect(
+    within(flow).queryByText('Awaiting validation'),
+  ).not.toBeInTheDocument();
+  expect(within(flow).getByText('Finalized')).toBeInTheDocument();
+  expect(within(flow).getByText('Archived')).toBeInTheDocument();
+});
+it('includes required validation and highlights the waiting stage', async () => {
+  await setup({
+    ...board,
+    deliverables: [
+      {
+        ...item,
+        lifecycleStatus: 'finalized',
+        validationRequired: true,
+        validationStatus: 'pending',
+      },
+    ],
+  });
+  const flow = screen.getByRole('region', {
+    name: 'Deliverable and document lifecycle',
+  });
+  expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
+    'Awaiting validation',
+  );
+});
 it('keeps modal content local and protects unsaved changes when closing', async () => {
   const slot = document.createElement('div');
   slot.id = 'deliverable-header-p-r';
@@ -375,6 +408,51 @@ it('aligns all compact badges to the right and preserves desktop column alignmen
     expect(badge).toHaveClass('@min-[68rem]:justify-self-auto');
   }
 });
+it('shows active document names only outside compact mode and keeps card rows explicit', async () => {
+  const document = {
+    id: 'doc',
+    deliverableId: 'd',
+    name: 'Design.docx',
+    format: 'docx',
+    sourcePath: '/Design.docx',
+    currentVersionNumber: 1,
+    deletedAt: null,
+    createdAt: 1,
+    updatedAt: 1,
+    versions: [],
+  };
+  await setupList({
+    ...board,
+    deliverables: [
+      {
+        ...item,
+        documents: [
+          document,
+          { ...document, id: 'removed', name: 'Removed.docx', deletedAt: 2 },
+        ],
+      },
+    ],
+  });
+  const names = screen.getByRole('list', { name: 'Documents' });
+  expect(names).toHaveClass('hidden', '@min-[36rem]:block');
+  expect(within(names).getByText('Design.docx')).toHaveAttribute(
+    'title',
+    'Design.docx',
+  );
+  expect(screen.queryByText('Removed.docx')).not.toBeInTheDocument();
+  expect(screen.getByTestId('deliverable-status-d')).toHaveClass(
+    'col-start-2',
+    'row-start-1',
+  );
+  expect(screen.getByText('Not required', { selector: 'span' })).toHaveClass(
+    'col-start-2',
+    'row-start-2',
+  );
+  expect(screen.getByText('Standard access', { selector: 'span' })).toHaveClass(
+    'col-start-2',
+    'row-start-3',
+  );
+});
 
 it.each([
   {
@@ -486,9 +564,11 @@ it.each([
     expect(colors(screen.getByText(accessLabel, { selector: 'span' }))).toEqual(
       accessColors,
     );
-    expect(
-      colors(screen.getByText(lifecycleLabel, { selector: 'span' })),
-    ).toEqual(lifecycleColors);
+    for (const badge of screen.getAllByText(lifecycleLabel, {
+      selector: 'span',
+    })) {
+      expect(colors(badge)).toEqual(lifecycleColors);
+    }
   },
 );
 
@@ -706,11 +786,12 @@ it('keeps the table search visible and exposes filters through a mobile toggle',
   await setupList();
 
   expect(screen.getByRole('button', { name: /Report/ })).toHaveClass(
-    'order-1',
-    '@min-[36rem]:col-span-2',
+    'col-start-1',
+    'row-start-1',
   );
   expect(screen.getByTestId('deliverable-status-d')).toHaveClass(
-    'order-2',
+    'col-start-2',
+    'row-start-1',
     'justify-self-end',
   );
   expect(screen.getByLabelText('Search deliverables')).toBeInTheDocument();
@@ -1025,6 +1106,17 @@ it('only offers detachment for an associated main task and displays its subtasks
   expect(
     screen.getByRole('button', { name: 'Review figures' }),
   ).toBeInTheDocument();
+  const subtask = screen.getByRole('button', { name: 'Review figures' });
+  expect(subtask).toHaveClass('min-w-0', 'flex-1', 'truncate', 'text-left');
+  expect(subtask).toHaveAttribute('title', 'Review figures');
+  expect(subtask.parentElement).toHaveClass('flex', 'min-w-0');
+  expect(within(subtask.parentElement!).getByText('0%')).toHaveClass(
+    'shrink-0',
+    'whitespace-nowrap',
+  );
+  fireEvent.click(subtask);
+  expect(screen.getByRole('dialog', { name: 'child' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close task' }));
   fireEvent.click(screen.getByRole('button', { name: 'Detach task' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d', {

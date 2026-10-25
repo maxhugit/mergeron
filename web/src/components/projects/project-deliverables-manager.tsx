@@ -453,7 +453,7 @@ export function ProjectDeliverablesManager({
   );
 }
 
-function DeliverablesList({
+export function DeliverablesList({
   items,
   board,
   onSelect,
@@ -468,7 +468,7 @@ function DeliverablesList({
   >(null);
   return (
     <div className="@container">
-      <div className="hidden grid-cols-[minmax(0,2fr)_65px_120px_120px_minmax(0,1.5fr)_120px_95px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium text-muted-foreground @min-[68rem]:grid">
+      <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium text-muted-foreground @min-[68rem]:grid">
         <span>{t('title')}</span>
         <span>{t('documents')}</span>
         <span>{t('status')}</span>
@@ -482,17 +482,17 @@ function DeliverablesList({
           const task = board.tasks.find(
             (candidate) => candidate.id === item.primaryTaskId,
           );
-          const count = item.documents.filter(
+          const documents = item.documents.filter(
             (document) => document.deletedAt === null,
-          ).length;
+          );
           return (
             <div
               key={item.id}
-              className="grid w-full grid-cols-2 items-center gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-accent/60 @min-[36rem]:grid-cols-3 @min-[68rem]:grid-cols-[minmax(0,2fr)_65px_120px_120px_minmax(0,1.5fr)_120px_95px] @min-[68rem]:gap-3"
+              className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-accent/60 @min-[68rem]:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] @min-[68rem]:items-center @min-[68rem]:gap-3"
             >
               <button
                 type="button"
-                className="order-1 col-span-1 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[36rem]:col-span-2 @min-[68rem]:order-none @min-[68rem]:col-span-1"
+                className="col-start-1 row-start-1 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[68rem]:col-auto @min-[68rem]:row-auto"
                 onClick={() => onSelect(item.id)}
               >
                 <strong className="block truncate">{item.title}</strong>
@@ -500,24 +500,40 @@ function DeliverablesList({
                   {item.description || t('noDescription')}
                 </span>
               </button>
-              <span className="order-3 flex items-center gap-2 text-sm @min-[68rem]:order-none">
-                <span className="text-xs text-muted-foreground @min-[68rem]:hidden">
-                  {t('documents')}:
+              <div className="col-start-1 row-start-2 min-w-0 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground @min-[68rem]:hidden">
+                    {t('documents')}:
+                  </span>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  {documents.length}
                 </span>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                {count}
-              </span>
+                <ul
+                  aria-label={t('documents')}
+                  className="mt-1 hidden min-w-0 space-y-1 text-xs text-muted-foreground @min-[36rem]:block"
+                >
+                  {documents.map((document) => (
+                    <li
+                      key={document.id}
+                      className="truncate"
+                      title={document.name}
+                    >
+                      {document.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
               <span
                 data-testid={`deliverable-status-${item.id}`}
-                className="order-2 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+                className="col-start-2 row-start-1 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
               >
                 <LifecycleBadge status={displayedLifecycle(item)} />
               </span>
               <ValidationBadge
                 item={item}
-                className="order-4 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+                className="col-start-2 row-start-2 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
               />
-              <span className="order-5 flex min-w-0 items-center gap-2 text-sm @min-[68rem]:order-none">
+              <span className="col-start-1 row-start-3 flex min-w-0 items-center gap-2 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                 {task ? (
                   <button
@@ -535,9 +551,9 @@ function DeliverablesList({
               </span>
               <AccessBadge
                 confidentiality={item.confidentiality}
-                className="order-6 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+                className="col-start-2 row-start-3 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
               />
-              <span className="order-7 text-xs text-muted-foreground @min-[68rem]:order-none">
+              <span className="col-start-1 row-start-4 text-xs text-muted-foreground @min-[68rem]:col-auto @min-[68rem]:row-auto">
                 {new Date(item.updatedAt).toLocaleDateString()}
               </span>
             </div>
@@ -1340,6 +1356,47 @@ function DeliverableFolderSelector({
   );
 }
 
+function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
+  const { t } = useTranslation();
+  const current = displayedLifecycle(item);
+  const stages = (
+    Object.keys(lifecycleStatuses) as Array<keyof typeof lifecycleStatuses>
+  ).filter(
+    (stage) => stage !== 'awaiting_validation' || item.validationRequired,
+  );
+  return (
+    <section
+      className="col-span-full min-w-0 rounded-xl border bg-card p-4"
+      aria-label={t('deliverableLifecycleFlow')}
+    >
+      <h2 className="mb-3 font-semibold">{t('deliverableLifecycleFlow')}</h2>
+      <ol className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {stages.map((stage, index) => (
+          <li
+            key={stage}
+            className="flex items-center gap-3"
+            aria-current={stage === current ? 'step' : undefined}
+          >
+            {index > 0 && <span aria-hidden="true">→</span>}
+            <span
+              className={
+                stage === current
+                  ? 'rounded-full ring-2 ring-primary ring-offset-2 ring-offset-card'
+                  : 'opacity-60'
+              }
+            >
+              <LifecycleBadge status={stage} />
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {t('deliverableLifecycleFlowDescription')}
+      </p>
+    </section>
+  );
+}
+
 function Overview({
   item,
   board,
@@ -1391,6 +1448,7 @@ function Overview({
   );
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <DeliverableLifecycleFlow item={item} />
       <section className="min-w-0 space-y-3 rounded-xl border bg-card p-4">
         <h2 className="font-semibold">{t('generalInformation')}</h2>
         <label className="block text-sm">
@@ -2091,8 +2149,8 @@ function Links({
           {t('onePrimaryTaskPerDeliverable')}
         </p>
       </div>
-      <div className="grid gap-4">
-        <div className="space-y-3">
+      <div className="grid min-w-0 gap-4">
+        <div className="min-w-0 space-y-3">
           <h3 className="font-medium">{t('primaryTask')}</h3>
           {item.primaryTaskId ? (
             <Button
@@ -2155,7 +2213,7 @@ function Links({
             </p>
           )}
           {primaryTask && (
-            <div className="rounded-lg border p-3 text-sm">
+            <div className="min-w-0 rounded-lg border p-3 text-sm">
               <button
                 type="button"
                 className="block w-full rounded text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -2177,10 +2235,14 @@ function Links({
               {subtasks.length > 0 && (
                 <ul className="mt-3 space-y-1 border-t pt-2">
                   {subtasks.map((task) => (
-                    <li key={task.id}>
+                    <li
+                      key={task.id}
+                      className="flex min-w-0 items-center gap-2"
+                    >
                       <button
                         type="button"
-                        className="underline"
+                        className="min-w-0 flex-1 truncate text-left underline"
+                        title={task.title}
                         onClick={() =>
                           setOpenTask({
                             id: task.id,
@@ -2189,8 +2251,10 @@ function Links({
                         }
                       >
                         {task.title}
-                      </button>{' '}
-                      · {task.progress}%
+                      </button>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">
+                        {task.progress}%
+                      </span>
                     </li>
                   ))}
                 </ul>

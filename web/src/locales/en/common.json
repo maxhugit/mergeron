@@ -1,4 +1,6 @@
 {
+  "deliverableLifecycleFlow": "Deliverable and document lifecycle",
+  "deliverableLifecycleFlowDescription": "The current stage is outlined. When required, validation applies to the document versions. Reopening allows work on the deliverable to resume.",
   "saveRuntimeSettings": "Save runtime settings",
   "agentLinkedTo": "Linked to",
   "agentDirectTask": "Assigned task",

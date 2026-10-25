@@ -6,6 +6,7 @@ import {
   AuthResourceError,
   AuthRedirectError,
   AUTH_REQUEST_TIMEOUT_MS,
+  SESSION_RECOVERY_INTERVAL_MS,
   isSessionTransportError,
   platformSessionKey,
   readAuthResource,
@@ -23,6 +24,86 @@ afterEach(() => {
 });
 
 describe('platform session recovery', () => {
+  it('rechecks identity after server downtime without any focus or online event', async () => {
+    vi.useFakeTimers();
+    const identity = {
+      kind: 'person',
+      personId: 'person',
+      active: true,
+      role: 'administrator',
+      name: 'Person',
+    };
+    const client = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity } },
+    });
+    client.setQueryData(platformSessionKey, identity);
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify(identity), {
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      );
+    const hook = renderHook(() => usePlatformSession(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
+    });
+    await act(async () => {
+      await client
+        .fetchQuery({
+          queryKey: platformSessionKey,
+          queryFn: () => {
+            throw new AuthResourceError('Restarting', 503);
+          },
+          retry: false,
+        })
+        .catch(() => {});
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(hook.result.current.isError).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SESSION_RECOVERY_INTERVAL_MS + 1);
+    });
+    expect(hook.result.current.isSuccess).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][1]?.method).toBeUndefined();
+    hook.unmount();
+    client.clear();
+  });
+
+  it.each([401, 403])(
+    'does not poll a real HTTP %s refusal as a restart',
+    async (status) => {
+      vi.useFakeTimers();
+      const client = new QueryClient({
+        defaultOptions: { queries: { gcTime: Infinity } },
+      });
+      client.setQueryData(platformSessionKey, { active: true });
+      const fetch = vi.spyOn(globalThis, 'fetch');
+      const hook = renderHook(() => usePlatformSession(), {
+        wrapper: ({ children }: { children: ReactNode }) =>
+          createElement(QueryClientProvider, { client }, children),
+      });
+      await act(async () => {
+        await client
+          .fetchQuery({
+            queryKey: platformSessionKey,
+            queryFn: () => {
+              throw new AuthResourceError('Denied', status);
+            },
+            retry: false,
+          })
+          .catch(() => {});
+        await vi.advanceTimersByTimeAsync(SESSION_RECOVERY_INTERVAL_MS * 2);
+      });
+      expect(hook.result.current.isError).toBe(true);
+      expect(fetch).not.toHaveBeenCalled();
+      hook.unmount();
+      client.clear();
+    },
+  );
   it('retries transient transport failures up to three times', () => {
     const networkError = new TypeError('Load failed');
 

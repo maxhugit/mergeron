@@ -39,11 +39,17 @@ it('hides cached identity and protected content on transport failure', () => {
   sessionFailure(new TypeError('Load failed'));
   render(<AuthenticatedLayout />);
   expect(
-    screen.getByRole('heading', { name: 'Connection interrupted' }),
+    screen.getByRole('heading', { name: 'Reconnecting to the server…' }),
   ).toBeInTheDocument();
   expect(
-    screen.getByRole('button', { name: 'Restore connection' }),
+    screen.queryByRole('button', { name: 'Restore connection' }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByText(/This page retries automatically/),
   ).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Use another sign-in method' }),
+  ).not.toBeInTheDocument();
   expect(screen.queryByText('cached@example.test')).not.toBeInTheDocument();
   expect(screen.queryByText(/cached-subject/)).not.toBeInTheDocument();
   expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
