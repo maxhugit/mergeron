@@ -21,5 +21,12 @@
   "projectArchiveSafety": "Les agents et automatisations ne démarrent pas. Les connexions externes doivent être reconfigurées : leurs secrets ne sont pas transférés.",
   "projectArchiveContacts": "Les contacts importés sont inactifs et ne sont pas associés automatiquement aux comptes de cette installation. Leurs coordonnées d’origine restent dans la provenance du projet.",
   "projectArchiveExpiry": "Cette analyse reste valable pendant 15 minutes. La compatibilité est revérifiée lors de la confirmation.",
-  "projectArchiveConfirmImport": "Créer le projet depuis le ZIP"
+  "projectArchiveConfirmImport": "Créer le projet depuis le ZIP",
+  "projectArchiveSelection": "Que souhaitez-vous importer ?",
+  "projectArchiveCore": "Toujours inclus : informations du projet, participants, groupes et configuration des espaces de travail. Les contacts restent inactifs.",
+  "projectArchiveBundle_files": "Fichiers et dossiers de tous les espaces de travail",
+  "projectArchiveBundle_conversations": "Agents et conversations, avec leurs historiques et pièces jointes",
+  "projectArchiveBundle_work": "Activité métier complète : tâches, livrables, documents et versions, automatisations, connaissances et journal",
+  "projectArchiveRequired": "Inclus automatiquement : dépendance d’une catégorie sélectionnée.",
+  "projectArchiveDependencies": "L’activité métier inclut les conversations et les fichiers ; les conversations incluent les fichiers. Aucun choix document par document : les ensembles liés restent complets. Décochez d’abord les catégories qui en dépendent. Le volume indiqué ci-dessus est celui du ZIP complet."
 }

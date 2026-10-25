@@ -163,6 +163,11 @@ export function ProjectArchiveImportForm({
   const [busy, setBusy] = useState<'preview' | 'import' | null>(null);
   const [preview, setPreview] = useState<ArchivePreview | null>(null);
   const [name, setName] = useState('');
+  const [selection, setSelection] = useState<string[]>([
+    'files',
+    'conversations',
+    'work',
+  ]);
   const [error, setError] = useState('');
   const inspect = async (file: File | undefined) => {
     setPreview(null);
@@ -183,6 +188,7 @@ export function ProjectArchiveImportForm({
       });
       const result = (await response.json()) as ArchivePreview;
       setPreview(result);
+      setSelection(['files', 'conversations', 'work']);
       setName(
         (result.projectName + t('projectArchiveImportedSuffix')).slice(0, 200),
       );
@@ -211,7 +217,11 @@ export function ProjectArchiveImportForm({
       const response = await archiveRequest('/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: preview.token, name: name.trim() }),
+        body: JSON.stringify({
+          token: preview.token,
+          name: name.trim(),
+          selection,
+        }),
       });
       const result = (await response.json()) as { projectId: string };
       await client.invalidateQueries({ queryKey: projectsQueryKey });
@@ -288,6 +298,52 @@ export function ProjectArchiveImportForm({
               onChange={(event) => setName(event.target.value)}
             />
           </label>
+          <fieldset
+            className="space-y-3 rounded-lg border p-3"
+            disabled={!!busy}
+          >
+            <legend className="px-1 font-medium">
+              {t('projectArchiveSelection')}
+            </legend>
+            <p className="text-muted-foreground">{t('projectArchiveCore')}</p>
+            {(['files', 'conversations', 'work'] as const).map((category) => {
+              const required =
+                category === 'files'
+                  ? selection.includes('conversations') ||
+                    selection.includes('work')
+                  : category === 'conversations' && selection.includes('work');
+              return (
+                <label key={category} className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={selection.includes(category)}
+                    disabled={!!busy || required}
+                    onChange={(event) => {
+                      const next = new Set(selection);
+                      if (event.target.checked) {
+                        next.add(category);
+                        if (category === 'work') next.add('conversations');
+                        if (category !== 'files') next.add('files');
+                      } else next.delete(category);
+                      setSelection([...next]);
+                    }}
+                  />
+                  <span>
+                    {t(`projectArchiveBundle_${category}`)}
+                    {required && (
+                      <span className="block text-xs text-muted-foreground">
+                        {t('projectArchiveRequired')}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+            <p className="text-muted-foreground">
+              {t('projectArchiveDependencies')}
+            </p>
+          </fieldset>
           <p>{t('projectArchiveSafety')}</p>
           <p>{t('projectArchiveContacts')}</p>
           <p>{t('projectArchiveExpiry')}</p>

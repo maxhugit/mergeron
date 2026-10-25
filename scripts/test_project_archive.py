@@ -85,6 +85,31 @@ class ProjectArchiveTest(unittest.TestCase):
             for name, data in content.items():
                 target.writestr(name, data)
 
+    def test_selected_bundles_keep_dependencies_and_valid_foreign_keys(self):
+        self.add_agent()
+        self.export()
+        for selection in ([], ['files'], ['conversations'], ['work']):
+            with self.subTest(selection=selection):
+                archive, manifest = self.load()
+                result = engine.import_archive(dict(self.target, selection=selection), archive, manifest)
+                target = self.target_root / result['projectId']
+                self.assertEqual((target / 'documents/budget.txt').exists(), bool(selection))
+                with engine.connect(self.target_db) as db:
+                    pid = result['projectId']
+                    self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+                    self.assertEqual(db.execute('SELECT count(*) FROM simple_chat_threads WHERE project_id=?', (pid,)).fetchone()[0], int(selection in (['conversations'], ['work'])))
+                    resources = db.execute('SELECT count(*) FROM project_resources WHERE project_id=?', (pid,)).fetchone()[0]
+                    self.assertEqual(resources, int(selection == ['work']))
+                    self.assertEqual(db.execute('SELECT count(*) FROM project_agent_threads WHERE project_id=?', (pid,)).fetchone()[0], int(selection in (['conversations'], ['work'])))
+
+    def test_invalid_selection_fails_before_creating_anything(self):
+        self.export()
+        archive, manifest = self.load()
+        for selection in ('files', ['unknown'], [None], {}):
+            with self.assertRaisesRegex(engine.ArchiveError, 'Sélection'):
+                engine.import_archive(dict(self.target, selection=selection), archive, manifest)
+        self.assertEqual(list(self.target_root.iterdir()), [])
+
     def test_round_trip_between_different_application_versions(self):
         self.export()
         archive, manifest = self.load()
@@ -294,6 +319,7 @@ class ProjectArchiveTest(unittest.TestCase):
             composition = json.dumps([{'documentId': 'document', 'documentVersionId': 'document-version', 'versionNumber': 1, 'sha256': digest}])
             db.execute("INSERT INTO project_deliverable_snapshots(id,deliverable_id,documents,created_by_person_id,created_by_name,created_at) VALUES('snapshot','deliverable',?,'person','Alice',1)", (composition,))
         self.export()
+        self.target['selection'] = ['work']  # must pull tasks, snapshots and files together
         self.import_project()
         with engine.connect(self.target_db) as db:
             document = db.execute('SELECT * FROM project_deliverable_documents').fetchone()

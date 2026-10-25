@@ -73,7 +73,7 @@ export class ProjectArchivesController {
   @Post('import')
   async import(
     @Req() request: IdentityRequest,
-    @Body() body: { token?: unknown; name?: unknown },
+    @Body() body: { token?: unknown; name?: unknown; selection?: unknown },
   ) {
     const { owner, personId } = archiveAdministrator(request);
     return this.archives.importProject(owner, personId, body ?? {});

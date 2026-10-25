@@ -4,6 +4,7 @@ Invoked by the authenticated application, not a public command-line restore tool
 Only the Python standard library is required in the runtime image.
 """
 import base64
+import copy
 import hashlib
 import json
 import os
@@ -713,7 +714,42 @@ def insert_rows(db, records):
             db.execute(sql, tuple(decoded(record[k]) for k in keys))
 
 
+def select_import_content(manifest, selection):
+    """Coarse bundles; dependencies are included, never references silently severed."""
+    if selection is None:
+        return manifest
+    if not isinstance(selection, list) or any(not isinstance(s, str) or s not in {'files', 'conversations', 'work'} for s in selection):
+        fail('Sélection d’import invalide. Choisissez les catégories proposées.')
+    selected = set(selection)
+    if 'work' in selected:
+        selected.add('conversations')
+    if 'conversations' in selected:
+        selected.add('files')
+    result = copy.deepcopy(manifest)
+    core = {'projects', 'people', 'project_participants', 'project_manager_assignments',
+            'project_person_groups', 'project_person_group_members', 'project_workspaces',
+            'project_workspace_resources', 'project_workspace_copies',
+            'project_workspace_transfers', 'project_workspace_transfer_runs'}
+    conversations = THREAD_TABLES | {'project_agent_threads', 'project_active_folders',
+                                    'simple_chat_threads', 'simple_chat_messages', 'settings'}
+    result['tables'] = {name: rows for name, rows in result['tables'].items()
+                        if name in core or (name in conversations and 'conversations' in selected)
+                        or (name not in core | conversations and 'work' in selected)}
+    if 'conversations' not in selected:
+        result.pop('agents', None)
+        result['roots'] = [r for r in result['roots'] if r['kind'] == 'workspace']
+    roots = {r['key'] for r in result['roots']}
+    result['files'] = [r for r in result['files'] if 'files' in selected and r['root'] in roots]
+    result['directories'] = [r for r in result.get('directories', []) if 'files' in selected and r['root'] in roots]
+    if 'work' not in selected:
+        result['tables']['projects'][0]['sidebar_order'] = '[]'
+    return result
+
+
 def import_archive(options, archive, manifest):
+    # Validate the complete original archive first, then revalidate the selected closure.
+    preview(options, manifest)
+    manifest = select_import_content(manifest, options.get('selection'))
     preview(options, manifest)
     ids = {}
     native = manifest.get('agents')
