@@ -82,10 +82,15 @@ export interface ManagerUpdatePlan {
   images: Record<string, string>;
 }
 
+export type ManagerUpdateState = NonNullable<ManagerStatus['update']>;
+export type ManagerUpdateOperation = NonNullable<
+  ManagerUpdateState['operation']
+>;
+
 export async function requestManagerUpdate(
   action: 'plan' | 'apply' | 'rollback' | 'recover',
   input: Record<string, unknown>,
-): Promise<ManagerUpdatePlan> {
+): Promise<ManagerUpdatePlan | ManagerUpdateState> {
   const authorization = getAuthorizationHeader();
   const response = await fetch(
     withBasePath(
@@ -100,7 +105,10 @@ export async function requestManagerUpdate(
       body: JSON.stringify(input),
     },
   );
-  const data = (await response.json()) as ManagerUpdatePlan & {
+  const data = (await response.json()) as (
+    | ManagerUpdatePlan
+    | ManagerUpdateState
+  ) & {
     message?: string;
     error?: string;
   };

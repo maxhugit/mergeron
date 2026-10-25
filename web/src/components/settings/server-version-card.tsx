@@ -258,9 +258,7 @@ export function ServerVersionCard() {
           ))}
         </section>
       )}
-      {manager.data?.available && manager.data.update && (
-        <ManagerUpdateControls status={manager.data} />
-      )}
+      {manager.data && <ManagerUpdateControls status={manager.data} />}
     </section>
   );
 }
