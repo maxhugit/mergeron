@@ -453,7 +453,7 @@ export function ProjectDeliverablesManager({
   );
 }
 
-function DeliverablesList({
+export function DeliverablesList({
   items,
   board,
   onSelect,
@@ -468,7 +468,7 @@ function DeliverablesList({
   >(null);
   return (
     <div className="@container">
-      <div className="hidden grid-cols-[minmax(0,2fr)_65px_120px_120px_minmax(0,1.5fr)_120px_95px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium text-muted-foreground @min-[68rem]:grid">
+      <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium text-muted-foreground @min-[68rem]:grid">
         <span>{t('title')}</span>
         <span>{t('documents')}</span>
         <span>{t('status')}</span>
@@ -482,17 +482,17 @@ function DeliverablesList({
           const task = board.tasks.find(
             (candidate) => candidate.id === item.primaryTaskId,
           );
-          const count = item.documents.filter(
+          const documents = item.documents.filter(
             (document) => document.deletedAt === null,
-          ).length;
+          );
           return (
             <div
               key={item.id}
-              className="grid w-full grid-cols-2 items-center gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-accent/60 @min-[36rem]:grid-cols-3 @min-[68rem]:grid-cols-[minmax(0,2fr)_65px_120px_120px_minmax(0,1.5fr)_120px_95px] @min-[68rem]:gap-3"
+              className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-accent/60 @min-[68rem]:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] @min-[68rem]:items-center @min-[68rem]:gap-3"
             >
               <button
                 type="button"
-                className="order-1 col-span-1 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[36rem]:col-span-2 @min-[68rem]:order-none @min-[68rem]:col-span-1"
+                className="col-start-1 row-start-1 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[68rem]:col-auto @min-[68rem]:row-auto"
                 onClick={() => onSelect(item.id)}
               >
                 <strong className="block truncate">{item.title}</strong>
@@ -500,24 +500,40 @@ function DeliverablesList({
                   {item.description || t('noDescription')}
                 </span>
               </button>
-              <span className="order-3 flex items-center gap-2 text-sm @min-[68rem]:order-none">
-                <span className="text-xs text-muted-foreground @min-[68rem]:hidden">
-                  {t('documents')}:
+              <div className="col-start-1 row-start-2 min-w-0 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground @min-[68rem]:hidden">
+                    {t('documents')}:
+                  </span>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  {documents.length}
                 </span>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                {count}
-              </span>
+                <ul
+                  aria-label={t('documents')}
+                  className="mt-1 hidden min-w-0 space-y-1 text-xs text-muted-foreground @min-[36rem]:block"
+                >
+                  {documents.map((document) => (
+                    <li
+                      key={document.id}
+                      className="truncate"
+                      title={document.name}
+                    >
+                      {document.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
               <span
                 data-testid={`deliverable-status-${item.id}`}
-                className="order-2 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+                className="col-start-2 row-start-1 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
               >
                 <LifecycleBadge status={displayedLifecycle(item)} />
               </span>
               <ValidationBadge
                 item={item}
-                className="order-4 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+                className="col-start-2 row-start-2 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
               />
-              <span className="order-5 flex min-w-0 items-center gap-2 text-sm @min-[68rem]:order-none">
+              <span className="col-start-1 row-start-3 flex min-w-0 items-center gap-2 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                 {task ? (
                   <button
@@ -535,9 +551,9 @@ function DeliverablesList({
               </span>
               <AccessBadge
                 confidentiality={item.confidentiality}
-                className="order-6 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+                className="col-start-2 row-start-3 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
               />
-              <span className="order-7 text-xs text-muted-foreground @min-[68rem]:order-none">
+              <span className="col-start-1 row-start-4 text-xs text-muted-foreground @min-[68rem]:col-auto @min-[68rem]:row-auto">
                 {new Date(item.updatedAt).toLocaleDateString()}
               </span>
             </div>
