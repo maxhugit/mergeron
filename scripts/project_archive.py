@@ -27,7 +27,8 @@ FORMAT = 1
 AGENT_CODEC = '0.153'
 CAPABILITIES = {'relational-v1', 'workspace-tree-v1', 'simple-chat-v1',
                 'tasks-v1', 'deliverables-v1', 'knowledge-v1', 'automation-v1',
-                'workspace-connections-v1', 'conversation-branches-v1', 'codex-history-0.153'}
+                'workspace-connections-v1', 'conversation-branches-v1', 'codex-history-0.153',
+                'agent-response-detail-v1'}
 MAX_BYTES = 1024 ** 3
 MAX_ZIP = 96 * 1024 ** 2
 MAX_ENTRY = 256 * 1024 ** 2
@@ -211,7 +212,7 @@ def select_project(db, project_id):
     # Credentials and SSO subjects are installation-specific, not project content.
     for person in selected['people']:
         person['identity_subject'] = None
-    selected['settings'] = scoped_rows(db, 'settings', 'key', {'thread-workspace:' + tid for tid in thread_ids})
+    selected['settings'] = scoped_rows(db, 'settings', 'key', {prefix + tid for tid in thread_ids for prefix in ('thread-workspace:', 'thread-response-detail:')})
     return {name: records for name, records in selected.items() if records}, thread_ids
 
 
@@ -383,6 +384,8 @@ def export_snapshot(options, source_db):
                 'warnings': ['Les identifiants de connexion ne sont pas transférés. Les agents et automatisations importés restent arrêtés.',
                              'Les fichiers du projet peuvent contenir des données confidentielles. Le ZIP n’est pas chiffré.',
                              'Les connexions externes sont conservées comme définitions désactivées, sans leurs secrets ni une copie de leurs serveurs distants.']}
+    if not any(r['key'].startswith('thread-response-detail:') for r in data.get('settings', [])):
+        manifest['requiredCapabilities'].remove('agent-response-detail-v1')
     size = 0
     watched = []
     seen = set()
@@ -593,8 +596,10 @@ def preview(options, manifest):
     if manifest['project']['id'] != project_id:
         fail('L’identité du projet ne correspond pas à l’inventaire.')
     thread_ids = {r['thread_id'] for r in manifest['tables'].get('project_agent_threads', [])}
-    if any(r['key'] not in {'thread-workspace:' + tid for tid in thread_ids} for r in manifest['tables'].get('settings', [])):
+    if any(r['key'] not in {prefix + tid for tid in thread_ids for prefix in ('thread-workspace:', 'thread-response-detail:')} for r in manifest['tables'].get('settings', [])):
         fail('Le ZIP ne peut pas contenir de réglages globaux de l’installation.')
+    if any(r['key'].startswith('thread-response-detail:') and r['value'] not in ('concise', 'normal', 'detailed') for r in manifest['tables'].get('settings', [])):
+        fail('Niveau de détail d’un agent incompatible.')
     if len(manifest['roots']) > MAX_ENTRIES or len(manifest.get('directories', [])) > MAX_ENTRIES:
         fail('Le ZIP contient trop de racines ou de dossiers.')
     root_keys, root_sources = set(), set()
@@ -691,7 +696,7 @@ def remap(value, ids, paths):
             return target + tail
     if ':' in value:
         prefix, suffix = value.split(':', 1)
-        if prefix in ('agent', 'simple', 'resource', 'thread', 'thread-workspace') and suffix in ids:
+        if prefix in ('agent', 'simple', 'resource', 'thread', 'thread-workspace', 'thread-response-detail') and suffix in ids:
             return prefix + ':' + ids[suffix]
     if value.startswith(('{', '[')):
         try:

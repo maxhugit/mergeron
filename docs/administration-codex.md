@@ -1,5 +1,24 @@
 # Administration Codex : listes, enregistrement et version du CLI
 
+## Niveau de détail par agent
+
+Dans la conversation d’un agent, ouvrir **Capacités**, puis choisir **Concis**,
+**Normal** ou **Détaillé** dans **Niveau de détail**. Le choix est enregistré
+côté serveur pour cet agent ; il ne modifie pas les autres conversations ni
+les réglages globaux. Sans choix explicite, le mode est Normal.
+
+La préférence est transmise comme consigne de présentation au début de chaque
+nouveau tour. Elle s’applique donc aux prochaines réponses, pas à un tour déjà
+en cours. Repasser sur Normal remplace explicitement la préférence précédente.
+Le modèle garde une marge d’adaptation à la demande précise de l’utilisateur :
+ce n’est pas une limite stricte de mots ou de jetons. Les erreurs et informations
+essentielles ne doivent pas être omises en mode Concis.
+
+Ce choix ne modifie ni l’effort de raisonnement, ni les permissions, ni les outils.
+Les commandes, résultats et logs restent consultables dans les trois modes.
+Le choix accompagne les agents lors d’un export/import ZIP ; une destination trop
+ancienne pour comprendre cette préférence refuse l’archive avec une explication.
+
 ## Consignes et connaissance partagée
 
 - `instructions` est réservé à un usage futur par Codex : laisser vide et utiliser

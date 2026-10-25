@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ThreadResponseDetailService } from './thread-response-detail.service';
+import { ThreadResponseDetailController } from './thread-response-detail.controller';
 import { DeliverablesModule } from '../deliverables/deliverables.module';
 import { KnowledgeProposalsObserverService } from './knowledge-proposals-observer.service';
 import { ProjectKnowledgeModule } from '../project-knowledge/project-knowledge.module';
@@ -48,6 +50,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     ThreadDeletionModule,
   ],
   controllers: [
+    ThreadResponseDetailController,
     ThreadsController,
     ThreadsDeletionController,
     ThreadCommandsController,
@@ -55,6 +58,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     WorkspacesManagementController,
   ],
   providers: [
+    ThreadResponseDetailService,
     KnowledgeProposalsObserverService,
     ThreadsService,
     ThreadsBranchingService,

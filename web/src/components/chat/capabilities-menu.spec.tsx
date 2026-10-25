@@ -13,6 +13,9 @@ vi.mock('./skill-selector', () => ({
 vi.mock('./service-tier-selector', () => ({
   ServiceTierSelector: () => <button>Speed</button>,
 }));
+vi.mock('./response-detail-selector', () => ({
+  ResponseDetailSelector: () => <select aria-label="Response detail" />,
+}));
 
 describe('CapabilitiesMenu', () => {
   it('groups connectors, skills and speed behind one composer control', () => {
@@ -27,5 +30,8 @@ describe('CapabilitiesMenu', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skills' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Speed' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('combobox', { name: 'Response detail' }),
+    ).toBeInTheDocument();
   });
 });

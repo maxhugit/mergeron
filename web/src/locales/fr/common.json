@@ -119,6 +119,8 @@
   "tokenThresholdForAutomaticContextCompaction": "Seuil de jetons déclenchant la condensation automatique du contexte",
   "reservedForFutureUseByCodexLeaveEmptyUseAgentsMdForProjectGuidance": "Champ réservé à un usage futur par Codex. Laissez vide ; utilisez AGENTS.md pour les consignes du projet.",
   "verbosity": "Niveau de détail",
+  "responseDetailNormal": "Normal",
+  "responseDetailHint": "Enregistré pour cet agent. S’applique aux prochaines réponses ; les logs restent consultables.",
   "webSearch": "Recherche sur le Web",
   "valueCannotBeEmpty": "La valeur ne peut pas être vide",
   "valueMustBeAValidNumber": "La valeur doit être un nombre valide",

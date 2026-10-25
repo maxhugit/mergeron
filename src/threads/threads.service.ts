@@ -57,6 +57,7 @@ import { ThreadWorkspaceOverridesService } from './thread-workspace-overrides.se
 import { ThreadMetadataService } from './thread-metadata.service';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { ThreadResponseDetailService } from './thread-response-detail.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
 const MAX_FORK_CHAIN_WALK = 32;
@@ -89,6 +90,7 @@ export class ThreadsService {
     private readonly activeFolders: ActiveFoldersService,
     @Optional() private readonly knowledge?: ProjectKnowledgeService,
     @Optional() private readonly deliverables?: DeliverablesService,
+    @Optional() private readonly responseDetail?: ThreadResponseDetailService,
   ) {}
 
   /**
@@ -441,6 +443,7 @@ export class ThreadsService {
     const deliverableContext = this.deliverables?.contextForConversation(
       params.threadId,
     );
+    const responseGuidance = this.responseDetail?.context(params.threadId);
     const effectiveParams: v2.TurnStartParams = {
       ...params,
       ...(projectPolicy?.readOnly
@@ -451,12 +454,12 @@ export class ThreadsService {
             },
           }
         : {}),
-      ...(sharedKnowledge || deliverableContext
+      ...(sharedKnowledge || deliverableContext || responseGuidance
         ? {
             input: [
               {
                 type: 'text' as const,
-                text: [sharedKnowledge, deliverableContext]
+                text: [sharedKnowledge, deliverableContext, responseGuidance]
                   .filter(Boolean)
                   .join('\n\n'),
                 text_elements: [],
