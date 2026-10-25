@@ -32,6 +32,7 @@ try {
     const fs=require('fs'), assert=require('assert/strict');
     const root=process.argv[1], db=process.argv[2], ssh=process.argv[3];
     fs.writeFileSync(root+'/main.js','code-editable');
+    assert.throws(()=>fs.writeFileSync(root+'/missing-project/tampered','no'),e=>e.code==='EROFS'||e.code==='EACCES');
     assert.equal(fs.readFileSync(root+'/livrables/report.docx','utf8'),'V1');
     for(const file of [root+'/livrables/report.docx',root+'/.mergeron/v1.docx']) {
       assert.throws(()=>fs.writeFileSync(file,'tampered'),e=>e.code==='EROFS'||e.code==='EACCES');
@@ -57,6 +58,7 @@ try {
       databasePath,
       writableRoots: [workspace],
       publishedRoots: [retained, history],
+      unavailableRoots: [path.join(workspace, 'missing-project')],
     },
     process.execPath,
     ['-e', probe, workspace, databasePath, ssh],

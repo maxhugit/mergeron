@@ -111,7 +111,7 @@ export class ThreadsService {
     params: v2.ThreadStartParams,
   ): Promise<v2.ThreadStartResponse> {
     requireExecutionAccess();
-    await this.processManager?.ensureDocumentIsolation();
+    await this.processManager?.ensureDocumentIsolation(params.cwd);
     const projectPolicy = await this.projectConnections.policyForCwd(
       params.cwd,
     );
@@ -429,7 +429,6 @@ export class ThreadsService {
    */
   async startTurn(params: v2.TurnStartParams): Promise<v2.TurnStartResponse> {
     requireExecutionAccess();
-    await this.processManager?.ensureDocumentIsolation();
     this.deletionRegistry.assertMutable(params.threadId);
     const beforeTurn = this.metadata.getHeldThread(params.threadId);
     const shouldAutoName = Boolean(
@@ -444,6 +443,7 @@ export class ThreadsService {
     const workspaceCwd =
       activeCwd ?? this.workspaceOverrides.get(params.threadId);
     const effectiveCwd = workspaceCwd ?? params.cwd ?? beforeTurn?.cwd ?? null;
+    await this.processManager?.ensureDocumentIsolation(effectiveCwd);
     const projectPolicy =
       await this.projectConnections.policyForCwd(effectiveCwd);
     const sharedKnowledge = await this.knowledge?.contextForConversation(

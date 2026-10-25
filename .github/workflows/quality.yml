@@ -17,7 +17,8 @@ on:
         default: false
 
 concurrency:
-  group: mergeron-quality-${{ github.ref }}
+  # A reusable invocation must not cancel source checks of an active publish.
+  group: mergeron-quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -107,6 +108,10 @@ jobs:
           src/database/database.service.spec.ts
           src/database/pending-request-migration.spec.ts
           src/http-stack.spec.ts
+
+      - name: Test release-pair compensation
+        if: matrix.part == 'backend'
+        run: node --test scripts/promote-image-pair.test.mjs
           src/archive
           src/document-publication
           src/projects/project-workspace-layout.spec.ts

@@ -6,6 +6,7 @@ export interface DocumentIsolationPlan {
   databasePath: string;
   writableRoots: string[];
   publishedRoots: string[];
+  unavailableRoots?: string[];
 }
 
 const PRIVATE_ENV =
@@ -96,6 +97,12 @@ export function documentIsolationArgs(
   // Overlay after every writable bind, including nested workspace roots.
   for (const root of [...new Set(plan.publishedRoots)].sort())
     result.push('--ro-bind', root, root);
+  // Missing paths are masked inside the namespace only, never recreated on disk.
+  for (const root of [...new Set(plan.unavailableRoots ?? [])].sort()) {
+    if (!root.startsWith('/workspaces/'))
+      throw new Error('Invalid unavailable workspace boundary');
+    result.push('--tmpfs', root, '--remount-ro', root);
+  }
   // SQLite's sidecars must not expose identities, sessions or server settings.
   for (const suffix of ['', '-wal', '-shm', '-journal'])
     result.push('--ro-bind', '/dev/null', plan.databasePath + suffix);

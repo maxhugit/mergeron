@@ -126,10 +126,11 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   /** New project folders cannot enter an already running mount namespace. */
-  async ensureDocumentIsolation(): Promise<void> {
+  async ensureDocumentIsolation(cwd?: string | null): Promise<void> {
     if (!this.documentProtection?.enabled) return;
     const plan = await this.documentProtection.plan();
     if (this.documentProtection.changed(plan)) await this.restartControlled();
+    this.documentProtection.assertWorkspaceAvailable(cwd);
   }
 
   /** Recovers interrupted activation before spawning; errors leave HTTP repair available. */
