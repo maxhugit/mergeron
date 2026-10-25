@@ -58,7 +58,14 @@ class ManagerDeploymentTest(unittest.TestCase):
         self.assertIn("MERGERON_PROXY_NETWORK: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}", self.compose)
         self.assertIn("name: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}", self.compose)
         self.assertEqual(root.find("Config[@Target='MERGERON_PROXY_NETWORK']").text, "mergeron-proxy")
-        self.assertEqual(root.find("Config[@Target='MERGERON_AUTH_MODE']").text, "authentik")
+        self.assertEqual(root.find("Config[@Target='MERGERON_AUTH_MODE']").text, "native")
+        self.assertIn('MERGERON_AUTH_MODE=native', self.production_env)
+        self.assertIn('MERGERON_AUTH_MODE=native', self.development_env)
+        self.assertIn('MERGERON_NGINX_TEMPLATE=nginx.native.conf.template', self.production_env)
+        self.assertIn('MERGERON_NGINX_TEMPLATE=nginx.native.conf.template', self.development_env)
+        # An existing Compose stack without an explicit choice must fail closed,
+        # not silently remount a different authentication template on recreation.
+        self.assertIn('${MERGERON_NGINX_TEMPLATE:?', self.compose)
         self.assertIn("nginx.native.conf.template", self.dockerfile)
         self.assertIn("sh scripts/smoke-test-ingress.sh", self.quality_workflow)
 

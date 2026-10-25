@@ -1,5 +1,11 @@
 import { ConfigService } from '@nestjs/config';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AuthConfigService } from './auth-config.service';
@@ -20,6 +26,36 @@ describe('AuthConfigService', () => {
   });
 
   afterEach(() => rmSync(directory, { recursive: true, force: true }));
+
+  it('defaults to username/password with OIDC and its redirect disabled', () => {
+    expect(service.getPublic().local.enabled).toBe(true);
+    expect(service.getPublic().oidc.enabled).toBe(false);
+    expect(service.getPublic().oidc.autoRedirect).toBe(false);
+  });
+
+  it('preserves the explicit authentication choices of an existing installation', () => {
+    const stored = {
+      version: 1,
+      local: { enabled: false },
+      oidc: {
+        enabled: true,
+        issuerUrl: 'https://identity.example.test',
+        clientId: 'existing',
+        clientSecret: 'private',
+        redirectUri: 'https://webui.example.test/api/auth/oidc/callback',
+        autoRedirect: true,
+      },
+    };
+    writeFileSync(path, JSON.stringify(stored), { mode: 0o600 });
+    const existing = new AuthConfigService({
+      get: (key: string) =>
+        key === 'WEBUI_AUTH_CONFIG_PATH' ? path : undefined,
+    } as ConfigService);
+    expect(existing.get().local.enabled).toBe(false);
+    expect(existing.get().oidc.enabled).toBe(true);
+    expect(existing.get().oidc.autoRedirect).toBe(true);
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(stored);
+  });
 
   it('persists configuration atomically with owner-only permissions', () => {
     const result = service.update({

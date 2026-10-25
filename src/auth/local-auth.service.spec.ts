@@ -44,6 +44,21 @@ describe('LocalAuthService', () => {
   afterEach(() => rmSync(directory, { recursive: true, force: true }));
   afterAll(() => database.sqlite.close());
 
+  it('offers only password authentication by default without allowing unprovisioned logins', async () => {
+    expect(service.methods()).toMatchObject({
+      localEnabled: true,
+      oidcEnabled: false,
+      oidcAutoRedirect: false,
+    });
+    await expect(
+      service.login('admin', 'unprovisioned-password'),
+    ).rejects.toThrow('Invalid username or password');
+    expect(database.db.select().from(localAuthCredentials).all()).toHaveLength(
+      0,
+    );
+    expect(database.db.select().from(authSessions).all()).toHaveLength(0);
+  });
+
   it('creates an Argon2id credential and a revocable opaque session', async () => {
     await service.setAccount('admin', {
       username: 'maxime',
