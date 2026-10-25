@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Cable, PlugZap, Unlink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   projectsApi,
   projectsQueryKey,
@@ -34,7 +44,9 @@ export function ExternalWorkspaceResources({
   pending: boolean;
   allowCreate?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['workspaces', 'common'], {
+    nsMode: 'fallback',
+  });
   const queryClient = useQueryClient();
   const [resources, setResources] = useState<ProjectWorkspaceResourceSummary[]>(
     [],
@@ -46,6 +58,9 @@ export function ExternalWorkspaceResources({
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [detaching, setDetaching] =
+    useState<ProjectWorkspaceResourceSummary | null>(null);
+  const detachTrigger = useRef<HTMLButtonElement | null>(null);
   const load = useCallback(async () => {
     try {
       const result = await projectsApi<{
@@ -248,7 +263,7 @@ export function ExternalWorkspaceResources({
           key={resource.id}
           className="space-y-2 rounded-lg border border-border p-3"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <PlugZap className="h-4 w-4 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -274,7 +289,7 @@ export function ExternalWorkspaceResources({
                 <p className="text-xs text-destructive">{resource.lastError}</p>
               )}
             </div>
-            <div className="flex gap-1">
+            <div className="ml-auto flex w-full flex-wrap justify-end gap-1 sm:w-auto">
               <Button
                 size="sm"
                 variant="ghost"
@@ -318,15 +333,15 @@ export function ExternalWorkspaceResources({
                 size="sm"
                 variant="ghost"
                 className="text-destructive"
-                disabled={busy}
-                onClick={() =>
-                  void mutate(
-                    `/${project.id}/workspace-resources/${resource.id}`,
-                    { method: 'DELETE' },
-                  )
-                }
+                disabled={pending || busy}
+                onClick={(event) => {
+                  detachTrigger.current = event.currentTarget;
+                  setError('');
+                  setDetaching(resource);
+                }}
               >
                 <Unlink className="h-3.5 w-3.5" />
+                {t('detachFromProject')}
               </Button>
             </div>
           </div>
@@ -401,6 +416,52 @@ export function ExternalWorkspaceResources({
         </p>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
+      <AlertDialog
+        open={detaching !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setDetaching(null);
+        }}
+      >
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (detachTrigger.current?.isConnected)
+              detachTrigger.current.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('detachResourceTitle', { name: detaching?.name ?? '' })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('detachResourceDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pending || busy || !detaching}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!detaching || pending || busy) return;
+                void mutate(
+                  `/${project.id}/workspace-resources/${detaching.id}`,
+                  { method: 'DELETE' },
+                ).then((done) => {
+                  if (done) setDetaching(null);
+                });
+              }}
+            >
+              {t('detachFromProject')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <WorkspaceTransfers project={project} />
     </div>
   );
