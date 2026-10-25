@@ -1236,9 +1236,6 @@ it('creates an independent version from the current document file', async () => 
     deliverables: [{ ...item, documents: [document] }],
   });
   fireEvent.click(screen.getByRole('tab', { name: /Documents/ }));
-  fireEvent.change(screen.getByLabelText('Version comment'), {
-    target: { value: 'After review' },
-  });
   expect(screen.getByRole('link', { name: 'report.docx' })).toHaveAttribute(
     'href',
     '/document?path=%2Fworkspaces%2Fp%2Flivrables%2Fd%2Freport.docx',
@@ -1267,7 +1264,7 @@ it('creates an independent version from the current document file', async () => 
   )?.[1] as RequestInit;
   expect(JSON.parse(request.body as string)).toEqual({
     path: '/workspaces/p/livrables/d/report.docx',
-    comment: 'After review',
+    comment: '',
     expectedVersion: 2,
   });
 });
@@ -1383,7 +1380,11 @@ it('uploads selected files before creating their document records', async () => 
 
   await setup();
   fireEvent.click(screen.getByRole('tab', { name: /Documents/ }));
+  expect(screen.queryByLabelText('Version comment')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Add a document' }));
+  fireEvent.change(screen.getByLabelText('Version comment'), {
+    target: { value: 'Initial document' },
+  });
   fireEvent.change(screen.getByLabelText('Documents'), {
     target: {
       files: [new File(['brief'], 'brief.pdf', { type: 'application/pdf' })],
@@ -1406,7 +1407,7 @@ it('uploads selected files before creating their document records', async () => 
   )?.[1] as RequestInit;
   expect(JSON.parse(request.body as string)).toEqual({
     path: '/workspaces/p/livrables/d/brief.pdf',
-    comment: '',
+    comment: 'Initial document',
   });
 
   vi.unstubAllGlobals();

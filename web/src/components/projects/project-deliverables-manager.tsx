@@ -1203,7 +1203,6 @@ function DeliverableDetail({
             />
           )}
           {tab === 'documents' && (
-            <div className="rounded-xl border bg-card p-4">
               <DeliverableDocuments
                 item={item}
                 base={base}
@@ -1215,7 +1214,6 @@ function DeliverableDetail({
                 refresh={refresh}
                 onError={fail}
               />
-            </div>
           )}
           {tab === 'history' && (
             <DeliverableHistory item={item} download={download} />
