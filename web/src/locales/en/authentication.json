@@ -63,6 +63,11 @@
     "connectionError": "Failed to connect to server"
   },
   "access": {
+    "reconnecting": "Connection interrupted",
+    "connectionInterrupted": "The connection to the server was interrupted. Your identity will be checked again when you return to this window or the network reconnects.",
+    "sessionExpired": "Session renewal required",
+    "proxySessionExpired": "Your sign-in session needs to be renewed. You will be redirected to authentication. If needed, click Restore connection.",
+    "restoreConnection": "Restore connection",
     "verifying": "Verifying identity…",
     "unavailable": "Access unavailable",
     "verificationError": "Unable to verify your identity",

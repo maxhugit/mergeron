@@ -27,7 +27,12 @@ import { cn } from '@/lib/utils';
 import { clearApiToken } from '@/auth-token';
 import { resetSocket } from '@/socket';
 import { filesGetRoots, filesAddRoot } from '@/generated/api';
-import { readAuthResource, usePlatformSession } from '@/lib/platform-session';
+import {
+  AuthRedirectError,
+  isSessionTransportError,
+  readAuthResource,
+  usePlatformSession,
+} from '@/lib/platform-session';
 import { isSupportedLocale } from '@/locales';
 import { MobileRefresh } from '@/components/mobile-refresh';
 
@@ -46,21 +51,35 @@ export function AuthenticatedLayout() {
   const session = usePlatformSession();
   const { t } = useTranslation('authentication');
   const navigate = useNavigate();
+  const reconnecting = isSessionTransportError(session.error);
+  const proxyExpired = session.error instanceof AuthRedirectError;
   if (session.isPending)
     return <div className="p-6">{t('access.verifying')}</div>;
   if (session.isError || !session.data?.active)
     return (
       <main className="mx-auto max-w-xl space-y-4 p-6">
-        <h1 className="text-xl font-semibold">{t('access.unavailable')}</h1>
+        <h1 className="text-xl font-semibold">
+          {t(
+            reconnecting
+              ? 'access.reconnecting'
+              : proxyExpired
+                ? 'access.sessionExpired'
+                : 'access.unavailable',
+          )}
+        </h1>
         <p>
           {t(
-            session.isError
-              ? 'access.verificationError'
-              : 'access.inactivePerson',
+            reconnecting
+              ? 'access.connectionInterrupted'
+              : proxyExpired
+                ? 'access.proxySessionExpired'
+                : session.isError
+                  ? 'access.verificationError'
+                  : 'access.inactivePerson',
           )}
         </p>
-        {session.data?.email && <p>{session.data.email}</p>}
-        {session.data?.subject && (
+        {!session.isError && session.data?.email && <p>{session.data.email}</p>}
+        {!session.isError && session.data?.subject && (
           <p className="break-all text-xs">
             {t('access.reference')}: {session.data.subject}
           </p>
@@ -71,6 +90,14 @@ export function AuthenticatedLayout() {
         >
           {t('access.retry')}
         </button>
+        {(reconnecting || proxyExpired) && (
+          <button
+            className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
+            onClick={() => window.location.reload()}
+          >
+            {t('access.restoreConnection')}
+          </button>
+        )}
         <button
           className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
           onClick={() =>

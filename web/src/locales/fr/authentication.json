@@ -63,6 +63,11 @@
     "connectionError": "Échec de la connexion au serveur"
   },
   "access": {
+    "reconnecting": "Connexion interrompue",
+    "connectionInterrupted": "La connexion au serveur a été interrompue. Une nouvelle vérification sera effectuée au retour sur cette fenêtre ou au rétablissement du réseau.",
+    "sessionExpired": "Session à renouveler",
+    "proxySessionExpired": "Votre session de connexion doit être renouvelée. Vous allez être redirigé vers l’authentification. Si nécessaire, cliquez sur Rétablir la connexion.",
+    "restoreConnection": "Rétablir la connexion",
     "verifying": "Vérification de l’identité…",
     "unavailable": "Accès indisponible",
     "verificationError": "Impossible de vérifier votre identité",

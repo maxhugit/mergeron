@@ -66,6 +66,25 @@ const explorerDivider: BrowserCommand<
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    plugins: [
+      {
+        name: 'test-auth-proxy-redirect',
+        configureServer(server) {
+          // Real HTTP redirect, including WebKit's opaque manual-redirect response.
+          // This endpoint exists only in the test server, never the app build.
+          server.middlewares.use((request, response, next) => {
+            if (request.url !== '/api/auth/__test_proxy_redirect')
+              return next();
+            response.statusCode = 302;
+            response.setHeader(
+              'Location',
+              'https://authentication.example.invalid/sign-in',
+            );
+            response.end();
+          });
+        },
+      },
+    ],
     test: {
       projects: [
         {
