@@ -4,6 +4,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
+import { GitCopyActions } from './workspace-git-actions';
+import type { GitSnapshot } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 
@@ -17,6 +19,8 @@ vi.mock('@/lib/projects-api', () => ({
             id: 'git',
             name: 'Dépôt de développement',
             type: 'git',
+            accessMode: 'read_write',
+            address: 'https://github.com/example/demo.git',
             enabled: true,
           },
         ],
@@ -26,6 +30,7 @@ vi.mock('@/lib/projects-api', () => ({
             sourceResourceId: 'git',
             name: 'feature/une-branche-avec-un-nom-très-long',
             localPath: '/copy',
+            accessMode: 'read_write',
             sourceEnabled: true,
             state: 'ready',
           },
@@ -34,6 +39,7 @@ vi.mock('@/lib/projects-api', () => ({
     if (url.endsWith('/copies/copy'))
       return {
         branch: 'feature/une-branche-avec-un-nom-très-long',
+        fingerprint: 'a'.repeat(64),
         head: 'a'.repeat(40),
         ahead: 2,
         behind: 1,
@@ -46,6 +52,11 @@ vi.mock('@/lib/projects-api', () => ({
         ],
         branches: [],
         inspectedAt: 1,
+      };
+    if (url.endsWith('/staged-diff'))
+      return {
+        fingerprint: 'a'.repeat(64),
+        diff: '+staged change\n'.repeat(20),
       };
     if (url.endsWith('/pull-requests'))
       return {
@@ -85,6 +96,7 @@ test.each([260, 330, 600])(
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+
     const view = render(
       <QueryClientProvider client={client}>
         <div
@@ -148,3 +160,50 @@ test.each([260, 330, 600])(
     }
   },
 );
+
+test('keeps commit confirmation usable on mobile and never writes on cancel', async () => {
+  await page.viewport(390, 800);
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  const client = new QueryClient();
+  const state: GitSnapshot = {
+    fingerprint: 'a'.repeat(64),
+    head: 'b'.repeat(40),
+    branch: 'feature/long-branch-name',
+    changes: [{ path: 'src/reviewed.ts', status: 'M ' }],
+    branches: [],
+    ahead: 0,
+    behind: 0,
+    upstream: null,
+    branchesLimited: false,
+    inspectedAt: 1,
+  };
+  const view = render(
+    <QueryClientProvider client={client}>
+      <GitCopyActions
+        projectId="p"
+        copyId="copy"
+        snapshot={state}
+        address="https://github.com/example/demo.git"
+      />
+    </QueryClientProvider>,
+  );
+  try {
+    await page.getByRole('button', { name: 'Commit…', exact: true }).click();
+    const dialog = await screen.findByRole('dialog');
+    await screen.findByText(/staged change/);
+    const bounds = dialog.getBoundingClientRect();
+    expect(bounds.left).toBeGreaterThanOrEqual(0);
+    expect(bounds.right).toBeLessThanOrEqual(390);
+    expect(bounds.height).toBeLessThanOrEqual(800 * 0.85 + 1);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+    await page.screenshot({
+      path: '../../../.vitest-screenshots/git-commit-mobile.png',
+    });
+    await page.getByRole('button', { name: 'Annuler', exact: true }).click();
+    await expect.poll(() => screen.queryByRole('dialog')).toBeNull();
+  } finally {
+    view.unmount();
+    client.clear();
+  }
+});
