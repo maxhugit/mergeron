@@ -38,6 +38,9 @@ envoyé le fichier. La compatibilité est revérifiée à la confirmation.
 - Définitions des ressources distantes, copies locales et règles/historiques de transfert.
 
 Les identifiants et chemins opérationnels sont adaptés au nouveau projet. Les
+espaces locaux imbriqués conservent leurs fichiers partagés, sans duplication.
+Un espace secondaire englobant le principal est refusé avec une explication.
+Les
 historiques d’agents conservent leurs identifiants de tours/items, mais reçoivent
 de nouveaux identifiants de conversation. Les index paginés sont recalculés en
 fonction des nouveaux chemins et des nouvelles positions dans les fichiers JSONL.

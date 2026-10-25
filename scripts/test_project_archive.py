@@ -130,6 +130,19 @@ class ProjectArchiveTest(unittest.TestCase):
         self.assertNotEqual(first['projectId'], second['projectId'])
         self.assertTrue((self.target_root / first['projectId'] / 'documents/budget.txt').is_file())
 
+    def test_nested_workspaces_preserve_shared_files_without_duplication(self):
+        nested = self.project / 'documents'
+        with sqlite3.connect(self.source_db) as db:
+            db.execute("INSERT INTO project_workspaces(id,project_id,name,path,is_primary,created_at,updated_at) VALUES('nested','project-source','Nested',?,0,1,1)", (str(nested),))
+        self.export()
+        _, manifest = self.load()
+        self.assertEqual(len(manifest['files']), 1)
+        imported = self.import_project()
+        with engine.connect(self.target_db, True) as db:
+            workspace = db.execute("SELECT path FROM project_workspaces WHERE name='Nested'").fetchone()[0]
+        self.assertEqual(Path(workspace), self.target_root.resolve() / imported['projectId'] / 'documents')
+        self.assertEqual(len(list((self.target_root / imported['projectId']).rglob('budget.txt'))), 1)
+
     def test_rejects_unknown_archive_format_with_reason(self):
         self.export()
         self.rewrite_manifest(lambda m: m.update(formatVersion=99))

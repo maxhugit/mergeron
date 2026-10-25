@@ -343,6 +343,8 @@ def export_snapshot(options, source_db):
     primary = data['projects'][0]['workspace_path']
     if primary not in {r['source'] for r in roots}:
         fail('Espace principal absent du projet.')
+    if any(r['source'] != primary and Path(primary).is_relative_to(r['source']) for r in roots):
+        fail('Un espace secondaire contient l’espace principal. Réorganisez ces racines avant l’export pour préserver leur structure sans duplication.')
     # An attached local workspace must never be a parent of another project's root.
     other_paths = [r['workspace_path'] for r in rows(source_db, 'projects') if r['id'] != options['projectId']]
     other_paths += [r['path'] for r in rows(source_db, 'project_workspaces') if r['project_id'] != options['projectId']]
@@ -391,6 +393,9 @@ def export_snapshot(options, source_db):
                 source = Path(root['source'])
                 if root['kind'] == 'workspace':
                     watched.append((source, source.stat()))
+                    # A nested workspace is already included by its parent tree.
+                    if any(r['kind'] == 'workspace' and r['source'] != root['source'] and source.is_relative_to(r['source']) for r in roots):
+                        continue
                 candidates = [source] if root['kind'] != 'workspace' else source.rglob('*')
                 for file in candidates:
                     if file.is_dir() and not file.is_symlink():
@@ -601,6 +606,9 @@ def preview(options, manifest):
         root_sources.add(root['source'])
     if manifest['tables']['projects'][0]['workspace_path'] not in root_sources:
         fail('L’espace principal est absent du ZIP.')
+    primary = manifest['tables']['projects'][0]['workspace_path']
+    if any(r['kind'] == 'workspace' and r['source'] != primary and Path(primary).is_relative_to(r['source']) for r in manifest['roots']):
+        fail('Un espace secondaire contient l’espace principal : cette organisation ne peut pas être restaurée sans duplication.')
     if {r['source'] for r in manifest['roots'] if r['kind'] == 'workspace'} != {r['path'] for r in manifest['tables'].get('project_workspaces', [])}:
         fail('Les espaces de travail ne correspondent pas au contenu du ZIP.')
     for record in manifest['files']:
@@ -733,14 +741,22 @@ def import_archive(options, archive, manifest):
     ownership = json.dumps({'projectId': project_id, 'operationId': operation_id})
     durable_text(staging / '.mergeron-import-owner', ownership)
     paths, root_targets = {}, {}
-    for record in manifest['roots']:
+    # Resolve workspace parents before children, retaining nested folder identity.
+    ordered_roots = sorted(manifest['roots'], key=lambda r: (r['kind'] != 'workspace', len(PurePosixPath(r['source']).parts)))
+    for record in ordered_roots:
         key = safe_entry(record['key'])
         if '/' in key:
             fail('Racine de contenu invalide.')
         if record['source'] == source_project['workspace_path']:
             location = target
         elif record['kind'] == 'workspace':
-            location = target / '.mergeron' / 'imported-workspaces' / key
+            ancestors = [r for r in ordered_roots if r['kind'] == 'workspace' and r['key'] in root_targets and Path(record['source']).is_relative_to(r['source'])]
+            if ancestors:
+                ancestor = max(ancestors, key=lambda r: len(r['source']))
+                relative = Path(record['source']).relative_to(ancestor['source'])
+                location = root_targets[ancestor['key']] / Path(*(ids.get(part, part) for part in relative.parts))
+            else:
+                location = target / '.mergeron' / 'imported-workspaces' / key
         elif record['kind'] == 'agent' and native:
             thread_id = ids[key.removeprefix('agent-')]
             instant = datetime.now().astimezone()
