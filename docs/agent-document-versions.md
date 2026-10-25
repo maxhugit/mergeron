@@ -37,6 +37,14 @@ Les workspaces d'exécution doivent être des copies locales sous `/workspaces`.
 Une nouvelle racine nécessite un redémarrage contrôlé de Codex, refusé si un
 travail est actif ; aucun repli sans protection n'est effectué.
 
+Un workspace ou un fichier conservé absent/inaccessible ne bloque plus le
+démarrage de tous les projets. La frontière concernée est mise en quarantaine
+en lecture seule ; les chemins absents sont masqués uniquement dans l'espace
+isolé, sans recréation sur le serveur. Un tour visant un workspace mis en
+quarantaine est refusé avec une demande de réparation. Les anomalies de sécurité
+(liens symboliques, liens physiques multiples, chemins hors de `/workspaces`)
+restent bloquantes : elles ne sont jamais ignorées.
+
 La pile de développement active cette protection. Les installations existantes
 de production ne sont pas activées implicitement. Les nouvelles installations
 Compose/Manager déclarent la protection et le profil seccomp correspondant.

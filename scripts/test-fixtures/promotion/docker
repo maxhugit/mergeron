@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -eu
+echo "$*" >> "$PROMOTION_LOG"
+if [[ "$*" == *inspect* ]]; then
+  if [[ "${FAIL_SNAPSHOT:-}" == 1 ]]; then exit 1; fi
+  echo sha256:previous
+elif [[ "${FAIL_MANAGER:-}" == 1 && "$*" == *manager@sha256:new-manager* ]]; then
+  exit 1
+fi

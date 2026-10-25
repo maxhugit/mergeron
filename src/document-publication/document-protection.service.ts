@@ -25,6 +25,52 @@ import {
 @Injectable()
 export class DocumentProtectionService {
   private fingerprint: string | null = null;
+  private unavailableRoots: string[] = [];
+
+  assertWorkspaceAvailable(cwd?: string | null): void {
+    if (!cwd) return;
+    const target = path.resolve(cwd);
+    if (
+      this.unavailableRoots.some(
+        (root) => target === root || target.startsWith(root + path.sep),
+      )
+    )
+      throw new Error(
+        'This project has unavailable retained files or workspaces; repair it before running an agent. Other projects remain available.',
+      );
+  }
+
+  /** Keep the nearest existing boundary read-only if a registered path vanished. */
+  private async availableBoundary(target: string): Promise<string> {
+    let candidate = path.resolve(target);
+    const missing: string[] = [];
+    while (candidate !== path.dirname(candidate)) {
+      try {
+        const canonical = await fs.realpath(candidate);
+        if (
+          canonical !== '/workspaces' &&
+          !canonical.startsWith('/workspaces/')
+        )
+          throw new Error(
+            'Unavailable protected paths must remain under /workspaces',
+          );
+        return path.join(canonical, ...missing);
+      } catch (error) {
+        if (!this.unavailableFile(error)) throw error;
+        missing.unshift(path.basename(candidate));
+        candidate = path.dirname(candidate);
+      }
+    }
+    throw new Error(
+      'Cannot establish a protected boundary for an unavailable path',
+    );
+  }
+
+  private unavailableFile(error: unknown): boolean {
+    return ['ENOENT', 'EACCES', 'ENOTDIR'].includes(
+      (error as NodeJS.ErrnoException).code ?? '',
+    );
+  }
 
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
@@ -78,17 +124,39 @@ export class DocumentProtectionService {
       (await fs.lstat(ssh)).isSymbolicLink()
     )
       throw new Error('The server SSH directory must not be a symbolic link');
+    const quarantined = new Set<string>();
+    const boundaries = new Set<string>();
+    const missingBoundaries = new Set<string>();
+    const quarantine = async (target: string) => {
+      const boundary = await this.availableBoundary(target);
+      quarantined.add(path.resolve(target));
+      quarantined.add(boundary);
+      if (
+        await fs
+          .access(boundary)
+          .then(() => true)
+          .catch(() => false)
+      )
+        boundaries.add(boundary);
+      else missingBoundaries.add(boundary);
+    };
     const workspaces = this.db.select().from(projectWorkspaces).all();
     const workspaceRoots = await Promise.all(
       workspaces.map(async (workspace) => ({
         projectId: workspace.projectId,
-        root: await fs.realpath(workspace.path),
+        root: await fs.realpath(workspace.path).catch(async (error) => {
+          if (!this.unavailableFile(error)) throw error;
+          await quarantine(workspace.path);
+          return null;
+        }),
       })),
     );
     if (
       workspaceRoots.some(
         ({ root }) =>
-          root !== '/workspaces' && !root.startsWith('/workspaces/'),
+          root !== null &&
+          root !== '/workspaces' &&
+          !root.startsWith('/workspaces/'),
       )
     )
       throw new Error(
@@ -97,16 +165,29 @@ export class DocumentProtectionService {
     const publishedRoots: string[] = [];
     for (const project of this.db.select().from(projects).all()) {
       if (project.workspaceLayoutVersion < 1) continue;
-      const root = await fs.realpath(project.workspacePath);
+      const root = await fs
+        .realpath(project.workspacePath)
+        .catch(async (error) => {
+          if (!this.unavailableFile(error)) throw error;
+          await quarantine(project.workspacePath);
+          return null;
+        });
+      if (!root) continue;
       if (root !== '/workspaces' && !root.startsWith('/workspaces/'))
         throw new Error(
           'Protected projects require a primary workspace under /workspaces',
         );
-      publishedRoots.push(await this.directory(root, ['livrables']));
-      publishedRoots.push(await this.directory(root, ['.mergeron']));
+      try {
+        publishedRoots.push(await this.directory(root, ['livrables']));
+        publishedRoots.push(await this.directory(root, ['.mergeron']));
+      } catch (error) {
+        if (!this.unavailableFile(error)) throw error;
+        await quarantine(root);
+      }
     }
     const writableRoots = new Set<string>();
-    for (const workspace of workspaceRoots) writableRoots.add(workspace.root);
+    for (const workspace of workspaceRoots)
+      if (workspace.root) writableRoots.add(workspace.root);
     // Projectless code remains editable without exposing appdata/stack backups.
     if (
       await fs
@@ -129,7 +210,15 @@ export class DocumentProtectionService {
       .innerJoin(projects, eq(projects.id, projectResources.projectId))
       .all();
     for (const { document, project } of legacy) {
-      const sourceStat = await fs.lstat(document.sourcePath);
+      const sourceStat = await fs
+        .lstat(document.sourcePath)
+        .catch(async (error) => {
+          if (!this.unavailableFile(error)) throw error;
+          await quarantine(project.workspacePath);
+          await quarantine(path.dirname(document.sourcePath));
+          return null;
+        });
+      if (!sourceStat) continue;
       if (!sourceStat.isFile() || sourceStat.isSymbolicLink())
         throw new Error('A retained document source must be a regular file');
       const source = await fs.realpath(document.sourcePath);
@@ -138,6 +227,7 @@ export class DocumentProtectionService {
         !workspaceRoots.some(
           (workspace) =>
             workspace.projectId === project.id &&
+            workspace.root !== null &&
             source.startsWith(workspace.root + path.sep),
         )
       )
@@ -188,7 +278,12 @@ export class DocumentProtectionService {
       .all())
       for (const file of version.files) snapshots.add(file.snapshotPath);
     for (const snapshot of snapshots) {
-      const stat = await fs.lstat(snapshot);
+      const stat = await fs.lstat(snapshot).catch(async (error) => {
+        if (!this.unavailableFile(error)) throw error;
+        await quarantine(path.dirname(snapshot));
+        return null;
+      });
+      if (!stat) continue;
       const canonical = await fs.realpath(snapshot);
       if (
         !stat.isFile() ||
@@ -204,10 +299,12 @@ export class DocumentProtectionService {
       home,
       databasePath: this.database.databasePath,
       writableRoots: [...writableRoots].sort(),
-      publishedRoots: publishedRoots.sort(),
+      publishedRoots: [...new Set([...publishedRoots, ...boundaries])].sort(),
+      unavailableRoots: [...missingBoundaries].sort(),
     };
     // Validate broad roots before starting or restarting a process.
     documentIsolationArgs(plan, '/unused', []);
+    this.unavailableRoots = [...quarantined];
     return plan;
   }
 

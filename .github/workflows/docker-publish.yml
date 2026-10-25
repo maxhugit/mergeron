@@ -8,7 +8,8 @@ on:
 
 concurrency:
   group: mergeron-${{ github.ref }}
-  cancel-in-progress: true
+  # Never interrupt the app/Manager promotion pair with a newer main commit.
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -115,6 +116,11 @@ jobs:
           MERGERON_CHANNEL: ${{ steps.release-version.outputs.channel }}
           MERGERON_BUILD_DATE: ${{ steps.release-version.outputs.created }}
         run: scripts/verify-build-info-image.sh "$IMAGE_REF" "$MERGERON_VERSION" "$GITHUB_SHA" "$MERGERON_BUILD_DATE" "$MERGERON_CHANNEL"
+
+      - name: Verify published document isolation on the immutable candidate
+        env:
+          IMAGE_REF: ${{ steps.candidate.outputs.tags }}
+        run: bash scripts/smoke-test-document-isolation.sh "$IMAGE_REF"
 
       - name: Verify header package and native compilation
         env:
@@ -358,18 +364,15 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Promote the verified digest to release tags
+      - name: Promote the verified app and Manager pair with rollback
         env:
-          SOURCE_IMAGE: ${{ needs.build.outputs.candidate }}
-          SOURCE_DIGEST: ${{ needs.build.outputs.digest }}
-          TARGET_TAGS: ${{ needs.build.outputs.tags }}
-        run: scripts/promote-image.sh
-      - name: Promote the verified manager digest to release tags
-        env:
-          SOURCE_IMAGE: ${{ needs.manager-build.outputs.candidate }}
-          SOURCE_DIGEST: ${{ needs.manager-build.outputs.digest }}
-          TARGET_TAGS: ${{ needs.manager-build.outputs.tags }}
-        run: scripts/promote-image.sh
+          APP_SOURCE_IMAGE: ${{ needs.build.outputs.candidate }}
+          APP_SOURCE_DIGEST: ${{ needs.build.outputs.digest }}
+          APP_TARGET_TAGS: ${{ needs.build.outputs.tags }}
+          MANAGER_SOURCE_IMAGE: ${{ needs.manager-build.outputs.candidate }}
+          MANAGER_SOURCE_DIGEST: ${{ needs.manager-build.outputs.digest }}
+          MANAGER_TARGET_TAGS: ${{ needs.manager-build.outputs.tags }}
+        run: bash scripts/promote-image-pair.sh
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
