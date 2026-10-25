@@ -6,6 +6,7 @@ import { usePeople, useParticipants, personLabel } from '@/lib/people-api';
 import { ResponsiblePerson } from './people-manager';
 import { StableProjectGantt } from './stable-project-gantt';
 import { TaskManagerToolbar } from './task-manager-toolbar';
+import { TaskDetailSurface } from './task-detail-surface';
 import '@svar-ui/react-gantt/all.css';
 import {
   Bot,
@@ -1594,7 +1595,7 @@ export function ProjectTaskManager({
         modalOnly ? 'contents' : 'flex min-h-0 flex-1 flex-col overflow-hidden'
       }
     >
-      <div className={modalOnly ? 'hidden' : 'contents'}>
+      <div className={modalOnly || taskOpen ? 'hidden' : 'contents'}>
       <TaskManagerToolbar
         view={view}
         onViewChange={setView}
@@ -2159,25 +2160,21 @@ export function ProjectTaskManager({
         )}
       </div>
       </div>
-      <Dialog
+      <TaskDetailSurface
         open={taskOpen}
-        onOpenChange={(open) => {
-          setTaskOpen(open);
-          if (!open) onModalClose?.();
+        embedded={modalOnly}
+        onClose={() => {
+          setTaskOpen(false);
+          onModalClose?.();
         }}
-      >
-        <DialogContent className="flex max-h-[92vh] flex-col overflow-hidden p-0 sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="px-6 pt-6">
-              {editing
+        title={editing
                 ? editing.parentTaskId
                   ? 'Modifier la sous-tâche'
                   : 'Modifier la tâche'
                 : draft.parentTaskId
                   ? 'Nouvelle sous-tâche'
                   : 'Nouvelle tâche'}
-            </DialogTitle>
-          </DialogHeader>
+      >
           {rootTask && (
             <div className="flex shrink-0 gap-1 overflow-x-auto border-b px-6">
               <button
@@ -2758,8 +2755,7 @@ export function ProjectTaskManager({
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+      </TaskDetailSurface>
       <Dialog open={breakdownOpen} onOpenChange={setBreakdownOpen}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="shrink-0 px-6 pt-6">
