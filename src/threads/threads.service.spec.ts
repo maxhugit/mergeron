@@ -360,6 +360,44 @@ describe('ThreadsService', () => {
     );
   });
 
+  it('reopens an existing thread after MCP connection replacement before dispatching a turn', async () => {
+    const order: string[] = [];
+    Object.assign(service, {
+      connections: {
+        assertOpen: vi.fn(),
+        assertGeneration: vi.fn(),
+        beforeTurn: vi
+          .fn()
+          .mockResolvedValue({ policy: null, restarted: true }),
+      },
+    });
+    mockResumeRegistry.ensureOpened.mockImplementation(() => {
+      order.push('resume');
+      return Promise.resolve({});
+    });
+    mockCodex.request.mockImplementation(() => {
+      order.push('turn');
+      return Promise.resolve({ turn: { id: 'turn1' } });
+    });
+    await service.startTurn({ threadId: 't1', input: [] });
+    expect(order).toEqual(['resume', 'turn']);
+  });
+
+  it('does not dispatch a turn when the project integration policy cannot be enforced', async () => {
+    Object.assign(service, {
+      connections: {
+        assertOpen: vi.fn(),
+        beforeTurn: vi
+          .fn()
+          .mockRejectedValue(new Error('Cannot establish idle')),
+      },
+    });
+    await expect(
+      service.startTurn({ threadId: 't1', input: [] }),
+    ).rejects.toThrow('Cannot establish idle');
+    expect(mockCodex.request).not.toHaveBeenCalled();
+  });
+
   it.each(['workspaceWrite', 'readOnly', 'dangerFullAccess'])(
     'adds the scoped draft directory only to workspaceWrite, not %s permissions',
     async (type) => {

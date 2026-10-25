@@ -256,13 +256,13 @@ export class ProjectsController {
   }
 
   @Patch(':id/mcp-servers')
-  configureMcpServers(
+  async configureMcpServers(
     @Param('id') id: string,
     @Body() body: { names?: unknown },
     @Req() request: IdentityRequest,
   ) {
     return {
-      project: this.projects.configureMcpServers(
+      project: await this.projects.configureMcpServers(
         id,
         body.names,
         activityActor(request),
@@ -271,13 +271,13 @@ export class ProjectsController {
   }
 
   @Patch(':id/apps')
-  configureApps(
+  async configureApps(
     @Param('id') id: string,
     @Body() body: { ids?: unknown },
     @Req() request: IdentityRequest,
   ) {
     return {
-      project: this.projects.configureApps(
+      project: await this.projects.configureApps(
         id,
         body.ids,
         activityActor(request),

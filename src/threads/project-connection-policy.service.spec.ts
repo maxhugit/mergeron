@@ -1,7 +1,6 @@
 import type { CodexService } from '../codex/codex.service';
 import type { AppDatabase } from '../database/database.constants';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
-
 function databaseReturning(...rows: unknown[]): AppDatabase {
   let index = 0;
   return {
@@ -13,151 +12,126 @@ function databaseReturning(...rows: unknown[]): AppDatabase {
     })),
   } as unknown as AppDatabase;
 }
-
 describe('ProjectConnectionPolicyService', () => {
-  it('builds deny-by-default app and MCP overrides for the owning project', async () => {
-    const request = vi.fn((method: string) => {
-      if (method === 'app/list') {
-        return Promise.resolve({
-          data: [
-            { id: 'gmail', isAccessible: true, isEnabled: true },
-            { id: 'github', isAccessible: true, isEnabled: true },
-          ],
-          nextCursor: null,
-        });
-      }
-      return Promise.resolve({
-        data: [
-          { name: 'example_server', pluginId: null, authStatus: 'oAuth' },
-          { name: 'drive', pluginId: 'google', authStatus: 'unsupported' },
-        ],
-        nextCursor: null,
-      });
-    });
+  function setup(appIds: string[] = [], mcpServerIds: string[] = []) {
+    const request = vi.fn((method: string) =>
+      Promise.resolve(
+        method === 'config/read'
+          ? {
+              config: {
+                apps: { github: { enabled: true } },
+                mcp_servers: {
+                  fixture: { command: 'node', args: ['fixture.js'] },
+                  disabled: { command: 'node', enabled: false },
+                },
+                plugins: {
+                  google: { enabled: true, mcp_servers: { drive: {} } },
+                },
+              },
+            }
+          : method === 'app/list'
+            ? {
+                data: [
+                  { id: 'gmail', isAccessible: true, isEnabled: true },
+                  { id: 'blocked', isAccessible: false, isEnabled: true },
+                ],
+                nextCursor: null,
+              }
+            : {
+                data: [
+                  { name: 'fixture', pluginId: null },
+                  { name: 'codex_apps', pluginId: null },
+                  { name: 'drive', pluginId: 'google' },
+                ],
+                nextCursor: null,
+              },
+      ),
+    );
     const service = new ProjectConnectionPolicyService(
       { request } as unknown as CodexService,
       databaseReturning(
-        { projectId: 'project-1' },
+        { projectId: 'p' },
         {
-          appIds: ['gmail'],
-          mcpServerIds: ['example_server'],
-          agentModel: 'gpt-project',
+          appIds,
+          mcpServerIds,
+          agentModel: 'model',
           agentReasoningEffort: 'high',
         },
       ),
     );
-
-    await expect(service.configForCwd('/workspaces/mail')).resolves.toEqual({
-      apps: {
-        _default: { enabled: false },
-        gmail: { enabled: true },
-        github: { enabled: false },
+    return { service, request };
+  }
+  it('explicitly disables global MCP servers, plugin servers and per-app enables for an empty selection', async () => {
+    const { service, request } = setup();
+    await expect(service.configForCwd('/workspaces/project')).resolves.toEqual({
+      features: { apps: false },
+      apps: { _default: { enabled: false }, github: { enabled: false } },
+      mcp_servers: {
+        fixture: { command: 'node', args: ['fixture.js'], enabled: false },
+        disabled: { command: 'node', enabled: false },
       },
-      mcp_servers: { example_server: { enabled: true } },
       plugins: {
-        google: { mcp_servers: { drive: { enabled: false } } },
+        google: { enabled: true, mcp_servers: { drive: { enabled: false } } },
       },
     });
-  });
-
-  it('does not emit the built-in connector catalog as an MCP transport', async () => {
-    const request = vi.fn((method: string) =>
-      Promise.resolve({
-        data:
-          method === 'app/list'
-            ? []
-            : [
-                {
-                  name: 'codex_apps',
-                  pluginId: null,
-                  authStatus: 'unsupported',
-                },
-              ],
-        nextCursor: null,
-      }),
+    expect(request.mock.calls.some(([method]) => method === 'app/list')).toBe(
+      false,
     );
-    const service = new ProjectConnectionPolicyService(
-      { request } as unknown as CodexService,
-      databaseReturning(
-        { projectId: 'project-1' },
-        {
-          appIds: [],
-          mcpServerIds: ['codex_apps'],
-          agentModel: null,
-          agentReasoningEffort: null,
+  });
+  it('allows only selected accessible apps and configured MCP transports', async () => {
+    const { service } = setup(
+      ['gmail', 'blocked'],
+      ['fixture', 'disabled', 'drive', 'codex_apps'],
+    );
+    const policy = await service.policyForCwd('/workspaces/project');
+    expect(policy).toMatchObject({
+      model: 'model',
+      reasoningEffort: 'high',
+      config: {
+        apps: {
+          _default: { enabled: false },
+          github: { enabled: false },
+          gmail: { enabled: true },
+          blocked: { enabled: false },
         },
-      ),
-    );
-
-    await expect(service.configForCwd('/workspaces/mail')).resolves.toEqual({
-      apps: { _default: { enabled: false } },
-      mcp_servers: {},
-      plugins: {},
-    });
-    expect(request).not.toHaveBeenCalledWith('app/list', expect.anything());
-    expect(request).toHaveBeenCalledWith('mcpServerStatus/list', {
-      limit: 100,
-      cursor: undefined,
-      detail: 'toolsAndAuthOnly',
-    });
-  });
-
-  it('does not query connector catalogs when the project selects none', async () => {
-    const request = vi.fn();
-    const service = new ProjectConnectionPolicyService(
-      { request } as unknown as CodexService,
-      databaseReturning(
-        { projectId: 'project-1' },
-        {
-          appIds: [],
-          mcpServerIds: [],
-          agentModel: null,
-          agentReasoningEffort: null,
+        mcp_servers: {
+          fixture: { command: 'node', args: ['fixture.js'], enabled: true },
+          disabled: { enabled: false },
         },
-      ),
-    );
-
-    await expect(service.configForCwd('/workspaces/mail')).resolves.toEqual({
-      apps: { _default: { enabled: false } },
-      mcp_servers: {},
-      plugins: {},
-    });
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  it('returns the project model and reasoning effort with the connection policy', async () => {
-    const service = new ProjectConnectionPolicyService(
-      {
-        request: vi.fn().mockResolvedValue({ data: [], nextCursor: null }),
-      } as unknown as CodexService,
-      databaseReturning(
-        { projectId: 'project-1' },
-        {
-          appIds: [],
-          mcpServerIds: [],
-          agentModel: 'gpt-project',
-          agentReasoningEffort: 'xhigh',
+        plugins: {
+          google: { enabled: true, mcp_servers: { drive: { enabled: true } } },
         },
-      ),
-    );
-
-    await expect(
-      service.policyForCwd('/workspaces/mail'),
-    ).resolves.toMatchObject({
-      projectId: 'project-1',
-      model: 'gpt-project',
-      reasoningEffort: 'xhigh',
+      },
     });
+    expect(policy?.config.features).toBeUndefined();
+    expect(policy?.config.mcp_servers).not.toHaveProperty('codex_apps');
   });
-
-  it('does not add overrides outside a project workspace', async () => {
+  it('fails closed when native inventory cannot be read', async () => {
+    const { service, request } = setup();
+    request.mockRejectedValue(new Error('unavailable'));
+    await expect(service.configForCwd('/workspaces/project')).rejects.toThrow(
+      'unavailable',
+    );
+  });
+  it('does not alter projectless execution', async () => {
     const request = vi.fn();
     const service = new ProjectConnectionPolicyService(
       { request } as unknown as CodexService,
       databaseReturning(undefined),
     );
-
     await expect(service.configForCwd('/tmp')).resolves.toBeNull();
     expect(request).not.toHaveBeenCalled();
+  });
+  it('refuses a bound conversation cwd outside its project instead of inheriting global tools', async () => {
+    const service = new ProjectConnectionPolicyService(
+      { request: vi.fn() } as unknown as CodexService,
+      databaseReturning(
+        { projectId: 'p', workspacePath: '/workspaces/p' },
+        undefined,
+      ),
+    );
+    await expect(service.policyForThread('thread', '/tmp')).rejects.toThrow(
+      'ne correspond pas',
+    );
   });
 });

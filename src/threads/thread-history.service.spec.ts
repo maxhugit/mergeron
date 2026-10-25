@@ -1,4 +1,5 @@
 import { CodexService } from '../codex/codex.service';
+import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
 import { CodexRpcError } from '../codex/codex-errors';
 import {
   InProgressTurnHistoryError,
@@ -12,6 +13,38 @@ describe('ThreadHistoryService', () => {
   beforeEach(() => {
     mockCodex.request.mockReset();
     service = new ThreadHistoryService(mockCodex as unknown as CodexService);
+  });
+
+  it('applies current project restrictions when resuming a stored conversation', async () => {
+    const config = {
+      features: { apps: false },
+      mcp_servers: { fixture: { command: 'node', enabled: false } },
+    };
+    const policy = { config, projectId: 'p' };
+    const connections = {
+      generation: () => 4,
+      assertGeneration: vi.fn(),
+      forResume: vi.fn().mockResolvedValue(policy),
+      record: vi.fn(),
+    };
+    service = new ThreadHistoryService(
+      mockCodex as unknown as CodexService,
+      connections as unknown as ProjectConnectionRuntimeService,
+    );
+    mockCodex.request.mockResolvedValue({
+      thread: { id: 'old', turns: [], historyMode: 'paginated' },
+      initialTurnsPage: { data: [], nextCursor: null, backwardsCursor: null },
+    });
+    await service.resumeMetadataFirst({
+      threadId: 'old',
+      initialTurnsLimit: 1,
+      itemsView: 'summary',
+    });
+    expect(mockCodex.request).toHaveBeenCalledWith(
+      'thread/resume',
+      expect.objectContaining({ threadId: 'old', config }),
+    );
+    expect(connections.record).toHaveBeenCalledWith('old', policy, 4);
   });
 
   it('falls back to paged history when resume omits the experimental page', async () => {

@@ -60,6 +60,7 @@ import { ThreadMetadataService } from './thread-metadata.service';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { GitMutationGateService } from './git-mutation-gate.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
@@ -99,6 +100,7 @@ export class ThreadsService {
     private readonly documentPublication?: DocumentPublicationService,
     @Optional()
     private readonly settingsObserver?: ThreadSettingsObserverService,
+    @Optional() private readonly connections?: ProjectConnectionRuntimeService,
   ) {}
 
   /**
@@ -111,7 +113,9 @@ export class ThreadsService {
     params: v2.ThreadStartParams,
   ): Promise<v2.ThreadStartResponse> {
     requireExecutionAccess();
+    this.connections?.assertOpen();
     await this.processManager?.ensureDocumentIsolation(params.cwd);
+    const settingsGeneration = this.resumeRegistry.getGeneration();
     const projectPolicy = await this.projectConnections.policyForCwd(
       params.cwd,
     );
@@ -132,7 +136,7 @@ export class ThreadsService {
         : {}),
       historyMode: REQUIRED_HISTORY_MODE,
     };
-    const settingsGeneration = this.resumeRegistry.getGeneration();
+    this.connections?.assertGeneration(settingsGeneration);
     const response = await this.codex.request<v2.ThreadStartResponse>(
       'thread/start',
       requestParams,
@@ -161,6 +165,11 @@ export class ThreadsService {
       settingsGeneration,
     );
     this.resumeRegistry.markResumed(response.thread.id);
+    this.connections?.record(
+      response.thread.id,
+      projectPolicy,
+      settingsGeneration,
+    );
     const access = currentAccess();
     if (access)
       access.identities.recordConversationOwner(
@@ -444,8 +453,15 @@ export class ThreadsService {
       activeCwd ?? this.workspaceOverrides.get(params.threadId);
     const effectiveCwd = workspaceCwd ?? params.cwd ?? beforeTurn?.cwd ?? null;
     await this.processManager?.ensureDocumentIsolation(effectiveCwd);
-    const projectPolicy =
-      await this.projectConnections.policyForCwd(effectiveCwd);
+    const connectionState = await this.connections?.beforeTurn(
+      params.threadId,
+      effectiveCwd,
+    );
+    if (connectionState?.restarted)
+      await this.resumeRegistry.ensureOpened(params.threadId, 1, 'summary');
+    const projectPolicy = connectionState
+      ? connectionState.policy
+      : await this.projectConnections.policyForCwd(effectiveCwd);
     const sharedKnowledge = await this.knowledge?.contextForConversation(
       effectiveCwd,
       params.threadId,
@@ -511,8 +527,15 @@ export class ThreadsService {
         effectiveCwd,
         params.threadId,
       );
-    const send = () =>
-      this.codex.request<v2.TurnStartResponse>('turn/start', effectiveParams);
+    const send = () => {
+      this.connections?.assertOpen();
+      if (connectionState)
+        this.connections?.assertGeneration(connectionState.generation);
+      return this.codex.request<v2.TurnStartResponse>(
+        'turn/start',
+        effectiveParams,
+      );
+    };
     let response: v2.TurnStartResponse;
     try {
       response = await (this.gitMutations
