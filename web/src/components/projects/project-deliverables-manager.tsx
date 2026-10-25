@@ -1879,8 +1879,8 @@ function Links({
           {t('onePrimaryTaskPerDeliverable')}
         </p>
       </div>
-      <div className="grid gap-4">
-        <div className="space-y-3">
+      <div className="grid min-w-0 gap-4">
+        <div className="min-w-0 space-y-3">
           <h3 className="font-medium">{t('primaryTask')}</h3>
           {item.primaryTaskId ? (
             <Button
@@ -1943,7 +1943,7 @@ function Links({
             </p>
           )}
           {primaryTask && (
-            <div className="rounded-lg border p-3 text-sm">
+            <div className="min-w-0 rounded-lg border p-3 text-sm">
               <button
                 type="button"
                 className="block w-full rounded text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -1965,10 +1965,11 @@ function Links({
               {subtasks.length > 0 && (
                 <ul className="mt-3 space-y-1 border-t pt-2">
                   {subtasks.map((task) => (
-                    <li key={task.id}>
+                    <li key={task.id} className="flex min-w-0 items-center gap-2">
                       <button
                         type="button"
-                        className="underline"
+                        className="min-w-0 flex-1 truncate text-left underline"
+                        title={task.title}
                         onClick={() =>
                           setOpenTask({
                             id: task.id,
@@ -1977,8 +1978,10 @@ function Links({
                         }
                       >
                         {task.title}
-                      </button>{' '}
-                      · {task.progress}%
+                      </button>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">
+                        {task.progress}%
+                      </span>
                     </li>
                   ))}
                 </ul>
