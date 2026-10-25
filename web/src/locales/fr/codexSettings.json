@@ -1,0 +1,6 @@
+{
+  "responseVerbosity": "Verbosité des réponses",
+  "reasoningEffortDescription": "Définit l’effort consacré à résoudre la tâche. Un effort plus élevé peut demander davantage de temps et de jetons ; les niveaux disponibles dépendent du modèle.",
+  "reasoningSummaryDescription": "Définit le niveau de détail du résumé fourni dans les blocs « Réfléchit ». Ce n’est pas le raisonnement interne brut, et un résumé plus détaillé n’augmente pas l’effort de raisonnement.",
+  "responseVerbosityDescription": "Définit le niveau de détail du texte répondu par l’agent : plus concis ou plus développé. Ne masque pas les commandes, résultats ou logs ; leur affichage se règle dans « Détails techniques » pour chaque agent."
+}
