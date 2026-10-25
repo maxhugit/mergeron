@@ -42,9 +42,9 @@ export function ResponseDetailSelector({
   });
   const mode = query.data?.mode ?? 'collapsed';
   const options = [
-    ['hidden', 'technicalDetailsHidden'],
-    ['collapsed', 'technicalDetailsCollapsed'],
-    ['expanded', 'technicalDetailsExpanded'],
+    ['hidden', t('technicalDetailsHidden')],
+    ['collapsed', t('technicalDetailsCollapsed')],
+    ['expanded', t('technicalDetailsExpanded')],
   ] as const;
   const locked =
     disabled ||
@@ -66,7 +66,7 @@ export function ResponseDetailSelector({
           >
             <ListFilter className="h-3.5 w-3.5" />
             <span className="max-w-[220px] truncate">
-              {t('technicalDetails')} · {t(selectedLabel)}
+              {t('technicalDetails')} · {selectedLabel}
             </span>
             <ChevronDown className="h-3 w-3 opacity-50" />
           </Button>
@@ -85,7 +85,7 @@ export function ResponseDetailSelector({
               <OptionRow
                 key={value}
                 active={mode === value}
-                label={t(label)}
+                label={label}
                 onSelect={() => {
                   if (locked || !threadId) return;
                   mutation.mutate({ id: threadId, mode: value });
