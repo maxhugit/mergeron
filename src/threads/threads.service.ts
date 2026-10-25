@@ -60,6 +60,7 @@ import { ThreadMetadataService } from './thread-metadata.service';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { GitMutationGateService } from './git-mutation-gate.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
 const MAX_FORK_CHAIN_WALK = 32;
@@ -96,6 +97,8 @@ export class ThreadsService {
     @Optional() private readonly processManager?: CodexProcessManager,
     @Optional()
     private readonly documentPublication?: DocumentPublicationService,
+    @Optional()
+    private readonly settingsObserver?: ThreadSettingsObserverService,
   ) {}
 
   /**
@@ -488,6 +491,20 @@ export class ThreadsService {
         ? { effort: projectPolicy.reasoningEffort }
         : {}),
     };
+    // The deliverable cwd is intentionally read-only in the outer namespace.
+    // Grant only the scoped draft directory, without upgrading read-only access
+    // or changing any of the user's network / sandbox settings.
+    const sandbox =
+      effectiveParams.sandboxPolicy ??
+      this.settingsObserver?.readSecurityPolicy(params.threadId).sandboxPolicy;
+    if (publication?.draftDirectory && sandbox?.type === 'workspaceWrite') {
+      effectiveParams.sandboxPolicy = {
+        ...sandbox,
+        writableRoots: [
+          ...new Set([...sandbox.writableRoots, publication.draftDirectory]),
+        ],
+      };
+    }
     if (projectPolicy && effectiveCwd)
       this.projectConnections.recordExecutionContext(
         projectPolicy,

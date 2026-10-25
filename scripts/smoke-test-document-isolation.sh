@@ -11,7 +11,7 @@ docker run --rm --network none --read-only --cap-drop ALL \
   --security-opt systempaths=unconfined \
   --security-opt apparmor=unconfined \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 \
-  --tmpfs /home/codex:rw,nosuid,nodev,size=1g,uid=11002,gid=11002,mode=0750 \
+  --tmpfs /home/codex:rw,exec,nosuid,nodev,size=1g,uid=11002,gid=11002,mode=0750 \
   --tmpfs /workspaces:rw,nosuid,nodev,size=64m,uid=11002,gid=11002 \
   --tmpfs /run/secrets:rw,nosuid,nodev,size=1m,uid=11002,gid=11002 \
   --tmpfs /run/mergeron-manager:rw,nosuid,nodev,size=1m,uid=11002,gid=11002 \

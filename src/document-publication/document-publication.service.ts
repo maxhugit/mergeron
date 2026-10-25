@@ -248,6 +248,7 @@ export class DocumentPublicationService implements OnModuleDestroy {
     ].join('\n');
     return {
       context,
+      draftDirectory: active.directory,
       bind: (turnId: string) => {
         active.turnId = turnId;
         if (active.completedTurnId === turnId && !active.completedSuccessfully)
