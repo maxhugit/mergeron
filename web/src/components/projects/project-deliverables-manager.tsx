@@ -439,7 +439,10 @@ export function ProjectDeliverablesManager({
               >
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={!title.trim() || create.isPending}>
+              <Button
+                type="submit"
+                disabled={!title.trim() || create.isPending}
+              >
                 {t('create')}
               </Button>
             </DialogFooter>
@@ -510,27 +513,10 @@ function DeliverablesList({
               >
                 <LifecycleBadge status={displayedLifecycle(item)} />
               </span>
-              <span
-                className={`order-4 flex w-fit items-center justify-self-end gap-2 rounded-md px-2 py-1 text-xs font-medium @min-[68rem]:order-none @min-[68rem]:justify-self-auto ${
-                  item.validationStatus === 'approved'
-                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                    : item.validationStatus === 'rejected'
-                      ? 'bg-red-500/15 text-red-700 dark:text-red-300'
-                      : item.validationStatus === 'pending'
-                        ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300'
-                        : item.validationStatus === 'outdated'
-                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                          : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {item.validationRequired &&
-                item.validationStatus === 'not_required'
-                  ? t('required')
-                  : t(
-                      translationKey(validationStatuses[item.validationStatus]),
-                    )}
-              </span>
+              <ValidationBadge
+                item={item}
+                className="order-4 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+              />
               <span className="order-5 flex min-w-0 items-center gap-2 text-sm @min-[68rem]:order-none">
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                 {task ? (
@@ -547,13 +533,10 @@ function DeliverablesList({
                   </span>
                 )}
               </span>
-              <span
-                className={`order-6 w-fit justify-self-end rounded-md px-2 py-1 text-xs font-medium @min-[68rem]:order-none @min-[68rem]:justify-self-auto ${item.confidentiality === 'restricted' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}
-              >
-                {item.confidentiality === 'restricted'
-                  ? t('restrictedAccessShort')
-                  : t('standardAccessShort')}
-              </span>
+              <AccessBadge
+                confidentiality={item.confidentiality}
+                className="order-6 justify-self-end @min-[68rem]:order-none @min-[68rem]:justify-self-auto"
+              />
               <span className="order-7 text-xs text-muted-foreground @min-[68rem]:order-none">
                 {new Date(item.updatedAt).toLocaleDateString()}
               </span>
@@ -571,6 +554,57 @@ function DeliverablesList({
         />
       )}
     </div>
+  );
+}
+
+function ValidationBadge({
+  item,
+  className = '',
+}: {
+  item: Pick<Deliverable, 'validationStatus' | 'validationRequired'>;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  const color =
+    item.validationStatus === 'approved'
+      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+      : item.validationStatus === 'rejected'
+        ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+        : item.validationStatus === 'pending'
+          ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300'
+          : item.validationStatus === 'outdated'
+            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+            : 'bg-muted text-muted-foreground';
+  return (
+    <span
+      className={`flex w-fit items-center gap-2 rounded-md px-2 py-1 text-xs font-medium ${color} ${className}`}
+    >
+      <CheckCircle2 className="h-4 w-4 shrink-0" />
+      {item.validationRequired && item.validationStatus === 'not_required'
+        ? t('required')
+        : t(translationKey(validationStatuses[item.validationStatus]))}
+    </span>
+  );
+}
+
+function AccessBadge({
+  confidentiality,
+  className = '',
+}: {
+  confidentiality: Deliverable['confidentiality'];
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <span
+      className={`w-fit rounded-md px-2 py-1 text-xs font-medium ${confidentiality === 'restricted' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'} ${className}`}
+    >
+      {t(
+        confidentiality === 'restricted'
+          ? 'restrictedAccessShort'
+          : 'standardAccessShort',
+      )}
+    </span>
   );
 }
 
@@ -1340,18 +1374,12 @@ function Overview({
         <Summary
           icon={CheckCircle2}
           title={t('validation')}
-          value={
-            item.status === 'validated' ? t('validated') : t('notValidated')
-          }
+          value={<ValidationBadge item={item} />}
         />
         <Summary
           icon={UserRound}
           title={t('confidentiality')}
-          value={
-            item.confidentiality === 'restricted'
-              ? t('restrictedAccessShort')
-              : t('standardAccessShort')
-          }
+          value={<AccessBadge confidentiality={item.confidentiality} />}
         />
         <div className="col-span-full min-w-0 rounded-xl border bg-card p-4">
           <div className="mb-2 flex items-center gap-2 font-medium">
@@ -1469,7 +1497,7 @@ function Summary({
 }: {
   icon: typeof FileText;
   title: string;
-  value: string;
+  value: ReactNode;
 }) {
   return (
     <div className="rounded-xl border bg-card p-3">
