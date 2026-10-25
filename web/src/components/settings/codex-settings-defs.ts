@@ -91,6 +91,7 @@ export const FIELD_DEFS: FieldDef[] = [
   {
     key: 'model_reasoning_effort',
     label: 'Reasoning Effort',
+    description: 'codexSettings:reasoningEffortDescription',
     group: 'Reasoning',
     control: 'select',
     // Kept in sync with the backend's REASONING_EFFORT_VALUES. Unlike service
@@ -110,13 +111,15 @@ export const FIELD_DEFS: FieldDef[] = [
   {
     key: 'model_reasoning_summary',
     label: 'Reasoning Summary',
+    description: 'codexSettings:reasoningSummaryDescription',
     group: 'Reasoning',
     control: 'select',
     options: ['auto', 'concise', 'detailed', 'none'],
   },
   {
     key: 'model_verbosity',
-    label: 'Verbosity',
+    label: 'codexSettings:responseVerbosity',
+    description: 'codexSettings:responseVerbosityDescription',
     group: 'Reasoning',
     control: 'select',
     options: ['low', 'medium', 'high'],

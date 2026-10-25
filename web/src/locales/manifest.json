@@ -8,6 +8,7 @@
   "namespaces": [
     "authentication",
     "common",
+    "codexSettings",
     "deliverables",
     "logs",
     "manager",

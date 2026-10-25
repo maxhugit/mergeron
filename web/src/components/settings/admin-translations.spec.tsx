@@ -4,6 +4,8 @@ import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import { describe, expect, it, vi } from 'vitest';
 import fr from '@/locales/fr/common.json';
+import frCodex from '@/locales/fr/codexSettings.json';
+import enCodex from '@/locales/en/codexSettings.json';
 import { translationKey } from '@/locales/translation-key';
 import { loadLocaleResources } from '@/locales';
 import { FIELD_DEFS, GROUP_ORDER } from './codex-settings-defs';
@@ -40,6 +42,52 @@ const DYNAMIC_CODEX_LABELS = [
 ] as const;
 
 describe('administration translations', () => {
+  it.each(['fr', 'en'])(
+    'explains the three distinct reasoning settings in %s',
+    async (language) => {
+      const i18n = createInstance();
+      await i18n.init({
+        lng: language,
+        fallbackLng: 'en',
+        defaultNS: 'common',
+        ns: ['common', 'codexSettings'],
+        resources: {
+          en: await loadLocaleResources('en'),
+          fr: await loadLocaleResources('fr'),
+        },
+      });
+      const fields = FIELD_DEFS.filter((field) =>
+        [
+          'model_reasoning_effort',
+          'model_reasoning_summary',
+          'model_verbosity',
+        ].includes(field.key),
+      );
+      render(
+        <I18nextProvider i18n={i18n}>
+          {fields.map((def) => (
+            <ConfigFieldEditor
+              key={def.key}
+              def={def}
+              draft=""
+              dirty={false}
+              origin={null}
+              overridden={false}
+              saving={false}
+              onDraftChange={vi.fn()}
+              onSave={vi.fn()}
+              onClear={vi.fn()}
+            />
+          ))}
+        </I18nextProvider>,
+      );
+      const copy = language === 'fr' ? frCodex : enCodex;
+      expect(screen.getByText(copy.responseVerbosity)).toBeVisible();
+      expect(screen.getByText(copy.reasoningEffortDescription)).toBeVisible();
+      expect(screen.getByText(copy.reasoningSummaryDescription)).toBeVisible();
+      expect(screen.getByText(copy.responseVerbosityDescription)).toBeVisible();
+    },
+  );
   it('covers every structured Codex label, description and group in French', () => {
     for (const text of [
       ...GROUP_ORDER,
@@ -49,7 +97,14 @@ describe('administration translations', () => {
       ...DYNAMIC_CODEX_LABELS,
     ]) {
       const key = translationKey(text);
-      expect(fr, `Missing French translation: ${text}`).toHaveProperty(key);
+      const resources = { common: fr, codexSettings: frCodex };
+      const [namespace, catalogKey] = key.includes(':')
+        ? key.split(':')
+        : ['common', key];
+      expect(
+        resources[namespace as keyof typeof resources],
+        `Missing French translation: ${text}`,
+      ).toHaveProperty(catalogKey);
     }
   });
 

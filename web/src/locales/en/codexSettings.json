@@ -1,0 +1,6 @@
+{
+  "responseVerbosity": "Response verbosity",
+  "reasoningEffortDescription": "Controls the effort spent solving the task. Higher effort may require more time and tokens; available levels depend on the model.",
+  "reasoningSummaryDescription": "Controls the detail of the summary provided in the thinking blocks. This is not raw internal reasoning, and a more detailed summary does not increase reasoning effort.",
+  "responseVerbosityDescription": "Controls how concise or detailed the agent’s response text is. Does not hide commands, results or logs; their display is controlled by each agent’s Technical details setting."
+}
