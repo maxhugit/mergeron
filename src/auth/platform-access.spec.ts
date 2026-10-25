@@ -213,6 +213,8 @@ it('links OIDC email only when verified and still recognizes an explicitly linke
 
 it.each([
   '/settings',
+  '/settings/manager/backups',
+  '/settings/manager/backups/delete',
   '/settings/general.onlyofficeJwtSecret',
   '/codex/config/raw',
   '/codex/catalog/draft',

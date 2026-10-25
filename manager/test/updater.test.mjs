@@ -181,6 +181,154 @@ async function begin(updater) {
   await updater.task;
 }
 
+test('lists dated backups without transaction secrets and deletes only the selected copy', async (t) => {
+  const { root, updater, options } = await fixture(t);
+  await begin(updater);
+  const first = updater.current.id;
+  await begin(updater);
+  const second = updater.current.id;
+  const list = await updater.listBackups();
+  assert.equal(list.backups.length, 2);
+  assert.equal(
+    list.backups.every(
+      (backup) =>
+        backup.canDelete && !Number.isNaN(Date.parse(backup.createdAt)),
+    ),
+    true,
+  );
+  assert.equal(JSON.stringify(list).includes('SECRET'), false);
+  assert.equal(JSON.stringify(list).includes('never-display'), false);
+  await updater.deleteBackup({
+    operationId: first,
+    confirmation: 'DELETE_UPDATE_BACKUP',
+  });
+  assert.equal((await updater.listBackups()).backups.length, 1);
+  assert.equal((await updater.listBackups()).backups[0].id, second);
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'original');
+  assert.equal(
+    (await lstat(join(options.directory, `${first}.json`))).isFile(),
+    true,
+  );
+  assert.equal(
+    (await lstat(join(options.directory, second, 'backup'))).isDirectory(),
+    true,
+  );
+});
+
+test('deleting the latest backup preserves quarantine and disables rollback durably', async (t) => {
+  const { updater, options } = await fixture(t);
+  await begin(updater);
+  const id = updater.current.id;
+  await mkdir(join(options.directory, id, 'quarantine'));
+  await writeFile(
+    join(options.directory, id, 'quarantine', 'preserve'),
+    'new data',
+  );
+  await updater.deleteBackup({
+    operationId: id,
+    confirmation: 'DELETE_UPDATE_BACKUP',
+  });
+  assert.equal(updater.status().operation.backupRetained, false);
+  assert.equal(
+    await readFile(
+      join(options.directory, id, 'quarantine', 'preserve'),
+      'utf8',
+    ),
+    'new data',
+  );
+  assert.equal(
+    JSON.parse(
+      await readFile(join(options.directory, 'transaction.json'), 'utf8'),
+    ).backupComplete,
+    false,
+  );
+  await assert.rejects(
+    updater.requestRollback({
+      operationId: id,
+      confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+    }),
+    /updateRollbackUnavailable/,
+  );
+  await updater.deleteBackup({
+    operationId: id,
+    confirmation: 'DELETE_UPDATE_BACKUP',
+  });
+});
+
+test('refuses unconfirmed, unsafe, busy and recovery backup deletion', async (t) => {
+  const { updater } = await fixture(t);
+  await begin(updater);
+  const id = updater.current.id;
+  await assert.rejects(
+    updater.deleteBackup({ operationId: id, confirmation: 'no' }),
+    /ConfirmationRequired/,
+  );
+  await assert.rejects(
+    updater.deleteBackup({
+      operationId: '../home',
+      confirmation: 'DELETE_UPDATE_BACKUP',
+    }),
+    /Invalid/,
+  );
+  updater.busy = true;
+  await assert.rejects(
+    updater.deleteBackup({
+      operationId: id,
+      confirmation: 'DELETE_UPDATE_BACKUP',
+    }),
+    /InProgress/,
+  );
+  assert.equal((await updater.listBackups()).backups[0].canDelete, false);
+  updater.busy = false;
+  updater.current.status = 'recoveryRequired';
+  await assert.rejects(
+    updater.deleteBackup({
+      operationId: id,
+      confirmation: 'DELETE_UPDATE_BACKUP',
+    }),
+    /InProgress/,
+  );
+});
+
+test('does not follow a backup-directory symlink or delete unknown backup metadata', async (t) => {
+  const { root, updater, options } = await fixture(t);
+  await begin(updater);
+  const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  await mkdir(join(options.directory, id));
+  await symlink(join(root, 'home'), join(options.directory, id, 'backup'));
+  await writeFile(
+    join(options.directory, `${id}.json`),
+    JSON.stringify({ ...updater.current, id }),
+  );
+  await assert.rejects(
+    updater.deleteBackup({
+      operationId: id,
+      confirmation: 'DELETE_UPDATE_BACKUP',
+    }),
+    /Invalid/,
+  );
+  assert.equal(
+    (await updater.listBackups()).backups.some((backup) => backup.id === id),
+    false,
+  );
+  await rm(join(options.directory, id, 'backup'));
+  await mkdir(join(options.directory, id, 'backup'));
+  await rm(join(options.directory, `${id}.json`));
+  assert.equal(
+    (await updater.listBackups()).backups.find((backup) => backup.id === id)
+      .canDelete,
+    false,
+  );
+  await assert.rejects(
+    updater.deleteBackup({
+      operationId: id,
+      confirmation: 'DELETE_UPDATE_BACKUP',
+    }),
+    /Invalid/,
+  );
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'original');
+});
+
 test('commits only healthy candidates, pins images, preserves mounts and hides secrets', async (t) => {
   const { root, updater, docker } = await fixture(t);
   await begin(updater);

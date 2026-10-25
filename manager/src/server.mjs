@@ -234,6 +234,7 @@ const server = http.createServer(async (request, response) => {
       ...snapshot,
       events: [...events],
       update: updater.status(),
+      capabilities: { backupManagement: true },
     });
     return;
   }
@@ -271,6 +272,34 @@ const server = http.createServer(async (request, response) => {
           : 409,
         { error: code },
       );
+    }
+    return;
+  }
+  if (request.url === '/v1/backups' && request.method === 'GET') {
+    try {
+      json(response, 200, await updater.listBackups());
+    } catch {
+      json(response, 503, { error: 'managerBackupsUnavailable' });
+    }
+    return;
+  }
+  if (request.url === '/v1/backups/delete' && request.method === 'POST') {
+    try {
+      if (!ready || installing || adopting || updater.busy)
+        throw new Error('managerOperationInProgress');
+      json(
+        response,
+        200,
+        await updater.deleteBackup(await readJsonBody(request)),
+      );
+    } catch (error) {
+      const code =
+        error instanceof Error && /^manager[A-Za-z]+$/.test(error.message)
+          ? error.message
+          : 'managerBackupDeleteFailed';
+      json(response, code === 'managerBackupConfirmationRequired' ? 400 : 409, {
+        error: code,
+      });
     }
     return;
   }

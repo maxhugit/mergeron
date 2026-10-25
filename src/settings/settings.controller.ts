@@ -100,6 +100,22 @@ export class SettingsController {
     return this.managerStatus.updateOperation('plan', body);
   }
 
+  @Get('manager/backups')
+  @ApiOperation({
+    summary: 'List saved update backups without private transaction data',
+  })
+  managerBackups() {
+    return this.managerStatus.backups();
+  }
+
+  @Post('manager/backups/delete')
+  @ApiOperation({ summary: 'Delete one explicitly confirmed update backup' })
+  managerDeleteBackup(
+    @Body() body: { operationId?: unknown; confirmation?: unknown },
+  ) {
+    return this.managerStatus.deleteBackup(body);
+  }
+
   @Post('manager/update')
   @ApiOperation({ summary: 'Start a confirmed transactional stack update' })
   managerUpdate(

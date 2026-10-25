@@ -1,0 +1,113 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { ManagerBackups } from './manager-backups';
+import type { ManagerStatus } from './manager-status-api';
+const api = vi.hoisted(() => ({ list: vi.fn(), remove: vi.fn() }));
+vi.mock('./manager-status-api', async (original) => ({
+  ...(await original<typeof import('./manager-status-api')>()),
+  requestManagerBackups: api.list,
+  deleteManagerBackup: api.remove,
+}));
+const status = {
+  available: true,
+  capabilities: { backupManagement: true },
+  update: { busy: false, operation: null },
+} as ManagerStatus;
+const backup = {
+  id: 'backup',
+  createdAt: '2026-10-25T17:19:18Z',
+  current: true,
+  status: 'succeeded',
+  restorable: true,
+  canDelete: true,
+  protectionReason: null,
+};
+beforeEach(() => {
+  api.list.mockResolvedValue({ backups: [backup] });
+  api.remove.mockResolvedValue({ ok: true });
+});
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+function setup(value = status) {
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({
+          defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false },
+          },
+        })
+      }
+    >
+      <ManagerBackups status={value} />
+    </QueryClientProvider>,
+  );
+}
+it('lists backup dates and requires confirmation before deletion', async () => {
+  setup();
+  expect(await screen.findByText('backup')).toBeInTheDocument();
+  expect(document.querySelector('time')).toHaveAttribute(
+    'dateTime',
+    backup.createdAt,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delete backup' }));
+  expect(api.remove).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(api.remove).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Delete backup' }));
+  fireEvent.click(
+    screen.getAllByRole('button', { name: 'Delete backup' }).at(-1)!,
+  );
+  await waitFor(() => expect(api.remove).toHaveBeenCalledWith('backup'));
+});
+it('disables deletion during an operation', async () => {
+  setup({ ...status, update: { busy: true, operation: null } });
+  expect(
+    await screen.findByRole('button', { name: 'Delete backup' }),
+  ).toBeDisabled();
+});
+it('keeps unknown backups protected', async () => {
+  api.list.mockResolvedValueOnce({
+    backups: [
+      {
+        ...backup,
+        canDelete: false,
+        protectionReason: 'managerBackupMetadataProtected',
+      },
+    ],
+  });
+  setup();
+  expect(
+    await screen.findByRole('button', { name: 'Delete backup' }),
+  ).toBeDisabled();
+  expect(
+    screen.getByText(/metadata could not be verified/),
+  ).toBeInTheDocument();
+});
+it('shows an actionable message for managers without backup support', () => {
+  setup({ ...status, capabilities: undefined });
+  expect(screen.getByText(/Update Mergeron Manager/)).toBeInTheDocument();
+  expect(api.list).not.toHaveBeenCalled();
+});
+it('keeps confirmation open on failure and never repeats deletion automatically', async () => {
+  api.remove.mockRejectedValueOnce(new Error('Busy'));
+  setup();
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete backup' }));
+  fireEvent.click(
+    screen.getAllByRole('button', { name: 'Delete backup' }).at(-1)!,
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Could not delete',
+  );
+  expect(api.remove).toHaveBeenCalledTimes(1);
+});

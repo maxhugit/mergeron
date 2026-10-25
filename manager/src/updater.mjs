@@ -12,6 +12,7 @@ import {
   readdir,
   readlink,
   rename,
+  rm,
   statfs,
   symlink,
   utimes,
@@ -241,6 +242,124 @@ export class TransactionalUpdater {
         backupRetained: operation.backupComplete === true,
       },
     };
+  }
+
+  async listBackups() {
+    const entries = await readdir(this.directory).catch((error) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    });
+    const backups = [];
+    for (const id of entries.filter((name) =>
+      /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+        name,
+      ),
+    )) {
+      const directory = join(this.directory, id);
+      const stat = await lstat(directory).catch(() => null);
+      const backup = await lstat(join(directory, 'backup')).catch(() => null);
+      if (
+        !stat?.isDirectory() ||
+        stat.isSymbolicLink() ||
+        !backup?.isDirectory() ||
+        backup.isSymbolicLink()
+      )
+        continue;
+      let operation = this.current?.id === id ? this.current : null;
+      if (!operation) {
+        const journal = join(this.directory, `${id}.json`);
+        const metadata = await lstat(journal).catch(() => null);
+        if (metadata?.isFile() && !metadata.isSymbolicLink()) {
+          try {
+            operation = JSON.parse(await readFile(journal, 'utf8'));
+          } catch {
+            /* Fail closed for incomplete metadata. */
+          }
+        }
+      }
+      const valid =
+        operation?.id === id &&
+        operation.stack === this.manifest.stack &&
+        operation.environment === this.manifest.environment;
+      const blocked =
+        this.busy || (this.current && !terminal.has(this.current.status));
+      backups.push({
+        id,
+        createdAt:
+          valid && Number.isFinite(Date.parse(operation.startedAt))
+            ? operation.startedAt
+            : backup.mtime.toISOString(),
+        status:
+          valid && typeof operation.status === 'string'
+            ? operation.status
+            : 'unknown',
+        current: this.current?.id === id,
+        restorable: valid && operation.backupComplete === true,
+        canDelete: Boolean(!blocked && valid && terminal.has(operation.status)),
+        protectionReason: blocked
+          ? 'managerBackupOperationProtected'
+          : !valid || !terminal.has(operation.status)
+            ? 'managerBackupMetadataProtected'
+            : null,
+      });
+    }
+    return {
+      backups: backups.sort(
+        (a, b) =>
+          b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
+      ),
+    };
+  }
+
+  async deleteBackup({ operationId, confirmation }) {
+    if (this.busy || (this.current && !terminal.has(this.current.status)))
+      throw new Error('managerOperationInProgress');
+    if (confirmation !== 'DELETE_UPDATE_BACKUP')
+      throw new Error('managerBackupConfirmationRequired');
+    if (
+      typeof operationId !== 'string' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+        operationId,
+      )
+    )
+      throw new Error('managerBackupInvalid');
+    this.busy = true;
+    try {
+      const directory = join(this.directory, operationId);
+      const stat = await lstat(directory).catch(() => null);
+      if (!stat?.isDirectory() || stat.isSymbolicLink())
+        throw new Error('managerBackupInvalid');
+      const current = this.current?.id === operationId;
+      const metadataPath = join(
+        this.directory,
+        current ? 'transaction.json' : `${operationId}.json`,
+      );
+      const metadata = await lstat(metadataPath).catch(() => null);
+      if (!metadata?.isFile() || metadata.isSymbolicLink())
+        throw new Error('managerBackupInvalid');
+      const operation = JSON.parse(await readFile(metadataPath, 'utf8'));
+      if (
+        operation.id !== operationId ||
+        operation.stack !== this.manifest.stack ||
+        operation.environment !== this.manifest.environment ||
+        !terminal.has(operation.status)
+      )
+        throw new Error('managerBackupInvalid');
+      const path = join(directory, 'backup');
+      const backup = await lstat(path).catch(() => null);
+      if (backup && (!backup.isDirectory() || backup.isSymbolicLink()))
+        throw new Error('managerBackupInvalid');
+      // Invalidate rollback durably before deleting data, including if deletion is interrupted.
+      operation.backupComplete = false;
+      operation.backupDeletedAt = new Date().toISOString();
+      await atomicJson(metadataPath, operation);
+      if (current) this.current = operation;
+      // Only the backup subtree: preserve transaction metadata and quarantine data.
+      if (backup) await rm(path, { recursive: true, maxRetries: 3 });
+      return { ok: true };
+    } finally {
+      this.busy = false;
+    }
   }
 
   async save(phase, status = this.current.status) {
@@ -574,7 +693,11 @@ export class TransactionalUpdater {
     if (this.busy) throw new Error('managerOperationInProgress');
     if (confirmation !== 'ROLLBACK_WITH_DATA_RESTORE')
       throw new Error('updateConfirmationRequired');
-    if (this.current?.id !== operationId || this.current.status !== 'succeeded')
+    if (
+      this.current?.id !== operationId ||
+      this.current.status !== 'succeeded' ||
+      !this.current.backupComplete
+    )
       throw new Error('updateRollbackUnavailable');
     this.busy = true;
     try {
