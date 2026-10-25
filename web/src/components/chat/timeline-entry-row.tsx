@@ -121,5 +121,5 @@ export function TimelineEntryRow({
       />
     );
 
-  return <TurnBlock entry={entry} />;
+  return <TurnBlock entry={entry} threadId={threadId} />;
 }

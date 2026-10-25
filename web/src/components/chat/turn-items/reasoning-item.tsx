@@ -1,4 +1,6 @@
 import { ChevronDown, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { useExpandedTechnicalDetails } from '@/lib/technical-display';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useTimelineStore } from '@/stores/timeline-store';
@@ -10,17 +12,24 @@ interface Props {
 
 export function ReasoningItem({ item }: Props) {
   const { t } = useTranslation();
-  const expanded = useTimelineStore((s) =>
+  const savedExpanded = useTimelineStore((s) =>
     s.expandedReasoning.has(item.itemId),
   );
   const toggleReasoning = useTimelineStore((s) => s.toggleReasoning);
+  const expandDetails = useExpandedTechnicalDetails();
+  const [localExpanded, setLocalExpanded] = useState(expandDetails);
+  const expanded = expandDetails ? localExpanded : savedExpanded;
 
   if (!item.content) return null;
 
   return (
     <div
       className="cursor-pointer select-none"
-      onClick={() => toggleReasoning(item.itemId)}
+      onClick={() =>
+        expandDetails
+          ? setLocalExpanded((value) => !value)
+          : toggleReasoning(item.itemId)
+      }
     >
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <ChevronDown

@@ -34,52 +34,21 @@ import {
   isTurnItemDisplayable,
 } from '@/lib/turn-item-display';
 import { DiffViewer } from './turn-items/diff-viewer';
-import { ToolCallGroup } from './turn-items/tool-call-group';
+import { TechnicalDetails } from './technical-details';
+import {
+  isTechnicalItem,
+  isFailedTechnicalItem,
+} from '@/lib/technical-display';
+import { useAgentDisplayStore } from '@/stores/agent-display-store';
 import { ApprovalItem } from './turn-items/approval-item';
 import { UserInputCard } from './turn-items/user-input-card';
 import { TurnTokenFooter } from './turn-token-footer';
 import { PlanPanel } from './plan-panel';
 import { useTimelineStore } from '@/stores/timeline-store';
 
-/* ── Grouping consecutive mcpToolCall items ── */
-
-type GroupedEntry =
-  | { kind: 'single'; item: TurnItem }
-  | {
-      kind: 'toolGroup';
-      items: Array<Extract<TurnItem, { type: 'mcpToolCall' }>>;
-    };
-
-/** Groups consecutive mcpToolCall items so they can be rendered in a collapsible block. */
-function groupConsecutiveToolCalls(items: TurnItem[]): GroupedEntry[] {
-  const result: GroupedEntry[] = [];
-  let buffer: Array<Extract<TurnItem, { type: 'mcpToolCall' }>> = [];
-
-  const flush = () => {
-    if (buffer.length === 0) return;
-    if (buffer.length === 1) {
-      result.push({ kind: 'single', item: buffer[0] });
-    } else {
-      result.push({ kind: 'toolGroup', items: buffer });
-    }
-    buffer = [];
-  };
-
-  for (const item of items) {
-    if (item.type === 'mcpToolCall') {
-      buffer.push(item);
-    } else {
-      flush();
-      result.push({ kind: 'single', item });
-    }
-  }
-  flush();
-
-  return result;
-}
-
 interface Props {
   entry: Extract<TimelineEntry, { kind: 'turn' }>;
+  threadId?: string | null;
 }
 
 /** Compile-time exhaustiveness guard for the internal item union. */
@@ -270,8 +239,13 @@ function ItemWithRequests(props: Parameters<typeof ItemBody>[0]) {
   );
 }
 
-export function TurnBlock({ entry }: Props) {
+export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
   const { t } = useTranslation();
+  const selectedThreadId = useTimelineStore((s) => s.threadId);
+  const threadId = ownerThreadId ?? selectedThreadId;
+  const displayMode = useAgentDisplayStore((s) =>
+    threadId ? (s.byThread[threadId] ?? 'collapsed') : 'collapsed',
+  );
   const userInputRequests = useTimelineStore((s) => s.userInputRequests);
   const activeTurnId = useTimelineStore((s) => s.activeTurnId);
   // Select this turn's approvals, not the whole map: approvals are keyed by
@@ -329,6 +303,31 @@ export function TurnBlock({ entry }: Props) {
       (approvalsByItemId.get(item.itemId)?.length ?? 0) > 0 ||
       inputRequestItemIds.has(item.itemId),
   );
+  // Preserve chronology: group only adjacent routine technical items. Never put
+  // approvals, questions, failures or assistant prose inside a hidden disclosure.
+  const displayGroups: Array<{ technical: boolean; items: TurnItem[] }> = [];
+  for (const item of visibleItems) {
+    const needsAttention =
+      approvalsByItemId
+        .get(item.itemId)
+        ?.some((a) =>
+          ['pending', 'submitted', 'failed', 'declined', 'cancelled'].includes(
+            a.status,
+          ),
+        ) ||
+      Object.values(userInputRequests).some(
+        (r) =>
+          r.turnId === entry.turnId &&
+          r.itemId === item.itemId &&
+          r.status !== 'resolved',
+      ) ||
+      isFailedTechnicalItem(item);
+    const technical = isTechnicalItem(item) && !needsAttention;
+    const previous = displayGroups.at(-1);
+    if (displayMode === 'hidden' && technical && previous?.technical)
+      previous.items.push(item);
+    else displayGroups.push({ technical, items: [item] });
+  }
   // Both mirror their renderers, which refuse an empty plan and an empty diff
   // string; testing the fields for mere presence would readmit both.
   const planVisible = isPlanDisplayable(entry.plan);
@@ -376,28 +375,36 @@ export function TurnBlock({ entry }: Props) {
           <PlanPanel plan={entry.plan} completed={entry.completed} />
         )}
 
-        {groupConsecutiveToolCalls(visibleItems).map((group) => {
-          if (group.kind === 'single') {
-            return (
-              <ItemWithRequests
-                key={group.item.itemId}
-                item={group.item}
-                turnId={entry.turnId}
-                approvals={approvalsByItemId.get(group.item.itemId) ?? []}
-              />
-            );
-          }
-          return (
-            <ToolCallGroup key={group.items[0].itemId} items={group.items}>
-              {group.items.map((item) => (
-                <ItemWithRequests
-                  key={item.itemId}
-                  item={item}
-                  turnId={entry.turnId}
-                  approvals={approvalsByItemId.get(item.itemId) ?? []}
-                />
-              ))}
-            </ToolCallGroup>
+        {displayGroups.map((group) => {
+          const content = group.items.map((item) => (
+            <ItemWithRequests
+              key={item.itemId}
+              item={item}
+              turnId={entry.turnId}
+              approvals={approvalsByItemId.get(item.itemId) ?? []}
+            />
+          ));
+          return group.technical ? (
+            <TechnicalDetails
+              key={`${displayMode}:${group.items[0].itemId}`}
+              expanded={displayMode === 'expanded'}
+              label={
+                (displayMode === 'hidden'
+                  ? `${t('technicalDetails')} (${group.items.length})`
+                  : group.items[0].type === 'commandExecution'
+                    ? t('terminal')
+                    : group.items[0].type === 'reasoning'
+                      ? t('thinking')
+                      : t('technicalDetails')) +
+                (group.items.some((item) => !item.completed)
+                  ? ` · ${t('running')}`
+                  : '')
+              }
+            >
+              {content}
+            </TechnicalDetails>
+          ) : (
+            <div key={group.items[0].itemId}>{content}</div>
           );
         })}
 
@@ -409,7 +416,15 @@ export function TurnBlock({ entry }: Props) {
           <UserInputCard key={pendingRequestKey(req)} request={req} />
         ))}
 
-        {entry.diff && <DiffViewer diff={entry.diff} />}
+        {entry.diff && (
+          <TechnicalDetails
+            key={`diff:${displayMode}`}
+            label={t('technicalDetails')}
+            expanded={displayMode === 'expanded'}
+          >
+            <DiffViewer diff={entry.diff} />
+          </TechnicalDetails>
+        )}
 
         {entry.completed && <TurnTokenFooter turnId={entry.turnId} />}
 

@@ -31,20 +31,17 @@ function storage() {
   return { db, rows };
 }
 
-it('defaults to normal and persists distinct preferences across service instances', () => {
+it('defaults to collapsed and persists distinct preferences across service instances', () => {
   const { db } = storage();
   const service = new ThreadResponseDetailService(db);
-  expect(service.read('a')).toEqual({ mode: 'normal' });
-  expect(service.context('a')).toContain('Use balanced responses');
-  service.set('a', 'concise');
-  service.set('b', 'detailed');
+  expect(service.read('a')).toEqual({ mode: 'collapsed' });
+  service.set('a', 'hidden');
+  service.set('b', 'expanded');
   const restarted = new ThreadResponseDetailService(db);
-  expect(restarted.read('a').mode).toBe('concise');
-  expect(restarted.read('b').mode).toBe('detailed');
-  expect(restarted.context('a')).toContain('Use concise responses');
-  restarted.set('a', 'normal');
-  expect(restarted.context('a')).toContain('Use balanced responses');
-  expect(restarted.read('b').mode).toBe('detailed');
+  expect(restarted.read('a').mode).toBe('hidden');
+  expect(restarted.read('b').mode).toBe('expanded');
+  restarted.set('a', 'collapsed');
+  expect(restarted.read('b').mode).toBe('expanded');
 });
 
 it('validates all three modes and refuses deletion or unauthorized access', () => {
@@ -55,7 +52,7 @@ it('validates all three modes and refuses deletion or unauthorized access', () =
     service,
     deletion as unknown as ThreadDeletionRegistryService,
   );
-  for (const mode of ['concise', 'normal', 'detailed']) {
+  for (const mode of ['hidden', 'collapsed', 'expanded']) {
     expect(controller.set('a', { mode })).toEqual({ mode });
   }
   for (const mode of [null, undefined, '', 'high', 4, {}]) {
@@ -64,7 +61,7 @@ it('validates all three modes and refuses deletion or unauthorized access', () =
   deletion.assertMutable.mockImplementation(() => {
     throw new Error('Deleted');
   });
-  expect(() => controller.set('a', { mode: 'concise' })).toThrow('Deleted');
+  expect(() => controller.set('a', { mode: 'hidden' })).toThrow('Deleted');
   const identities = {
     requireThread: vi.fn(() => {
       throw new Error('Forbidden');
@@ -78,12 +75,12 @@ it('validates all three modes and refuses deletion or unauthorized access', () =
     },
     () => {
       expect(() => controller.read('a')).toThrow('Forbidden');
-      expect(() => controller.set('a', { mode: 'concise' })).toThrow(
+      expect(() => controller.set('a', { mode: 'hidden' })).toThrow(
         'Forbidden',
       );
     },
   );
-  expect(service.read('a').mode).toBe('detailed');
+  expect(service.read('a').mode).toBe('expanded');
 });
 
 it('allows authorized reads but refuses changes without execution rights', () => {
@@ -104,11 +101,11 @@ it('allows authorized reads but refuses changes without execution rights', () =>
       identities: identities as unknown as IdentityService,
     },
     () => {
-      expect(controller.read('a')).toEqual({ mode: 'normal' });
-      expect(() => controller.set('a', { mode: 'detailed' })).toThrow(
+      expect(controller.read('a')).toEqual({ mode: 'collapsed' });
+      expect(() => controller.set('a', { mode: 'expanded' })).toThrow(
         'Administrator required',
       );
     },
   );
-  expect(service.read('a')).toEqual({ mode: 'normal' });
+  expect(service.read('a')).toEqual({ mode: 'collapsed' });
 });

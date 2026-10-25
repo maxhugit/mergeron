@@ -152,10 +152,6 @@ function normalizeUserMessage(
           .replace(
             /^<project_deliverable_context>\n[\s\S]*?\n<\/project_deliverable_context>\n*/,
             '',
-          )
-          .replace(
-            /^<agent_response_detail>\nResponse presentation preference for this agent:[\s\S]*?\n<\/agent_response_detail>\n*/,
-            '',
           );
         if (message) text.push(message);
       } else if (
@@ -368,6 +364,7 @@ export function normalizeThreadItem(
           toolServer: stringValue(item.server),
           toolName: stringValue(item.tool),
           toolArgs: displayJson(item.arguments),
+          failed: Boolean(error) || result?.isError === true || item.status === 'failed',
         },
       };
     }

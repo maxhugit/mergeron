@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ThreadsService } from './threads.service';
-import { ThreadResponseDetailService } from './thread-response-detail.service';
 import { CodexService } from '../codex/codex.service';
 import { ThreadResumeRegistryService } from './thread-resume-registry.service';
 import { ConversationBranchesService } from '../conversation-branches/conversation-branches.service';
@@ -80,12 +79,10 @@ describe('ThreadsService', () => {
   };
   const mockKnowledge = { contextForConversation: vi.fn() };
   const mockActiveFolders = { resolveAgent: vi.fn() };
-  const mockResponseDetail = { context: vi.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: ThreadResponseDetailService, useValue: mockResponseDetail },
         { provide: ActiveFoldersService, useValue: mockActiveFolders },
         { provide: ProjectKnowledgeService, useValue: mockKnowledge },
         ThreadsService,
@@ -118,7 +115,6 @@ describe('ThreadsService', () => {
     service = module.get(ThreadsService);
     mockCodex.request.mockReset();
     mockKnowledge.contextForConversation.mockReset();
-    mockResponseDetail.context.mockReset();
     mockActiveFolders.resolveAgent.mockReset();
     mockKnowledge.contextForConversation.mockResolvedValue(null);
     Object.values(mockResumeRegistry).forEach((mock) => mock.mockReset());
@@ -343,41 +339,6 @@ describe('ThreadsService', () => {
     await expect(service.listOverview({ limit: 10 })).resolves.toBe(response);
 
     expect(mockOverview.listOverview).toHaveBeenCalledWith({ limit: 10 });
-  });
-
-  it('applies the current agent presentation preference on each turn without altering user input or permissions', async () => {
-    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
-    mockResponseDetail.context.mockImplementation((id) =>
-      id === 't1' ? 'Respond concisely' : null,
-    );
-    const input = [{ type: 'text' as const, text: 'hello', text_elements: [] }];
-    await service.startTurn({ threadId: 't1', input });
-    expect(mockCodex.request).toHaveBeenLastCalledWith('turn/start', {
-      threadId: 't1',
-      input: [
-        { type: 'text', text: 'Respond concisely', text_elements: [] },
-        ...input,
-      ],
-    });
-    await service.startTurn({ threadId: 't2', input });
-    expect(mockCodex.request).toHaveBeenLastCalledWith('turn/start', {
-      threadId: 't2',
-      input,
-    });
-    mockResponseDetail.context.mockReturnValue('Respond normally');
-    await service.startTurn({ threadId: 't1', input });
-    expect(mockCodex.request).toHaveBeenLastCalledWith('turn/start', {
-      threadId: 't1',
-      input: [
-        { type: 'text', text: 'Respond normally', text_elements: [] },
-        ...input,
-      ],
-    });
-    expect(mockBranches.attachPendingVersionTurn).toHaveBeenLastCalledWith(
-      't1',
-      'turn1',
-      'hello',
-    );
   });
 
   it('should call turn/start', async () => {

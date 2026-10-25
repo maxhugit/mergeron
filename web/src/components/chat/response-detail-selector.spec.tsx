@@ -42,24 +42,24 @@ it('offers three modes, saves per agent and restores them after remounting', asy
       const id = String(url).includes('/a/') ? 'a' : 'b';
       if (init?.method === 'PATCH')
         modes[id] = JSON.parse(init.body as string).mode;
-      return new Response(JSON.stringify({ mode: modes[id] ?? 'normal' }));
+      return new Response(JSON.stringify({ mode: modes[id] ?? 'collapsed' }));
     });
   const view = mount();
-  const select = screen.getByRole('combobox', { name: 'Verbosity' });
+  const select = screen.getByRole('combobox', { name: 'Technical details' });
   await waitFor(() => expect(select).toBeEnabled());
-  expect(select).toHaveValue('normal');
+  expect(select).toHaveValue('collapsed');
   expect(screen.getAllByRole('option')).toHaveLength(3);
-  fireEvent.change(select, { target: { value: 'concise' } });
-  await waitFor(() => expect(select).toHaveValue('concise'));
+  fireEvent.change(select, { target: { value: 'hidden' } });
+  await waitFor(() => expect(select).toHaveValue('hidden'));
   useTimelineStore.setState({ threadId: 'b' });
   await waitFor(() => expect(select).toBeEnabled());
-  expect(select).toHaveValue('normal');
-  fireEvent.change(select, { target: { value: 'detailed' } });
-  await waitFor(() => expect(select).toHaveValue('detailed'));
+  expect(select).toHaveValue('collapsed');
+  fireEvent.change(select, { target: { value: 'expanded' } });
+  await waitFor(() => expect(select).toHaveValue('expanded'));
   view.unmount();
   mount();
   await waitFor(() =>
-    expect(screen.getByRole('combobox')).toHaveValue('concise'),
+    expect(screen.getByRole('combobox')).toHaveValue('hidden'),
   );
   expect(
     fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH'),
@@ -69,15 +69,15 @@ it('offers three modes, saves per agent and restores them after remounting', asy
 it('does not claim a preference was saved when the server rejects it', async () => {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (_url, init) =>
-      new Response(JSON.stringify({ mode: 'normal' }), {
+      new Response(JSON.stringify({ mode: 'collapsed' }), {
         status: init?.method === 'PATCH' ? 500 : 200,
       }),
   );
   mount();
   const select = screen.getByRole('combobox');
   await waitFor(() => expect(select).toBeEnabled());
-  fireEvent.change(select, { target: { value: 'detailed' } });
+  fireEvent.change(select, { target: { value: 'expanded' } });
   expect(await screen.findByRole('alert')).toBeInTheDocument();
-  expect(select).toHaveValue('normal');
+  expect(select).toHaveValue('collapsed');
   expect(select).toBeEnabled();
 });

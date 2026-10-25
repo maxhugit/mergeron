@@ -257,10 +257,10 @@ class ProjectArchiveTest(unittest.TestCase):
         old_id = self.add_agent()
         source_rollout = (self.home / 'sessions/rollout.jsonl').read_bytes()
         with sqlite3.connect(self.source_db) as db:
-            db.execute("INSERT INTO settings(key,value,type,category,description,default_value,constraints,updated_at) VALUES(?,'concise','string','thread-response-detail','Detail','normal','{}',1)", ('thread-response-detail:' + old_id,))
+            db.execute("INSERT INTO settings(key,value,type,category,description,default_value,constraints,updated_at) VALUES(?,'hidden','string','thread-response-detail','Display','collapsed','{}',1)", ('thread-response-detail:' + old_id,))
         self.export()
         _, manifest = self.load()
-        self.assertIn('agent-response-detail-v1', manifest['requiredCapabilities'])
+        self.assertIn('agent-display-detail-v1', manifest['requiredCapabilities'])
         self.import_project()
         with engine.connect(self.target_home / 'state_5.sqlite') as db:
             thread = db.execute('SELECT * FROM threads').fetchone()
@@ -270,7 +270,7 @@ class ProjectArchiveTest(unittest.TestCase):
             self.assertTrue(rollout.is_file())
             self.assertEqual(json.loads(rollout.read_text())['payload']['id'], thread['id'])
             with engine.connect(self.target_db) as app:
-                self.assertEqual(app.execute('SELECT value FROM settings WHERE key=?', ('thread-response-detail:' + thread['id'],)).fetchone()[0], 'concise')
+                self.assertEqual(app.execute('SELECT value FROM settings WHERE key=?', ('thread-response-detail:' + thread['id'],)).fetchone()[0], 'hidden')
                 self.assertIsNone(app.execute('SELECT value FROM settings WHERE key=?', ('thread-response-detail:' + old_id,)).fetchone())
             with engine.connect(self.target_home / 'thread_history_1.sqlite') as history:
                 state = history.execute('SELECT * FROM thread_history_projection_state').fetchone()

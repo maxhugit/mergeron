@@ -1,23 +1,26 @@
 # Administration Codex : listes, enregistrement et version du CLI
 
-## Niveau de détail par agent
+## Affichage des détails techniques par agent
 
-Dans la conversation d’un agent, ouvrir **Capacités**, puis choisir **Concis**,
-**Normal** ou **Détaillé** dans **Niveau de détail**. Le choix est enregistré
-côté serveur pour cet agent ; il ne modifie pas les autres conversations ni
-les réglages globaux. Sans choix explicite, le mode est Normal.
+Dans **Capacités → Détails techniques**, choisir :
 
-La préférence est transmise comme consigne de présentation au début de chaque
-nouveau tour. Elle s’applique donc aux prochaines réponses, pas à un tour déjà
-en cours. Repasser sur Normal remplace explicitement la préférence précédente.
-Le modèle garde une marge d’adaptation à la demande précise de l’utilisateur :
-ce n’est pas une limite stricte de mots ou de jetons. Les erreurs et informations
-essentielles ne doivent pas être omises en mode Concis.
+- **Sans détails techniques** : les activités techniques consécutives sont regroupées
+  derrière une ligne dépliable. Les réponses de l’agent restent intégrales, dans leur ordre.
+- **Détails repliés** (par défaut) : une ligne par activité ; cliquer pour consulter
+  les commandes, résultats, logs ou changements de fichiers.
+- **Tout afficher** : les activités techniques et leurs contenus sont ouverts par défaut.
 
-Ce choix ne modifie ni l’effort de raisonnement, ni les permissions, ni les outils.
-Les commandes, résultats et logs restent consultables dans les trois modes.
-Le choix accompagne les agents lors d’un export/import ZIP ; une destination trop
-ancienne pour comprendre cette préférence refuse l’archive avec une explication.
+Le choix est enregistré côté serveur pour cet agent et s’applique immédiatement
+à l’historique déjà affiché et aux nouveaux événements. Rien n’est supprimé :
+on peut déplier les détails ou changer de mode à tout moment. Les erreurs connues,
+questions et approbations en attente restent visibles, indépendamment du mode.
+Les résultats visuels et les réponses de l’agent restent affichés.
+
+Ce réglage est uniquement visuel : aucune consigne n’est envoyée au modèle ;
+la longueur des réponses, le prompt, l’effort de raisonnement et les permissions
+ne sont pas modifiés. Les blocs de code présents dans le texte de la réponse ne
+sont pas filtrés. La préférence accompagne les agents lors d’un export/import ZIP ;
+une destination trop ancienne pour la comprendre refuse l’archive avec une explication.
 
 ## Consignes et connaissance partagée
 

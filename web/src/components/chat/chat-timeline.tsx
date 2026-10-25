@@ -42,6 +42,7 @@ import {
 } from '@/stores/timeline-store';
 import type { TimelineEntry } from '@/types/timeline';
 import { TimelineEntryRow } from './timeline-entry-row';
+import { useAgentDisplayPreference } from '@/hooks/use-agent-display-preference';
 
 /** Stable empty set, so "nothing is being deleted" is referentially constant. */
 const EMPTY_THREAD_IDS: ReadonlySet<string> = new Set<string>();
@@ -131,6 +132,7 @@ export function ChatTimeline({
   'use no memo'; // TanStack Virtual is incompatible with React Compiler memoization
   const { t } = useTranslation();
   const runtime = useTimelineStore((s) => s.threadsById[conversationId]);
+  useAgentDisplayPreference(conversationId);
   const retainedTimeline = runtime?.timeline ?? EMPTY_TIMELINE;
   const activeTurnId = runtime?.activeTurnId ?? null;
   const approvals = runtime?.approvals ?? EMPTY_APPROVALS;

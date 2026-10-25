@@ -36,7 +36,7 @@ export class ThreadResponseDetailController {
     requireExecutionAccess();
     this.deletion.assertMutable(threadId);
     if (!RESPONSE_DETAILS.includes(body?.mode as ResponseDetail)) {
-      throw new BadRequestException('Choose concise, normal or detailed.');
+      throw new BadRequestException('Choose hidden, collapsed or expanded.');
     }
     return this.detail.set(threadId, body.mode as ResponseDetail);
   }

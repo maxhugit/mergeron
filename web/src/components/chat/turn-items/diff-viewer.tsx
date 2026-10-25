@@ -4,6 +4,7 @@
  * split into per-file GitHub-style diff panels.
  */
 import { useMemo, useState } from 'react';
+import { useExpandedTechnicalDetails } from '@/lib/technical-display';
 import { ChevronDown, GitBranch } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -101,7 +102,8 @@ function splitFileDiffSections(diff: string): FileDiffSection[] {
 
 export function DiffViewer({ diff }: Props) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const expandDetails = useExpandedTechnicalDetails();
+  const [expanded, setExpanded] = useState(expandDetails);
   const sections = useMemo(() => splitFileDiffSections(diff), [diff]);
   const fileCount = sections.length;
   const additions = sections.reduce(

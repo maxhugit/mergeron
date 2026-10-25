@@ -88,6 +88,9 @@ const knownItems: Array<[string, Record<string, unknown>]> = [
 ];
 
 describe('normalizeThreadItem', () => {
+  it('retains MCP failure state so display preferences cannot hide errors', () => {
+    expect(normalizeThreadItem({ type: 'mcpToolCall', id: 'failed', status: 'failed', error: { message: 'Denied' } }, true)).toMatchObject({ kind: 'render', item: { failed: true, content: 'Denied' } });
+  });
   it.each(knownItems)('normalizes %s identically for live and history paths', (type, raw) => {
     const started = normalizeThreadItem(raw, false);
     const persisted = normalizeThreadItem(raw, true);
@@ -273,30 +276,5 @@ describe('normalizeThreadItem', () => {
         images: ['https://example.com/image.png'],
       },
     });
-  });
-
-  it('keeps agent response preferences out of replayed user messages', () => {
-    for (const prefix of [
-      '',
-      '<project_deliverable_context>\nBrief\n</project_deliverable_context>\n\n',
-    ]) {
-      expect(
-        normalizeThreadItem(
-          {
-            type: 'userMessage',
-            content: [
-              {
-                type: 'text',
-                text:
-                  prefix +
-                  '<agent_response_detail>\nResponse presentation preference for this agent: concise.\nBe concise.\n</agent_response_detail>',
-              },
-              { type: 'text', text: 'My request' },
-            ],
-          },
-          true,
-        ),
-      ).toMatchObject({ kind: 'userMessage', message: { text: 'My request' } });
-    }
   });
 });
