@@ -54,14 +54,15 @@ l’image dans `STATE_ROOT` :
 
 Le montage `/appdata` donne à l’application un accès en lecture/écriture aux
 configurations Unraid. Cette capacité est puissante : elle doit rester réservée
-à un utilisateur Authentik de confiance.
+à un administrateur de confiance. Le chemin hôte de ce montage est configurable
+avec `MERGERON_APPDATA_ROOT`, sans obligation de monter l’Appdata Unraid complet.
 
 ## Cycle d’une requête
 
 1. Le navigateur ouvre le domaine public configuré pour Codex.
-2. Traefik termine HTTPS et transmet la requête à Nginx.
-3. Nginx interroge Authentik, renouvelle ou redemande la session si nécessaire,
-   puis injecte le jeton interne.
+2. Le reverse proxy choisi termine HTTPS et transmet la requête à Nginx.
+3. En mode historique Nginx vérifie Authentik ; en mode natif Mergeron vérifie
+   ses propres sessions locales/OIDC. Voir [les choix d’installation](installation-portable.md).
 4. Le backend répond, démarre Codex CLI ou accède aux données persistantes.
 5. Les connexions Internet autorisées passent par Squid.
 

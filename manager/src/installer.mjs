@@ -61,9 +61,7 @@ function imageRepository(reference) {
 
 export function readInstallConfiguration(manifest, env = process.env) {
   const production = manifest.environment === 'production';
-  const defaultRoot = production
-    ? '/mnt/pool/appdata/mergeron/state'
-    : `/mnt/pool/appdata/${manifest.stack}/state`;
+  const defaultRoot = `/srv/${manifest.stack}/state`;
   const stateRoot = absoluteSafePath(
     env.MERGERON_STATE_ROOT ?? defaultRoot,
     'MERGERON_STATE_ROOT',
@@ -80,9 +78,12 @@ export function readInstallConfiguration(manifest, env = process.env) {
       env.MERGERON_MANAGER_DEFAULT_CONFIG ??
       '/opt/mergeron-manager/default-config',
     appdataRoot: absoluteSafePath(
-      env.MERGERON_UNRAID_APPDATA_ROOT ?? '/mnt/user/appdata',
-      'MERGERON_UNRAID_APPDATA_ROOT',
+      env.MERGERON_APPDATA_ROOT ??
+        env.MERGERON_UNRAID_APPDATA_ROOT ??
+        `${stateRoot}/appdata`,
+      'MERGERON_APPDATA_ROOT',
     ),
+    authMode: env.MERGERON_AUTH_MODE ?? 'authentik',
     adminSubnet:
       env.MERGERON_ADMIN_SUBNET ??
       (production ? '172.30.44.0/28' : '172.30.44.16/28'),
@@ -106,6 +107,8 @@ export function readInstallConfiguration(manifest, env = process.env) {
       egress: env.MERGERON_EGRESS_IMAGE ?? 'ubuntu/squid:latest',
     },
   };
+  if (!['authentik', 'native'].includes(configuration.authMode))
+    throw new Error('MERGERON_AUTH_MODE is invalid');
   if (!privateIpv4Cidr(configuration.adminSubnet))
     throw new Error('MERGERON_ADMIN_SUBNET is invalid');
   for (const component of manifest.components) {
@@ -139,6 +142,7 @@ const PERSISTENT_DIRECTORIES = [
   'manager-run',
   'manager-state',
   'config',
+  'appdata',
 ];
 
 async function persistentStatePlan(configuration) {
@@ -296,6 +300,9 @@ export async function createInstallPlan(
       publicUrl: configuration.publicUrl,
       iconUrl: configuration.iconUrl,
       images: configuration.images,
+      authMode: configuration.authMode,
+      proxyNetwork: manifest.networks.find((network) => network.id === 'proxy')
+        ?.name,
     },
     actions,
     blockers: [...new Set(blockers)].sort(),
@@ -348,9 +355,13 @@ async function preparePersistentState(configuration) {
       mode: directory === 'ssh' ? 0o700 : 0o750,
     });
     if (wasMissing && configuration.applyOwnership !== false) {
-      const applicationOwned = ['home', 'workspace', 'logs', 'ssh'].includes(
-        directory,
-      );
+      const applicationOwned = [
+        'home',
+        'workspace',
+        'logs',
+        'ssh',
+        'appdata',
+      ].includes(directory);
       await chown(
         path,
         applicationOwned ? 11002 : 0,
@@ -399,7 +410,17 @@ async function preparePersistentState(configuration) {
       await createExclusive(
         destination,
         file === 'nginx.conf.template'
-          ? (await readFile(join(defaults, file), 'utf8')).replaceAll(
+          ? (
+              await readFile(
+                join(
+                  defaults,
+                  configuration.authMode === 'native'
+                    ? 'nginx.native.conf.template'
+                    : file,
+                ),
+                'utf8',
+              )
+            ).replaceAll(
               'http://mergeron-ui:',
               `http://${configuration.stackPrefix ?? 'mergeron'}-ui:`,
             )

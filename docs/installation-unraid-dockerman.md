@@ -1,6 +1,9 @@
 # Installation avec les formulaires Docker standard d'Unraid
 
-Cette méthode est recommandée pour l'exploitation quotidienne. Les trois
+Pour une nouvelle installation, utiliser d’abord
+[le parcours Manager](installation-portable.md#manager--recommandé-sur-unraid) :
+un seul XML, aucun formulaire sur les dépendances. Cette page décrit la méthode
+manuelle historique, à ne pas utiliser simultanément avec ce parcours. Les trois
 conteneurs apparaissent séparément dans l'onglet **Docker** d'Unraid et peuvent
 être mis à jour avec l'action standard **Check for Updates / Update**.
 
@@ -22,21 +25,21 @@ Dans le terminal Unraid :
 
 ```bash
 git clone https://github.com/maxhugit/mergeron.git /tmp/mergeron-install
-mkdir -p /mnt/pool/appdata/mergeron/config
+mkdir -p /mnt/user/appdata/mergeron/config
 cp -a /tmp/mergeron-install/deployment/config/. \
-  /mnt/pool/appdata/mergeron/config/
+  /mnt/user/appdata/mergeron/config/
 cp /tmp/mergeron-install/deployment/docker-man/my-*.xml \
   /boot/config/plugins/dockerMan/templates-user/
 cp /tmp/mergeron-install/deployment/docker-man/prepare-networks.sh \
-  /mnt/pool/appdata/mergeron/prepare-networks.sh
+  /mnt/user/appdata/mergeron/prepare-networks.sh
 cp /tmp/mergeron-install/deployment/docker-man/reconcile-networks.sh \
-  /mnt/pool/appdata/mergeron/reconcile-networks.sh
-chmod 700 /mnt/pool/appdata/mergeron/prepare-networks.sh \
-  /mnt/pool/appdata/mergeron/reconcile-networks.sh
+  /mnt/user/appdata/mergeron/reconcile-networks.sh
+chmod 700 /mnt/user/appdata/mergeron/prepare-networks.sh \
+  /mnt/user/appdata/mergeron/reconcile-networks.sh
 ```
 
-Les valeurs proposées par les formulaires utilisent `/mnt/pool`. Si le pool
-Appdata porte un autre nom, modifier les chemins dans chaque formulaire avant
+Les valeurs proposées par les formulaires utilisent `/mnt/user/appdata`. Si votre
+stockage utilise un autre emplacement, modifier les chemins dans chaque formulaire avant
 de cliquer sur **Apply**, ainsi que le chemin du profil `seccomp=` dans
 **Extra Parameters** du formulaire `mergeron`.
 
@@ -57,7 +60,7 @@ passer directement à la section suivante.
 Pour une nouvelle installation :
 
 ```bash
-STATE=/mnt/pool/appdata/mergeron/state
+STATE=/mnt/user/appdata/mergeron/state
 mkdir -p "$STATE"/{home,workspace,logs,ssh,manager-run,manager-state}
 openssl rand -hex 48 > "$STATE/backend-token.txt"
 cp "$STATE/backend-token.txt" "$STATE/backend-token-nginx.txt"
@@ -74,11 +77,15 @@ valeur. Aucun secret ni contenu de `state` ne doit être ajouté à Git.
 
 ## 3. Préparer les réseaux
 
-Traefik et Authentik doivent déjà appartenir au réseau `net_standard`. Exécuter
+Le proxy choisi (et Authentik dans le mode historique) doit appartenir au réseau
+externe choisi. Le nom par défaut est `mergeron-proxy`. Exporter
+`MERGERON_PROXY_NETWORK` avant de lancer **les deux scripts** si son nom diffère.
+Conserver aussi cette variable dans le script de démarrage du réconciliateur.
+Exécuter
 ensuite le script idempotent :
 
 ```bash
-/mnt/pool/appdata/mergeron/prepare-networks.sh
+/mnt/user/appdata/mergeron/prepare-networks.sh
 ```
 
 Il crée ou vérifie :
@@ -86,7 +93,7 @@ Il crée ou vérifie :
 - `mergeron-isolated`, réseau interne sans accès Internet direct ;
 - `mergeron-external`, réseau de sortie de Squid ;
 - `mergeron-admin`, réseau administratif `172.30.44.0/28` ;
-- `net_standard`, réseau partagé existant de Traefik et Authentik.
+- `mergeron-proxy`, réseau partagé existant de Traefik et Authentik.
 
 Le script s'arrête sans modifier un réseau existant si sa configuration ne
 correspond pas à celle attendue.
@@ -94,7 +101,7 @@ correspond pas à celle attendue.
 Lancer ensuite le réconciliateur depuis l'Appdata :
 
 ```bash
-nohup /mnt/pool/appdata/mergeron/reconcile-networks.sh watch \
+nohup /mnt/user/appdata/mergeron/reconcile-networks.sh watch \
   >> /var/log/mergeron-network-reconciler.log 2>&1 &
 ```
 
@@ -102,7 +109,7 @@ Il contrôle périodiquement la topologie Docker. Après chaque création ou mis
 jour DockerMan, il rattache automatiquement les réseaux secondaires suivants :
 
 - `mergeron-ui` à `mergeron-admin` ;
-- `mergeron-ingress` à `net_standard` ;
+- `mergeron-ingress` à `mergeron-proxy` ;
 - `mergeron-squid` à `mergeron-external`.
 
 Il vérifie également les alias DNS sur chaque réseau déjà raccordé. Si
@@ -122,7 +129,7 @@ Scripts** un script nommé `Mergeron network reconciler`, contenant :
 
 ```bash
 #!/bin/bash
-nohup /mnt/pool/appdata/mergeron/reconcile-networks.sh watch \
+nohup /mnt/user/appdata/mergeron/reconcile-networks.sh watch \
   >/var/log/mergeron-network-reconciler.log 2>&1 &
 ```
 
@@ -137,7 +144,7 @@ USB ; elle ne modifie pas les données applicatives.
 Ne pas exécuter simultanément les versions Compose et DockerMan : elles portent
 les mêmes noms de conteneurs et utilisent les mêmes données.
 
-1. sauvegarder `/mnt/pool/appdata/mergeron/state/home` ;
+1. sauvegarder `/mnt/user/appdata/mergeron/state/home` ;
 2. désactiver l'autostart de l'ancienne stack dans Compose Manager ;
 3. arrêter la stack ;
 4. supprimer uniquement les trois anciens conteneurs, sans supprimer `state` ;
@@ -181,12 +188,12 @@ docker inspect mergeron --format '{{.State.Health.Status}}'
 docker inspect mergeron-ingress --format '{{.State.Health.Status}}'
 docker inspect mergeron-manager --format '{{.State.Health.Status}}'
 docker network inspect mergeron-isolated
-/mnt/pool/appdata/mergeron/reconcile-networks.sh once
+/mnt/user/appdata/mergeron/reconcile-networks.sh once
 curl -I https://mergeron.example.com
 ```
 
 Le backend `mergeron` ne doit avoir aucun port publié. Traefik doit joindre
-uniquement `mergeron-ingress:8080` sur `net_standard`.
+uniquement `mergeron-ingress:8080` sur `mergeron-proxy`.
 
 ## 7. Mettre à jour et revenir en arrière
 
@@ -199,7 +206,7 @@ Le formulaire principal utilise
 4. tester la connexion, une conversation et les intégrations.
 
 Cette opération télécharge l'image et recrée seulement le conteneur ; les
-données restent dans `/mnt/pool/appdata/mergeron/state`.
+données restent dans `/mnt/user/appdata/mergeron/state`.
 
 Après la recréation, vérifier que le réconciliateur a remis `mergeron` sur
 `mergeron-admin`. Une mise à jour réussie de l’image ne garantit pas à elle seule
@@ -216,7 +223,7 @@ jour proposées, lancer **Update**, puis contrôler que les trois conteneurs son
 de nouveau `healthy` et que l'interface publique répond correctement.
 
 Le réconciliateur est installé dans
-`/mnt/pool/appdata/mergeron/reconcile-networks.sh`. Son journal est disponible
+`/mnt/user/appdata/mergeron/reconcile-networks.sh`. Son journal est disponible
 dans `/var/log/mergeron-network-reconciler.log`. L'entrée User Scripts est
 enregistrée sur la clé USB par Unraid afin de survivre au redémarrage.
 
@@ -224,7 +231,7 @@ enregistrée sur la clé USB par Unraid afin de survivre au redémarrage.
 
 Les modèles XML copiés dans `/boot/config/plugins/dockerMan/templates-user/`
 permettent de recréer les formulaires. Les fichiers réellement persistants de
-l’application restent dans `/mnt/pool/appdata/mergeron`.
+l’application restent dans `/mnt/user/appdata/mergeron`.
 
 Lorsqu’une nouvelle version du dépôt modifie un modèle XML ou un fichier sous
 `deployment/config/`, comparer puis recopier le fichier concerné avant de

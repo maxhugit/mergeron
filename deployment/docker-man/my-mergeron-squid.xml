@@ -20,5 +20,5 @@
   <DonateText/>
   <DonateLink/>
   <Requires>Le réconciliateur réseau doit être installé. Les réseaux mergeron-isolated et mergeron-external doivent exister.</Requires>
-  <Config Name="Configuration Squid" Target="/etc/squid/squid.conf" Default="/mnt/pool/appdata/mergeron/config/squid.conf" Mode="ro" Description="Liste blanche et règles du proxy sortant." Type="Path" Display="always" Required="true" Mask="false">/mnt/pool/appdata/mergeron/config/squid.conf</Config>
+  <Config Name="Configuration Squid" Target="/etc/squid/squid.conf" Default="/mnt/user/appdata/mergeron/config/squid.conf" Mode="ro" Description="Liste blanche et règles du proxy sortant." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mergeron/config/squid.conf</Config>
 </Container>

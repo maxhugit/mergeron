@@ -5,7 +5,7 @@ FROM node:22-bookworm-slim AS manager-files
 WORKDIR /opt/mergeron-manager
 COPY manager/package.json manager/stack-manifest.json ./
 COPY manager/src ./src
-COPY deployment/config/nginx.conf.template deployment/config/squid.conf /opt/mergeron-manager/default-config/
+COPY deployment/config/nginx.conf.template deployment/config/nginx.native.conf.template deployment/config/squid.conf /opt/mergeron-manager/default-config/
 
 RUN mkdir -p /runtime/run/mergeron-manager /runtime/var/lib/mergeron-manager \
  && chmod 0750 /runtime/run/mergeron-manager \

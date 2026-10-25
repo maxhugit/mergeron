@@ -1,4 +1,10 @@
-# Choisir le mode d’installation Unraid
+# Choisir le mode d’installation
+
+Le parcours de référence est [l’installation portable](installation-portable.md).
+Sur Unraid, privilégier le seul formulaire **Manager** : les dépendances sont
+créées par le Manager sans formulaires individuels ni réconciliateur hôte.
+La comparaison ci-dessous décrit les deux méthodes manuelles historiques,
+toujours disponibles pour les installations qui les utilisent déjà.
 
 La plateforme utilise les mêmes trois conteneurs applicatifs, auxquels s'ajoute
 Mergeron Manager, avec les mêmes volumes, secrets et réseaux.
@@ -41,8 +47,9 @@ Dans les deux modes :
    `mergeron-external` pour filtrer les sorties Internet ;
 2. `mergeron-ui` démarre sur `mergeron-isolated` et rejoint `mergeron-admin` pour les
    services locaux autorisés ;
-3. `mergeron-ingress` démarre sur `mergeron-isolated` et rejoint `net_standard`
-   pour être joint par Traefik et Authentik.
+3. `mergeron-ingress` démarre sur `mergeron-isolated` et rejoint `mergeron-proxy`
+   (nom configurable par `MERGERON_PROXY_NETWORK`) pour être joint par le proxy
+   HTTPS choisi. Authentik ne le rejoint que si ce mode est utilisé.
 4. `mergeron-manager` ne rejoint aucun réseau, crée uniquement les ressources
    manquantes autorisées, lit l'inventaire Docker et partage son socket Unix
    avec `mergeron-ui`.

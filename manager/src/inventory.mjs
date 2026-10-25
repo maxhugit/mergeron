@@ -6,6 +6,7 @@ export function scopeManifest(
   manifest,
   stackPrefix = manifest.stack,
   stackEnvironment = 'production',
+  proxyNetwork = 'mergeron-proxy',
 ) {
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(stackPrefix)) {
     throw new Error('MERGERON_STACK_PREFIX is invalid');
@@ -13,6 +14,27 @@ export function scopeManifest(
   if (!['production', 'development'].includes(stackEnvironment)) {
     throw new Error('MERGERON_STACK_ENVIRONMENT is invalid');
   }
+  if (
+    typeof proxyNetwork !== 'string' ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(proxyNetwork) ||
+    [
+      'bridge',
+      'host',
+      'none',
+      ...['isolated', 'admin', 'external'].map((id) => `${stackPrefix}-${id}`),
+    ].includes(proxyNetwork)
+  ) {
+    throw new Error('MERGERON_PROXY_NETWORK is invalid');
+  }
+  const sourceProxy = manifest.networks.find(
+    (network) => network.id === 'proxy',
+  )?.name;
+  const scopedNetwork = (name) =>
+    name === sourceProxy
+      ? proxyNetwork
+      : name.startsWith(`${manifest.stack}-`)
+        ? `${stackPrefix}-${name.slice(manifest.stack.length + 1)}`
+        : name;
   if (stackEnvironment === 'development' && stackPrefix === manifest.stack) {
     throw new Error(
       'A development stack must use a dedicated MERGERON_STACK_PREFIX',
@@ -31,9 +53,7 @@ export function scopeManifest(
     environment: stackEnvironment,
     networks: (manifest.networks ?? []).map((network) => ({
       ...network,
-      name: network.name.startsWith(`${manifest.stack}-`)
-        ? `${stackPrefix}-${network.name.slice(manifest.stack.length + 1)}`
-        : network.name,
+      name: scopedNetwork(network.name),
     })),
     components: manifest.components.map((component) => ({
       ...component,
@@ -43,11 +63,7 @@ export function scopeManifest(
           ? component.canonicalName
           : componentNames[component.id],
       legacyNames: acceptsLegacyNames ? component.legacyNames : [],
-      requiredNetworks: component.requiredNetworks.map((network) =>
-        network.startsWith(`${manifest.stack}-`)
-          ? `${stackPrefix}-${network.slice(manifest.stack.length + 1)}`
-          : network,
-      ),
+      requiredNetworks: component.requiredNetworks.map(scopedNetwork),
     })),
   };
 }

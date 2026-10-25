@@ -7,6 +7,52 @@ const manifest = JSON.parse(
   await readFile(new URL('../stack-manifest.json', import.meta.url), 'utf8'),
 );
 
+test('scopes the external proxy network independently of the private stack', () => {
+  for (const network of ['shared-proxy', 'net_standard', 'caddy.default']) {
+    const scoped = scopeManifest(
+      manifest,
+      'mergeron-dev',
+      'development',
+      network,
+    );
+    assert.equal(
+      scoped.networks.find((item) => item.id === 'proxy').name,
+      network,
+    );
+    assert.deepEqual(
+      scoped.components.find((item) => item.id === 'ingress').requiredNetworks,
+      ['mergeron-dev-isolated', network],
+    );
+    assert.equal(
+      scoped.networks.find((item) => item.id === 'proxy').external,
+      true,
+    );
+    assert.equal(
+      manifest.networks.find((item) => item.id === 'proxy').name,
+      'mergeron-proxy',
+    );
+  }
+});
+
+test('rejects invalid or private-network-colliding proxy names', () => {
+  for (const network of [
+    '',
+    'bad network',
+    '../host',
+    'host',
+    'bridge',
+    'none',
+    'mergeron-dev-isolated',
+    'mergeron-dev-admin',
+    'mergeron-dev-external',
+  ]) {
+    assert.throws(
+      () => scopeManifest(manifest, 'mergeron-dev', 'development', network),
+      /MERGERON_PROXY_NETWORK/,
+    );
+  }
+});
+
 function fixtureDocker({ missingWorkspace = false, duplicate = false } = {}) {
   const containers = [
     {
@@ -54,7 +100,7 @@ function fixtureDocker({ missingWorkspace = false, duplicate = false } = {}) {
           Networks: container.Id.startsWith('application')
             ? { 'mergeron-isolated': {}, 'mergeron-admin': {} }
             : container.Id.startsWith('ingress')
-              ? { 'mergeron-isolated': {}, net_standard: {} }
+              ? { 'mergeron-isolated': {}, 'mergeron-proxy': {} }
               : { 'mergeron-isolated': {}, 'mergeron-external': {} },
         },
         Mounts: container.Id.startsWith('application')
@@ -146,7 +192,7 @@ test('scopes names and private networks for an isolated development stack', () =
   ]);
   assert.deepEqual(scoped.components[1].requiredNetworks, [
     'mergeron-dev-isolated',
-    'net_standard',
+    'mergeron-proxy',
   ]);
 });
 

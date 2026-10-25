@@ -1,9 +1,10 @@
 # Installation et reconstruction sur Unraid
 
-> Cette procédure concerne Compose Manager. Pour utiliser les formulaires
-> standard de l'onglet Docker et les mises à jour natives d'Unraid, suivre la
-> [procédure DockerMan](installation-unraid-dockerman.md), désormais
-> recommandée.
+> Cette procédure est un exemple Unraid avec Compose, Traefik et Authentik,
+> pas une liste de dépendances imposées. Voir d’abord
+> [l’installation portable](installation-portable.md) pour un autre hôte,
+> reverse proxy ou mode d’authentification. Sur Unraid, le parcours Manager
+> utilise uniquement son XML et ne nécessite pas Compose Manager.
 
 Lire le [comparatif des deux modes](choisir-mode-installation.md) avant de
 choisir cette variante. Avec Compose Manager, `docker-compose.yml` et
@@ -38,14 +39,14 @@ Appdata unique :
 
 ```bash
 git clone https://github.com/maxhugit/mergeron.git /tmp/mergeron-install
-mkdir -p /mnt/pool/appdata/mergeron/config
+mkdir -p /mnt/user/appdata/mergeron/config
 cp /tmp/mergeron-install/deployment/compose.unraid.yml \
-  /mnt/pool/appdata/mergeron/docker-compose.yml
+  /mnt/user/appdata/mergeron/docker-compose.yml
 cp -a /tmp/mergeron-install/deployment/config/. \
-  /mnt/pool/appdata/mergeron/config/
+  /mnt/user/appdata/mergeron/config/
 cp /tmp/mergeron-install/deployment/.env.example \
-  /mnt/pool/appdata/mergeron/images.env
-cd /mnt/pool/appdata/mergeron
+  /mnt/user/appdata/mergeron/images.env
+cd /mnt/user/appdata/mergeron
 ```
 
 Éditer `images.env`, adapter les chemins et renseigner
@@ -59,6 +60,12 @@ Conserver `MERGERON_STACK_PREFIX=mergeron` en production. Remplacer si possible
 Le fichier `.env` de
 production ne doit jamais être envoyé sur GitHub.
 
+Les exemples `.env` proposent désormais des chemins Linux `/srv`. Pour suivre
+les commandes de cette page, régler `DEPLOY_ROOT=/mnt/user/appdata/mergeron`,
+`STATE_ROOT=/mnt/user/appdata/mergeron/state` et le montage
+`MERGERON_APPDATA_ROOT` sur le dossier réellement souhaité. Choisir explicitement
+`MERGERON_PROXY_NETWORK` ; conserver son nom actuel lors d’une mise à jour.
+
 Vérifier que les fichiers de configuration sont présents :
 
 ```bash
@@ -71,7 +78,7 @@ test -f config/seccomp-bwrap.json
 ## 2. Préparer l’état persistant
 
 ```bash
-STATE=/mnt/pool/appdata/mergeron/state
+STATE=/mnt/user/appdata/mergeron/state
 mkdir -p "$STATE"/{home,workspace,logs,ssh,manager-run,manager-state}
 ```
 
@@ -117,19 +124,21 @@ chmod 440 "$STATE/openai-api-key.txt"
 
 ## 3. Vérifier le réseau partagé
 
-Traefik et Authentik doivent être présents sur `net_standard` :
+Cet exemple utilise `MERGERON_PROXY_NETWORK=mergeron-proxy`. Avec un autre nom,
+remplacer aussi ce nom dans les commandes ci-dessous. Traefik et Authentik
+doivent être présents sur ce réseau :
 
 ```bash
-docker network inspect net_standard
+docker network inspect mergeron-proxy
 ```
 
 Si ce réseau n’existe pas, le créer et y rattacher Traefik et Authentik avant de
 démarrer Codex. Les trois réseaux propres à Codex seront créés par Compose.
 
 ```bash
-docker network create net_standard
-docker network connect net_standard <nom-du-conteneur-traefik>
-docker network connect net_standard <nom-du-conteneur-authentik>
+docker network create mergeron-proxy
+docker network connect mergeron-proxy <nom-du-conteneur-traefik>
+docker network connect mergeron-proxy <nom-du-conteneur-authentik>
 ```
 
 Ne pas répéter les commandes `connect` si les conteneurs appartiennent déjà au
@@ -181,7 +190,7 @@ quatre conteneurs avec **Add Container**.
 
 Copier `deployment/.env.dev.example` comme fichier d'environnement d'une
 seconde stack Compose. Ce profil utilise par défaut
-`/mnt/pool/appdata/mergeron-dev`, le préfixe `mergeron-dev`, l'environnement
+`/srv/mergeron-dev` (à adapter sur Unraid), le préfixe `mergeron-dev`, l'environnement
 `development`, le sous-réseau `172.30.44.16/28` et l'URL générique
 `https://mergeron-dev.example.com`, à remplacer par l'adresse de recette.
 Ne jamais lui
@@ -195,7 +204,7 @@ Copier `deployment/traefik/mergeron.yml` dans le dossier dynamique de Traefik.
 Le routeur ne doit pas ajouter un second middleware Authentik : Nginx assure
 le contrôle de session et la redirection vers l’outpost.
 
-Vérifier que Traefik est attaché à `net_standard` et peut résoudre
+Vérifier que Traefik est attaché à `mergeron-proxy` et peut résoudre
 `mergeron-ingress`.
 
 Recharger Traefik et vérifier dans son tableau de bord que le routeur Codex est
@@ -212,7 +221,7 @@ Nginx réalise l’unique vérification sur :
 http://authentik:9000/outpost.goauthentik.io/auth/nginx
 ```
 
-Le nom Docker `authentik` doit donc être résolvable depuis `net_standard`. Les
+Le nom Docker `authentik` doit donc être résolvable depuis `mergeron-proxy`. Les
 chemins `/outpost.goauthentik.io/*` sont relayés publiquement par Nginx afin que
 la connexion et le renouvellement de session puissent aboutir.
 

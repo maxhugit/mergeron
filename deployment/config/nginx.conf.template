@@ -37,7 +37,7 @@ http {
         }
 
         # Nginx is the single Authentik enforcement point. Keeping the check
-        # here prevents another container on net_standard from bypassing the
+        # here prevents another container on mergeron-proxy from bypassing the
         # public Traefik route.
         location = /_authentik_check {
             internal;

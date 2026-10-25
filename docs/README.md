@@ -4,6 +4,8 @@ Ce dossier constitue le manuel d’installation et d’exploitation du dépôt. 
 reconstruire la plateforme sans connaissance préalable, suivre les documents
 dans cet ordre :
 
+0. [Installation portable et choix du proxy/authentification](installation-portable.md)
+
 1. [Fonctionnement du dépôt](fonctionnement-du-depot.md)
 2. [Architecture sur Unraid](architecture-unraid.md)
 3. [Choisir entre DockerMan et Compose Manager](choisir-mode-installation.md)

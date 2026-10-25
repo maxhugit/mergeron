@@ -51,7 +51,7 @@ function inventory(overrides = {}) {
         image: 'nginx:stable',
         imageRepositoryAllowed: true,
         adoption: 'adoptable',
-        networks: ['mergeron-isolated', 'net_standard'],
+        networks: ['mergeron-isolated', 'mergeron-proxy'],
         missingNetworks: [],
         protectedMounts: [],
       },
@@ -144,13 +144,13 @@ test('still offers adoption for a legacy installation with a mix of managed and 
 
 test('blocks adoption when a required network or protected mount is missing', () => {
   const value = inventory();
-  value.components[1].missingNetworks = ['net_standard'];
+  value.components[1].missingNetworks = ['mergeron-proxy'];
   value.dataSafety.blockers = ['application:/workspaces:unprotected'];
   const result = evaluateAdoption(value);
   assert.equal(result.adoption.state, 'blocked');
   assert.deepEqual(result.adoption.blockers, [
     'application:/workspaces:unprotected',
-    'ingress:net_standard:networkMissing',
+    'ingress:mergeron-proxy:networkMissing',
   ]);
 });
 

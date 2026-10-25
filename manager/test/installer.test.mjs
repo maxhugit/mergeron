@@ -19,7 +19,7 @@ const manifest = scopeManifest(sourceManifest, 'mergeron', 'production');
 class FixtureDocker {
   constructor({ proxy = true } = {}) {
     this.networks = proxy
-      ? [{ Name: 'net_standard', Driver: 'bridge', Internal: false }]
+      ? [{ Name: 'mergeron-proxy', Driver: 'bridge', Internal: false }]
       : [];
     this.containers = [];
     this.images = [];
@@ -98,6 +98,10 @@ async function fixtureConfiguration(directory) {
   await mkdir(defaults);
   await Promise.all([
     writeFile(join(defaults, 'nginx.conf.template'), 'existing nginx default'),
+    writeFile(
+      join(defaults, 'nginx.native.conf.template'),
+      'native upstream http://mergeron-ui:8172',
+    ),
     writeFile(join(defaults, 'squid.conf'), 'existing squid default'),
   ]);
   const configuration = readInstallConfiguration(manifest, {
@@ -134,7 +138,7 @@ test('plans only missing declared resources and exposes zero destructive actions
   }
 });
 
-test('blocks installation when the external Unraid network is absent', async () => {
+test('blocks installation when the external proxy network is absent', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'mergeron-install-'));
   try {
     const plan = await createInstallPlan(
@@ -143,7 +147,94 @@ test('blocks installation when the external Unraid network is absent', async () 
       await fixtureConfiguration(directory),
     );
     assert.equal(plan.applicable, false);
-    assert.ok(plan.blockers.includes('net_standard:externalNetworkMissing'));
+    assert.ok(plan.blockers.includes('mergeron-proxy:externalNetworkMissing'));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('uses portable defaults and accepts the legacy appdata variable', () => {
+  const configuration = readInstallConfiguration(manifest, {});
+  assert.equal(configuration.stateRoot, '/srv/mergeron/state');
+  assert.equal(configuration.appdataRoot, '/srv/mergeron/state/appdata');
+  assert.equal(
+    readInstallConfiguration(manifest, {
+      MERGERON_UNRAID_APPDATA_ROOT: '/legacy/appdata',
+    }).appdataRoot,
+    '/legacy/appdata',
+  );
+  assert.equal(
+    readInstallConfiguration(manifest, {
+      MERGERON_UNRAID_APPDATA_ROOT: '/legacy/appdata',
+      MERGERON_APPDATA_ROOT: '/data/apps',
+    }).appdataRoot,
+    '/data/apps',
+  );
+  assert.throws(
+    () =>
+      readInstallConfiguration(manifest, { MERGERON_AUTH_MODE: 'anonymous' }),
+    /MERGERON_AUTH_MODE/,
+  );
+});
+
+test('installs with a custom proxy network and native auth without managing the external network', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'mergeron-portable-'));
+  try {
+    const scoped = scopeManifest(
+      sourceManifest,
+      'portable',
+      'production',
+      'caddy-proxy',
+    );
+    const configuration = await fixtureConfiguration(directory);
+    configuration.stackPrefix = 'portable';
+    configuration.authMode = 'native';
+    const docker = new FixtureDocker({ proxy: false });
+    docker.networks.push({
+      Name: 'caddy-proxy',
+      Driver: 'bridge',
+      Internal: false,
+    });
+    const plan = await createInstallPlan(scoped, docker, configuration);
+    assert.equal(plan.applicable, true);
+    await applyInstallPlan({
+      manifest: scoped,
+      docker,
+      configuration,
+      expectedFingerprint: plan.fingerprint,
+      confirmation: 'INSTALL',
+    });
+    assert.equal(
+      await readFile(join(directory, 'config/nginx.conf.template'), 'utf8'),
+      'native upstream http://portable-ui:8172',
+    );
+    assert.deepEqual(
+      docker.calls
+        .filter(([operation]) => operation === 'createNetwork')
+        .map(([, name]) => name)
+        .sort(),
+      ['portable-admin', 'portable-external', 'portable-isolated'],
+    );
+    assert.deepEqual(
+      Object.keys(
+        docker.inspections.get('container-portable-ingress').NetworkSettings
+          .Networks,
+      ).sort(),
+      ['caddy-proxy', 'portable-isolated'],
+    );
+    configuration.authMode = 'authentik';
+    const second = await createInstallPlan(scoped, docker, configuration);
+    await applyInstallPlan({
+      manifest: scoped,
+      docker,
+      configuration,
+      expectedFingerprint: second.fingerprint,
+      confirmation: 'INSTALL',
+    });
+    assert.equal(
+      await readFile(join(directory, 'config/nginx.conf.template'), 'utf8'),
+      'native upstream http://portable-ui:8172',
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

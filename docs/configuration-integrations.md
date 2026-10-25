@@ -111,7 +111,7 @@ peut provisionner la première fiche depuis un fichier JSON **privé, hors Git**
 ```
 
 ```sh
-docker exec -i mergeron node /app/scripts/provision-person.cjs < personne-privee.json
+docker exec -i mergeron-ui node /app/scripts/provision-person.cjs < personne-privee.json
 ```
 
 Ce programme requiert un accès privilégié au conteneur et réutilise la validation
@@ -131,7 +131,13 @@ jeton signé valable une heure, limité au chemin du document. Le jeton généra
 l’application n’apparaît plus dans la configuration de l’éditeur. Le retour de
 sauvegarde OnlyOffice conserve sa validation JWT et son état signé.
 
-## Authentik
+## Authentification : OIDC et Authentik facultatif
+
+Le fournisseur n’est pas imposé : le mode ingress `native` utilise les sessions
+Mergeron et un fournisseur OIDC compatible sans contrôle proxy Authentik.
+Voir [le parcours portable](installation-portable.md#authentification-sans-authentik)
+pour l’installation neuve et la bascule sécurisée. Les sections suivantes
+conservent Authentik comme exemple et décrivent aussi le mode historique.
 
 Le WebUI prend en charge un fournisseur OpenID Connect avec le flux Authorization
 Code, PKCE, `state` et `nonce`. Créer dans Authentik un fournisseur
@@ -179,8 +185,11 @@ Nginx réalise la vérification interne auprès de :
 http://authentik:9000/outpost.goauthentik.io/auth/nginx
 ```
 
-Le conteneur Authentik et `mergeron-ingress` doivent donc partager
-`net_standard`. Les routes `/outpost.goauthentik.io/*` doivent rester publiques
+Dans ce mode uniquement, le conteneur Authentik et `mergeron-ingress` doivent
+partager le réseau choisi par `MERGERON_PROXY_NETWORK` (`mergeron-proxy` par
+défaut). Si Authentik n’est pas joignable sous `authentik:9000`, adapter
+`$authentik_backend` dans le modèle privé de l’ingress.
+Les routes `/outpost.goauthentik.io/*` doivent rester publiques
 sur ce domaine. Après configuration, une fenêtre privée doit être redirigée vers
 Authentik ; aucune page Mergeron ne doit apparaître avant authentification.
 

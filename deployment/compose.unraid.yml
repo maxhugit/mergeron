@@ -45,7 +45,7 @@ services:
     volumes:
       - ${STATE_ROOT}/home:/home/codex
       - ${STATE_ROOT}/workspace:/workspaces
-      - ${UNRAID_APPDATA_ROOT:-/mnt/user/appdata}:/appdata
+      - ${MERGERON_APPDATA_ROOT:-${UNRAID_APPDATA_ROOT:-/srv/mergeron/state/appdata}}:/appdata
       - ${STATE_ROOT}/logs:/app/logs
       - ${STATE_ROOT}/backend-token.txt:/run/secrets/backend_token:ro
       - ${STATE_ROOT}/openai-api-key.txt:/run/secrets/openai_api_key:ro
@@ -112,12 +112,12 @@ services:
       - -c
       - export MERGERON_BACKEND_TOKEN="$$(cat /run/secrets/backend_token)"; envsubst '$${MERGERON_BACKEND_TOKEN}' < /etc/nginx/templates-secure/nginx.conf.template > /tmp/nginx.conf; exec nginx -c /tmp/nginx.conf -g 'daemon off;'
     volumes:
-      - ${DEPLOY_ROOT}/config/nginx.conf.template:/etc/nginx/templates-secure/nginx.conf.template:ro
+      - ${DEPLOY_ROOT}/config/${MERGERON_NGINX_TEMPLATE:-nginx.conf.template}:/etc/nginx/templates-secure/nginx.conf.template:ro
       - ${STATE_ROOT}/backend-token-nginx.txt:/run/secrets/backend_token:ro
     networks:
       mergeron-isolated:
         aliases: [mergeron-ingress]
-      net_standard:
+      proxy:
         aliases: [mergeron-ingress]
     read_only: true
     tmpfs:
@@ -207,6 +207,8 @@ services:
     environment:
       MERGERON_STACK_PREFIX: ${MERGERON_STACK_PREFIX:-mergeron}
       MERGERON_STACK_ENVIRONMENT: ${MERGERON_STACK_ENVIRONMENT:-production}
+      MERGERON_PROXY_NETWORK: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}
+      MERGERON_AUTH_MODE: ${MERGERON_AUTH_MODE:-authentik}
       MERGERON_MANAGER_SOCKET: /run/mergeron-manager/manager.sock
       MERGERON_MANAGER_SOCKET_GID: '11002'
       MERGERON_MANAGER_POLL_MS: '20000'
@@ -215,7 +217,7 @@ services:
       MERGERON_INSTALL_ENABLED: ${MERGERON_INSTALL_ENABLED:-false}
       MERGERON_STATE_ROOT: ${STATE_ROOT}
       MERGERON_MANAGER_HOST_STATE: /host-state
-      MERGERON_UNRAID_APPDATA_ROOT: ${UNRAID_APPDATA_ROOT:-/mnt/user/appdata}
+      MERGERON_APPDATA_ROOT: ${MERGERON_APPDATA_ROOT:-${UNRAID_APPDATA_ROOT:-/srv/mergeron/state/appdata}}
       MERGERON_ADMIN_SUBNET: ${MERGERON_ADMIN_SUBNET:-172.30.44.0/28}
       MERGERON_WEBUI_URL: ${MERGERON_WEBUI_URL:-https://mergeron.example.com}
       MERGERON_ICON_URL: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
@@ -267,6 +269,6 @@ networks:
     ipam:
       config:
         - subnet: ${MERGERON_ADMIN_SUBNET:-172.30.44.0/28}
-  net_standard:
+  proxy:
     external: true
-    name: net_standard
+    name: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}

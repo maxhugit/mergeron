@@ -49,14 +49,27 @@ class ManagerDeploymentTest(unittest.TestCase):
             "rw",
         )
 
+    def test_proxy_and_authentication_are_configurable_without_personal_host_defaults(self) -> None:
+        manifest = (ROOT / "manager/stack-manifest.json").read_text()
+        installer = (ROOT / "manager/src/installer.mjs").read_text()
+        root = ET.parse(ROOT / "deployment/docker-man/my-mergeron-manager.xml").getroot()
+        self.assertNotIn("net_standard", manifest)
+        self.assertNotIn("/mnt/pool", installer)
+        self.assertIn("MERGERON_PROXY_NETWORK: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}", self.compose)
+        self.assertIn("name: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}", self.compose)
+        self.assertEqual(root.find("Config[@Target='MERGERON_PROXY_NETWORK']").text, "mergeron-proxy")
+        self.assertEqual(root.find("Config[@Target='MERGERON_AUTH_MODE']").text, "authentik")
+        self.assertIn("nginx.native.conf.template", self.dockerfile)
+        self.assertIn("sh scripts/smoke-test-ingress.sh", self.quality_workflow)
+
     def test_development_profile_cannot_reuse_production_identity(self) -> None:
-        self.assertIn("STATE_ROOT=/mnt/pool/appdata/mergeron/state", self.production_env)
+        self.assertIn("STATE_ROOT=/srv/mergeron/state", self.production_env)
         self.assertIn(
             "MERGERON_STACK_ENVIRONMENT=production", self.production_env
         )
         self.assertIn("MERGERON_INSTALL_ENABLED=false", self.production_env)
         self.assertIn(
-            "STATE_ROOT=/mnt/pool/appdata/mergeron-dev/state", self.development_env
+            "STATE_ROOT=/srv/mergeron-dev/state", self.development_env
         )
         self.assertIn("MERGERON_STACK_PREFIX=mergeron-dev", self.development_env)
         self.assertIn(
