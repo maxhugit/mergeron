@@ -1,5 +1,27 @@
 # Administration Codex : listes, enregistrement et version du CLI
 
+## Affichage des détails techniques par agent
+
+Dans **Capacités → Détails techniques**, choisir :
+
+- **Sans détails techniques** : les activités techniques consécutives sont regroupées
+  derrière une ligne dépliable. Les réponses de l’agent restent intégrales, dans leur ordre.
+- **Détails repliés** (par défaut) : une ligne par activité ; cliquer pour consulter
+  les commandes, résultats, logs ou changements de fichiers.
+- **Tout afficher** : les activités techniques et leurs contenus sont ouverts par défaut.
+
+Le choix est enregistré côté serveur pour cet agent et s’applique immédiatement
+à l’historique déjà affiché et aux nouveaux événements. Rien n’est supprimé :
+on peut déplier les détails ou changer de mode à tout moment. Les erreurs connues,
+questions et approbations en attente restent visibles, indépendamment du mode.
+Les résultats visuels et les réponses de l’agent restent affichés.
+
+Ce réglage est uniquement visuel : aucune consigne n’est envoyée au modèle ;
+la longueur des réponses, le prompt, l’effort de raisonnement et les permissions
+ne sont pas modifiés. Les blocs de code présents dans le texte de la réponse ne
+sont pas filtrés. La préférence accompagne les agents lors d’un export/import ZIP ;
+une destination trop ancienne pour la comprendre refuse l’archive avec une explication.
+
 ## Consignes et connaissance partagée
 
 - `instructions` est réservé à un usage futur par Codex : laisser vide et utiliser

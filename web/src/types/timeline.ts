@@ -71,6 +71,7 @@ export interface McpToolCallTurnItem extends TurnItemBase {
   toolServer: string;
   toolArgs: string;
   toolProgress?: string;
+  failed?: boolean;
 }
 
 export interface CommandExecutionTurnItem extends TurnItemBase {

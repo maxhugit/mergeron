@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/popover';
 import { McpStatusBadge } from './mcp-status-badge';
 import { ServiceTierSelector } from './service-tier-selector';
+import { ResponseDetailSelector } from './response-detail-selector';
 import { SkillSelector, type SkillSelection } from './skill-selector';
 
 interface Props {
@@ -46,6 +47,7 @@ export function CapabilitiesMenu({ cwd, disabled, onSelectSkill }: Props) {
           onSelect={onSelectSkill}
         />
         <ServiceTierSelector menuItem />
+        <ResponseDetailSelector disabled={disabled} />
       </PopoverContent>
     </Popover>
   );

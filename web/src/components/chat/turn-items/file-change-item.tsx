@@ -4,6 +4,7 @@
  * When a pending approval exists, accept/acceptForSession/decline/cancel buttons appear.
  */
 import { useState } from 'react';
+import { useExpandedTechnicalDetails } from '@/lib/technical-display';
 import {
   FileCode,
   Loader2,
@@ -33,7 +34,8 @@ interface Props {
 export function FileChangeItem({ item, approval }: Props) {
   const { t } = useTranslation();
   const { decide: handleDecision, submitting } = useApprovalDecision(approval);
-  const [expanded, setExpanded] = useState(false);
+  const expandDetails = useExpandedTechnicalDetails();
+  const [expanded, setExpanded] = useState(expandDetails);
 
   // One approval can cover several files (measured). Fall back to the legacy
   // single-file fields so an item normalized before this existed still renders.

@@ -13,6 +13,7 @@
  */
 import { pendingRequestKey } from '@/lib/pending-request-identity';
 import { useState } from 'react';
+import { useExpandedTechnicalDetails } from '@/lib/technical-display';
 import { ChevronDown, ChevronRight, Loader2, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ApprovalRequest } from '@/types/approval';
@@ -44,7 +45,8 @@ export function CommandItem({ item, approvals = [] }: Props) {
     ? stripShellWrapper(item.command)
     : undefined;
   const isLong = (fullCommand?.length ?? 0) > COLLAPSE_THRESHOLD;
-  const [expanded, setExpanded] = useState(!isLong);
+  const expandDetails = useExpandedTechnicalDetails();
+  const [expanded, setExpanded] = useState(expandDetails || !isLong);
 
   const pending = approvals.filter((a) => a.status === 'pending');
   // Never ask someone to authorize a command they cannot see. A long command

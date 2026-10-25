@@ -88,6 +88,9 @@ const knownItems: Array<[string, Record<string, unknown>]> = [
 ];
 
 describe('normalizeThreadItem', () => {
+  it('retains MCP failure state so display preferences cannot hide errors', () => {
+    expect(normalizeThreadItem({ type: 'mcpToolCall', id: 'failed', status: 'failed', error: { message: 'Denied' } }, true)).toMatchObject({ kind: 'render', item: { failed: true, content: 'Denied' } });
+  });
   it.each(knownItems)('normalizes %s identically for live and history paths', (type, raw) => {
     const started = normalizeThreadItem(raw, false);
     const persisted = normalizeThreadItem(raw, true);

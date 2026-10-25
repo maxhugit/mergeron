@@ -3,6 +3,7 @@
  * Header shows tool name + status; body (args, progress, result) can be toggled.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useExpandedTechnicalDetails } from '@/lib/technical-display';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TurnItem } from '@/types/timeline';
@@ -14,17 +15,24 @@ interface Props {
 
 export function ToolCallItem({ item }: Props) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(!item.completed);
+  const expandDetails = useExpandedTechnicalDetails();
+  const [requestedOpen, setOpen] = useState(expandDetails || !item.completed);
+  const open = requestedOpen || item.failed === true;
   const hasBody = !!(item.toolArgs || item.toolProgress || item.content);
 
   // Auto-collapse once the tool call finishes
   const prevCompleted = useRef(item.completed);
   useEffect(() => {
-    if (item.completed && !prevCompleted.current) {
+    if (
+      item.completed &&
+      !prevCompleted.current &&
+      !expandDetails &&
+      !item.failed
+    ) {
       setOpen(false);
     }
     prevCompleted.current = item.completed;
-  }, [item.completed]);
+  }, [item.completed, expandDetails, item.failed]);
 
   const headerClasses = cn(
     'flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground transition-colors',
@@ -46,7 +54,9 @@ export function ToolCallItem({ item }: Props) {
       </span>
       {!item.completed && <Loader2 className="h-3 w-3 animate-spin" />}
       {item.completed && (
-        <span className="text-green-500">{t('donee5fd9cfe')}</span>
+        <span className={item.failed ? 'text-red-500' : 'text-green-500'}>
+          {t(item.failed ? 'failed' : 'donee5fd9cfe')}
+        </span>
       )}
     </>
   );

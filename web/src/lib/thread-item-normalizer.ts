@@ -364,6 +364,7 @@ export function normalizeThreadItem(
           toolServer: stringValue(item.server),
           toolName: stringValue(item.tool),
           toolArgs: displayJson(item.arguments),
+          failed: Boolean(error) || result?.isError === true || item.status === 'failed',
         },
       };
     }

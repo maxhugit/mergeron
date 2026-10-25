@@ -1,5 +1,6 @@
 /** Distinct cards for hook, standalone output, dynamic-tool, and collaboration items. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useExpandedTechnicalDetails } from '@/lib/technical-display';
 import {
   Bot,
   ChevronRight,
@@ -18,6 +19,7 @@ interface ActivityCardProps {
   title: string;
   completed: boolean;
   status?: string;
+  failed?: boolean;
   children?: ReactNode;
 }
 
@@ -27,16 +29,20 @@ function ActivityCard({
   title,
   completed,
   status,
+  failed = false,
   children,
 }: ActivityCardProps) {
   const hasBody = children !== undefined && children !== null;
-  const [open, setOpen] = useState(!completed);
+  const expandDetails = useExpandedTechnicalDetails();
+  const [requestedOpen, setOpen] = useState(expandDetails || !completed);
+  const open = requestedOpen || failed;
   const previousCompleted = useRef(completed);
 
   useEffect(() => {
-    if (completed && !previousCompleted.current) setOpen(false);
+    if (completed && !previousCompleted.current && !expandDetails)
+      setOpen(false);
     previousCompleted.current = completed;
-  }, [completed]);
+  }, [completed, expandDetails]);
 
   const header = (
     <>
@@ -202,6 +208,7 @@ export function DynamicToolCallItem({
       title={title || t('dynamicToolCall')}
       completed={item.completed}
       status={status}
+      failed={item.success === false || item.status === 'failed'}
     >
       {item.toolArgs && (
         <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono wrap-break-word">
@@ -262,6 +269,7 @@ export function CollabAgentToolCallItem({
       title={`${t('agentCollaboration')}: ${item.tool}`}
       completed={item.completed}
       status={item.status}
+      failed={['failed', 'errored'].includes(item.status)}
     >
       <p className="font-mono text-[10px]">
         {item.senderThreadId}
