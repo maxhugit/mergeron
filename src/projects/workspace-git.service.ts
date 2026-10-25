@@ -5,7 +5,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { spawn } from 'node:child_process';
-import { lstat, realpath } from 'node:fs/promises';
+import {
+  lstat,
+  realpath,
+  readFile,
+  mkdtemp,
+  writeFile,
+  rm,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
@@ -16,7 +25,7 @@ export interface GitChange {
   status: string;
 }
 
-/** Read-only inspection of registered copies. Never accepts a client-provided cwd or command. */
+/** Inspection of registered copies; the command runner is server-only, never a route. */
 @Injectable()
 export class WorkspaceGitService {
   constructor(
@@ -24,7 +33,7 @@ export class WorkspaceGitService {
     private readonly resources: WorkspaceResourcesService,
   ) {}
 
-  private async directory(projectId: string, copyId: string) {
+  async directory(projectId: string, copyId: string) {
     const copy = this.copies.list(projectId).find((item) => item.id === copyId);
     if (!copy) throw new NotFoundException('Git working copy not found');
     if (
@@ -53,6 +62,22 @@ export class WorkspaceGitService {
       );
     for (const name of ['commondir', 'objects/info/alternates']) {
       if (await lstat(path.join(gitPath, name)).catch(() => null))
+        throw new ConflictException('External Git metadata is not supported');
+    }
+    for (const name of ['objects', 'index', 'config', 'HEAD']) {
+      const target = path.join(gitPath, name);
+      const entry = await lstat(target).catch(() => null);
+      if (
+        entry &&
+        (name === 'objects' ? !entry.isDirectory() : !entry.isFile())
+      )
+        throw new ConflictException('External Git metadata is not supported');
+      if (name === 'index' && entry && entry.size > 32 * 1024 * 1024)
+        throw new ConflictException('Git index exceeds its inspection limit');
+      if (
+        entry?.isSymbolicLink() ||
+        (entry && !(await realpath(target)).startsWith(`${gitPath}${path.sep}`))
+      )
         throw new ConflictException('External Git metadata is not supported');
     }
     return cwd;
@@ -99,6 +124,11 @@ export class WorkspaceGitService {
     return {
       branch: branch.trim() || null,
       head: head.trim(),
+      fingerprint: createHash('sha256')
+        .update(head)
+        .update(branch)
+        .update(await readFile(path.join(cwd, '.git/index')))
+        .digest('hex'),
       changes: parseGitChanges(status),
       branches,
       ahead: Number(/ahead (\d+)/.exec(current?.tracking ?? '')?.[1] ?? 0),
@@ -150,8 +180,48 @@ export class WorkspaceGitService {
     return { path: input, diff, untracked: false };
   }
 
-  /** Bounded, shell-free reads, with executable Git extensions disabled. */
-  private git(cwd: string, args: string[]): Promise<string> {
+  async stagedDiff(projectId: string, copyId: string) {
+    const cwd = await this.directory(projectId, copyId);
+    const state = await this.snapshot(projectId, copyId);
+    const index = await readFile(path.join(cwd, '.git/index'));
+    if (
+      createHash('sha256')
+        .update(`${state.head}\n`)
+        .update(`${state.branch ?? ''}\n`)
+        .update(index)
+        .digest('hex') !== state.fingerprint
+    )
+      throw new ConflictException('GIT_STALE');
+    const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-review-'));
+    try {
+      const frozen = path.join(folder, 'index');
+      await writeFile(frozen, index, { mode: 0o600 });
+      const diff = await this.git(
+        cwd,
+        [
+          'diff',
+          '--cached',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--no-color',
+          'HEAD',
+          '--',
+        ],
+        { GIT_INDEX_FILE: frozen },
+      );
+      return { fingerprint: state.fingerprint, diff };
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  }
+
+  /** Bounded, shell-free runner; callers own all arguments and environment overrides. */
+  git(
+    cwd: string,
+    args: string[],
+    extraEnv: Record<string, string> = {},
+    timeoutMs = 15000,
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       const env = Object.fromEntries(
         Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
@@ -181,6 +251,8 @@ export class WorkspaceGitService {
             GIT_TERMINAL_PROMPT: '0',
             GIT_PAGER: 'cat',
             LC_ALL: 'C',
+            GIT_NO_REPLACE_OBJECTS: '1',
+            ...extraEnv,
           },
           stdio: ['ignore', 'pipe', 'pipe'],
         },
@@ -196,7 +268,7 @@ export class WorkspaceGitService {
           new ConflictException('Git inspection failed or exceeded its limit'),
         );
       };
-      const timer = setTimeout(fail, 15000);
+      const timer = setTimeout(fail, timeoutMs);
       child.stdout.on('data', (data: Buffer) => {
         size += data.length;
         if (size > 1024 * 1024) fail();
@@ -217,7 +289,7 @@ export class WorkspaceGitService {
     });
   }
 
-  private github(projectId: string, resourceId: string) {
+  github(projectId: string, resourceId: string) {
     const { resource, secret } = this.resources.resolveForTransfer(
       projectId,
       resourceId,
@@ -300,6 +372,7 @@ export class WorkspaceGitService {
       mergeable: boolean | null;
       mergeable_state: string;
       draft: boolean;
+      base: { sha: string };
     }>(repo, `pulls/${number}`);
     if (!/^[a-f0-9]{40,64}$/.test(pr.head.sha))
       throw new ConflictException('Invalid GitHub revision');
@@ -320,6 +393,7 @@ export class WorkspaceGitService {
     ]);
     return {
       head: pr.head.sha,
+      baseHead: pr.base?.sha ?? null,
       mergeable: pr.mergeable,
       mergeableState: pr.mergeable_state,
       draft: pr.draft,

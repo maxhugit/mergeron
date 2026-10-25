@@ -56,6 +56,7 @@ import {
 import { ThreadWorkspaceOverridesService } from './thread-workspace-overrides.service';
 import { ThreadMetadataService } from './thread-metadata.service';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
+import { GitMutationGateService } from './git-mutation-gate.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
@@ -89,6 +90,7 @@ export class ThreadsService {
     private readonly activeFolders: ActiveFoldersService,
     @Optional() private readonly knowledge?: ProjectKnowledgeService,
     @Optional() private readonly deliverables?: DeliverablesService,
+    @Optional() private readonly gitMutations?: GitMutationGateService,
   ) {}
 
   /**
@@ -477,10 +479,11 @@ export class ThreadsService {
         effectiveCwd,
         params.threadId,
       );
-    const response = await this.codex.request<v2.TurnStartResponse>(
-      'turn/start',
-      effectiveParams,
-    );
+    const send = () =>
+      this.codex.request<v2.TurnStartResponse>('turn/start', effectiveParams);
+    const response = await (this.gitMutations
+      ? this.gitMutations.startTurn(send)
+      : send());
     this.branches.attachPendingVersionTurn(
       params.threadId,
       response.turn.id,

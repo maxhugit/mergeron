@@ -19,6 +19,7 @@ import { ProjectArchivesController } from './project-archives.controller';
 import { ProjectArchivesService } from './project-archives.service';
 import { WorkspaceGitController } from './workspace-git.controller';
 import { WorkspaceGitService } from './workspace-git.service';
+import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { WorkspaceGitService } from './workspace-git.service';
     WorkspaceResourcesController,
   ],
   providers: [
+    WorkspaceGitActionsService,
     WorkspaceGitService,
     ProjectArchivesService,
     ProjectsService,

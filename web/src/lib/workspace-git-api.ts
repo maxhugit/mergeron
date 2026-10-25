@@ -9,6 +9,7 @@ export interface GitInventory {
   copies: ProjectWorkspaceCopySummary[];
 }
 export interface GitSnapshot {
+  fingerprint?: string;
   branch: string | null;
   head: string;
   ahead: number;
@@ -39,6 +40,7 @@ export interface GitPullRequests {
   }>;
 }
 export interface GitChecks {
+  baseHead?: string | null;
   head: string;
   mergeable: boolean | null;
   mergeableState: string;
