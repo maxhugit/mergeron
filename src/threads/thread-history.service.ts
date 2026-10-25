@@ -127,6 +127,7 @@ export class ThreadHistoryService {
     const request: ExperimentalResumeParams = {
       threadId: params.threadId,
       ...(policy ? { config: policy.config } : {}),
+      ...(policy?.executionCwd ? { cwd: policy.executionCwd } : {}),
       excludeTurns: true,
       initialTurnsPage: {
         limit: params.initialTurnsLimit,

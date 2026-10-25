@@ -20,6 +20,7 @@ import {
 type JsonObject = { [key: string]: JsonValue };
 
 export interface ProjectExecutionPolicy {
+  executionCwd?: string;
   projectId: string;
   config: JsonObject;
   model: string | null;
@@ -201,6 +202,7 @@ export class ProjectConnectionPolicyService {
     }
 
     return {
+      executionCwd: cwd,
       projectId: workspace.projectId,
       workspaceId: workspace.id || workspace.path || cwd,
       readOnly: source?.accessMode === 'read_only',

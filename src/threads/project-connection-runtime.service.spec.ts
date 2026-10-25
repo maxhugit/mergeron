@@ -77,6 +77,23 @@ describe('project MCP connection lifetime', () => {
     );
     expect(manager.restartControlled).toHaveBeenCalledOnce();
   });
+
+  it('does not restart just because native config keys are returned in a different order', async () => {
+    const { service, manager, policies } = setup();
+    service.record('t', policy);
+    policies.policyForThread.mockResolvedValue({
+      ...policy,
+      config: {
+        mcp_servers: {},
+        apps: { _default: { enabled: false } },
+        features: { apps: false },
+      },
+    });
+    expect((await service.beforeTurn('t', '/workspaces/p')).restarted).toBe(
+      false,
+    );
+    expect(manager.restartControlled).not.toHaveBeenCalled();
+  });
   it('refuses policy replacement if Core cannot establish idle', async () => {
     const { service, manager } = setup();
     manager.restartControlled.mockRejectedValue(new Error('active work'));

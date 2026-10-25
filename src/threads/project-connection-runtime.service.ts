@@ -1,5 +1,6 @@
 /** Replaces native MCP connections when project policy changes; resume alone is not a reload. */
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
+import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { createHash } from 'node:crypto';
 import { CodexService } from '../codex/codex.service';
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
@@ -19,6 +20,7 @@ export class ProjectConnectionRuntimeService {
     private readonly manager: CodexProcessManager,
     private readonly policies: ProjectConnectionPolicyService,
     private readonly admission: CatalogAdmissionService,
+    @Optional() private readonly folders?: ActiveFoldersService,
   ) {
     manager.addLifecycleListener((event) => {
       if (event.type === 'appServerReady') this.applied.clear();
@@ -26,10 +28,22 @@ export class ProjectConnectionRuntimeService {
   }
 
   private key(policy: ProjectExecutionPolicy | null) {
+    const stable = (value: unknown): unknown =>
+      Array.isArray(value)
+        ? value.map(stable)
+        : value && typeof value === 'object'
+          ? Object.fromEntries(
+              Object.entries(value)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, leaf]) => [key, stable(leaf)]),
+            )
+          : value;
     return createHash('sha256')
       .update(
         JSON.stringify(
-          policy && { projectId: policy.projectId, config: policy.config },
+          stable(
+            policy && { projectId: policy.projectId, config: policy.config },
+          ),
         ),
       )
       .digest('hex');
@@ -69,17 +83,15 @@ export class ProjectConnectionRuntimeService {
       'thread/read',
       { threadId, includeTurns: false },
     );
-    const policy = await this.policies.policyForThread(
-      threadId,
-      metadata.thread.cwd,
-    );
+    const cwd = this.folders?.resolveAgent(threadId) ?? metadata.thread.cwd;
+    const policy = await this.policies.policyForThread(threadId, cwd);
     this.assertOpen();
     if (
       policy &&
       metadata.thread.status.type !== 'notLoaded' &&
       this.applied.get(threadId) !== this.key(policy)
     ) {
-      await this.beforeTurn(threadId, metadata.thread.cwd);
+      await this.beforeTurn(threadId, cwd);
       throw new ConflictException(
         'Les connexions MCP ont été renouvelées. Rouvrez la conversation.',
       );

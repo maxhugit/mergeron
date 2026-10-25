@@ -12,6 +12,11 @@ projet. Les transports MCP complets et les désactivations globales sont préser
 Un échec de lecture des règles ou du catalogue n'autorise jamais un repli vers les
 outils globaux.
 
+Cette règle limite les outils MCP exposés par Mergeron à la conversation. Elle
+ne remplace pas un cloisonnement des identifiants et du réseau pour des scripts,
+clients externes ou commandes en accès complet ; cette isolation nécessite une
+frontière distincte. Ne pas présenter la sélection comme un pare-feu général.
+
 Les reprises de conversations conservées reçoivent les règles actuelles. Core
 peut conserver les connexions d'une session déjà chargée malgré des overrides
 sur `thread/resume` : une empreinte de règles par génération détecte ce cas avant
