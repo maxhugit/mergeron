@@ -1226,6 +1226,136 @@ function DeliverableDetail({
   );
 }
 
+function DeliverableFolderSelector({
+  item,
+  base,
+  busy,
+}: {
+  item: Deliverable;
+  base: string;
+  busy: boolean;
+}) {
+  const { t } = useTranslation(['deliverables', 'common']);
+  const client = useQueryClient();
+  const projectId = base.split('/')[1];
+  const [editing, setEditing] = useState(false);
+  const [resourceId, setResourceId] = useState(
+    item.activeFolder?.resourceId ?? '',
+  );
+  const [relativePath, setRelativePath] = useState(
+    item.activeFolder?.relativePath ?? '',
+  );
+  const projects = useQuery({
+    queryKey: projectsQueryKey,
+    queryFn: () => projectsApi<{ projects: ProjectSummary[] }>(),
+  });
+  const workspaces =
+    projects.data?.projects?.find((project) => project.id === projectId)
+      ?.workspaces ?? [];
+  const change = useMutation({
+    mutationFn: () =>
+      projectsApi(`/${projectId}/active-folders/deliverable/${item.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ resourceId, relativePath }),
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: projectsQueryKey });
+      await client.invalidateQueries({
+        queryKey: ['project-deliverables', projectId],
+      });
+      setEditing(false);
+    },
+  });
+  return (
+    <div className="mt-3 space-y-2">
+      <Button
+        variant="outline"
+        disabled={busy || item.lifecycleStatus === 'archived'}
+        onClick={() => {
+          setResourceId(item.activeFolder?.resourceId ?? '');
+          setRelativePath(item.activeFolder?.relativePath ?? '');
+          change.reset();
+          setEditing(true);
+        }}
+      >
+        {t('selectDeliverableFolder')}
+      </Button>
+      <Dialog
+        open={editing}
+        onOpenChange={(open) => {
+          if (!change.isPending) setEditing(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('selectDeliverableFolder')}</DialogTitle>
+            <DialogDescription>
+              {t('deliverableFolderSelectionHelp')}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              change.mutate();
+            }}
+          >
+            <label className="grid gap-1 text-sm">
+              {t('workingFolder')}
+              <select
+                className="min-w-0 rounded border bg-background p-2"
+                value={resourceId}
+                disabled={change.isPending}
+                onChange={(event) => setResourceId(event.target.value)}
+              >
+                <option value="" disabled>
+                  {t('chooseAFolder')}
+                </option>
+                {workspaces
+                  .filter((workspace) => !workspace.readOnly)
+                  .map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              {t('deliverableRelativeFolder')}
+              <Input
+                value={relativePath}
+                disabled={change.isPending}
+                onChange={(event) => setRelativePath(event.target.value)}
+              />
+            </label>
+            {change.isError && (
+              <p role="alert" className="text-sm text-destructive">
+                {t('deliverableFolderSelectionFailed')}
+              </p>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={change.isPending}
+                onClick={() => setEditing(false)}
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                type="submit"
+                disabled={!resourceId || change.isPending || projects.isLoading}
+              >
+                {t('save')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
   const { t } = useTranslation();
   const current = displayedLifecycle(item);
@@ -1452,6 +1582,7 @@ function Overview({
               {t('activeFolderNeedsResolution')}
             </p>
           )}
+          <DeliverableFolderSelector item={item} base={base} busy={busy} />
         </div>
       </aside>
       <section className="col-span-full rounded-xl border bg-card p-4">
@@ -1758,13 +1889,94 @@ function DeliverableHistory({
   item: Deliverable;
   download: (version: DeliverableVersion, index: number) => Promise<void>;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['deliverables', 'common']);
   const events: Array<{
     id: string;
     date: number;
     author: string | null;
     content: ReactNode;
   }> = [
+    ...(item.activityEvents ?? []).map((event) => ({
+      id: `activity:${event.id}`,
+      date: event.createdAt,
+      author: event.actorName,
+      content: (
+        <>
+          {t(
+            event.action === 'deliverable_document_deleted'
+              ? 'deliverableDocumentRemoved'
+              : event.action === 'deliverable_document_restored'
+                ? 'deliverableDocumentReattached'
+                : 'deliverableDetailsChanged',
+          )}
+          {' — '}
+          {event.label}
+          {event.action === 'deliverable_updated' &&
+            Array.isArray(event.details.fields) && (
+              <span className="block text-xs text-muted-foreground">
+                {event.details.fields
+                  .map((field) => {
+                    const labels: Record<string, string> = {
+                      title: t('title'),
+                      description: t('description'),
+                      criteria: t('validationCriteria'),
+                      confidentiality: t('confidentiality'),
+                      primaryTaskId: t('primaryTask'),
+                      authorizedGroupIds: t('deliverableAccess'),
+                      conversations: t('assignedDeliverableAgent'),
+                    };
+                    return (
+                      labels[String(field)] ?? t('deliverableOtherDetails')
+                    );
+                  })
+                  .join(', ')}
+              </span>
+            )}
+        </>
+      ),
+    })),
+    ...item.documents.flatMap((document) => [
+      ...document.versions.map((version) => ({
+        id: `document-version:${version.id}`,
+        date: version.createdAt,
+        author: version.authorName,
+        content: (
+          <>
+            {t(
+              version.restoredFromVersionId
+                ? 'deliverableDocumentVersionRestored'
+                : version.number === 1
+                  ? 'deliverableDocumentAdded'
+                  : 'deliverableDocumentChanged',
+            )}
+            {' — '}
+            {version.fileName} · V{version.number}
+            {version.comment ? ` — ${version.comment}` : ''}
+          </>
+        ),
+      })),
+      ...(document.deletedAt !== null &&
+      !(item.activityEvents ?? []).some(
+        (event) =>
+          event.action === 'deliverable_document_deleted' &&
+          event.details.documentId === document.id,
+      )
+        ? [
+            {
+              id: `legacy-deletion:${document.id}`,
+              date: document.deletedAt,
+              author: null,
+              content: (
+                <>
+                  {t('deliverableDocumentRemoved')}
+                  {' — '}
+                  {document.name}
+                </>
+              ),
+            },
+          ]
+        : []),
+    ]),
     ...item.lifecycleEvents.map((event) => ({
       id: `life:${event.id}`,
       date: event.createdAt,
@@ -2023,7 +2235,10 @@ function Links({
               {subtasks.length > 0 && (
                 <ul className="mt-3 space-y-1 border-t pt-2">
                   {subtasks.map((task) => (
-                    <li key={task.id} className="flex min-w-0 items-center gap-2">
+                    <li
+                      key={task.id}
+                      className="flex min-w-0 items-center gap-2"
+                    >
                       <button
                         type="button"
                         className="min-w-0 flex-1 truncate text-left underline"

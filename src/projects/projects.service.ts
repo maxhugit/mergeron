@@ -21,7 +21,7 @@ import {
   requireExecutionAccess,
 } from '../auth/access-context';
 import * as path from 'node:path';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { Inject } from '@nestjs/common';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
@@ -160,13 +160,22 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
 
   activity(projectId: string, limit = 200) {
     this.get(projectId);
-    return this.db
-      .select()
-      .from(projectActivity)
-      .where(eq(projectActivity.projectId, projectId))
-      .orderBy(desc(projectActivity.createdAt))
-      .limit(Math.min(Math.max(limit, 1), 500))
-      .all();
+    return (
+      this.db
+        .select()
+        .from(projectActivity)
+        // Restricted deliverable details are exposed only through the
+        // deliverable board, which applies its own confidentiality checks.
+        .where(
+          and(
+            eq(projectActivity.projectId, projectId),
+            ne(projectActivity.entityType, 'deliverable_history'),
+          ),
+        )
+        .orderBy(desc(projectActivity.createdAt))
+        .limit(Math.min(Math.max(limit, 1), 500))
+        .all()
+    );
   }
 
   setActiveFolder(
