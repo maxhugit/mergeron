@@ -551,10 +551,8 @@ export class WorkspaceResourcesService {
         ...process.env,
         GIT_TERMINAL_PROMPT: '0',
       };
-      if (
-        secret?.token &&
-        args.some((argument) => /^https:\/\//i.test(argument))
-      ) {
+      const token = secret?.token || secret?.password;
+      if (token && args.some((argument) => /^https:\/\//i.test(argument))) {
         askpassDirectory = mkdtempSync(join(tmpdir(), 'mergeron-git-'));
         const askpass = join(askpassDirectory, 'askpass.sh');
         writeFileSync(
@@ -565,7 +563,7 @@ export class WorkspaceResourcesService {
         chmodSync(askpass, 0o700);
         env.GIT_ASKPASS = askpass;
         env.MERGERON_GIT_USERNAME = secret.username || 'oauth2';
-        env.MERGERON_GIT_TOKEN = secret.token;
+        env.MERGERON_GIT_TOKEN = token;
       }
       const child = spawn('git', args, {
         env,
@@ -597,7 +595,7 @@ export class WorkspaceResourcesService {
         else
           reject(
             new Error(
-              secret?.token
+              token
                 ? 'Git authentication failed'
                 : error || 'Git connection failed',
             ),
