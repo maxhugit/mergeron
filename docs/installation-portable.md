@@ -5,6 +5,24 @@ de l’application. Aucun panneau d’administration, nom de pool, reverse proxy
 ou réseau propre à un homelab n’est imposé. Le fichier standard est
 `deployment/compose.yml` et l’image officielle est construite avec `Dockerfile`.
 
+## Identité visuelle de l’environnement
+
+Déclarer `MERGERON_STACK_ENVIRONMENT=development` sur une pile de recette :
+l’application affiche le logo turquoise avec badge **DEV**, un favicon distinct
+et le nom **Mergeron Dev** pour l’installation mobile/PWA. La production conserve
+le logo cuivre. Ce choix ne dépend ni du domaine, ni du proxy, ni du fournisseur
+d’authentification ou du tag de l’image : `edge` ne signifie pas automatiquement
+`development`. Le Manager transmet cet environnement aux nouveaux conteneurs ;
+Compose le lit dans le fichier `.env` choisi. Les conteneurs historiques créés
+par le Manager avec `NODE_ENV=development` restent reconnus si la nouvelle
+variable n’est pas encore présente.
+
+Après mise à jour, un rechargement peut être nécessaire ; une application mobile
+déjà installée peut garder son ancien nom ou son icône jusqu’au rafraîchissement
+du manifeste par le système, voire nécessiter sa réinstallation. Cela ne change
+pas les données du serveur. Voir les [adaptations aux hôtes](adapters/README.md)
+pour les icônes des conteneurs et le formulaire Manager Dev facultatif.
+
 ## Séparer les responsabilités
 
 - Mergeron Manager gère les trois conteneurs applicatifs et leurs trois réseaux

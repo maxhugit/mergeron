@@ -18,6 +18,21 @@ export function normalizeForwardedPrefix(
 }
 
 /** Renders the built SPA index for the current public proxy prefix. */
-export function renderIndexHtml(indexHtml: string, basePath: string): string {
-  return indexHtml.replaceAll(PUBLIC_BASE_PATH_TOKEN, basePath);
+export function renderIndexHtml(
+  indexHtml: string,
+  basePath: string,
+  environment?: string,
+): string {
+  const html = indexHtml.replaceAll(PUBLIC_BASE_PATH_TOKEN, basePath);
+  if (environment !== 'development') return html;
+  return html
+    .replace(
+      'data-mergeron-environment="production"',
+      'data-mergeron-environment="development"',
+    )
+    .replaceAll('favicon.svg', 'mergeron-dev-icon.svg')
+    .replaceAll('manifest.webmanifest', 'manifest-dev.webmanifest')
+    .replaceAll('pwa-icon-180.png', 'pwa-dev-icon-180.png')
+    .replaceAll('content="Mergeron"', 'content="Mergeron Dev"')
+    .replace('<title>Mergeron</title>', '<title>Mergeron Dev</title>');
 }

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Mergeron Dev</title>
+  <rect width="512" height="512" rx="112" fill="#29282e"/>
+  <path fill="#54cbd5" d="M218 250c0-58 50-104 114-104s106 46 106 104v102a36 36 0 0 1-72 0V250c0-20-14-34-34-34s-36 14-36 34v102a39 39 0 0 1-78 0Z"/>
+  <path fill="#fff9f0" d="M75 250c0-58 45-104 103-104s118 46 118 104v102c0-40-37-49-61-67-18-14-18-26-18-35 0-20-18-34-39-34s-31 14-31 34v102a36 36 0 0 1-72 0Z"/>
+  <rect x="306" y="406" width="142" height="62" rx="18" fill="#54cbd5"/>
+  <text x="377" y="450" text-anchor="middle" font-family="Arial, sans-serif" font-size="43" font-weight="700" letter-spacing="1" fill="#20252b">DEV</text>
+</svg>

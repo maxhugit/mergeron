@@ -7,6 +7,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ManagerDeploymentTest(unittest.TestCase):
+    def test_development_template_uses_dev_artwork_and_isolated_defaults(self):
+        root = ET.parse(ROOT / 'deployment/docker-man/my-mergeron-dev-manager.xml').getroot()
+        self.assertEqual(root.findtext('Name'), 'mergeron-dev-manager')
+        self.assertEqual(root.findtext('Network'), 'none')
+        self.assertTrue(root.findtext('Icon').endswith('/pwa-dev-icon-192.png'))
+        self.assertEqual(root.find("Config[@Target='MERGERON_STACK_ENVIRONMENT']").text, 'development')
+        self.assertEqual(root.find("Config[@Target='MERGERON_STACK_PREFIX']").text, 'mergeron-dev')
+        self.assertEqual(root.find("Config[@Target='MERGERON_INSTALL_ENABLED']").text, 'false')
+        self.assertIn('/mergeron-dev/state', root.find("Config[@Target='/host-state']").text)
+        self.assertTrue(root.find("Config[@Target='MERGERON_APP_IMAGE']").text.endswith(':edge'))
+        self.assertIsNone(root.find("Config[@Type='Port']"))
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.compose = (ROOT / "deployment/compose.yml").read_text()

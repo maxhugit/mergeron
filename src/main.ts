@@ -95,7 +95,11 @@ async function bootstrap() {
         const basePath = normalizeForwardedPrefix(
           request.headers['x-forwarded-prefix'],
         );
-        return renderIndexHtml(indexHtml, basePath);
+        return renderIndexHtml(
+          indexHtml,
+          basePath,
+          process.env.MERGERON_STACK_ENVIRONMENT ?? process.env.NODE_ENV,
+        );
       });
   }
 

@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>mergeron-dev-manager</Name>
+  <Repository>ghcr.io/maxhugit/mergeron-manager:edge</Repository>
+  <Registry>https://github.com/maxhugit/mergeron/pkgs/container/mergeron-manager</Registry>
+  <Network>none</Network>
+  <Shell/>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/maxhugit/mergeron/issues</Support>
+  <Project>https://github.com/maxhugit/mergeron</Project>
+  <Overview>Installe de façon idempotente puis observe la pile Mergeron, sans supprimer ni recréer les données persistantes.</Overview>
+  <Category>Tools:System</Category>
+  <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/maxhugit/mergeron/main/deployment/docker-man/my-mergeron-dev-manager.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-dev-icon-192.png</Icon>
+  <ExtraParams>--read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH --security-opt no-new-privileges:true --tmpfs /tmp:rw,nosuid,nodev,size=8m --pids-limit 64 --memory 128m --cpus 0.25 --log-opt max-size=10m --log-opt max-file=3</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>Le réseau externe choisi dans MERGERON_PROXY_NETWORK doit exister. Le dossier manager-run est partagé avec mergeron-ui.</Requires>
+  <Config Name="Socket Docker" Target="/var/run/docker.sock" Default="/var/run/docker.sock" Mode="ro" Description="API Docker locale utilisée uniquement pour les ressources déclarées par le manifeste." Type="Path" Display="always" Required="true" Mask="false">/var/run/docker.sock</Config>
+  <Config Name="Racine persistante" Target="/host-state" Default="/mnt/user/appdata/mergeron-dev/state" Mode="rw" Description="Prépare uniquement les dossiers et fichiers manquants. Aucun élément existant n'est écrasé ou supprimé." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mergeron-dev/state</Config>
+  <Config Name="Socket Mergeron Manager" Target="/run/mergeron-manager" Default="/mnt/user/appdata/mergeron-dev/state/manager-run" Mode="rw" Description="Canal Unix partagé uniquement avec mergeron-ui." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mergeron-dev/state/manager-run</Config>
+  <Config Name="État Mergeron Manager" Target="/var/lib/mergeron-manager" Default="/mnt/user/appdata/mergeron-dev/state/manager-state" Mode="rw" Description="Conserve uniquement l'empreinte d'adoption validée. Aucun fichier applicatif n'est déplacé dans ce dossier." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mergeron-dev/state/manager-state</Config>
+  <Config Name="Préfixe de la pile" Target="MERGERON_STACK_PREFIX" Default="mergeron-dev" Mode="" Description="Préfixe exact des conteneurs et réseaux observés. Utiliser mergeron-dev pour une recette isolée." Type="Variable" Display="always" Required="true" Mask="false">mergeron-dev</Config>
+  <Config Name="Environnement de la pile" Target="MERGERON_STACK_ENVIRONMENT" Default="development" Mode="" Description="Type de pile observée : production ou development. Une pile development doit utiliser un préfixe dédié." Type="Variable" Display="always" Required="true" Mask="false">development</Config>
+  <Config Name="Installation automatique" Target="MERGERON_INSTALL_ENABLED" Default="false" Mode="" Description="Mettre à true pour créer seulement les conteneurs et réseaux manquants après validation du plan." Type="Variable" Display="always" Required="true" Mask="false">false</Config>
+  <Config Name="Intégration à l'hôte" Target="MERGERON_HOST_INTEGRATION" Default="unraid" Mode="" Description="Métadonnées facultatives pour l'interface Docker de cet hôte. Aucun effet sur les réseaux ni sur les données." Type="Variable" Display="advanced" Required="true" Mask="false">unraid</Config>
+  <Config Name="Réseau du reverse proxy" Target="MERGERON_PROXY_NETWORK" Default="mergeron-proxy" Mode="" Description="Nom exact du réseau Docker externe existant, quel que soit le proxy choisi. Installation historique : conserver explicitement votre ancien nom." Type="Variable" Display="always" Required="true" Mask="false">mergeron-proxy</Config>
+  <Config Name="Authentification de l'ingress" Target="MERGERON_AUTH_MODE" Default="native" Mode="" Description="native : compte et mot de passe actifs par défaut, OIDC désactivé jusqu’à activation ; provisionner le compte avant exposition. authentik : adaptateur SSO historique optionnel. Ne modifie jamais une configuration Nginx existante." Type="Variable" Display="always" Required="true" Mask="false">native</Config>
+  <Config Name="Chemin hôte des données" Target="MERGERON_STATE_ROOT" Default="/mnt/user/appdata/mergeron-dev/state" Mode="" Description="Chemin absolu utilisé dans les montages créés par Docker." Type="Variable" Display="always" Required="true" Mask="false">/mnt/user/appdata/mergeron-dev/state</Config>
+  <Config Name="Dossiers hôtes accessibles" Target="MERGERON_APPDATA_ROOT" Default="/mnt/user/appdata/mergeron-dev/state/appdata" Mode="" Description="Dossiers explicitement exposés à l'application. Les anciennes variables restent compatibles pour les formulaires déjà enregistrés." Type="Variable" Display="always" Required="true" Mask="false">/mnt/user/appdata/mergeron-dev/state/appdata</Config>
+  <Config Name="Sous-réseau administrateur" Target="MERGERON_ADMIN_SUBNET" Default="172.30.44.16/28" Mode="" Description="Sous-réseau dédié au réseau administratif Mergeron." Type="Variable" Display="always" Required="true" Mask="false">172.30.44.16/28</Config>
+  <Config Name="URL publique" Target="MERGERON_WEBUI_URL" Default="https://mergeron-dev.example.com" Mode="" Description="URL publique transmise à l'application ; elle ne sert pas à identifier la pile." Type="Variable" Display="always" Required="true" Mask="false">https://mergeron-dev.example.com</Config>
+  <Config Name="Icône Unraid" Target="MERGERON_ICON_URL" Default="https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-dev-icon-192.png" Mode="" Description="Icône affichée pour les conteneurs créés." Type="Variable" Display="advanced" Required="true" Mask="false">https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-dev-icon-192.png</Config>
+  <Config Name="Image application" Target="MERGERON_APP_IMAGE" Default="ghcr.io/maxhugit/mergeron:edge" Mode="" Description="Image autorisée de mergeron-ui." Type="Variable" Display="advanced" Required="true" Mask="false">ghcr.io/maxhugit/mergeron:edge</Config>
+  <Config Name="Image ingress" Target="MERGERON_INGRESS_IMAGE" Default="nginx:stable" Mode="" Description="Image autorisée de mergeron-ingress." Type="Variable" Display="advanced" Required="true" Mask="false">nginx:stable</Config>
+  <Config Name="Image egress" Target="MERGERON_EGRESS_IMAGE" Default="ubuntu/squid:latest" Mode="" Description="Image autorisée de mergeron-squid." Type="Variable" Display="advanced" Required="true" Mask="false">ubuntu/squid:latest</Config>
+  <Config Name="Chemin du socket Manager" Target="MERGERON_MANAGER_SOCKET" Default="/run/mergeron-manager/manager.sock" Mode="" Description="Socket Unix local exposé à mergeron-ui." Type="Variable" Display="advanced" Required="true" Mask="false">/run/mergeron-manager/manager.sock</Config>
+  <Config Name="Groupe du socket Manager" Target="MERGERON_MANAGER_SOCKET_GID" Default="11002" Mode="" Description="GID autorisé à lire le socket local." Type="Variable" Display="advanced" Required="true" Mask="false">11002</Config>
+  <Config Name="Intervalle d'observation" Target="MERGERON_MANAGER_POLL_MS" Default="20000" Mode="" Description="Intervalle entre deux inventaires, en millisecondes." Type="Variable" Display="advanced" Required="true" Mask="false">20000</Config>
+  <Config Name="Chemin du socket Docker" Target="MERGERON_DOCKER_SOCKET" Default="/var/run/docker.sock" Mode="" Description="Chemin interne du socket Docker." Type="Variable" Display="advanced" Required="true" Mask="false">/var/run/docker.sock</Config>
+  <Config Name="Fichier d'adoption" Target="MERGERON_MANAGER_ADOPTION_PATH" Default="/var/lib/mergeron-manager/adoption.json" Mode="" Description="Empreinte immuable de l'installation adoptée." Type="Variable" Display="advanced" Required="true" Mask="false">/var/lib/mergeron-manager/adoption.json</Config>
+</Container>

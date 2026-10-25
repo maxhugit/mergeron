@@ -10,11 +10,25 @@ par défaut et ne modifient pas les protections, les réseaux ou les données.
 - [DockerMan manuel](unraid-dockerman.md)
 - [Compose Manager](unraid-compose.md)
 - [Formulaire du Manager](../../deployment/docker-man/my-mergeron-manager.xml)
+- [Formulaire du Manager Dev](../../deployment/docker-man/my-mergeron-dev-manager.xml)
 
 Pour une pile créée par le Manager, le formulaire active explicitement
 `MERGERON_HOST_INTEGRATION=unraid` pour les icônes, liens WebUI et terminaux.
 Sans cette valeur, le Manager ne crée aucune métadonnée `net.unraid.*`.
 Les dépendances gérées n’ont pas besoin de formulaires individuels.
+
+Le formulaire Dev utilise le logo turquoise avec badge **DEV**, le préfixe
+`mergeron-dev`, des chemins Appdata distincts et le canal `edge`. Il laisse
+l’installation automatique désactivée : vérifier les chemins avant de l’activer.
+Le formulaire standard conserve le logo cuivre de production.
+
+L’icône des dépendances créées par le Manager est choisie automatiquement selon
+`MERGERON_STACK_ENVIRONMENT` ; laisser `MERGERON_ICON_URL` vide pour ce choix,
+ou fournir une URL personnalisée. Le fichier `.env.dev.example` indique l’icône
+Dev explicitement pour que l’adaptateur Compose applique les mêmes métadonnées.
+Les icônes des conteneurs déjà présents ne sont pas modifiées en place : mettre
+à jour leur configuration par leur propriétaire habituel (DockerMan ou Compose),
+sans supprimer les données. Un ancien `MERGERON_ICON_URL` explicite reste prioritaire.
 
 Pour Compose, les métadonnées de cette plateforme sont isolées dans un fichier
 additionnel :
