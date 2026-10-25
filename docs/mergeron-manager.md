@@ -118,6 +118,19 @@ différence ultérieure entre Docker et l'enregistrement passe l'installation en
 
 ## Production et recette isolées
 
+Dans Unraid, le Manager de recette doit utiliser le dépôt
+`ghcr.io/maxhugit/mergeron-manager:edge`, avec `MERGERON_APP_IMAGE` pointant
+sur `ghcr.io/maxhugit/mergeron:edge`. Un tag `sha-…` reste volontairement
+épinglé : « Forcer la mise à jour » retélécharge ce même tag, sans sélectionner
+la dernière révision du canal. En production, conserver un tag stable choisi
+explicitement plutôt que basculer sur `edge`.
+
+Le contrôle de santé du Manager doit être hérité de l'image, en forme exec
+(`CMD` avec `/nodejs/bin/node`). Ne pas ajouter `--health-cmd` aux paramètres
+supplémentaires du XML : Docker le transforme en `CMD-SHELL`, alors que
+l'image distroless ne contient pas `/bin/sh`. Cela marque à tort un Manager
+fonctionnel comme défaillant après une recréation par Unraid.
+
 `MERGERON_STACK_ENVIRONMENT` déclare explicitement `production` ou
 `development`. `MERGERON_STACK_PREFIX` sélectionne exclusivement les
 conteneurs et réseaux à observer. Une recette utilise un préfixe dédié, par
