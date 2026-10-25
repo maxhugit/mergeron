@@ -3,6 +3,7 @@
  * Replaces the old App.tsx conditional rendering.
  */
 import { useEffect, useState } from 'react';
+import { LoaderCircle } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -59,6 +60,12 @@ export function AuthenticatedLayout() {
     return (
       <main className="mx-auto max-w-xl space-y-4 p-6">
         <h1 className="text-xl font-semibold">
+          {reconnecting && (
+            <LoaderCircle
+              aria-hidden="true"
+              className="mr-2 inline size-5 animate-spin"
+            />
+          )}
           {t(
             reconnecting
               ? 'access.reconnecting'
@@ -90,7 +97,7 @@ export function AuthenticatedLayout() {
         >
           {t('access.retry')}
         </button>
-        {(reconnecting || proxyExpired) && (
+        {proxyExpired && (
           <button
             className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
             onClick={() => window.location.reload()}
@@ -98,17 +105,19 @@ export function AuthenticatedLayout() {
             {t('access.restoreConnection')}
           </button>
         )}
-        <button
-          className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
-          onClick={() =>
-            void navigate({
-              to: '/login',
-              search: { redirect: window.location.pathname, manual: true },
-            })
-          }
-        >
-          {t('access.anotherMethod')}
-        </button>
+        {!reconnecting && (
+          <button
+            className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
+            onClick={() =>
+              void navigate({
+                to: '/login',
+                search: { redirect: window.location.pathname, manual: true },
+              })
+            }
+          >
+            {t('access.anotherMethod')}
+          </button>
+        )}
       </main>
     );
   return (

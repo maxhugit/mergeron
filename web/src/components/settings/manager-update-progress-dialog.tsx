@@ -45,6 +45,7 @@ export function ManagerUpdateProgressDialog({
   requestError,
   session,
   excludedOperationId,
+  expectedOperationId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,10 +54,12 @@ export function ManagerUpdateProgressDialog({
   requestError: string | null;
   session: number;
   excludedOperationId: string | null;
+  expectedOperationId?: string | null;
 }) {
   const { t, i18n } = useTranslation('manager');
   const { t: common } = useTranslation();
   const client = useQueryClient();
+  const expectedId = initialOperation?.id ?? expectedOperationId;
   const query = useQuery({
     queryKey: ['administration', 'manager-update-progress', session],
     queryFn: async () => {
@@ -73,7 +76,7 @@ export function ManagerUpdateProgressDialog({
       return open &&
         (!operation ||
           operation.id === excludedOperationId ||
-          (initialOperation && operation.id !== initialOperation.id) ||
+          (expectedId && operation.id !== expectedId) ||
           operation.status === 'running')
         ? 2_000
         : false;
@@ -86,7 +89,7 @@ export function ManagerUpdateProgressDialog({
     ? null
     : latest &&
         latest.id !== excludedOperationId &&
-        (!initialOperation || latest.id === initialOperation.id)
+        (!expectedId || latest.id === expectedId)
       ? latest
       : initialOperation;
   const phase = operation?.phase ?? 'preparing';

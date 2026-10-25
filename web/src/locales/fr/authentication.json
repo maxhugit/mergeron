@@ -63,8 +63,8 @@
     "connectionError": "Échec de la connexion au serveur"
   },
   "access": {
-    "reconnecting": "Connexion interrompue",
-    "connectionInterrupted": "La connexion au serveur a été interrompue. Une nouvelle vérification sera effectuée au retour sur cette fenêtre ou au rétablissement du réseau.",
+    "reconnecting": "Reconnexion au serveur…",
+    "connectionInterrupted": "Le serveur est temporairement indisponible, notamment pendant un redémarrage ou une mise à jour. Cette page réessaie automatiquement et reprendra dès que le serveur sera disponible et votre identité vérifiée. Vous pouvez rester sur cette fenêtre.",
     "sessionExpired": "Session à renouveler",
     "proxySessionExpired": "Votre session de connexion doit être renouvelée. Vous allez être redirigé vers l’authentification. Si nécessaire, cliquez sur Rétablir la connexion.",
     "restoreConnection": "Rétablir la connexion",
