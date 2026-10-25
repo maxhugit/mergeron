@@ -453,6 +453,11 @@ export class ThreadsService {
       activeCwd ?? this.workspaceOverrides.get(params.threadId);
     const effectiveCwd = workspaceCwd ?? params.cwd ?? beforeTurn?.cwd ?? null;
     await this.processManager?.ensureDocumentIsolation(effectiveCwd);
+    // A document-isolation restart may have just replaced Core. Join the
+    // generation-scoped reopen instead of racing its automatic recovery and
+    // requesting a second process replacement for an as-yet unrecorded policy.
+    if (this.connections && !this.resumeRegistry.isResumed(params.threadId))
+      await this.resumeRegistry.ensureOpened(params.threadId, 1, 'summary');
     const connectionState = await this.connections?.beforeTurn(
       params.threadId,
       effectiveCwd,

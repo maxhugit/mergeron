@@ -30,6 +30,7 @@ describe('ThreadsService', () => {
   let service: ThreadsService;
   const mockCodex = { request: vi.fn() };
   const mockResumeRegistry = {
+    isResumed: vi.fn(() => true),
     ensureOpened: vi.fn(),
     markResumed: vi.fn(),
     cacheResponse: vi.fn(),
@@ -118,6 +119,7 @@ describe('ThreadsService', () => {
     mockActiveFolders.resolveAgent.mockReset();
     mockKnowledge.contextForConversation.mockResolvedValue(null);
     Object.values(mockResumeRegistry).forEach((mock) => mock.mockReset());
+    mockResumeRegistry.isResumed.mockReturnValue(true);
     Object.values(mockBranches).forEach((mock) => mock.mockReset());
     mockBranchMutations.recordLocalFork.mockReset();
     mockBranching.createMessageBranch.mockReset();
