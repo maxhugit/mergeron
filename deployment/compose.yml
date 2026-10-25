@@ -20,6 +20,7 @@ services:
       PORT: '8172'
       HOME: /home/codex
       CODEX_HOME: /home/codex/.codex
+      MERGERON_PUBLISHED_DOCUMENT_PROTECTION: required
       WEBUI_DB_PATH: /home/codex/.codex/codex-webui.sqlite
       WEBUI_REQUIRE_IDENTITY: 'true'
       MERGERON_PUBLIC_URL: ${MERGERON_WEBUI_URL:-https://mergeron.example.com}

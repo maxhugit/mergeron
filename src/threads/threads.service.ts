@@ -11,6 +11,8 @@ import {
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { CodexService } from '../codex/codex.service';
+import { CodexProcessManager } from '../codex/codex-process-manager.service';
+import { DocumentPublicationService } from '../document-publication/document-publication.service';
 import type { ServerNotification, v2 } from '../codex/codex-schema';
 import { BusinessException } from '../common/business.exception';
 import { ErrorCode } from '../common/error-codes';
@@ -58,6 +60,7 @@ import { ThreadMetadataService } from './thread-metadata.service';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { GitMutationGateService } from './git-mutation-gate.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
 const MAX_FORK_CHAIN_WALK = 32;
@@ -91,6 +94,11 @@ export class ThreadsService {
     @Optional() private readonly knowledge?: ProjectKnowledgeService,
     @Optional() private readonly deliverables?: DeliverablesService,
     @Optional() private readonly gitMutations?: GitMutationGateService,
+    @Optional() private readonly processManager?: CodexProcessManager,
+    @Optional()
+    private readonly documentPublication?: DocumentPublicationService,
+    @Optional()
+    private readonly settingsObserver?: ThreadSettingsObserverService,
   ) {}
 
   /**
@@ -103,6 +111,7 @@ export class ThreadsService {
     params: v2.ThreadStartParams,
   ): Promise<v2.ThreadStartResponse> {
     requireExecutionAccess();
+    await this.processManager?.ensureDocumentIsolation();
     const projectPolicy = await this.projectConnections.policyForCwd(
       params.cwd,
     );
@@ -420,6 +429,7 @@ export class ThreadsService {
    */
   async startTurn(params: v2.TurnStartParams): Promise<v2.TurnStartResponse> {
     requireExecutionAccess();
+    await this.processManager?.ensureDocumentIsolation();
     this.deletionRegistry.assertMutable(params.threadId);
     const beforeTurn = this.metadata.getHeldThread(params.threadId);
     const shouldAutoName = Boolean(
@@ -443,6 +453,10 @@ export class ThreadsService {
     const deliverableContext = this.deliverables?.contextForConversation(
       params.threadId,
     );
+    const publication = await this.documentPublication?.prepare(
+      params.threadId,
+      beforeTurn?.name,
+    );
     const effectiveParams: v2.TurnStartParams = {
       ...params,
       ...(projectPolicy?.readOnly
@@ -453,12 +467,16 @@ export class ThreadsService {
             },
           }
         : {}),
-      ...(sharedKnowledge || deliverableContext
+      ...(sharedKnowledge || deliverableContext || publication?.context
         ? {
             input: [
               {
                 type: 'text' as const,
-                text: [sharedKnowledge, deliverableContext]
+                text: [
+                  sharedKnowledge,
+                  deliverableContext,
+                  publication?.context,
+                ]
                   .filter(Boolean)
                   .join('\n\n'),
                 text_elements: [],
@@ -473,6 +491,20 @@ export class ThreadsService {
         ? { effort: projectPolicy.reasoningEffort }
         : {}),
     };
+    // The deliverable cwd is intentionally read-only in the outer namespace.
+    // Grant only the scoped draft directory, without upgrading read-only access
+    // or changing any of the user's network / sandbox settings.
+    const sandbox =
+      effectiveParams.sandboxPolicy ??
+      this.settingsObserver?.readSecurityPolicy(params.threadId).sandboxPolicy;
+    if (publication?.draftDirectory && sandbox?.type === 'workspaceWrite') {
+      effectiveParams.sandboxPolicy = {
+        ...sandbox,
+        writableRoots: [
+          ...new Set([...sandbox.writableRoots, publication.draftDirectory]),
+        ],
+      };
+    }
     if (projectPolicy && effectiveCwd)
       this.projectConnections.recordExecutionContext(
         projectPolicy,
@@ -481,9 +513,16 @@ export class ThreadsService {
       );
     const send = () =>
       this.codex.request<v2.TurnStartResponse>('turn/start', effectiveParams);
-    const response = await (this.gitMutations
-      ? this.gitMutations.startTurn(send)
-      : send());
+    let response: v2.TurnStartResponse;
+    try {
+      response = await (this.gitMutations
+        ? this.gitMutations.startTurn(send)
+        : send());
+      publication?.bind(response.turn.id);
+    } catch (error) {
+      publication?.abort();
+      throw error;
+    }
     this.branches.attachPendingVersionTurn(
       params.threadId,
       response.turn.id,

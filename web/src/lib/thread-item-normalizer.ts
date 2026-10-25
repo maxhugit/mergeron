@@ -152,6 +152,10 @@ function normalizeUserMessage(
           .replace(
             /^<project_deliverable_context>\n[\s\S]*?\n<\/project_deliverable_context>\n*/,
             '',
+          )
+          .replace(
+            /^<document_publication>\n[\s\S]*?\n<\/document_publication>\n*/,
+            '',
           );
         if (message) text.push(message);
       } else if (

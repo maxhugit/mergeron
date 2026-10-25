@@ -1,0 +1,8 @@
+# Disposable CI fixture only, never installed on a deployment host.
+# Ubuntu restricts user namespaces even for the generic "unconfined" label.
+# Docker still applies cap-drop ALL, seccomp, no-new-privileges, no network,
+# a read-only root and RAM-only writable mounts to this fixture.
+abi <abi/4.0>,
+profile mergeron-document-isolation-ci flags=(unconfined) {
+  userns,
+}

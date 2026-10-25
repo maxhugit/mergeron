@@ -42,6 +42,7 @@ import { FilesService } from '../files/files.service';
 import { IdentityService } from '../auth/identity.service';
 import { PROJECT_SYSTEM_DIRECTORY } from '../projects/workspace-structure';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { documentProtectionEnabled as protectedDocuments } from '../document-publication/document-isolation';
 
 type Item = typeof items.$inferSelect;
 export type DeliverableLifecycleStatus =
@@ -94,6 +95,26 @@ const MAX_FILE = 100 * 1024 * 1024;
 @Injectable()
 export class DeliverablesService {
   private readonly onlyOfficeSessions = new Map<string, OnlyOfficeSession>();
+  private readonly documentWrites = new Map<string, Promise<void>>();
+
+  private async serializeDocumentWrite<T>(
+    id: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.documentWrites.get(id) ?? Promise.resolve();
+    let release!: () => void;
+    const next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.documentWrites.set(id, next);
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.documentWrites.get(id) === next) this.documentWrites.delete(id);
+    }
+  }
 
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
@@ -589,6 +610,7 @@ export class DeliverablesService {
           .filter((document) => document.deliverableId === item.id)
           .map((document) => ({
             ...document,
+            protectedSource: protectedDocuments(),
             versions: documentHistory.filter(
               (version) => version.documentId === document.id,
             ),
@@ -1103,6 +1125,10 @@ export class DeliverablesService {
     id: string,
     input: { paths: string[]; note?: string; version: number },
   ) {
+    if (protectedDocuments())
+      throw new ConflictException(
+        'Save documents as new versions before submitting them for validation',
+      );
     const current = this.get(projectId, resourceId, id);
     this.requireDocumentMutable(current);
     if (current.version !== input.version)
@@ -1311,6 +1337,7 @@ export class DeliverablesService {
       : [];
     return rows.map((document) => ({
       ...document,
+      protectedSource: protectedDocuments(),
       versions: history.filter((version) => version.documentId === document.id),
     }));
   }
@@ -1328,12 +1355,34 @@ export class DeliverablesService {
     documentId?: string,
     trustedOnlyOffice = false,
   ) {
+    return this.serializeDocumentWrite(deliverableId, () =>
+      this.addDocumentVersionUnlocked(
+        projectId,
+        resourceId,
+        deliverableId,
+        input,
+        actor,
+        documentId,
+        trustedOnlyOffice,
+      ),
+    );
+  }
+
+  private async addDocumentVersionUnlocked(
+    projectId: string,
+    resourceId: string,
+    deliverableId: string,
+    input: { path?: unknown; comment?: unknown; expectedVersion?: unknown },
+    actor: DeliverableDocumentActor,
+    documentId?: string,
+    trustedOnlyOffice = false,
+  ) {
     const deliverable = this.get(projectId, resourceId, deliverableId);
     this.requireDocumentMutable(deliverable);
     if (typeof input.path !== 'string' || !input.path.trim())
       throw new BadRequestException('Document path is required');
     const comment = this.text(input.comment ?? '', 4000);
-    const sourcePath = await this.files.resolveSafePath(input.path);
+    let sourcePath = await this.files.resolveSafePath(input.path);
     if (!trustedOnlyOffice) this.identities.requireWorkspacePath(sourcePath);
     const workspaces = this.db
       .select()
@@ -1350,7 +1399,7 @@ export class DeliverablesService {
         'Document must belong to a project workspace',
       );
     this.files.assertProjectPathMutable(sourcePath);
-    const stat = await fs.stat(sourcePath);
+    let stat = await fs.stat(sourcePath);
     if (!stat.isFile() || stat.size > MAX_FILE)
       throw new BadRequestException('Invalid document file');
     const fileName = path.basename(sourcePath);
@@ -1383,7 +1432,7 @@ export class DeliverablesService {
         throw new ConflictException(
           'This document already belongs to the deliverable',
         );
-    } else if (sourcePath !== document.sourcePath) {
+    } else if (sourcePath !== document.sourcePath && !protectedDocuments()) {
       throw new BadRequestException(
         'A document version must use the document source path',
       );
@@ -1405,28 +1454,97 @@ export class DeliverablesService {
     if (latest?.sha256 === digest.sha256)
       throw new ConflictException('Document content has not changed');
     const id = document?.id ?? randomUUID();
-    const versionId = randomUUID();
-    const number = (latest?.number ?? 0) + 1;
-    const folder = await this.directory(projectId, [
-      PROJECT_SYSTEM_DIRECTORY,
-      'history',
-      'deliverables',
-      deliverableId,
-      'documents',
-      id,
-      versionId,
-    ]);
-    const snapshotPath = path.join(folder, fileName);
-    await fs.copyFile(sourcePath, snapshotPath, constants.COPYFILE_EXCL);
-    const after = await fs.stat(sourcePath);
-    if (after.size !== stat.size || after.mtimeMs !== stat.mtimeMs) {
-      await fs.rm(folder, { recursive: true, force: true });
-      throw new ConflictException(
-        'Document changed while its version was created',
-      );
-    }
-    const now = Date.now();
+    let replacedProjection = false;
+    let projectionPath: string | undefined;
+    let newProjectionFolder: string | undefined;
+    let folder: string | undefined;
     try {
+      if (protectedDocuments()) {
+        if (document && fileName !== document.name)
+          throw new BadRequestException(
+            'A document version must keep its document name',
+          );
+        if (
+          !document &&
+          this.db
+            .select()
+            .from(documents)
+            .where(
+              and(
+                eq(documents.deliverableId, deliverableId),
+                eq(documents.name, fileName),
+              ),
+            )
+            .get()
+        )
+          throw new ConflictException(
+            'Choose the existing document when publishing a new version',
+          );
+        if (!document)
+          newProjectionFolder = await this.directory(projectId, [
+            'livrables',
+            deliverableId,
+            'published',
+            id,
+          ]);
+        const target =
+          document?.sourcePath ?? path.join(newProjectionFolder!, fileName);
+        if (sourcePath !== target) {
+          if (this.blockingOnlyOfficeSession(deliverableId))
+            throw new ConflictException(
+              'Close the document editor before publishing',
+            );
+          if (
+            document &&
+            latest &&
+            (await this.hash(target)).sha256 !== latest.sha256
+          )
+            throw new ConflictException(
+              'Save pending document changes as a version before replacing the retained source',
+            );
+          projectionPath = target;
+          replacedProjection = Boolean(document);
+          await fs.copyFile(
+            sourcePath,
+            target,
+            document ? 0 : constants.COPYFILE_EXCL,
+          );
+          if ((await this.hash(target)).sha256 !== digest.sha256) {
+            if (document && latest)
+              await fs.copyFile(latest.snapshotPath, target);
+            throw new ConflictException(
+              'Draft changed while saving its version',
+            );
+          }
+          sourcePath = target;
+          stat = await fs.stat(sourcePath);
+        }
+      }
+      const versionId = randomUUID();
+      const number = (latest?.number ?? 0) + 1;
+      folder = await this.directory(projectId, [
+        PROJECT_SYSTEM_DIRECTORY,
+        'history',
+        'deliverables',
+        deliverableId,
+        'documents',
+        id,
+        versionId,
+      ]);
+      const snapshotPath = path.join(folder, fileName);
+      await fs.copyFile(sourcePath, snapshotPath, constants.COPYFILE_EXCL);
+      const after = await fs.stat(sourcePath);
+      if (
+        after.size !== stat.size ||
+        after.mtimeMs !== stat.mtimeMs ||
+        (await this.hash(snapshotPath)).sha256 !== digest.sha256
+      ) {
+        await fs.rm(folder, { recursive: true, force: true });
+        throw new ConflictException(
+          'Document changed while its version was created',
+        );
+      }
+      const now = Date.now();
       return this.db.transaction((tx) => {
         if (!document) {
           document = tx
@@ -1518,7 +1636,11 @@ export class DeliverablesService {
         return { document, version };
       });
     } catch (error) {
-      await fs.rm(folder, { recursive: true, force: true });
+      if (folder) await fs.rm(folder, { recursive: true, force: true });
+      if (replacedProjection && latest && projectionPath)
+        await fs.copyFile(latest.snapshotPath, projectionPath);
+      if (newProjectionFolder)
+        await fs.rm(newProjectionFolder, { recursive: true, force: true });
       throw error;
     }
   }

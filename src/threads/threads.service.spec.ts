@@ -360,6 +360,47 @@ describe('ThreadsService', () => {
     );
   });
 
+  it.each(['workspaceWrite', 'readOnly', 'dangerFullAccess'])(
+    'adds the scoped draft directory only to workspaceWrite, not %s permissions',
+    async (type) => {
+      const sandbox =
+        type === 'workspaceWrite'
+          ? {
+              type,
+              writableRoots: ['/code'],
+              networkAccess: false,
+              excludeTmpdirEnvVar: true,
+              excludeSlashTmp: true,
+            }
+          : type === 'readOnly'
+            ? { type, networkAccess: false }
+            : { type };
+      Object.assign(service, {
+        documentPublication: {
+          prepare: vi.fn().mockResolvedValue({
+            draftDirectory: '/draft/scope',
+            context: '',
+            bind: vi.fn(),
+            abort: vi.fn(),
+          }),
+        },
+        settingsObserver: {
+          readSecurityPolicy: () => ({ sandboxPolicy: sandbox }),
+        },
+      });
+      mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+      await service.startTurn({ threadId: 't1', input: [] });
+      const sent = mockCodex.request.mock.calls[0][1] as {
+        sandboxPolicy?: unknown;
+      };
+      expect(sent.sandboxPolicy).toEqual(
+        type === 'workspaceWrite'
+          ? { ...sandbox, writableRoots: ['/code', '/draft/scope'] }
+          : undefined,
+      );
+    },
+  );
+
   it('does not send turn/start while the Git mutation gate refuses admission', async () => {
     const startTurn = vi.fn().mockRejectedValue(new Error('GIT_BUSY'));
     Object.assign(service, { gitMutations: { startTurn } });

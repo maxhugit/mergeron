@@ -1341,6 +1341,36 @@ it('offers Preview instead of Open and opens a read-only document sheet', async 
   );
 });
 
+it('uploads a version candidate without overwriting the protected retained source', async () => {
+  const sourcePath = '/workspaces/p/livrables/d/published/doc/report.docx';
+  const version = (number: number, authorName: string) => ({
+    id: `v${number}`, documentId: 'doc', number, fileName: 'report.docx', sourcePath,
+    snapshotPath: `/history/v${number}/report.docx`, size: 42, sha256: `hash-${number}`,
+    authorPersonId: null, authorName, comment: '', restoredFromVersionId: null, createdAt: number,
+  });
+  const document = { id: 'doc', deliverableId: 'd', name: 'report.docx', format: 'docx',
+    sourcePath, protectedSource: true, currentVersionNumber: 2, deletedAt: null,
+    createdAt: 1, updatedAt: 2, versions: [version(2, 'New writer'), version(1, 'Old writer')] };
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({
+    files: [{ path: '/workspaces/p/livrables/d/report.docx' }],
+  }) });
+  vi.stubGlobal('fetch', fetchMock);
+  await setup({ ...board, deliverables: [{ ...item, documents: [document] }] });
+  fireEvent.click(screen.getByRole('tab', { name: /Documents/ }));
+  expect(screen.getByText(/New writer/)).toBeInTheDocument();
+  const menu = screen.getByLabelText('Actions').closest('details')!;
+  menu.open = true;
+  fireEvent.change(screen.getByLabelText('Save a new version'), {
+    target: { files: [new File(['candidate'], 'report.docx')] },
+  });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  expect(String(fetchMock.mock.calls[0][0])).toContain('destinationPath=%2Fworkspaces%2Fp%2Flivrables%2Fd&');
+  expect(String(fetchMock.mock.calls[0][0])).not.toContain('published');
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d/documents/doc/versions', {
+    method: 'POST', body: JSON.stringify({ path: '/workspaces/p/livrables/d/report.docx', comment: '', expectedVersion: 2 }),
+  }));
+});
+
 it('uploads selected files before creating their document records', async () => {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,

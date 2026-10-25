@@ -1,5 +1,6 @@
 import { chown, mkdir, open, readFile, lstat } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectInventory } from './inventory.mjs';
 import {
@@ -12,6 +13,27 @@ const MANAGED_LABELS = {
   'io.mergeron.managed': 'true',
 };
 const INSTALL_CONFIRMATION = 'INSTALL';
+
+/** Same reviewed profile as Compose; Docker API expects inline JSON, not a path. */
+function documentSeccompProfile() {
+  let source;
+  try {
+    source = readFileSync(
+      new URL('../seccomp-bwrap.json', import.meta.url),
+      'utf8',
+    );
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    source = readFileSync(
+      new URL('../../deployment/config/seccomp-bwrap.json', import.meta.url),
+      'utf8',
+    );
+  }
+  const profile = JSON.parse(source);
+  if (profile.defaultAction !== 'SCMP_ACT_ERRNO')
+    throw new Error('Invalid document seccomp profile');
+  return `seccomp=${JSON.stringify(profile)}`;
+}
 
 function absoluteSafePath(value, name) {
   if (typeof value !== 'string' || !value.startsWith('/') || value === '/')
@@ -498,6 +520,7 @@ export function containerSpecification(manifest, component, configuration) {
         'PORT=8172',
         'HOME=/home/codex',
         'CODEX_HOME=/home/codex/.codex',
+        'MERGERON_PUBLISHED_DOCUMENT_PROTECTION=required',
         'WEBUI_DB_PATH=/home/codex/.codex/codex-webui.sqlite',
         'WEBUI_REQUIRE_IDENTITY=true',
         `MERGERON_PUBLIC_URL=${configuration.publicUrl}`,
@@ -548,7 +571,7 @@ export function containerSpecification(manifest, component, configuration) {
         GroupAdd: ['11001'],
         StopTimeout: 1800,
         // Docker CLI translates systempaths=unconfined into these API fields.
-        SecurityOpt: ['no-new-privileges:true'],
+        SecurityOpt: ['no-new-privileges:true', documentSeccompProfile()],
         MaskedPaths: [],
         ReadonlyPaths: [],
         LogConfig: {

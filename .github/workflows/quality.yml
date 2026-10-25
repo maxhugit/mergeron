@@ -108,6 +108,7 @@ jobs:
           src/database/pending-request-migration.spec.ts
           src/http-stack.spec.ts
           src/archive
+          src/document-publication
           src/projects/project-workspace-layout.spec.ts
           src/projects/project-archives.spec.ts
           src/project-knowledge/project-knowledge.service.spec.ts
@@ -201,6 +202,9 @@ jobs:
 
       - name: Start the production image and wait for its health check
         run: scripts/smoke-test-image.sh "mergeron:quality-${{ github.sha }}"
+
+      - name: Verify protected document execution on Linux
+        run: bash scripts/smoke-test-document-isolation.sh "mergeron:quality-${{ github.sha }}"
 
       - name: Scan production image dependencies
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

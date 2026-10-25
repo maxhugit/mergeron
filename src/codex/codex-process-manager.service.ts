@@ -4,6 +4,7 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import { readCatalogFile } from './catalog/catalog-files';
@@ -16,6 +17,11 @@ import { CatalogStorageService } from './catalog/catalog-storage.service';
 import type { ServerRequestHandler } from './server-request-owner';
 import { SettingsService } from '../settings/settings.service';
 import { GENERAL_SETTING_KEYS } from '../settings/settings.definitions';
+import { DocumentProtectionService } from '../document-publication/document-protection.service';
+import {
+  documentAgentEnvironment,
+  documentIsolationArgs,
+} from '../document-publication/document-isolation';
 
 const MCP_OAUTH_CALLBACK_PATH = '/mcp/oauth/callback';
 const MCP_OAUTH_CALLBACK_PORT = 12345;
@@ -116,7 +122,15 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly storage: CatalogStorageService,
     private readonly settings: SettingsService,
+    @Optional() private readonly documentProtection?: DocumentProtectionService,
   ) {}
+
+  /** New project folders cannot enter an already running mount namespace. */
+  async ensureDocumentIsolation(): Promise<void> {
+    if (!this.documentProtection?.enabled) return;
+    const plan = await this.documentProtection.plan();
+    if (this.documentProtection.changed(plan)) await this.restartControlled();
+  }
 
   /** Recovers interrupted activation before spawning; errors leave HTTP repair available. */
   async onModuleInit(): Promise<void> {
@@ -281,16 +295,20 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
         'Ignoring invalid general.publicBaseUrl for MCP OAuth callback',
       );
     }
+    const isolation = (await this.documentProtection?.plan()) ?? null;
+    const binary = this.storage.paths.binary;
+    const args = ['app-server', '--listen', 'stdio://', ...oauthArgs];
+    const environment = {
+      ...process.env,
+      PATH: this.storage.paths.childPath ?? process.env.PATH,
+      CODEX_HOME: this.storage.paths.home,
+    };
     const child = spawn(
-      this.storage.paths.binary,
-      ['app-server', '--listen', 'stdio://', ...oauthArgs],
+      isolation ? '/usr/bin/bwrap' : binary,
+      isolation ? documentIsolationArgs(isolation, binary, args) : args,
       {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PATH: this.storage.paths.childPath ?? process.env.PATH,
-          CODEX_HOME: this.storage.paths.home,
-        },
+        env: isolation ? documentAgentEnvironment(environment) : environment,
       },
     );
     let stderr = '';
@@ -374,6 +392,7 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
       this.generation += 1;
       this.startupError = null;
       accepted = true;
+      this.documentProtection?.accept(isolation);
       this.emitLifecycle({
         type: 'appServerReady',
         generation: this.generation,
