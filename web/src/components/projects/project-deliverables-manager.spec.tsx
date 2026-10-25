@@ -214,6 +214,51 @@ it('aligns all compact badges to the right and preserves desktop column alignmen
     expect(badge).toHaveClass('@min-[68rem]:justify-self-auto');
   }
 });
+it('shows active document names only outside compact mode and keeps card rows explicit', async () => {
+  const document = {
+    id: 'doc',
+    deliverableId: 'd',
+    name: 'Design.docx',
+    format: 'docx',
+    sourcePath: '/Design.docx',
+    currentVersionNumber: 1,
+    deletedAt: null,
+    createdAt: 1,
+    updatedAt: 1,
+    versions: [],
+  };
+  await setupList({
+    ...board,
+    deliverables: [
+      {
+        ...item,
+        documents: [
+          document,
+          { ...document, id: 'removed', name: 'Removed.docx', deletedAt: 2 },
+        ],
+      },
+    ],
+  });
+  const names = screen.getByRole('list', { name: 'Documents' });
+  expect(names).toHaveClass('hidden', '@min-[36rem]:block');
+  expect(within(names).getByText('Design.docx')).toHaveAttribute(
+    'title',
+    'Design.docx',
+  );
+  expect(screen.queryByText('Removed.docx')).not.toBeInTheDocument();
+  expect(screen.getByTestId('deliverable-status-d')).toHaveClass(
+    'col-start-2',
+    'row-start-1',
+  );
+  expect(screen.getByText('Not required', { selector: 'span' })).toHaveClass(
+    'col-start-2',
+    'row-start-2',
+  );
+  expect(screen.getByText('Standard access', { selector: 'span' })).toHaveClass(
+    'col-start-2',
+    'row-start-3',
+  );
+});
 
 it.each([
   {
@@ -545,11 +590,12 @@ it('keeps the table search visible and exposes filters through a mobile toggle',
   await setupList();
 
   expect(screen.getByRole('button', { name: /Report/ })).toHaveClass(
-    'order-1',
-    '@min-[36rem]:col-span-2',
+    'col-start-1',
+    'row-start-1',
   );
   expect(screen.getByTestId('deliverable-status-d')).toHaveClass(
-    'order-2',
+    'col-start-2',
+    'row-start-1',
     'justify-self-end',
   );
   expect(screen.getByLabelText('Search deliverables')).toBeInTheDocument();
