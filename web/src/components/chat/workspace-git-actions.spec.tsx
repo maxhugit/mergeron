@@ -83,6 +83,12 @@ async function fillCommit() {
   });
   await screen.findByText('+only-staged');
 }
+
+it('allows an explicit first staged commit but disables push before HEAD exists', () => {
+  showCopy({ ...snapshot, head: '' });
+  expect(screen.getByRole('button', { name: 'Commit…' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Push…' })).toBeDisabled();
+});
 it('requires staged review, identity and explicit commit confirmation', async () => {
   showCopy();
   fireEvent.click(screen.getByRole('button', { name: 'Commit…' }));

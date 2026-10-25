@@ -381,7 +381,7 @@ export function ExternalWorkspaceResources({
                   <div className="font-medium">{copy.name}</div>
                   <div className="truncate font-mono text-muted-foreground">
                     {copy.branch ?? t('detachedRevision')} ·{' '}
-                    {copy.revision.slice(0, 12)} ·{' '}
+                    {copy.revision.slice(0, 12) || t('gitNoCommit')} ·{' '}
                     {copy.accessMode === 'read_only'
                       ? t('readOnly')
                       : t('readAndWrite')}

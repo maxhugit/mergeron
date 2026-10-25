@@ -24,6 +24,7 @@ function ActionError({ error }: { error: Error | null }) {
     GIT_READ_ONLY: t('gitActionReadOnly'),
     GIT_STALE: t('gitActionStale'),
     GIT_NOTHING_STAGED: t('gitActionNothingStaged'),
+    GIT_NO_COMMIT: t('gitNoCommit'),
     GIT_MERGE_BLOCKED: t('gitActionMergeBlocked'),
     GIT_IN_PROGRESS: t('gitActionInProgress'),
     GIT_BRANCH_REQUIRED: t('gitActionBranchRequired'),
@@ -143,7 +144,7 @@ export function GitCopyActions({
         <Button
           size="sm"
           variant="outline"
-          disabled={!snapshot.fingerprint || !snapshot.branch}
+          disabled={!snapshot.fingerprint || !snapshot.branch || !snapshot.head}
           onClick={(event) => {
             trigger.current = event.currentTarget;
             open('push');

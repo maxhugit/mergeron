@@ -87,7 +87,13 @@ export class WorkspaceGitService {
     const cwd = await this.directory(projectId, copyId);
     const [branch, head, status, refs] = await Promise.all([
       this.git(cwd, ['branch', '--show-current']),
-      this.git(cwd, ['rev-parse', '--verify', 'HEAD']),
+      this.git(
+        cwd,
+        ['rev-parse', '--verify', '--quiet', 'HEAD'],
+        {},
+        15000,
+        [0, 1],
+      ),
       this.git(cwd, [
         'status',
         '--porcelain=v1',
@@ -118,17 +124,29 @@ export class WorkspaceGitService {
         };
       })
       .filter((item) => !item.name.endsWith('/HEAD'));
+    if (!head.trim()) {
+      if (!branch.trim())
+        throw new ConflictException('Git HEAD is unavailable');
+      if (!branches.some((item) => !item.remote && item.name === branch.trim()))
+        branches.unshift({
+          name: branch.trim(),
+          remote: false,
+          revision: '',
+          upstream: '',
+          tracking: '',
+        });
+    }
     const current = branches.find(
       (item) => !item.remote && item.name === branch.trim(),
     );
     return {
       branch: branch.trim() || null,
       head: head.trim(),
-      fingerprint: createHash('sha256')
-        .update(head)
-        .update(branch)
-        .update(await readFile(path.join(cwd, '.git/index')))
-        .digest('hex'),
+      fingerprint: gitStateFingerprint(
+        head.trim(),
+        branch.trim(),
+        await readGitIndex(cwd),
+      ),
       changes: parseGitChanges(status),
       branches,
       ahead: Number(/ahead (\d+)/.exec(current?.tracking ?? '')?.[1] ?? 0),
@@ -167,35 +185,42 @@ export class WorkspaceGitService {
       input,
       ...(change.originalPath ? [change.originalPath] : []),
     ].map((name) => `:(literal)${name}`);
+    const head = (
+      await this.git(
+        cwd,
+        ['rev-parse', '--verify', '--quiet', 'HEAD'],
+        {},
+        15000,
+        [0, 1],
+      )
+    ).trim();
     const diff = await this.git(cwd, [
       'diff',
+      ...(!head ? ['--cached'] : []),
       '--no-ext-diff',
       '--no-textconv',
       '--no-color',
       '--no-renames',
-      'HEAD',
+      ...(head ? ['HEAD'] : []),
       '--',
       ...names,
     ]);
-    return { path: input, diff, untracked: false };
+    return { path: input, diff, untracked: false, stagedOnly: !head };
   }
 
   async stagedDiff(projectId: string, copyId: string) {
     const cwd = await this.directory(projectId, copyId);
     const state = await this.snapshot(projectId, copyId);
-    const index = await readFile(path.join(cwd, '.git/index'));
+    const index = await readGitIndex(cwd);
     if (
-      createHash('sha256')
-        .update(`${state.head}\n`)
-        .update(`${state.branch ?? ''}\n`)
-        .update(index)
-        .digest('hex') !== state.fingerprint
+      gitStateFingerprint(state.head, state.branch ?? '', index) !==
+      state.fingerprint
     )
       throw new ConflictException('GIT_STALE');
     const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-review-'));
     try {
       const frozen = path.join(folder, 'index');
-      await writeFile(frozen, index, { mode: 0o600 });
+      if (index.length) await writeFile(frozen, index, { mode: 0o600 });
       const diff = await this.git(
         cwd,
         [
@@ -204,7 +229,7 @@ export class WorkspaceGitService {
           '--no-ext-diff',
           '--no-textconv',
           '--no-color',
-          'HEAD',
+          ...(state.head ? ['HEAD'] : []),
           '--',
         ],
         { GIT_INDEX_FILE: frozen },
@@ -221,6 +246,7 @@ export class WorkspaceGitService {
     args: string[],
     extraEnv: Record<string, string> = {},
     timeoutMs = 15000,
+    acceptedExitCodes: number[] = [0],
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const env = Object.fromEntries(
@@ -283,7 +309,7 @@ export class WorkspaceGitService {
       child.on('close', (code) => {
         clearTimeout(timer);
         if (failed) return;
-        if (code !== 0) fail();
+        if (code === null || !acceptedExitCodes.includes(code)) fail();
         else resolve(Buffer.concat(output).toString('utf8'));
       });
     });
@@ -416,6 +442,30 @@ export class WorkspaceGitService {
       inspectedAt: Date.now(),
     };
   }
+}
+
+export async function readGitIndex(cwd: string): Promise<Buffer> {
+  try {
+    return await readFile(path.join(cwd, '.git/index'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return Buffer.alloc(0);
+    throw error;
+  }
+}
+
+export function gitStateFingerprint(
+  head: string,
+  branch: string,
+  index: Buffer,
+): string {
+  return createHash('sha256')
+    .update(head)
+    .update('\0')
+    .update(branch)
+    .update('\0')
+    .update(index)
+    .digest('hex');
 }
 
 export function parseGitChanges(output: string): GitChange[] {
