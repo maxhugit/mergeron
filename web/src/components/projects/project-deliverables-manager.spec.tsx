@@ -864,6 +864,17 @@ it('only offers detachment for an associated main task and displays its subtasks
   expect(
     screen.getByRole('button', { name: 'Review figures' }),
   ).toBeInTheDocument();
+  const subtask = screen.getByRole('button', { name: 'Review figures' });
+  expect(subtask).toHaveClass('min-w-0', 'flex-1', 'truncate', 'text-left');
+  expect(subtask).toHaveAttribute('title', 'Review figures');
+  expect(subtask.parentElement).toHaveClass('flex', 'min-w-0');
+  expect(within(subtask.parentElement!).getByText('0%')).toHaveClass(
+    'shrink-0',
+    'whitespace-nowrap',
+  );
+  fireEvent.click(subtask);
+  expect(screen.getByRole('dialog', { name: 'child' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close task' }));
   fireEvent.click(screen.getByRole('button', { name: 'Detach task' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d', {
