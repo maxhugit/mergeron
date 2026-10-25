@@ -43,6 +43,24 @@ export const PROJECT_TASKS_SCHEMA = {
   required: ['tasks'],
 } as const;
 
+/** Project planning creates only top-level tasks; decomposition is a separate action. */
+export const PROJECT_PLAN_SCHEMA = {
+  ...PROJECT_TASKS_SCHEMA,
+  properties: {
+    tasks: {
+      ...PROJECT_TASKS_SCHEMA.properties.tasks,
+      items: {
+        ...PROJECT_TASKS_SCHEMA.properties.tasks.items,
+        properties: {
+          ...PROJECT_TASKS_SCHEMA.properties.tasks.items.properties,
+          parentTitle: { type: 'string', enum: [''] },
+          executionMode: { type: 'string', enum: ['manual'] },
+        },
+      },
+    },
+  },
+} as const;
+
 export const PROJECT_REPLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,

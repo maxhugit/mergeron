@@ -66,6 +66,7 @@ import { summarizeProjects } from './project-dashboard';
 import {
   PROJECT_REPLAN_SCHEMA,
   PROJECT_TASKS_SCHEMA,
+  PROJECT_PLAN_SCHEMA,
   TASK_ADVICE_SCHEMA,
 } from './project-ai-schemas';
 
@@ -2341,22 +2342,34 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       4_000,
     );
     return {
-      tasks: await this.suggestProjectTasksWithCodex(projectId, request),
+      tasks: await this.suggestProjectTasksWithCodex(
+        projectId,
+        request,
+        'plan',
+      ),
     };
   }
 
   private async suggestProjectTasksWithCodex(
     projectId: string,
     prompt: string,
+    intent: 'plan' | 'subtasks',
   ) {
     requireExecutionAccess();
     const project = this.get(projectId);
     const text = await this.threads.runProjectStructuredPrompt({
       cwd: project.workspacePath,
       prompt,
-      instructions:
-        'Tu es un chef de projet. Construis un plan concret en français. Utilise parentTitle pour créer des sous-tâches et dependsOnTitles pour les dépendances fin-vers-début. Les titres référencés doivent correspondre exactement à un autre titre de la liste. Pour chaque proposition, décide si elle peut être exécutée de façon fiable par un agent IA (agent) ou si elle nécessite une intervention humaine (manual), et explique brièvement ce choix dans assignmentReason. Une tâche principale doit toujours rester manuelle. Dans labels, utilise exclusivement les labels disponibles explicitement fournis dans la demande ; sinon retourne une liste vide.',
-      outputSchema: PROJECT_TASKS_SCHEMA as never,
+      instructions: [
+        'Tu es un chef de projet. Construis des propositions concrètes en français.',
+        intent === 'plan'
+          ? 'Construis d’abord le plan des tâches principales : objectifs, livrables, ordre de priorité, charges et dépendances fin-vers-début entre ces tâches. Ne crée aucune sous-tâche, même si la demande propose un découpage détaillé. Retourne parentTitle vide et executionMode manual pour chaque tâche. Le découpage en sous-tâches se fera dans un second temps, sur demande explicite depuis une tâche.'
+          : 'Découpe uniquement la tâche fournie en sous-tâches. Pour chaque proposition, décide si elle peut être exécutée de façon fiable par un agent IA (agent) ou si elle nécessite une intervention humaine (manual), et explique brièvement ce choix dans assignmentReason.',
+        'Les titres référencés dans dependsOnTitles doivent correspondre exactement à un autre titre de la liste. Dans labels, utilise exclusivement les labels disponibles explicitement fournis dans la demande ; sinon retourne une liste vide.',
+      ].join(' '),
+      outputSchema: (intent === 'plan'
+        ? PROJECT_PLAN_SCHEMA
+        : PROJECT_TASKS_SCHEMA) as never,
     });
     const parsed = JSON.parse(text) as {
       tasks?: Array<{
@@ -2372,6 +2385,13 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         labels?: string[];
       }>;
     };
+    if (
+      intent === 'plan' &&
+      parsed.tasks?.some((task) => task.parentTitle?.trim())
+    )
+      throw new BadRequestException(
+        'Le plan doit contenir uniquement des tâches principales. Relancez la génération ; le découpage en sous-tâches se fait ensuite depuis une tâche.',
+      );
     return (parsed.tasks ?? []).map((task) => ({
       title: task.title?.trim() || 'Nouvelle tâche',
       description: task.description?.trim() || '',
@@ -2386,7 +2406,10 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       dependsOnTitles: (task.dependsOnTitles ?? [])
         .map((title) => title.trim())
         .filter(Boolean),
-      executionMode: task.executionMode === 'agent' ? 'agent' : 'manual',
+      executionMode:
+        intent === 'subtasks' && task.executionMode === 'agent'
+          ? 'agent'
+          : 'manual',
       assignmentReason: task.assignmentReason?.trim() || '',
       labels: (task.labels ?? []).map((label) => label.trim()).filter(Boolean),
     }));
@@ -2639,6 +2662,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     const suggestions = await this.suggestProjectTasksWithCodex(
       projectId,
       prompt,
+      'subtasks',
     );
     return {
       tasks: suggestions.slice(0, 10).map((suggestion) => ({
