@@ -779,7 +779,7 @@ it('creates an independent version from the current document file', async () => 
   });
 });
 
-it('opens a detailed document sheet with versions and information', async () => {
+it('offers Preview instead of Open and opens a read-only document sheet', async () => {
   const document = {
     id: 'doc',
     deliverableId: 'd',
@@ -821,10 +821,15 @@ it('opens a detailed document sheet with versions and information', async () => 
   fireEvent.keyDown(window.document, { key: 'Escape' });
   expect(menu.open).toBe(false);
   expect(screen.getByLabelText('Actions')).toHaveFocus();
-  fireEvent.click(screen.getByRole('button', { name: 'History' }));
-
-  expect(screen.getByRole('dialog')).toHaveTextContent('Reviewed version');
-  fireEvent.click(screen.getByRole('tab', { name: 'Preview' }));
+  menu.open = true;
+  expect(
+    screen.queryByRole('button', { name: 'Open' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  expect(screen.getByRole('tab', { name: 'Preview' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   expect(screen.getByTestId('document-preview')).toHaveAttribute(
     'data-read-only',
     'true',
@@ -834,6 +839,7 @@ it('opens a detailed document sheet with versions and information', async () => 
     'aria-selected',
     'true',
   );
+  expect(screen.getByRole('dialog')).toHaveTextContent('Reviewed version');
   fireEvent.click(screen.getByRole('tab', { name: 'Information' }));
   expect(screen.getByRole('dialog')).toHaveTextContent('2.0 KB');
   expect(screen.getByRole('dialog')).toHaveTextContent('document-hash');
