@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class ManagerDeploymentTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.compose = (ROOT / "deployment/compose.unraid.yml").read_text()
+        cls.compose = (ROOT / "deployment/compose.yml").read_text()
         cls.production_env = (ROOT / "deployment/.env.example").read_text()
         cls.development_env = (ROOT / "deployment/.env.dev.example").read_text()
         cls.workflow = (ROOT / ".github/workflows/docker-publish.yml").read_text()

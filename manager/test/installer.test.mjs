@@ -105,7 +105,7 @@ async function fixtureConfiguration(directory) {
     writeFile(join(defaults, 'squid.conf'), 'existing squid default'),
   ]);
   const configuration = readInstallConfiguration(manifest, {
-    MERGERON_STATE_ROOT: '/mnt/pool/appdata/mergeron/state',
+    MERGERON_STATE_ROOT: '/srv/mergeron/state',
     MERGERON_MANAGER_HOST_STATE: directory,
     MERGERON_MANAGER_DEFAULT_CONFIG: defaults,
     MERGERON_WEBUI_URL: 'https://mergeron.example.test',
@@ -157,6 +157,16 @@ test('uses portable defaults and accepts the legacy appdata variable', () => {
   const configuration = readInstallConfiguration(manifest, {});
   assert.equal(configuration.stateRoot, '/srv/mergeron/state');
   assert.equal(configuration.appdataRoot, '/srv/mergeron/state/appdata');
+  assert.equal(configuration.hostIntegration, 'none');
+  const specification = containerSpecification(
+    manifest,
+    manifest.components[0],
+    configuration,
+  );
+  assert.equal(
+    Object.keys(specification.Labels).some((name) => name.startsWith('net.')),
+    false,
+  );
   assert.equal(
     readInstallConfiguration(manifest, {
       MERGERON_UNRAID_APPDATA_ROOT: '/legacy/appdata',
@@ -352,7 +362,7 @@ test('uses isolated development names and runtime configuration', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'mergeron-install-'));
   try {
     const configuration = readInstallConfiguration(development, {
-      MERGERON_STATE_ROOT: '/mnt/pool/appdata/mergeron-dev/state',
+      MERGERON_STATE_ROOT: '/srv/mergeron-dev/state',
       MERGERON_MANAGER_HOST_STATE: directory,
     });
     const component = development.components.find(

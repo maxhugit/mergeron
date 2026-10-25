@@ -81,7 +81,7 @@ export function DirectorySelectionTree({
           new Set([rootsQuery.data.homeDir, ...rootsQuery.data.roots]),
         ).filter(Boolean) as string[]);
     // A thread cwd is dynamically registered as a root. When its parent is
-    // already visible (for example /workspaces/Unraid below /workspaces),
+    // already visible (for example /workspaces/ExampleProject below /workspaces),
     // rendering it again at depth zero creates a misleading duplicate.
     return candidates.filter(
       (candidate) =>

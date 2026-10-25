@@ -2,6 +2,11 @@ import { chown, mkdir, open, readFile, lstat } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { collectInventory } from './inventory.mjs';
+import {
+  hostLabels,
+  readHostIntegration,
+  readAppdataRoot,
+} from './integrations/host-platform.mjs';
 
 const MANAGED_LABELS = {
   'io.mergeron.managed': 'true',
@@ -78,12 +83,11 @@ export function readInstallConfiguration(manifest, env = process.env) {
       env.MERGERON_MANAGER_DEFAULT_CONFIG ??
       '/opt/mergeron-manager/default-config',
     appdataRoot: absoluteSafePath(
-      env.MERGERON_APPDATA_ROOT ??
-        env.MERGERON_UNRAID_APPDATA_ROOT ??
-        `${stateRoot}/appdata`,
+      readAppdataRoot(env, stateRoot),
       'MERGERON_APPDATA_ROOT',
     ),
     authMode: env.MERGERON_AUTH_MODE ?? 'authentik',
+    hostIntegration: readHostIntegration(env),
     adminSubnet:
       env.MERGERON_ADMIN_SUBNET ??
       (production ? '172.30.44.0/28' : '172.30.44.16/28'),
@@ -301,6 +305,7 @@ export async function createInstallPlan(
       iconUrl: configuration.iconUrl,
       images: configuration.images,
       authMode: configuration.authMode,
+      hostIntegration: configuration.hostIntegration,
       proxyNetwork: manifest.networks.find((network) => network.id === 'proxy')
         ?.name,
     },
@@ -435,12 +440,7 @@ function labels(manifest, component, configuration) {
     ...MANAGED_LABELS,
     'io.mergeron.stack': manifest.stack,
     'io.mergeron.component': component.id,
-    'net.unraid.docker.icon': configuration.iconUrl,
-    'net.unraid.docker.shell':
-      component.id === 'ingress' ? '/bin/sh' : '/bin/bash',
-    ...(component.id === 'application'
-      ? { 'net.unraid.docker.webui': configuration.publicUrl }
-      : {}),
+    ...hostLabels(component, configuration),
   };
 }
 

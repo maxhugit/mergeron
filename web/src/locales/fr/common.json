@@ -1187,7 +1187,7 @@
   "newOpenAiApiKey": "Nouvelle clé API OpenAI",
   "noApiKeyAvailable": "Aucune clé API disponible",
   "noActivityForThisPerson": "Aucune activité pour cette personne.",
-  "onUnraid": " sur Unraid",
+  "inServerConfiguration": " dans la configuration du serveur",
   "openAiApi": "API OpenAI",
   "openAiApiConfiguration": "Configuration de l’API OpenAI",
   "selection": "Sélection",

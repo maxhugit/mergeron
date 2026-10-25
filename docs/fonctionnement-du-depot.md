@@ -9,21 +9,21 @@ dispose jamais directement des secrets OpenAI, SSH ou MCP.
 
 ## Arborescence
 
-| Chemin               | Contenu                                                               |
-| -------------------- | --------------------------------------------------------------------- |
-| `src/`               | backend NestJS, API, base SQLite, terminaux, fichiers et intégrations |
-| `web/`               | interface React, PWA et affichage mobile                              |
-| `drizzle/`           | migrations de la base de données                                      |
-| `skills/`            | compétences disponibles dans le conteneur, notamment Office           |
-| `deployment/`        | définition reproductible des trois conteneurs Unraid                  |
-| `docs/`              | documentation d’architecture, installation et exploitation            |
-| `codex_probe/`       | outils de vérification du protocole Codex                             |
-| `.github/workflows/` | construction et publication de l’image GHCR                           |
-| `Dockerfile.unraid`  | construction multiétape de l’image publiée pour Unraid                |
+| Chemin               | Contenu                                                                  |
+| -------------------- | ------------------------------------------------------------------------ |
+| `src/`               | backend NestJS, API, base SQLite, terminaux, fichiers et intégrations    |
+| `web/`               | interface React, PWA et affichage mobile                                 |
+| `drizzle/`           | migrations de la base de données                                         |
+| `skills/`            | compétences disponibles dans le conteneur, notamment Office              |
+| `deployment/`        | définitions reproductibles de la pile Docker et adaptations facultatives |
+| `docs/`              | documentation d’architecture, installation et exploitation               |
+| `codex_probe/`       | outils de vérification du protocole Codex                                |
+| `.github/workflows/` | construction et publication de l’image GHCR                              |
+| `Dockerfile`         | construction multiétape de l’image Docker officielle durcie              |
 
 ## Construction de l’image
 
-Le `Dockerfile.unraid` effectue les opérations suivantes :
+Le `Dockerfile` effectue les opérations suivantes :
 
 1. compilation de l’interface React ;
 2. compilation du backend NestJS ;
@@ -53,9 +53,9 @@ l’image dans `STATE_ROOT` :
 | `openai-api-key.txt` | clé du chat simple                                          |
 
 Le montage `/appdata` donne à l’application un accès en lecture/écriture aux
-configurations Unraid. Cette capacité est puissante : elle doit rester réservée
+fichiers hôtes autorisés. Cette capacité est puissante : elle doit rester réservée
 à un administrateur de confiance. Le chemin hôte de ce montage est configurable
-avec `MERGERON_APPDATA_ROOT`, sans obligation de monter l’Appdata Unraid complet.
+avec `MERGERON_APPDATA_ROOT`, sans obligation de monter tous les fichiers de l’hôte.
 
 ## Cycle d’une requête
 

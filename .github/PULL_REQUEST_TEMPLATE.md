@@ -9,7 +9,7 @@ Décrire le problème et le résultat obtenu.
 ## Vérifications
 
 - [ ] `python3 scripts/check-no-chinese.py`
-- [ ] validation de `deployment/compose.unraid.yml`
+- [ ] validation de `deployment/compose.yml`
 - [ ] compilation TypeScript
 - [ ] tests concernés
 - [ ] documentation française mise à jour, ou absence d’impact expliquée

@@ -32,13 +32,13 @@ function inventory(overrides = {}) {
         protectedMounts: [
           {
             target: '/home/codex',
-            source: '/mnt/pool/appdata/mergeron/state/home',
+            source: '/srv/mergeron/state/home',
             type: 'bind',
             writable: true,
           },
           {
             target: '/workspaces',
-            source: '/mnt/pool/appdata/mergeron/state/workspace',
+            source: '/srv/mergeron/state/workspace',
             type: 'bind',
             writable: true,
           },
@@ -175,7 +175,7 @@ test('persists the exact verified inventory only after explicit confirmation', a
     assert.equal(record.fingerprint, current.adoption.fingerprint);
     assert.equal(
       record.components[0].protectedMounts[0].source,
-      '/mnt/pool/appdata/mergeron/state/home',
+      '/srv/mergeron/state/home',
     );
   } finally {
     await rm(directory, { recursive: true, force: true });

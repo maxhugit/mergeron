@@ -1,6 +1,6 @@
 # OpenSSH client security update
 
-The production Unraid image uses real Debian packages rebuilt from the official
+The production Mergeron image uses real Debian packages rebuilt from the official
 OpenSSH 10.6p1-1 source and Debian patch archives on Trixie. SHA-256 values for all
 six inputs, including signed source descriptors, are pinned in
 `scripts/build-openssh-backport.sh`. The local version is

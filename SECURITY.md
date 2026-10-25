@@ -9,17 +9,19 @@ Utiliser de préférence les avis de sécurité privés GitHub du dépôt.
 
 Un utilisateur authentifié peut demander à Codex de lire ou modifier les
 répertoires montés et d’exécuter des commandes dans le conteneur. Les protections
-doivent donc être appliquées par Docker, les volumes, les réseaux, Authentik et
+doivent donc être appliquées par Docker, les volumes, les réseaux, l’authentification et
 les permissions de l’hôte, et non par une simple consigne textuelle au modèle.
 
 ## Protections attendues
 
-- aucun socket Docker dans le conteneur ;
+- aucun socket Docker dans les conteneurs applicatifs ; seul le Manager utilise
+  l’API Docker locale pour les ressources déclarées dans son manifeste ;
 - aucun mode privilégié ;
 - système de fichiers du conteneur en lecture seule ;
 - capacités Linux supprimées autant que possible ;
 - secrets montés en lecture seule et exclus de Git ;
-- accès public exclusivement par HTTPS, Traefik, Authentik et Nginx ;
+- accès public exclusivement par HTTPS et l’ingress, avec sessions natives ou
+  contrôle d’identité ; reverse proxy et fournisseur choisis par l’opérateur ;
 - filtrage des sorties Web par Squid ;
 - clés SSH limitées et montées en lecture seule ;
 - sauvegarde des données persistantes ;
@@ -34,7 +36,7 @@ leurs fonctions d’extraction sont vérifiées dans un conteneur jetable.
 
 Les décisions OpenVEX ne masquent que des vulnérabilités dont l’implémentation
 concernée a été vérifiée comme absente de l’image. Elles ne déclarent pas sûr le
-noyau de l’hôte Unraid et ne couvrent ni les volumes montés ni les outils ajoutés
+noyau de l’hôte Docker et ne couvrent ni les volumes montés ni les outils ajoutés
 après construction. Consulter les éléments d’audit :
 
 - [évaluation GnuPG, systemd et serveur SSH](security/system-components.md) ;
@@ -47,7 +49,7 @@ les conclusions critiques non justifiées restent visibles dans les rapports.
 
 ## Risques résiduels connus
 
-Le réseau `mergeron-admin` permet au conteneur principal d’atteindre Unraid, le VPS
+Le réseau `mergeron-admin` permet au conteneur principal d’atteindre les serveurs
 et les services administratifs. Les programmes respectant les variables de
 proxy utilisent Squid, mais ce réseau constitue aussi une route directe. Les
 autorisations SSH et les services accessibles doivent rester strictement limités.

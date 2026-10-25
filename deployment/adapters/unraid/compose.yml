@@ -1,0 +1,26 @@
+# Optional UI metadata only. Apply with the generic file, never on its own:
+# docker compose -f deployment/compose.yml -f deployment/adapters/unraid/compose.yml ...
+services:
+  mergeron-ui:
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
+      net.unraid.docker.webui: ${MERGERON_WEBUI_URL:-https://mergeron.example.com}
+      net.unraid.docker.shell: /bin/bash
+  mergeron-ingress:
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
+      net.unraid.docker.shell: /bin/sh
+  mergeron-squid:
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
+      net.unraid.docker.shell: /bin/bash
+  mergeron-manager:
+    environment:
+      MERGERON_HOST_INTEGRATION: unraid
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
+      net.unraid.docker.shell: /bin/sh

@@ -16,7 +16,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "kernel: memory exhaustion via crafted Graphics Execution Manager (GEM) objects. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "kernel: memory exhaustion via crafted Graphics Execution Manager (GEM) objects. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -29,7 +29,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "kernel: mounting a crafted f2fs filesystem image can lead to slab-out-of-bounds read access in f2fs_build_segment_manager in fs/f2fs/segment.c. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "kernel: mounting a crafted f2fs filesystem image can lead to slab-out-of-bounds read access in f2fs_build_segment_manager in fs/f2fs/segment.c. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -42,7 +42,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "kernel: out-of-bounds write in __remove_dirty_segment in fs/f2fs/segment.c. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "kernel: out-of-bounds write in __remove_dirty_segment in fs/f2fs/segment.c. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -55,7 +55,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "kernel: low-privileged user privileges escalation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "kernel: low-privileged user privileges escalation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -68,7 +68,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "kernel: descendant's dumpable setting with certain SUID binaries. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "kernel: descendant's dumpable setting with certain SUID binaries. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -81,7 +81,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "kernel: bluetooth: use-after-free vulnerability in af_bluetooth.c. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "kernel: bluetooth: use-after-free vulnerability in af_bluetooth.c. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -94,7 +94,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "wifi: ath12k: Fix for out-of bound access error. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "wifi: ath12k: Fix for out-of bound access error. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -107,7 +107,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "PCI/pwrctrl: Cancel outstanding rescan work when unregistering. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "PCI/pwrctrl: Cancel outstanding rescan work when unregistering. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -120,7 +120,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "drm/nouveau: fix a use-after-free in r535_gsp_rpc_push(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "drm/nouveau: fix a use-after-free in r535_gsp_rpc_push(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -133,7 +133,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "platform/x86/amd: pmf: Use device managed allocations. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "platform/x86/amd: pmf: Use device managed allocations. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -146,7 +146,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "rv: Use strings in da monitors tracepoints. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "rv: Use strings in da monitors tracepoints. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -159,7 +159,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ptp: ocp: fix use-after-free bugs causing by ptp_ocp_watchdog. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ptp: ocp: fix use-after-free bugs causing by ptp_ocp_watchdog. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -172,7 +172,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "wifi: mt76: mt7915: fix list corruption after hardware restart. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "wifi: mt76: mt7915: fix list corruption after hardware restart. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -185,7 +185,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "iommu/s390: Make attach succeed when the device was surprise removed. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "iommu/s390: Make attach succeed when the device was surprise removed. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -198,7 +198,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "f2fs: fix to do sanity check on node footer for non inode dnode. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "f2fs: fix to do sanity check on node footer for non inode dnode. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -211,7 +211,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "amd/amdkfd: enhance kfd process check in switch partition. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "amd/amdkfd: enhance kfd process check in switch partition. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -224,7 +224,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "drm/panthor: Prevent potential UAF in group creation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "drm/panthor: Prevent potential UAF in group creation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -237,7 +237,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ACPI: platform: Use acpi_bus_get_primary_device(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ACPI: platform: Use acpi_bus_get_primary_device(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -250,7 +250,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "arm64/fpsimd: signal: Fix restoration of SVE context. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "arm64/fpsimd: signal: Fix restoration of SVE context. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -263,7 +263,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ALSA: usb-audio: Prevent excessive number of frames. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ALSA: usb-audio: Prevent excessive number of frames. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -276,7 +276,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "cxl/mbox: validate payload size before accessing contents in cxl_payload_from_user_allowed(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "cxl/mbox: validate payload size before accessing contents in cxl_payload_from_user_allowed(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -289,7 +289,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "RDMA/efa: Fix use of completion ctx after free. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "RDMA/efa: Fix use of completion ctx after free. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -302,7 +302,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "s390/mm: Add missing secure storage access fixups for donated memory. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "s390/mm: Add missing secure storage access fixups for donated memory. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -315,7 +315,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ksmbd: fix signededness bug in smb_direct_prepare_negotiation(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ksmbd: fix signededness bug in smb_direct_prepare_negotiation(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -328,7 +328,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "dm-verity-fec: fix reading parity bytes split across blocks (take 3). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "dm-verity-fec: fix reading parity bytes split across blocks (take 3). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -341,7 +341,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "RDMA/mlx4: Fix mis-use of RCU in mlx4_srq_event(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "RDMA/mlx4: Fix mis-use of RCU in mlx4_srq_event(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -354,7 +354,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "mm/alloc_tag: clear codetag for pages allocated before page_ext initialization. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "mm/alloc_tag: clear codetag for pages allocated before page_ext initialization. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -367,7 +367,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "sched/psi: fix race between file release and pressure write. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "sched/psi: fix race between file release and pressure write. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -380,7 +380,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "netfilter: nat: use kfree_rcu to release ops. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "netfilter: nat: use kfree_rcu to release ops. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -393,7 +393,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "net: pull headers in qdisc_pkt_len_segs_init(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "net: pull headers in qdisc_pkt_len_segs_init(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -406,7 +406,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "powerpc/pgtable-frag: Fix bad page state in pte_frag_destroy. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "powerpc/pgtable-frag: Fix bad page state in pte_frag_destroy. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -419,7 +419,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "vdpa: use generic driver_override infrastructure. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "vdpa: use generic driver_override infrastructure. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -432,7 +432,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "KVM: arm64: Take the SRCU lock for page table walks in fault injection and AT emulation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "KVM: arm64: Take the SRCU lock for page table walks in fault injection and AT emulation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -445,7 +445,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "drm/amd/display: Fix out-of-bounds read in dp_get_eq_aux_rd_interval(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "drm/amd/display: Fix out-of-bounds read in dp_get_eq_aux_rd_interval(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -458,7 +458,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "drm/amdgpu: fix amdgpu_hmm_range_get_pages. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "drm/amdgpu: fix amdgpu_hmm_range_get_pages. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -471,7 +471,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "KVM: guest_memfd: Treat memslot binding offset+size as unsigned values. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "KVM: guest_memfd: Treat memslot binding offset+size as unsigned values. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -484,7 +484,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ksmbd: validate NTLMv2 response before updating session key. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ksmbd: validate NTLMv2 response before updating session key. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -497,7 +497,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ksmbd: prevent path traversal bypass by restricting caseless retry. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ksmbd: prevent path traversal bypass by restricting caseless retry. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -510,7 +510,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "wifi: mac80211: defer link RX stats percpu free to RCU. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "wifi: mac80211: defer link RX stats percpu free to RCU. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -523,7 +523,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "xfrm: fix stale skb->prev after async crypto steals a GSO segment. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "xfrm: fix stale skb->prev after async crypto steals a GSO segment. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -536,7 +536,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "wifi: mac80211: validate extension-frame layout before RX. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "wifi: mac80211: validate extension-frame layout before RX. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -549,7 +549,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ipmi: Fix user refcount underflow in event delivery. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ipmi: Fix user refcount underflow in event delivery. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -562,7 +562,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "dm-verity: fix buffer overflow in FEC calculation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "dm-verity: fix buffer overflow in FEC calculation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -575,7 +575,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "bnxt: fix head underflow on XDP head-grow. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "bnxt: fix head underflow on XDP head-grow. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -588,7 +588,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "iommu/iommufd: Fix IOPF group ownership UAF. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "iommu/iommufd: Fix IOPF group ownership UAF. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -601,7 +601,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "sctp: validate cookie AUTH state before use. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "sctp: validate cookie AUTH state before use. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -614,7 +614,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "net: tap: fix wrong transport_header when sending VLAN-tagged frame. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "net: tap: fix wrong transport_header when sending VLAN-tagged frame. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -627,7 +627,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "smb: client: reject a tree connect response whose byte count is too small. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "smb: client: reject a tree connect response whose byte count is too small. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -640,7 +640,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "nfsd: fix UAF in async copy cancel and shutdown. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "nfsd: fix UAF in async copy cancel and shutdown. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -653,7 +653,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ksmbd: fix tree connection use-after-free in smb2_tree_connect(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ksmbd: fix tree connection use-after-free in smb2_tree_connect(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -666,7 +666,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "drm/amdkfd: Fix error path at svm_migrate_copy_to_ram. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "drm/amdkfd: Fix error path at svm_migrate_copy_to_ram. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -679,7 +679,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "drm/amdkfd: Add TLB flush after MES queue eviction/suspension. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "drm/amdkfd: Add TLB flush after MES queue eviction/suspension. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -692,7 +692,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "KVM: arm64: vgic-v3: take an LPI reference in vgic_v3_save_pending_tables. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "KVM: arm64: vgic-v3: take an LPI reference in vgic_v3_save_pending_tables. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -705,7 +705,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "ip6mr: do not clone dst in ip6mr_cache_report(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "ip6mr: do not clone dst in ip6mr_cache_report(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -718,7 +718,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "nvmet: fix max_qid race between configfs and controller allocation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "nvmet: fix max_qid race between configfs and controller allocation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -731,7 +731,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "PCI/sysfs: Add lockdown checks to legacy I/O and memory handlers. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "PCI/sysfs: Add lockdown checks to legacy I/O and memory handlers. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -744,7 +744,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "bpf: backtracking shouldn't clear outer frame R1-R5 for callbacks. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "bpf: backtracking shouldn't clear outer frame R1-R5 for callbacks. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -757,7 +757,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "bpf: backtrack_insn(): Handle ld_{abs,ind} subprog exit edge. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "bpf: backtrack_insn(): Handle ld_{abs,ind} subprog exit edge. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -770,7 +770,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "xfrm: hold net_device reference under RCU in bundle creation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "xfrm: hold net_device reference under RCU in bundle creation. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -783,7 +783,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "KVM: arm64: Transfer the hyp stack pages out of the host stage-2. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "KVM: arm64: Transfer the hyp stack pages out of the host stage-2. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -796,7 +796,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "KVM: s390: Add missing srcu in kvm_s390_set_irq_state(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "KVM: s390: Add missing srcu in kvm_s390_set_irq_state(). The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -809,7 +809,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "bpf: Skip detached progs in trampoline images that are still in use. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "bpf: Skip detached progs in trampoline images that are still in use. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -822,7 +822,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "net: stmmac: fix rx Scatter-Gather support. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "net: stmmac: fix rx Scatter-Gather support. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -835,7 +835,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "bpf: Hold map BTF for the memory allocator destructor record. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "bpf: Hold map BTF for the memory allocator destructor record. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -848,7 +848,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "wifi: mac80211: validate TX status rate metadata. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "wifi: mac80211: validate TX status rate metadata. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -861,7 +861,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "wifi: mac80211: drop oversized fragments to avoid extra_len overflow. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "wifi: mac80211: drop oversized fragments to avoid extra_len overflow. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     },
     {
       "vulnerability": {
@@ -874,7 +874,7 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "KVM: x86: Re-pend GET_NESTED_STATE_PAGES if getting said pages fails. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running Unraid/host kernel is outside this assessment and may require remediation."
+      "impact_statement": "KVM: x86: Re-pend GET_NESTED_STATE_PAGES if getting said pages fails. The affected implementation executes in the Linux kernel, not in the userspace UAPI headers shipped by linux-libc-dev 6.12.113-1. This statement covers only this header package in the WebUI image. The running host kernel is outside this assessment and may require remediation."
     }
   ]
 }
