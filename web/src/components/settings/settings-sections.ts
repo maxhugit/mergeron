@@ -1,5 +1,6 @@
 export const SETTINGS_SECTIONS = [
   'general',
+  'infrastructure',
   'onlyOffice',
   'people',
   'account',

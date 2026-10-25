@@ -12,6 +12,7 @@ import {
   ScrollText,
   Plug,
   ServerCog,
+  Network,
   ShieldCheck,
   SquareTerminal,
   Terminal,
@@ -19,17 +20,20 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { useLayoutStore } from '@/stores/layout-store';
 import { cn } from '@/lib/utils';
 import { settingsPageLabel } from './setting-helpers';
 import { requestCli, type CliStatus } from './codex-cli-api';
+import { serverReleaseQueryOptions } from './server-release-api';
 
 import { SETTINGS_SECTIONS } from './settings-sections';
 
 const sectionIcons = {
   general: ServerCog,
+  infrastructure: Network,
   onlyOffice: FileText,
   people: UsersRound,
   account: UserCircle,
@@ -42,6 +46,23 @@ const sectionIcons = {
   security: ShieldCheck,
   integrations: Plug,
 } satisfies Record<(typeof SETTINGS_SECTIONS)[number], typeof ServerCog>;
+
+function ServerUpdateIndicator() {
+  const { t } = useTranslation('manager');
+  const query = useQuery(serverReleaseQueryOptions);
+  if (!query.data?.updateAvailable || query.isError || query.data.checkError)
+    return null;
+  return (
+    <span
+      role="status"
+      aria-label={t('managerNewImageAvailable')}
+      title={t('managerNewImageAvailable')}
+      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold text-white"
+    >
+      !
+    </span>
+  );
+}
 
 function CodexCliUpdateIndicator() {
   const { t } = useTranslation();
@@ -92,7 +113,7 @@ function CodexCliUpdateIndicator() {
  * server session is shared; per-person roles must be enforced server-side.
  */
 export function SettingsSidebar() {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'manager'], { nsMode: 'fallback' });
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const section = useRouterState({
@@ -150,6 +171,7 @@ export function SettingsSidebar() {
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {t(translationKey(settingsPageLabel(entry)))}
+                {entry === 'general' && <ServerUpdateIndicator />}
                 {entry === 'codexCli' && <CodexCliUpdateIndicator />}
               </button>
             );

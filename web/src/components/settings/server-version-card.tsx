@@ -13,6 +13,7 @@ import { translationKey } from '@/locales/translation-key';
 import {
   requestServerRelease,
   serverReleaseQueryKey,
+  serverReleaseQueryOptions,
 } from './server-release-api';
 import { ManagerUpdateControls } from './manager-update-controls';
 import {
@@ -26,13 +27,7 @@ export function ServerVersionCard() {
   const client = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const query = useQuery({
-    queryKey: serverReleaseQueryKey,
-    queryFn: () => requestServerRelease(),
-    staleTime: 15 * 60_000,
-    retry: false,
-    refetchInterval: 60_000,
-  });
+  const query = useQuery(serverReleaseQueryOptions);
   const manager = useQuery({
     queryKey: managerStatusQueryKey,
     queryFn: requestManagerStatus,
@@ -57,6 +52,21 @@ export function ServerVersionCard() {
       setRefreshing(false);
     }
   };
+  const refreshControl = (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={refreshing || query.isLoading}
+      onClick={() => void refresh()}
+    >
+      <RefreshCw
+        aria-hidden="true"
+        className={cn('h-4 w-4', refreshing && 'animate-spin')}
+      />
+      {tm('managerRefreshDetection')}
+    </Button>
+  );
 
   return (
     <section className="space-y-4 rounded-xl border border-border bg-card/50 p-4">
@@ -67,19 +77,6 @@ export function ServerVersionCard() {
             {tm('managerAutomaticDetection')}
           </p>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={refreshing || query.isLoading}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw
-            aria-hidden="true"
-            className={cn('h-4 w-4', refreshing && 'animate-spin')}
-          />
-          {tm('managerRefreshDetection')}
-        </Button>
       </div>
 
       {query.isLoading && (
@@ -258,7 +255,14 @@ export function ServerVersionCard() {
           ))}
         </section>
       )}
-      {manager.data && <ManagerUpdateControls status={manager.data} />}
+      {manager.data ? (
+        <ManagerUpdateControls
+          status={manager.data}
+          trailingActions={refreshControl}
+        />
+      ) : (
+        refreshControl
+      )}
     </section>
   );
 }
