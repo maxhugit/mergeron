@@ -1,23 +1,28 @@
 # Exploitation sur Unraid
 
+> Archive du parcours manuel. Pour une installation neuve, privilégier le seul
+> formulaire Manager décrit dans [l’adaptation actuelle](README.md). Les quatre
+> formulaires et le réconciliateur ci-dessous ne concernent que la méthode
+> manuelle historique, à ne pas cumuler avec la création par le Manager.
+
 La plateforme comprend trois conteneurs applicatifs et Mergeron Manager en
 observation. Pour une installation native dans l'onglet **Docker** d'Unraid,
 utiliser les quatre formulaires de
-[`deployment/docker-man`](deployment/docker-man) et suivre la
-[procédure DockerMan](docs/installation-unraid-dockerman.md).
+[`deployment/docker-man`](../../deployment/docker-man) et suivre la
+[procédure DockerMan](unraid-dockerman.md).
 
-La définition [`deployment/compose.unraid.yml`](deployment/compose.unraid.yml)
+La définition [`deployment/compose.yml`](../../deployment/compose.yml)
 reste disponible comme variante pour Compose Manager.
 
 Avant une nouvelle installation ou un changement de méthode, consulter le
-[comparatif DockerMan / Compose Manager](docs/choisir-mode-installation.md). Les
+[comparatif DockerMan / Compose Manager](../choisir-mode-installation.md). Les
 deux modes utilisent les mêmes données mais ne doivent pas fonctionner en même
 temps.
 
 | Mode            | À privilégier pour                                                           | Point d’attention                                                                                   |
 | --------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | DockerMan       | intégration native à l’onglet Docker et mises à jour conteneur par conteneur | le réconciliateur rattache les réseaux secondaires et doit être relancé après un redémarrage Unraid |
-| Compose Manager | gestion déclarative et mise à jour des quatre services comme une stack        | les changements doivent être reportés dans `docker-compose.yml` ou `images.env`                     |
+| Compose Manager | gestion déclarative et mise à jour des quatre services comme une stack       | les changements doivent être reportés dans `docker-compose.yml` ou `images.env`                     |
 
 ## Emplacements recommandés
 
@@ -93,7 +98,7 @@ Ne pas mélanger les conteneurs de cette stack avec ceux créés depuis les
 formulaires DockerMan : ils ont volontairement les mêmes noms.
 
 La procédure d’installation et de restauration complète est disponible dans
-[`docs/installation-unraid.md`](docs/installation-unraid.md).
+[`docs/adapters/unraid-compose.md`](unraid-compose.md).
 
 L’architecture et les responsabilités des conteneurs sont décrites dans
-[`docs/architecture-unraid.md`](docs/architecture-unraid.md).
+[`docs/architecture.md`](../architecture.md).

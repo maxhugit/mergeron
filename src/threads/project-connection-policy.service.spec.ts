@@ -28,7 +28,7 @@ describe('ProjectConnectionPolicyService', () => {
       }
       return Promise.resolve({
         data: [
-          { name: 'unraid', pluginId: null, authStatus: 'oAuth' },
+          { name: 'example_server', pluginId: null, authStatus: 'oAuth' },
           { name: 'drive', pluginId: 'google', authStatus: 'unsupported' },
         ],
         nextCursor: null,
@@ -40,7 +40,7 @@ describe('ProjectConnectionPolicyService', () => {
         { projectId: 'project-1' },
         {
           appIds: ['gmail'],
-          mcpServerIds: ['unraid'],
+          mcpServerIds: ['example_server'],
           agentModel: 'gpt-project',
           agentReasoningEffort: 'high',
         },
@@ -53,7 +53,7 @@ describe('ProjectConnectionPolicyService', () => {
         gmail: { enabled: true },
         github: { enabled: false },
       },
-      mcp_servers: { unraid: { enabled: true } },
+      mcp_servers: { example_server: { enabled: true } },
       plugins: {
         google: { mcp_servers: { drive: { enabled: false } } },
       },

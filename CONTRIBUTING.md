@@ -4,7 +4,7 @@
 
 - préserver la compatibilité avec `codex app-server` ;
 - ne jamais intégrer de secret ou de donnée du homelab dans Git ;
-- documenter en français les changements propres au déploiement Unraid ;
+- documenter en français les changements propres au déploiement serveur ;
 - conserver les restrictions Docker et réseau ;
 - tester le code avant de publier une nouvelle image.
 
@@ -49,7 +49,7 @@ Vérifier au minimum :
 - `SECURITY.md` et les évaluations de `security/` pour les changements de
   sécurité ou de dépendances système ;
 - les guides d’installation et d’exploitation pour les changements de
-  conteneurs, variables, volumes, réseaux ou procédures Unraid.
+  conteneurs, variables, volumes, réseaux ou procédures serveur.
 
 Si aucun document n’est modifié, la description de la pull request doit indiquer
 pourquoi le changement est sans impact utilisateur, administrateur ou migration.
@@ -57,10 +57,10 @@ pourquoi le changement est sans impact utilisateur, administrateur ou migration.
 ## Déploiement
 
 Une fusion dans `main` construit l’image GHCR. Tester de préférence le tag
-immuable `sha-<commit>` avant de modifier l’image utilisée sur Unraid.
+immuable `sha-<commit>` avant de modifier l’image utilisée sur serveur.
 
 Toute modification de `deployment/` doit être répercutée dans
-`docs/installation-unraid.md`.
+`docs/installation-docker.md` et les adaptations facultatives concernées.
 
 Ne pas fusionner automatiquement la branche du projet d’origine. Reprendre
 manuellement les corrections pertinentes après étude de leur impact.

@@ -2,7 +2,7 @@
 
 Mergeron est un espace collaboratif auto-hébergé pour piloter les projets,
 les conversations, les documents et les agents de développement. Il s’installe
-avec Docker Compose ou les formulaires Unraid. Codex est le moteur de
+sur un hôte Docker Linux avec Compose ou Mergeron Manager. Codex est le moteur de
 développement actuellement intégré, pas le nom de la plateforme.
 
 L’icône graphite-cuivre est commune au web et à la PWA. Son original vectoriel
@@ -15,7 +15,7 @@ applicatifs sont nommés `mergeron-ui`, `mergeron-ingress` et `mergeron-squid` ;
 plan non destructif, puis les observe. Les variables de
 configuration, volumes et clés de stockage existants sont conservés.
 La [migration vers Mergeron](docs/migration-mergeron.md) décrit les changements
-à reporter dans les formulaires Unraid ou une installation Compose existante.
+à reporter dans une installation Docker existante.
 
 Il s’agit d’une adaptation du projet
 [`LimLLL/mergeron`](https://github.com/LimLLL/mergeron), publiée sous
@@ -35,7 +35,7 @@ licence AGPL-3.0-or-later.
 - consultation des PDF et édition des documents Office avec OnlyOffice ;
 - intégrations MCP, notamment Home Assistant ;
 - isolation des données selon le rôle et la participation aux projets ;
-- accès SSH à Unraid et au VPS avec des clés montées en lecture seule ;
+- accès SSH aux serveurs autorisés avec des clés montées en lecture seule ;
 - interface adaptée aux ordinateurs et aux mobiles/PWA.
 
 ## Architecture de production
@@ -57,14 +57,14 @@ flowchart LR
     C --> S[mergeron-squid]
     S --> I[Internet autorisé]
     C --> H[HA-MCP / Home Assistant]
-    C --> X[Unraid et VPS par SSH]
+    C --> X[Serveurs autorisés par SSH]
 ```
 
-Les formulaires Docker standard d'Unraid se trouvent dans
-[`deployment/docker-man`](deployment/docker-man). La définition Compose reste
-disponible dans [`deployment/compose.unraid.yml`](deployment/compose.unraid.yml).
+La définition Docker Compose standard se trouve dans
+[`deployment/compose.yml`](deployment/compose.yml). Les intégrations aux panneaux
+d’administration hôtes sont des [adaptations facultatives](docs/adapters/README.md).
 Les détails des réseaux et des protections sont documentés dans
-[`docs/architecture-unraid.md`](docs/architecture-unraid.md).
+[`docs/architecture.md`](docs/architecture.md).
 La conception progressive du gestionnaire local est décrite dans
 [`docs/mergeron-manager.md`](docs/mergeron-manager.md).
 
@@ -73,16 +73,13 @@ La conception progressive du gestionnaire local est décrite dans
 Le [sommaire de la documentation](docs/README.md) permet de comprendre le dépôt
 et de reconstruire toute la plateforme. Commencer par
 [l’installation portable](docs/installation-portable.md) : réseau configurable,
-chemins Linux ou Unraid, Traefik/Caddy/Nginx Proxy Manager, authentification
+chemins de l’hôte au choix, Traefik/Caddy/Nginx Proxy Manager, authentification
 native ou Authentik. Aucun réseau personnel ni nom de pool n’est imposé. Le
 [comparatif des modes d’installation](docs/choisir-mode-installation.md) explique
 les différences de gestion des réseaux, mises à jour et retours arrière. La
-[procédure DockerMan historique](docs/installation-unraid-dockerman.md) reste
-disponible ; sur Unraid, privilégier désormais un seul formulaire Manager,
-qui gère ses dépendances sans formulaires supplémentaires. La
-[procédure Compose](docs/installation-unraid.md) reste disponible. Elles couvrent
-la préparation des secrets, les réseaux, Traefik, Authentik, OnlyOffice, SSH et
-MCP.
+[procédure Docker](docs/installation-docker.md) couvre la préparation des secrets
+et les démarrages avec Manager ou Compose. Les adaptations aux interfaces
+d’administration ne sont pas nécessaires au fonctionnement de la pile.
 
 ## Construction et versions de l’image
 
@@ -115,7 +112,7 @@ lancé manuellement en mode simulation depuis GitHub Actions.
 ## Évolutions du projet d’origine
 
 La synchronisation automatique avec le projet d’origine est désactivée. Ce fork
-contient désormais des adaptations importantes pour Unraid, le mobile, les
+contient désormais des adaptations importantes pour Docker, le mobile, les
 fichiers, OnlyOffice, Authentik et la sécurité réseau. Une fusion globale de
 l’amont présenterait trop de risques de régression.
 

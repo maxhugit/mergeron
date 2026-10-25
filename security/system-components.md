@@ -1,9 +1,9 @@
 # GnuPG, systemd and SSH server applicability
 
 Review date: 2026-10-22. Scope: exact Debian package versions and architectures in
-`system-components-assessment.json`, in the immutable Unraid WebUI image.
+`system-components-assessment.json`, in the immutable Mergeron image.
 This is an applicability assessment, not a binary update or an assessment of the
-Unraid host, bind mounts, TPM passthrough or tools subsequently installed by users.
+Docker host, bind mounts, TPM passthrough or tools subsequently installed by users.
 
 | CVE | HIGH findings | Affected implementation | Image decision |
 | --- | ---: | --- | --- |

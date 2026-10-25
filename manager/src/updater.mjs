@@ -643,7 +643,7 @@ export class TransactionalUpdater {
       const base = join(this.directory, this.current.id);
       // manager-state is also mounted separately at /var/lib/... . Use its
       // STATE_ROOT alias for relative quarantine references to work both on
-      // the Unraid host and inside the Manager, not just in one namespace.
+      // the Docker host and inside the Manager, not just in one namespace.
       const storageBase = join(
         this.configuration.hostStatePath,
         'manager-state',

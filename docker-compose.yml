@@ -1,4 +1,4 @@
-# Point d'entrée pratique pour le déploiement complet Unraid.
+# Point d’entrée pratique pour le déploiement Docker complet.
 # Utilisation : docker compose --env-file deployment/.env up -d
 include:
-  - path: deployment/compose.unraid.yml
+  - path: deployment/compose.yml

@@ -1,7 +1,7 @@
 name: Signaler un bug
-description: Signaler un défaut de Mergeron ou du déploiement Unraid
-title: "[Bug] "
-labels: ["bug"]
+description: Signaler un défaut de Mergeron ou du déploiement Docker
+title: '[Bug] '
+labels: ['bug']
 body:
   - type: checkboxes
     id: checks
@@ -28,7 +28,7 @@ body:
         - Fichiers et OnlyOffice
         - Terminal et espaces de travail
         - MCP et intégrations
-        - Authentik et accès public
+        - Authentification et accès public
         - Docker, réseaux ou déploiement
         - Autre
     validations:

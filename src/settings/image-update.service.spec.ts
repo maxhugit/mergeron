@@ -265,7 +265,7 @@ it.skipIf(process.env.MERGERON_REGISTRY_SMOKE !== '1')(
   'reads the real published edge and latest metadata without installing anything',
   async () => {
     class Registry extends ImageUpdateService {
-      // The published Unraid image targets amd64, even when this smoke test runs on macOS ARM.
+      // The published Mergeron image targets amd64, even when this smoke test runs on macOS ARM.
       protected override imageArchitecture() {
         return 'amd64';
       }

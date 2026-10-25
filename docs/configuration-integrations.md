@@ -44,7 +44,7 @@ par un autre identifiant présentant le même e-mail. Une fiche standard déjà 
 peut être promue administrateur par un administrateur existant, après vérification
 de la personne : son identifiant stable est alors déjà connu.
 
-En déploiement Unraid, `WEBUI_REQUIRE_IDENTITY=true` refuse toute session humaine
+En déploiement Docker, `WEBUI_REQUIRE_IDENTITY=true` refuse toute session humaine
 sans identité du proxy. Le backend ne doit pas publier son port sur le réseau
 externe. Le jeton technique de déploiement reste un secret administrateur, réservé
 aux services internes ; il n’est ni transmis au navigateur ni aux utilisateurs.
@@ -95,7 +95,7 @@ déjà lié. Une fiche administrateur encore non liée ne constitue pas une rel�
 
 ### Initialisation et récupération administrateur
 
-Après démarrage de l’image (et migration de la base), un administrateur Unraid
+Après démarrage de l’image (et migration de la base), un administrateur de l’hôte
 peut provisionner la première fiche depuis un fichier JSON **privé, hors Git** :
 
 ```json
@@ -223,7 +223,7 @@ Connecter GitHub depuis les paramètres de l’interface. Le jeton ou l’autori
 OAuth est conservé dans le volume persistant, jamais dans le dépôt. Accorder le
 minimum de dépôts et de permissions nécessaires.
 
-## SSH vers Unraid et le VPS
+## SSH vers les serveurs autorisés
 
 Placer une clé distincte par destination dans `STATE_ROOT/ssh`. Ajouter les clés
 publiques dans les comptes distants concernés et enregistrer les empreintes dans

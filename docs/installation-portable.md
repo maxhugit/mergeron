@@ -1,10 +1,9 @@
 # Installation Docker indépendante de l’hôte
 
-Mergeron ne nécessite ni Unraid, ni un pool nommé `pool`, ni Traefik, ni un
-réseau appelé `net_standard`. Un hôte Docker Linux compatible avec le sandbox
-de l’application suffit. Les XML sont une adaptation Unraid, pas le contrat
-du Manager. Le fichier `compose.unraid.yml` conserve son nom historique mais
-fonctionne aussi avec Docker Compose sans le plugin Compose Manager.
+Mergeron s’installe sur un hôte Docker Linux amd64 compatible avec le sandbox
+de l’application. Aucun panneau d’administration, nom de pool, reverse proxy
+ou réseau propre à un homelab n’est imposé. Le fichier standard est
+`deployment/compose.yml` et l’image officielle est construite avec `Dockerfile`.
 
 ## Séparer les responsabilités
 
@@ -46,38 +45,36 @@ le client Docker. Dans le Manager, le montage `/host-state` doit désigner
 exactement `MERGERON_STATE_ROOT`. Conserver aussi les montages `manager-run`
 et `manager-state` sous cette même racine.
 
-Sur Unraid, les XML proposent `/mnt/user/appdata/mergeron/state`, sans imposer
-le nom d’un pool. Un chemin de pool direct reste possible si vous le choisissez
-et le reportez dans tous les montages. Les anciennes variables
-`MERGERON_UNRAID_APPDATA_ROOT` (Manager) et `UNRAID_APPDATA_ROOT` (Compose)
-restent acceptées ; la nouvelle variable générique est prioritaire. Limiter
-ce montage aux dossiers utiles plutôt qu’exposer tous les fichiers de l’hôte.
+Limiter les montages aux dossiers utiles plutôt qu’exposer tous les fichiers
+de l’hôte. Les [adaptations aux panneaux hôtes](adapters/README.md) sont
+facultatives. `MERGERON_HOST_INTEGRATION=none` est le mode générique par défaut.
 
 ## Installation neuve : choisir un seul propriétaire
 
-### Manager — recommandé sur Unraid
+### Manager
 
-Importer **uniquement** `my-mergeron-manager.xml`, régler les chemins, le réseau,
-le mode d’authentification, l’URL et les tags (`latest` en stable, `edge` pour
-la recette). Précréer le réseau externe et y raccorder votre proxy.
+Créer uniquement le conteneur Manager avec les chemins, réseau,
+mode d’authentification, URL et tags choisis (`latest` en stable, `edge` pour
+la recette), selon [les commandes Docker](installation-docker.md#variante-manager).
+Précréer le réseau externe et y raccorder votre proxy.
 Activer `MERGERON_INSTALL_ENABLED=true` pour le premier démarrage : le Manager
 prépare les fichiers manquants et crée les trois dépendances. Examiner les logs
 et le plan si l’installation est bloquée, puis remettre la variable à `false`.
-Les dépendances n’ont pas besoin de formulaires DockerMan ni du réconciliateur.
+Les dépendances n’ont besoin ni de formulaires individuels ni d’un réconciliateur hôte.
 Voir [le fonctionnement du Manager](mergeron-manager.md).
 
 Le mode d’authentification sélectionne le **premier** fichier Nginx créé dans
 `STATE_ROOT/config/nginx.conf.template`. Un fichier existant n’est jamais
 remplacé : changer seulement la variable ne fait pas basculer une installation.
 
-### Compose — hôte Linux ou Unraid avec Compose Manager
+### Docker Compose
 
-Copier `deployment/compose.unraid.yml` dans un dossier privé sous le nom
+Copier `deployment/compose.yml` dans un dossier privé sous le nom
 `compose.yml`, `deployment/config/` dans son sous-dossier `config/`, et
 `deployment/.env.example` dans `.env`. Adapter les valeurs ci-dessus.
 Préparer les secrets et leurs permissions selon
-[la procédure Compose](installation-unraid.md#2-préparer-létat-persistant), en
-remplaçant ses chemins Unraid par les vôtres. Créer aussi le dossier utilisé
+[la procédure Docker](installation-docker.md#préparer-les-données-et-secrets).
+Créer aussi le dossier utilisé
 pour `/appdata` avec des droits adaptés à l’UID/GID `11002:11002`.
 
 Pour le mode natif, régler les **deux** valeurs :
@@ -209,19 +206,14 @@ ce guide n’ajoute pas de formulaire public d’inscription ou de récupératio
 ## Conserver une installation existante
 
 **Avant de mettre à jour le Manager**, renseigner explicitement les valeurs
-actuellement utilisées. Par exemple, une ancienne installation utilisant
-`net_standard` et `/mnt/pool` doit conserver :
-
-```dotenv
-MERGERON_PROXY_NETWORK=net_standard
-MERGERON_STATE_ROOT=/mnt/pool/appdata/mergeron/state
-MERGERON_UNRAID_APPDATA_ROOT=/mnt/user/appdata
-MERGERON_AUTH_MODE=authentik
-```
+actuellement utilisées : `MERGERON_PROXY_NETWORK`, `MERGERON_STATE_ROOT`,
+`MERGERON_APPDATA_ROOT` et `MERGERON_AUTH_MODE`. Les valeurs par défaut des
+exemples ne sont pas une instruction de migration. Les alias et chemins
+historiques sont décrits dans [les adaptations](adapters/README.md).
 
 Dans Compose, conserver également `STATE_ROOT`, `DEPLOY_ROOT` et les montages
-actuels. Dans DockerMan, conserver les chemins des trois montages du Manager.
-Ne pas remplacer aveuglément un XML enregistré par les nouvelles valeurs par
+actuels. Conserver les chemins des trois montages du Manager.
+Ne pas remplacer aveuglément une définition enregistrée par les nouvelles valeurs par
 défaut. Ne déplacer aucun fichier et ne renommer aucun réseau pour suivre un
 exemple documentaire. Une dérive vis-à-vis de l’adoption bloque les opérations ;
 ne pas effacer `adoption.json` pour contourner ce contrôle.

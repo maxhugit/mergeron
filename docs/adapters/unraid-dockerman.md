@@ -1,14 +1,14 @@
 # Installation avec les formulaires Docker standard d'Unraid
 
 Pour une nouvelle installation, utiliser d’abord
-[le parcours Manager](installation-portable.md#manager--recommandé-sur-unraid) :
+[le parcours Manager](../installation-portable.md#manager) :
 un seul XML, aucun formulaire sur les dépendances. Cette page décrit la méthode
 manuelle historique, à ne pas utiliser simultanément avec ce parcours. Les trois
 conteneurs apparaissent séparément dans l'onglet **Docker** d'Unraid et peuvent
 être mis à jour avec l'action standard **Check for Updates / Update**.
 
 Lire d’abord le
-[comparatif des deux modes](choisir-mode-installation.md). DockerMan enregistre
+[comparatif des deux modes](../choisir-mode-installation.md). DockerMan enregistre
 les paramètres dans les modèles et formulaires Unraid. Toute modification de
 chemin, variable, volume ou option avancée doit donc être appliquée au formulaire
 du conteneur concerné. Le fichier Compose du dépôt n’est pas utilisé par ce mode.
@@ -68,6 +68,8 @@ install -m 440 /dev/null "$STATE/openai-api-key.txt"
 editor "$STATE/openai-api-key.txt"
 chown -R 11002:11002 "$STATE/home" "$STATE/workspace" "$STATE/logs" "$STATE/ssh"
 chmod 700 "$STATE/ssh"
+chown 11002:11002 "$STATE/backend-token.txt"
+chown 0:0 "$STATE/backend-token-nginx.txt"
 chmod 400 "$STATE/backend-token.txt" "$STATE/backend-token-nginx.txt"
 chmod 440 "$STATE/openai-api-key.txt"
 ```

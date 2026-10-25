@@ -4,10 +4,6 @@ services:
     container_name: ${MERGERON_STACK_PREFIX:-mergeron}-ui
     restart: unless-stopped
     labels:
-      net.unraid.docker.managed: composeman
-      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
-      net.unraid.docker.webui: ${MERGERON_WEBUI_URL:-https://mergeron.example.com}
-      net.unraid.docker.shell: /bin/bash
       io.mergeron.managed: 'true'
       io.mergeron.stack: ${MERGERON_STACK_PREFIX:-mergeron}
       io.mergeron.component: application
@@ -45,7 +41,7 @@ services:
     volumes:
       - ${STATE_ROOT}/home:/home/codex
       - ${STATE_ROOT}/workspace:/workspaces
-      - ${MERGERON_APPDATA_ROOT:-${UNRAID_APPDATA_ROOT:-/srv/mergeron/state/appdata}}:/appdata
+      - ${MERGERON_APPDATA_ROOT:-${STATE_ROOT}/appdata}:/appdata
       - ${STATE_ROOT}/logs:/app/logs
       - ${STATE_ROOT}/backend-token.txt:/run/secrets/backend_token:ro
       - ${STATE_ROOT}/openai-api-key.txt:/run/secrets/openai_api_key:ro
@@ -98,9 +94,6 @@ services:
     container_name: ${MERGERON_STACK_PREFIX:-mergeron}-ingress
     restart: unless-stopped
     labels:
-      net.unraid.docker.managed: composeman
-      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
-      net.unraid.docker.shell: /bin/sh
       io.mergeron.managed: 'true'
       io.mergeron.stack: ${MERGERON_STACK_PREFIX:-mergeron}
       io.mergeron.component: ingress
@@ -151,9 +144,6 @@ services:
     container_name: ${MERGERON_STACK_PREFIX:-mergeron}-squid
     restart: unless-stopped
     labels:
-      net.unraid.docker.managed: composeman
-      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
-      net.unraid.docker.shell: /bin/bash
       io.mergeron.managed: 'true'
       io.mergeron.stack: ${MERGERON_STACK_PREFIX:-mergeron}
       io.mergeron.component: egress
@@ -199,9 +189,6 @@ services:
     container_name: ${MERGERON_STACK_PREFIX:-mergeron}-manager
     restart: unless-stopped
     labels:
-      net.unraid.docker.managed: composeman
-      net.unraid.docker.icon: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}
-      net.unraid.docker.shell: /bin/sh
       io.mergeron.stack: ${MERGERON_STACK_PREFIX:-mergeron}
       io.mergeron.component: manager
     environment:
@@ -217,7 +204,7 @@ services:
       MERGERON_INSTALL_ENABLED: ${MERGERON_INSTALL_ENABLED:-false}
       MERGERON_STATE_ROOT: ${STATE_ROOT}
       MERGERON_MANAGER_HOST_STATE: /host-state
-      MERGERON_APPDATA_ROOT: ${MERGERON_APPDATA_ROOT:-${UNRAID_APPDATA_ROOT:-/srv/mergeron/state/appdata}}
+      MERGERON_APPDATA_ROOT: ${MERGERON_APPDATA_ROOT:-${STATE_ROOT}/appdata}
       MERGERON_ADMIN_SUBNET: ${MERGERON_ADMIN_SUBNET:-172.30.44.0/28}
       MERGERON_WEBUI_URL: ${MERGERON_WEBUI_URL:-https://mergeron.example.com}
       MERGERON_ICON_URL: ${MERGERON_ICON_URL:-https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-icon-192.png}

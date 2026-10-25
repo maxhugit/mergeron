@@ -106,7 +106,7 @@ function fixtureDocker({ missingWorkspace = false, duplicate = false } = {}) {
         Mounts: container.Id.startsWith('application')
           ? [
               {
-                Source: '/mnt/pool/appdata/mergeron/state/home',
+                Source: '/srv/mergeron/state/home',
                 Destination: '/home/codex',
                 Type: 'bind',
                 RW: true,
@@ -114,7 +114,7 @@ function fixtureDocker({ missingWorkspace = false, duplicate = false } = {}) {
               ...(!missingWorkspace
                 ? [
                     {
-                      Source: '/mnt/pool/appdata/mergeron/state/workspace',
+                      Source: '/srv/mergeron/state/workspace',
                       Destination: '/workspaces',
                       Type: 'bind',
                       RW: true,
