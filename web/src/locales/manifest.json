@@ -11,6 +11,7 @@
     "deliverables",
     "logs",
     "manager",
-    "projectArchives"
+    "projectArchives",
+    "workspaces"
   ]
 }

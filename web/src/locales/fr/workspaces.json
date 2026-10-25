@@ -1,0 +1,5 @@
+{
+  "detachFromProject": "Détacher du projet",
+  "detachResourceTitle": "Détacher « {{name}} » de ce projet ?",
+  "detachResourceDescription": "Cette action retire uniquement le lien de la ressource avec le projet. Le dépôt distant et tous les fichiers distants et locaux ne seront PAS supprimés. Les copies de travail associées seront marquées comme révoquées et ne seront plus accessibles aux agents ; leurs fichiers seront conservés."
+}
