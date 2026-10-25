@@ -9,5 +9,11 @@
   "deliverableDocumentReattached": "Document restored to deliverable",
   "deliverableDocumentVersionRestored": "Document version restored",
   "deliverableDetailsChanged": "Deliverable modified",
-  "deliverableOtherDetails": "Other properties"
+  "deliverableOtherDetails": "Other properties",
+  "changeDeliverableStatus": "Change status",
+  "lifecycleDraftDefinition": "The deliverable is being defined. Its content and validation criteria can still be prepared.",
+  "lifecycleConstitutionDefinition": "The documents are being created or revised, by people or agents.",
+  "lifecycleValidationDefinition": "The finalized deliverable requires approval of its document versions before it can be considered validated.",
+  "lifecycleFinalizedDefinition": "The deliverable is complete. When validation is required, its document versions have been approved. Reopen it to resume work.",
+  "lifecycleArchivedDefinition": "The deliverable is kept for reference. Unarchive it before resuming work."
 }

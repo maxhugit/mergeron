@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,11 +9,13 @@ import {
   ListTodo,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   FileText,
   FolderOpen,
   History,
   Link2,
   ListFilter,
+  MoreVertical,
   Pencil,
   Plus,
   RotateCcw,
@@ -24,6 +26,17 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogContent,
@@ -121,6 +134,7 @@ export function ProjectDeliverablesManager({
   });
   const [title, setTitle] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<DetailTab>('overview');
   const [selected, setSelected] = useState<string | null>(
     initialDeliverableId ?? null,
   );
@@ -218,6 +232,7 @@ export function ProjectDeliverablesManager({
       <DeliverableDetail
         key={`${current.id}:${current.version}`}
         item={current}
+        initialTab={selectedTab}
         board={board}
         base={base}
         refresh={() => client.invalidateQueries({ queryKey: key })}
@@ -385,7 +400,10 @@ export function ProjectDeliverablesManager({
             <DeliverablesList
               items={visible}
               board={board}
-              onSelect={setSelected}
+              onSelect={(id, tab = 'overview') => {
+                setSelectedTab(tab);
+                setSelected(id);
+              }}
             />
           )}
         </div>
@@ -460,106 +478,234 @@ export function DeliverablesList({
 }: {
   items: Deliverable[];
   board: DeliverablesBoard;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, tab?: DetailTab) => void;
 }) {
   const { t } = useTranslation();
+  const container = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const element = container.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      setWide(entry.contentRect.width >= 576);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const [openTask, setOpenTask] = useState<
     DeliverablesBoard['tasks'][number] | null
   >(null);
   return (
-    <div className="@container">
-      <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium text-muted-foreground @min-[68rem]:grid">
-        <span>{t('title')}</span>
-        <span>{t('documents')}</span>
-        <span>{t('status')}</span>
-        <span>{t('validation')}</span>
-        <span>{t('primaryTask')}</span>
-        <span>{t('confidentiality')}</span>
-        <span>{t('lastModified')}</span>
-      </div>
-      <div className="divide-y">
-        {items.map((item) => {
-          const task = board.tasks.find(
-            (candidate) => candidate.id === item.primaryTaskId,
-          );
-          const documents = item.documents.filter(
-            (document) => document.deletedAt === null,
-          );
-          return (
-            <div
-              key={item.id}
-              className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-accent/60 @min-[68rem]:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] @min-[68rem]:items-center @min-[68rem]:gap-3"
-            >
-              <button
-                type="button"
-                className="col-start-1 row-start-1 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[68rem]:col-auto @min-[68rem]:row-auto"
-                onClick={() => onSelect(item.id)}
-              >
-                <strong className="block truncate">{item.title}</strong>
-                <span className="mt-1 block truncate text-xs text-muted-foreground">
-                  {item.description || t('noDescription')}
-                </span>
-              </button>
-              <div className="col-start-1 row-start-2 min-w-0 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
-                <span className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground @min-[68rem]:hidden">
-                    {t('documents')}:
-                  </span>
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  {documents.length}
-                </span>
-                <ul
-                  aria-label={t('documents')}
-                  className="mt-1 hidden min-w-0 space-y-1 text-xs text-muted-foreground @min-[36rem]:block"
-                >
-                  {documents.map((document) => (
-                    <li
-                      key={document.id}
-                      className="truncate"
-                      title={document.name}
-                    >
-                      {document.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <span
-                data-testid={`deliverable-status-${item.id}`}
-                className="col-start-2 row-start-1 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
-              >
-                <LifecycleBadge status={displayedLifecycle(item)} />
-              </span>
-              <ValidationBadge
-                item={item}
-                className="col-start-2 row-start-2 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
-              />
-              <span className="col-start-1 row-start-3 flex min-w-0 items-center gap-2 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
-                <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                {task ? (
-                  <button
-                    type="button"
-                    className="truncate rounded text-left font-medium text-blue-700 underline decoration-blue-500/40 underline-offset-2 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-300"
-                    onClick={() => setOpenTask(task)}
+    <div ref={container} className="@container">
+      {wide && (
+        <div className="overflow-x-auto">
+          <table
+            className="w-full min-w-[850px] table-fixed text-left text-sm"
+            aria-label={t('deliverables')}
+          >
+            <colgroup>
+              <col className="w-[20%]" />
+              <col className="w-[23%]" />
+              <col className="w-[17%]" />
+              <col className="w-[20%]" />
+              <col className="w-[14%]" />
+              <col className="w-[6%]" />
+            </colgroup>
+            <thead className="border-b bg-muted/40 text-xs font-medium text-muted-foreground">
+              <tr>
+                {[
+                  'title',
+                  'documents',
+                  'status',
+                  'primaryTask',
+                  'lastModified',
+                  'actions',
+                ].map((key) => (
+                  <th key={key} scope="col" className="px-4 py-3 font-medium">
+                    {t(translationKey(key))}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {items.map((item) => {
+                const task = board.tasks.find(
+                  (candidate) => candidate.id === item.primaryTaskId,
+                );
+                const documents = item.documents.filter(
+                  (document) => document.deletedAt === null,
+                );
+                return (
+                  <tr
+                    key={item.id}
+                    className="align-top transition-colors hover:bg-accent/60"
                   >
-                    {task.title}
-                  </button>
-                ) : (
-                  <span className="truncate text-muted-foreground">
-                    {t('noPrimaryTask')}
+                    <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        className="block w-full min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => onSelect(item.id)}
+                      >
+                        <strong className="block truncate" title={item.title}>
+                          {item.title}
+                        </strong>
+                        <span
+                          className="mt-1 block truncate text-xs text-muted-foreground"
+                          title={item.description}
+                        >
+                          {item.description || t('noDescription')}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <FileText className="h-4 w-4 shrink-0" />
+                        {documents.length}
+                      </span>
+                      <ul
+                        aria-label={t('documents')}
+                        className="mt-2 space-y-1 text-xs"
+                      >
+                        {documents.map((document) => (
+                          <li
+                            key={document.id}
+                            className="truncate"
+                            title={document.name}
+                          >
+                            {document.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td className="space-y-2 px-4 py-4">
+                      <div>
+                        <LifecycleBadge status={displayedLifecycle(item)} />
+                      </div>
+                      <ValidationBadge item={item} />
+                      <div>
+                        <AccessBadge confidentiality={item.confidentiality} />
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      {task ? (
+                        <button
+                          type="button"
+                          className="block w-full truncate text-left text-blue-700 underline underline-offset-2 dark:text-blue-300"
+                          title={task.title}
+                          onClick={() => setOpenTask(task)}
+                        >
+                          {task.title}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {t('noPrimaryTask')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-xs text-muted-foreground">
+                      <time dateTime={new Date(item.updatedAt).toISOString()}>
+                        {new Date(item.updatedAt).toLocaleDateString()}
+                      </time>
+                    </td>
+                    <td className="px-1 py-3">
+                      <DeliverableRowActions
+                        item={item}
+                        onSelect={onSelect}
+                        onTask={task ? () => setOpenTask(task) : undefined}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!wide && (
+        <div className="divide-y">
+          {items.map((item) => {
+            const task = board.tasks.find(
+              (candidate) => candidate.id === item.primaryTaskId,
+            );
+            const documents = item.documents.filter(
+              (document) => document.deletedAt === null,
+            );
+            return (
+              <div
+                key={item.id}
+                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-accent/60 @min-[68rem]:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] @min-[68rem]:items-center @min-[68rem]:gap-3"
+              >
+                <button
+                  type="button"
+                  className="col-start-1 row-start-1 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[68rem]:col-auto @min-[68rem]:row-auto"
+                  onClick={() => onSelect(item.id)}
+                >
+                  <strong className="block truncate">{item.title}</strong>
+                  <span className="mt-1 block truncate text-xs text-muted-foreground">
+                    {item.description || t('noDescription')}
                   </span>
-                )}
-              </span>
-              <AccessBadge
-                confidentiality={item.confidentiality}
-                className="col-start-2 row-start-3 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
-              />
-              <span className="col-start-1 row-start-4 text-xs text-muted-foreground @min-[68rem]:col-auto @min-[68rem]:row-auto">
-                {new Date(item.updatedAt).toLocaleDateString()}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+                </button>
+                <div className="col-start-1 row-start-2 min-w-0 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground @min-[68rem]:hidden">
+                      {t('documents')}:
+                    </span>
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    {documents.length}
+                  </span>
+                  <ul
+                    aria-label={t('documents')}
+                    className="mt-1 hidden min-w-0 space-y-1 text-xs text-muted-foreground @min-[36rem]:block"
+                  >
+                    {documents.map((document) => (
+                      <li
+                        key={document.id}
+                        className="truncate"
+                        title={document.name}
+                      >
+                        {document.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <span
+                  data-testid={`deliverable-status-${item.id}`}
+                  className="col-start-2 row-start-1 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
+                >
+                  <LifecycleBadge status={displayedLifecycle(item)} />
+                </span>
+                <ValidationBadge
+                  item={item}
+                  className="col-start-2 row-start-2 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
+                />
+                <span className="col-start-1 row-start-3 flex min-w-0 items-center gap-2 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
+                  <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  {task ? (
+                    <button
+                      type="button"
+                      className="truncate rounded text-left font-medium text-blue-700 underline decoration-blue-500/40 underline-offset-2 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-300"
+                      onClick={() => setOpenTask(task)}
+                    >
+                      {task.title}
+                    </button>
+                  ) : (
+                    <span className="truncate text-muted-foreground">
+                      {t('noPrimaryTask')}
+                    </span>
+                  )}
+                </span>
+                <AccessBadge
+                  confidentiality={item.confidentiality}
+                  className="col-start-2 row-start-3 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
+                />
+                <span className="col-start-1 row-start-4 text-xs text-muted-foreground @min-[68rem]:col-auto @min-[68rem]:row-auto">
+                  {new Date(item.updatedAt).toLocaleDateString()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {openTask && (
         <ProjectTaskManager
           projectId={board.resource.projectId}
@@ -570,6 +716,68 @@ export function DeliverablesList({
         />
       )}
     </div>
+  );
+}
+
+function DeliverableRowActions({
+  item,
+  onSelect,
+  onTask,
+}: {
+  item: Deliverable;
+  onSelect: (id: string, tab?: DetailTab) => void;
+  onTask?: () => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`${t('actions')} : ${item.title}`}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-56 p-1"
+        aria-label={`${t('actions')} : ${item.title}`}
+      >
+        {(['overview', 'documents', 'history', 'validation'] as const).map(
+          (tab) => (
+            <Button
+              key={tab}
+              type="button"
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => {
+                setOpen(false);
+                onSelect(item.id, tab);
+              }}
+            >
+              {t(translationKey(tab))}
+            </Button>
+          ),
+        )}
+        <div className="my-1 border-t" />
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full justify-start"
+          disabled={!onTask}
+          onClick={() => {
+            setOpen(false);
+            onTask?.();
+          }}
+        >
+          {t('primaryTask')}
+        </Button>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -649,7 +857,7 @@ function LifecycleBadge({
   );
 }
 
-function LifecycleActions({
+export function LifecycleActions({
   item,
   busy,
   action,
@@ -658,7 +866,10 @@ function LifecycleActions({
   busy: boolean;
   action: DeliverableAction;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['deliverables', 'common'], {
+    nsMode: 'fallback',
+  });
+  const [open, setOpen] = useState(false);
   const targets: Partial<
     Record<
       Deliverable['lifecycleStatus'],
@@ -684,27 +895,41 @@ function LifecycleActions({
     archived: [{ target: 'finalized', label: 'Unarchive' }],
   };
   return (
-    <>
-      {targets[item.lifecycleStatus]?.map(({ target, label, variant }) => (
-        <Button
-          key={target}
-          variant={variant}
-          disabled={
-            busy ||
-            (target === 'finalized' &&
-              item.documents.every((document) => document.deletedAt !== null))
-          }
-          onClick={() =>
-            action.mutate({
-              suffix: '/lifecycle',
-              body: { target, version: item.version },
-            })
-          }
-        >
-          {t(translationKey(label))}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" disabled={busy}>
+          {t('changeDeliverableStatus')}
+          <ChevronDown className="h-4 w-4" />
         </Button>
-      ))}
-    </>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-60 p-1"
+        aria-label={t('changeDeliverableStatus')}
+      >
+        {targets[item.lifecycleStatus]?.map(({ target, label }) => (
+          <Button
+            key={target}
+            variant="ghost"
+            className="w-full justify-start"
+            disabled={
+              busy ||
+              (target === 'finalized' &&
+                item.documents.every((document) => document.deletedAt !== null))
+            }
+            onClick={() => {
+              setOpen(false);
+              action.mutate({
+                suffix: '/lifecycle',
+                body: { target, version: item.version },
+              });
+            }}
+          >
+            {t(translationKey(label))}
+          </Button>
+        ))}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -743,6 +968,7 @@ function DeliverableDetail({
   onRemoved,
   onDirty,
   embedded = false,
+  initialTab = 'overview',
 }: {
   item: Deliverable;
   board: DeliverablesBoard;
@@ -752,11 +978,12 @@ function DeliverableDetail({
   onRemoved: () => void;
   onDirty: (dirty: boolean) => void;
   embedded?: boolean;
+  initialTab?: DetailTab;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const session = usePlatformSession();
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const [tab, setTab] = useState<DetailTab>(initialTab);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState(item.title);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
@@ -1235,7 +1462,9 @@ function DeliverableFolderSelector({
   base: string;
   busy: boolean;
 }) {
-  const { t } = useTranslation(['deliverables', 'common']);
+  const { t } = useTranslation(['deliverables', 'common'], {
+    nsMode: 'fallback',
+  });
   const client = useQueryClient();
   const projectId = base.split('/')[1];
   const [editing, setEditing] = useState(false);
@@ -1356,8 +1585,17 @@ function DeliverableFolderSelector({
   );
 }
 
-function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
-  const { t } = useTranslation();
+export function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
+  const { t } = useTranslation(['deliverables', 'common'], {
+    nsMode: 'fallback',
+  });
+  const definitions = {
+    draft: 'lifecycleDraftDefinition',
+    in_constitution: 'lifecycleConstitutionDefinition',
+    awaiting_validation: 'lifecycleValidationDefinition',
+    finalized: 'lifecycleFinalizedDefinition',
+    archived: 'lifecycleArchivedDefinition',
+  } as const;
   const current = displayedLifecycle(item);
   const stages = (
     Object.keys(lifecycleStatuses) as Array<keyof typeof lifecycleStatuses>
@@ -1366,33 +1604,39 @@ function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
   );
   return (
     <section
-      className="col-span-full min-w-0 rounded-xl border bg-card p-4"
+      className="col-span-full min-w-0"
       aria-label={t('deliverableLifecycleFlow')}
     >
-      <h2 className="mb-3 font-semibold">{t('deliverableLifecycleFlow')}</h2>
-      <ol className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {stages.map((stage, index) => (
-          <li
-            key={stage}
-            className="flex items-center gap-3"
-            aria-current={stage === current ? 'step' : undefined}
-          >
-            {index > 0 && <span aria-hidden="true">→</span>}
-            <span
-              className={
-                stage === current
-                  ? 'rounded-full ring-2 ring-primary ring-offset-2 ring-offset-card'
-                  : 'opacity-60'
-              }
+      <TooltipProvider>
+        <ol className="flex w-full items-center justify-between gap-3 overflow-x-auto p-1">
+          {stages.map((stage, index) => (
+            <li
+              key={stage}
+              className={`flex shrink-0 items-center gap-3 ${index > 0 ? 'grow justify-between' : ''}`}
+              aria-current={stage === current ? 'step' : undefined}
             >
-              <LifecycleBadge status={stage} />
-            </span>
-          </li>
-        ))}
-      </ol>
-      <p className="mt-3 text-xs text-muted-foreground">
-        {t('deliverableLifecycleFlowDescription')}
-      </p>
+              {index > 0 && <span aria-hidden="true">→</span>}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    className={
+                      stage === current
+                        ? 'shrink-0 whitespace-nowrap rounded-full ring-2 ring-primary ring-offset-2 ring-offset-background focus-visible:outline-none'
+                        : 'shrink-0 whitespace-nowrap rounded-full opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                    }
+                  >
+                    <LifecycleBadge status={stage} />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t(translationKey(definitions[stage]))}
+                </TooltipContent>
+              </Tooltip>
+            </li>
+          ))}
+        </ol>
+      </TooltipProvider>
     </section>
   );
 }
@@ -1882,14 +2126,16 @@ function VersionHistory({
   );
 }
 
-function DeliverableHistory({
+export function DeliverableHistory({
   item,
   download,
 }: {
   item: Deliverable;
   download: (version: DeliverableVersion, index: number) => Promise<void>;
 }) {
-  const { t } = useTranslation(['deliverables', 'common']);
+  const { t } = useTranslation(['deliverables', 'common'], {
+    nsMode: 'fallback',
+  });
   const events: Array<{
     id: string;
     date: number;

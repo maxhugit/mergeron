@@ -958,6 +958,10 @@ it('creates an internal execution unit when no task manager is configured', asyn
 });
 it('changes the lifecycle only through an explicit transition action', async () => {
   await setup();
+  expect(
+    screen.queryByRole('button', { name: 'Start constitution' }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Change status' }));
   fireEvent.click(screen.getByRole('button', { name: 'Start constitution' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith(

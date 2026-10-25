@@ -9,5 +9,11 @@
   "deliverableDocumentReattached": "Document réintégré au livrable",
   "deliverableDocumentVersionRestored": "Version de document restaurée",
   "deliverableDetailsChanged": "Livrable modifié",
-  "deliverableOtherDetails": "Autres propriétés"
+  "deliverableOtherDetails": "Autres propriétés",
+  "changeDeliverableStatus": "Changement de statut",
+  "lifecycleDraftDefinition": "Le livrable est en cours de définition. Son contenu et ses critères de validation peuvent encore être préparés.",
+  "lifecycleConstitutionDefinition": "Les documents sont en cours de création ou de révision, par des personnes ou des agents.",
+  "lifecycleValidationDefinition": "Le livrable finalisé nécessite l’approbation des versions de ses documents avant d’être considéré comme validé.",
+  "lifecycleFinalizedDefinition": "Le livrable est terminé. Si la validation est obligatoire, les versions de ses documents ont été approuvées. Rouvrez-le pour reprendre le travail.",
+  "lifecycleArchivedDefinition": "Le livrable est conservé pour consultation. Désarchivez-le avant de reprendre le travail."
 }
