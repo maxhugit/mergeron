@@ -45,11 +45,6 @@ async function main() {
     const bin = resolveCodexBin();
     assert.equal(codexVersion(bin), 'codex-cli 0.153.2');
     source = await AppServer.start({ bin, home: sourceHome, cwd: workspace });
-    destination = await AppServer.start({
-      bin,
-      home: targetHome,
-      cwd: targetRoot,
-    });
     const started = result(
       await source.request<v2.ThreadStartResponse>({
         method: 'thread/start',
@@ -95,14 +90,6 @@ async function main() {
       );
     await source.kill('SIGTERM');
     source = undefined;
-    await destination.requestRaw('thread/turns/list', {
-      threadId: started.id,
-      limit: 1,
-      sortDirection: 'asc',
-      itemsView: 'notLoaded',
-    });
-    await destination.kill('SIGTERM');
-    destination = undefined;
 
     const setup = String.raw`
 import json, pathlib, sqlite3, sys

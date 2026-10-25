@@ -153,6 +153,15 @@ class ProjectArchiveTest(unittest.TestCase):
         with self.assertRaisesRegex(engine.ArchiveError, 'fonctionnalité future-feature-v2'):
             self.load()
 
+    def test_refuses_global_settings_in_a_project_zip(self):
+        self.export()
+        _, manifest = self.load()
+        with engine.connect(self.source_db, True) as db:
+            manifest['schemas']['settings'] = engine.columns(db, 'settings')
+        manifest['tables']['settings'] = [dict(key='global-setting', value='unsafe', type='string', category='general', description='', default_value='', constraints='{}', updated_at=1)]
+        with self.assertRaisesRegex(engine.ArchiveError, 'réglages globaux'):
+            engine.preview(self.target, manifest)
+
     def test_rejects_operational_path_traversal_before_import(self):
         self.export()
         self.rewrite_manifest(lambda m: m['tables']['simple_chat_threads'][0].update(cwd=str(self.project) + '/../other'))

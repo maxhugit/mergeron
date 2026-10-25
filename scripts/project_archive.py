@@ -587,6 +587,9 @@ def preview(options, manifest):
     project_id = manifest['tables']['projects'][0]['id']
     if manifest['project']['id'] != project_id:
         fail('L’identité du projet ne correspond pas à l’inventaire.')
+    thread_ids = {r['thread_id'] for r in manifest['tables'].get('project_agent_threads', [])}
+    if any(r['key'] not in {'thread-workspace:' + tid for tid in thread_ids} for r in manifest['tables'].get('settings', [])):
+        fail('Le ZIP ne peut pas contenir de réglages globaux de l’installation.')
     if len(manifest['roots']) > MAX_ENTRIES or len(manifest.get('directories', [])) > MAX_ENTRIES:
         fail('Le ZIP contient trop de racines ou de dossiers.')
     root_keys, root_sources = set(), set()
@@ -1054,6 +1057,10 @@ def run(options):
                 required = set(manifest['agents'].get('auxiliary', {}))
                 if not required <= set(AUXILIARY):
                     fail('Section native inconnue dans le ZIP.')
+                database_name = manifest['agents'].get('database')
+                if database_name != 'state_5.sqlite':
+                    fail('Format de stockage natif non pris en charge par ce codec.')
+                required.add(database_name)
                 try:
                     initialize_stores(options.get('codexBin'), options['codexHome'], required)
                 except RuntimeError as error:
