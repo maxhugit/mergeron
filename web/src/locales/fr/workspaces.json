@@ -1,4 +1,5 @@
 {
+  "executionLocationUnavailable": "Cet emplacement local n’est plus disponible. Actualisez les emplacements du projet avant de le sélectionner.",
   "localLocations": "Emplacements locaux",
   "localLocationsDescription": "L’espace principal géré par Mergeron et les dossiers locaux associés au projet. Les connexions distantes sont présentées séparément.",
   "managedLocalDescription": "L’espace local géré est l’emplacement principal permanent du projet. Ses fichiers de travail sont distincts des données internes du dossier .mergeron, réservées à l’application et masquées par défaut dans la liste des fichiers.",

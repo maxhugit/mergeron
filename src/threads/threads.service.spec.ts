@@ -76,6 +76,8 @@ describe('ThreadsService', () => {
   const mockProjectConnections = {
     configForCwd: vi.fn(),
     policyForCwd: vi.fn(),
+    policyForThread: vi.fn(),
+    assertExecutionLocation: vi.fn(),
     recordExecutionContext: vi.fn(),
   };
   const mockKnowledge = { contextForConversation: vi.fn() };
@@ -132,6 +134,12 @@ describe('ThreadsService', () => {
     mockProjectConnections.configForCwd.mockResolvedValue(null);
     mockProjectConnections.policyForCwd.mockReset();
     mockProjectConnections.policyForCwd.mockResolvedValue(null);
+    mockProjectConnections.policyForThread.mockReset();
+    mockProjectConnections.assertExecutionLocation.mockReset();
+    mockProjectConnections.policyForThread.mockImplementation(
+      (_threadId: string, cwd: string) =>
+        mockProjectConnections.policyForCwd(cwd) as unknown,
+    );
     mockProjectConnections.recordExecutionContext.mockReset();
     mockBranches.hasKnownDescendants.mockReturnValue(false);
     mockBranches.hasForkEdge.mockReturnValue(false);
@@ -484,6 +492,49 @@ describe('ThreadsService', () => {
       'turn1',
       'Continue',
     );
+  });
+
+  it('keeps a readonly location readonly even when full access is requested', async () => {
+    mockProjectConnections.policyForCwd.mockResolvedValue({
+      projectId: 'p',
+      config: {},
+      readOnly: true,
+    });
+    mockCodex.request.mockResolvedValue({
+      thread: { id: 't1', historyMode: 'paginated' },
+    });
+    await service.startThread({ cwd: '/copy', sandbox: 'danger-full-access' });
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'thread/start',
+      expect.objectContaining({ sandbox: 'read-only' }),
+    );
+    mockCodex.request.mockClear();
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+    await service.startTurn({
+      threadId: 't1',
+      cwd: '/copy',
+      input: [],
+      sandboxPolicy: { type: 'dangerFullAccess' },
+    });
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        sandboxPolicy: { type: 'readOnly', networkAccess: false },
+      }),
+    );
+  });
+
+  it('does not dispatch when the final execution-location check detects revocation', async () => {
+    mockProjectConnections.assertExecutionLocation.mockImplementation(() => {
+      throw new Error('location revoked');
+    });
+    await expect(service.startThread({ cwd: '/copy' })).rejects.toThrow(
+      'location revoked',
+    );
+    await expect(
+      service.startTurn({ threadId: 't1', cwd: '/copy', input: [] }),
+    ).rejects.toThrow('location revoked');
+    expect(mockCodex.request).not.toHaveBeenCalled();
   });
 
   it('enforces the project model and reasoning effort on every turn', async () => {

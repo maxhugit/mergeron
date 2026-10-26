@@ -18,6 +18,8 @@ import {
   projectTasks,
   projectWorkspaceCopies,
   projectWorkspaceResources,
+  projectLocations,
+  projectConnections,
   projectWorkspaces,
   simpleChatThreads,
   type ProjectActiveFolder,
@@ -51,6 +53,15 @@ export type ActiveFolderSelection = Pick<
   ActiveFolderView,
   'resourceId' | 'resourceName' | 'relativePath' | 'effectivePath' | 'state'
 >;
+
+export interface ExecutionLocation {
+  locationId: string;
+  workspaceId: string;
+  projectId: string;
+  readOnly: boolean;
+  sourceResourceId: string | null;
+  sourceRevision: string | null;
+}
 
 /** Resolves stable active-folder references without granting additional access. */
 @Injectable()
@@ -159,6 +170,157 @@ export class ActiveFoldersService {
       resourceId: workspace.id,
       relativePath: relativePath.split(path.sep).join('/'),
     });
+  }
+
+  /** Explicit normalized choice, retaining legacy references during transition. */
+  validateLocationSelection(
+    projectId: string,
+    input: { locationId: string; relativePath?: string | null },
+  ): ActiveFolderSelection {
+    requireProjectAccess(projectId);
+    if (typeof input.locationId !== 'string' || !input.locationId.trim())
+      throw new BadRequestException('A project location is required');
+    const location = this.db
+      .select()
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.id, input.locationId),
+          eq(projectLocations.projectId, projectId),
+        ),
+      )
+      .get();
+    if (!location) throw new NotFoundException('Project location not found');
+    if (location.kind === 'remote' || !location.localWorkspaceId)
+      throw new ConflictException(
+        'A remote connection is not an execution folder. Create an explicit local working copy first.',
+      );
+    return this.validateSelection(projectId, {
+      resourceId: location.localWorkspaceId,
+      relativePath: input.relativePath,
+    });
+  }
+
+  /** Resolve the execution boundary before any native tool inventory or dispatch. */
+  executionLocationForCwd(
+    cwd?: string | null,
+    expectedProjectId?: string,
+  ): ExecutionLocation | null {
+    if (!cwd) {
+      if (expectedProjectId)
+        throw new ConflictException(
+          'Le dossier de cette conversation ne correspond pas à son projet.',
+        );
+      return null;
+    }
+    const candidate = path.resolve(cwd);
+    const workspaces = this.db.select().from(projectWorkspaces).all();
+    const contains = (root: string, target: string) =>
+      target === root || target.startsWith(root + path.sep);
+    const lexical = workspaces
+      .filter((workspace) => contains(path.resolve(workspace.path), candidate))
+      .sort((a, b) => b.path.length - a.path.length)[0];
+    // Resolve the deepest existing ancestor too: a missing child below a
+    // symlink must not turn a project-owned path into projectless execution.
+    let physical: string | undefined;
+    let ancestor = candidate;
+    const suffix: string[] = [];
+    while (!physical) {
+      try {
+        physical = path.join(realpathSync(ancestor), ...suffix);
+      } catch {
+        const parent = path.dirname(ancestor);
+        if (parent === ancestor) break;
+        suffix.unshift(path.basename(ancestor));
+        ancestor = parent;
+      }
+    }
+    const physicalOwner = physical
+      ? workspaces
+          .flatMap((workspace) => {
+            try {
+              const root = realpathSync(workspace.path);
+              return contains(root, physical)
+                ? [{ ...workspace, physicalRoot: root }]
+                : [];
+            } catch {
+              return [];
+            }
+          })
+          .sort((a, b) => b.physicalRoot.length - a.physicalRoot.length)[0]
+      : undefined;
+    // Never silently classify an alias into a project as projectless execution.
+    if (
+      (!lexical && physicalOwner) ||
+      (lexical &&
+        physicalOwner &&
+        lexical.projectId !== physicalOwner.projectId)
+    )
+      throw new ConflictException(
+        'Select the canonical local project location, not an alias to another execution context.',
+      );
+    if (!lexical) {
+      if (expectedProjectId)
+        throw new ConflictException(
+          'Le dossier de cette conversation ne correspond pas à son projet.',
+        );
+      return null;
+    }
+    if (expectedProjectId && lexical.projectId !== expectedProjectId)
+      throw new ConflictException(
+        'Le dossier de cette conversation ne correspond pas à son projet.',
+      );
+    requireProjectAccess(lexical.projectId);
+    const relativePath = path
+      .relative(lexical.path, candidate)
+      .split(path.sep)
+      .join('/');
+    this.validateLocationSelection(lexical.projectId, {
+      locationId: `local:${lexical.id}`,
+      relativePath,
+    });
+    const location = this.db
+      .select()
+      .from(projectLocations)
+      .where(eq(projectLocations.id, `local:${lexical.id}`))
+      .get()!;
+    if (!location.capabilities.read)
+      throw new ConflictException('The selected location is not readable');
+    const copy = this.db
+      .select()
+      .from(projectWorkspaceCopies)
+      .where(eq(projectWorkspaceCopies.localWorkspaceId, lexical.id))
+      .get();
+    const source = copy
+      ? this.db
+          .select()
+          .from(projectLocations)
+          .where(
+            and(
+              eq(projectLocations.legacyResourceId, copy.sourceResourceId),
+              eq(projectLocations.projectId, lexical.projectId),
+            ),
+          )
+          .get()
+      : null;
+    if (copy && (!source || !source.capabilities.read))
+      throw new ConflictException(
+        'The source location for this working copy is no longer available',
+      );
+    return {
+      locationId: location.id,
+      workspaceId: lexical.id,
+      projectId: lexical.projectId,
+      readOnly:
+        location.accessMode === 'read_only' ||
+        !location.capabilities.write ||
+        Boolean(
+          source &&
+          (source.accessMode === 'read_only' || !source.capabilities.write),
+        ),
+      sourceResourceId: copy?.sourceResourceId ?? null,
+      sourceRevision: copy?.revision ?? null,
+    };
   }
 
   get(
@@ -291,7 +453,28 @@ export class ActiveFoldersService {
         effectivePath: null,
         state: 'detached',
       };
-    if (!this.copySourceIsAvailable(workspace.id))
+    const location = this.db
+      .select()
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.localWorkspaceId, workspace.id),
+          eq(projectLocations.projectId, reference.projectId),
+        ),
+      )
+      .get();
+    if (
+      !location ||
+      location.path !== workspace.path ||
+      location.kind === 'remote'
+    )
+      return {
+        ...reference,
+        resourceName: workspace.name,
+        effectivePath: null,
+        state: 'invalid',
+      };
+    if (!this.copySourceIsAvailable(workspace.id, workspace.projectId))
       return {
         ...reference,
         resourceName: workspace.name,
@@ -338,6 +521,8 @@ export class ActiveFoldersService {
   }
 
   private normalizeRelativePath(value?: string | null): string {
+    if (value !== undefined && value !== null && typeof value !== 'string')
+      throw new BadRequestException('Active folder path must be relative text');
     const raw = (value ?? '').trim().replaceAll('\\', '/');
     if (!raw || raw === '.') return '';
     if (raw.includes('\0') || path.posix.isAbsolute(raw))
@@ -380,14 +565,33 @@ export class ActiveFoldersService {
         );
       throw new NotFoundException('Project resource not found');
     }
-    if (!this.copySourceIsAvailable(workspace.id))
+    const location = this.db
+      .select()
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.localWorkspaceId, workspace.id),
+          eq(projectLocations.projectId, projectId),
+        ),
+      )
+      .get();
+    if (
+      !location ||
+      location.kind === 'remote' ||
+      location.path !== workspace.path
+    )
+      throw new ConflictException('The local project location is unresolved');
+    if (!this.copySourceIsAvailable(workspace.id, projectId))
       throw new ConflictException(
         'The source resource for this working copy is disabled or detached',
       );
     return workspace;
   }
 
-  private copySourceIsAvailable(localWorkspaceId: string): boolean {
+  private copySourceIsAvailable(
+    localWorkspaceId: string,
+    projectId: string,
+  ): boolean {
     const copy = this.db
       .select({
         sourceResourceId: projectWorkspaceCopies.sourceResourceId,
@@ -400,12 +604,13 @@ export class ActiveFoldersService {
     if (copy.state !== 'ready') return false;
     return Boolean(
       this.db
-        .select({ id: projectWorkspaceResources.id })
-        .from(projectWorkspaceResources)
+        .select({ id: projectConnections.id })
+        .from(projectConnections)
         .where(
           and(
-            eq(projectWorkspaceResources.id, copy.sourceResourceId),
-            eq(projectWorkspaceResources.enabled, true),
+            eq(projectConnections.id, copy.sourceResourceId),
+            eq(projectConnections.projectId, projectId),
+            eq(projectConnections.enabled, true),
           ),
         )
         .get(),

@@ -123,8 +123,17 @@ describe('WorkspaceCopiesService', () => {
       readFile(path.join(first.localPath!, 'README.md'), 'utf8'),
     ).resolves.toBe('source repository\n');
     const policy = new ProjectConnectionPolicyService(
-      { request: vi.fn() } as unknown as CodexService,
+      {
+        request: vi.fn((method: string) =>
+          Promise.resolve(
+            method === 'config/read'
+              ? { config: {} }
+              : { data: [], nextCursor: null },
+          ),
+        ),
+      } as unknown as CodexService,
       database.db,
+      new ActiveFoldersService(database.db),
     );
     await expect(policy.policyForCwd(first.localPath)).resolves.toMatchObject({
       workspaceId: first.id,
@@ -160,9 +169,10 @@ describe('WorkspaceCopiesService', () => {
     const policy = new ProjectConnectionPolicyService(
       { request: vi.fn() } as unknown as CodexService,
       database.db,
+      new ActiveFoldersService(database.db),
     );
     await expect(policy.policyForCwd(copy.localPath)).rejects.toThrow(
-      'no longer available',
+      'disabled or detached',
     );
 
     await expect(copies.remove('project', copy.id)).resolves.toEqual({
@@ -182,3 +192,4 @@ describe('WorkspaceCopiesService', () => {
     expect(copies.list('project')).toEqual([]);
   });
 });
+import { ActiveFoldersService } from '../active-folders/active-folders.service';

@@ -99,7 +99,16 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           ...(authorization ? { Authorization: authorization } : {}),
         },
         body: JSON.stringify(
-          project ? { workspacePath: nextCwd } : { cwd: nextCwd },
+          project
+            ? (() => {
+                const location = localExecutionSelection(project, nextCwd);
+                if (!location)
+                  throw new Error(
+                    t('executionLocationUnavailable', { ns: 'workspaces' }),
+                  );
+                return location;
+              })()
+            : { cwd: nextCwd },
         ),
       });
       const payload = (await response.json().catch(() => ({}))) as {
@@ -378,3 +387,4 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
     </div>
   );
 }
+import { localExecutionSelection } from '@/lib/project-execution-location';

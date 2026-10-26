@@ -1,6 +1,7 @@
 import type { CodexService } from '../codex/codex.service';
 import type { AppDatabase } from '../database/database.constants';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
+import { ActiveFoldersService } from '../active-folders/active-folders.service';
 function databaseReturning(...rows: unknown[]): AppDatabase {
   let index = 0;
   return {
@@ -49,15 +50,22 @@ describe('ProjectConnectionPolicyService', () => {
     );
     const service = new ProjectConnectionPolicyService(
       { request } as unknown as CodexService,
-      databaseReturning(
-        { projectId: 'p' },
-        {
-          appIds,
-          mcpServerIds,
-          agentModel: 'model',
-          agentReasoningEffort: 'high',
-        },
-      ),
+      databaseReturning({
+        appIds,
+        mcpServerIds,
+        agentModel: 'model',
+        agentReasoningEffort: 'high',
+      }),
+      {
+        executionLocationForCwd: () => ({
+          projectId: 'p',
+          locationId: 'local:w',
+          workspaceId: 'w',
+          readOnly: false,
+          sourceResourceId: null,
+          sourceRevision: null,
+        }),
+      } as unknown as ActiveFoldersService,
     );
     return { service, request };
   }
@@ -118,6 +126,9 @@ describe('ProjectConnectionPolicyService', () => {
     const service = new ProjectConnectionPolicyService(
       { request } as unknown as CodexService,
       databaseReturning(undefined),
+      {
+        executionLocationForCwd: () => null,
+      } as unknown as ActiveFoldersService,
     );
     await expect(service.configForCwd('/tmp')).resolves.toBeNull();
     expect(request).not.toHaveBeenCalled();
@@ -129,6 +140,9 @@ describe('ProjectConnectionPolicyService', () => {
         { projectId: 'p', workspacePath: '/workspaces/p' },
         undefined,
       ),
+      {
+        executionLocationForCwd: () => null,
+      } as unknown as ActiveFoldersService,
     );
     await expect(service.policyForThread('thread', '/tmp')).rejects.toThrow(
       'ne correspond pas',
