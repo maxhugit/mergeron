@@ -201,6 +201,22 @@ async function inspectComponent(component, containers, docker) {
       component.allowedImageRepositories.includes(repository),
     health: inspect.State?.Health?.Status ?? null,
     restartCount: Number(inspect.RestartCount ?? 0),
+    configuration: {
+      user: inspect.Config?.User || null,
+      readOnlyRoot: inspect.HostConfig?.ReadonlyRootfs === true,
+      restartPolicy: inspect.HostConfig?.RestartPolicy?.Name || null,
+      networkMode: inspect.HostConfig?.NetworkMode || null,
+      environment: (inspect.Config?.Env ?? []).map((entry) => {
+        const separator = entry.indexOf('=');
+        const name = separator < 0 ? entry : entry.slice(0, separator);
+        // Never send arbitrary environment values to the browser, even to admins.
+        const visible = ['TZ', 'NODE_ENV', 'LANG', 'LC_ALL'].includes(name);
+        return {
+          name,
+          value: visible && separator >= 0 ? entry.slice(separator + 1) : null,
+        };
+      }),
+    },
     networks,
     missingNetworks: component.requiredNetworks.filter(
       (network) => !networks.includes(network),

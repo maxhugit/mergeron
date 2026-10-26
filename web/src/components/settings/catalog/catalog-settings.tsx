@@ -95,7 +95,7 @@ export function CatalogSettings() {
     catalog.blockers.error;
 
   return (
-    <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+    <section className="space-y-4 rounded-lg border border-border bg-card/50 p-4">
       <header className="space-y-1">
         <h2 className="text-sm font-semibold">{t('modelCatalog')}</h2>
         <p className="text-xs text-muted-foreground">

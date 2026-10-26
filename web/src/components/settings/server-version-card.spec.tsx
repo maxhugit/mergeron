@@ -56,6 +56,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('keeps the current-version notice exclusively in the update tab', async () => {
+  fetchMock.mockImplementation(() =>
+    Promise.resolve(
+      json({ ...status, versionStatus: 'current', updateAvailable: false }),
+    ),
+  );
+  fixture.render(<GeneralSettings />);
+  const notice = await screen.findByText(
+    'This Mergeron installation is up to date.',
+  );
+  expect(notice).not.toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Update' }));
+  expect(notice).toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Backup' }));
+  expect(notice).not.toBeVisible();
+});
+
 it('shows the installed channel, latest stable version and cumulative changes', async () => {
   fixture.render(<ServerVersionCard />);
 

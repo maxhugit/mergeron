@@ -53,6 +53,39 @@ test('rejects invalid or private-network-colliding proxy names', () => {
   }
 });
 
+test('exposes configuration metadata without arbitrary environment values', async () => {
+  const docker = fixtureDocker();
+  const inspect = docker.inspectContainer.bind(docker);
+  docker.inspectContainer = async (id) => {
+    const result = await inspect(id);
+    return {
+      ...result,
+      Config: {
+        ...result.Config,
+        Env: [
+          'NODE_ENV=production',
+          'JWT_SECRET=test-secret-never-expose',
+          'CUSTOM_URL=https://user:password@example.invalid',
+        ],
+      },
+      HostConfig: {
+        NetworkMode: 'bridge',
+        RestartPolicy: { Name: 'unless-stopped' },
+      },
+    };
+  };
+  const result = await collectInventory(manifest, docker);
+  const configuration = result.components[0].configuration;
+  assert.equal(configuration.networkMode, 'bridge');
+  assert.deepEqual(configuration.environment, [
+    { name: 'NODE_ENV', value: 'production' },
+    { name: 'JWT_SECRET', value: null },
+    { name: 'CUSTOM_URL', value: null },
+  ]);
+  assert.ok(!JSON.stringify(result).includes('test-secret-never-expose'));
+  assert.ok(!JSON.stringify(result).includes('user:password'));
+});
+
 function fixtureDocker({ missingWorkspace = false, duplicate = false } = {}) {
   const containers = [
     {

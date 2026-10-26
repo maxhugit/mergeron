@@ -41,6 +41,7 @@ const adoptionLabels = {
 
 function ComponentRow({ component }: { component: ManagerComponent }) {
   const { t } = useTranslation();
+  const { t: tm } = useTranslation('manager');
   const healthy = component.state === 'healthy';
   const warning = ['unhealthy', 'stopped', 'conflict', 'missing'].includes(
     component.state,
@@ -89,6 +90,51 @@ function ComponentRow({ component }: { component: ManagerComponent }) {
           {component.image}
         </p>
       )}
+      <dl className="grid gap-3 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground">
+            {tm('managerContainerNetworks')}
+          </dt>
+          <dd className="break-all">{component.networks.join(', ') || '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">
+            {tm('managerContainerRestarts')}
+          </dt>
+          <dd>{component.restartCount}</dd>
+        </div>
+        {component.configuration && (
+          <>
+            <div>
+              <dt className="text-muted-foreground">
+                {tm('managerContainerNetworkMode')}
+              </dt>
+              <dd>{component.configuration.networkMode || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">
+                {tm('managerContainerRestartPolicy')}
+              </dt>
+              <dd>{component.configuration.restartPolicy || '—'}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-muted-foreground">
+                {tm('managerContainerEnvironment')}
+              </dt>
+              <dd>
+                <ul className="mt-1 grid gap-1 font-mono sm:grid-cols-2">
+                  {component.configuration.environment.map((entry) => (
+                    <li key={entry.name} className="break-all">
+                      {entry.name} ={' '}
+                      {entry.value ?? tm('managerContainerHiddenValue')}
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          </>
+        )}
+      </dl>
     </li>
   );
 }
@@ -131,11 +177,11 @@ export function ManagerStatusCard() {
       <div className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Mergeron Manager</h2>
-          <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-            {data?.update
-              ? tm('managerTransactionalUpdate')
-              : t('observationOnly')}
-          </span>
+          {!data?.update && (
+            <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+              {t('observationOnly')}
+            </span>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           {data?.update
@@ -214,17 +260,15 @@ export function ManagerStatusCard() {
             </div>
           )}
 
-          <ul className="grid gap-3 sm:grid-cols-3">
+          <ul className="grid gap-3">
             {data.components.map((component) => (
               <ComponentRow key={component.id} component={component} />
             ))}
           </ul>
 
           {data.dataSafety.protectedMounts.length > 0 && (
-            <details className="rounded-lg border border-border bg-background/60 p-3 text-xs">
-              <summary className="cursor-pointer font-medium">
-                {t('protectedPersistentData')}
-              </summary>
+            <section className="rounded-lg border border-border bg-background/60 p-3 text-xs">
+              <h3 className="font-medium">{t('protectedPersistentData')}</h3>
               <ul className="mt-2 space-y-2 text-muted-foreground">
                 {data.dataSafety.protectedMounts.map((mount) => (
                   <li key={`${mount.component}:${mount.target}`}>
@@ -236,7 +280,7 @@ export function ManagerStatusCard() {
                   </li>
                 ))}
               </ul>
-            </details>
+            </section>
           )}
 
           {data.observedAt && (

@@ -33,6 +33,13 @@ export interface ManagerComponent {
   imageRepositoryAllowed: boolean | null;
   health: string | null;
   restartCount: number;
+  configuration?: {
+    user: string | null;
+    readOnlyRoot: boolean;
+    restartPolicy: string | null;
+    networkMode: string | null;
+    environment: { name: string; value: string | null }[];
+  };
   networks: string[];
   missingNetworks: string[];
   protectedMounts: Omit<ManagerProtectedMount, 'component'>[];
