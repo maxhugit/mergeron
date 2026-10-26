@@ -109,7 +109,7 @@ export function ProjectSettingsPanel({
   });
   const addExternalWorkspace = useMutation({
     mutationFn: (input: ExternalWorkspaceInput) =>
-      projectsApi(`/${project.id}/workspace-resources`, {
+      projectsApi(`/${project.id}/connections`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),

@@ -22,6 +22,8 @@ import { WorkspaceGitService } from './workspace-git.service';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import { ProjectLocationsController } from './project-locations.controller';
 import { ProjectLocationsService } from './project-locations.service';
+import { ProjectConnectionsController } from './project-connections.controller';
+import { ProjectLocationTransfersController } from './project-location-transfers.controller';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { ProjectLocationsService } from './project-locations.service';
   ],
   controllers: [
     ProjectLocationsController,
+    ProjectConnectionsController,
+    ProjectLocationTransfersController,
     WorkspaceGitController,
     ProjectArchivesController,
     ProjectsController,

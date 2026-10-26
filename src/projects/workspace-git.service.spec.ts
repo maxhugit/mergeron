@@ -132,9 +132,14 @@ it('clones an empty repository and supports the first staged commit without chan
   await exec('git', ['init', '--initial-branch=main', remote]);
   database.sqlite
     .prepare(
-      'UPDATE project_workspace_resources SET address = ?, access_mode = ? WHERE id = ?',
+      'UPDATE project_workspace_resources SET address = ?, access_mode = ?, capabilities = ? WHERE id = ?',
     )
-    .run(remote, 'read_write', 'remote');
+    .run(
+      remote,
+      'read_write',
+      JSON.stringify({ read: true, write: true, execute: false }),
+      'remote',
+    );
   const copy = await copies.create('p', 'remote', {});
   cwd = copy.localPath!;
   copyId = copy.id;
@@ -418,6 +423,24 @@ describe('confirmed actions', () => {
     );
     expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
   });
+  it('blocks writes when only the normalized local copy is read-only', async () => {
+    writable();
+    const state = await staged();
+    database.sqlite
+      .prepare(
+        "UPDATE project_locations SET access_mode='read_only' WHERE local_workspace_id=?",
+      )
+      .run(copies.list('p')[0].localWorkspaceId);
+    expect(copies.list('p')[0].accessMode).toBe('read_only');
+    await expect(
+      actions.commit('p', copyId, {
+        ...identity,
+        fingerprint: state.fingerprint,
+      }),
+    ).rejects.toThrow('GIT_READ_ONLY');
+    expect((await service.snapshot('p', copyId)).head).toBe(state.head);
+  });
+
   it('blocks stale index, read-only resource, busy agent and empty commits', async () => {
     let state = await staged();
     await expect(

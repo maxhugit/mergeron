@@ -24,7 +24,13 @@ import { DeleteConfirmDialog, FilePathDialog } from './file-dialogs';
 import { DirectorySelectionTree } from './directory-selection-tree';
 import { InlineEntryEditor } from './inline-entry-editor';
 import { useDeliverableDirectoryAliases } from '@/hooks/use-deliverable-directory-aliases';
-import type { ProjectSummary } from '@/lib/projects-api';
+import { projectsApi, type ProjectSummary } from '@/lib/projects-api';
+import {
+  projectDirectorySelection,
+  projectLocationsPath,
+} from '@/lib/project-locations-api';
+import type { FileEntryDto } from '@/generated/api/types.gen';
+import { filesReadTree } from '@/generated/api/sdk.gen';
 import { ProjectSystemFiles } from './project-system-files';
 import { projectSystemDirectory } from '@/lib/project-system-directory';
 
@@ -224,6 +230,7 @@ export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
           <ScrollArea className="h-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
               <FlatDirectory
+                project={project}
                 systemDirectory={projectSystemDirectory(project)}
                 directoryAliases={directoryAliases}
                 dirPath={rootDir}
@@ -360,6 +367,7 @@ export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
 }
 
 interface FlatDirectoryProps {
+  project?: ProjectSummary;
   systemDirectory?: string;
   directoryAliases: Record<string, string>;
   dirPath: string;
@@ -386,8 +394,35 @@ interface FlatDirectoryProps {
 /** Gates navigation-created rows on a successful directory read and leases the visible scope. */
 function FlatDirectory(props: FlatDirectoryProps) {
   const { t } = useTranslation();
-  const query = useQuery({
-    ...filesReadTreeOptions({ query: { root: props.dirPath } }),
+  const globalOptions = filesReadTreeOptions({
+    query: { root: props.dirPath },
+  });
+  const selection = props.project
+    ? projectDirectorySelection(props.project, props.dirPath)
+    : null;
+  const query = useQuery<FileEntryDto[], Error>({
+    queryKey: props.project
+      ? [
+          ...globalOptions.queryKey,
+          { projectId: props.project.id, locationId: selection?.locationId },
+        ]
+      : globalOptions.queryKey,
+    queryFn: async ({ signal }) => {
+      if (!props.project) {
+        const result = await filesReadTree({
+          query: { root: props.dirPath },
+          signal,
+          throwOnError: true,
+        });
+        return result.data;
+      }
+      if (!selection)
+        throw new Error('Directory is outside the selected project locations');
+      return projectsApi<FileEntryDto[]>(
+        `${projectLocationsPath(props.project.id)}/${encodeURIComponent(selection.locationId)}/tree?relativePath=${encodeURIComponent(selection.relativePath)}`,
+        { signal },
+      );
+    },
   });
   useFileWatch(props.dirPath);
   const mountedNavigation = props.navigationEdit?.targetPath === props.dirPath;

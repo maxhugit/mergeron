@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import { WorkspaceGitService } from './workspace-git.service';
 
-@Controller('projects/:projectId/workspace-git')
+@Controller(['projects/:projectId/workspace-git', 'projects/:projectId/git'])
 export class WorkspaceGitController {
   constructor(
     private readonly git: WorkspaceGitService,
@@ -27,7 +27,10 @@ export class WorkspaceGitController {
     return this.actions.push(projectId, copyId, body);
   }
 
-  @Post('resources/:resourceId/pull-requests/:number/merge')
+  @Post([
+    'resources/:resourceId/pull-requests/:number/merge',
+    'connections/:resourceId/pull-requests/:number/merge',
+  ])
   merge(
     @Param('projectId') projectId: string,
     @Param('resourceId') resourceId: string,
@@ -62,7 +65,10 @@ export class WorkspaceGitController {
     return this.git.stagedDiff(projectId, copyId);
   }
 
-  @Get('resources/:resourceId/pull-requests')
+  @Get([
+    'resources/:resourceId/pull-requests',
+    'connections/:resourceId/pull-requests',
+  ])
   pullRequests(
     @Param('projectId') projectId: string,
     @Param('resourceId') resourceId: string,
@@ -70,7 +76,10 @@ export class WorkspaceGitController {
     return this.git.pullRequests(projectId, resourceId);
   }
 
-  @Get('resources/:resourceId/pull-requests/:number/checks')
+  @Get([
+    'resources/:resourceId/pull-requests/:number/checks',
+    'connections/:resourceId/pull-requests/:number/checks',
+  ])
   checks(
     @Param('projectId') projectId: string,
     @Param('resourceId') resourceId: string,

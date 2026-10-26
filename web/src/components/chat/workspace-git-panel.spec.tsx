@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceGitPanel } from './workspace-git-panel';
 import i18n from '@/i18n';
+import { locationInventoryFixture } from '@/test/project-locations-fixture';
 import { useFilesStore } from '@/stores/files-store';
 import type { GitInventory, GitSnapshot } from '@/lib/workspace-git-api';
 
@@ -102,7 +103,7 @@ beforeEach(async () => {
       inventory = { ...inventory, copies: [copy] };
       return { copy };
     }
-    if (url.endsWith('/workspace-resources')) return inventory;
+    if (url.endsWith('/locations')) return locationInventoryFixture(inventory);
     if (url.includes('/diff?'))
       return { path: 'file.ts', diff: '+changed', untracked: false };
     if (url.endsWith('/copies/copy')) return snapshot;
@@ -180,7 +181,7 @@ it('creates an explicit isolated copy and never selects it for the agent automat
   fireEvent.click(screen.getByRole('button', { name: 'Créer la copie' }));
   await screen.findByRole('button', { name: 'Utiliser pour cet agent' });
   expect(api).toHaveBeenCalledWith(
-    '/p/workspace-resources/git/copies',
+    '/p/connections/git/copies',
     expect.objectContaining({
       method: 'POST',
       body: '{"branch":"feature/test"}',
@@ -244,7 +245,7 @@ it('never interprets absent checks or unknown mergeability as approval', async (
 it('shows failed inspection instead of a stale clean state', async () => {
   inventory.copies = [copy];
   api.mockImplementation(async (url: string) => {
-    if (url.endsWith('/workspace-resources')) return inventory;
+    if (url.endsWith('/locations')) return locationInventoryFixture(inventory);
     throw new Error('offline');
   });
   show();

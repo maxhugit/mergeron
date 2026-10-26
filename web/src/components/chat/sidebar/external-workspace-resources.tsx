@@ -22,6 +22,12 @@ import {
   type ProjectWorkspaceResourceSummary,
 } from '@/lib/projects-api';
 import { WorkspaceTransfers } from './workspace-transfers';
+import {
+  getProjectLocations,
+  connectionResourceViews,
+  projectConnectionsPath,
+  projectLocationsPath,
+} from '@/lib/project-locations-api';
 
 const emptyForm = {
   name: '',
@@ -63,13 +69,8 @@ export function ExternalWorkspaceResources({
   const detachTrigger = useRef<HTMLButtonElement | null>(null);
   const load = useCallback(async () => {
     try {
-      const result = await projectsApi<{
-        resources: ProjectWorkspaceResourceSummary[];
-        copies: ProjectWorkspaceCopySummary[];
-      }>(`/${project.id}/workspace-resources`);
-      setResources(
-        result.resources.filter((resource) => resource.type !== 'local'),
-      );
+      const result = await getProjectLocations(project.id);
+      setResources(connectionResourceViews(result));
       setCopies(result.copies);
       setError('');
     } catch (cause) {
@@ -97,7 +98,7 @@ export function ExternalWorkspaceResources({
     }
   };
   const create = async () => {
-    const created = await mutate(`/${project.id}/workspace-resources`, {
+    const created = await mutate(projectConnectionsPath(project.id), {
       method: 'POST',
       body: JSON.stringify({
         name: form.name,
@@ -296,7 +297,7 @@ export function ExternalWorkspaceResources({
                 disabled={busy || !resource.enabled}
                 onClick={() =>
                   void mutate(
-                    `/${project.id}/workspace-resources/${resource.id}/test`,
+                    `${projectConnectionsPath(project.id)}/${resource.id}/test`,
                     { method: 'POST' },
                   )
                 }
@@ -322,7 +323,7 @@ export function ExternalWorkspaceResources({
                 disabled={busy}
                 onClick={() =>
                   void mutate(
-                    `/${project.id}/workspace-resources/${resource.id}/${resource.enabled ? 'disable' : 'enable'}`,
+                    `${projectConnectionsPath(project.id)}/${resource.id}/${resource.enabled ? 'disable' : 'enable'}`,
                     { method: 'POST' },
                   )
                 }
@@ -358,7 +359,7 @@ export function ExternalWorkspaceResources({
                 disabled={busy}
                 onClick={() =>
                   void mutate(
-                    `/${project.id}/workspace-resources/${resource.id}/copies`,
+                    `${projectConnectionsPath(project.id)}/${resource.id}/copies`,
                     {
                       method: 'POST',
                       body: JSON.stringify({ branch: copyBranch || undefined }),
@@ -399,7 +400,7 @@ export function ExternalWorkspaceResources({
                   disabled={busy}
                   onClick={() =>
                     void mutate(
-                      `/${project.id}/workspace-resources/copies/${copy.id}`,
+                      `${projectLocationsPath(project.id)}/${encodeURIComponent(`local:${copy.localWorkspaceId}`)}/working-copy`,
                       { method: 'DELETE' },
                     )
                   }
@@ -450,7 +451,7 @@ export function ExternalWorkspaceResources({
                 event.preventDefault();
                 if (!detaching || pending || busy) return;
                 void mutate(
-                  `/${project.id}/workspace-resources/${detaching.id}`,
+                  `${projectConnectionsPath(project.id)}/${detaching.id}`,
                   { method: 'DELETE' },
                 ).then((done) => {
                   if (done) setDetaching(null);

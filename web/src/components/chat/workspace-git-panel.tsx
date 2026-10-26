@@ -40,11 +40,13 @@ export function WorkspaceGitPanel(props: Props) {
   const { t } = useTranslation('workspaces');
   const inventory = useQuery({
     queryKey: gitInventoryKey(props.projectId),
-    queryFn: ({ signal }) =>
-      projectsApi<GitInventory>(
-        `/${encodeURIComponent(props.projectId)}/workspace-resources`,
-        { signal },
-      ),
+    queryFn: async ({ signal }): Promise<GitInventory> => {
+      const inventory = await getProjectLocations(props.projectId, signal);
+      return {
+        resources: connectionResourceViews(inventory),
+        copies: inventory.copies,
+      };
+    },
     refetchInterval: 15000,
   });
   const resources =
@@ -156,7 +158,7 @@ function RepositoryPanel({
   const clone = useMutation({
     mutationFn: () =>
       projectsApi<{ copy: ProjectWorkspaceCopySummary }>(
-        `/${encodeURIComponent(projectId)}/workspace-resources/${encodeURIComponent(resource.id)}/copies`,
+        `${projectConnectionsPath(projectId)}/${encodeURIComponent(resource.id)}/copies`,
         {
           method: 'POST',
           body: JSON.stringify(branch.trim() ? { branch: branch.trim() } : {}),
@@ -690,3 +692,8 @@ function PullRequests({
     </div>
   );
 }
+import {
+  getProjectLocations,
+  connectionResourceViews,
+  projectConnectionsPath,
+} from '@/lib/project-locations-api';

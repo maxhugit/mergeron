@@ -46,6 +46,11 @@ beforeEach(() => {
   api.read.mockReset();
   api.create.mockReset();
   projects.mockReset();
+  projects.mockImplementation(async (url: string) => {
+    if (url.includes('/tree'))
+      return (await api.read({ query: { root: '/work' } })).data;
+    return { deliverables: [] };
+  });
   useFilesStore.setState({
     rootDir: '/work',
     selectedFile: '/work/selected.ts',
@@ -142,8 +147,14 @@ it('does not classify a similarly named folder in an attached local directory as
 });
 
 it('shows deliverable aliases but navigates and renames using the real directory', async () => {
-  projects.mockResolvedValue({
-    deliverables: [{ directory: '/work/a', title: 'Architecture' }],
+  projects.mockImplementation(async (url: string) => {
+    if (url.includes('/tree'))
+      return (
+        await api.read({
+          query: { root: url.includes('relativePath=a') ? '/work/a' : '/work' },
+        })
+      ).data;
+    return { deliverables: [{ directory: '/work/a', title: 'Architecture' }] };
   });
   api.read.mockImplementation(({ query }: { query: { root: string } }) =>
     Promise.resolve({
@@ -160,6 +171,7 @@ it('shows deliverable aliases but navigates and renames using the real directory
           {
             id: 'p',
             resources: [{ id: 'r', type: 'deliverable_board' }],
+            workspaces: [{ id: 'main', path: '/work', primary: true }],
           } as ProjectSummary
         }
       />

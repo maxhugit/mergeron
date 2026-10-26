@@ -30,6 +30,8 @@ import {
   projectWorkspaceResources,
   projectWorkspaceSecrets,
   projectWorkspaces,
+  projectLocations,
+  projectConnections,
   type ProjectWorkspaceResource,
 } from '../database/schema';
 
@@ -77,7 +79,7 @@ export class WorkspaceResourcesService {
       .from(projectWorkspaceResources)
       .where(eq(projectWorkspaceResources.projectId, projectId))
       .all()
-      .map((resource) => this.view(resource));
+      .map((resource) => this.view(this.normalized(resource)));
   }
 
   create(
@@ -327,7 +329,74 @@ export class WorkspaceResourcesService {
       )
       .get();
     if (!resource) throw new NotFoundException('Workspace resource not found');
-    return resource;
+    return this.normalized(resource);
+  }
+
+  /** All consumers read the separated model; legacy rows adapt writes/secrets. */
+  private normalized(
+    resource: ProjectWorkspaceResource,
+  ): ProjectWorkspaceResource {
+    if (resource.type === 'local') {
+      const location = this.db
+        .select()
+        .from(projectLocations)
+        .where(
+          and(
+            eq(
+              projectLocations.localWorkspaceId,
+              resource.localWorkspaceId ?? '',
+            ),
+            eq(projectLocations.projectId, resource.projectId),
+          ),
+        )
+        .get();
+      if (!location)
+        throw new ConflictException('Local project location is unresolved');
+      return {
+        ...resource,
+        name: location.name,
+        accessMode: location.accessMode,
+        capabilities: location.capabilities,
+      };
+    }
+    const location = this.db
+      .select()
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.legacyResourceId, resource.id),
+          eq(projectLocations.projectId, resource.projectId),
+        ),
+      )
+      .get();
+    const connection = location?.connectionId
+      ? this.db
+          .select()
+          .from(projectConnections)
+          .where(
+            and(
+              eq(projectConnections.id, location.connectionId),
+              eq(projectConnections.projectId, resource.projectId),
+            ),
+          )
+          .get()
+      : null;
+    if (!location || !connection)
+      throw new ConflictException(
+        'Project connection or location is unresolved',
+      );
+    return {
+      ...resource,
+      name: location.name,
+      type: connection.protocol,
+      address: connection.address,
+      rootPath: location.path,
+      accessMode: location.accessMode,
+      capabilities: location.capabilities,
+      enabled: connection.enabled,
+      connectionState: connection.connectionState,
+      lastCheckedAt: connection.lastCheckedAt,
+    };
   }
 
   private view(resource: ProjectWorkspaceResource): WorkspaceResourceView {

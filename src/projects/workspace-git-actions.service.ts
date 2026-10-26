@@ -50,6 +50,8 @@ export class WorkspaceGitActionsService {
     requireExecutionAccess();
     const copy = this.copies.list(projectId).find((item) => item.id === copyId);
     if (!copy) throw new BadRequestException('GIT_UNAVAILABLE');
+    if (copy.accessMode !== 'read_write')
+      throw new ForbiddenException('GIT_READ_ONLY');
     const source = this.writable(projectId, copy.sourceResourceId);
     const cwd = await this.git.directory(projectId, copyId);
     const state = await this.git.snapshot(projectId, copyId);

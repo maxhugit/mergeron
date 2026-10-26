@@ -10,6 +10,11 @@ import {
   type ProjectWorkspaceTransferRunSummary,
   type ProjectWorkspaceTransferSummary,
 } from '@/lib/projects-api';
+import {
+  getProjectLocations,
+  locationResourceViews,
+  locationTransfersPath,
+} from '@/lib/project-locations-api';
 
 const emptyForm = {
   name: '',
@@ -36,13 +41,31 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
-    const result = await projectsApi<{
-      resources: ProjectWorkspaceResourceSummary[];
-      transfers: ProjectWorkspaceTransferSummary[];
-      runs: ProjectWorkspaceTransferRunSummary[];
-    }>(`/${project.id}/workspace-resources`);
-    setResources(result.resources);
-    setTransfers(result.transfers);
+    const [inventory, result] = await Promise.all([
+      getProjectLocations(project.id),
+      projectsApi<{
+        transfers: Array<
+          Omit<
+            ProjectWorkspaceTransferSummary,
+            'sourceResourceId' | 'destinationWorkspaceId'
+          > & {
+            sourceLocationId: string | null;
+            destinationLocationId: string | null;
+          }
+        >;
+        runs: ProjectWorkspaceTransferRunSummary[];
+      }>(locationTransfersPath(project.id)),
+    ]);
+    setResources(locationResourceViews(inventory));
+    setTransfers(
+      result.transfers.map(
+        ({ sourceLocationId, destinationLocationId, ...rest }) => ({
+          ...rest,
+          sourceResourceId: sourceLocationId ?? '',
+          destinationWorkspaceId: destinationLocationId ?? '',
+        }),
+      ),
+    );
     setRuns(result.runs);
   }, [project.id]);
   useEffect(() => {
@@ -59,8 +82,12 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
       ),
     [resources],
   );
-  const destinations = project.workspaces.filter(
-    (workspace) => !workspace.readOnly,
+  const destinations = resources.filter(
+    (location) =>
+      location.type === 'local' &&
+      location.enabled &&
+      location.accessMode === 'read_write' &&
+      location.capabilities.write,
   );
   const mutate = async <T,>(key: string, path: string, init: RequestInit) => {
     setBusy(key);
@@ -79,11 +106,17 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
   const create = async () => {
     const result = await mutate<{ transfer: ProjectWorkspaceTransferSummary }>(
       'create',
-      `/${project.id}/workspace-resources/transfers`,
+      locationTransfersPath(project.id),
       {
         method: 'POST',
         body: JSON.stringify({
-          ...form,
+          name: form.name,
+          sourceLocationId: form.sourceResourceId,
+          destinationLocationId: form.destinationWorkspaceId,
+          sourcePath: form.sourcePath,
+          destinationPath: form.destinationPath,
+          conflictPolicy: form.conflictPolicy,
+          propagateDeletes: form.propagateDeletes,
           exclusions: form.exclusions
             .split('\n')
             .map((value) => value.trim())
@@ -254,7 +287,7 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
                     (item) => item.id === transfer.sourceResourceId,
                   )?.name ?? transfer.sourceResourceId}{' '}
                   →{' '}
-                  {project.workspaces.find(
+                  {resources.find(
                     (item) => item.id === transfer.destinationWorkspaceId,
                   )?.name ?? transfer.destinationWorkspaceId}
                 </div>
@@ -266,7 +299,7 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
                 onClick={() =>
                   void mutate<ProjectWorkspaceTransferRunSummary>(
                     `preview-${transfer.id}`,
-                    `/${project.id}/workspace-resources/transfers/${transfer.id}/preview`,
+                    `${locationTransfersPath(project.id)}/${transfer.id}/preview`,
                     { method: 'POST' },
                   )
                 }
@@ -281,7 +314,7 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
                   onClick={() =>
                     void mutate(
                       `execute-${transfer.id}`,
-                      `/${project.id}/workspace-resources/transfers/${transfer.id}/runs/${run.id}/execute`,
+                      `${locationTransfersPath(project.id)}/${transfer.id}/runs/${run.id}/execute`,
                       { method: 'POST' },
                     )
                   }
@@ -298,7 +331,7 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
                 onClick={() =>
                   void mutate(
                     `delete-${transfer.id}`,
-                    `/${project.id}/workspace-resources/transfers/${transfer.id}`,
+                    `${locationTransfersPath(project.id)}/${transfer.id}`,
                     { method: 'DELETE' },
                   )
                 }

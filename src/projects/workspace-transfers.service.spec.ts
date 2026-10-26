@@ -10,6 +10,8 @@ import {
 import { projects, projectWorkspaces } from '../database/schema';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { WorkspaceTransfersService } from './workspace-transfers.service';
+import { ProjectLocationsService } from './project-locations.service';
+import { ProjectLocationTransfersController } from './project-location-transfers.controller';
 
 describe('WorkspaceTransfersService', () => {
   let database: TestDatabase;
@@ -74,6 +76,48 @@ describe('WorkspaceTransfersService', () => {
   afterEach(async () => {
     database.sqlite.close();
     await rm(root, { recursive: true, force: true });
+  });
+
+  it('uses normalized locations, keeps preview read-only and requires a local writable destination', async () => {
+    const inventory = new ProjectLocationsService(database.db);
+    const controller = new ProjectLocationTransfersController(
+      inventory,
+      service,
+    );
+    expect(() =>
+      controller.create('project', {
+        sourceResourceId: 'source',
+        destinationWorkspaceId: 'destination',
+      }),
+    ).toThrow();
+    expect(() =>
+      controller.create('project', {
+        sourceLocationId: 'local:source',
+        destinationLocationId: 'local:missing',
+      }),
+    ).toThrow();
+    const { transfer } = controller.create('project', {
+      name: 'Normalized',
+      sourceLocationId: 'local:source',
+      destinationLocationId: 'local:destination',
+      conflictPolicy: 'skip',
+    });
+    expect(transfer).toMatchObject({
+      sourceLocationId: 'local:source',
+      destinationLocationId: 'local:destination',
+    });
+    expect(transfer).not.toHaveProperty('sourceResourceId');
+    const preview = await controller.preview('project', transfer!.id);
+    await expect(readFile(path.join(destination, 'new.txt'))).rejects.toThrow();
+    database.sqlite
+      .prepare(
+        "UPDATE project_locations SET access_mode='read_only' WHERE id='local:destination'",
+      )
+      .run();
+    await expect(
+      controller.execute('project', transfer!.id, preview.id),
+    ).rejects.toThrow();
+    await expect(readFile(path.join(destination, 'new.txt'))).rejects.toThrow();
   });
 
   it('previews conflicts and copies without propagating deletions by default', async () => {

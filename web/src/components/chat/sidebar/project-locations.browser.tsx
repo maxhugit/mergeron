@@ -6,24 +6,35 @@ import { ManageWorkspacesDialog } from './manage-workspaces-dialog';
 import type { ProjectSummary } from '@/lib/projects-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+import { locationInventoryFixture } from '@/test/project-locations-fixture';
+import type { GitInventory } from '@/lib/workspace-git-api';
 vi.mock('./workspace-transfers', () => ({ WorkspaceTransfers: () => null }));
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
-  projectsApi: vi.fn().mockResolvedValue({
-    resources: [
-      {
-        id: 'git',
-        name: 'Dépôt Git du projet',
-        type: 'git',
-        address: 'https://example.test/repo.git',
-        enabled: true,
-        connectionState: 'connected',
-        accessMode: 'read_only',
-        rootPath: '/',
-      },
-    ],
-    copies: [],
-  }),
+  projectsApi: vi.fn().mockImplementation(async () =>
+    locationInventoryFixture({
+      resources: [
+        {
+          id: 'git',
+          projectId: 'p',
+          localWorkspaceId: null,
+          capabilities: { read: true, write: false, execute: false },
+          lastCheckedAt: null,
+          lastError: null,
+          hasSecret: false,
+          localPath: null,
+          name: 'Dépôt Git du projet',
+          type: 'git',
+          address: 'https://example.test/repo.git',
+          enabled: true,
+          connectionState: 'connected',
+          accessMode: 'read_only',
+          rootPath: '/',
+        },
+      ],
+      copies: [],
+    } as GitInventory),
+  ),
 }));
 afterEach(cleanup);
 test.each([390, 1001])(

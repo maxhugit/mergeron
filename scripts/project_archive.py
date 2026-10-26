@@ -491,6 +491,16 @@ def export_snapshot(options, source_db):
     warnings = []
     relocations = []
     data, thread_ids = select_project(source_db, options['projectId'], warnings, relocations)
+    location_model = normalized_location_model(data)
+    # Reject projection drift instead of exporting a ZIP that silently loses roots.
+    if {'project_connections', 'project_locations'} <= tables(source_db):
+        connections = scoped_rows(source_db, 'project_connections', 'project_id', {options['projectId']})
+        locations = scoped_rows(source_db, 'project_locations', 'project_id', {options['projectId']})
+        actual = {'version': 1,
+                  'connections': sorted([{k: r[k] for k in ('id', 'protocol', 'address', 'enabled')} for r in connections], key=lambda r: r['id']),
+                  'locations': sorted([{k: r[k] for k in ('id', 'kind', 'path', 'local_workspace_id', 'connection_id', 'access_mode')} for r in locations], key=lambda r: r['id'])}
+        if actual != location_model:
+            fail('Les emplacements et connexions du projet ne correspondent pas aux références de compatibilité. Réparez ces références avant l’export.')
     native = native_export(options['codexHome'], thread_ids, warnings)
     if native:
         _, codec = agent_codec(options.get('codexVersion', ''))
@@ -537,6 +547,7 @@ def export_snapshot(options, source_db):
                 'applicationVersion': options.get('version', 'unknown'), 'exportedAt': int(time.time() * 1000),
                 'project': {'id': options['projectId'], 'name': data['projects'][0]['name']},
                 'tables': data, 'schemas': {n: columns(source_db, n) for n in data},
+                'locationModel': location_model,
                 'agents': native, 'roots': roots, 'files': [], 'directories': [],
                 'relocatedOperationalPaths': relocations,
                 'warnings': ['Les identifiants de connexion ne sont pas transférés. Les agents et automatisations importés restent arrêtés.',
@@ -719,7 +730,21 @@ def validate_tables(db, records, schemas, native=False, allowed_native=None):
                 fail('Référence hors du projet ou manquante : ' + table + '.' + fk['from'])
 
 
+def normalized_location_model(records):
+    """Portable declarative inventory, without secret material or SQL projections."""
+    external = [r for r in records.get('project_workspace_resources', []) if r['type'] != 'local']
+    connections = [{'id': r['id'], 'protocol': r['type'], 'address': r['address'], 'enabled': r['enabled']} for r in external]
+    locations = [{'id': 'local:' + r['id'], 'kind': 'managed_local' if r['is_primary'] else 'attached_local',
+                  'path': r['path'], 'local_workspace_id': r['id'], 'connection_id': None, 'access_mode': 'read_write'}
+                 for r in records.get('project_workspaces', [])]
+    locations += [{'id': 'remote:' + r['id'], 'kind': 'remote', 'path': r['root_path'], 'local_workspace_id': None,
+                   'connection_id': r['id'], 'access_mode': r['access_mode']} for r in external]
+    return {'version': 1, 'connections': sorted(connections, key=lambda r: r['id']), 'locations': sorted(locations, key=lambda r: r['id'])}
+
+
 def validate_project_content(manifest):
+    if 'locationModel' in manifest and manifest['locationModel'] != normalized_location_model(manifest['tables']):
+        fail('L’inventaire des emplacements et connexions est incohérent avec le projet.')
     roots = {r['key']: r for r in manifest['roots']}
     inventory = {}
     for file in manifest['files']:
