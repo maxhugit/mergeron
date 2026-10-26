@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { MemoryProposalMessage } from './memory-proposal-message';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { CopyResponse } from './copy-response';
 import { parseFileReference, type FileReference } from '@/lib/file-references';
 import {
   remarkFileReferences,
@@ -76,6 +77,7 @@ function getHighlighter(): Promise<HighlighterType> {
 }
 
 interface Props {
+  copyResponse?: boolean;
   content: string;
   /** When false (streaming), skip Shiki highlighting for performance. */
   completed: boolean;
@@ -225,7 +227,10 @@ function CodeBlock({
 
   return (
     <div className="group relative my-3 overflow-hidden rounded-lg border border-border/50 bg-[#0d1117]">
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-1">
+      <div
+        data-copy-exclude
+        className="flex items-center justify-between border-b border-white/10 px-3 py-1"
+      >
         <span className="text-xs text-gray-400">{lang || t('code')}</span>
         <button
           type="button"
@@ -429,13 +434,14 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
   completed,
   onOpenFileReference,
+  copyResponse = false,
 }: Props) {
   const markdownComponents = useMemo(
     () => components(completed, onOpenFileReference),
     [completed, onOpenFileReference],
   );
 
-  return (
+  const rendered = (
     <div className={cn('text-sm leading-relaxed', 'wrap-break-word')}>
       <Markdown
         remarkPlugins={REMARK_PLUGINS}
@@ -445,5 +451,12 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
         {content}
       </Markdown>
     </div>
+  );
+  return copyResponse ? (
+    <CopyResponse completed={completed} empty={!content.trim()}>
+      {rendered}
+    </CopyResponse>
+  ) : (
+    rendered
   );
 });
