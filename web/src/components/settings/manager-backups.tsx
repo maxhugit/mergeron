@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { translationKey } from '@/locales/translation-key';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,10 +60,7 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
     return `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(value / 1024 ** unit)} ${units[unit]}`;
   };
   return (
-    <section
-      className="space-y-3 border-t pt-4"
-      aria-label={t('managerBackupsTitle')}
-    >
+    <section className="space-y-3" aria-label={t('managerBackupsTitle')}>
       <h3 className="font-medium">{t('managerBackupsTitle')}</h3>
       <p className="text-xs text-muted-foreground">{t('managerBackupsHelp')}</p>
       {query.data && (
@@ -97,70 +95,99 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
               {t('managerBackupsEmpty')}
             </p>
           )}
-          <ul className="divide-y rounded-lg border">
-            {query.data?.backups.map((backup) => (
-              <li
-                key={backup.id}
-                className="flex flex-wrap items-center gap-3 p-3 text-sm"
-              >
-                <div className="min-w-0 flex-1">
-                  <time dateTime={backup.createdAt}>
-                    {date(backup.createdAt)}
-                  </time>
-                  <p className="break-all font-mono text-xs text-muted-foreground">
-                    {backup.id}
-                  </p>
-                  <p className="break-all font-mono text-xs text-muted-foreground">
-                    {t(
-                      backup.path
-                        ? 'managerBackupHostPath'
-                        : 'managerBackupManagerPath',
-                    )}
-                    :{' '}
-                    {backup.path ||
-                      backup.managerPath ||
-                      t('managerBackupSizeUnknown')}
-                  </p>
-                  <p className="text-xs">
-                    {t('managerBackupDiskSize', {
-                      size:
-                        backup.sizeStatus === 'calculating'
-                          ? t('managerBackupSizeCalculating')
-                          : size(backup.sizeBytes),
-                    })}
-                  </p>
-                  {backup.current && (
-                    <p className="text-xs">{t('managerBackupsLatest')}</p>
-                  )}
-                  {!backup.restorable && (
-                    <p className="text-xs text-muted-foreground">
-                      {t('managerBackupIncomplete')}
-                    </p>
-                  )}
-                  {backup.protectionReason && (
-                    <p className="text-xs text-muted-foreground">
-                      {t(
-                        backup.protectionReason ===
-                          'managerBackupOperationProtected'
-                          ? 'managerBackupOperationProtected'
-                          : 'managerBackupMetadataProtected',
+          <div className="max-h-[65vh] overflow-auto">
+            <table
+              className="w-full text-left text-sm"
+              aria-label={t('managerBackupsTitle')}
+            >
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr className="border-b">
+                  {(
+                    [
+                      'managerBackupDateColumn',
+                      'managerBackupHostPath',
+                      'managerBackupSizeColumn',
+                      'managerBackupStatusColumn',
+                      'managerBackupActionsColumn',
+                    ] as const
+                  ).map((key) => (
+                    <th key={key} scope="col" className="px-3 py-2 font-medium">
+                      {t(translationKey(key))}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {query.data?.backups.map((backup) => (
+                  <tr key={backup.id} className="align-top">
+                    <td className="px-3 py-3">
+                      <time dateTime={backup.createdAt}>
+                        {date(backup.createdAt)}
+                      </time>
+                      <p className="break-all font-mono text-xs text-muted-foreground">
+                        {backup.id}
+                      </p>
+                    </td>
+                    <td className="min-w-48 max-w-md px-3 py-3">
+                      <p className="break-all font-mono text-xs text-muted-foreground">
+                        {t(
+                          backup.path
+                            ? 'managerBackupHostPath'
+                            : 'managerBackupManagerPath',
+                        )}
+                        :{' '}
+                        {backup.path ||
+                          backup.managerPath ||
+                          t('managerBackupSizeUnknown')}
+                      </p>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3">
+                      <p className="text-xs">
+                        {t('managerBackupDiskSize', {
+                          size:
+                            backup.sizeStatus === 'calculating'
+                              ? t('managerBackupSizeCalculating')
+                              : size(backup.sizeBytes),
+                        })}
+                      </p>
+                    </td>
+                    <td className="min-w-40 px-3 py-3">
+                      {backup.current && (
+                        <p className="text-xs">{t('managerBackupsLatest')}</p>
                       )}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  variant="outline"
-                  disabled={busy || !backup.canDelete}
-                  onClick={() => {
-                    deletion.reset();
-                    setSelected(backup);
-                  }}
-                >
-                  {t('managerBackupDelete')}
-                </Button>
-              </li>
-            ))}
-          </ul>
+                      {!backup.restorable && (
+                        <p className="text-xs text-muted-foreground">
+                          {t('managerBackupIncomplete')}
+                        </p>
+                      )}
+                      {backup.protectionReason && (
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            backup.protectionReason ===
+                              'managerBackupOperationProtected'
+                              ? 'managerBackupOperationProtected'
+                              : 'managerBackupMetadataProtected',
+                          )}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <Button
+                        variant="outline"
+                        disabled={busy || !backup.canDelete}
+                        onClick={() => {
+                          deletion.reset();
+                          setSelected(backup);
+                        }}
+                      >
+                        {t('managerBackupDelete')}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
       <AlertDialog

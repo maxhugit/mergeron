@@ -16,7 +16,7 @@
       "documentWriteAttempt": "Écriture documentaire tentée"
     },
     "start": "Tester en tant que",
-    "confirm": "Tester la plateforme en tant que {{name}} pendant 15 minutes ? Les modifications sont réelles et seront journalisées avec votre identité d’administrateur.",
+    "confirm": "Tester la plateforme en tant que {{name}} pendant 30 minutes ? Les modifications sont réelles et seront journalisées avec votre identité d’administrateur.",
     "banner": "Test en tant que {{name}} — administrateur : {{administrator}}. Les modifications sont réelles et journalisées.",
     "expired": "Le test est terminé ou n’est plus valide. Revenez à votre compte pour continuer.",
     "stop": "Revenir à mon compte",

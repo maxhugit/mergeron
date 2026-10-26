@@ -18,6 +18,8 @@ const EXCLUDED_RUNTIME_SETTINGS = [
 export function GeneralSettings() {
   const { t } = useTranslation();
   const { t: tm } = useTranslation('manager');
+  const [actionsContainer, setActionsContainer] =
+    useState<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<'current' | 'update' | 'backups' | 'socket'>(
     'current',
   );
@@ -96,7 +98,10 @@ export function GeneralSettings() {
             id={tab === 'socket' ? undefined : `server-panel-${tab}`}
             aria-labelledby={tab === 'socket' ? undefined : `server-tab-${tab}`}
           >
-            <ServerVersionCard view={tab === 'socket' ? 'current' : tab} />
+            <ServerVersionCard
+              view={tab === 'socket' ? 'current' : tab}
+              actionsContainer={actionsContainer}
+            />
           </div>
           <div
             hidden={tab !== 'socket'}
@@ -142,6 +147,15 @@ export function GeneralSettings() {
             />
           </div>
         </div>
+      </div>
+      <div
+        hidden={tab !== 'update'}
+        className="shrink-0 border-t bg-background px-4 py-3 sm:px-6"
+      >
+        <div
+          ref={setActionsContainer}
+          className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-2"
+        />
       </div>
     </section>
   );

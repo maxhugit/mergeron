@@ -16,7 +16,7 @@
       "documentWriteAttempt": "Document write attempted"
     },
     "start": "Test as this person",
-    "confirm": "Test the platform as {{name}} for 15 minutes? Changes are real and will be audited with your administrator identity.",
+    "confirm": "Test the platform as {{name}} for 30 minutes? Changes are real and will be audited with your administrator identity.",
     "banner": "Testing as {{name}} — administrator: {{administrator}}. Changes are real and audited.",
     "expired": "The test has ended or is no longer valid. Return to your account to continue.",
     "stop": "Return to my account",

@@ -24,8 +24,10 @@ import {
 
 export function ServerVersionCard({
   view = 'all',
+  actionsContainer,
 }: {
   view?: 'all' | 'current' | 'update' | 'backups';
+  actionsContainer?: HTMLElement | null;
 }) {
   const { t, i18n } = useTranslation();
   const { t: tm } = useTranslation('manager');
@@ -74,7 +76,15 @@ export function ServerVersionCard({
   );
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card/50 p-4">
+    <section
+      className={cn(
+        'space-y-4',
+        view === 'update' && 'flex flex-col',
+        view !== 'update' &&
+          view !== 'backups' &&
+          'rounded-xl border border-border bg-card/50 p-4',
+      )}
+    >
       <div hidden={view !== 'all' && view !== 'current'} className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -149,46 +159,53 @@ export function ServerVersionCard({
                 </dd>
               </div>
             </dl>
-
-            {!error &&
-              data.latestVersion &&
-              data.versionStatus !== 'unknown' && (
-                <div
-                  role="status"
-                  className={cn(
-                    'flex items-start gap-2 rounded-lg border p-3 text-sm',
-                    data.versionStatus === 'update_available'
-                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                      : data.versionStatus === 'current'
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                        : 'border-border bg-background/60 text-muted-foreground',
-                  )}
-                >
-                  {data.versionStatus === 'update_available' ? (
-                    <TriangleAlert
-                      aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0"
-                    />
-                  ) : (
-                    <CheckCircle2
-                      aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0"
-                    />
-                  )}
-                  <span>
-                    {data.versionStatus === 'update_available'
-                      ? tm('managerNewImageAvailable')
-                      : t(
-                          data.versionStatus === 'current'
-                            ? 'mergeronIsUpToDate'
-                            : data.versionStatus === 'edge'
-                              ? 'thisServerFollowsEdgeAndMayContainUnpublishedChanges'
-                              : 'installedVersionIsNewerThanLatestPublishedStableVersion',
-                        )}
-                  </span>
-                </div>
+          </>
+        )}
+      </div>
+      <div hidden={view !== 'all' && view !== 'update'}>
+        {data &&
+          !error &&
+          data.latestVersion &&
+          data.versionStatus !== 'unknown' && (
+            <div
+              role="status"
+              className={cn(
+                'flex items-start gap-2 rounded-lg border p-3 text-sm',
+                data.versionStatus === 'update_available'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  : data.versionStatus === 'current'
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'border-border bg-background/60 text-muted-foreground',
               )}
-
+            >
+              {data.versionStatus === 'update_available' ? (
+                <TriangleAlert
+                  aria-hidden="true"
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+              ) : (
+                <CheckCircle2
+                  aria-hidden="true"
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+              )}
+              <span>
+                {data.versionStatus === 'update_available'
+                  ? tm('managerNewImageAvailable')
+                  : t(
+                      data.versionStatus === 'current'
+                        ? 'mergeronIsUpToDate'
+                        : data.versionStatus === 'edge'
+                          ? 'thisServerFollowsEdgeAndMayContainUnpublishedChanges'
+                          : 'installedVersionIsNewerThanLatestPublishedStableVersion',
+                    )}
+              </span>
+            </div>
+          )}
+      </div>
+      <div hidden={view !== 'all' && view !== 'current'} className="space-y-4">
+        {data && (
+          <>
             {data.installed.revision && (
               <p className="break-all text-xs text-muted-foreground">
                 {t('buildRevision')}: {data.installed.revision}
@@ -200,7 +217,6 @@ export function ServerVersionCard({
             </p>
           </>
         )}
-
       </div>
       {error && view !== 'backups' && (
         <p role="alert" className="text-sm text-destructive">
@@ -208,7 +224,10 @@ export function ServerVersionCard({
         </p>
       )}
 
-      <div hidden={view !== 'all' && view !== 'update'} className="space-y-4">
+      <div
+        hidden={view !== 'all' && view !== 'update'}
+        className="order-first flex flex-col gap-4"
+      >
         {data?.updateAvailable && data.changesError && (
           <p role="status" className="text-sm text-muted-foreground">
             {tm('managerChangesUnavailable')}
@@ -275,6 +294,7 @@ export function ServerVersionCard({
             status={manager.data}
             trailingActions={refreshControl}
             showBackups={view === 'all'}
+            actionsContainer={actionsContainer}
           />
         ) : (
           refreshControl

@@ -13,7 +13,13 @@ import {
   Plus,
   UserRound,
   UserPlus,
+  MoreHorizontal,
 } from 'lucide-react';
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -293,175 +299,218 @@ export function PeopleManager({
           )}
         </p>
       )}
-      <div className="space-y-2">
-        {rows.map((person) => {
-          const member = participants.data?.participants.find(
-            (p) => p.personId === person.id,
-          );
-          const account = localAccounts.data?.accounts.find(
-            (item) => item.personId === person.id,
-          );
-          const connectedSince = account?.connectedSince
-            ? new Intl.DateTimeFormat(
-                i18n.resolvedLanguage === 'fr' ? 'fr-FR' : 'en-US',
-                { dateStyle: 'short', timeStyle: 'short' },
-              ).format(account.connectedSince)
-            : null;
-          if (mode === 'activeAdministrators')
-            return (
-              <button
-                type="button"
-                key={person.id}
-                className="flex w-full cursor-pointer items-center gap-3 rounded-lg border bg-background/60 p-3 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
-                onClick={() => editPerson(person, account)}
-              >
-                <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{person.name}</div>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {person.email || t('noEmail')}
-                  </p>
-                </div>
-                {account?.oidcLinked && (
-                  <Badge variant="outline" className="hidden sm:inline-flex">
-                    {t('ssoIdentityLinked')}
-                  </Badge>
-                )}
-                {account?.passwordConfigured && (
-                  <Badge variant="outline" className="hidden sm:inline-flex">
-                    {t('localLogin')}
-                  </Badge>
-                )}
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </button>
-            );
-          return (
-            <div
-              key={person.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border p-3"
-            >
-              <UserRound className="h-4 w-4 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <div className="break-words font-medium">
-                  {person.name}{' '}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {person.reference}
-                  </span>
-                </div>
-                <p className="break-all text-xs text-muted-foreground">
-                  {!projectId && <>{person.email || t('noEmail')} · </>}
-                  {t(person.active ? 'active' : 'inactive')}
-                  {!projectId && (
-                    <>
-                      {' '}
-                      ·{' '}
-                      {t(
-                        person.role === 'administrator'
-                          ? 'administrator'
-                          : 'standardUser',
-                      )}{' '}
-                      · {person.phone} ·{' '}
-                      {t(
-                        person.identityLinked
-                          ? 'loginLinked'
-                          : 'loginNotLinked',
+      <div className="max-h-[65vh] overflow-auto">
+        <table className="w-full text-left text-sm" aria-label={t('people')}>
+          <thead className="sticky top-0 z-10 bg-background">
+            <tr className="border-b">
+              <th scope="col" className="px-3 py-2">
+                {t('people')}
+              </th>
+              <th scope="col" className="px-3 py-2">
+                {t('email')}
+              </th>
+              <th scope="col" className="px-3 py-2">
+                {t('actions')}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map((person) => {
+              const member = participants.data?.participants.find(
+                (p) => p.personId === person.id,
+              );
+              const account = localAccounts.data?.accounts.find(
+                (item) => item.personId === person.id,
+              );
+              const connectedSince = account?.connectedSince
+                ? new Intl.DateTimeFormat(
+                    i18n.resolvedLanguage === 'fr' ? 'fr-FR' : 'en-US',
+                    { dateStyle: 'short', timeStyle: 'short' },
+                  ).format(account.connectedSince)
+                : null;
+              if (mode === 'activeAdministrators')
+                return (
+                  <tr key={person.id}>
+                    <td colSpan={3}>
+                      <button
+                        type="button"
+                        key={person.id}
+                        className="flex w-full cursor-pointer items-center gap-3 rounded-lg border bg-background/60 p-3 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => editPerson(person, account)}
+                      >
+                        <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">
+                            {person.name}
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {person.email || t('noEmail')}
+                          </p>
+                        </div>
+                        {account?.oidcLinked && (
+                          <Badge
+                            variant="outline"
+                            className="hidden sm:inline-flex"
+                          >
+                            {t('ssoIdentityLinked')}
+                          </Badge>
+                        )}
+                        {account?.passwordConfigured && (
+                          <Badge
+                            variant="outline"
+                            className="hidden sm:inline-flex"
+                          >
+                            {t('localLogin')}
+                          </Badge>
+                        )}
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              return (
+                <tr key={person.id} className="align-top">
+                  <td className="min-w-48 px-3 py-3">
+                    <div className="break-words font-medium">
+                      {person.name}{' '}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {person.reference}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="min-w-48 px-3 py-3">
+                    <p className="break-all text-xs text-muted-foreground">
+                      {!projectId && <>{person.email || t('noEmail')} · </>}
+                      {t(person.active ? 'active' : 'inactive')}
+                      {!projectId && (
+                        <>
+                          {' '}
+                          ·{' '}
+                          {t(
+                            person.role === 'administrator'
+                              ? 'administrator'
+                              : 'standardUser',
+                          )}{' '}
+                          · {person.phone} ·{' '}
+                          {t(
+                            person.identityLinked
+                              ? 'loginLinked'
+                              : 'loginNotLinked',
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
-                </p>
-                {!projectId && account && (
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span
-                      aria-hidden="true"
-                      className={`h-2 w-2 rounded-full ${
-                        account.connected
-                          ? 'bg-emerald-500'
-                          : 'bg-muted-foreground/40'
-                      }`}
-                    />
-                    {account.connected && connectedSince
-                      ? t('connectedSinceDate', {
-                          date: connectedSince,
-                        })
-                      : t('offline')}
-                  </p>
-                )}
-                {member && (
-                  <p className="text-xs text-muted-foreground">
-                    {t('countAssignmentsIncludingOpenOpen', {
-                      count: member.assignmentCount,
-                      open: member.openAssignmentCount,
-                    })}
-                  </p>
-                )}
-              </div>
-              {projectId && !readOnly ? (
-                <Button
-                  size="sm"
-                  variant={member ? 'outline' : 'default'}
-                  className="cursor-pointer"
-                  disabled={
-                    mutation.isPending ||
-                    participants.isPending ||
-                    (!member && !person.active)
-                  }
-                  onClick={() =>
-                    member
-                      ? setRemoving({ person, member })
-                      : mutation.mutate({
-                          path: `/${projectId}/participants`,
-                          method: 'POST',
-                          body: { personId: person.id },
-                        })
-                  }
-                >
-                  {!member && <UserPlus className="mr-1 h-3 w-3" />}
-                  {t(member ? 'removeParticipant' : 'addParticipant')}
-                </Button>
-              ) : !projectId ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  {!readOnly && person.active && (
-                    <TestAsPersonButton
-                      personId={person.id}
-                      name={person.name}
-                    />
-                  )}
-                  {account?.connected && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="cursor-pointer"
-                      disabled={revokeSessions.isPending}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            t(
-                              'forceSignOutNameAllActiveSessionsForThisPersonWillBeClosed',
-                              { name: person.name },
-                            ),
-                          )
-                        )
-                          revokeSessions.mutate(person.id);
-                      }}
-                    >
-                      <LogOut className="mr-1 h-3 w-3" />
-                      {t('forceSignOut')}
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="cursor-pointer"
-                    onClick={() => editPerson(person, account)}
-                  >
-                    <Pencil className="mr-1 h-3 w-3" />
-                    {t('edit')}
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+                    </p>
+                    {!projectId && account && (
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span
+                          aria-hidden="true"
+                          className={`h-2 w-2 rounded-full ${
+                            account.connected
+                              ? 'bg-emerald-500'
+                              : 'bg-muted-foreground/40'
+                          }`}
+                        />
+                        {account.connected && connectedSince
+                          ? t('connectedSinceDate', {
+                              date: connectedSince,
+                            })
+                          : t('offline')}
+                      </p>
+                    )}
+                    {member && (
+                      <p className="text-xs text-muted-foreground">
+                        {t('countAssignmentsIncludingOpenOpen', {
+                          count: member.assignmentCount,
+                          open: member.openAssignmentCount,
+                        })}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    {projectId && !readOnly ? (
+                      <Button
+                        size="sm"
+                        variant={member ? 'outline' : 'default'}
+                        className="cursor-pointer"
+                        disabled={
+                          mutation.isPending ||
+                          participants.isPending ||
+                          (!member && !person.active)
+                        }
+                        onClick={() =>
+                          member
+                            ? setRemoving({ person, member })
+                            : mutation.mutate({
+                                path: `/${projectId}/participants`,
+                                method: 'POST',
+                                body: { personId: person.id },
+                              })
+                        }
+                      >
+                        {!member && <UserPlus className="mr-1 h-3 w-3" />}
+                        {t(member ? 'removeParticipant' : 'addParticipant')}
+                      </Button>
+                    ) : !projectId ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`${t('actions')} — ${person.name}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="end"
+                          className="flex w-fit flex-col items-stretch gap-1"
+                        >
+                          {!readOnly && person.active && (
+                            <TestAsPersonButton
+                              personId={person.id}
+                              name={person.name}
+                            />
+                          )}
+                          {account?.connected && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="cursor-pointer"
+                              disabled={revokeSessions.isPending}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    t(
+                                      'forceSignOutNameAllActiveSessionsForThisPersonWillBeClosed',
+                                      { name: person.name },
+                                    ),
+                                  )
+                                )
+                                  revokeSessions.mutate(person.id);
+                              }}
+                            >
+                              <LogOut className="mr-1 h-3 w-3" />
+                              {t('forceSignOut')}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="cursor-pointer"
+                            onClick={() => editPerson(person, account)}
+                          >
+                            <Pencil className="mr-1 h-3 w-3" />
+                            {t('edit')}
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       <Dialog
         open={form !== null}
