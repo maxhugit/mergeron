@@ -18,6 +18,7 @@
   "gitRemoteObserved": "Observed on GitHub at {{date}}",
   "gitNoPublishedBranch": "No published branches.",
   "gitProtectedBranch": "Protected",
+  "executionLocationUnavailable": "This local location is no longer available. Refresh the project locations before selecting it.",
   "gitCloseDiff": "Close comparison for {{name}}",
   "gitDiffEmptyBefore": "Before · repository without commits",
   "gitDiffTabTitle": "Changes · {{name}}",

@@ -1,7 +1,7 @@
 /** Builds per-project Codex app and MCP enablement overrides for new threads. */
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import * as path from 'node:path';
+import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { eq } from 'drizzle-orm';
 import { currentAccess } from '../auth/access-context';
 import { CodexService } from '../codex/codex.service';
@@ -12,9 +12,6 @@ import {
   projectActivity,
   projectAgentThreads,
   projects,
-  projectWorkspaceCopies,
-  projectWorkspaceResources,
-  projectWorkspaces,
 } from '../database/schema';
 
 type JsonObject = { [key: string]: JsonValue };
@@ -26,6 +23,7 @@ export interface ProjectExecutionPolicy {
   model: string | null;
   reasoningEffort: string | null;
   workspaceId: string;
+  locationId?: string;
   readOnly: boolean;
   sourceResourceId: string | null;
   sourceRevision: string | null;
@@ -36,6 +34,7 @@ export class ProjectConnectionPolicyService {
   constructor(
     private readonly codex: CodexService,
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
+    private readonly folders: ActiveFoldersService,
   ) {}
 
   /** A conversation's project binding cannot be bypassed by a turn cwd. */
@@ -68,55 +67,11 @@ export class ProjectConnectionPolicyService {
     cwd: string | null | undefined,
     expectedProjectId?: string,
   ): Promise<ProjectExecutionPolicy | null> {
-    if (!cwd) return null;
-    let workspace = this.db
-      .select({
-        id: projectWorkspaces.id,
-        projectId: projectWorkspaces.projectId,
-        path: projectWorkspaces.path,
-      })
-      .from(projectWorkspaces)
-      .where(eq(projectWorkspaces.path, cwd))
-      .get();
-    if (!workspace) {
-      const candidate = path.resolve(cwd);
-      workspace = this.db
-        .select({
-          id: projectWorkspaces.id,
-          projectId: projectWorkspaces.projectId,
-          path: projectWorkspaces.path,
-        })
-        .from(projectWorkspaces)
-        .all()
-        .filter((item) => {
-          const root = path.resolve(item.path);
-          return candidate === root || candidate.startsWith(root + path.sep);
-        })
-        .sort((a, b) => b.path.length - a.path.length)[0];
-    }
-    if (!workspace) return null;
-    if (expectedProjectId && workspace.projectId !== expectedProjectId)
-      throw new ConflictException(
-        'Le dossier de cette conversation ne correspond pas à son projet.',
-      );
-    const copy = workspace.id
-      ? this.db
-          .select()
-          .from(projectWorkspaceCopies)
-          .where(eq(projectWorkspaceCopies.localWorkspaceId, workspace.id))
-          .get()
-      : null;
-    const source = copy
-      ? this.db
-          .select()
-          .from(projectWorkspaceResources)
-          .where(eq(projectWorkspaceResources.id, copy.sourceResourceId))
-          .get()
-      : null;
-    if (copy && (!source || !source.enabled || copy.state !== 'ready'))
-      throw new ConflictException(
-        'The source resource for this working copy is no longer available',
-      );
+    const location = this.folders.executionLocationForCwd(
+      cwd,
+      expectedProjectId,
+    );
+    if (!location) return null;
     const project = this.db
       .select({
         appIds: projects.appIds,
@@ -125,9 +80,12 @@ export class ProjectConnectionPolicyService {
         agentReasoningEffort: projects.agentReasoningEffort,
       })
       .from(projects)
-      .where(eq(projects.id, workspace.projectId))
+      .where(eq(projects.id, location.projectId))
       .get();
-    if (!project) return null;
+    if (!project)
+      throw new ConflictException(
+        'The execution project is no longer available',
+      );
 
     // Never treat an empty selection as an empty override: config merges retain
     // global per-app enables and configured MCP servers. Discovery failures are
@@ -140,6 +98,7 @@ export class ProjectConnectionPolicyService {
         cwd,
       }),
     ]);
+    this.assertExecutionLocation(location, cwd);
     const object = (value: unknown): JsonObject =>
       value && typeof value === 'object' && !Array.isArray(value)
         ? (value as JsonObject)
@@ -202,12 +161,8 @@ export class ProjectConnectionPolicyService {
     }
 
     return {
-      executionCwd: cwd,
-      projectId: workspace.projectId,
-      workspaceId: workspace.id || workspace.path || cwd,
-      readOnly: source?.accessMode === 'read_only',
-      sourceResourceId: copy?.sourceResourceId ?? null,
-      sourceRevision: copy?.revision ?? null,
+      executionCwd: cwd ?? undefined,
+      ...location,
       model: project.agentModel,
       reasoningEffort: project.agentReasoningEffort,
       config: {
@@ -217,6 +172,34 @@ export class ProjectConnectionPolicyService {
         plugins: pluginConfig,
       },
     };
+  }
+
+  /** Recheck after asynchronous preparation, immediately before native dispatch. */
+  assertExecutionLocation(
+    policy: Pick<
+      ProjectExecutionPolicy,
+      | 'projectId'
+      | 'workspaceId'
+      | 'locationId'
+      | 'readOnly'
+      | 'sourceResourceId'
+      | 'sourceRevision'
+    > | null,
+    cwd?: string | null,
+  ): void {
+    const latest = this.folders.executionLocationForCwd(cwd, policy?.projectId);
+    const keys = [
+      'projectId',
+      'workspaceId',
+      'locationId',
+      'readOnly',
+      'sourceResourceId',
+      'sourceRevision',
+    ] as const;
+    if (keys.some((key) => (policy?.[key] ?? null) !== (latest?.[key] ?? null)))
+      throw new ConflictException(
+        'The execution location changed during preparation. Retry with the current project location.',
+      );
   }
 
   /** Records the exact local and source context used for an operation. */
@@ -237,6 +220,7 @@ export class ProjectConnectionPolicyService {
         label: cwd,
         details: {
           workspaceId: policy.workspaceId,
+          locationId: policy.locationId ?? null,
           sourceResourceId: policy.sourceResourceId,
           sourceRevision: policy.sourceRevision,
           readOnly: policy.readOnly,

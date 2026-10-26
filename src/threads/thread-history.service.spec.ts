@@ -20,10 +20,16 @@ describe('ThreadHistoryService', () => {
       features: { apps: false },
       mcp_servers: { fixture: { command: 'node', enabled: false } },
     };
-    const policy = { config, projectId: 'p' };
+    const policy = {
+      config,
+      projectId: 'p',
+      readOnly: true,
+      executionCwd: '/copy',
+    };
     const connections = {
       generation: () => 4,
       assertGeneration: vi.fn(),
+      assertExecutionLocation: vi.fn(),
       forResume: vi.fn().mockResolvedValue(policy),
       record: vi.fn(),
     };
@@ -42,7 +48,12 @@ describe('ThreadHistoryService', () => {
     });
     expect(mockCodex.request).toHaveBeenCalledWith(
       'thread/resume',
-      expect.objectContaining({ threadId: 'old', config }),
+      expect.objectContaining({
+        threadId: 'old',
+        config,
+        sandbox: 'read-only',
+        cwd: '/copy',
+      }),
     );
     expect(connections.record).toHaveBeenCalledWith('old', policy, 4);
   });

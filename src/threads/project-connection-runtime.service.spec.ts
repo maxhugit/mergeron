@@ -78,6 +78,24 @@ describe('project MCP connection lifetime', () => {
     expect(manager.restartControlled).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    { readOnly: true },
+    { locationId: 'local:new-location' },
+    { sourceRevision: 'new-revision' },
+    { executionCwd: '/workspaces/p/nested' },
+  ])(
+    'does not reuse the previous native session after location settings change: %j',
+    async (change) => {
+      const { service, manager, policies } = setup();
+      service.record('t', policy);
+      policies.policyForThread.mockResolvedValue({ ...policy, ...change });
+      expect((await service.beforeTurn('t', '/workspaces/p')).restarted).toBe(
+        true,
+      );
+      expect(manager.restartControlled).toHaveBeenCalledOnce();
+    },
+  );
+
   it('does not restart just because native config keys are returned in a different order', async () => {
     const { service, manager, policies } = setup();
     service.record('t', policy);
