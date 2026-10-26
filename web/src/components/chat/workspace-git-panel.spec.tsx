@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
@@ -60,6 +61,7 @@ const copy: GitInventory['copies'][number] = {
   updatedAt: 1,
 };
 const snapshot: GitSnapshot = {
+  fingerprint: 'f'.repeat(64),
   branch: 'main',
   head: 'a'.repeat(40),
   changes: [{ path: 'file.ts', status: ' M' }],
@@ -106,6 +108,27 @@ beforeEach(async () => {
     if (url.includes('/diff?'))
       return { path: 'file.ts', diff: '+changed', untracked: false };
     if (url.endsWith('/copies/copy')) return snapshot;
+    if (url.endsWith('/commits'))
+      return {
+        items: [
+          {
+            sha: 'a'.repeat(40),
+            date: '2026-10-26T12:00:00Z',
+            author: 'Test',
+            subject: 'Local change',
+          },
+        ],
+        limited: false,
+      };
+    if (url.endsWith('/branches'))
+      return {
+        supported: true,
+        items: [
+          { name: 'only-on-github', revision: 'b'.repeat(40), protected: true },
+        ],
+        limited: false,
+        inspectedAt: Date.now(),
+      };
     if (url.endsWith('/checks'))
       return {
         head: 'a'.repeat(40),
@@ -229,7 +252,7 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
 it('never interprets absent checks or unknown mergeability as approval', async () => {
   show();
   await screen.findByRole('button', { name: 'Préparer une copie de travail' });
-  tab('PR / checks');
+  tab('Distant · GitHub');
   fireEvent.click(await screen.findByRole('button', { name: '#12 Feature' }));
   expect(
     await screen.findByText('Détection des conflits en cours ou indisponible.'),
@@ -271,4 +294,79 @@ it('ignores a file registration completed after leaving the repository', async (
   view.unmount();
   await act(async () => finish());
   expect(useFilesStore.getState().rootDir).toBe('/original');
+});
+
+it('separates local history from live GitHub branches and never activates a copy by browsing remote data', async () => {
+  inventory.copies = [copy];
+  show();
+  await screen.findByRole('button', { name: 'Parcourir les fichiers' });
+  expect(screen.queryByRole('tab', { name: 'PR / checks' })).toBeNull();
+  tab('Commits');
+  expect(await screen.findByText('Local change')).toBeVisible();
+  tab('Distant · GitHub');
+  expect(await screen.findByRole('tab', { name: 'PR / checks' })).toBeVisible();
+  expect(screen.getByText('Local change')).not.toBeVisible();
+  tab('Branches publiées');
+  expect(await screen.findByText('only-on-github')).toBeVisible();
+  expect(onActive).not.toHaveBeenCalled();
+  expect(useFilesStore.getState().rootDir).toBe('/original');
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Préparer une copie de travail' }),
+  );
+  expect(screen.getByRole('tab', { name: 'Local' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(
+    screen.getByLabelText('Branche distante existante (facultatif)'),
+  ).toHaveValue('only-on-github');
+  expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+    false,
+  );
+});
+
+it('keeps remote GitHub data usable without a local copy and keeps synchronization explicit', async () => {
+  show();
+  await screen.findByRole('tab', { name: 'Local' });
+  tab('Distant · GitHub');
+  expect(await screen.findByText(/#12 Feature/)).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: '↓ Intégrer les commits…' }),
+  ).toBeDisabled();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Actualiser les données GitHub' }),
+  );
+  expect(onActive).not.toHaveBeenCalled();
+  expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+    false,
+  );
+});
+
+it('places publication only in Synchronization and keeps commits local', async () => {
+  inventory.copies = [copy];
+  show();
+  await screen.findByRole('button', { name: 'Commit…' });
+  const sync = screen.getByRole('region', { name: 'Synchronisation' });
+  expect(
+    within(sync).getByRole('button', { name: '↑ Publier les commits…' }),
+  ).toBeVisible();
+  expect(within(sync).queryByRole('button', { name: 'Commit…' })).toBeNull();
+  tab('Distant · GitHub');
+  expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
+  expect(
+    within(sync).getByRole('button', { name: '↑ Publier les commits…' }),
+  ).toBeVisible();
+});
+
+it('does not expose publication for a read-only resource', async () => {
+  inventory = {
+    resources: [{ ...resource, accessMode: 'read_only' }],
+    copies: [copy],
+  };
+  show();
+  await screen.findByRole('button', { name: 'Parcourir les fichiers' });
+  expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: '↑ Publier les commits…' }),
+  ).toBeNull();
 });

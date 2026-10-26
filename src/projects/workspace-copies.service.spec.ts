@@ -123,7 +123,11 @@ describe('WorkspaceCopiesService', () => {
       readFile(path.join(first.localPath!, 'README.md'), 'utf8'),
     ).resolves.toBe('source repository\n');
     const policy = new ProjectConnectionPolicyService(
-      { request: vi.fn() } as unknown as CodexService,
+      {
+        request: vi
+          .fn()
+          .mockResolvedValue({ data: [], nextCursor: null, config: {} }),
+      } as unknown as CodexService,
       database.db,
     );
     await expect(policy.policyForCwd(first.localPath)).resolves.toMatchObject({

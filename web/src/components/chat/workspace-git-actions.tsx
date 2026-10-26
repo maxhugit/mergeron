@@ -46,11 +46,13 @@ export function GitCopyActions({
   copyId,
   snapshot,
   address,
+  actionScope = 'all',
 }: {
   projectId: string;
   copyId: string;
   snapshot: GitSnapshot;
   address: string | null;
+  actionScope?: 'all' | 'commit' | 'push';
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
@@ -101,9 +103,17 @@ export function GitCopyActions({
       setResult(value.sha.slice(0, 7));
       setMode(null);
       setMessage('');
-      await client.invalidateQueries({
-        queryKey: ['workspace-git', projectId, copyId],
-      });
+      await Promise.all([
+        client.invalidateQueries({
+          queryKey: ['workspace-git', projectId, copyId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['workspace-git-commits', projectId, copyId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['workspace-git-remote-branches', projectId],
+        }),
+      ]);
     },
     onSettled: () => {
       submitted.current = false;
@@ -124,38 +134,46 @@ export function GitCopyActions({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={
-            !snapshot.fingerprint ||
-            !snapshot.branch ||
-            !snapshot.changes.some(
-              (item) => ![' ', '?'].includes(item.status[0]),
-            )
-          }
-          onClick={(event) => {
-            trigger.current = event.currentTarget;
-            open('commit');
-          }}
-        >
-          {t('gitActionCommit')}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!snapshot.fingerprint || !snapshot.branch || !snapshot.head}
-          onClick={(event) => {
-            trigger.current = event.currentTarget;
-            open('push');
-          }}
-        >
-          {t('gitActionPush')}
-        </Button>
+        {actionScope !== 'push' && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={
+              !snapshot.fingerprint ||
+              !snapshot.branch ||
+              !snapshot.changes.some(
+                (item) => ![' ', '?'].includes(item.status[0]),
+              )
+            }
+            onClick={(event) => {
+              trigger.current = event.currentTarget;
+              open('commit');
+            }}
+          >
+            {t('gitActionCommit')}
+          </Button>
+        )}
+        {actionScope !== 'commit' && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={
+              !snapshot.fingerprint || !snapshot.branch || !snapshot.head
+            }
+            onClick={(event) => {
+              trigger.current = event.currentTarget;
+              open('push');
+            }}
+          >
+            {actionScope === 'push' ? t('gitPublish') : t('gitActionPush')}
+          </Button>
+        )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        {t('gitActionStagedHelp')}
-      </p>
+      {actionScope !== 'push' && (
+        <p className="text-xs text-muted-foreground">
+          {t('gitActionStagedHelp')}
+        </p>
+      )}
       {result && (
         <p role="status" className="text-xs text-primary">
           {t('gitActionSuccess', { sha: result })}
@@ -353,6 +371,9 @@ export function GitMergeAction({
         }),
         client.invalidateQueries({
           queryKey: ['workspace-git-checks', projectId, resourceId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['workspace-git-remote-branches', projectId, resourceId],
         }),
       ]);
     },

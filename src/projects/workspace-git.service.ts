@@ -240,6 +240,27 @@ export class WorkspaceGitService {
     }
   }
 
+  async commits(projectId: string, copyId: string) {
+    const state = await this.snapshot(projectId, copyId);
+    if (!state.head) return { items: [], limited: false };
+    const cwd = await this.directory(projectId, copyId);
+    const output = await this.git(cwd, [
+      'log',
+      '-31',
+      '--format=%H%x00%aI%x00%an%x00%s',
+      state.head,
+      '--',
+    ]);
+    const rows = output.trim().split('\n').filter(Boolean);
+    return {
+      items: rows.slice(0, 30).map((row) => {
+        const [sha, date, author, subject] = row.split('\0');
+        return { sha, date, author, subject };
+      }),
+      limited: rows.length > 30,
+    };
+  }
+
   /** Bounded, shell-free runner; callers own all arguments and environment overrides. */
   git(
     cwd: string,
@@ -385,6 +406,30 @@ export class WorkspaceGitService {
         head: item.head.sha,
         url: `https://github.com/${repo.owner}/${repo.repo}/pull/${item.number}`,
       })),
+    };
+  }
+
+  async remoteBranches(projectId: string, resourceId: string) {
+    const repo = this.github(projectId, resourceId);
+    if (!repo)
+      return {
+        supported: false,
+        items: [],
+        limited: false,
+        inspectedAt: Date.now(),
+      };
+    const branches = await this.githubGet<
+      Array<{ name: string; commit: { sha: string }; protected: boolean }>
+    >(repo, 'branches?per_page=100');
+    return {
+      supported: true,
+      items: branches.map((branch) => ({
+        name: branch.name,
+        revision: branch.commit.sha,
+        protected: branch.protected,
+      })),
+      limited: branches.length === 100,
+      inspectedAt: Date.now(),
     };
   }
 

@@ -54,6 +54,22 @@ export class WorkspaceGitController {
     return this.git.diff(projectId, copyId, path);
   }
 
+  @Get('copies/:copyId/commits')
+  commits(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+  ) {
+    return this.git.commits(projectId, copyId);
+  }
+
+  @Get('resources/:resourceId/branches')
+  remoteBranches(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return this.git.remoteBranches(projectId, resourceId);
+  }
+
   @Get('copies/:copyId/staged-diff')
   stagedDiff(
     @Param('projectId') projectId: string,
