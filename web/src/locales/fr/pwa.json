@@ -1,4 +1,6 @@
 {
+  "reload": "Rafraîchir l’application",
+  "reloadHelp": "Recharger l’application pour récupérer la version déployée. Les saisies non enregistrées peuvent être perdues.",
   "install": "Installer l’application",
   "installed": "Application installée",
   "description": "Ouvrez Mergeron dans sa propre fenêtre. Une connexion au serveur reste nécessaire ; les conversations et documents ne sont pas conservés hors ligne.",
