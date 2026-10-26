@@ -453,6 +453,20 @@ export const projectActivity = sqliteTable(
 export type ProjectActivity = typeof projectActivity.$inferSelect;
 
 /** Extensible project tools (task boards today, other skills later). */
+/** Security audit: immutable identity snapshots, retained if a person is removed. */
+export const impersonationAudit = sqliteTable('impersonation_audit', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  administratorId: text('administrator_id').notNull(),
+  administratorName: text('administrator_name').notNull(),
+  personId: text('person_id').notNull(),
+  personName: text('person_name').notNull(),
+  action: text('action').notNull(),
+  method: text('method'),
+  route: text('route'),
+  createdAt: integer('created_at').notNull(),
+});
+
 export const people = sqliteTable('people', {
   id: text('id').primaryKey(),
   reference: text('reference').notNull().unique(),
@@ -1362,5 +1376,13 @@ export const documentAccessSessions = sqliteTable('document_access_sessions', {
   }),
   administrator: integer('administrator', { mode: 'boolean' }).notNull(),
   writable: integer('writable', { mode: 'boolean' }).notNull(),
+  impersonation: text('impersonation', { mode: 'json' }).$type<{
+    sessionId: string;
+    administratorId: string;
+    administratorName: string;
+    personId: string;
+    personName: string;
+    expiresAt: number;
+  }>(),
   expiresAt: integer('expires_at').notNull(),
 });

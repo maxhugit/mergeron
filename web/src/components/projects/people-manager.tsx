@@ -1,4 +1,8 @@
 import { translationKey } from '@/locales/translation-key';
+import {
+  TestAsPersonButton,
+  ImpersonationAuditButton,
+} from '@/components/impersonation-controls';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -213,6 +217,7 @@ export function PeopleManager({
   };
   return (
     <section className="space-y-4">
+      {!projectId && !readOnly && <ImpersonationAuditButton />}
       <div className="flex flex-wrap items-start justify-between gap-3">
         {showHeading && (
           <div>
@@ -415,6 +420,12 @@ export function PeopleManager({
                 </Button>
               ) : !projectId ? (
                 <div className="flex flex-wrap items-center gap-2">
+                  {!readOnly && person.active && (
+                    <TestAsPersonButton
+                      personId={person.id}
+                      name={person.name}
+                    />
+                  )}
                   {account?.connected && (
                     <Button
                       size="sm"

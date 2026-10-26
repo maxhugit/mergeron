@@ -124,6 +124,11 @@ jobs:
           src/auth/project-authorization.spec.ts
           src/auth/auth-config.service.spec.ts
           src/auth/local-auth.service.spec.ts
+          src/auth/impersonation.spec.ts
+          src/auth/platform-access.spec.ts
+          src/auth/platform-access.http.spec.ts
+          src/auth/platform-access.socket.spec.ts
+          src/auth/project-socket-authorization.spec.ts
 
       - name: Test release-pair compensation
         if: matrix.part == 'backend'

@@ -37,7 +37,7 @@ MAX_ZIP = 96 * 1024 ** 2
 MAX_ENTRY = 256 * 1024 ** 2
 MAX_ENTRIES = 20000
 MAX_JSON = 64 * 1024 ** 2
-EXCLUDED = {'project_workspace_secrets', 'document_access_sessions',
+EXCLUDED = {'project_workspace_secrets', 'document_access_sessions', 'impersonation_audit',
             'auth_sessions', 'local_auth_credentials', 'oidc_auth_flows'}
 THREAD_TABLES = {'token_usage_snapshots', 'turn_diffs', 'turn_errors',
                  'conversation_branch_groups', 'conversation_branch_versions',

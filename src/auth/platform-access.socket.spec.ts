@@ -88,6 +88,33 @@ it('enforces person roles on real Socket.IO terminal events and rechecks a downg
     expect((await request(0, 'global')).ok).toBe(false);
     expect((await request(0, 'thread:example')).ok).toBe(false);
     expect((await request(1, 'global')).ok).toBe(true);
+    const identities = module.get(IdentityService);
+    const adminHeaders = {
+      'x-webui-auth-source': 'authentik',
+      'x-webui-auth-subject': 'administrator',
+      'x-webui-auth-email': 'administrator@example.com',
+    };
+    const token = identities.startImpersonation(
+      identities.resolve(adminHeaders),
+      adminHeaders,
+      'standard',
+    );
+    const simulatedOptions = {
+      transports: ['websocket'],
+      reconnection: false,
+      extraHeaders: {
+        ...adminHeaders,
+        authorization: 'Bearer isolated-socket-test',
+        cookie: `mergeron_impersonation=${token}`,
+      },
+    };
+    sockets.push(io(url, simulatedOptions));
+    await expect.poll(() => sockets[2].connected, { timeout: 3000 }).toBe(true);
+    expect((await request(2, 'global')).ok).toBe(false);
+    identities.stopImpersonation(identities.resolveOriginal(adminHeaders), {
+      cookie: `mergeron_impersonation=${token}`,
+    });
+    expect((await request(2, 'global')).ok).toBe(false);
     fixture.database.db
       .update(people)
       .set({ role: 'standard' })

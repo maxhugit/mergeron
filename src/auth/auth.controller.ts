@@ -116,6 +116,58 @@ export class AuthController {
     return request.platformIdentity ?? this.identities.resolve(request.headers);
   }
 
+  @Post('impersonation')
+  startImpersonation(
+    @Req() request: FastifyRequest & IdentityRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+    @Body() body: { personId?: unknown },
+  ) {
+    this.requireSameOrigin(request);
+    const real = this.identities.resolveOriginal(
+      request.headers,
+      request.authenticatedPersonId,
+    );
+    const token = this.identities.startImpersonation(
+      real,
+      request.headers,
+      body?.personId,
+    );
+    reply.header('Cache-Control', 'no-store');
+    reply.header(
+      'set-cookie',
+      this.identities.impersonationCookie(token, this.secureCookie(request)),
+    );
+    return { started: true };
+  }
+
+  @Get('impersonation-audit')
+  impersonationAudit(@Req() request: IdentityRequest) {
+    return {
+      events: this.identities.listImpersonationAudit(
+        request.platformIdentity ?? this.identities.resolve(request.headers),
+      ),
+    };
+  }
+
+  @Delete('impersonation')
+  stopImpersonation(
+    @Req() request: FastifyRequest & IdentityRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    this.requireSameOrigin(request);
+    const real = this.identities.resolveOriginal(
+      request.headers,
+      request.authenticatedPersonId,
+    );
+    this.identities.stopImpersonation(real, request.headers);
+    reply.header('Cache-Control', 'no-store');
+    reply.header(
+      'set-cookie',
+      this.identities.impersonationCookie('', this.secureCookie(request)),
+    );
+    return { stopped: true };
+  }
+
   @Patch('preferences')
   preferences(
     @Req() request: IdentityRequest,
