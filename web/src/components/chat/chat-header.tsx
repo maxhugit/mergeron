@@ -39,7 +39,12 @@ import {
 } from '@/generated/api/@tanstack/react-query.gen';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useConnectionStore } from '@/stores/connection-store';
-import { SIDEBAR_REGION_ID, useLayoutStore } from '@/stores/layout-store';
+import {
+  SIDEBAR_REGION_ID,
+  useLayoutStore,
+  desktopSidebarCollapsedForPath,
+  isDocumentWindow,
+} from '@/stores/layout-store';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { useMessageVersions } from '@/hooks/use-message-branches';
 import {
@@ -148,11 +153,13 @@ export function ChatHeader() {
   const breakpoint = useBreakpoint();
   const isDesktop = breakpoint === 'desktop';
   const toggleSidebarOpen = useLayoutStore((s) => s.toggleSidebarOpen);
-  const desktopSidebarCollapsed = useLayoutStore(
-    (s) => s.desktopSidebarCollapsed,
+  const desktopSidebarCollapsed = useLayoutStore((s) =>
+    desktopSidebarCollapsedForPath(s, pathname),
   );
-  const toggleDesktopSidebarCollapsed = useLayoutStore(
-    (s) => s.toggleDesktopSidebarCollapsed,
+  const toggleDesktopSidebarCollapsed = useLayoutStore((s) =>
+    isDocumentWindow(pathname)
+      ? s.toggleDocumentSidebarCollapsed
+      : s.toggleDesktopSidebarCollapsed,
   );
 
   // The timeline store deliberately keeps the last opened Codex thread warm

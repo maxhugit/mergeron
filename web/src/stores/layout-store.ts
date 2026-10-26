@@ -33,6 +33,9 @@ export type SidebarViewState =
 // ── Store interface ──────────────────────────────────────────────────
 
 interface LayoutState {
+  /** Document windows start collapsed, independently of the main window. Never persisted. */
+  documentSidebarCollapsed: boolean;
+  toggleDocumentSidebarCollapsed: () => void;
   /** Global explorer preference; transient phone overlays never overwrite it. */
   workspaceTreeCollapsed: boolean;
   workspaceTreeWidth: number;
@@ -65,6 +68,9 @@ interface LayoutState {
 export const useLayoutStore = create<LayoutState>()(
   persist(
     (set, get) => ({
+      documentSidebarCollapsed: true,
+      toggleDocumentSidebarCollapsed: () =>
+        set((s) => ({ documentSidebarCollapsed: !s.documentSidebarCollapsed })),
       workspaceTreeCollapsed: true,
       workspaceTreeWidth: 260,
       setWorkspaceTreeCollapsed: (workspaceTreeCollapsed) =>
@@ -113,3 +119,20 @@ export const useLayoutStore = create<LayoutState>()(
     },
   ),
 );
+
+export function isDocumentWindow(pathname: string) {
+  return pathname === '/document' || pathname === '/document/';
+}
+
+/** Shared by shell and header so the toggle always describes the visible sidebar. */
+export function desktopSidebarCollapsedForPath(
+  state: Pick<
+    LayoutState,
+    'desktopSidebarCollapsed' | 'documentSidebarCollapsed'
+  >,
+  pathname: string,
+) {
+  return isDocumentWindow(pathname)
+    ? state.documentSidebarCollapsed
+    : state.desktopSidebarCollapsed;
+}
