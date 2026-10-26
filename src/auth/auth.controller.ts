@@ -4,6 +4,7 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Header,
   Get,
   Query,
   Delete,
@@ -112,6 +113,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @Header('Cache-Control', 'no-store')
   me(@Req() request: IdentityRequest) {
     return request.platformIdentity ?? this.identities.resolve(request.headers);
   }
@@ -141,6 +143,7 @@ export class AuthController {
   }
 
   @Get('impersonation-audit')
+  @Header('Cache-Control', 'no-store')
   impersonationAudit(@Req() request: IdentityRequest) {
     return {
       events: this.identities.listImpersonationAudit(

@@ -126,6 +126,38 @@ describe('ApiKeyGuard', () => {
   });
 
   describe('local session cookie', () => {
+    it('drops a cached socket person when their local session has been revoked', async () => {
+      const localAuth = {
+        authenticateCookie: vi.fn().mockReturnValue(null),
+      } as unknown as LocalAuthService;
+      const reflector = {
+        getAllAndOverride: () => false,
+      } as unknown as Reflector;
+      const checked = new ApiKeyGuard(
+        authService as AuthService,
+        reflector,
+        localAuth,
+      );
+      const socket = {
+        id: 's1',
+        data: { authenticatedPersonId: 'old-admin' } as Record<string, unknown>,
+        handshake: {
+          headers: {
+            cookie: 'codex_webui_session=revoked',
+            authorization: 'Bearer valid-token',
+          },
+          auth: {},
+        },
+      };
+      const context = {
+        getType: () => 'ws',
+        getHandler: () => ({}),
+        getClass: () => ({}),
+        switchToWs: () => ({ getClient: () => socket }),
+      } as unknown as ExecutionContext;
+      expect(await checked.canActivate(context)).toBe(true);
+      expect(socket.data.authenticatedPersonId).toBeUndefined();
+    });
     it('accepts safe requests authenticated by a local session', async () => {
       const localAuth = {
         authenticateCookie: vi.fn().mockReturnValue('person-1'),

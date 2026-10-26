@@ -125,6 +125,7 @@ jobs:
           src/auth/auth-config.service.spec.ts
           src/auth/local-auth.service.spec.ts
           src/auth/impersonation.spec.ts
+          src/auth/api-key.guard.spec.ts
           src/auth/platform-access.spec.ts
           src/auth/platform-access.http.spec.ts
           src/auth/platform-access.socket.spec.ts
