@@ -1,0 +1,1 @@
+ALTER TABLE `document_access_sessions` ADD `impersonation` text;

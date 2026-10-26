@@ -94,9 +94,12 @@ export class ThreadsGateway
   afterInit(): void {
     const revoke = (personId: string) => {
       for (const socket of this.clients.values()) {
+        const effective = this.identities.resolve(socket.handshake.headers);
         if (
-          this.identities.resolve(socket.handshake.headers).personId ===
-          personId
+          this.identities.resolveOriginal(socket.handshake.headers).personId ===
+            personId ||
+          effective.personId === personId ||
+          effective.impersonation?.personId === personId
         ) {
           socket.emit('access.revoked');
           socket.disconnect(true);

@@ -41,10 +41,19 @@ export class PlatformAccessGuard implements CanActivate {
         data?: { authenticatedPersonId?: unknown };
       }>();
       const authenticatedPersonId = socket.data?.authenticatedPersonId;
-      const identity =
+      const identity = this.identities.resolve(
+        socket.handshake.headers,
         typeof authenticatedPersonId === 'string'
-          ? this.identities.resolvePerson(authenticatedPersonId)
-          : this.identities.resolve(socket.handshake.headers);
+          ? authenticatedPersonId
+          : undefined,
+      );
+      if (identity.impersonation)
+        this.identities.auditImpersonation(
+          identity.impersonation,
+          'socketAttempt',
+          'WS',
+          context.switchToWs().getPattern(),
+        );
       this.identities.requireActive(identity);
       if (identity.role === 'administrator') return true;
       const data =
@@ -76,10 +85,25 @@ export class PlatformAccessGuard implements CanActivate {
         )
       );
     }
-    const identity = request.authenticatedPersonId
-      ? this.identities.resolvePerson(request.authenticatedPersonId)
-      : this.identities.resolve(request.headers);
+    const control = url === '/auth/impersonation';
+    const identity = control
+      ? this.identities.resolveOriginal(
+          request.headers,
+          request.authenticatedPersonId,
+        )
+      : this.identities.resolve(request.headers, request.authenticatedPersonId);
     request.platformIdentity = identity;
+    if (control && request.method === 'DELETE') return true;
+    if (
+      identity.impersonation &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+    )
+      this.identities.auditImpersonation(
+        identity.impersonation,
+        'httpAttempt',
+        request.method,
+        url,
+      );
     if (url === '/auth/me') return true;
     this.identities.requireActive(identity);
     if (identity.role === 'administrator') return true;
@@ -124,7 +148,9 @@ export class PlatformAccessGuard implements CanActivate {
       (request.method !== 'GET' &&
         /^\/simple-chat\/(config|settings|models)(\/|$)/.test(url)) ||
       /^\/simple-chat\/(?:api-key|settings)(\/|$)/.test(url) ||
-      /^\/auth\/(?:configuration|local-accounts|sessions)(\/|$)/.test(url) ||
+      /^\/auth\/(?:configuration|local-accounts|sessions|impersonation-audit)(\/|$)/.test(
+        url,
+      ) ||
       (request.method !== 'GET' && /^\/projects\/people(\/|$)/.test(url)) ||
       (request.method !== 'GET' &&
         /^\/projects\/[^/]+\/participants(?:\/|$)/.test(url)) ||

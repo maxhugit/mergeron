@@ -3,11 +3,14 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Optional,
 } from '@nestjs/common';
-import { eq, and, isNull, lte } from 'drizzle-orm';
+import { eq, and, isNull, lte, desc } from 'drizzle-orm';
 import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
+import { LocalAuthService } from './local-auth.service';
+import { identityEvents } from './identity-events';
 import { currentAccess } from './access-context';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
@@ -22,6 +25,7 @@ import {
   conversationOwners,
   conversationBranchEdges,
   documentAccessSessions,
+  impersonationAudit,
 } from '../database/schema';
 
 export interface PlatformIdentity {
@@ -36,15 +40,196 @@ export interface PlatformIdentity {
   lastName?: string;
   theme?: string;
   language?: string;
+  impersonation?: {
+    sessionId: string;
+    administratorId: string;
+    administratorName: string;
+    personId: string;
+    personName: string;
+    expiresAt: number;
+    expired?: boolean;
+  };
 }
 export type IdentityHeaders = Record<string, string | string[] | undefined>;
 
 @Injectable()
 export class IdentityService {
-  constructor(@Inject(DRIZZLE_DB) private readonly db: AppDatabase) {}
+  private readonly impersonations = new Map<
+    string,
+    NonNullable<PlatformIdentity['impersonation']>
+  >();
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
+    @Optional() private readonly localAuth?: LocalAuthService,
+  ) {}
+
+  resolveOriginal(
+    headers: IdentityHeaders,
+    personId?: string,
+  ): PlatformIdentity {
+    const local =
+      personId ?? this.localAuth?.authenticateCookie(headers.cookie);
+    return local
+      ? this.resolvePerson(local)
+      : this.resolveTrustedHeaders(headers);
+  }
+
+  resolve(headers: IdentityHeaders, personId?: string): PlatformIdentity {
+    const real = this.resolveOriginal(headers, personId);
+    const token = this.impersonationToken(headers);
+    if (!token) return real;
+    const session = this.impersonations.get(this.digestImpersonation(token));
+    const allowed =
+      session &&
+      real.kind === 'person' &&
+      real.active &&
+      real.role === 'administrator' &&
+      real.personId === session.administratorId;
+    if (!allowed)
+      return {
+        kind: 'unlinked',
+        personId: null,
+        name: null,
+        role: null,
+        active: false,
+        impersonation: {
+          sessionId: '',
+          administratorId: real.personId ?? '',
+          administratorName: real.name ?? '',
+          personId: '',
+          personName: '',
+          expiresAt: 0,
+          expired: true,
+        },
+      };
+    const target = this.resolvePerson(session.personId);
+    if (session.expiresAt <= Date.now() || !target.active)
+      return {
+        ...target,
+        active: false,
+        role: null,
+        impersonation: { ...session, expired: true },
+      };
+    return { ...target, impersonation: session };
+  }
+
+  private impersonationToken(headers: IdentityHeaders): string | null {
+    const cookie = headers.cookie;
+    if (typeof cookie !== 'string') return null;
+    const value = cookie
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('mergeron_impersonation='));
+    return value
+      ? value.slice('mergeron_impersonation='.length) || 'invalid'
+      : null;
+  }
+
+  private digestImpersonation(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  startImpersonation(
+    real: PlatformIdentity,
+    headers: IdentityHeaders,
+    personId: unknown,
+  ) {
+    this.requireAdministrator(real);
+    if (
+      real.kind !== 'person' ||
+      !real.personId ||
+      this.impersonationToken(headers)
+    )
+      throw new ForbiddenException(
+        'Revenez à votre compte avant de lancer un nouveau test. Un compte administrateur personnel est requis.',
+      );
+    if (typeof personId !== 'string' || personId === real.personId)
+      throw new BadRequestException('Choisissez une autre personne active.');
+    const target = this.resolvePerson(personId);
+    this.requireActive(target);
+    for (const [key, entry] of this.impersonations)
+      if (entry.expiresAt <= Date.now()) this.impersonations.delete(key);
+    if (this.impersonations.size >= 500)
+      throw new ForbiddenException(
+        'Trop de sessions de test. Réessayez plus tard.',
+      );
+    const session = {
+      sessionId: randomUUID(),
+      administratorId: real.personId,
+      administratorName: real.name ?? '',
+      personId,
+      personName: target.name ?? '',
+      expiresAt: Date.now() + 15 * 60_000,
+    };
+    this.auditImpersonation(session, 'started');
+    // Capabilities minted in the administrator view must not survive the switch.
+    this.db
+      .delete(documentAccessSessions)
+      .where(eq(documentAccessSessions.personId, real.personId))
+      .run();
+    const token = randomBytes(32).toString('base64url');
+    this.impersonations.set(this.digestImpersonation(token), session);
+    const timer = setTimeout(
+      () => identityEvents.emit('changed', real.personId),
+      15 * 60_000,
+    );
+    timer.unref();
+    identityEvents.emit('changed', real.personId);
+    return token;
+  }
+
+  stopImpersonation(real: PlatformIdentity, headers: IdentityHeaders) {
+    const token = this.impersonationToken(headers);
+    if (token) {
+      const digest = this.digestImpersonation(token);
+      const session = this.impersonations.get(digest);
+      if (session && session.administratorId === real.personId) {
+        this.auditImpersonation(session, 'stopped');
+        this.impersonations.delete(digest);
+      }
+    }
+    if (real.personId) identityEvents.emit('changed', real.personId);
+  }
+
+  impersonationCookie(token: string, secure: boolean) {
+    return `mergeron_impersonation=${token}; Path=/; HttpOnly; SameSite=Strict${secure ? '; Secure' : ''}${token ? '' : '; Max-Age=0'}`;
+  }
+
+  listImpersonationAudit(identity: PlatformIdentity) {
+    this.requireAdministrator(identity);
+    return this.db
+      .select()
+      .from(impersonationAudit)
+      .orderBy(desc(impersonationAudit.createdAt))
+      .limit(200)
+      .all();
+  }
+
+  auditImpersonation(
+    session: NonNullable<PlatformIdentity['impersonation']>,
+    action: string,
+    method?: string,
+    route?: string,
+  ) {
+    this.db
+      .insert(impersonationAudit)
+      .values({
+        id: randomUUID(),
+        sessionId: session.sessionId,
+        administratorId: session.administratorId,
+        administratorName: session.administratorName,
+        personId: session.personId,
+        personName: session.personName,
+        action,
+        method,
+        route: route?.split('?')[0].slice(0, 500),
+        createdAt: Date.now(),
+      })
+      .run();
+  }
 
   /** Call only after bearer authentication. The ingress overwrites every identity header. */
-  resolve(headers: IdentityHeaders): PlatformIdentity {
+  private resolveTrustedHeaders(headers: IdentityHeaders): PlatformIdentity {
     if (headers['x-webui-auth-source'] !== 'authentik') {
       if (
         (headers['x-webui-auth-source'] !== undefined &&
@@ -228,6 +413,7 @@ export class IdentityService {
   }
 
   requireActive(identity: PlatformIdentity) {
+    identity = this.current(identity);
     if (!identity.active || !identity.role)
       throw new ForbiddenException(
         'Your login is not linked to an active person. Contact an administrator.',
@@ -242,6 +428,20 @@ export class IdentityService {
 
   /** Shared policy used by REST, sockets, file capabilities and domain services. */
   current(identity: PlatformIdentity): PlatformIdentity {
+    if (identity.impersonation) {
+      const session = identity.impersonation;
+      const real = this.resolvePerson(session.administratorId);
+      if (
+        session.expired ||
+        ![...this.impersonations.values()].some(
+          (item) => item.sessionId === session.sessionId,
+        ) ||
+        session.expiresAt <= Date.now() ||
+        !real.active ||
+        real.role !== 'administrator'
+      )
+        return { ...identity, active: false, role: null };
+    }
     if (identity.kind === 'service') return identity;
     const person = identity.personId
       ? this.db
@@ -558,7 +758,9 @@ export class IdentityService {
         personId: identity.personId,
         administrator: identity.role === 'administrator',
         writable,
-        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+        impersonation: identity.impersonation ?? null,
+        expiresAt:
+          identity.impersonation?.expiresAt ?? Date.now() + 24 * 60 * 60 * 1000,
       })
       .run();
     return id;
@@ -578,6 +780,23 @@ export class IdentityService {
       (writable && !session.writable)
     )
       return false;
+    if (session.impersonation) {
+      const context = session.impersonation;
+      const active = [...this.impersonations.values()].some(
+        (item) =>
+          item.sessionId === context.sessionId && item.expiresAt > Date.now(),
+      );
+      const real = this.resolvePerson(context.administratorId);
+      if (!active || !real.active || real.role !== 'administrator')
+        return false;
+      if (writable)
+        this.auditImpersonation(
+          context,
+          'documentWriteAttempt',
+          'DOCUMENT',
+          'document-capability',
+        );
+    }
     // Service sessions are internal and can only be minted behind authenticated ingress.
     if (!session.personId) return session.administrator;
     const person = this.db

@@ -23,6 +23,7 @@ import {
   projects,
 } from '../database/schema';
 import { SettingsController } from '../settings/settings.controller';
+import { ImageUpdateService } from '../settings/image-update.service';
 import { ServerReleaseService } from '../settings/server-release.service';
 import { ManagerStatusService } from '../settings/manager-status.service';
 import { SettingsService } from '../settings/settings.service';
@@ -145,6 +146,10 @@ beforeEach(async () => {
       LocalAuthService,
       OidcAuthService,
       IdentityService,
+      {
+        provide: ImageUpdateService,
+        useValue: { status: () => ({ installed: { version: '0.1.0' } }) },
+      },
       ProjectKnowledgeService,
       KnowledgeProposalsService,
       {
@@ -235,6 +240,138 @@ it('returns an HTTP redirect when starting the OIDC flow', async () => {
   expect(response.headers['set-cookie']).toContain(
     'codex_webui_oidc_state=test-state',
   );
+});
+
+it('tests the real target permissions and records the administrator behind real modifications', async () => {
+  const admin = {
+    ...proxyHeaders('administrator@example.com'),
+    host: 'app.test',
+    origin: 'http://app.test',
+  };
+  const started = await app.inject({
+    method: 'POST',
+    url: '/api/auth/impersonation',
+    headers: admin,
+    payload: { personId: 'standard' },
+  });
+  expect(started.statusCode).toBe(201);
+  const value = started.headers['set-cookie'];
+  const cookie = (Array.isArray(value) ? value[0] : value!).split(';')[0];
+  expect(value).toContain('HttpOnly');
+  const headers = { ...admin, cookie };
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers });
+  expect(me.json()).toMatchObject({
+    personId: 'standard',
+    role: 'standard',
+    impersonation: { administratorId: 'administrator' },
+  });
+  expect(
+    (await app.inject({ method: 'GET', url: '/api/settings', headers }))
+      .statusCode,
+  ).toBe(403);
+  expect(
+    (
+      await app.inject({
+        method: 'GET',
+        url: '/api/projects/outside-project/participants',
+        headers,
+      })
+    ).statusCode,
+  ).toBe(403);
+  const edit = await app.inject({
+    method: 'PATCH',
+    url: '/api/auth/preferences',
+    headers,
+    payload: { theme: 'nord' },
+  });
+  expect(edit.statusCode).toBe(200);
+  expect(
+    database.sqlite
+      .prepare('SELECT theme FROM people WHERE id=?')
+      .get('standard'),
+  ).toMatchObject({ theme: 'nord' });
+  expect(
+    database.sqlite
+      .prepare('SELECT theme FROM people WHERE id=?')
+      .get('administrator'),
+  ).not.toMatchObject({ theme: 'nord' });
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/impersonation',
+        headers,
+        payload: { personId: 'administrator' },
+      })
+    ).statusCode,
+  ).toBe(403);
+  const stopped = await app.inject({
+    method: 'DELETE',
+    url: '/api/auth/impersonation',
+    headers,
+  });
+  expect(stopped.statusCode).toBe(200);
+  expect(stopped.headers['set-cookie']).toContain('Max-Age=0');
+  expect(
+    (
+      await app.inject({ method: 'GET', url: '/api/auth/me', headers: admin })
+    ).json<{ personId: string }>().personId,
+  ).toBe('administrator');
+  // An old socket/cookie cannot turn back into an administrator after revocation.
+  expect(
+    (await app.inject({ method: 'GET', url: '/api/auth/me', headers })).json<{
+      active: boolean;
+    }>().active,
+  ).toBe(false);
+  const audit = await app.inject({
+    method: 'GET',
+    url: '/api/auth/impersonation-audit',
+    headers: admin,
+  });
+  expect(audit.statusCode).toBe(200);
+  expect(audit.json<{ events: unknown[] }>().events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        administratorId: 'administrator',
+        personId: 'standard',
+        action: 'httpCompleted',
+        route: '/api/auth/preferences',
+      }),
+    ]),
+  );
+});
+
+it('refuses non-admin impersonation and cross-origin switches', async () => {
+  const basic = {
+    ...proxyHeaders(),
+    host: 'app.test',
+    origin: 'http://app.test',
+  };
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/impersonation',
+        headers: basic,
+        payload: { personId: 'administrator' },
+      })
+    ).statusCode,
+  ).toBe(403);
+  const admin = {
+    ...proxyHeaders('administrator@example.com'),
+    host: 'app.test',
+    origin: 'https://evil.test',
+  };
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/impersonation',
+        headers: admin,
+        payload: { personId: 'standard' },
+      })
+    ).statusCode,
+  ).toBe(401);
 });
 
 it('returns 403 on real settings routes for standard users and 200 for administrators', async () => {

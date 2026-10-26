@@ -13,6 +13,15 @@ export interface PlatformSession {
   email?: string;
   theme?: string;
   language?: string;
+  impersonation?: {
+    sessionId: string;
+    administratorId: string;
+    administratorName: string;
+    personId: string;
+    personName: string;
+    expiresAt: number;
+    expired?: boolean;
+  };
 }
 
 const SESSION_RETRY_DELAYS_MS = [500, 1_500, 3_000] as const;

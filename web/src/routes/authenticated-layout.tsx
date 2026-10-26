@@ -37,6 +37,7 @@ import {
 } from '@/lib/platform-session';
 import { isSupportedLocale } from '@/locales';
 import { MobileRefresh } from '@/components/mobile-refresh';
+import { ImpersonationBanner } from '@/components/impersonation-controls';
 
 /**
  * Bound on retained per-conversation state.
@@ -55,6 +56,17 @@ const ManagerUpdateReconnecting = lazy(() =>
 );
 
 export function AuthenticatedLayout() {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <ImpersonationBanner />
+      <div className="min-h-0 flex-1">
+        <AuthenticatedContent />
+      </div>
+    </div>
+  );
+}
+
+function AuthenticatedContent() {
   const session = usePlatformSession();
   const { t } = useTranslation('authentication');
   const navigate = useNavigate();

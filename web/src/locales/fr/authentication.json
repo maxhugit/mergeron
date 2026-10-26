@@ -1,4 +1,27 @@
 {
+  "impersonation": {
+    "audit": "Journal des tests de droits",
+    "loading": "Chargement du journal…",
+    "date": "Date",
+    "administrator": "Administrateur réel",
+    "person": "Personne simulée",
+    "action": "Action",
+    "events": {
+      "started": "Test démarré",
+      "stopped": "Retour au compte",
+      "httpAttempt": "Requête tentée",
+      "httpCompleted": "Requête terminée",
+      "httpFailed": "Requête en échec",
+      "socketAttempt": "Action temps réel tentée",
+      "documentWriteAttempt": "Écriture documentaire tentée"
+    },
+    "start": "Tester en tant que",
+    "confirm": "Tester la plateforme en tant que {{name}} pendant 15 minutes ? Les modifications sont réelles et seront journalisées avec votre identité d’administrateur.",
+    "banner": "Test en tant que {{name}} — administrateur : {{administrator}}. Les modifications sont réelles et journalisées.",
+    "expired": "Le test est terminé ou n’est plus valide. Revenez à votre compte pour continuer.",
+    "stop": "Revenir à mon compte",
+    "error": "Impossible de changer d’identité. Vérifiez vos droits et réessayez."
+  },
   "settings": {
     "loading": "Chargement des paramètres d’authentification…",
     "title": "Authentification",

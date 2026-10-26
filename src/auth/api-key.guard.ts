@@ -42,6 +42,9 @@ export class ApiKeyGuard implements CanActivate {
 
     if (context.getType() === 'ws') {
       const socket = context.switchToWs().getClient<Socket>();
+      // Revalidate the browser session on every event; never reuse a revoked id.
+      if (socket.data)
+        delete (socket.data as Record<string, unknown>).authenticatedPersonId;
       const personId = this.localAuth?.authenticateCookie(
         socket.handshake.headers.cookie,
       );
