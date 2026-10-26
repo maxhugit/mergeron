@@ -1,6 +1,8 @@
 /** Drizzle table declarations for Mergeron persistence. */
 import { sql } from 'drizzle-orm';
 import {
+  check,
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -1056,6 +1058,10 @@ export const projectWorkspaces = sqliteTable(
   },
   (table) => [
     uniqueIndex('idx_project_workspaces_path').on(table.path),
+    uniqueIndex('idx_project_workspaces_id_project').on(
+      table.id,
+      table.projectId,
+    ),
     uniqueIndex('idx_project_workspaces_primary')
       .on(table.projectId)
       .where(sql`${table.primary} = 1`),
@@ -1125,6 +1131,103 @@ export const projectWorkspaceSecrets = sqliteTable(
 
 export type ProjectWorkspaceResource =
   typeof projectWorkspaceResources.$inferSelect;
+
+/** Connection configuration only: no directory, access grant or plaintext secret. */
+export const projectConnections = sqliteTable(
+  'project_connections',
+  {
+    // During the expand phase the legacy resource remains the write authority.
+    id: text('id')
+      .primaryKey()
+      .references(() => projectWorkspaceResources.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    protocol: text('protocol')
+      .$type<'git' | 'ssh' | 'sftp' | 'ftp' | 'ftps'>()
+      .notNull(),
+    address: text('address'),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+    connectionState: text('connection_state')
+      .$type<'untested' | 'connected' | 'unreachable' | 'disabled'>()
+      .notNull(),
+    lastCheckedAt: integer('last_checked_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_project_connections_id_project').on(
+      table.id,
+      table.projectId,
+    ),
+    index('idx_project_connections_project').on(table.projectId),
+    check(
+      'project_connections_protocol',
+      sql`${table.protocol} IN ('git', 'ssh', 'sftp', 'ftp', 'ftps')`,
+    ),
+  ],
+);
+
+/** A local directory or a root accessible through a connection; not an agent grant. */
+export const projectLocations = sqliteTable(
+  'project_locations',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind')
+      .$type<'managed_local' | 'attached_local' | 'remote'>()
+      .notNull(),
+    path: text('path').notNull(),
+    localWorkspaceId: text('local_workspace_id'),
+    connectionId: text('connection_id'),
+    legacyResourceId: text('legacy_resource_id').references(
+      () => projectWorkspaceResources.id,
+      { onDelete: 'cascade' },
+    ),
+    accessMode: text('access_mode')
+      .$type<'read_only' | 'read_write'>()
+      .notNull(),
+    capabilities: text('capabilities', { mode: 'json' })
+      .$type<{ read: boolean; write: boolean; execute: false }>()
+      .notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_project_locations_project').on(table.projectId),
+    index('idx_project_locations_connection').on(table.connectionId),
+    uniqueIndex('idx_project_locations_workspace').on(table.localWorkspaceId),
+    uniqueIndex('idx_project_locations_legacy_resource').on(
+      table.legacyResourceId,
+    ),
+    uniqueIndex('idx_project_locations_managed')
+      .on(table.projectId)
+      .where(sql`${table.kind} = 'managed_local'`),
+    foreignKey({
+      columns: [table.connectionId, table.projectId],
+      foreignColumns: [projectConnections.id, projectConnections.projectId],
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.localWorkspaceId, table.projectId],
+      foreignColumns: [projectWorkspaces.id, projectWorkspaces.projectId],
+    }).onDelete('cascade'),
+    check(
+      'project_locations_kind',
+      sql`(${table.kind} IN ('managed_local', 'attached_local') AND ${table.localWorkspaceId} IS NOT NULL AND ${table.connectionId} IS NULL AND ${table.legacyResourceId} IS NULL) OR (${table.kind} = 'remote' AND ${table.localWorkspaceId} IS NULL AND ${table.connectionId} IS NOT NULL)`,
+    ),
+    check(
+      'project_locations_access',
+      sql`${table.accessMode} IN ('read_only', 'read_write')`,
+    ),
+  ],
+);
+
+export type ProjectConnection = typeof projectConnections.$inferSelect;
+export type ProjectLocation = typeof projectLocations.$inferSelect;
 
 /** Explicit local snapshot of an external resource, suitable for activities. */
 export const projectWorkspaceCopies = sqliteTable(

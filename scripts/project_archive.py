@@ -38,6 +38,8 @@ MAX_ENTRY = 256 * 1024 ** 2
 MAX_ENTRIES = 20000
 MAX_JSON = 64 * 1024 ** 2
 EXCLUDED = {'project_workspace_secrets', 'document_access_sessions', 'impersonation_audit',
+            # Transitional projections rebuild from the legacy records on import.
+            'project_connections', 'project_locations',
             'auth_sessions', 'local_auth_credentials', 'oidc_auth_flows'}
 THREAD_TABLES = {'token_usage_snapshots', 'turn_diffs', 'turn_errors',
                  'conversation_branch_groups', 'conversation_branch_versions',
@@ -1004,7 +1006,12 @@ def import_archive(options, archive, manifest):
     records['projects'][0]['app_ids'] = '[]'
     for person in records.get('people', []):
         person.update(identity_subject=None, email=None, active=0, role='standard', reference='IMPORT-' + person['id'])
-    for resource in records.get('project_workspace_resources', []):
+    for source, resource in zip(manifest['tables'].get('project_workspace_resources', []),
+                                records.get('project_workspace_resources', [])):
+        # Protocol/access enums are not identifiers, even if an old resource id
+        # happens to be "ssh" or "local". Keep the normalized projection valid.
+        resource['type'] = source['type']
+        resource['access_mode'] = source['access_mode']
         if resource['type'] != 'local':
             resource.update(enabled=0, connection_state='disabled', last_checked_at=None, last_error=None)
     for resource in records.get('project_resources', []):

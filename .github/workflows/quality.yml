@@ -107,6 +107,7 @@ jobs:
           src/app.controller.spec.ts
           src/database/database.service.spec.ts
           src/database/pending-request-migration.spec.ts
+          src/database/project-locations-migration.spec.ts
           src/http-stack.spec.ts
           src/archive
           src/document-publication
@@ -116,6 +117,7 @@ jobs:
           src/threads/threads.service.spec.ts
           src/codex/catalog/catalog-admission.service.spec.ts
           src/projects/project-workspace-layout.spec.ts
+          src/projects/project-locations.service.spec.ts
           src/projects/project-archives.spec.ts
           src/project-knowledge/project-knowledge.service.spec.ts
           src/project-knowledge/knowledge-proposals.service.spec.ts
