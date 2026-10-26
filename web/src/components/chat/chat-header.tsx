@@ -1,6 +1,7 @@
 import { translationKey } from '@/locales/translation-key';
 import { BrandIcon } from '@/components/brand-icon';
 import { PwaInstall } from '@/components/pwa-install';
+import { ReloadApplicationButton } from '@/components/reload-application-button';
 import { useState } from 'react';
 import {
   Check,
@@ -418,6 +419,7 @@ export function ChatHeader() {
           </TooltipTrigger>
           <TooltipContent>{t('account')}</TooltipContent>
         </Tooltip>
+        <ReloadApplicationButton />
       </header>
       <Separator />
       <BranchGraphDialog

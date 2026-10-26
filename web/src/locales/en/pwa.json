@@ -1,4 +1,6 @@
 {
+  "reload": "Refresh the app",
+  "reloadHelp": "Reload the app to get the deployed version. Unsaved input may be lost.",
   "install": "Install the app",
   "installed": "App installed",
   "description": "Open Mergeron in its own window. A server connection is still required; conversations and documents are not stored for offline use.",
