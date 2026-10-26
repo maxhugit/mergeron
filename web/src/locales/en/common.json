@@ -380,6 +380,7 @@
   "connectingTerminal": "Connecting terminal…",
   "conversation": "Conversation",
   "copy": "Copy",
+  "copyFormatted": "Copy with formatting",
   "darkMode": "Dark mode",
   "default": "Default",
   "delete": "Delete",

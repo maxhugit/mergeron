@@ -47,6 +47,7 @@ export function AgentMessageItem({ item }: Props) {
   return (
     <div>
       <MarkdownRenderer
+        copyResponse
         content={item.content}
         completed={item.completed}
         onOpenFileReference={handleOpenFileReference}

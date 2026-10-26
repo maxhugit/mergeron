@@ -313,7 +313,11 @@ export function SimpleChatRoute() {
               >
                 {message.role === 'assistant' ? (
                   <div className="prose prose-sm max-w-none dark:prose-invert">
-                    <MarkdownRenderer content={message.content} completed />
+                    <MarkdownRenderer
+                      content={message.content}
+                      completed
+                      copyResponse
+                    />
                   </div>
                 ) : (
                   <p className="whitespace-pre-wrap">{message.content}</p>
