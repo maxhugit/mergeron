@@ -4,6 +4,10 @@ import { SimpleChatFolderSelector } from '@/components/chat/simple-chat-folder-s
 import type { FormEvent, KeyboardEvent } from 'react';
 import { MarkdownRenderer } from '@/components/chat/markdown-renderer';
 import {
+  SimpleChatBubble,
+  SimpleChatTranscript,
+} from '@/components/chat/simple-chat-transcript';
+import {
   Bot,
   ExternalLink,
   Globe2,
@@ -18,7 +22,6 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
-import { cn } from '@/lib/utils';
 import { VoiceDictationButton } from '@/components/chat/voice-dictation-button';
 import { SimpleChatModelSelector } from '@/components/chat/simple-chat-model-selector';
 import { useSimpleChatActivityStore } from '@/stores/simple-chat-activity-store';
@@ -280,91 +283,78 @@ export function SimpleChatRoute() {
   };
 
   return (
-    <main className="flex min-h-0 flex-1 overflow-hidden">
+    <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div
-          ref={messagesRef}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5"
-        >
-          <div className="mx-auto flex max-w-3xl flex-col gap-4">
-            {status && !status.configured && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-                La clé API OpenAI n’est pas encore configurée.
-              </div>
-            )}
-            {!activeThreadId && !loadingThread && (
-              <div className="py-16 text-center text-sm text-muted-foreground">
-                <MessageCircle className="mx-auto mb-3 h-8 w-8" />
-                Crée une conversation ou envoie directement un message.
-              </div>
-            )}
-            {loadingThread && (
-              <Loader2 className="mx-auto mt-16 h-6 w-6 animate-spin" />
-            )}
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={cn(
-                  'max-w-[92%] rounded-2xl px-4 py-3 text-sm',
-                  message.role === 'user'
-                    ? 'ml-auto bg-primary text-primary-foreground'
-                    : 'mr-auto border bg-card text-card-foreground',
-                )}
-              >
-                {message.role === 'assistant' ? (
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
-                    <MarkdownRenderer
-                      content={message.content}
-                      completed
-                      copyResponse
-                    />
-                  </div>
-                ) : (
-                  <p className="whitespace-pre-wrap">{message.content}</p>
-                )}
-                {message.sources?.length > 0 && (
-                  <div className="mt-3 border-t pt-2">
-                    <p className="mb-1 text-[11px] font-medium opacity-70">
-                      Sources
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {message.sources.map((source) => (
-                        <a
-                          key={source.url}
-                          href={source.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex max-w-64 items-center gap-1 truncate rounded border px-2 py-1 text-[11px] hover:bg-accent"
-                        >
-                          <ExternalLink className="h-3 w-3 shrink-0" />{' '}
-                          {source.title}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {message.role === 'assistant' && (
-                  <p className="mt-2 text-[11px] opacity-55">
-                    {message.model} · {message.totalTokens} jetons
+        <SimpleChatTranscript scrollRef={messagesRef}>
+          {status && !status.configured && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+              La clé API OpenAI n’est pas encore configurée.
+            </div>
+          )}
+          {!activeThreadId && !loadingThread && (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              <MessageCircle className="mx-auto mb-3 h-8 w-8" />
+              Crée une conversation ou envoie directement un message.
+            </div>
+          )}
+          {loadingThread && (
+            <Loader2 className="mx-auto mt-16 h-6 w-6 animate-spin" />
+          )}
+          {messages.map((message) => (
+            <SimpleChatBubble key={message.id} role={message.role}>
+              {message.role === 'assistant' ? (
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <MarkdownRenderer
+                    content={message.content}
+                    completed
+                    copyResponse
+                  />
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              )}
+              {message.sources?.length > 0 && (
+                <div className="mt-3 border-t pt-2">
+                  <p className="mb-1 text-[11px] font-medium opacity-70">
+                    Sources
                   </p>
-                )}
-              </article>
-            ))}
-            {sending && (
-              <div className="mr-auto flex items-center gap-2 rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Réponse en cours…
-              </div>
-            )}
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error ===
-                'The active folder is unresolved. Select an available project resource before starting a new operation.'
-                  ? t('activeFolderNeedsResolution')
-                  : error}
-              </p>
-            )}
-          </div>
-        </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {message.sources.map((source) => (
+                      <a
+                        key={source.url}
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex max-w-64 items-center gap-1 truncate rounded border px-2 py-1 text-[11px] hover:bg-accent"
+                      >
+                        <ExternalLink className="h-3 w-3 shrink-0" />{' '}
+                        {source.title}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {message.role === 'assistant' && (
+                <p className="mt-2 text-[11px] opacity-55">
+                  {message.model} · {message.totalTokens} jetons
+                </p>
+              )}
+            </SimpleChatBubble>
+          ))}
+          {sending && (
+            <div className="mr-auto flex items-center gap-2 rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Réponse en cours…
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error ===
+              'The active folder is unresolved. Select an available project resource before starting a new operation.'
+                ? t('activeFolderNeedsResolution')
+                : error}
+            </p>
+          )}
+        </SimpleChatTranscript>
 
         <form
           onSubmit={(event) => void send(event)}
