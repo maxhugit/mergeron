@@ -1,4 +1,5 @@
 {
+  "executionLocationUnavailable": "Cet emplacement local n’est plus disponible. Actualisez les emplacements du projet avant de le sélectionner.",
   "gitCloseDiff": "Fermer la comparaison de {{name}}",
   "gitDiffEmptyBefore": "Avant · dépôt sans commit",
   "gitDiffTabTitle": "Différences · {{name}}",

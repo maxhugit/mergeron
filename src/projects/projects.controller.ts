@@ -640,17 +640,28 @@ export class ProjectsController {
     @Body()
     body: {
       workspacePath?: string;
+      locationId?: string;
       resourceId?: string;
       relativePath?: string | null;
       alreadyAtWorkspace?: boolean;
     },
   ) {
+    if (
+      body.locationId !== undefined &&
+      (typeof body.locationId !== 'string' ||
+        !body.locationId.trim() ||
+        body.resourceId !== undefined ||
+        body.workspacePath !== undefined)
+    )
+      throw new BadRequestException('Choose one explicit project location');
     return this.projects.associateAgent(
       id,
       threadId,
-      body.resourceId
-        ? { resourceId: body.resourceId, relativePath: body.relativePath }
-        : (body.workspacePath ?? ''),
+      body.locationId
+        ? { locationId: body.locationId, relativePath: body.relativePath }
+        : body.resourceId
+          ? { resourceId: body.resourceId, relativePath: body.relativePath }
+          : (body.workspacePath ?? ''),
       body.alreadyAtWorkspace === true,
     );
   }

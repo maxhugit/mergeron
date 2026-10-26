@@ -118,6 +118,9 @@ jobs:
           src/codex/catalog/catalog-admission.service.spec.ts
           src/projects/project-workspace-layout.spec.ts
           src/projects/project-locations.service.spec.ts
+          src/projects/project-location-selection.spec.ts
+          src/projects/workspace-copies.service.spec.ts
+          src/active-folders
           src/projects/project-archives.spec.ts
           src/project-knowledge/project-knowledge.service.spec.ts
           src/project-knowledge/knowledge-proposals.service.spec.ts

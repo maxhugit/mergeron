@@ -42,7 +42,16 @@ export class ProjectConnectionRuntimeService {
       .update(
         JSON.stringify(
           stable(
-            policy && { projectId: policy.projectId, config: policy.config },
+            policy && {
+              projectId: policy.projectId,
+              config: policy.config,
+              locationId: policy.locationId,
+              workspaceId: policy.workspaceId,
+              executionCwd: policy.executionCwd,
+              readOnly: policy.readOnly,
+              sourceResourceId: policy.sourceResourceId,
+              sourceRevision: policy.sourceRevision,
+            },
           ),
         ),
       )
@@ -66,6 +75,10 @@ export class ProjectConnectionRuntimeService {
       throw new ConflictException(
         'Les connexions ont changé pendant la préparation. Réessayez.',
       );
+  }
+
+  assertExecutionLocation(policy: ProjectExecutionPolicy | null) {
+    this.policies.assertExecutionLocation(policy, policy?.executionCwd);
   }
 
   record(

@@ -124,10 +124,12 @@ export class ThreadHistoryService {
     const generation = this.connections?.generation();
     const policy = await this.connections?.forResume(params.threadId);
     this.connections?.assertGeneration(generation);
+    this.connections?.assertExecutionLocation(policy ?? null);
     const request: ExperimentalResumeParams = {
       threadId: params.threadId,
       ...(policy ? { config: policy.config } : {}),
       ...(policy?.executionCwd ? { cwd: policy.executionCwd } : {}),
+      ...(policy?.readOnly ? { sandbox: 'read-only' as const } : {}),
       excludeTurns: true,
       initialTurnsPage: {
         limit: params.initialTurnsLimit,

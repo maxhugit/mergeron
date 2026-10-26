@@ -1051,7 +1051,10 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   async associateAgent(
     projectId: string,
     threadId: string,
-    selection: string | { resourceId: string; relativePath?: string | null },
+    selection:
+      | string
+      | { resourceId: string; relativePath?: string | null }
+      | { locationId: string; relativePath?: string | null },
     alreadyAtWorkspace = false,
   ) {
     requireExecutionAccess();
@@ -1068,7 +1071,9 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     const folder =
       typeof selection === 'string'
         ? this.folders.validateAbsoluteSelection(projectId, selection)
-        : this.folders.validateSelection(projectId, selection);
+        : 'locationId' in selection
+          ? this.folders.validateLocationSelection(projectId, selection)
+          : this.folders.validateSelection(projectId, selection);
     if (!folder.effectivePath)
       throw new ConflictException('Active folder is unresolved');
     const workspace = this.getWorkspace(projectId, folder.resourceId);

@@ -137,6 +137,7 @@ export class ThreadsService {
       historyMode: REQUIRED_HISTORY_MODE,
     };
     this.connections?.assertGeneration(settingsGeneration);
+    this.projectConnections.assertExecutionLocation(projectPolicy, params.cwd);
     const response = await this.codex.request<v2.ThreadStartResponse>(
       'thread/start',
       requestParams,
@@ -364,6 +365,10 @@ export class ThreadsService {
   }
 
   private async resumeAtCwd(threadId: string, cwd: string): Promise<void> {
+    const projectPolicy = await this.projectConnections.policyForThread(
+      threadId,
+      cwd,
+    );
     const opened = await this.resumeRegistry.ensureOpened(
       threadId,
       1,
@@ -375,9 +380,15 @@ export class ThreadsService {
         'The conversation is currently owned by another client',
       );
     }
+    this.projectConnections.assertExecutionLocation(projectPolicy, cwd);
     const response = await this.codex.request<v2.ThreadResumeResponse>(
       'thread/resume',
-      { threadId, cwd, excludeTurns: true } satisfies v2.ThreadResumeParams,
+      {
+        threadId,
+        cwd,
+        excludeTurns: true,
+        ...(projectPolicy?.readOnly ? { sandbox: 'read-only' as const } : {}),
+      } satisfies v2.ThreadResumeParams,
     );
     this.resumeRegistry.cacheResponse(threadId, response);
   }
@@ -466,7 +477,10 @@ export class ThreadsService {
       await this.resumeRegistry.ensureOpened(params.threadId, 1, 'summary');
     const projectPolicy = connectionState
       ? connectionState.policy
-      : await this.projectConnections.policyForCwd(effectiveCwd);
+      : await this.projectConnections.policyForThread(
+          params.threadId,
+          effectiveCwd,
+        );
     const sharedKnowledge = await this.knowledge?.contextForConversation(
       effectiveCwd,
       params.threadId,
@@ -534,6 +548,10 @@ export class ThreadsService {
       );
     const send = () => {
       this.connections?.assertOpen();
+      this.projectConnections.assertExecutionLocation(
+        projectPolicy,
+        effectiveCwd,
+      );
       if (connectionState)
         this.connections?.assertGeneration(connectionState.generation);
       return this.codex.request<v2.TurnStartResponse>(
