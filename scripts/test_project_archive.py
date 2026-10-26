@@ -61,7 +61,7 @@ class ProjectArchiveTest(unittest.TestCase):
         with database(self.target_db) as db:
             db.execute("INSERT INTO people(id,reference,name,email,role,active,created_at,updated_at) VALUES('target-admin','D1','Admin','alice@example.test','administrator',1,1,1)")
         self.source = dict(database=str(self.source_db), workspaceRoot=str(self.source_root), codexHome=str(self.home), version='0.1.0', codexVersion='0.153.2', projectId='project-source', archive=str(self.archive))
-        self.target = dict(database=str(self.target_db), workspaceRoot=str(self.target_root), codexHome=str(self.target_home), version='0.9.0', codexVersion='0.153.3', personId='target-admin', archive=str(self.archive))
+        self.target = dict(database=str(self.target_db), workspaceRoot=str(self.target_root), codexHome=str(self.target_home), version='0.9.0', codexVersion='0.153.3', personId='target-admin', archive=str(self.archive), personMappings={'person': None})
 
     def export(self):
         return engine.export_archive(self.source)
@@ -148,6 +148,64 @@ class ProjectArchiveTest(unittest.TestCase):
             self.assertEqual((people[0]['active'], people[0]['role'], people[0]['identity_subject']), (0, 'standard', None))
             provenance = json.loads(db.execute('SELECT provenance FROM project_archive_imports WHERE project_id=?', (result['projectId'],)).fetchone()[0])
             self.assertEqual(provenance['contacts'][0]['email'], 'alice@example.test')
+
+    def test_preview_exposes_safe_person_choices(self):
+        self.export()
+        _, manifest = self.load()
+        result = engine.preview(self.target, manifest)
+        self.assertEqual(result['people'][0]['id'], 'person')
+        self.assertEqual(result['availablePeople'][0]['id'], 'target-admin')
+        self.assertNotIn('identity_subject', result['people'][0])
+        self.assertNotIn('identity_subject', result['availablePeople'][0])
+
+    def test_explicit_existing_person_keeps_account_and_relinks_tasks(self):
+        self.export()
+        self.target['personMappings'] = {'person': 'target-admin'}
+        with engine.connect(self.target_db) as db:
+            before = dict(db.execute('SELECT * FROM people').fetchone())
+        result = self.import_project()
+        with engine.connect(self.target_db) as db:
+            self.assertEqual([dict(r) for r in db.execute('SELECT * FROM people')], [before])
+            self.assertEqual(db.execute("SELECT assignee_id FROM project_tasks WHERE title='Parent'").fetchone()[0], 'target-admin')
+            self.assertEqual(db.execute('SELECT count(*) FROM project_participants WHERE project_id=?', (result['projectId'],)).fetchone()[0], 1)
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+            provenance = json.loads(db.execute('SELECT provenance FROM project_archive_imports').fetchone()[0])
+            self.assertEqual(provenance['personMappings'], {'person': 'target-admin'})
+
+    def test_person_mapping_is_required_complete_and_valid_before_any_write(self):
+        self.export()
+        archive, manifest = self.load()
+        for mapping in (None, {}, {'unknown': None}, {'person': 'missing'}, {'person': {}}, {'person': None, 'extra': None}):
+            with self.subTest(mapping=mapping), self.assertRaises(engine.ArchiveError):
+                engine.import_archive(dict(self.target, personMappings=mapping), archive, manifest)
+            self.assertEqual(list(self.target_root.iterdir()), [])
+            with engine.connect(self.target_db) as db:
+                self.assertEqual(db.execute('SELECT count(*) FROM people').fetchone()[0], 1)
+                self.assertEqual(db.execute('SELECT count(*) FROM projects').fetchone()[0], 0)
+
+    def test_two_source_people_can_map_to_one_existing_person(self):
+        with engine.connect(self.source_db) as db:
+            db.execute("INSERT INTO people(id,reference,name,active,created_at,updated_at) VALUES('second','P2','Alice bis',0,1,1)")
+            db.execute("INSERT INTO project_participants VALUES('project-source','second',1)")
+        self.export()
+        self.target['personMappings'] = {'person': 'target-admin', 'second': 'target-admin'}
+        result = self.import_project()
+        with engine.connect(self.target_db) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM people').fetchone()[0], 1)
+            self.assertEqual(db.execute('SELECT count(*) FROM project_participants WHERE project_id=?', (result['projectId'],)).fetchone()[0], 1)
+
+    def test_failed_import_never_removes_reused_identity(self):
+        self.export()
+        self.target['personMappings'] = {'person': 'target-admin'}
+        with engine.connect(self.target_db) as db:
+            before = dict(db.execute('SELECT * FROM people').fetchone())
+            db.execute("CREATE TRIGGER reject_import BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT,'test rollback'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.import_project()
+        self.assertEqual(list(self.target_root.iterdir()), [])
+        with engine.connect(self.target_db) as db:
+            self.assertEqual([dict(r) for r in db.execute('SELECT * FROM people')], [before])
+            self.assertEqual(db.execute('SELECT count(*) FROM projects').fetchone()[0], 0)
 
     def test_same_zip_can_be_imported_twice_without_overwriting(self):
         self.export()

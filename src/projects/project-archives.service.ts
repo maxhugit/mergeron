@@ -263,7 +263,12 @@ export class ProjectArchivesService implements OnModuleInit, OnModuleDestroy {
   async importProject(
     owner: string,
     personId: string | null,
-    input: { token?: unknown; name?: unknown; selection?: unknown },
+    input: {
+      token?: unknown;
+      name?: unknown;
+      selection?: unknown;
+      personMappings?: unknown;
+    },
   ) {
     return this.exclusive(async () => {
       await this.expire();
@@ -296,6 +301,7 @@ export class ProjectArchivesService implements OnModuleInit, OnModuleDestroy {
           name: input.name,
           personId,
           selection: input.selection,
+          personMappings: input.personMappings,
         });
         this.metadata.invalidate();
         return result;

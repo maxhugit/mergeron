@@ -18,6 +18,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
+interface ArchivePerson {
+  id: string;
+  name: string;
+  email: string | null;
+  reference: string;
+  active?: boolean | number;
+}
+
 interface ArchivePreview {
   token: string;
   projectName: string;
@@ -26,6 +34,8 @@ interface ArchivePreview {
   files: number;
   bytes: number;
   warnings: string[];
+  people: ArchivePerson[];
+  availablePeople: ArchivePerson[];
 }
 
 function archiveError(reason: unknown, fallback: string) {
@@ -163,6 +173,9 @@ export function ProjectArchiveImportForm({
   const [busy, setBusy] = useState<'preview' | 'import' | null>(null);
   const [preview, setPreview] = useState<ArchivePreview | null>(null);
   const [name, setName] = useState('');
+  const [personMappings, setPersonMappings] = useState<
+    Record<string, string | null>
+  >({});
   const [selection, setSelection] = useState<string[]>([
     'files',
     'conversations',
@@ -171,6 +184,7 @@ export function ProjectArchiveImportForm({
   const [error, setError] = useState('');
   const inspect = async (file: File | undefined) => {
     setPreview(null);
+    setPersonMappings({});
     setError('');
     if (!file) return;
     if (file.size > 96 * 1024 * 1024) {
@@ -209,7 +223,13 @@ export function ProjectArchiveImportForm({
     };
   }, [preview?.token]);
   const restore = async () => {
-    if (!preview) return;
+    if (
+      !preview ||
+      !preview.people.every((person) =>
+        Object.hasOwn(personMappings, person.id),
+      )
+    )
+      return;
     setBusy('import');
     onBusyChange(true);
     setError('');
@@ -221,6 +241,7 @@ export function ProjectArchiveImportForm({
           token: preview.token,
           name: name.trim(),
           selection,
+          personMappings,
         }),
       });
       const result = (await response.json()) as { projectId: string };
@@ -349,7 +370,72 @@ export function ProjectArchiveImportForm({
             </p>
           </fieldset>
           <p>{t('projectArchiveSafety')}</p>
-          <p>{t('projectArchiveContacts')}</p>
+          <fieldset
+            className="space-y-3 rounded-lg border p-3"
+            disabled={!!busy}
+          >
+            <legend className="px-1 font-medium">
+              {t('projectArchivePeopleTitle')}
+            </legend>
+            <p className="text-muted-foreground">
+              {t('projectArchivePeopleDescription')}
+            </p>
+            {preview.people.length === 0 && (
+              <p>{t('projectArchivePeopleEmpty')}</p>
+            )}
+            {preview.people.map((person) => (
+              <div key={person.id} className="min-w-0 space-y-2">
+                <p className="break-words font-medium">
+                  {person.name} · {person.reference}
+                </p>
+                {person.email && (
+                  <p className="break-words text-muted-foreground">
+                    {person.email}
+                  </p>
+                )}
+                <select
+                  className="w-full min-w-0 rounded-lg border bg-background px-3 py-2 text-foreground"
+                  aria-label={t('projectArchivePersonFor', {
+                    name: person.name,
+                  })}
+                  disabled={!!busy}
+                  value={
+                    Object.hasOwn(personMappings, person.id)
+                      ? (personMappings[person.id] ?? '__new')
+                      : ''
+                  }
+                  onChange={(event) =>
+                    setPersonMappings((previous) => ({
+                      ...previous,
+                      [person.id]:
+                        event.target.value === '__new'
+                          ? null
+                          : event.target.value,
+                    }))
+                  }
+                >
+                  <option value="" disabled>
+                    {t('projectArchivePersonChoose')}
+                  </option>
+                  <option value="__new">
+                    {t('projectArchivePersonCreate')}
+                  </option>
+                  {preview.availablePeople.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name} ·{' '}
+                      {candidate.email || candidate.reference}
+                      {!candidate.active
+                        ? ` · ${t('projectArchivePersonInactive')}`
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+            <p className="text-muted-foreground">
+              {t('projectArchiveContacts')}
+            </p>
+          </fieldset>
           <p>{t('projectArchiveExpiry')}</p>
         </div>
       )}
@@ -373,7 +459,14 @@ export function ProjectArchiveImportForm({
           {t('cancel')}
         </Button>
         <Button
-          disabled={!preview || !!busy || !name.trim()}
+          disabled={
+            !preview ||
+            !!busy ||
+            !name.trim() ||
+            !preview.people.every((person) =>
+              Object.hasOwn(personMappings, person.id),
+            )
+          }
           onClick={() => void restore()}
         >
           {t('projectArchiveConfirmImport')}
