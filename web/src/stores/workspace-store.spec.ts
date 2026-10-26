@@ -8,11 +8,47 @@ beforeEach(() => {
   useTerminalViewStore.setState({ retained: {}, target: null });
 });
 
+it('keeps comparisons beside conversation, deduplicated by project/copy/file and separate from editable files', () => {
+  const store = useWorkspaceStore.getState();
+  const target = {
+    projectId: 'p',
+    copyId: 'copy',
+    path: 'file.ts',
+    localPath: '/copy',
+    status: ' M',
+  };
+  store.openGitDiff('thread:a', target);
+  const first = useWorkspaceStore.getState().contexts['thread:a'];
+  expect(first.tabs[0].kind).toBe('git-diff');
+  store.select('thread:a', 'conversation');
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
+    1,
+  );
+  store.openGitDiff('thread:a', target);
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
+    1,
+  );
+  store.openGitDiff('thread:a', { ...target, copyId: 'other' });
+  store.openFile('thread:a', '/copy/file.ts');
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
+    3,
+  );
+  expect(useWorkspaceStore.getState().contexts['thread:b']).toBeUndefined();
+  store.remove('thread:a', first.activeId);
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
+    2,
+  );
+  store.forgetConversations(['a']);
+  expect(useWorkspaceStore.getState().contexts['thread:a']).toBeUndefined();
+});
+
 it('opens one tab per document, with independent navigation requests in each conversation', () => {
   const store = useWorkspaceStore.getState();
   store.openFile('thread:a', '/shared.ts', 3);
   const firstTab = useWorkspaceStore.getState().contexts['thread:a'].tabs[0];
-  const first = useWorkspaceStore.getState().fileViews[fileViewId('thread:a', firstTab.id)].reveal!;
+  const first =
+    useWorkspaceStore.getState().fileViews[fileViewId('thread:a', firstTab.id)]
+      .reveal!;
   store.openFile('thread:a', '/shared.ts', 9);
   store.openFile('thread:b', '/shared.ts', 20);
   const state = useWorkspaceStore.getState();
@@ -21,7 +57,9 @@ it('opens one tab per document, with independent navigation requests in each con
     state.fileViews[fileViewId('thread:a', firstTab.id)].reveal,
   ).toMatchObject({ line: 9 });
   expect(
-    state.fileViews[fileViewId('thread:b', state.contexts['thread:b'].tabs[0].id)].reveal,
+    state.fileViews[
+      fileViewId('thread:b', state.contexts['thread:b'].tabs[0].id)
+    ].reveal,
   ).toMatchObject({ line: 20 });
   store.consumeReveal(fileViewId('thread:a', firstTab.id), first.request);
   expect(
@@ -34,11 +72,18 @@ it('cancels navigation when leaving a view, but not when closing an unrelated ta
   const store = useWorkspaceStore.getState();
   store.openFile('thread:a', '/first.ts');
   store.openFile('thread:a', '/second.ts', 12);
-  store.remove('thread:a', useWorkspaceStore.getState().contexts['thread:a'].tabs[0].id);
+  store.remove(
+    'thread:a',
+    useWorkspaceStore.getState().contexts['thread:a'].tabs[0].id,
+  );
   const secondId = useWorkspaceStore.getState().contexts['thread:a'].tabs[0].id;
   expect(
-    useWorkspaceStore.getState().fileViews[fileViewId('thread:a', useWorkspaceStore.getState().contexts['thread:a'].tabs[0].id)]
-      .reveal?.line,
+    useWorkspaceStore.getState().fileViews[
+      fileViewId(
+        'thread:a',
+        useWorkspaceStore.getState().contexts['thread:a'].tabs[0].id,
+      )
+    ].reveal?.line,
   ).toBe(12);
   store.select('thread:a', 'conversation');
   expect(
@@ -56,7 +101,11 @@ it('keeps tab sets across selection and removes only conversations actually dele
   useTerminalViewStore.getState().retain('terminal-b', 'thread:b');
   store.forgetConversations(['a']);
   expect(useWorkspaceStore.getState().contexts['thread:a']).toBeUndefined();
-  expect(useWorkspaceStore.getState().contexts['thread:b'].tabs.find((tab) => tab.kind === 'file')).toMatchObject({ path: '/b.ts' });
+  expect(
+    useWorkspaceStore
+      .getState()
+      .contexts['thread:b'].tabs.find((tab) => tab.kind === 'file'),
+  ).toMatchObject({ path: '/b.ts' });
   expect(useTerminalViewStore.getState().retained).toEqual({
     'terminal-b': 'thread:b',
   });
@@ -65,7 +114,10 @@ it('keeps tab sets across selection and removes only conversations actually dele
 it('falls back to the pinned conversation after its final closable tab is removed', () => {
   const store = useWorkspaceStore.getState();
   store.openFile('thread:a', '/a.ts');
-  store.remove('thread:a', useWorkspaceStore.getState().contexts['thread:a'].tabs[0].id);
+  store.remove(
+    'thread:a',
+    useWorkspaceStore.getState().contexts['thread:a'].tabs[0].id,
+  );
   expect(useWorkspaceStore.getState().contexts['thread:a']).toEqual({
     tabs: [],
     activeId: 'conversation',

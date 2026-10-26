@@ -12,6 +12,7 @@ import { filesAddRoot } from '@/generated/api';
 import { pathIsWithin } from '@/lib/file-change-events';
 import { type ProjectSummary } from '@/lib/projects-api';
 import { WorkspaceGitPanel } from './workspace-git-panel';
+import type { GitDiffTarget } from '@/stores/workspace-store';
 
 interface Props {
   cwd: string | null;
@@ -22,6 +23,7 @@ interface Props {
   mobileOpen: boolean;
   onMobileClose: () => void;
   onFile: (path: string) => void;
+  onGitDiff?: (target: GitDiffTarget) => void;
 }
 
 /** Adapts only explorer presentation; the conversation and tab content keep their tree positions. */
@@ -34,6 +36,7 @@ export function WorkspaceTree({
   mobileOpen,
   onMobileClose,
   onFile,
+  onGitDiff,
 }: Props) {
   const { t } = useTranslation();
   const currentRoot = useFilesStore((s) => s.rootDir);
@@ -139,6 +142,10 @@ export function WorkspaceTree({
         <WorkspaceGitPanel
           key={project.id}
           projectId={project.id}
+          onGitDiff={(target) => {
+            onGitDiff?.(target);
+            onMobileClose();
+          }}
           resourceId={gitResourceId}
           onSelect={setGitResourceId}
           cwd={cwd}

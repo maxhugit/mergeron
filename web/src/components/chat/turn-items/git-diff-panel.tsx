@@ -27,6 +27,7 @@ interface GitDiffPanelProps {
   className?: string;
   /** Tailwind max-height class for the scrollable diff body. */
   maxHeightClassName?: string;
+  initialSplit?: boolean;
 }
 
 // ── Highlighter singleton ────────────────────────────────────────────
@@ -179,10 +180,11 @@ export function GitDiffPanel({
   showToolbar = true,
   className,
   maxHeightClassName = 'max-h-64',
+  initialSplit = false,
 }: GitDiffPanelProps) {
   const { t } = useTranslation();
   const dark = useThemeStore((s) => s.dark);
-  const [split, setSplit] = useState(false);
+  const [split, setSplit] = useState(initialSplit);
   const [diffViewModule, setDiffViewModule] = useState<DiffViewModule | null>(
     null,
   );

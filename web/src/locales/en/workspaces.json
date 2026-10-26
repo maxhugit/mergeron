@@ -1,4 +1,10 @@
 {
+  "gitCloseDiff": "Close comparison for {{name}}",
+  "gitDiffEmptyBefore": "Before · repository without commits",
+  "gitDiffTabTitle": "Changes · {{name}}",
+  "gitDiffBefore": "Before · last commit (HEAD)",
+  "gitDiffAfter": "After · working copy",
+  "gitDiffStaged": "After · staged changes",
   "localLocations": "Local locations",
   "localLocationsDescription": "The local space managed by Mergeron and other local folders attached to this project. Remote connections are listed separately.",
   "managedLocalDescription": "The managed local space is the project’s permanent primary location. Working files are separate from internal data in the .mergeron directory, reserved for the application and hidden by default in the file listing.",
