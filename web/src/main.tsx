@@ -8,10 +8,12 @@ import { router } from './routes/router';
 import { useThemeStore } from './stores/theme-store';
 import { installMobileViewportFixes } from './lib/mobile-viewport';
 import { i18nReady } from './i18n';
+import { initializePwaInstall } from './lib/pwa-install';
 import './index.css';
 
 configureApiClient();
 installMobileViewportFixes();
+initializePwaInstall();
 
 // Install only the static-asset service worker. API responses, conversations,
 // files and authentication pages deliberately remain network-only.

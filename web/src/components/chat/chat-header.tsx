@@ -1,5 +1,6 @@
 import { translationKey } from '@/locales/translation-key';
 import { BrandIcon } from '@/components/brand-icon';
+import { PwaInstall } from '@/components/pwa-install';
 import { useState } from 'react';
 import {
   Check,
@@ -462,6 +463,7 @@ export function ChatHeader() {
             </div>
           </dl>
           <ProfileAppearance />
+          <PwaInstall />
           <DialogFooter className="sm:justify-between">
             <Button variant="destructive" onClick={() => void handleLogout()}>
               <LogOut className="h-4 w-4" />

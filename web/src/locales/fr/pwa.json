@@ -1,0 +1,9 @@
+{
+  "install": "Installer l’application",
+  "installed": "Application installée",
+  "description": "Ouvrez Mergeron dans sa propre fenêtre. Une connexion au serveur reste nécessaire ; les conversations et documents ne sont pas conservés hors ligne.",
+  "manualIntroduction": "Si le navigateur ne propose pas sa fenêtre d’installation, utilisez son menu.",
+  "edge": "Dans Edge : menu ⋯, puis Applications (ou Outils supplémentaires → Applications), puis Installer ce site en tant qu’application. L’icône d’installation peut aussi apparaître dans la barre d’adresse.",
+  "safari": "Dans Safari sur Mac : Fichier → Ajouter au Dock. Sur iPhone/iPad : Partager → Sur l’écran d’accueil, selon le navigateur et la version du système.",
+  "availability": "Connectez-vous d’abord à Mergeron. Le navigateur décide de la disponibilité de l’installation : une navigation privée, une politique d’entreprise, une installation existante ou un refus récent peuvent empêcher la proposition. Aucune installation n’est lancée automatiquement."
+}
