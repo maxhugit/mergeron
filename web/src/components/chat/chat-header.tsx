@@ -405,6 +405,7 @@ export function ChatHeader() {
             t={t}
           />
         ) : null}
+        <ReloadApplicationButton />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -419,7 +420,6 @@ export function ChatHeader() {
           </TooltipTrigger>
           <TooltipContent>{t('account')}</TooltipContent>
         </Tooltip>
-        <ReloadApplicationButton />
       </header>
       <Separator />
       <BranchGraphDialog
