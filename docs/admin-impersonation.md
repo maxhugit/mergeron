@@ -9,7 +9,7 @@ l’administrateur. Aucun mot de passe ni identité SSO de la personne n’est u
 Le bandeau permanent affiche la personne simulée et l’administrateur réel.
 **Revenir à mon compte** termine le test. Il reste accessible après expiration,
 désactivation du compte cible ou redémarrage du serveur. Les tests durent au
-maximum 15 minutes ; après expiration ils sont bloqués, sans restauration
+maximum 30 minutes ; après expiration ils sont bloqués, sans restauration
 silencieuse des droits administrateur dans une ancienne vue.
 
 Le changement provoque un rechargement complet et une reconnexion des sockets.

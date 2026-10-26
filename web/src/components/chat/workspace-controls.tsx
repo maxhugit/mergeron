@@ -8,6 +8,7 @@ import {
   TerminalSquare,
   X,
   ChevronDown,
+  GitCompareArrows,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -41,10 +42,15 @@ export function WorkspaceControls({
   terminalCreationDisabled,
 }: Props) {
   const { t } = useTranslation();
+  const { t: tw } = useTranslation('workspaces');
   const desktop = useBreakpoint() === 'desktop';
   const terminals = useTerminalStore((s) => s.terminals);
   const [chooser, setChooser] = useState(false);
   const label = (tab: WorkspaceTab) => {
+    if (tab.kind === 'git-diff')
+      return tw('gitDiffTabTitle', {
+        name: tab.path.split('/').pop() ?? tab.path,
+      });
     if (tab.kind === 'file') return tab.path.split('/').pop() ?? tab.path;
     const terminal = terminals[tab.terminalId];
     const title = terminal?.title ?? t('terminal');
@@ -53,6 +59,14 @@ export function WorkspaceControls({
     return title;
   };
   const selected = workspace.tabs.find((tab) => tab.id === workspace.activeId);
+  const closeLabel = (tab: WorkspaceTab) =>
+    tab.kind === 'git-diff'
+      ? tw('gitCloseDiff', { name: tab.path })
+      : t(
+          translationKey(
+            tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
+          ),
+        );
   const choose = (id: string) => {
     onSelect(id);
     setChooser(false);
@@ -148,7 +162,11 @@ export function WorkspaceControls({
                   role="tab"
                   aria-selected={workspace.activeId === tab.id}
                   tabIndex={workspace.activeId === tab.id ? 0 : -1}
-                  title={tab.kind === 'file' ? tab.path : label(tab)}
+                  title={
+                    tab.kind === 'file' || tab.kind === 'git-diff'
+                      ? tab.path
+                      : label(tab)
+                  }
                   onClick={() => choose(tab.id)}
                   onKeyDown={(event) => {
                     if (event.key === 'Delete') {
@@ -158,7 +176,9 @@ export function WorkspaceControls({
                   }}
                   className="flex min-w-0 items-center gap-2 px-3 text-xs"
                 >
-                  {tab.kind === 'file' ? (
+                  {tab.kind === 'git-diff' ? (
+                    <GitCompareArrows className="h-3.5 w-3.5 shrink-0" />
+                  ) : tab.kind === 'file' ? (
                     <FileCode className="h-3.5 w-3.5 shrink-0" />
                   ) : (
                     <TerminalSquare className="h-3.5 w-3.5 shrink-0" />
@@ -169,11 +189,7 @@ export function WorkspaceControls({
                   type="button"
                   tabIndex={-1}
                   onClick={() => onClose(tab)}
-                  aria-label={t(
-                    translationKey(
-                      tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
-                    ),
-                  )}
+                  aria-label={closeLabel(tab)}
                   className="mr-1 rounded p-1 hover:bg-accent"
                 >
                   <X className="h-3 w-3" />
@@ -242,11 +258,7 @@ export function WorkspaceControls({
                 <button
                   type="button"
                   className="p-3"
-                  aria-label={t(
-                    translationKey(
-                      tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
-                    ),
-                  )}
+                  aria-label={closeLabel(tab)}
                   onClick={() => onClose(tab)}
                 >
                   <X className="h-4 w-4" />

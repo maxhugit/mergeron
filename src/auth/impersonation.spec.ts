@@ -84,7 +84,10 @@ it('expires closed and never restores administrative privileges to a stale ident
   vi.useFakeTimers();
   const session = start('otherAdmin');
   const identity = identities.resolve(session.headers);
-  vi.advanceTimersByTime(15 * 60_000 + 1);
+  expect(identity.impersonation?.expiresAt).toBe(Date.now() + 30 * 60_000);
+  vi.advanceTimersByTime(30 * 60_000 - 1);
+  expect(identities.resolve(session.headers).active).toBe(true);
+  vi.advanceTimersByTime(2);
   expect(identities.resolve(session.headers).active).toBe(false);
   expect(identities.canReadProject(identity, 'anything')).toBe(false);
   expect(() => identities.requireAdministrator(identity)).toThrow();

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,10 +56,12 @@ export function ManagerUpdateControls({
   status,
   trailingActions,
   showBackups = true,
+  actionsContainer,
 }: {
   status: ManagerStatus;
   trailingActions?: ReactNode;
   showBackups?: boolean;
+  actionsContainer?: HTMLElement | null;
 }) {
   const { t } = useTranslation('manager');
   const { t: common } = useTranslation();
@@ -141,10 +144,31 @@ export function ManagerUpdateControls({
     (progressOperation?.status === 'running' &&
       operation?.id !== progressOperation.id);
   const blocked = operation?.status === 'recoveryRequired';
+  const renderActions = (actions: ReactNode) =>
+    actionsContainer ? (
+      createPortal(actions, actionsContainer)
+    ) : (
+      <div className="flex flex-wrap items-center gap-2">{actions}</div>
+    );
   if (!status.available && !progressOpen && !progressOperation)
-    return <>{trailingActions}</>;
+    return <>{renderActions(trailingActions)}</>;
   return (
-    <div className="space-y-3 border-t border-border pt-4">
+    <div className="order-first space-y-3">
+      <div className="space-y-2">
+        <label htmlFor="manager-update-image" className="text-sm">
+          {t('managerTargetApplicationImage')}
+        </label>
+        <Input
+          id="manager-update-image"
+          value={image}
+          disabled={busy || blocked}
+          onChange={(event) => {
+            setManualSelection(true);
+            setImage(event.target.value);
+            setPlan(null);
+          }}
+        />
+      </div>
       <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
       <p className="text-xs text-muted-foreground">
         {t('managerUpdateSafetyDescription')}
@@ -178,15 +202,6 @@ export function ManagerUpdateControls({
               {t(translationKey(operation.error))}
             </p>
           )}
-          {operation.status === 'succeeded' && operation.backupRetained && (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setConfirm('rollback')}
-            >
-              {t('managerRestorePreviousVersion')}
-            </Button>
-          )}
           {blocked && (
             <Button
               disabled={busy}
@@ -199,75 +214,65 @@ export function ManagerUpdateControls({
           )}
         </div>
       )}
-      {(operation || progressOperation || progressSession > 0) && (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setProgressOpen(true)}
-        >
-          {t('managerViewUpdateProgress')}
-        </Button>
-      )}
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
           {t('managerUpdateSeparateFromSettings')}
         </p>
-        <p className="break-all font-mono text-xs">{image}</p>
-        <details>
-          <summary className="cursor-pointer text-xs text-muted-foreground">
-            {t('managerAdvancedImage')}
-          </summary>
-          <div className="mt-2 space-y-2">
-            <label htmlFor="manager-update-image" className="text-sm">
-              {t('managerTargetApplicationImage')}
-            </label>
-            <Input
-              id="manager-update-image"
-              value={image}
-              disabled={busy || blocked}
-              onChange={(event) => {
-                setManualSelection(true);
-                setImage(event.target.value);
-                setPlan(null);
+        {renderActions(
+          <>
+            <Button
+              type="button"
+              disabled={
+                busy ||
+                !status.available ||
+                blocked ||
+                !image.trim() ||
+                (!manualSelection &&
+                  (!release.data ||
+                    release.isError ||
+                    (!!release.data.targetImage &&
+                      !release.data.updateAvailable)))
+              }
+              onClick={() => {
+                // Keep the reviewed target fixed if release discovery finishes later.
+                setImage(image.trim());
+                const target =
+                  !manualSelection &&
+                  release.data?.targetDigest &&
+                  release.data.targetImage === image
+                    ? `ghcr.io/maxhugit/mergeron@${release.data.targetDigest}`
+                    : image.trim();
+                mutation.mutate({
+                  action: 'plan',
+                  input: { images: { application: target } },
+                });
               }}
-            />
-          </div>
-        </details>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            disabled={
-              busy ||
-              !status.available ||
-              blocked ||
-              !image.trim() ||
-              (!manualSelection &&
-                (!release.data ||
-                  release.isError ||
-                  (!!release.data.targetImage &&
-                    !release.data.updateAvailable)))
-            }
-            onClick={() => {
-              // Keep the reviewed target fixed if release discovery finishes later.
-              setImage(image.trim());
-              const target =
-                !manualSelection &&
-                release.data?.targetDigest &&
-                release.data.targetImage === image
-                  ? `ghcr.io/maxhugit/mergeron@${release.data.targetDigest}`
-                  : image.trim();
-              mutation.mutate({
-                action: 'plan',
-                input: { images: { application: target } },
-              });
-            }}
-          >
-            {mutation.isPending
-              ? t('managerCheckingPrerequisites')
-              : t('managerPrepareUpdate')}
-          </Button>
-          {trailingActions}
-        </div>
+            >
+              {mutation.isPending
+                ? t('managerCheckingPrerequisites')
+                : t('managerPrepareUpdate')}
+            </Button>
+            {trailingActions}
+            {(operation || progressOperation || progressSession > 0) && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setProgressOpen(true)}
+              >
+                {t('managerViewUpdateProgress')}
+              </Button>
+            )}
+            {operation?.status === 'succeeded' && operation.backupRetained && (
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => setConfirm('rollback')}
+              >
+                {t('managerRestorePreviousVersion')}
+              </Button>
+            )}
+          </>,
+        )}
       </div>
       {plan && (
         <div className="space-y-2 text-sm">

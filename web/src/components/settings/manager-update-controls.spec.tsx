@@ -207,9 +207,9 @@ it('does not overwrite a manually selected image when release discovery complete
   vi.mocked(requestServerRelease).mockReturnValue(pending.promise);
   fixture.render(<ManagerUpdateControls status={status} />);
   const user = userEvent.setup();
-  await user.click(
-    screen.getByText('Options avancées : choisir une autre image'),
-  );
+  expect(
+    screen.queryByText('Options avancées : choisir une autre image'),
+  ).not.toBeInTheDocument();
   const input = screen.getByRole('textbox');
   await user.clear(input);
   await user.type(input, 'ghcr.io/maxhugit/mergeron:0.1.2');

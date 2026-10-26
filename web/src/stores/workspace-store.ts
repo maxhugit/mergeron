@@ -13,8 +13,17 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
+  | ({ id: string; kind: 'git-diff' } & GitDiffTarget)
   | { id: string; kind: 'file'; path: string; documentId: string }
   | { id: string; kind: 'terminal'; terminalId: string };
+
+export interface GitDiffTarget {
+  projectId: string;
+  copyId: string;
+  path: string;
+  localPath: string | null;
+  status: string;
+}
 
 export interface WorkspaceContext {
   tabs: WorkspaceTab[];
@@ -37,6 +46,7 @@ interface WorkspaceState {
   contexts: Record<string, WorkspaceContext>;
   fileViews: Record<string, FileViewState>;
   openFile: (context: string, path: string, line?: number | null) => void;
+  openGitDiff: (context: string, target: GitDiffTarget) => void;
   openTerminal: (context: string, terminalId: string) => void;
   adoptTerminal: (context: string, terminalId: string) => void;
   select: (context: string, id: string) => void;
@@ -72,6 +82,24 @@ function clearActiveReveal(state: WorkspaceState, context: string) {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   contexts: {},
   fileViews: {},
+  openGitDiff: (context, target) =>
+    set((state) => {
+      const current = state.contexts[context] ?? EMPTY_WORKSPACE;
+      const id = `git-diff:${JSON.stringify([target.projectId, target.copyId, target.path])}`;
+      const tab = { ...target, id, kind: 'git-diff' as const };
+      return {
+        contexts: {
+          ...state.contexts,
+          [context]: {
+            tabs: current.tabs.some((entry) => entry.id === id)
+              ? current.tabs.map((entry) => (entry.id === id ? tab : entry))
+              : [...current.tabs, tab],
+            activeId: id,
+          },
+        },
+        fileViews: clearActiveReveal(state, context),
+      };
+    }),
   /** Adds a discovered terminal without changing tab selection or file reveal intent. */
   adoptTerminal: (context, terminalId) =>
     set((state) => {

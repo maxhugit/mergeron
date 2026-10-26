@@ -159,7 +159,7 @@ export class IdentityService {
       administratorName: real.name ?? '',
       personId,
       personName: target.name ?? '',
-      expiresAt: Date.now() + 15 * 60_000,
+      expiresAt: Date.now() + 30 * 60_000,
     };
     this.auditImpersonation(session, 'started');
     // Capabilities minted in the administrator view must not survive the switch.
@@ -171,7 +171,7 @@ export class IdentityService {
     this.impersonations.set(this.digestImpersonation(token), session);
     const timer = setTimeout(
       () => identityEvents.emit('changed', real.personId),
-      15 * 60_000,
+      30 * 60_000,
     );
     timer.unref();
     identityEvents.emit('changed', real.personId);

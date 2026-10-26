@@ -125,6 +125,8 @@ it('shows live presence and lets an administrator revoke all sessions', async ()
   );
 
   expect(await screen.findByText(/Connected since/)).toBeInTheDocument();
+  expect(screen.getByRole('table')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^Actions —/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Force sign out' }));
 
   await waitFor(() =>
