@@ -59,7 +59,7 @@ export interface GitDiff {
 export const gitInventoryKey = (projectId: string) =>
   ['workspace-git-inventory', projectId] as const;
 export const gitPath = (projectId: string, suffix: string) =>
-  `/${encodeURIComponent(projectId)}/workspace-git/${suffix}`;
+  `/${encodeURIComponent(projectId)}/git/${suffix.replace(/^resources\//, 'connections/')}`;
 export const gitGet = <T>(
   projectId: string,
   suffix: string,

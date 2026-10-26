@@ -59,9 +59,7 @@ it('loads a split comparison, supports refresh and opens a separate editable fil
   );
   expect(screen.getByText('Avant · dernier commit (HEAD)')).toBeVisible();
   expect(screen.getByText('Après · copie de travail')).toBeVisible();
-  expect(api.mock.calls[0][0]).toBe(
-    '/p/workspace-git/copies/c/diff?path=src%2Fa%20b.ts',
-  );
+  expect(api.mock.calls[0][0]).toBe('/p/git/copies/c/diff?path=src%2Fa%20b.ts');
   fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }));
   await waitFor(() => expect(api).toHaveBeenCalledTimes(2));
   expect(onFile).not.toHaveBeenCalled();

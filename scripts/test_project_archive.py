@@ -26,6 +26,32 @@ def database(path):
 
 
 class ProjectArchiveTest(unittest.TestCase):
+    def test_normalized_locations_roundtrip_and_legacy_archive_compatibility(self):
+        self.export()
+        archive, manifest = self.load()
+        self.assertEqual(manifest['locationModel']['version'], 1)
+        self.assertEqual(manifest['locationModel']['locations'][0]['id'], 'local:workspace')
+        result = engine.import_archive(self.target, archive, manifest)
+        with engine.connect(self.target_db) as db:
+            rows = db.execute('SELECT id,path FROM project_locations WHERE project_id=?', (result['projectId'],)).fetchall()
+            self.assertEqual(len(rows), 1)
+            self.assertNotEqual(rows[0]['id'], 'local:workspace')
+            self.assertTrue(Path(rows[0]['path']).is_relative_to(self.target_root.resolve()))
+        self.rewrite_manifest(lambda m: m.pop('locationModel'))
+        self.import_project()
+
+    def test_inconsistent_normalized_descriptor_is_rejected(self):
+        self.export()
+        self.rewrite_manifest(lambda m: m['locationModel']['locations'][0].update(path='/outside'))
+        with self.assertRaises(engine.ArchiveError):
+            self.import_project()
+
+    def test_export_refuses_to_silently_lose_an_unrepresentable_location(self):
+        with engine.connect(self.source_db) as db:
+            db.execute("UPDATE project_locations SET path='/outside' WHERE id='local:workspace'")
+        with self.assertRaises(engine.ArchiveError):
+            self.export()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='mergeron-archive-test-')
         self.addCleanup(self.temp.cleanup)

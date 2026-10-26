@@ -8,12 +8,14 @@ import { GitCopyActions } from './workspace-git-actions';
 import type { GitSnapshot } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+import { locationInventoryFixture } from '@/test/project-locations-fixture';
+import type { GitInventory } from '@/lib/workspace-git-api';
 
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
   projectsApi: async (url: string) => {
-    if (url.endsWith('/workspace-resources'))
-      return {
+    if (url.endsWith('/locations'))
+      return locationInventoryFixture({
         resources: [
           {
             id: 'git',
@@ -35,7 +37,7 @@ vi.mock('@/lib/projects-api', () => ({
             state: 'ready',
           },
         ],
-      };
+      } as GitInventory);
     if (url.endsWith('/copies/copy'))
       return {
         branch: 'feature/une-branche-avec-un-nom-très-long',

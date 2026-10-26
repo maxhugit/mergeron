@@ -20,6 +20,8 @@ import {
   projectWorkspaceCopies,
   projectWorkspaceResources,
   projectWorkspaces,
+  projectConnections,
+  projectLocations,
   projects,
   type ProjectWorkspaceCopy,
 } from '../database/schema';
@@ -227,19 +229,55 @@ export class WorkspaceCopiesService {
       .from(projectWorkspaces)
       .where(eq(projectWorkspaces.id, copy.localWorkspaceId))
       .get();
-    const source = this.db
+    const sourceLocation = this.db
       .select()
-      .from(projectWorkspaceResources)
-      .where(eq(projectWorkspaceResources.id, copy.sourceResourceId))
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.legacyResourceId, copy.sourceResourceId),
+          eq(projectLocations.projectId, copy.projectId),
+        ),
+      )
+      .get();
+    const source = sourceLocation?.connectionId
+      ? this.db
+          .select()
+          .from(projectConnections)
+          .where(
+            and(
+              eq(projectConnections.id, sourceLocation.connectionId),
+              eq(projectConnections.projectId, copy.projectId),
+            ),
+          )
+          .get()
+      : null;
+    const location = this.db
+      .select()
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.localWorkspaceId, copy.localWorkspaceId),
+          eq(projectLocations.projectId, copy.projectId),
+        ),
+      )
       .get();
     return {
       ...copy,
-      state: source && source.enabled ? copy.state : 'revoked',
-      localPath: workspace?.path ?? null,
+      state:
+        source && source.enabled && location?.path === workspace?.path
+          ? copy.state
+          : 'revoked',
+      localPath:
+        location?.path === workspace?.path ? (location?.path ?? null) : null,
       sourceName: source?.name ?? null,
-      sourceType: source?.type ?? null,
-      accessMode: source?.accessMode ?? null,
-      sourceEnabled: Boolean(source?.enabled),
+      sourceType: source?.protocol ?? null,
+      accessMode:
+        location?.accessMode === 'read_only' ||
+        !location?.capabilities.write ||
+        !sourceLocation?.capabilities.write
+          ? 'read_only'
+          : (sourceLocation?.accessMode ?? null),
+      sourceEnabled: Boolean(source?.enabled && location),
     };
   }
 

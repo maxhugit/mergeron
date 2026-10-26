@@ -120,6 +120,7 @@ jobs:
           src/projects/project-locations.service.spec.ts
           src/projects/project-location-selection.spec.ts
           src/projects/workspace-copies.service.spec.ts
+          src/projects/workspace-transfers.service.spec.ts
           src/active-folders
           src/projects/project-archives.spec.ts
           src/project-knowledge/project-knowledge.service.spec.ts

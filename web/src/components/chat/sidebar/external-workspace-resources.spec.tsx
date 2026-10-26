@@ -9,6 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
+import { locationInventoryFixture } from '@/test/project-locations-fixture';
 import { ExternalWorkspaceResources } from './external-workspace-resources';
 import type {
   ProjectSummary,
@@ -57,7 +58,10 @@ beforeEach(async () => {
       removed = true;
       return { ok: true, remoteDataDeleted: false };
     }
-    return { resources: removed ? [] : [resource], copies: [] };
+    return locationInventoryFixture({
+      resources: removed ? [] : [resource],
+      copies: [],
+    });
   });
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
@@ -113,14 +117,14 @@ it('detaches only the selected connection after explicit confirmation', async ()
   await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
   expect(
     api.mock.calls.filter(([, init]) => init?.method === 'DELETE'),
-  ).toEqual([['/p/workspace-resources/git', { method: 'DELETE' }]]);
+  ).toEqual([['/p/connections/git', { method: 'DELETE' }]]);
   expect(screen.queryByText('Git Test')).toBeNull();
 });
 it('keeps confirmation open on failure and never retries the detachment automatically', async () => {
   const dialog = await mount();
   api.mockImplementation(async (_path, init) => {
     if (init?.method === 'DELETE') throw new Error('Connexion indisponible');
-    return { resources: [resource], copies: [] };
+    return locationInventoryFixture({ resources: [resource], copies: [] });
   });
   fireEvent.click(
     within(dialog).getByRole('button', { name: 'Détacher du projet' }),
@@ -144,7 +148,9 @@ it('blocks duplicate confirmation while detachment is in progress', async () => 
       ? new Promise((resolve) => {
           finish = resolve;
         })
-      : Promise.resolve({ resources: [], copies: [] }),
+      : Promise.resolve(
+          locationInventoryFixture({ resources: [], copies: [] }),
+        ),
   );
   const button = within(dialog).getByRole('button', {
     name: 'Détacher du projet',

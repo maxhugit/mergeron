@@ -25,6 +25,7 @@ import {
   requireProjectAccess,
 } from '../auth/access-context';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
+import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import {
   projectActivity,
   projectWorkspaceCopies,
@@ -304,6 +305,19 @@ export class WorkspaceTransfersService {
       .get();
     if (!destination)
       throw new NotFoundException('Destination workspace not found');
+    const folders = new ActiveFoldersService(this.db);
+    const destinationPolicy = folders.executionLocationForCwd(
+      destination.path,
+      transfer.projectId,
+    );
+    if (!destinationPolicy || destinationPolicy.readOnly)
+      throw new ConflictException(
+        'Destination location is read-only or unavailable',
+      );
+    if (source.localWorkspaceId)
+      folders.validateLocationSelection(transfer.projectId, {
+        locationId: `local:${source.localWorkspaceId}`,
+      });
     const copy = this.db
       .select()
       .from(projectWorkspaceCopies)

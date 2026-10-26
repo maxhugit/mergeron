@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createCipheriv, createHash } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
@@ -117,12 +118,32 @@ describe('locations/connections expand migration', () => {
       drizzle(sqlite, { schema }),
       new ConfigService({ WEBUI_CONNECTION_SECRET_KEY: 'existing-key' }),
     );
-    const resource = resources.create('p', {
-      type: 'ssh',
-      name: 'Existing',
-      address: 'ssh://host.example.test',
-      secret: { username: 'existing-user', password: 'existing-test-password' },
-    });
+    const resource = { id: 'existing-encrypted' };
+    remote(resource.id, 'ssh');
+    const iv = Buffer.alloc(12, 1);
+    const cipher = createCipheriv(
+      'aes-256-gcm',
+      createHash('sha256').update('existing-key').digest(),
+      iv,
+    );
+    const ciphertext = Buffer.concat([
+      cipher.update(
+        JSON.stringify({
+          username: 'existing-user',
+          password: 'existing-test-password',
+        }),
+        'utf8',
+      ),
+      cipher.final(),
+    ]);
+    sqlite
+      .prepare('INSERT INTO project_workspace_secrets VALUES (?,?,?,?,1,1)')
+      .run(
+        resource.id,
+        ciphertext.toString('base64'),
+        iv.toString('base64'),
+        cipher.getAuthTag().toString('base64'),
+      );
     const encrypted = sqlite
       .prepare('SELECT * FROM project_workspace_secrets WHERE resource_id=?')
       .get(resource.id);

@@ -222,9 +222,7 @@ it('merges only after confirmation and sends both reviewed revisions', async () 
     }),
   );
   await waitFor(() => expect(posts()).toHaveLength(1));
-  expect(posts()[0][0]).toBe(
-    '/p/workspace-git/resources/git/pull-requests/12/merge',
-  );
+  expect(posts()[0][0]).toBe('/p/git/connections/git/pull-requests/12/merge');
   expect(JSON.parse(posts()[0][1].body as string)).toEqual({
     head: checks.head,
     baseHead: checks.baseHead,

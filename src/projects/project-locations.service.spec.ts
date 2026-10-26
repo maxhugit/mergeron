@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { ProjectConnectionsController } from './project-connections.controller';
 import { accessContext } from '../auth/access-context';
 import { IdentityService } from '../auth/identity.service';
 import {
@@ -14,6 +15,9 @@ import {
 } from '../database/schema';
 import { ProjectLocationsService } from './project-locations.service';
 import { ProjectLocationsController } from './project-locations.controller';
+import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import type { FilesService } from '../files/files.service';
+import type { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 
 let database: TestDatabase;
@@ -103,7 +107,12 @@ it('exposes the normalized inventory to project participants without credentials
     secret: { password: 'plaintext-test-secret' },
   });
   const view = asMember(() =>
-    new ProjectLocationsController(inventory).list('p'),
+    new ProjectLocationsController(
+      inventory,
+      new ActiveFoldersService(database.db),
+      {} as FilesService,
+      {} as WorkspaceCopiesService,
+    ).list('p'),
   );
   expect(view.modelVersion).toBe(1);
   expect(view.connections).toEqual([
@@ -172,4 +181,64 @@ it('reflects legacy changes immediately without requiring an inventory read to b
   resources.detach('p', resource.id);
   expect(inventory.list('p').connections).toEqual([]);
   expect(inventory.list('p').locations).toHaveLength(1);
+});
+
+it('scopes connection mutations and normalized ID resolution to their project', () => {
+  const controller = new ProjectConnectionsController(
+    inventory,
+    resources,
+    {} as WorkspaceCopiesService,
+  );
+  const created = controller.create('p', {
+    name: 'Git',
+    protocol: 'git',
+    address: 'https://example.test/a.git',
+  });
+  expect(created.connection.protocol).toBe('git');
+  expect(created.location.connectionId).toBe(created.connection.id);
+  expect(() => controller.disable('other', created.connection.id)).toThrow(
+    'Project connection not found',
+  );
+  expect(() => inventory.resourceId('other', created.location.id)).toThrow(
+    'Project location not found',
+  );
+  expect(() => inventory.workspaceId('p', created.location.id)).toThrow(
+    'local destination',
+  );
+  expect(() =>
+    asMember(() => controller.disable('p', created.connection.id)),
+  ).toThrow();
+  expect(
+    controller.disable('p', created.connection.id).connection.enabled,
+  ).toBe(false);
+  expect(controller.enable('p', created.connection.id).connection.enabled).toBe(
+    true,
+  );
+});
+
+it('never calls the filesystem for remote, unknown or escaping location selections', () => {
+  const readDirectory = vi.fn();
+  const controller = new ProjectLocationsController(
+    inventory,
+    new ActiveFoldersService(database.db),
+    { readDirectory } as unknown as FilesService,
+    {} as WorkspaceCopiesService,
+  );
+  const remote = resources.create('p', {
+    name: 'Git',
+    type: 'git',
+    address: 'https://example.test/a.git',
+  });
+  for (const [id, relative] of [
+    [`remote:${remote.id}`, ''],
+    ['local:local', '../outside'],
+    ['local:local', '/outside'],
+    ['local:missing', ''],
+  ]) {
+    expect(() => controller.tree('p', id, relative)).toThrow();
+  }
+  expect(() => controller.tree('p', 'local:local', ['bad'])).toThrow(
+    'relative directory',
+  );
+  expect(readDirectory).not.toHaveBeenCalled();
 });
