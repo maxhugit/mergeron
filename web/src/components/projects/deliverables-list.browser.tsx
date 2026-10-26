@@ -215,6 +215,72 @@ test.each([390, 1001])(
   },
 );
 
+test('uses the selected theme for current, completed and upcoming lifecycle chevrons', async () => {
+  await i18nReady;
+  const root = document.documentElement;
+  const previousTheme = root.getAttribute('data-theme');
+  const previousClass = root.className;
+  render(
+    <DeliverableLifecycleFlow
+      item={{
+        ...item,
+        lifecycleStatus: 'in_constitution',
+        validationRequired: true,
+      }}
+    />,
+  );
+  const states = ['complete', 'current', 'upcoming'];
+  const chevrons = states.map(
+    (state) =>
+      document.querySelector(
+        `[data-stage-state="${state}"] > span`,
+      ) as HTMLElement,
+  );
+  const probe = document.createElement('span');
+  probe.style.backgroundColor = 'var(--primary)';
+  probe.style.color = 'var(--primary-foreground)';
+  document.body.append(probe);
+  const palettes = new Set<string>();
+  try {
+    for (const theme of [
+      'light',
+      'dark',
+      'sepia',
+      'nord',
+      'solarized',
+      'dracula',
+      'high-contrast',
+    ]) {
+      root.setAttribute('data-theme', theme);
+      root.classList.toggle('dark', theme === 'dark');
+      const expected = getComputedStyle(probe);
+      const primary = expected.backgroundColor;
+      const foreground = expected.color;
+      await waitFor(() => {
+        expect(getComputedStyle(chevrons[1]).backgroundColor).toBe(primary);
+        expect(getComputedStyle(chevrons[1]).color).toBe(foreground);
+        expect(
+          getComputedStyle(chevrons[0].firstElementChild!).backgroundColor,
+        ).toBe(primary);
+        expect(getComputedStyle(chevrons[0].firstElementChild!).color).toBe(
+          foreground,
+        );
+      });
+      const colors = chevrons.map(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+      expect(new Set(colors).size).toBe(3);
+      palettes.add(colors.join('|'));
+    }
+    expect(palettes.size).toBe(7);
+  } finally {
+    probe.remove();
+    root.className = previousClass;
+    if (previousTheme === null) root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', previousTheme);
+  }
+});
+
 test('keeps status transitions in the application dropdown and sends only the selected action', async () => {
   await i18nReady;
   await i18n.changeLanguage('fr');

@@ -1631,11 +1631,11 @@ export function DeliverableLifecycleFlow({ item }: { item: Deliverable }) {
                     <span
                       tabIndex={0}
                       style={{ clipPath: shape }}
-                      className={`flex h-16 items-center justify-center gap-2 pr-7 text-sm font-medium outline-none transition-colors focus-visible:brightness-125 ${index === 0 ? 'pl-3' : 'pl-7'} ${active ? 'bg-violet-400 text-violet-950' : completed ? 'bg-violet-500 text-white' : 'bg-violet-500/15 text-violet-900 dark:text-violet-200'}`}
+                      className={`flex h-16 items-center justify-center gap-2 pr-7 text-sm font-medium outline-none transition-colors focus-visible:brightness-125 ${index === 0 ? 'pl-3' : 'pl-7'} ${active ? 'bg-primary text-primary-foreground' : completed ? 'bg-primary/20 text-foreground' : 'bg-muted text-muted-foreground'}`}
                     >
                       <span
                         aria-hidden="true"
-                        className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${completed ? 'bg-emerald-300 text-emerald-950' : active ? 'bg-violet-950 text-violet-100' : 'bg-background/60 text-violet-700 dark:text-violet-200'}`}
+                        className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${completed ? 'bg-primary text-primary-foreground' : active ? 'bg-primary-foreground text-primary' : 'bg-background/60 text-muted-foreground'}`}
                       >
                         {completed ? (
                           <Check className="size-4" strokeWidth={3} />

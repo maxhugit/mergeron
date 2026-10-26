@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { ProjectArchiveExportDialog } from './project-archive-transfer';
 import { CreateProjectDialog } from '@/components/chat/sidebar/create-project-dialog';
 
@@ -44,6 +45,8 @@ const preview = {
   files: 8,
   bytes: 1024,
   warnings: [],
+  people: [],
+  availablePeople: [],
 };
 
 it('is available without an existing project but hidden from non-administrators', () => {
@@ -216,8 +219,74 @@ it('imports only after confirmation using the opaque preview token', async () =>
     token: 'preview-token',
     name: 'Production project (imported)',
     selection: ['files', 'conversations', 'work'],
+    personMappings: {},
   });
 });
+
+it.each(['existing', 'new'])(
+  'requires an explicit %s person choice before importing',
+  async (choice) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).endsWith('/preview')
+              ? {
+                  ...preview,
+                  people: [
+                    {
+                      id: 'source',
+                      name: 'Maxime HUGOT',
+                      reference: 'P1',
+                      email: 'source@example.test',
+                    },
+                  ],
+                  availablePeople: [
+                    {
+                      id: 'destination',
+                      name: 'Maxime HUGOT',
+                      reference: 'DEV-ADMIN',
+                      email: 'dev@example.test',
+                      active: true,
+                    },
+                  ],
+                }
+              : { projectId: 'copy' },
+          ),
+          { headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+    openDialog();
+    fireEvent.change(screen.getByLabelText('Project archive'), {
+      target: { files: [new File(['zip'], 'project.zip')] },
+    });
+    const trigger = await screen.findByRole('combobox', {
+      name: 'Mapping for Maxime HUGOT',
+    });
+    const submit = screen.getByRole('button', {
+      name: 'Create project from ZIP',
+    });
+    expect(submit).toBeDisabled();
+    expect(screen.getByText('source@example.test')).toBeVisible();
+    await userEvent.selectOptions(
+      trigger,
+      choice === 'new' ? '__new' : 'destination',
+    );
+    expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(([url]) => String(url).endsWith('/import')),
+      ).toBe(true),
+    );
+    const call = fetch.mock.calls.find(([url]) =>
+      String(url).endsWith('/import'),
+    );
+    expect(JSON.parse(call?.[1]?.body as string).personMappings).toEqual({
+      source: choice === 'new' ? null : 'destination',
+    });
+  },
+);
 
 it('keeps macro dependencies selected and sends the chosen import categories', async () => {
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(

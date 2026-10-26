@@ -107,6 +107,7 @@ describe('staged ZIP imports', () => {
         token: preview.token,
         name: 'Copy',
         selection: ['files'],
+        personMappings: { source: 'person' },
       }),
     ).toEqual({ projectId: 'new-project' });
     expect(run.mock.calls[1][0]).toMatchObject({
@@ -114,6 +115,7 @@ describe('staged ZIP imports', () => {
       personId: 'person',
       name: 'Copy',
       selection: ['files'],
+      personMappings: { source: 'person' },
     });
     await expect(access(file)).rejects.toThrow();
     await expect(
