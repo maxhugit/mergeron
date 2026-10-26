@@ -1,0 +1,9 @@
+{
+  "install": "Install the app",
+  "installed": "App installed",
+  "description": "Open Mergeron in its own window. A server connection is still required; conversations and documents are not stored for offline use.",
+  "manualIntroduction": "If the browser does not offer its installation prompt, use its menu.",
+  "edge": "In Edge: open the ⋯ menu, then Apps (or More tools → Apps), then Install this site as an app. An installation icon may also appear in the address bar.",
+  "safari": "In Safari on Mac: File → Add to Dock. On iPhone/iPad: Share → Add to Home Screen, depending on the browser and system version.",
+  "availability": "Sign in to Mergeron first. The browser determines installation availability: private browsing, enterprise policy, an existing installation or a recent dismissal may prevent the prompt. Installation never starts automatically."
+}

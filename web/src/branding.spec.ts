@@ -10,6 +10,7 @@ describe('Mergeron web and PWA identity', () => {
     const html = read('index.html').toString();
     const manifest = JSON.parse(read('public/manifest.webmanifest').toString());
     expect(html).toContain('<title>Mergeron</title>');
+    expect(html).toContain('crossorigin="use-credentials"');
     expect(html).toContain('name="application-name" content="Mergeron"');
     expect(html).toContain(
       'name="apple-mobile-web-app-title" content="Mergeron"',
@@ -52,7 +53,7 @@ describe('Mergeron web and PWA identity', () => {
     for (const color of ['#29282e', '#dfa071', '#fff9f0'])
       expect(master).toContain(color);
     const sw = read('public/sw.js').toString();
-    expect(sw).toContain("'mergeron-static-v4'");
+    expect(sw).toContain("'mergeron-static-v5'");
     expect(sw).toContain("'./pwa-icon-maskable-512.png'");
     expect(sw).toContain("'./mergeron-icon.svg'");
   });

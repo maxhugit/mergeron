@@ -8,6 +8,30 @@ import { defineConfig, mergeConfig } from 'vitest/config';
 import viteConfig from './vite.config';
 import { playwright } from '@vitest/browser-playwright';
 import type { BrowserCommand } from 'vitest/node';
+import { readFileSync } from 'node:fs';
+
+/** Chromium's actual manifest fetch, not a fetch() approximation. */
+const authenticatedManifest: BrowserCommand<[]> = async (context) => {
+  const browser = context.page.context().browser();
+  if (browser?.browserType().name() !== 'chromium') return { skipped: true };
+  const page = await context.page.context().newPage();
+  try {
+    await page.goto(
+      new URL('/__pwa_install_fixture__/', context.page.url()).href,
+    );
+    const session = await page.context().newCDPSession(page);
+    const manifest = await session.send('Page.getAppManifest');
+    const install = await session.send('Page.getInstallabilityErrors');
+    return {
+      skipped: false,
+      data: manifest.data,
+      errors: manifest.errors.map((item) => item.message),
+      installErrors: install.installabilityErrors.map((item) => item.errorId),
+    };
+  } finally {
+    await page.close();
+  }
+};
 
 /** Sends native wheel input inside the test iframe rather than fabricating scroll measurements. */
 const scrollTranscript: BrowserCommand<[delta: number]> = async (
@@ -70,6 +94,55 @@ export default mergeConfig(
       {
         name: 'test-auth-proxy-redirect',
         configureServer(server) {
+          // A manifest protected like Authentik: only the document sets the
+          // session cookie. Missing crossorigin credentials returns login HTML.
+          server.middlewares.use((request, response, next) => {
+            const prefix = '/__pwa_install_fixture__/';
+            if (!request.url?.startsWith(prefix)) return next();
+            const name = request.url.slice(prefix.length).split('?')[0];
+            if (!name) {
+              const html = readFileSync(
+                new URL('./index.html', import.meta.url),
+                'utf8',
+              );
+              const link = html.match(/<link\s+rel="manifest"[^>]*>/)?.[0];
+              if (!link) throw new Error('Application manifest link missing');
+              response.setHeader(
+                'Set-Cookie',
+                'mergeron_pwa_fixture=allowed; Path=/__pwa_install_fixture__/; HttpOnly; SameSite=Lax',
+              );
+              response.setHeader('Content-Type', 'text/html');
+              response.end(
+                `<html><head>${link.replace('href="/manifest.webmanifest"', 'href="manifest-dev.webmanifest"')}</head><body>PWA fixture</body></html>`,
+              );
+            } else if (name === 'manifest-dev.webmanifest') {
+              if (
+                !request.headers.cookie?.includes(
+                  'mergeron_pwa_fixture=allowed',
+                )
+              ) {
+                response.statusCode = 302;
+                response.setHeader('Location', prefix + 'login');
+                return response.end();
+              }
+              response.setHeader('Content-Type', 'application/manifest+json');
+              response.end(
+                readFileSync(
+                  new URL('./public/manifest-dev.webmanifest', import.meta.url),
+                ),
+              );
+            } else if (
+              /^pwa-dev-icon-(192|512|maskable-512)\.png$/.test(name)
+            ) {
+              response.setHeader('Content-Type', 'image/png');
+              response.end(
+                readFileSync(new URL('./public/' + name, import.meta.url)),
+              );
+            } else {
+              response.setHeader('Content-Type', 'text/html');
+              response.end('<html>Sign in</html>');
+            }
+          });
           // Real HTTP redirect, including WebKit's opaque manual-redirect response.
           // This endpoint exists only in the test server, never the app build.
           server.middlewares.use((request, response, next) => {
@@ -110,6 +183,7 @@ export default mergeConfig(
               headless: true,
               provider: playwright(),
               commands: {
+                authenticatedManifest,
                 scrollTranscript,
                 holdTranscriptPointer,
                 explorerDivider,
