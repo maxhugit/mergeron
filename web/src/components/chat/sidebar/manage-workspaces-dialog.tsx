@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import type { ProjectSummary } from '@/lib/projects-api';
 import { ExternalWorkspaceResources } from './external-workspace-resources';
+import { ProjectLocationsIntro } from '@/components/projects/project-locations-intro';
 
 interface Props {
   project: ProjectSummary | null;
@@ -46,6 +47,7 @@ export function ManageWorkspacesDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[55vh] space-y-2 overflow-y-auto">
+            <ProjectLocationsIntro />
             {project.workspaces.map((workspace) => {
               const agents = (project.agentThreads ?? []).filter(
                 (thread) => thread.workspacePath === workspace.path,
@@ -125,8 +127,8 @@ export function ManageWorkspacesDialog({
                 </div>
               );
             })}
+            <ExternalWorkspaceResources project={project} pending={pending} />
           </div>
-          <ExternalWorkspaceResources project={project} pending={pending} />
           <DialogFooter className="flex-row justify-between sm:justify-between">
             <Button
               variant="outline"

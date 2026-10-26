@@ -48,7 +48,9 @@ it('keeps the existing directory picker for a local workspace', () => {
   const { onCreateLocal } = renderDialog();
   fireEvent.click(screen.getByRole('button', { name: /Local folder/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Select demo folder' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Add a workspace' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Add a location or connection' }),
+  );
   expect(onCreateLocal).toHaveBeenCalledWith('/workspaces/demo');
 });
 
@@ -66,7 +68,9 @@ it('builds an external Git resource from the same workspace dialog', () => {
   fireEvent.change(screen.getByLabelText('Access token'), {
     target: { value: 'secret-token' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Add a workspace' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Add a location or connection' }),
+  );
 
   expect(onCreateExternal).toHaveBeenCalledWith(
     expect.objectContaining({

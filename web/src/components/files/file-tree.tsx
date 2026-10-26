@@ -25,6 +25,8 @@ import { DirectorySelectionTree } from './directory-selection-tree';
 import { InlineEntryEditor } from './inline-entry-editor';
 import { useDeliverableDirectoryAliases } from '@/hooks/use-deliverable-directory-aliases';
 import type { ProjectSummary } from '@/lib/projects-api';
+import { ProjectSystemFiles } from './project-system-files';
+import { projectSystemDirectory } from '@/lib/project-system-directory';
 
 type EntryType = 'file' | 'directory';
 type InlineEdit = InlineFileEdit;
@@ -222,6 +224,7 @@ export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
           <ScrollArea className="h-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
               <FlatDirectory
+                systemDirectory={projectSystemDirectory(project)}
                 directoryAliases={directoryAliases}
                 dirPath={rootDir}
                 selectedFile={selectedFile}
@@ -357,6 +360,7 @@ export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
 }
 
 interface FlatDirectoryProps {
+  systemDirectory?: string;
   directoryAliases: Record<string, string>;
   dirPath: string;
   selectedFile: string | null;
@@ -445,33 +449,42 @@ function FlatDirectory(props: FlatDirectoryProps) {
           {t('cannotLoadDirectories')}
         </div>
       )}
-      {data?.map((entry) => (
-        <FileBrowserEntry
-          key={entry.path}
-          icon={entry.type === 'directory' ? 'directory' : 'file'}
-          name={entry.name}
-          displayName={
-            entry.type === 'directory'
-              ? props.directoryAliases[entry.path.replace(/\/+$/, '')]
-              : undefined
-          }
-          path={entry.path}
-          selected={entry.path === props.selectedFile}
-          onClick={() => entry.type === 'file' && props.onFileClick(entry.path)}
-          onDoubleClick={
-            entry.type === 'directory'
-              ? () => props.onDirClick(entry.path)
-              : undefined
-          }
-          openDialog={props.openDialog}
-          ops={props.ops}
-          onUpload={props.onUpload}
-          edit={props.edit}
-          setEdit={props.setEdit}
-          commitEdit={props.commitEdit}
-          onNavigateCreate={(kind) => props.onRowCreate(entry.path, kind)}
-        />
-      ))}
+      {data?.map((entry) => {
+        const row = (
+          <FileBrowserEntry
+            key={entry.path}
+            icon={entry.type === 'directory' ? 'directory' : 'file'}
+            name={entry.name}
+            displayName={
+              entry.type === 'directory'
+                ? props.directoryAliases[entry.path.replace(/\/+$/, '')]
+                : undefined
+            }
+            path={entry.path}
+            selected={entry.path === props.selectedFile}
+            onClick={() =>
+              entry.type === 'file' && props.onFileClick(entry.path)
+            }
+            onDoubleClick={
+              entry.type === 'directory'
+                ? () => props.onDirClick(entry.path)
+                : undefined
+            }
+            openDialog={props.openDialog}
+            ops={props.ops}
+            onUpload={props.onUpload}
+            edit={props.edit}
+            setEdit={props.setEdit}
+            commitEdit={props.commitEdit}
+            onNavigateCreate={(kind) => props.onRowCreate(entry.path, kind)}
+          />
+        );
+        return entry.path.replace(/\/+$/, '') === props.systemDirectory ? (
+          <ProjectSystemFiles key={entry.path}>{row}</ProjectSystemFiles>
+        ) : (
+          row
+        );
+      })}
       {createRow}
       {!query.isLoading && !isError && !data?.length && !props.edit && (
         <div className="px-3 py-8 text-center text-xs italic text-muted-foreground">
