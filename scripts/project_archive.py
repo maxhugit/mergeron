@@ -835,11 +835,30 @@ def preview(options, manifest):
         if capability not in manifest['requiredCapabilities']:
             fail('Le ZIP ne déclare pas le codec requis pour son historique d’agents.')
     return {'compatible': True, 'projectName': manifest['project']['name'],
+            'people': [{k: p.get(k) for k in ('id', 'name', 'first_name', 'last_name', 'email', 'reference')}
+                       for p in manifest['tables'].get('people', [])],
+            'availablePeople': available_people(options),
             'sourceVersion': manifest['applicationVersion'], 'targetVersion': options.get('version', 'unknown'),
             'formatVersion': FORMAT, 'files': len(manifest['files']),
             'bytes': sum(r['size'] for r in manifest['files']),
             'counts': {n: len(r) for n, r in manifest['tables'].items()},
             'warnings': manifest['warnings']}
+
+
+def available_people(options):
+    with connect(options['database'], True) as db:
+        return [dict(row) for row in db.execute('SELECT id,name,first_name,last_name,email,reference,active FROM people ORDER BY name,id')]
+
+
+def person_equivalences(options, manifest):
+    sources = {p['id'] for p in manifest['tables'].get('people', [])}
+    mappings = options.get('personMappings', {})
+    if not isinstance(mappings, dict) or set(mappings) != sources:
+        fail('Choisissez une correspondance ou une nouvelle personne pour chaque personne du ZIP.')
+    targets = {p['id'] for p in available_people(options)}
+    if any(value is not None and (not isinstance(value, str) or value not in targets) for value in mappings.values()):
+        fail('Une personne sélectionnée n’existe plus. Analysez de nouveau le ZIP.')
+    return mappings
 
 
 def remap(value, ids, paths):
@@ -916,6 +935,7 @@ def import_archive(options, archive, manifest):
     preview(options, manifest)
     manifest = select_import_content(manifest, options.get('selection'))
     preview(options, manifest)
+    person_mappings = person_equivalences(options, manifest)
     ids = {}
     native = manifest.get('agents')
     # Codex thread identifiers retain their UUIDv7 contract; business IDs use UUIDv4.
@@ -931,6 +951,9 @@ def import_archive(options, archive, manifest):
                     if key in record and isinstance(record[key], str) and record[key]:
                         ids.setdefault(record[key], str(uuid.uuid4()))
     source_project = manifest['tables']['projects'][0]
+    for source, destination in person_mappings.items():
+        if destination is not None:
+            ids[source] = destination
     project_id = ids[source_project['id']]
     root = Path(options['workspaceRoot']).resolve(strict=True)
     target = root / project_id
@@ -973,6 +996,9 @@ def import_archive(options, archive, manifest):
         paths[record['source']] = str(location)
         root_targets[key] = location
     records = remap(manifest['tables'], ids, paths)
+    # Existing identities are referenced, never overwritten with archive profiles.
+    existing = {value for value in person_mappings.values() if value is not None}
+    records['people'] = [p for p in records.get('people', []) if p['id'] not in existing]
     records['projects'][0]['name'] = (options.get('name') or source_project['name'] + ' (importé)').strip()[:200]
     records['projects'][0]['mcp_server_ids'] = '[]'
     records['projects'][0]['app_ids'] = '[]'
@@ -998,6 +1024,14 @@ def import_archive(options, archive, manifest):
         version['onlyoffice_key'] = None
     if options.get('personId'):
         records.setdefault('project_participants', []).append({'project_id': project_id, 'person_id': options['personId'], 'created_at': int(time.time() * 1000)})
+    # Several source contacts may intentionally represent the same destination person.
+    for table, keys in [('project_participants', ('project_id', 'person_id')),
+                        ('project_person_group_members', ('group_id', 'person_id'))]:
+        unique = {}
+        for row in records.get(table, []):
+            unique.setdefault(tuple(row[key] for key in keys), row)
+        if table in records:
+            records[table] = list(unique.values())
     native_records = remap(native['tables'], ids, paths) if native else None
     auxiliary_records = {filename: remap(section['tables'], ids, paths)
                          for filename, section in (native or {}).get('auxiliary', {}).items()}
@@ -1157,14 +1191,17 @@ def import_archive(options, archive, manifest):
             sync_directory(directory)
         with connect(options['database']) as db:
             db.execute('BEGIN IMMEDIATE')
+            # Recheck under the write lock: a deleted target must abort the whole import.
+            person_equivalences(options, manifest)
             insert_rows(db, records)
             provenance = {
                 'sourceProjectId': source_project['id'], 'sourceVersion': manifest['applicationVersion'],
                 'exportedAt': manifest['exportedAt'],
                 'contacts': manifest['tables'].get('people', []),
+                'personMappings': {source: ids[source] for source in person_mappings},
                 'mcpServerIds': source_project.get('mcp_server_ids'), 'appIds': source_project.get('app_ids'),
                 'relocatedOperationalPaths': manifest.get('relocatedOperationalPaths', []),
-                'safetyOverrides': {'automationsPaused': True, 'contactsInactive': True, 'externalConnectionsDisabled': True},
+                'safetyOverrides': {'automationsPaused': True, 'contactsInactive': not bool(existing), 'newContactsInactive': True, 'existingAccountsUnchanged': True, 'externalConnectionsDisabled': True},
             }
             db.execute('INSERT INTO project_archive_imports(id,project_id,source_version,imported_at,provenance) VALUES(?,?,?,?,?)',
                        (str(uuid.uuid4()), project_id, manifest['applicationVersion'], int(time.time() * 1000), json.dumps(provenance, ensure_ascii=False)))
