@@ -577,6 +577,15 @@ class ProjectArchiveTest(unittest.TestCase):
             self.assertEqual(config['automations'][0]['instructions'], 'Original instructions')
             resource = db.execute('SELECT * FROM project_workspace_resources').fetchone()
             self.assertEqual((resource['enabled'], resource['connection_state']), (0, 'disabled'))
+            self.assertEqual(resource['type'], 'ssh')
+            self.assertNotIn('project_connections', manifest['tables'])
+            self.assertNotIn('project_locations', manifest['tables'])
+            connection = db.execute('SELECT * FROM project_connections').fetchone()
+            self.assertEqual((connection['id'], connection['protocol'], connection['enabled']),
+                             (resource['id'], 'ssh', 0))
+            location = db.execute("SELECT * FROM project_locations WHERE kind='remote'").fetchone()
+            self.assertEqual((location['connection_id'], location['path']),
+                             (connection['id'], resource['root_path']))
             self.assertEqual(db.execute('SELECT count(*) FROM project_workspace_secrets').fetchone()[0], 0)
 
     def test_chat_attachments_are_copied_and_relinked(self):
