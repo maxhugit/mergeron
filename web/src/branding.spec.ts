@@ -6,6 +6,15 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(resolve(path));
 
 describe('Mergeron web and PWA identity', () => {
+  it.each(['manifest.webmanifest', 'manifest-dev.webmanifest'])(
+    '%s keeps the native draggable title bar and window controls outside the app',
+    (filename) => {
+      const manifest = JSON.parse(read(`public/${filename}`).toString());
+      expect(manifest.display).toBe('standalone');
+      expect(manifest.display_override).toBeUndefined();
+    },
+  );
+
   it('uses the same name and theme in HTML and the install manifest', () => {
     const html = read('index.html').toString();
     const manifest = JSON.parse(read('public/manifest.webmanifest').toString());
@@ -53,7 +62,7 @@ describe('Mergeron web and PWA identity', () => {
     for (const color of ['#29282e', '#dfa071', '#fff9f0'])
       expect(master).toContain(color);
     const sw = read('public/sw.js').toString();
-    expect(sw).toContain("'mergeron-static-v5'");
+    expect(sw).toContain("'mergeron-static-v6'");
     expect(sw).toContain("'./pwa-icon-maskable-512.png'");
     expect(sw).toContain("'./mergeron-icon.svg'");
   });

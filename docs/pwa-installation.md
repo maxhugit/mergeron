@@ -19,6 +19,15 @@ portée. Il refuse les réponses HTML et les redirections de connexion, joint la
 session pendant le préchargement et ne nettoie que ses propres anciens caches.
 Ce n’est pas un mode hors ligne pour les fichiers, conversations ou API.
 
+Les manifestes dev et production utilisent `standalone`, sans
+`window-controls-overlay`. Edge conserve ainsi sa barre de titre native sur
+toute la largeur : elle permet de déplacer la fenêtre et réserve une zone aux
+boutons réduire, agrandir et fermer, sans masquer les informations de Mergeron.
+L’identité de l’application reste inchangée. Pour une installation existante,
+Edge doit récupérer le manifeste mis à jour ; fermer puis rouvrir l’application
+après cette actualisation. Un simple rechargement ne garantit pas l’application
+immédiate des changements du manifeste par le navigateur.
+
 Le test navigateur `web/src/pwa-install.browser.tsx` vérifie le vrai chargement
 Chromium du manifeste derrière un cookie de session, puis les critères
 d’installation via DevTools Protocol. La fixture n’existe que dans le serveur
@@ -27,3 +36,4 @@ Vitest, jamais dans l’application déployée.
 Références :
 - https://web.dev/articles/add-manifest
 - https://learn.microsoft.com/en-us/microsoft-edge/progressive-web-apps/how-to/
+- https://learn.microsoft.com/en-us/microsoft-edge/progressive-web-apps/how-to/window-controls-overlay
