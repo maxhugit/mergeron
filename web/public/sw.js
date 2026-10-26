@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'mergeron-static-v5';
+const STATIC_CACHE = 'mergeron-static-v6';
 const STATIC_FILES = [
   './manifest.webmanifest',
   './favicon.svg',

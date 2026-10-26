@@ -48,7 +48,7 @@ function runtime() {
         Promise.resolve([
           'unrelated-cache',
           'mergeron-static-v4',
-          'mergeron-static-v5',
+          'mergeron-static-v6',
         ]),
       delete: remove,
       match: vi.fn(),
