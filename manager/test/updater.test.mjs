@@ -189,6 +189,8 @@ test('lists dated backups without transaction secrets and deletes only the selec
   const first = updater.current.id;
   await begin(updater);
   const second = updater.current.id;
+  await updater.listBackups();
+  await updater.backupSizeTask;
   const list = await updater.listBackups();
   assert.equal(list.backups.length, 2);
   assert.equal(
@@ -242,6 +244,8 @@ test('measures allocated backup blocks without following links or counting hardl
   await symlink(outside, join(directory, 'external'));
   await writeFile(join(directory, 'one'), Buffer.alloc(1024 * 1024));
   await link(join(directory, 'one'), join(directory, 'two'));
+  await updater.listBackups();
+  await updater.backupSizeTask;
   const result = await updater.listBackups();
   assert.ok(result.totalSizeBytes >= 1024 * 1024);
   assert.ok(result.totalSizeBytes < 2 * 1024 * 1024);
@@ -254,6 +258,57 @@ test('does not invent a server path when the host mount cannot be verified', asy
   const result = await updater.listBackups();
   assert.equal(result.backups[0].path, null);
   assert.ok(result.backups[0].managerPath.endsWith('/backup'));
+});
+
+test('finishes slow size scans in background without blocking or restarting on repeated lists', async (t) => {
+  const { updater } = await fixture(t);
+  await begin(updater);
+  let finish;
+  let calls = 0;
+  updater.measureBackupSize = () => {
+    calls++;
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  };
+  const first = await updater.listBackups();
+  assert.equal(first.sizesCalculating, true);
+  assert.equal(first.backups[0].sizeStatus, 'calculating');
+  while (!finish) await new Promise((resolve) => setImmediate(resolve));
+  await updater.listBackups();
+  assert.equal(calls, 1);
+  finish(12345);
+  await updater.backupSizeTask;
+  const result = await updater.listBackups();
+  assert.equal(result.sizesCalculating, false);
+  assert.equal(result.totalSizeBytes, 12345);
+  assert.equal(result.backups[0].sizeStatus, 'ready');
+  assert.equal(calls, 1);
+});
+
+test('a failed size scan does not starve the following backups', async (t) => {
+  const { updater } = await fixture(t);
+  await begin(updater);
+  await begin(updater);
+  let calls = 0;
+  updater.measureBackupSize = async () => {
+    if (++calls === 1) throw new Error('read denied');
+    return 512;
+  };
+  await updater.listBackups();
+  await updater.backupSizeTask;
+  const result = await updater.listBackups();
+  assert.equal(calls, 2);
+  assert.equal(
+    result.backups.filter((backup) => backup.sizeStatus === 'ready').length,
+    1,
+  );
+  assert.equal(
+    result.backups.filter((backup) => backup.sizeStatus === 'unavailable')
+      .length,
+    1,
+  );
+  assert.equal(result.totalSizeBytes, null);
 });
 
 test('deleting the latest backup preserves quarantine and disables rollback durably', async (t) => {

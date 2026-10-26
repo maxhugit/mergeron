@@ -1,4 +1,5 @@
 {
+  "managerBackupSizeCalculating": "Calculating…",
   "managerBackupSizeUnknown": "Unavailable",
   "managerBackupsTotalSize": "Total backup disk usage: {{size}}",
   "managerBackupHostPath": "Server path",

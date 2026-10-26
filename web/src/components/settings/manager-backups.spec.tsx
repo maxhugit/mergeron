@@ -62,6 +62,20 @@ it('shows the verified server path, disk usage and total usage', async () => {
   expect(screen.getByText('Disk usage: 2 KiB')).toBeVisible();
   expect(screen.getByText('Total backup disk usage: 2 KiB')).toBeVisible();
 });
+
+it('distinguishes a background calculation from unavailable disk usage', async () => {
+  api.list.mockResolvedValue({
+    backups: [{ ...backup, sizeBytes: null, sizeStatus: 'calculating' }],
+    totalSizeBytes: null,
+    sizesCalculating: true,
+  });
+  setup();
+  expect(await screen.findByText('Disk usage: Calculating…')).toBeVisible();
+  expect(
+    screen.getByText('Total backup disk usage: Calculating…'),
+  ).toBeVisible();
+  expect(screen.queryByText(/Unavailable/)).not.toBeInTheDocument();
+});
 it('lists backup dates and requires confirmation before deletion', async () => {
   setup();
   expect(await screen.findByText('backup')).toBeInTheDocument();

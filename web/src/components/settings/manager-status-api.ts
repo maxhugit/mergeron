@@ -125,6 +125,7 @@ export interface ManagerBackup {
   path?: string | null;
   managerPath?: string;
   sizeBytes?: number | null;
+  sizeStatus?: 'calculating' | 'ready' | 'unavailable';
   createdAt: string;
   status: string;
   current: boolean;
@@ -160,6 +161,7 @@ export function requestManagerBackups() {
   return backupRequest<{
     backups: ManagerBackup[];
     totalSizeBytes?: number | null;
+    sizesCalculating?: boolean;
   }>('backups');
 }
 export function deleteManagerBackup(id: string) {
