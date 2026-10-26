@@ -22,7 +22,11 @@ import { useCodexSocket } from '@/hooks/use-codex-socket';
 import { useGlobalFilesStore } from '@/stores/files-store';
 import { GlobalFilesHost } from '@/components/files/global-files-host';
 import { installFileReconciler } from '@/lib/file-reconciler';
-import { SIDEBAR_REGION_ID, useLayoutStore } from '@/stores/layout-store';
+import {
+  SIDEBAR_REGION_ID,
+  useLayoutStore,
+  desktopSidebarCollapsedForPath,
+} from '@/stores/layout-store';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { isThemeId, useThemeStore } from '@/stores/theme-store';
 import { cn } from '@/lib/utils';
@@ -302,8 +306,8 @@ function AuthenticatedWorkspace({
   const isDesktop = breakpoint === 'desktop';
   const sidebarOpen = useLayoutStore((s) => s.sidebarOpen);
   const setSidebarOpen = useLayoutStore((s) => s.setSidebarOpen);
-  const desktopSidebarCollapsed = useLayoutStore(
-    (s) => s.desktopSidebarCollapsed,
+  const desktopSidebarCollapsed = useLayoutStore((s) =>
+    desktopSidebarCollapsedForPath(s, pathname),
   );
 
   // Auto-close sidebar sheet on route change
