@@ -1,4 +1,10 @@
 {
+  "gitCloseDiff": "Fermer la comparaison de {{name}}",
+  "gitDiffEmptyBefore": "Avant · dépôt sans commit",
+  "gitDiffTabTitle": "Différences · {{name}}",
+  "gitDiffBefore": "Avant · dernier commit (HEAD)",
+  "gitDiffAfter": "Après · copie de travail",
+  "gitDiffStaged": "Après · modifications indexées",
   "localLocations": "Emplacements locaux",
   "localLocationsDescription": "L’espace principal géré par Mergeron et les dossiers locaux associés au projet. Les connexions distantes sont présentées séparément.",
   "managedLocalDescription": "L’espace local géré est l’emplacement principal permanent du projet. Ses fichiers de travail sont distincts des données internes du dossier .mergeron, réservées à l’application et masquées par défaut dans la liste des fichiers.",

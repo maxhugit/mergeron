@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
@@ -83,6 +82,7 @@ let inventory: GitInventory;
 let client: QueryClient;
 const onActive = vi.fn();
 const onFile = vi.fn();
+const onGitDiff = vi.fn();
 const onSelect = vi.fn();
 beforeEach(async () => {
   await i18n.changeLanguage('fr');
@@ -93,6 +93,7 @@ beforeEach(async () => {
   useFilesStore.setState({ rootDir: '/original' });
   onActive.mockReset();
   onFile.mockReset();
+  onGitDiff.mockReset();
   onSelect.mockReset();
   addRoot.mockReset().mockResolvedValue({});
   api.mockReset();
@@ -144,6 +145,7 @@ function show(resourceId: string | null = 'git') {
         activeWorkspacePending={false}
         onActiveWorkspaceChange={onActive}
         onFile={onFile}
+        onGitDiff={onGitDiff}
       >
         <div>Local tree</div>
       </WorkspaceGitPanel>
@@ -211,12 +213,15 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
   );
   tab('Modifications (1)');
   fireEvent.click(screen.getByRole('button', { name: /file.ts/ }));
-  const dialog = await screen.findByRole('dialog');
-  expect(await within(dialog).findByText('+changed')).toBeInTheDocument();
-  fireEvent.click(
-    within(dialog).getByRole('button', { name: 'Ouvrir le fichier' }),
-  );
-  expect(onFile).toHaveBeenCalledWith('/copy/file.ts');
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(onGitDiff).toHaveBeenCalledWith({
+    projectId: 'p',
+    copyId: 'copy',
+    path: 'file.ts',
+    localPath: '/copy',
+    status: ' M',
+  });
+  expect(onFile).not.toHaveBeenCalled();
   expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
     false,
   );

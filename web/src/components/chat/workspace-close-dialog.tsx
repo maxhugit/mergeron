@@ -48,6 +48,10 @@ export function useWorkspaceClose(context: string) {
     }
   };
   const requestClose = (tab: WorkspaceTab) => {
+    if (tab.kind === 'git-diff') {
+      remove(tab);
+      return;
+    }
     if (tab.kind === 'file') {
       const current = useDocumentStore.getState().documents[tab.documentId];
       if (current?.dirty || current?.detached) setPending(tab);
@@ -134,7 +138,9 @@ export function useWorkspaceClose(context: string) {
             pending && (
               <Button
                 disabled={locked}
-                onClick={() => void closeTerminal(pending)}
+                onClick={() => {
+                  if (pending.kind === 'terminal') void closeTerminal(pending);
+                }}
               >
                 {t('closeTerminal')}
               </Button>

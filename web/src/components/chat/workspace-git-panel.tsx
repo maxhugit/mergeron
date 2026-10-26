@@ -4,12 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { GitBranch, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import type { GitDiffTarget } from '@/stores/workspace-store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/files/file-tree';
 import { filesAddRoot } from '@/generated/api';
@@ -26,7 +21,6 @@ import {
   type GitSnapshot,
   type GitPullRequests,
   type GitChecks,
-  type GitDiff,
 } from '@/lib/workspace-git-api';
 
 interface Props {
@@ -37,6 +31,7 @@ interface Props {
   activeWorkspacePending: boolean;
   onActiveWorkspaceChange?: (path: string) => void;
   onFile: (path: string) => void;
+  onGitDiff?: (target: GitDiffTarget) => void;
   children: ReactNode;
 }
 
@@ -120,6 +115,7 @@ function RepositoryPanel({
   activeWorkspacePending,
   onActiveWorkspaceChange,
   onFile,
+  onGitDiff,
 }: Props & {
   resource: GitInventory['resources'][number];
   copies: ProjectWorkspaceCopySummary[];
@@ -401,7 +397,7 @@ function RepositoryPanel({
                 projectId={projectId}
                 copy={copy}
                 snapshot={snapshot.data}
-                onFile={onFile}
+                onGitDiff={onGitDiff}
               />
             ) : (
               <p className="p-1 text-xs">
@@ -468,31 +464,14 @@ function Changes({
   projectId,
   copy,
   snapshot,
-  onFile,
+  onGitDiff,
 }: {
   projectId: string;
   copy: ProjectWorkspaceCopySummary;
   snapshot: GitSnapshot;
-  onFile: (path: string) => void;
+  onGitDiff?: (target: GitDiffTarget) => void;
 }) {
   const { t } = useTranslation('workspaces');
-  const [selected, setSelected] = useState<string | null>(null);
-  const diff = useQuery({
-    queryKey: [
-      'workspace-git-diff',
-      projectId,
-      copy.id,
-      selected,
-      snapshot.inspectedAt,
-    ],
-    queryFn: ({ signal }) =>
-      gitGet<GitDiff>(
-        projectId,
-        `copies/${encodeURIComponent(copy.id)}/diff?path=${encodeURIComponent(selected!)}`,
-        signal,
-      ),
-    enabled: selected !== null,
-  });
   return (
     <>
       {snapshot.changes.length === 0 ? (
@@ -509,7 +488,15 @@ function Changes({
                 ? `${change.originalPath} → ${change.path}`
                 : change.path
             }
-            onClick={() => setSelected(change.path)}
+            onClick={() =>
+              onGitDiff?.({
+                projectId,
+                copyId: copy.id,
+                path: change.path,
+                localPath: copy.localPath,
+                status: change.status,
+              })
+            }
           >
             <code className="shrink-0 whitespace-pre text-primary">
               {change.status}
@@ -521,46 +508,6 @@ function Changes({
       <p className="mt-3 text-xs text-muted-foreground">
         {t('gitChangesHelp')}
       </p>
-      <Dialog
-        open={selected !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
-        }}
-      >
-        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-4xl">
-          <DialogTitle className="break-all pr-6">{selected}</DialogTitle>
-          <DialogDescription>
-            {diff.data?.stagedOnly ? t('gitUnbornDiffHelp') : t('gitDiffHelp')}
-          </DialogDescription>
-          {diff.isPending ? (
-            <p role="status">{t('gitLoading')}</p>
-          ) : diff.error ? (
-            <p role="alert">{t('gitDiffError')}</p>
-          ) : (
-            <pre className="min-h-0 overflow-auto whitespace-pre text-xs">
-              {diff.data?.untracked
-                ? t('gitUntracked')
-                : diff.data?.diff || t('gitNoTextDiff')}
-            </pre>
-          )}
-          {selected &&
-            copy.localPath &&
-            !snapshot.changes
-              .find((change) => change.path === selected)
-              ?.status.includes('D') && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  onFile(`${copy.localPath}/${selected}`);
-                  setSelected(null);
-                }}
-              >
-                {t('gitOpenFile')}
-              </Button>
-            )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

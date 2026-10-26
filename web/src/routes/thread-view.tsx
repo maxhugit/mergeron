@@ -8,6 +8,7 @@ import { ConversationFrame } from '@/components/chat/conversation-frame';
 import { WorkspaceControls } from '@/components/chat/workspace-controls';
 import { AgentContextLinks } from '@/components/chat/agent-context-links';
 import { WorkspaceTree } from '@/components/chat/workspace-tree';
+import { WorkspaceGitDiff } from '@/components/chat/workspace-git-diff';
 import { useWorkspaceClose } from '@/components/chat/workspace-close-dialog';
 import { FileViewer } from '@/components/files/file-viewer';
 import { TerminalSurface } from '@/components/terminal/terminal-host';
@@ -329,7 +330,11 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
               <SurfaceActivityContext key={tab.id} value={active}>
                 <div
                   role="tabpanel"
-                  aria-label={tab.kind === 'file' ? tab.path : t('terminal')}
+                  aria-label={
+                    tab.kind === 'file' || tab.kind === 'git-diff'
+                      ? tab.path
+                      : t('terminal')
+                  }
                   className="absolute inset-0 flex min-h-0 flex-col"
                   inert={!active}
                   style={{ visibility: active ? 'visible' : 'hidden' }}
@@ -343,6 +348,12 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                         active={active}
                       />
                     )
+                  ) : tab.kind === 'git-diff' ? (
+                    <WorkspaceGitDiff
+                      target={tab}
+                      active={active}
+                      onFile={(path) => openFile(context, path)}
+                    />
                   ) : (
                     <>
                       <div className="min-h-0 flex-1">
@@ -365,6 +376,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
         </div>
       </div>
       <WorkspaceTree
+        onGitDiff={(target) =>
+          useWorkspaceStore.getState().openGitDiff(context, target)
+        }
         cwd={cwd ?? null}
         project={project}
         activeWorkspacePending={setActiveWorkspace.isPending}
