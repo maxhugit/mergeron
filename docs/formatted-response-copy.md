@@ -1,8 +1,11 @@
 # Copier une réponse avec mise en forme
 
 Dans les conversations simples et les conversations avec un agent, le bouton
-« Copier avec mise en forme » se trouve en haut à gauche du texte de chaque
-réponse. Il devient disponible quand la réponse est terminée et non vide.
+est une icône dans le coin supérieur droit de chaque réponse. Sur ordinateur,
+elle apparaît uniquement au survol de cette réponse ou au focus clavier.
+Le libellé « Copier avec mise en forme » apparaît dans l’infobulle, pas dans
+le bouton. Sur écran tactile sans survol, l’icône reste accessible.
+Elle devient disponible quand la réponse est terminée et non vide.
 
 La copie écrit simultanément du HTML et du texte brut dans le presse-papiers.
 Un éditeur compatible peut conserver titres, emphase, listes, tableaux, liens
