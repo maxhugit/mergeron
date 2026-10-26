@@ -1,4 +1,5 @@
 {
+  "managerBackupSizeCalculating": "Calcul en cours…",
   "managerBackupSizeUnknown": "Indisponible",
   "managerBackupsTotalSize": "Espace disque total des sauvegardes : {{size}}",
   "managerBackupHostPath": "Chemin sur le serveur",

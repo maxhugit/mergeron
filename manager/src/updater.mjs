@@ -159,19 +159,32 @@ async function treeSize(path) {
 }
 
 // Allocated disk space, like du: do not follow symlinks or count hardlinks twice.
-async function allocatedTreeSize(path, deadline, seen = new Set()) {
-  if (Date.now() > deadline) throw new Error('backupSizeTimeout');
-  const value = await lstat(path);
-  const inode = `${value.dev}:${value.ino}`;
-  if (seen.has(inode)) return 0;
-  seen.add(inode);
-  let bytes = value.blocks * 512;
-  if (value.isDirectory()) {
-    for (const name of await readdir(path))
-      bytes += await allocatedTreeSize(join(path, name), deadline, seen);
+async function allocatedTreeSize(path) {
+  const pending = [path];
+  const seen = new Set();
+  let bytes = 0;
+  // Bounded parallel metadata reads, not one syscall round-trip per file.
+  // lstat deliberately never follows symlinks outside the backup.
+  while (pending.length) {
+    await Promise.all(
+      pending.splice(-32).map(async (entry) => {
+        const value = await lstat(entry);
+        const inode = `${value.dev}:${value.ino}`;
+        if (seen.has(inode)) return;
+        seen.add(inode);
+        bytes += value.blocks * 512;
+        if (value.isDirectory()) {
+          for (const name of await readdir(entry))
+            pending.push(join(entry, name));
+        }
+      }),
+    );
   }
   return bytes;
 }
+
+const backupIdentity = (value) =>
+  `${value.dev}:${value.ino}:${value.mtimeMs}:${value.ctimeMs}`;
 
 export async function restorePersistentEntry(stateRoot, base, id, name) {
   const source = join(stateRoot, name);
@@ -236,6 +249,9 @@ export class TransactionalUpdater {
     });
     this.busy = false;
     this.current = null;
+    this.backupSizeCache = new Map();
+    this.backupSizeTask = Promise.resolve();
+    this.measureBackupSize = allocatedTreeSize;
   }
 
   status() {
@@ -265,8 +281,6 @@ export class TransactionalUpdater {
       throw error;
     });
     const backups = [];
-    const sizeDeadline = Date.now() + 10_000;
-    this.backupSizeCache ??= new Map();
     // Expose the Docker-host path only when the two mounts identify the same directory.
     const alias = join(
       this.configuration.hostStatePath,
@@ -318,24 +332,17 @@ export class TransactionalUpdater {
         operation.environment === this.manifest.environment;
       const blocked =
         this.busy || (this.current && !terminal.has(this.current.status));
-      const cached = this.backupSizeCache.get(id);
-      const sizeBytes =
-        cached && cached.expires > Date.now()
-          ? cached.bytes
-          : await allocatedTreeSize(
-              join(directory, 'backup'),
-              sizeDeadline,
-            ).catch(() => null);
-      if (sizeBytes !== null && valid && terminal.has(operation.status))
-        this.backupSizeCache.set(id, {
-          bytes: sizeBytes,
-          expires: Date.now() + 60_000,
-        });
+      const measurable = valid && terminal.has(operation.status) && !blocked;
+      const measured = measurable
+        ? this.backupSize(id, join(directory, 'backup'), backup)
+        : null;
+      const sizeBytes = measured?.bytes ?? null;
       backups.push({
         id,
         path: hostDirectory ? join(hostDirectory, id, 'backup') : null,
         managerPath: join(directory, 'backup'),
         sizeBytes,
+        sizeStatus: measured?.status ?? 'unavailable',
         createdAt:
           valid && Number.isFinite(Date.parse(operation.startedAt))
             ? operation.startedAt
@@ -355,6 +362,9 @@ export class TransactionalUpdater {
       });
     }
     return {
+      sizesCalculating: backups.some(
+        (backup) => backup.sizeStatus === 'calculating',
+      ),
       totalSizeBytes: backups.every((backup) => backup.sizeBytes !== null)
         ? backups.reduce((total, backup) => total + backup.sizeBytes, 0)
         : null,
@@ -363,6 +373,46 @@ export class TransactionalUpdater {
           b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
       ),
     };
+  }
+
+  backupSize(id, path, value) {
+    const identity = backupIdentity(value);
+    const cached = this.backupSizeCache.get(id);
+    if (
+      cached?.identity === identity &&
+      (cached.status !== 'unavailable' || cached.retryAt > Date.now())
+    )
+      return cached;
+    const entry = { identity, bytes: null, status: 'calculating' };
+    this.backupSizeCache.set(id, entry);
+    // A single background queue survives list requests. A large backup must
+    // finish rather than restart after each HTTP deadline and starve the rest.
+    this.backupSizeTask = this.backupSizeTask.then(async () => {
+      try {
+        const before = await lstat(path);
+        if (
+          !before.isDirectory() ||
+          before.isSymbolicLink() ||
+          backupIdentity(before) !== identity
+        )
+          throw new Error('backupChanged');
+        const bytes = await this.measureBackupSize(path);
+        if (!Number.isSafeInteger(bytes) || bytes < 0)
+          throw new Error('backupSizeInvalid');
+        const after = await lstat(path);
+        if (
+          backupIdentity(after) !== identity ||
+          this.backupSizeCache.get(id) !== entry
+        )
+          throw new Error('backupChanged');
+        entry.bytes = bytes;
+        entry.status = 'ready';
+      } catch {
+        entry.status = 'unavailable';
+        entry.retryAt = Date.now() + 60_000;
+      }
+    });
+    return entry;
   }
 
   async deleteBackup({ operationId, confirmation }) {
@@ -408,6 +458,7 @@ export class TransactionalUpdater {
       operation.backupDeletedAt = new Date().toISOString();
       await atomicJson(metadataPath, operation);
       if (current) this.current = operation;
+      this.backupSizeCache.delete(operationId);
       // Only the backup subtree: preserve transaction metadata and quarantine data.
       if (backup) await rm(path, { recursive: true, maxRetries: 3 });
       return { ok: true };

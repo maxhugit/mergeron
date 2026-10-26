@@ -6,6 +6,27 @@ conteneurs de la plateforme. Son déploiement est séparé de l'application afin
 qu'une panne ou une mise à jour de `mergeron-ui` ne supprime jamais le composant
 chargé de l'observer.
 
+## Chemin et espace disque des sauvegardes
+
+Ces métadonnées nécessitent un Manager à jour, pas seulement une nouvelle image
+de l’application. Le chemin hôte n’est affiché qu’après vérification du montage ;
+sinon, le chemin interne au Manager est indiqué sans inventer de chemin serveur.
+
+La taille allouée est calculée en arrière-plan pour les sauvegardes de transactions
+terminées, dans une file bornée, avec au plus 32 lectures de métadonnées en parallèle.
+Le calcul ne suit pas les liens symboliques et ne compte qu’une fois les liens
+physiques d’une sauvegarde. Il ne repart pas de zéro à chaque requête HTTP et
+n’est plus interrompu par une limite globale de dix secondes. Les résultats sont
+gardés en mémoire pendant la vie du Manager et invalidés si la racine de la copie
+change ou si la copie est supprimée.
+
+Pendant le calcul, l’interface indique « Calcul en cours… » et se réactualise
+toutes les deux secondes. Une erreur réelle de lecture reste « Indisponible » et
+peut être réessayée après une minute. Le total n’est affiché que si toutes les
+tailles sont connues : aucune taille partielle n’est présentée comme un total.
+Ces calculs ne changent ni les règles de conservation ni les protections de
+suppression et ne suppriment aucune sauvegarde.
+
 ## Installation initiale sécurisée
 
 Le Manager sait désormais préparer une installation neuve et continue

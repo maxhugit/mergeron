@@ -30,7 +30,8 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
     queryKey: managerBackupsQueryKey,
     queryFn: requestManagerBackups,
     enabled: supported,
-    refetchInterval: 30_000,
+    refetchInterval: (query) =>
+      query.state.data?.sizesCalculating ? 2_000 : 30_000,
     retry: false,
   });
   const deletion = useMutation({
@@ -67,7 +68,10 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
       {query.data && (
         <p className="text-sm font-medium">
           {t('managerBackupsTotalSize', {
-            size: size(query.data.totalSizeBytes),
+            size:
+              query.data.totalSizeBytes == null && query.data.sizesCalculating
+                ? t('managerBackupSizeCalculating')
+                : size(query.data.totalSizeBytes),
           })}
         </p>
       )}
@@ -119,7 +123,10 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                   </p>
                   <p className="text-xs">
                     {t('managerBackupDiskSize', {
-                      size: size(backup.sizeBytes),
+                      size:
+                        backup.sizeStatus === 'calculating'
+                          ? t('managerBackupSizeCalculating')
+                          : size(backup.sizeBytes),
                     })}
                   </p>
                   {backup.current && (
