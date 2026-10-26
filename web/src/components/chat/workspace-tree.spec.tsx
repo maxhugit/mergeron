@@ -185,7 +185,7 @@ describe('project workspaces', () => {
     await screen.findByTestId('file-tree');
     expect(screen.getByText('Test')).toBeInTheDocument();
     expect(screen.getByText('Documentation')).toBeInTheDocument();
-    expect(screen.getByText('Active workspace')).toBeInTheDocument();
+    expect(screen.getByText('Active working directory')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Documentation'));
     expect(screen.getByTestId('file-tree')).toHaveTextContent('/appdata/docs');
@@ -200,7 +200,7 @@ describe('project workspaces', () => {
     expect(screen.getByText('Git view')).toBeInTheDocument();
     expect(primary).toHaveAttribute('aria-pressed', 'false');
     expect(primary).toHaveAttribute('data-variant', 'ghost');
-    expect(screen.getByText('Active workspace')).toBeInTheDocument();
+    expect(screen.getByText('Active working directory')).toBeInTheDocument();
     expect(useFilesStore.getState().rootDir).toBe('/workspaces/main');
     expect(onActiveWorkspaceChange).toHaveBeenCalledTimes(1);
     fireEvent.click(primary);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Folder, GitBranch, KeyRound, Network, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DirectorySelectionTree } from '@/components/files/directory-selection-tree';
@@ -142,25 +142,38 @@ export function WorkspaceCreationDialog({
 
           {!source ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {sourceOptions.map((option) => {
+              {sourceOptions.map((option, index) => {
                 const Icon = option.icon;
                 return (
-                  <button
-                    key={option.type}
-                    type="button"
-                    className="flex items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-accent/40"
-                    onClick={() => setSource(option.type)}
-                  >
-                    <span className="rounded-md bg-primary/10 p-2 text-primary">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span>
-                      <span className="block font-medium">{option.label}</span>
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        {option.description}
+                  <Fragment key={option.type}>
+                    {index === 0 && (
+                      <h3 className="col-span-full text-sm font-semibold">
+                        {t('projectWorkspaces')}
+                      </h3>
+                    )}
+                    {index === 1 && (
+                      <h3 className="col-span-full mt-2 text-sm font-semibold">
+                        {t('externalResources')}
+                      </h3>
+                    )}
+                    <button
+                      type="button"
+                      className="flex items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-accent/40"
+                      onClick={() => setSource(option.type)}
+                    >
+                      <span className="rounded-md bg-primary/10 p-2 text-primary">
+                        <Icon className="h-5 w-5" />
                       </span>
-                    </span>
-                  </button>
+                      <span>
+                        <span className="block font-medium">
+                          {option.label}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {option.description}
+                        </span>
+                      </span>
+                    </button>
+                  </Fragment>
                 );
               })}
             </div>

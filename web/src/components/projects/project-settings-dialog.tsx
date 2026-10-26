@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ProjectLocationsIntro } from './project-locations-intro';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bot,
@@ -289,6 +290,7 @@ export function ProjectSettingsPanel({
                 {t('addAWorkspace')}
               </Button>
             </div>
+            <ProjectLocationsIntro />
             {project.workspaces.map((workspace) => {
               const agents = (project.agentThreads ?? []).filter(
                 (thread) => thread.workspacePath === workspace.path,

@@ -15,9 +15,11 @@ const budgets = {
   // The platform guide, project agent management, deliverable execution flow,
   // workspace transfers, Mergeron Manager inventory and adoption safeguards,
   // and the unified local/Git/SSH/FTP source picker are intentionally localized
-  // in the shared catalog. Keep a narrow ceiling around that reviewed content
+  // in the shared catalog. The locations/connections vocabulary adds 625 bytes
+  // above the previous ceiling (largest catalog: 183,625 bytes in CI).
+  // Keep a narrow ceiling around that reviewed content
   // while preserving regression detection.
-  commonCatalogAssetBytes: 183_000,
+  commonCatalogAssetBytes: 184_000,
 };
 
 const entries = await readdir(assetsDirectory, { withFileTypes: true }).catch(

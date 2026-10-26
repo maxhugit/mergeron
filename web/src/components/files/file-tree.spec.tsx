@@ -8,6 +8,10 @@ import type { ProjectSummary } from '@/lib/projects-api';
 
 const api = vi.hoisted(() => ({ read: vi.fn(), create: vi.fn() }));
 const projects = vi.hoisted(() => vi.fn());
+const session = vi.hoisted(() => ({ isAdministrator: true }));
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => session,
+}));
 vi.mock('@/lib/projects-api', () => ({ projectsApi: projects }));
 vi.mock('@/socket', () => ({
   getSocket: () => ({
@@ -30,6 +34,7 @@ vi.mock('@/generated/api/sdk.gen', async (original) => ({
 }));
 
 beforeEach(() => {
+  session.isAdministrator = true;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -52,6 +57,88 @@ beforeEach(() => {
         })
       : Promise.reject(new Error('Listing denied')),
   );
+});
+
+it.each([true, false])(
+  'hides only the managed system entry by default for administrator=%s',
+  async (administrator) => {
+    session.isAdministrator = administrator;
+    api.read.mockResolvedValue({
+      data: [
+        { path: '/work/.mergeron', name: '.mergeron', type: 'directory' },
+        { path: '/work/.git', name: '.git', type: 'directory' },
+        { path: '/work/.env', name: '.env', type: 'file' },
+        { path: '/work/document.docx', name: 'document.docx', type: 'file' },
+      ],
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FileTree
+          project={
+            {
+              id: 'p',
+              resources: [],
+              workspaces: [{ id: 'main', path: '/work', primary: true }],
+            } as unknown as ProjectSummary
+          }
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      await screen.findByText(
+        'Mergeron internal data is hidden in this listing.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText('.mergeron')).toBeNull();
+    expect(screen.getByText('.git')).toBeVisible();
+    expect(screen.getByText('.env')).toBeVisible();
+    expect(screen.getByText('document.docx')).toBeVisible();
+    if (administrator) {
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Show internal data (administrator)',
+        }),
+      );
+      expect(screen.getByText('.mergeron')).toBeVisible();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Hide internal data' }),
+      );
+      expect(screen.queryByText('.mergeron')).toBeNull();
+    } else
+      expect(
+        screen.queryByRole('button', {
+          name: 'Show internal data (administrator)',
+        }),
+      ).toBeNull();
+    expect(useFilesStore.getState().rootDir).toBe('/work');
+    expect(api.create).not.toHaveBeenCalled();
+  },
+);
+
+it('does not classify a similarly named folder in an attached local directory as system data', async () => {
+  api.read.mockResolvedValue({
+    data: [{ path: '/work/.mergeron', name: '.mergeron', type: 'directory' }],
+  });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <FileTree
+        project={
+          {
+            id: 'p',
+            resources: [],
+            workspaces: [
+              { id: 'main', path: '/primary', primary: true },
+              { id: 'secondary', path: '/work', primary: false },
+            ],
+          } as unknown as ProjectSummary
+        }
+      />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText('.mergeron')).toBeVisible();
+  expect(
+    screen.queryByText('Mergeron internal data is hidden in this listing.'),
+  ).toBeNull();
 });
 
 it('shows deliverable aliases but navigates and renames using the real directory', async () => {
