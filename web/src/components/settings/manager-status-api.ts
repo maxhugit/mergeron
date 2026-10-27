@@ -46,7 +46,11 @@ export interface ManagerComponent {
 }
 
 export interface ManagerStatus {
-  capabilities?: { backupManagement?: boolean; devFastUpdate?: boolean };
+  capabilities?: {
+    backupManagement?: boolean;
+    devFastUpdate?: boolean;
+    backupRetention?: boolean;
+  };
   available: boolean;
   schemaVersion?: number;
   stack?: string;
@@ -143,7 +147,7 @@ export interface ManagerBackup {
 }
 export const managerBackupsQueryKey = ['administration', 'manager-backups'];
 async function backupRequest<T>(
-  path: 'backups' | 'backups/delete',
+  path: 'backups' | 'backups/delete' | 'backups/retention',
   body?: Record<string, unknown>,
 ): Promise<T> {
   const authorization = getAuthorizationHeader();
@@ -176,6 +180,19 @@ export function deleteManagerBackup(id: string) {
   return backupRequest<{ ok: boolean }>('backups/delete', {
     operationId: id,
     confirmation: 'DELETE_UPDATE_BACKUP',
+  });
+}
+
+export const managerRetentionQueryKey = [
+  'administration',
+  'manager-backup-retention',
+];
+export function requestManagerRetention() {
+  return backupRequest<{ maxBackups: number }>('backups/retention');
+}
+export function saveManagerRetention(maxBackups: number) {
+  return backupRequest<{ maxBackups: number }>('backups/retention', {
+    maxBackups,
   });
 }
 

@@ -1,4 +1,9 @@
 {
+  "managerRetentionCount": "Number of backups to keep",
+  "managerRetentionSave": "Save limit",
+  "managerRetentionHelp": "Default: 10. From 1 to 1,000 backups. After each successful update, the oldest backups beyond this limit are permanently deleted. Saving does not delete anything immediately; protected backups and quarantine data are preserved.",
+  "managerRetentionError": "Could not read or save the backup limit.",
+  "managerRetentionSaved": "Limit saved.",
   "updateInvalidMode": "Invalid update mode.",
   "updateFastDevelopmentOnly": "Fast updates require an isolated development stack.",
   "managerFastDevUpdate": "Fast update — development only",

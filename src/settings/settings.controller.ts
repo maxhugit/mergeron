@@ -116,6 +116,16 @@ export class SettingsController {
     return this.managerStatus.deleteBackup(body);
   }
 
+  @Get('manager/backups/retention')
+  managerBackupRetention() {
+    return this.managerStatus.backupRetention();
+  }
+
+  @Post('manager/backups/retention')
+  managerSetBackupRetention(@Body() body: { maxBackups?: unknown }) {
+    return this.managerStatus.setBackupRetention(body);
+  }
+
   @Post('manager/update')
   @ApiOperation({ summary: 'Start a confirmed transactional stack update' })
   managerUpdate(

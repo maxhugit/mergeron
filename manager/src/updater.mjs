@@ -494,41 +494,97 @@ export class TransactionalUpdater {
       throw new Error('managerBackupInvalid');
     this.busy = true;
     try {
-      const directory = join(this.directory, operationId);
-      const stat = await lstat(directory).catch(() => null);
-      if (!stat?.isDirectory() || stat.isSymbolicLink())
-        throw new Error('managerBackupInvalid');
-      const current = this.current?.id === operationId;
-      const metadataPath = join(
-        this.directory,
-        current ? 'transaction.json' : `${operationId}.json`,
-      );
-      const metadata = await lstat(metadataPath).catch(() => null);
-      if (!metadata?.isFile() || metadata.isSymbolicLink())
-        throw new Error('managerBackupInvalid');
-      const operation = JSON.parse(await readFile(metadataPath, 'utf8'));
-      if (
-        operation.id !== operationId ||
-        operation.stack !== this.manifest.stack ||
-        operation.environment !== this.manifest.environment ||
-        !terminal.has(operation.status)
-      )
-        throw new Error('managerBackupInvalid');
-      const path = join(directory, 'backup');
-      const backup = await lstat(path).catch(() => null);
-      if (backup && (!backup.isDirectory() || backup.isSymbolicLink()))
-        throw new Error('managerBackupInvalid');
-      // Invalidate rollback durably before deleting data, including if deletion is interrupted.
-      operation.backupComplete = false;
-      operation.backupDeletedAt = new Date().toISOString();
-      await atomicJson(metadataPath, operation);
-      if (current) this.current = operation;
-      this.backupSizeCache.delete(operationId);
-      // Only the backup subtree: preserve transaction metadata and quarantine data.
-      if (backup) await removeDiscardedBackupTree(path);
-      return { ok: true };
+      return await this.#discardBackup(operationId);
     } finally {
       this.busy = false;
+    }
+  }
+
+  async #discardBackup(operationId) {
+    const directory = join(this.directory, operationId);
+    const stat = await lstat(directory).catch(() => null);
+    if (!stat?.isDirectory() || stat.isSymbolicLink())
+      throw new Error('managerBackupInvalid');
+    const current = this.current?.id === operationId;
+    const metadataPath = join(
+      this.directory,
+      current ? 'transaction.json' : `${operationId}.json`,
+    );
+    const metadata = await lstat(metadataPath).catch(() => null);
+    if (!metadata?.isFile() || metadata.isSymbolicLink())
+      throw new Error('managerBackupInvalid');
+    const operation = JSON.parse(await readFile(metadataPath, 'utf8'));
+    if (
+      operation.id !== operationId ||
+      operation.stack !== this.manifest.stack ||
+      operation.environment !== this.manifest.environment ||
+      !terminal.has(operation.status)
+    )
+      throw new Error('managerBackupInvalid');
+    const path = join(directory, 'backup');
+    const backup = await lstat(path).catch(() => null);
+    if (backup && (!backup.isDirectory() || backup.isSymbolicLink()))
+      throw new Error('managerBackupInvalid');
+    // Invalidate rollback durably before deleting data, including if deletion is interrupted.
+    operation.backupComplete = false;
+    operation.backupDeletedAt = new Date().toISOString();
+    await atomicJson(metadataPath, operation);
+    if (current) this.current = operation;
+    this.backupSizeCache.delete(operationId);
+    // Only the backup subtree: preserve transaction metadata and quarantine data.
+    if (backup) await removeDiscardedBackupTree(path);
+    return { ok: true };
+  }
+
+  async backupRetention() {
+    let policy;
+    try {
+      const path = join(this.directory, '..', 'backup-retention.json');
+      const info = await lstat(path);
+      if (!info.isFile() || info.isSymbolicLink())
+        throw new Error('managerBackupRetentionInvalid');
+      policy = JSON.parse(await readFile(path, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') return { maxBackups: 10 };
+      throw error;
+    }
+    if (
+      policy.stack !== this.manifest.stack ||
+      policy.environment !== this.manifest.environment ||
+      !Number.isInteger(policy.maxBackups) ||
+      policy.maxBackups < 1 ||
+      policy.maxBackups > 1000
+    )
+      throw new Error('managerBackupRetentionInvalid');
+    return { maxBackups: policy.maxBackups };
+  }
+
+  async setBackupRetention({ maxBackups }) {
+    if (this.busy || (this.current && !terminal.has(this.current.status)))
+      throw new Error('managerOperationInProgress');
+    if (!Number.isInteger(maxBackups) || maxBackups < 1 || maxBackups > 1000)
+      throw new Error('managerBackupRetentionInvalid');
+    this.busy = true;
+    try {
+      await mkdir(dirname(this.directory), { recursive: true, mode: 0o700 });
+      await atomicJson(join(this.directory, '..', 'backup-retention.json'), {
+        stack: this.manifest.stack,
+        environment: this.manifest.environment,
+        maxBackups,
+      });
+      return { maxBackups };
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  async #enforceBackupRetention() {
+    // Called under the update lock, only after a successful durable commit.
+    const { maxBackups } = await this.backupRetention();
+    const { backups } = await this.listBackups();
+    for (const backup of backups.slice(maxBackups)) {
+      if (backup.current || !terminal.has(backup.status)) continue;
+      await this.#discardBackup(backup.id);
     }
   }
 
@@ -867,6 +923,14 @@ export class TransactionalUpdater {
     await this.refreshAdoption();
     this.current.finishedAt = new Date().toISOString();
     await this.save('complete', 'succeeded');
+    // Cleanup failure must never turn a healthy committed update into a rollback.
+    try {
+      await this.#enforceBackupRetention();
+    } catch {
+      console.error(
+        'Manager backup retention cleanup failed; backups retained',
+      );
+    }
   }
 
   async refreshAdoption() {

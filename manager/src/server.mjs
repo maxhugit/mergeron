@@ -236,6 +236,7 @@ const server = http.createServer(async (request, response) => {
       update: updater.status(),
       capabilities: {
         backupManagement: true,
+        backupRetention: true,
         devFastUpdate:
           manifest.environment === 'development' &&
           manifest.stack !== 'mergeron',
@@ -276,6 +277,36 @@ const server = http.createServer(async (request, response) => {
           ? 400
           : 409,
         { error: code },
+      );
+    }
+    return;
+  }
+  if (
+    request.url === '/v1/backups/retention' &&
+    ['GET', 'POST'].includes(request.method)
+  ) {
+    try {
+      if (
+        !ready ||
+        (request.method === 'POST' && (installing || adopting || updater.busy))
+      )
+        throw new Error('managerOperationInProgress');
+      json(
+        response,
+        200,
+        request.method === 'GET'
+          ? await updater.backupRetention()
+          : await updater.setBackupRetention(await readJsonBody(request)),
+      );
+    } catch (error) {
+      json(
+        response,
+        error.message === 'managerBackupRetentionInvalid' ? 400 : 409,
+        {
+          error: /^manager[A-Za-z]+$/.test(error.message)
+            ? error.message
+            : 'managerBackupRetentionUnavailable',
+        },
       );
     }
     return;

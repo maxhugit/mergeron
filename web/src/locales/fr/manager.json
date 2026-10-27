@@ -1,4 +1,9 @@
 {
+  "managerRetentionCount": "Nombre de sauvegardes à conserver",
+  "managerRetentionSave": "Enregistrer la limite",
+  "managerRetentionHelp": "Par défaut : 10. De 1 à 1 000 sauvegardes. Après chaque mise à jour réussie, les plus anciennes sont supprimées définitivement au-delà de cette limite. L’enregistrement ne supprime rien immédiatement ; les sauvegardes protégées et les quarantaines sont préservées.",
+  "managerRetentionError": "Impossible de lire ou d’enregistrer la limite de sauvegardes.",
+  "managerRetentionSaved": "Limite enregistrée.",
   "updateInvalidMode": "Mode de mise à jour invalide.",
   "updateFastDevelopmentOnly": "La mise à jour rapide est réservée à une stack de développement isolée.",
   "managerFastDevUpdate": "Mise à jour rapide — dev uniquement",

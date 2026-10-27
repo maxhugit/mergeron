@@ -8,6 +8,17 @@ chargé de l'observer.
 
 ## Chemin et espace disque des sauvegardes
 
+L’onglet Sauvegarde permet de régler le nombre de copies à conserver : **10 par
+défaut**, de 1 à 1 000. Le réglage est conservé dans l’état privé du Manager et
+isolé par stack/environnement. Il nécessite une application et un Manager à jour.
+L’enregistrement ne supprime rien immédiatement. Après chaque mise à jour réussie,
+le Manager retire les copies les plus anciennes au-delà de la limite, sans toucher
+à la sauvegarde courante, aux métadonnées inconnues ou protégées, aux journaux ni
+aux quarantaines. Ces protections peuvent laisser plus de copies que la limite.
+Un échec du nettoyage ne déclenche jamais de rollback d’une mise à jour réussie ;
+les copies restantes seront réexaminées après une prochaine mise à jour réussie.
+Les suppressions automatiques sont définitives.
+
 La suppression invalide durablement le retour arrière avant de retirer uniquement
 le sous-dossier `backup` sélectionné. Avec les capacités minimales `CHOWN` et
 `DAC_READ_SEARCH`, le Manager reprend la propriété des seuls répertoires de cette

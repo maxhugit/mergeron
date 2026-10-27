@@ -24,7 +24,7 @@ vi.mock('./server-version-card', () => ({
         status={
           {
             available: true,
-            capabilities: { backupManagement: true },
+            capabilities: { backupManagement: true, backupRetention: true },
             update: { busy: false, operation: null },
           } as ManagerStatus
         }
@@ -35,6 +35,7 @@ vi.mock('./server-version-card', () => ({
 }));
 vi.mock('./manager-status-api', async (original) => ({
   ...(await original<typeof import('./manager-status-api')>()),
+  requestManagerRetention: async () => ({ maxBackups: 10 }),
   requestManagerBackups: async () => ({
     totalSizeBytes: null,
     sizesCalculating: true,
@@ -78,9 +79,7 @@ test.each([1000, 1295, 390])(
       expect(scroller.getBoundingClientRect().width).toBeGreaterThanOrEqual(
         width - 48,
       );
-      expect(
-        screen.getByRole('columnheader', { name: 'Date' }),
-      ).toBeVisible();
+      expect(screen.getByRole('columnheader', { name: 'Date' })).toBeVisible();
       expect(
         screen.getByRole('columnheader', { name: 'Identifiant' }),
       ).toBeVisible();

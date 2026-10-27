@@ -112,6 +112,15 @@ export class ManagerStatusService {
     return this.requestManager('/v1/backups');
   }
 
+  backupRetention() {
+    return this.requestManager('/v1/backups/retention');
+  }
+  setBackupRetention(input: { maxBackups?: unknown }) {
+    return this.requestManager('/v1/backups/retention', 'POST', {
+      maxBackups: input?.maxBackups,
+    });
+  }
+
   async deleteBackup(input: { operationId?: unknown; confirmation?: unknown }) {
     return this.requestManager('/v1/backups/delete', 'POST', {
       operationId: input?.operationId,
