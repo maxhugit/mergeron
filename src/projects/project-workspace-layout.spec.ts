@@ -181,6 +181,26 @@ describe('permanent project workspaces', () => {
     await expect(
       files.writeFile(path.join(system, 'history/keep.bin'), 'forbidden'),
     ).rejects.toThrow('read-only');
+    const narrowFiles = new FilesService(
+      {
+        getStringSetting: (key: string) =>
+          key === SECURITY_SETTING_KEYS.workspaceRoots ? primary : '',
+        getSetting: () => ({ value: '' }),
+        onChange: () => () => {},
+      } as unknown as SettingsService,
+      database.db,
+    );
+    try {
+      // A verified document-server capability has no browser context. Relocating
+      // history outside a narrowly configured work root must not break transfers.
+      expect(
+        await narrowFiles.resolveSafePath(
+          path.join(system, 'history/keep.bin'),
+        ),
+      ).toBe(await fs.realpath(path.join(system, 'history/keep.bin')));
+    } finally {
+      narrowFiles.onModuleDestroy();
+    }
     await layout.migrate();
     expect(
       await fs.readFile(path.join(system, 'history/keep.bin'), 'utf8'),

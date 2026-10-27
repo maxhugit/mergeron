@@ -1306,7 +1306,12 @@ export class FilesService implements OnModuleDestroy {
 
   /** Checks if a resolved path is under an allowed workspace root. */
   private isAllowedPath(resolved: string): boolean {
-    if (this.db && currentAccess()?.identity.role === 'administrator') {
+    // Authenticated document transfers use a path-bound capability and no browser
+    // context. Keep their registered system history reachable even with narrow roots.
+    if (
+      this.db &&
+      (!currentAccess() || currentAccess()?.identity.role === 'administrator')
+    ) {
       for (const project of this.db.select().from(projects).all()) {
         const system = projectSystemPath(
           project.workspacePath,
