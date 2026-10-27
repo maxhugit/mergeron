@@ -26,6 +26,7 @@ import { GitStageChanges } from './git-stage-changes';
 import { GitCopyReservation } from './git-copy-reservation';
 import { GitCreateBranch } from './git-create-branch';
 import { GitLocalBranchActions } from './git-local-branch-actions';
+import { GitRemoteBranchMenu } from './git-remote-branch-menu';
 import { pathIsWithin } from '@/lib/file-change-events';
 import type {
   GitDiffTarget,
@@ -727,6 +728,11 @@ function RepositoryPanel({
                 <RemoteBranches
                   projectId={projectId}
                   resourceId={resource.id}
+                  address={resource.address}
+                  copy={copy}
+                  snapshot={snapshot.data}
+                  canWrite={resource.accessMode === 'read_write'}
+                  agentThreadId={agentThreadId}
                   canPrepare={!agentHasCopy}
                   onPrepare={(name) => {
                     setBranch(name);
@@ -897,13 +903,24 @@ function RemoteBranches({
   resourceId,
   onPrepare,
   canPrepare,
+  address,
+  copy,
+  snapshot,
+  canWrite,
+  agentThreadId,
 }: {
   projectId: string;
   resourceId: string;
   onPrepare: (branch: string) => void;
   canPrepare: boolean;
+  address: string | null;
+  copy?: ProjectWorkspaceCopySummary;
+  snapshot?: GitSnapshot;
+  canWrite: boolean;
+  agentThreadId?: string;
 }) {
   const { t, i18n } = useTranslation('workspaces');
+  const [retrieved, setRetrieved] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ['workspace-git-remote-branches', projectId, resourceId],
     queryFn: ({ signal }) =>
@@ -933,21 +950,37 @@ function RemoteBranches({
             })}
           </p>
           {query.data.items.length === 0 && <p>{t('gitNoPublishedBranch')}</p>}
+          {retrieved && (
+            <p role="status">{t('gitRetrieveDone', { name: retrieved })}</p>
+          )}
           {query.data.items.map((item) => (
-            <article key={item.name} className="space-y-1 border-b py-2">
-              <p className="break-all font-medium">{item.name}</p>
-              <p>
-                {item.revision.slice(0, 7)}
-                {item.protected ? ` · ${t('gitProtectedBranch')}` : ''}
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!canPrepare}
-                onClick={() => onPrepare(item.name)}
-              >
-                {t('gitPrepareCopy')}
-              </Button>
+            <article
+              key={item.name}
+              className="flex items-center gap-2 border-b py-2"
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="break-all font-medium">{item.name}</p>
+                <p>
+                  {item.revision.slice(0, 7)}
+                  {item.protected ? ` · ${t('gitProtectedBranch')}` : ''}
+                </p>
+              </div>
+              <div className="shrink-0">
+                <GitRemoteBranchMenu
+                  projectId={projectId}
+                  resourceId={resourceId}
+                  address={address}
+                  copy={copy}
+                  snapshot={snapshot}
+                  canWrite={canWrite}
+                  agentThreadId={agentThreadId}
+                  branch={item.name}
+                  revision={item.revision}
+                  canPrepare={canPrepare}
+                  onPrepare={() => onPrepare(item.name)}
+                  onRetrieved={setRetrieved}
+                />
+              </div>
             </article>
           ))}
           {query.data.limited && <p>{t('gitLimited')}</p>}

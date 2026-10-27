@@ -1,4 +1,13 @@
 {
+  "gitRetrieveDestination": "Local copy: {{name}}",
+  "gitRemoteBranchMenu": "Actions for remote branch {{name}}",
+  "gitRetrieveBranch": "Retrieve this branch locally…",
+  "gitRetrieveConfirm": "Retrieve branch",
+  "gitRetrieveHelp": "Downloads commits and creates a new local branch with the same name. No existing branch will be overwritten. Your files and pending changes are preserved without switching the active branch or changing upstream configuration. If the remote revision changed, refresh before confirming again.",
+  "gitRetrieveCurrent": "Active branch preserved: {{name}}",
+  "gitRetrieveNeedsCopy": "Prepare a local working copy for this repository first.",
+  "gitRetrieveUnavailable": "A writable local copy and connection are required.",
+  "gitRetrieveDone": "Branch {{name}} was retrieved locally.",
   "gitLocalBranchMenu": "Actions for branch {{name}}",
   "gitLocalDelete": "Delete local branch…",
   "gitLocalDeleteHelp": "Delete only this local branch? Its commits must already be included in the current branch. A branch checked out in this copy or another worktree cannot be deleted. No files or remote branches will be removed. No force deletion.",

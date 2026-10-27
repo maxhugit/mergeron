@@ -1,4 +1,13 @@
 {
+  "gitRetrieveDestination": "Copie locale : {{name}}",
+  "gitRemoteBranchMenu": "Actions de la branche distante {{name}}",
+  "gitRetrieveBranch": "Récupérer cette branche en local…",
+  "gitRetrieveConfirm": "Récupérer la branche",
+  "gitRetrieveHelp": "Télécharge les commits et crée une nouvelle branche locale du même nom. Aucune branche existante ne sera écrasée. Vos fichiers et modifications en cours sont conservés, sans changement de branche active ni de configuration de suivi. Si la révision distante a changé, actualisez avant de confirmer à nouveau.",
+  "gitRetrieveCurrent": "Branche active conservée : {{name}}",
+  "gitRetrieveNeedsCopy": "Préparez d’abord une copie de travail locale pour ce dépôt.",
+  "gitRetrieveUnavailable": "Une copie locale et une connexion en écriture sont nécessaires.",
+  "gitRetrieveDone": "La branche {{name}} a été récupérée en local.",
   "gitLocalBranchMenu": "Actions de la branche {{name}}",
   "gitLocalDelete": "Supprimer la branche locale…",
   "gitLocalDeleteHelp": "Supprimer uniquement cette branche locale ? Ses commits doivent être déjà intégrés à la branche actuelle. Une branche active dans cette copie ou un autre arbre de travail ne peut pas être supprimée. Aucun fichier ni branche distante ne sera supprimé. Aucun forçage.",
