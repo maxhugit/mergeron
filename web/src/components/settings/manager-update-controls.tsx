@@ -75,6 +75,11 @@ export function ManagerUpdateControls({
   });
   const [imageOverride, setImage] = useState<string | null>(null);
   const [manualSelection, setManualSelection] = useState(false);
+  const [fastEnabled, setFastEnabled] = useState(true);
+  const fastAvailable =
+    status.environment === 'development' &&
+    status.capabilities?.devFastUpdate === true;
+  const fastMode = fastAvailable && fastEnabled;
   const image =
     imageOverride ?? defaultManagerUpdateImage(status, release.data);
   const [plan, setPlan] = useState<ManagerUpdatePlan | null>(null);
@@ -169,6 +174,25 @@ export function ManagerUpdateControls({
           }}
         />
       </div>
+      {fastAvailable && (
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={fastEnabled}
+              disabled={busy || blocked}
+              onChange={(event) => {
+                setFastEnabled(event.target.checked);
+                setPlan(null);
+              }}
+            />
+            {t('managerFastDevUpdate')}
+          </label>
+          <p className="text-xs text-muted-foreground">
+            {t('managerFastDevUpdateHelp')}
+          </p>
+        </div>
+      )}
       <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
       <p className="text-xs text-muted-foreground">
         {t('managerUpdateSafetyDescription')}
@@ -244,7 +268,10 @@ export function ManagerUpdateControls({
                     : image.trim();
                 mutation.mutate({
                   action: 'plan',
-                  input: { images: { application: target } },
+                  input: {
+                    images: { application: target },
+                    ...(fastMode ? { mode: 'dev-fast' } : {}),
+                  },
                 });
               }}
             >
@@ -330,6 +357,7 @@ export function ManagerUpdateControls({
                     images: plan.images,
                     confirmation: 'UPDATE_WITH_ROLLBACK',
                     expectedFingerprint: plan.fingerprint,
+                    ...(plan.mode ? { mode: plan.mode } : {}),
                   });
                 if (confirm === 'rollback' && operation)
                   launch('rollback', {

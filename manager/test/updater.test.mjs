@@ -183,6 +183,137 @@ async function begin(updater) {
   await updater.task;
 }
 
+test('fast mode is rejected for production, unknown environments and production stack names', async (t) => {
+  const { updater } = await fixture(t);
+  const original = updater.manifest;
+  for (const change of [
+    { environment: 'production' },
+    { environment: undefined },
+    { stack: 'mergeron' },
+  ]) {
+    updater.manifest = { ...original, ...change };
+    await assert.rejects(
+      updater.plan(images, 'dev-fast'),
+      /updateFastDevelopmentOnly/,
+    );
+    assert.equal(updater.busy, false);
+  }
+  updater.manifest = original;
+  await assert.rejects(updater.plan(images, 'unknown'), /updateInvalidMode/);
+});
+
+test('fast dev update preserves a complete backup and full data rollback', async (t) => {
+  const { root, updater } = await fixture(t);
+  for (let n = 0; n < 24; n++)
+    await writeFile(join(root, 'workspace', `file-${n}`), `original-${n}`, {
+      mode: 0o640,
+    });
+  const plan = await updater.plan(images, 'dev-fast');
+  const standard = await updater.plan(images);
+  assert.notEqual(plan.fingerprint, standard.fingerprint);
+  await assert.rejects(
+    updater.begin({
+      images,
+      mode: 'standard',
+      confirmation: 'UPDATE_WITH_ROLLBACK',
+      expectedFingerprint: plan.fingerprint,
+    }),
+    /updatePlanChanged/,
+  );
+  await updater.begin({
+    images,
+    mode: 'dev-fast',
+    confirmation: 'UPDATE_WITH_ROLLBACK',
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'succeeded');
+  assert.equal(updater.current.backupComplete, true);
+  for (let n = 0; n < 24; n++)
+    assert.equal(
+      await readFile(
+        join(
+          updater.directory,
+          updater.current.id,
+          'backup',
+          'workspace',
+          `file-${n}`,
+        ),
+        'utf8',
+      ),
+      `original-${n}`,
+    );
+  await writeFile(join(root, 'home', 'database'), 'modified-after-update');
+  await updater.requestRollback({
+    operationId: updater.current.id,
+    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'rolledBack');
+  assert.equal(
+    await readFile(join(root, 'home', 'database'), 'utf8'),
+    'original',
+  );
+});
+
+test('fast mode reuses only a verified local immutable image, never a mutable tag', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const immutable = {
+    application: `ghcr.io/maxhugit/mergeron@sha256:${'b'.repeat(64)}`,
+  };
+  const inspect = docker.inspectImage.bind(docker);
+  docker.inspectImage = async (reference) =>
+    reference === immutable.application
+      ? { Id: reference, RepoDigests: [reference] }
+      : inspect(reference);
+  const plan = await updater.plan(immutable, 'dev-fast');
+  await updater.begin({
+    images: immutable,
+    mode: 'dev-fast',
+    confirmation: 'UPDATE_WITH_ROLLBACK',
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'succeeded');
+  assert.equal(docker.calls.filter(([action]) => action === 'pull').length, 0);
+});
+
+test('fast mode still pulls mutable tags and missing immutable images', async (t) => {
+  for (const mutable of [true, false]) {
+    const { updater, docker } = await fixture(t);
+    const requested = mutable
+      ? images
+      : { application: `ghcr.io/maxhugit/mergeron@sha256:${'b'.repeat(64)}` };
+    const inspect = docker.inspectImage.bind(docker);
+    let pulled = false;
+    const pull = docker.pullImage.bind(docker);
+    docker.pullImage = async (reference) => {
+      await pull(reference);
+      pulled = true;
+    };
+    docker.inspectImage = async (reference) => {
+      if (!mutable && reference === requested.application) {
+        if (!pulled) throw new Error('not found');
+        return { Id: reference, RepoDigests: [reference] };
+      }
+      return inspect(reference);
+    };
+    const plan = await updater.plan(requested, 'dev-fast');
+    await updater.begin({
+      images: requested,
+      mode: 'dev-fast',
+      confirmation: 'UPDATE_WITH_ROLLBACK',
+      expectedFingerprint: plan.fingerprint,
+    });
+    await updater.task;
+    assert.equal(updater.current.status, 'succeeded');
+    assert.equal(
+      docker.calls.filter(([action]) => action === 'pull').length,
+      1,
+    );
+  }
+});
+
 test('lists dated backups without transaction secrets and deletes only the selected copy', async (t) => {
   const { root, updater, options } = await fixture(t);
   await begin(updater);
