@@ -31,6 +31,7 @@ import {
   WorkspaceGitService,
 } from './workspace-git.service';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
+import { gitCredentialHelper } from './git-credentials';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import type { ThreadExecutionInventoryService } from '../threads/thread-execution-inventory.service';
 import type { CodexProcessManager } from '../codex/codex-process-manager.service';
@@ -586,7 +587,10 @@ describe('confirmed actions', () => {
           expect(args).toContain(`${state.head}:refs/heads/main`);
           expect(args).not.toContain('--force');
           expect(args).not.toContain('--force-with-lease');
-          expect(env?.MERGERON_GIT_PASSWORD).toBe('test-password');
+          expect(env?.MERGERON_GIT_TOKEN).toBe('test-password');
+          expect(env?.GIT_ASKPASS).toBeUndefined();
+          expect(args).toContain(`credential.helper=${gitCredentialHelper}`);
+          expect(args.join(' ')).not.toContain('test-password');
           expect(args).toContain('http.followRedirects=false');
           expect(args).toContain('credential.helper=');
           return '';
