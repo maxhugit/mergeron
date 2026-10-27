@@ -408,6 +408,7 @@ it('separates local history from live GitHub branches and never activates a copy
   expect(await screen.findByText('Local change')).toBeVisible();
   tab('Distant · GitHub');
   expect(await screen.findByRole('tab', { name: 'PR / checks' })).toBeVisible();
+  expect(screen.queryByText(/Données consultées sur GitHub/)).toBeNull();
   expect(screen.getByText('Local change')).not.toBeVisible();
   tab('Branches publiées');
   expect(await screen.findByText('only-on-github')).toBeVisible();

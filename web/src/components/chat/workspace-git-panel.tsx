@@ -642,11 +642,6 @@ function RepositoryPanel({
           value="remote"
           className="min-h-0 min-w-0 flex-1 overflow-auto"
         >
-          <p className="break-all border-b p-3 text-xs text-muted-foreground">
-            {resource.address}
-            <br />
-            {t('gitRemoteReadHelp')}
-          </p>
           {resource.enabled ? (
             <Tabs
               defaultValue={initialAction === 'remote' ? 'files' : 'prs'}
