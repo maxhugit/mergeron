@@ -696,6 +696,177 @@ it('parses porcelain without splitting whitespace or renames into phantom change
 });
 
 describe('confirmed actions', () => {
+  const prInput = async () => {
+    writable();
+    resources.update('p', 'remote', { secret: { token: 'test-pr-token' } });
+    const state = await service.snapshot('p', copyId);
+    return {
+      confirmation: 'CREATE_PULL_REQUEST',
+      fingerprint: state.fingerprint,
+      head: state.head,
+      address: 'https://github.com/example/demo.git',
+      base: 'develop',
+      title: 'Reviewed change',
+      description: 'User description',
+      draft: true,
+    };
+  };
+  it('requires write access and the copy owner before PR requests', async () => {
+    const input = await prInput();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    resources.update('p', 'remote', { accessMode: 'read_only' });
+    await expect(actions.createPullRequest('p', copyId, input)).rejects.toThrow(
+      'GIT_READ_ONLY',
+    );
+    writable();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'owner',
+        projectId: 'p',
+        workspacePath: path.join(root, 'project'),
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    claimAgentCopy(database.db, 'p', 'owner', copyId);
+    await expect(
+      actions.createPullRequest('p', copyId, {
+        ...input,
+        agentThreadId: 'other',
+      }),
+    ).rejects.toThrow('GIT_COPY_OWNED');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('refuses PR creation without explicit GitHub credentials before any API call', async () => {
+    writable();
+    const state = await service.snapshot('p', copyId);
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      actions.createPullRequest('p', copyId, {
+        confirmation: 'CREATE_PULL_REQUEST',
+        fingerprint: state.fingerprint,
+        head: state.head,
+        address: 'https://github.com/example/demo.git',
+        base: 'develop',
+        title: 'Title',
+        description: '',
+        draft: false,
+      }),
+    ).rejects.toThrow('GIT_GITHUB_TOKEN_REQUIRED');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('creates a PR for the exact published head using only the fixed GitHub API', async () => {
+    const input = await prInput();
+    const fetch = vi
+      .fn()
+      .mockImplementation(async (url: string, options?: RequestInit) => ({
+        ok: true,
+        json: async () =>
+          options?.method === 'POST'
+            ? { number: 12 }
+            : url.includes('/branches/')
+              ? {
+                  commit: {
+                    sha: url.endsWith('/main') ? input.head : 'a'.repeat(40),
+                  },
+                }
+              : [],
+      }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      actions.createPullRequest('p', copyId, input),
+    ).resolves.toEqual({
+      number: 12,
+      url: 'https://github.com/example/demo/pull/12',
+      existing: false,
+    });
+    const posts = fetch.mock.calls.filter(
+      ([, options]) => (options as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toEqual([
+      'https://api.github.com/repos/example/demo/pulls',
+      expect.objectContaining({
+        redirect: 'error',
+        body: JSON.stringify({
+          title: 'Reviewed change',
+          body: 'User description',
+          head: 'main',
+          base: 'develop',
+          draft: true,
+          maintainer_can_modify: false,
+        }),
+      }),
+    ]);
+    expect(
+      fetch.mock.calls.every(([url]) =>
+        String(url).startsWith('https://api.github.com/repos/example/demo/'),
+      ),
+    ).toBe(true);
+    expect((await service.snapshot('p', copyId)).head).toBe(input.head);
+  });
+  it('returns an existing PR without a second write and refuses an unpushed head', async () => {
+    const input = await prInput();
+    const prepare = vi
+      .spyOn(service, 'pullRequestPreparation')
+      .mockResolvedValue({
+        head: input.head,
+        baseHead: 'a'.repeat(40),
+        existingNumber: 42,
+      });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      actions.createPullRequest('p', copyId, input),
+    ).resolves.toMatchObject({ number: 42, existing: true });
+    expect(fetch).not.toHaveBeenCalled();
+    prepare.mockResolvedValue({
+      head: '0'.repeat(40),
+      baseHead: 'a'.repeat(40),
+      existingNumber: null,
+    });
+    await expect(actions.createPullRequest('p', copyId, input)).rejects.toThrow(
+      'GIT_PR_PUSH_REQUIRED',
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('blocks stale sources, equal branches, active agents and uncertain PR writes without retries', async () => {
+    const input = await prInput();
+    const fetch = vi
+      .fn()
+      .mockRejectedValue(new Error('private network diagnostic'));
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      actions.createPullRequest('p', copyId, {
+        ...input,
+        address: 'https://other.example/repo',
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    await expect(
+      actions.createPullRequest('p', copyId, { ...input, base: 'main' }),
+    ).rejects.toThrow('GIT_PR_SAME_BRANCH');
+    await expect(
+      actions.createPullRequest('p', copyId, { ...input, title: '' }),
+    ).rejects.toThrow('GIT_INVALID_INPUT');
+    active.push('agent');
+    await expect(actions.createPullRequest('p', copyId, input)).rejects.toThrow(
+      'GIT_BUSY',
+    );
+    active.length = 0;
+    expect(fetch).not.toHaveBeenCalled();
+    vi.spyOn(service, 'pullRequestPreparation').mockResolvedValue({
+      head: input.head,
+      baseHead: 'a'.repeat(40),
+      existingNumber: null,
+    });
+    await expect(actions.createPullRequest('p', copyId, input)).rejects.toThrow(
+      'GIT_OUTCOME_UNKNOWN',
+    );
+    expect(fetch).toHaveBeenCalledOnce();
+  });
   const branchAction = async (
     action: 'switch' | 'merge',
     name: string,
