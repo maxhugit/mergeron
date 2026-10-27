@@ -39,6 +39,17 @@ export interface GitPullRequests {
     url: string;
   }>;
 }
+
+export interface GitRemoteBranches {
+  supported: boolean;
+  limited: boolean;
+  inspectedAt: number;
+  items: Array<{ name: string; revision: string; protected: boolean }>;
+}
+export interface GitCommits {
+  limited: boolean;
+  items: Array<{ sha: string; date: string; author: string; subject: string }>;
+}
 export interface GitChecks {
   baseHead?: string | null;
   head: string;

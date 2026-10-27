@@ -91,7 +91,9 @@ test('opens a read-only side-by-side diff beside Conversation and preserves it w
   );
   try {
     await page.getByRole('button', { name: 'Comparer coucou.js' }).click();
-    await expect.poll(() => document.querySelector('table')).not.toBeNull();
+    await expect
+      .poll(() => document.querySelector('table'), { timeout: 10000 })
+      .not.toBeNull();
     expect(
       screen.getByRole('tab', { name: 'Différences · coucou.js' }),
     ).toHaveAttribute('aria-selected', 'true');

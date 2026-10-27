@@ -150,6 +150,7 @@ it('clones an empty repository and supports the first staged commit without chan
     expect.objectContaining({ name: 'main', revision: '' }),
   );
   expect((await service.stagedDiff('p', copyId)).diff).toBe('');
+  expect((await service.commits('p', copyId)).items).toEqual([]);
   await expect(
     actions.push('p', copyId, {
       fingerprint: empty.fingerprint,
@@ -205,6 +206,21 @@ it('inspects a registered read-only copy without modifying the index or worktree
       expect.objectContaining({ name: 'main', remote: false }),
     ]),
   );
+  expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+});
+
+it('reads local commits without accessing the remote or modifying the copy', async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  const index = await readFile(path.join(cwd, '.git/index'));
+  const history = await service.commits('p', copyId);
+  expect(history.items).toHaveLength(1);
+  expect(history.items[0]).toMatchObject({
+    subject: 'initial',
+    author: 'Test',
+  });
+  expect(history.items[0].sha).toMatch(/^[a-f0-9]{40,64}$/);
+  expect(fetch).not.toHaveBeenCalled();
   expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
 });
 
@@ -286,6 +302,39 @@ describe('provider adapter', () => {
       supported: false,
     });
     expect(fetch).not.toHaveBeenCalled();
+    expect(await service.remoteBranches('p', 'remote')).toMatchObject({
+      supported: false,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('reads published branches directly from the fixed GitHub API without a local copy', async () => {
+    const resource = githubResource();
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          name: 'published-only',
+          commit: { sha: 'b'.repeat(40) },
+          protected: true,
+        },
+      ],
+    });
+    vi.stubGlobal('fetch', fetch);
+    expect(await service.remoteBranches('p', resource.id)).toMatchObject({
+      supported: true,
+      items: [
+        { name: 'published-only', revision: 'b'.repeat(40), protected: true },
+      ],
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.github.com/repos/example/demo/branches?per_page=100',
+      expect.objectContaining({
+        redirect: 'error',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer private-token',
+        }),
+      }),
+    );
   });
   it('uses a fixed API origin, scoped credentials and canonical safe PR URLs', async () => {
     const resource = githubResource();

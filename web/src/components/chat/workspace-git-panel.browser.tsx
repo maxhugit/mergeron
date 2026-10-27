@@ -60,6 +60,31 @@ vi.mock('@/lib/projects-api', () => ({
         fingerprint: 'a'.repeat(64),
         diff: '+staged change\n'.repeat(20),
       };
+    if (url.endsWith('/commits'))
+      return {
+        items: [
+          {
+            sha: 'a'.repeat(40),
+            author: 'Test',
+            date: '2026-10-26T12:00:00Z',
+            subject: 'Modification locale du message',
+          },
+        ],
+        limited: false,
+      };
+    if (url.endsWith('/branches'))
+      return {
+        supported: true,
+        items: [
+          {
+            name: 'feature/publiee-sur-github',
+            revision: 'b'.repeat(40),
+            protected: false,
+          },
+        ],
+        limited: false,
+        inspectedAt: Date.now(),
+      };
     if (url.endsWith('/pull-requests'))
       return {
         supported: true,
@@ -149,13 +174,25 @@ test.each([260, 330, 600])(
         expect(bounds.right).toBeLessThanOrEqual(width);
         expect(bounds.bottom).toBeLessThan(850);
       }
-      await page.getByRole('tab', { name: 'PR / checks' }).click();
+      await page.getByRole('tab', { name: 'Distant · GitHub' }).click();
       await page.getByRole('button', { name: /#12/ }).click();
       await screen.findByText('En cours');
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
       await page.screenshot({
         path: `../../../.vitest-screenshots/git-panel-${width}.png`,
       });
+      await page.getByRole('tab', { name: 'Branches publiées' }).click();
+      expect(
+        await screen.findByText('feature/publiee-sur-github'),
+      ).toBeVisible();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-remote-branches-${width}.png`,
+      });
+      await page.getByRole('tab', { name: 'Local', exact: true }).click();
+      await page.getByRole('tab', { name: 'Commits' }).click();
+      expect(
+        await screen.findByText('Modification locale du message'),
+      ).toBeVisible();
     } finally {
       view.unmount();
       client.clear();
