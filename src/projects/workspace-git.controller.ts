@@ -72,6 +72,15 @@ export class WorkspaceGitController {
     return this.actions.push(projectId, copyId, body);
   }
 
+  @Post('copies/:copyId/pull-requests')
+  createPullRequest(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.createPullRequest(projectId, copyId, body);
+  }
+
   @Post([
     'resources/:resourceId/pull-requests/:number/merge',
     'connections/:resourceId/pull-requests/:number/merge',

@@ -776,6 +776,7 @@ function RepositoryPanel({
                 <GitCopyActions
                   key={`publish:${copy.id}`}
                   projectId={projectId}
+                  resourceId={resource.id}
                   agentThreadId={agentThreadId}
                   copyId={copy.id}
                   snapshot={snapshot.data}

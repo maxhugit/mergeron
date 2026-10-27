@@ -471,6 +471,35 @@ export class WorkspaceGitService {
     }
   }
 
+  async pullRequestPreparation(
+    projectId: string,
+    resourceId: string,
+    head: string,
+    base: string,
+  ) {
+    const repo = this.github(projectId, resourceId);
+    if (!repo?.token) throw new ConflictException('GIT_GITHUB_TOKEN_REQUIRED');
+    const [published, target, existing] = await Promise.all([
+      this.githubGet<{ commit: { sha: string } }>(
+        repo,
+        `branches/${encodeURIComponent(head)}`,
+      ),
+      this.githubGet<{ commit: { sha: string } }>(
+        repo,
+        `branches/${encodeURIComponent(base)}`,
+      ),
+      this.githubGet<Array<{ number: number }>>(
+        repo,
+        `pulls?${new URLSearchParams({ state: 'open', head: `${repo.owner}:${head}`, base, per_page: '1' })}`,
+      ),
+    ]);
+    return {
+      head: published.commit.sha,
+      baseHead: target.commit.sha,
+      existingNumber: existing.length ? existing[0].number : null,
+    };
+  }
+
   async pullRequests(projectId: string, resourceId: string) {
     const repo = this.github(projectId, resourceId);
     if (!repo) return { supported: false, items: [], limited: false };

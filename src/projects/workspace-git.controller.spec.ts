@@ -7,6 +7,18 @@ import type { WorkspaceGitService } from './workspace-git.service';
 import type { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import type { WorkspaceCopiesService } from './workspace-copies.service';
 
+it('routes explicit PR creation to the action service', async () => {
+  const createPullRequest = vi.fn().mockResolvedValue({ number: 12 });
+  const controller = new WorkspaceGitController(
+    {} as WorkspaceGitService,
+    { createPullRequest } as unknown as WorkspaceGitActionsService,
+    {} as WorkspaceCopiesService,
+  );
+  const body = { confirmation: 'CREATE_PULL_REQUEST' };
+  await controller.createPullRequest('p', 'copy', body);
+  expect(createPullRequest).toHaveBeenCalledWith('p', 'copy', body);
+});
+
 it('routes confirmed local branch creation to the action service', async () => {
   const createBranch = vi.fn().mockResolvedValue({ branch: 'feature/test' });
   const controller = new WorkspaceGitController(
