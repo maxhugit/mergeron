@@ -15,6 +15,13 @@ import type { GitInventory } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 
+// Each case changes the viewport between unmounted fixtures. Resolve it afresh
+// rather than retaining the app hook's module singleton from the previous case.
+vi.mock('@/hooks/use-breakpoint', () => ({
+  useBreakpoint: () =>
+    window.matchMedia('(min-width: 1024px)').matches ? 'desktop' : 'mobile',
+}));
+
 const state = vi.hoisted(() => ({
   copy: true,
   requests: [] as Array<{ url: string; method?: string }>,
