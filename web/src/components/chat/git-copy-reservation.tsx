@@ -26,15 +26,19 @@ export function GitCopyReservation({
   copy,
   agentThreadId,
   active,
+  initialOpen = false,
+  hideTrigger = false,
 }: {
   projectId: string;
   copy: ProjectWorkspaceCopySummary;
   agentThreadId?: string;
   active: boolean;
+  initialOpen?: boolean;
+  hideTrigger?: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen && !active);
   const own = copyOwnedByAgent(copy, agentThreadId);
   const release = useMutation({
     retry: false,
@@ -62,16 +66,18 @@ export function GitCopyReservation({
   });
   return (
     <div className="space-y-1">
-      <p className="text-muted-foreground">
-        {t(
-          copy.ownerAgentIds?.length
-            ? own
-              ? 'gitCopyOwnedByAgent'
-              : 'gitCopyOwnedElsewhere'
-            : 'gitCopyUnassigned',
-        )}
-      </p>
-      {own && (
+      {!hideTrigger && (
+        <p className="text-muted-foreground">
+          {t(
+            copy.ownerAgentIds?.length
+              ? own
+                ? 'gitCopyOwnedByAgent'
+                : 'gitCopyOwnedElsewhere'
+              : 'gitCopyUnassigned',
+          )}
+        </p>
+      )}
+      {own && !hideTrigger && (
         <Button
           size="sm"
           variant="outline"
@@ -81,7 +87,7 @@ export function GitCopyReservation({
           {t('gitCopyRelease')}
         </Button>
       )}
-      {own && active && (
+      {own && active && !hideTrigger && (
         <p className="text-muted-foreground">{t('gitCopyReleaseActive')}</p>
       )}
       <Dialog

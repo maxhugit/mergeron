@@ -156,6 +156,16 @@ describe('project workspaces', () => {
           resources: [],
           workspaces: [
             {
+              id: 'git-copy',
+              projectId: 'project-1',
+              name: 'Git Test — copie',
+              path: '/workspaces/main/sources/git-copy',
+              primary: false,
+              sourceResourceId: 'git',
+              createdAt: 1,
+              updatedAt: 1,
+            },
+            {
               id: 'main',
               projectId: 'project-1',
               name: 'Principal',
@@ -185,11 +195,24 @@ describe('project workspaces', () => {
     await screen.findByTestId('file-tree');
     expect(screen.getByText('Test')).toBeInTheDocument();
     expect(screen.getByText('Documentation')).toBeInTheDocument();
-    expect(screen.getByText('Active working directory')).toBeInTheDocument();
+    expect(screen.queryByText('Git Test — copie')).toBeNull();
+    expect(
+      screen.getByLabelText('Active working directory'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Documentation'));
     expect(screen.getByTestId('file-tree')).toHaveTextContent('/appdata/docs');
-    fireEvent.click(screen.getByLabelText('Use for this conversation'));
+    fireEvent.pointerDown(
+      screen.getByRole('button', {
+        name: 'Working folder actions · Documentation',
+      }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(
+      await screen.findByRole('menuitem', {
+        name: 'Use for this conversation',
+      }),
+    );
     expect(onActiveWorkspaceChange).toHaveBeenCalledWith('/appdata/docs');
 
     const primary = screen.getByTitle('/workspaces/main');
@@ -200,7 +223,9 @@ describe('project workspaces', () => {
     expect(screen.getByText('Git view')).toBeInTheDocument();
     expect(primary).toHaveAttribute('aria-pressed', 'false');
     expect(primary).toHaveAttribute('data-variant', 'ghost');
-    expect(screen.getByText('Active working directory')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Active working directory'),
+    ).toBeInTheDocument();
     expect(useFilesStore.getState().rootDir).toBe('/workspaces/main');
     expect(onActiveWorkspaceChange).toHaveBeenCalledTimes(1);
     fireEvent.click(primary);

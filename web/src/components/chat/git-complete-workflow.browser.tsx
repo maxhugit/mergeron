@@ -141,6 +141,8 @@ test.each([390, 1100])(
       </QueryClientProvider>,
     );
     try {
+      await screen.findByRole('tab', { name: /Modifications/ });
+      await page.getByRole('tab', { name: /Modifications/ }).click();
       const commit = await screen.findByRole('button', { name: 'Commit…' });
       expect(commit).toBeDisabled();
       await page.getByRole('tab', { name: /Modifications/ }).click();

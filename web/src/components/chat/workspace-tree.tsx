@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2, Folder, Star } from 'lucide-react';
 import { FileTree } from '@/components/files/file-tree';
-import { Badge } from '@/components/ui/badge';
+import { WorkspaceEntryMenu } from './workspace-entry-menu';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useFilesStore } from '@/stores/files-store';
@@ -12,7 +12,7 @@ import { filesAddRoot } from '@/generated/api';
 import { pathIsWithin } from '@/lib/file-change-events';
 import { type ProjectSummary } from '@/lib/projects-api';
 import { WorkspaceGitPanel } from './workspace-git-panel';
-import type { GitDiffTarget } from '@/stores/workspace-store';
+import type { GitDiffTarget, GitGraphTarget } from '@/stores/workspace-store';
 
 interface Props {
   agentThreadId?: string;
@@ -25,6 +25,7 @@ interface Props {
   onMobileClose: () => void;
   onFile: (path: string) => void;
   onGitDiff?: (target: GitDiffTarget) => void;
+  onGitGraph?: (target: GitGraphTarget) => void;
 }
 
 /** Adapts only explorer presentation; the conversation and tab content keep their tree positions. */
@@ -39,8 +40,10 @@ export function WorkspaceTree({
   onMobileClose,
   onFile,
   onGitDiff,
+  onGitGraph,
 }: Props) {
   const { t } = useTranslation();
+  const { t: tw } = useTranslation('workspaces');
   const currentRoot = useFilesStore((s) => s.rootDir);
   const [adoptedCwd, setAdoptedCwd] = useState<string | null>(null);
   const [gitResourceId, setGitResourceId] = useState<string | null>(null);
@@ -82,59 +85,82 @@ export function WorkspaceTree({
       </div>
       {project && (
         <div className="shrink-0 space-y-1 border-b p-2">
-          {project.workspaces.map((workspace) => {
-            const selected = Boolean(
-              !gitResourceId &&
-              currentRoot &&
-              pathIsWithin(currentRoot, workspace.path),
-            );
-            const isActive = workspace.path === cwd;
-            return (
-              <div
-                key={workspace.id}
-                className="flex min-w-0 items-center gap-1"
-              >
-                <Button
-                  type="button"
-                  variant={selected ? 'secondary' : 'ghost'}
-                  aria-pressed={selected}
-                  size="sm"
-                  className="h-7 min-w-0 flex-1 justify-start gap-2 px-2 text-xs"
-                  title={workspace.path}
-                  onClick={() => {
-                    setGitResourceId(null);
-                    useFilesStore.getState().setRootDir(workspace.path);
-                  }}
+          {project.workspaces
+            .filter((workspace) => !workspace.sourceResourceId)
+            .map((workspace) => {
+              const selected = Boolean(
+                !gitResourceId &&
+                currentRoot &&
+                pathIsWithin(currentRoot, workspace.path),
+              );
+              const isActive = Boolean(
+                cwd &&
+                pathIsWithin(workspace.path, cwd) &&
+                !project.workspaces.some(
+                  (other) =>
+                    other.id !== workspace.id &&
+                    pathIsWithin(workspace.path, other.path) &&
+                    pathIsWithin(other.path, cwd),
+                ),
+              );
+              return (
+                <div
+                  key={workspace.id}
+                  className="flex min-w-0 items-center gap-1"
                 >
-                  <Folder className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">
-                    {workspace.primary ? t('primaryWorkspace') : workspace.name}
-                  </span>
-                  {isActive && (
-                    <Badge
-                      variant="secondary"
-                      className="ml-auto px-1 text-[9px]"
-                    >
-                      {t('activeWorkspace')}
-                    </Badge>
-                  )}
-                </Button>
-                {!isActive && onActiveWorkspaceChange && (
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={activeWorkspacePending}
-                    title={t('useForThisConversation')}
-                    aria-label={t('useForThisConversation')}
-                    onClick={() => onActiveWorkspaceChange(workspace.path)}
+                    variant={selected ? 'secondary' : 'ghost'}
+                    aria-pressed={selected}
+                    size="sm"
+                    className="h-7 min-w-0 flex-1 justify-start gap-2 px-2 text-xs"
+                    title={workspace.path}
+                    onClick={() => {
+                      setGitResourceId(null);
+                      useFilesStore.getState().setRootDir(workspace.path);
+                    }}
                   >
-                    <Star className="h-3.5 w-3.5" />
+                    <Star
+                      aria-label={isActive ? t('activeWorkspace') : undefined}
+                      className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'fill-primary text-primary' : 'text-muted-foreground'}`}
+                    />
+                    <Folder className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                      {workspace.primary
+                        ? t('primaryWorkspace')
+                        : workspace.name}
+                    </span>
                   </Button>
-                )}
-              </div>
-            );
-          })}
+                  <WorkspaceEntryMenu
+                  label={`${tw('gitWorkspaceMenu')} · ${workspace.name}`}
+                    items={[
+                      {
+                        label: t('useForThisConversation'),
+                        disabled:
+                          isActive ||
+                          activeWorkspacePending ||
+                          !onActiveWorkspaceChange,
+                        onSelect: () =>
+                          onActiveWorkspaceChange?.(workspace.path),
+                      },
+                      {
+                      label: tw('gitBrowseLocal'),
+                        onSelect: () => {
+                          setGitResourceId(null);
+                          useFilesStore.getState().setRootDir(workspace.path);
+                        },
+                      },
+                      {
+                      label: tw('gitCopyPath'),
+                        onSelect: () => {
+                          void navigator.clipboard.writeText(workspace.path);
+                        },
+                      },
+                    ]}
+                  />
+                </div>
+              );
+            })}
         </div>
       )}
       {/* Never compare the browsed root to cwd: entering folders and going up
@@ -145,6 +171,10 @@ export function WorkspaceTree({
           agentThreadId={agentThreadId}
           key={project.id}
           projectId={project.id}
+          onGitGraph={(target) => {
+            onGitGraph?.(target);
+            onMobileClose();
+          }}
           onGitDiff={(target) => {
             onGitDiff?.(target);
             onMobileClose();

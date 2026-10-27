@@ -405,6 +405,123 @@ describe('provider adapter', () => {
       accessMode: 'read_only',
       secret: { password: 'private-token' },
     });
+  it('reads a bounded remote graph without touching a local copy, even with inverted dates', async () => {
+    const resource = githubResource();
+    const parent = 'a'.repeat(40),
+      child = 'b'.repeat(40);
+    const fetch = vi.fn().mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        url.includes('/branches?')
+          ? [{ name: 'main', commit: { sha: child }, protected: true }]
+          : [
+              {
+                sha: parent,
+                parents: [],
+                commit: {
+                  author: { name: 'A', date: '2026-10-28' },
+                  message: 'Parent',
+                },
+              },
+              {
+                sha: child,
+                parents: [{ sha: parent }],
+                commit: {
+                  author: { name: 'A', date: '2026-10-27' },
+                  message: 'Child\nbody',
+                },
+              },
+            ],
+    }));
+    vi.stubGlobal('fetch', fetch);
+    const local = vi.spyOn(service, 'directory');
+    const result = await service.remoteGraph('p', resource.id);
+    expect(result.items.map((c) => c.sha)).toEqual([child, parent]);
+    expect(result.items[0]).toMatchObject({
+      subject: 'Child',
+      current: false,
+      refs: [{ name: 'main', remote: true }],
+    });
+    expect(local).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('pins remote file navigation and never follows response URLs or exposes credentials', async () => {
+    const resource = githubResource(),
+      ref = 'c'.repeat(40);
+    const fetch = vi.fn().mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        url.endsWith('commits?per_page=1')
+          ? [{ sha: ref }]
+          : url.includes('contents/?')
+            ? [
+                {
+                  name: 'coucou.js',
+                  path: 'coucou.js',
+                  type: 'file',
+                  size: 7,
+                  download_url: 'https://untrusted.test/',
+                },
+              ]
+            : {
+                type: 'file',
+                size: 7,
+                encoding: 'base64',
+                content: Buffer.from('coucou!').toString('base64'),
+              },
+    }));
+    vi.stubGlobal('fetch', fetch);
+    const root = await service.remoteFiles('p', resource.id, '', undefined);
+    expect(root).toMatchObject({ ref, items: [{ name: 'coucou.js' }] });
+    expect(JSON.stringify(root)).not.toContain('download_url');
+    const file = await service.remoteFiles('p', resource.id, 'coucou.js', ref);
+    expect(file.content).toBe('coucou!');
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+      'https://api.github.com/repos/example/demo/commits?per_page=1',
+      `https://api.github.com/repos/example/demo/contents/?ref=${ref}`,
+      `https://api.github.com/repos/example/demo/contents/coucou.js?ref=${ref}`,
+    ]);
+    await expect(
+      service.remoteFiles('p', resource.id, '../private', ref),
+    ).rejects.toThrow('Invalid remote path');
+    await expect(
+      service.remoteFiles('p', resource.id, '', 'main&token=x'),
+    ).rejects.toThrow('Invalid remote revision');
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it('does not preview oversized or binary remote files, and supports empty repositories', async () => {
+    const resource = githubResource(),
+      ref = 'c'.repeat(40);
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        type: 'file',
+        size: 200000,
+        content: 'secret',
+        encoding: 'base64',
+      }),
+    });
+    vi.stubGlobal('fetch', fetch);
+    expect(
+      (await service.remoteFiles('p', resource.id, 'large', ref)).content,
+    ).toBeNull();
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        type: 'file',
+        size: 2,
+        content: Buffer.from([0, 1]).toString('base64'),
+        encoding: 'base64',
+      }),
+    });
+    expect(
+      (await service.remoteFiles('p', resource.id, 'binary', ref)).content,
+    ).toBeNull();
+    fetch.mockResolvedValue({ ok: false, status: 409 });
+    expect(
+      await service.remoteFiles('p', resource.id, '', undefined),
+    ).toMatchObject({ ref: null, items: [] });
+  });
   it('keeps generic Git independent from GitHub', async () => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);

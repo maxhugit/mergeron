@@ -8,6 +8,30 @@ beforeEach(() => {
   useTerminalViewStore.setState({ retained: {}, target: null });
 });
 
+it('opens one graph per repository beside conversation and updates its copy without duplicating tabs', () => {
+  const store = useWorkspaceStore.getState();
+  const target = {
+    projectId: 'p',
+    resourceId: 'r',
+    name: 'Git Test',
+    copyId: null,
+  };
+  store.openGitGraph('thread:a', target);
+  const first = useWorkspaceStore.getState().contexts['thread:a'];
+  expect(first.tabs[0]).toMatchObject({ kind: 'git-graph', copyId: null });
+  store.select('thread:a', 'conversation');
+  store.openGitGraph('thread:a', { ...target, copyId: 'copy' });
+  const next = useWorkspaceStore.getState().contexts['thread:a'];
+  expect(next.tabs).toHaveLength(1);
+  expect(next.tabs[0]).toMatchObject({ copyId: 'copy' });
+  expect(next.activeId).toBe(first.activeId);
+  expect(useWorkspaceStore.getState().contexts['thread:b']).toBeUndefined();
+  store.remove('thread:a', next.activeId);
+  expect(useWorkspaceStore.getState().contexts['thread:a'].activeId).toBe(
+    'conversation',
+  );
+});
+
 it('keeps comparisons beside conversation, deduplicated by project/copy/file and separate from editable files', () => {
   const store = useWorkspaceStore.getState();
   const target = {

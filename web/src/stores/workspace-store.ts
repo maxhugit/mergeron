@@ -13,6 +13,7 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
+  | ({ id: string; kind: 'git-graph' } & GitGraphTarget)
   | ({ id: string; kind: 'git-diff' } & GitDiffTarget)
   | { id: string; kind: 'file'; path: string; documentId: string }
   | { id: string; kind: 'terminal'; terminalId: string };
@@ -23,6 +24,13 @@ export interface GitDiffTarget {
   path: string;
   localPath: string | null;
   status: string;
+}
+
+export interface GitGraphTarget {
+  projectId: string;
+  resourceId: string;
+  name: string;
+  copyId: string | null;
 }
 
 export interface WorkspaceContext {
@@ -47,6 +55,7 @@ interface WorkspaceState {
   fileViews: Record<string, FileViewState>;
   openFile: (context: string, path: string, line?: number | null) => void;
   openGitDiff: (context: string, target: GitDiffTarget) => void;
+  openGitGraph: (context: string, target: GitGraphTarget) => void;
   openTerminal: (context: string, terminalId: string) => void;
   adoptTerminal: (context: string, terminalId: string) => void;
   select: (context: string, id: string) => void;
@@ -82,6 +91,24 @@ function clearActiveReveal(state: WorkspaceState, context: string) {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   contexts: {},
   fileViews: {},
+  openGitGraph: (context, target) =>
+    set((state) => {
+      const current = state.contexts[context] ?? EMPTY_WORKSPACE;
+      const id = `git-graph:${JSON.stringify([target.projectId, target.resourceId])}`;
+      const tab = { ...target, id, kind: 'git-graph' as const };
+      return {
+        contexts: {
+          ...state.contexts,
+          [context]: {
+            tabs: current.tabs.some((entry) => entry.id === id)
+              ? current.tabs.map((entry) => (entry.id === id ? tab : entry))
+              : [...current.tabs, tab],
+            activeId: id,
+          },
+        },
+        fileViews: clearActiveReveal(state, context),
+      };
+    }),
   openGitDiff: (context, target) =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;

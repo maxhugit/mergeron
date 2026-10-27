@@ -33,21 +33,33 @@ export function graphLayout(items: GitGraph['items']) {
 export function GitBranchGraph({
   projectId,
   copyId,
+  resourceId,
+  active: visible = true,
 }: {
   projectId: string;
-  copyId: string;
+  copyId?: string;
+  resourceId?: string;
+  active?: boolean;
 }) {
   const { t, i18n } = useTranslation('workspaces');
   const [selected, setSelected] = useState<string | null>(null);
   const query = useQuery({
-    queryKey: ['workspace-git-graph', projectId, copyId],
+    queryKey: [
+      'workspace-git-graph',
+      projectId,
+      copyId ?? resourceId,
+      copyId ? 'local' : 'remote',
+    ],
     queryFn: ({ signal }) =>
       gitGet<GitGraph>(
         projectId,
-        `copies/${encodeURIComponent(copyId)}/graph`,
+        copyId
+          ? `copies/${encodeURIComponent(copyId)}/graph`
+          : `connections/${encodeURIComponent(resourceId!)}/graph`,
         signal,
       ),
     retry: false,
+    enabled: visible && Boolean(copyId || resourceId),
   });
   const { rows, width } = graphLayout(query.data?.items ?? []);
   const active = rows.find((r) => r.item.sha === selected)?.item;
@@ -74,7 +86,9 @@ export function GitBranchGraph({
           {t('gitRefresh')}
         </Button>
       </div>
-      <p className="text-muted-foreground">{t('gitGraphHelp')}</p>
+      <p className="text-muted-foreground">
+        {t(copyId ? 'gitGraphHelp' : 'gitRemoteGraphHelp')}
+      </p>
       {query.isPending ? (
         <p role="status">{t('gitLoading')}</p>
       ) : query.isError ? (
