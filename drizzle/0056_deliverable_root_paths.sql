@@ -1,0 +1,1 @@
+ALTER TABLE `project_deliverable_documents` ADD `previous_source_paths` text DEFAULT '[]' NOT NULL;
