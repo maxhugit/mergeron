@@ -11,11 +11,13 @@ import {
   readFile,
   readdir,
   readlink,
+  rmdir,
   rename,
   rm,
   statfs,
   symlink,
   utimes,
+  unlink,
 } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { collectInventory } from './inventory.mjs';
@@ -26,6 +28,38 @@ import {
 } from './adoption.mjs';
 
 const terminal = new Set(['succeeded', 'rolledBack', 'cancelled']);
+
+/** Only for a validated, durably discarded backup below the private Manager root.
+ * CHOWN suffices: reclaim directories before chmod, without DAC_OVERRIDE/FOWNER.
+ * Never change file ownership/modes (files may be hardlinked) or follow symlinks.
+ */
+async function removeDiscardedBackupTree(path) {
+  const info = await lstat(path);
+  if (!info.isDirectory() || info.isSymbolicLink())
+    throw new Error('managerBackupInvalid');
+  const directory = await open(
+    path,
+    constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+  );
+  try {
+    const opened = await directory.stat();
+    if (opened.dev !== info.dev || opened.ino !== info.ino)
+      throw new Error('managerBackupInvalid');
+    if (opened.uid !== process.getuid())
+      await directory.chown(process.getuid(), process.getgid());
+    await directory.chmod(0o700);
+  } finally {
+    await directory.close();
+  }
+  for (const name of await readdir(path)) {
+    const child = join(path, name);
+    const entry = await lstat(child);
+    if (entry.isDirectory() && !entry.isSymbolicLink())
+      await removeDiscardedBackupTree(child);
+    else await unlink(child);
+  }
+  await rmdir(path);
+}
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object')
@@ -491,7 +525,7 @@ export class TransactionalUpdater {
       if (current) this.current = operation;
       this.backupSizeCache.delete(operationId);
       // Only the backup subtree: preserve transaction metadata and quarantine data.
-      if (backup) await rm(path, { recursive: true, maxRetries: 3 });
+      if (backup) await removeDiscardedBackupTree(path);
       return { ok: true };
     } finally {
       this.busy = false;
