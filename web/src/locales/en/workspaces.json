@@ -1,4 +1,5 @@
 {
+  "browser": "Browser",
   "gitCreateBranch": "Create branch",
   "gitCreateBranchHelp": "Creates a branch in this local copy only. Nothing is published to or fetched from GitHub.",
   "gitBranchName": "New branch name",

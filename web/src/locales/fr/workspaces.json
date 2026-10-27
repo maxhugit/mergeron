@@ -1,4 +1,5 @@
 {
+  "browser": "Navigateur",
   "gitCreateBranch": "Créer une branche",
   "gitCreateBranchHelp": "Crée une branche dans cette copie locale uniquement. Aucune publication ni récupération sur GitHub n’est effectuée.",
   "gitBranchName": "Nom de la nouvelle branche",

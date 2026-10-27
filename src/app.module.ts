@@ -9,6 +9,7 @@ import { AccountModule } from './account/account.module';
 import { AppsModule } from './apps/apps.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { BrowserModule } from './browser/browser.module';
 import { ApiKeyGuard } from './auth/api-key.guard';
 import { PlatformAccessGuard } from './auth/platform-access.guard';
 import { ArchiveModule } from './archive/archive.module';
@@ -90,6 +91,7 @@ const PINO_REDACT = {
 
 @Module({
   imports: [
+    BrowserModule,
     ConfigModule.forRoot({ isGlobal: true }),
     LoggerModule.forRoot({
       pinoHttp: {

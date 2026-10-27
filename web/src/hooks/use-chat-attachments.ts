@@ -7,6 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { clearApiToken, getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { escapeMentionPath } from '@/lib/mention-utils';
+import {
+  BROWSER_ANNOTATION_EVENT,
+  type BrowserAnnotationRequest,
+} from '@/lib/browser-annotations';
 import type {
   ChatAttachment,
   ChatFileAttachment,
@@ -24,6 +28,8 @@ function escapeRegExp(str: string): string {
 }
 
 interface UseChatAttachmentsParams {
+  threadId?: string | null;
+  readOnly?: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   valueRef: React.RefObject<string>;
   setValue: React.Dispatch<React.SetStateAction<string>>;
@@ -32,6 +38,8 @@ interface UseChatAttachmentsParams {
 }
 
 export function useChatAttachments({
+  threadId,
+  readOnly = false,
   textareaRef,
   valueRef,
   setValue,
@@ -250,6 +258,46 @@ export function useChatAttachments({
     },
     [addSystemError, t, insertAtCursor, uploadFile],
   );
+
+  useEffect(() => {
+    let current = true;
+    const handler = (event: Event) => {
+      const request = (event as CustomEvent<BrowserAnnotationRequest>).detail;
+      if (
+        !request ||
+        request.threadId !== threadId ||
+        readOnly ||
+        request.accepted
+      )
+        return;
+      request.accepted = true;
+      void uploadFile(request.image)
+        .then((result) => {
+          if (!current || !result) {
+            request.complete('Conversation changed or upload failed');
+            return;
+          }
+          setAttachments((previous) => [
+            ...previous,
+            {
+              type: 'localImage',
+              id: nextAttachmentId(),
+              name: request.image.name,
+              path: result.path,
+              previewUrl: URL.createObjectURL(request.image),
+            },
+          ]);
+          setValue((previous) => previous + request.text);
+          request.complete();
+        })
+        .catch(() => request.complete('Upload failed'));
+    };
+    window.addEventListener(BROWSER_ANNOTATION_EVENT, handler);
+    return () => {
+      current = false;
+      window.removeEventListener(BROWSER_ANNOTATION_EVENT, handler);
+    };
+  }, [threadId, readOnly, uploadFile, setValue]);
 
   /** Remove attachment. For file mentions, also remove @displayName from text. */
   const handleRemoveAttachment = useCallback(
