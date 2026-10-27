@@ -6,6 +6,7 @@ import {
   Get,
   Param,
   Query,
+  Body,
 } from '@nestjs/common';
 import { ProjectLocationsService } from './project-locations.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
@@ -48,6 +49,7 @@ export class ProjectLocationsController {
   removeCopy(
     @Param('projectId') projectId: string,
     @Param('locationId') locationId: string,
+    @Body() body?: { confirmation?: unknown; path?: unknown },
   ) {
     const location = this.locations.location(projectId, locationId);
     const copy = this.locations
@@ -57,6 +59,6 @@ export class ProjectLocationsController {
       );
     if (!copy)
       throw new ConflictException('This location is not a working copy');
-    return this.copies.remove(projectId, copy.id);
+    return this.copies.remove(projectId, copy.id, body);
   }
 }

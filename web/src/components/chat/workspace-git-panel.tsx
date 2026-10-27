@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
+import { GitCopyDelete } from './git-copy-delete';
+import { pathIsWithin } from '@/lib/file-change-events';
 import type { GitDiffTarget } from '@/stores/workspace-store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/files/file-tree';
@@ -137,6 +139,7 @@ function RepositoryPanel({
   const [copyId, setCopyId] = useState<string | null>(null);
   const [tab, setTab] = useState('files');
   const [scope, setScope] = useState('local');
+  const [removedCopyPath, setRemovedCopyPath] = useState('');
   const [branch, setBranch] = useState('');
   const [preparing, setPreparing] = useState(false);
   const [browsed, setBrowsed] = useState<string | null>(null);
@@ -209,7 +212,6 @@ function RepositoryPanel({
     setBrowsed(null);
     setBrowseError('');
   };
-  const activeCopy = ready.find((item) => item.localPath === cwd);
   const writable = Boolean(
     copy &&
     copy.accessMode === 'read_write' &&
@@ -222,11 +224,6 @@ function RepositoryPanel({
     >
       <div className="sticky top-0 z-10 shrink-0 space-y-1 border-b bg-background p-3 text-xs">
         <strong className="block break-all">{resource.name}</strong>
-        <p className="break-all text-primary">
-          {t('gitAgentCopy', {
-            name: activeCopy?.name ?? cwd ?? t('gitNoCopy'),
-          })}
-        </p>
       </div>
       <Tabs
         value={scope}
@@ -247,6 +244,13 @@ function RepositoryPanel({
           >
             <Cloud className="h-3.5 w-3.5" />
             {t('gitScopeRemote')}
+          </TabsTrigger>
+          <TabsTrigger
+            value="sync"
+            className="inline-flex min-w-0 items-center gap-1 px-3 py-2 text-xs"
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" />
+            {t('gitSynchronization')}
           </TabsTrigger>
         </TabsList>
         <TabsContent
@@ -292,11 +296,31 @@ function RepositoryPanel({
                       >
                         {ready.map((item) => (
                           <option key={item.id} value={item.id}>
-                            {item.name}
+                            {item.name} · {item.branch ?? t('gitDetached')} ·{' '}
+                            {item.id.slice(0, 8)}
                           </option>
                         ))}
                       </select>
                     </label>
+                    <p className="break-all font-mono text-muted-foreground">
+                      {copy.localPath}
+                    </p>
+                    <GitCopyDelete
+                      key={copy.id}
+                      projectId={projectId}
+                      copy={copy}
+                      active={Boolean(
+                        copy.localPath &&
+                        cwd &&
+                        pathIsWithin(copy.localPath, cwd),
+                      )}
+                      onRemoved={(path) => {
+                        setCopyId(null);
+                        setBrowsed(null);
+                        setBrowseError('');
+                        setRemovedCopyPath(path);
+                      }}
+                    />
                     {copy.localPath === cwd ? (
                       <p className="text-primary">{t('gitActiveForAgent')}</p>
                     ) : (
@@ -559,75 +583,89 @@ function RepositoryPanel({
             <p className="p-3 text-xs">{t('gitDisabledHelp')}</p>
           )}
         </TabsContent>
-      </Tabs>
-      {resource.enabled && (
-        <section
-          aria-label={t('gitSynchronization')}
-          className="shrink-0 space-y-2 border-t bg-background p-3 text-xs"
+        <TabsContent
+          value="sync"
+          className="min-h-0 min-w-0 flex-1 overflow-auto"
         >
-          <h3 className="flex items-center gap-2 font-medium">
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            {t('gitSynchronization')}
-          </h3>
-          <p className="break-all">
-            {copy
-              ? `${copy.name} · ${snapshot.data?.branch ?? t('gitDetached')}`
-              : t('gitNoCopy')}{' '}
-            → GitHub
-          </p>
-          <p className="text-muted-foreground">
-            {snapshot.data && !snapshot.error && snapshot.data.upstream
-              ? t('gitKnownTracking', {
-                  ahead: snapshot.data.ahead,
-                  behind: snapshot.data.behind,
-                  upstream: snapshot.data.upstream,
-                  date: new Date(
-                    snapshot.data.inspectedAt,
-                  ).toLocaleTimeString(),
-                })
-              : t('gitNoTrackingComparison')}
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              void client.invalidateQueries({
-                queryKey: [
-                  'workspace-git-remote-branches',
-                  projectId,
-                  resource.id,
-                ],
-              });
-              void client.invalidateQueries({
-                queryKey: ['workspace-git-prs', projectId, resource.id],
-              });
-              void client.invalidateQueries({
-                queryKey: ['workspace-git-checks', projectId, resource.id],
-              });
-            }}
-          >
-            {t('gitRefreshRemote')}
-          </Button>
-          <p className="text-muted-foreground">{t('gitRefreshRemoteHelp')}</p>
-          {writable && copy && snapshot.data && !snapshot.error && (
-            <GitCopyActions
-              key={`publish:${copy.id}`}
-              projectId={projectId}
-              copyId={copy.id}
-              snapshot={snapshot.data}
-              address={resource.address}
-              actionScope="push"
-            />
+          {resource.enabled ? (
+            <section
+              aria-label={t('gitSynchronization')}
+              className="space-y-2 p-3 text-xs"
+            >
+              <h3 className="flex items-center gap-2 font-medium">
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                {t('gitSynchronization')}
+              </h3>
+              <p className="break-all">
+                {copy
+                  ? `${copy.name} · ${snapshot.data?.branch ?? t('gitDetached')}`
+                  : t('gitNoCopy')}{' '}
+                → GitHub
+              </p>
+              <p className="text-muted-foreground">
+                {snapshot.data && !snapshot.error && snapshot.data.upstream
+                  ? t('gitKnownTracking', {
+                      ahead: snapshot.data.ahead,
+                      behind: snapshot.data.behind,
+                      upstream: snapshot.data.upstream,
+                      date: new Date(
+                        snapshot.data.inspectedAt,
+                      ).toLocaleTimeString(),
+                    })
+                  : t('gitNoTrackingComparison')}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void client.invalidateQueries({
+                    queryKey: [
+                      'workspace-git-remote-branches',
+                      projectId,
+                      resource.id,
+                    ],
+                  });
+                  void client.invalidateQueries({
+                    queryKey: ['workspace-git-prs', projectId, resource.id],
+                  });
+                  void client.invalidateQueries({
+                    queryKey: ['workspace-git-checks', projectId, resource.id],
+                  });
+                }}
+              >
+                {t('gitRefreshRemote')}
+              </Button>
+              <p className="text-muted-foreground">
+                {t('gitRefreshRemoteHelp')}
+              </p>
+              {writable && copy && snapshot.data && !snapshot.error && (
+                <GitCopyActions
+                  key={`publish:${copy.id}`}
+                  projectId={projectId}
+                  copyId={copy.id}
+                  snapshot={snapshot.data}
+                  address={resource.address}
+                  actionScope="push"
+                />
+              )}
+              <div>
+                <Button size="sm" variant="outline" disabled>
+                  {t('gitIntegrate')}
+                </Button>
+                <p className="mt-1 text-muted-foreground">
+                  {t('gitIntegrateUnavailable')}
+                </p>
+              </div>
+            </section>
+          ) : (
+            <p className="p-3 text-xs">{t('gitDisabledHelp')}</p>
           )}
-          <div>
-            <Button size="sm" variant="outline" disabled>
-              {t('gitIntegrate')}
-            </Button>
-            <p className="mt-1 text-muted-foreground">
-              {t('gitIntegrateUnavailable')}
-            </p>
-          </div>
-        </section>
+        </TabsContent>
+      </Tabs>
+      {removedCopyPath && (
+        <p role="status" className="break-all p-3 text-xs">
+          {t('gitCopyRecovery', { path: removedCopyPath })}
+        </p>
       )}
     </section>
   );

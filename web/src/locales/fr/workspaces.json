@@ -1,4 +1,12 @@
 {
+  "gitCopyDelete": "Supprimer cette copie…",
+  "gitCopyDeleteTitle": "Supprimer la copie locale « {{name}} » ?",
+  "gitCopyDeleteHelp": "Seule cette copie locale sera retirée du projet. Ses fichiers, modifications et commits locaux seront conservés dans une corbeille locale récupérable. Le dépôt distant, ses branches et les autres copies ne seront pas modifiés. Une copie utilisée par un agent ou une autre ressource ne peut pas être supprimée : changez d’abord son dossier de travail.",
+  "gitCopyInUse": "Copie utilisée : sélectionnez d’abord un autre dossier de travail pour les agents ou ressources concernés.",
+  "gitCopyRecovery": "Copie retirée. Fichiers récupérables dans : {{path}}",
+  "gitCopyDeleteFailed": "Impossible de supprimer cette copie. Actualisez la liste et vérifiez qu’elle est disponible et inutilisée.",
+  "gitCopyDeleteCancel": "Annuler",
+  "gitCopyDeleteConfirm": "Confirmer la suppression locale",
   "gitAgentCopy": "Copie utilisée par l’agent : {{name}}",
   "gitScopeLocal": "Local",
   "gitScopeRemote": "Distant · GitHub",

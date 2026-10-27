@@ -173,7 +173,7 @@ export function ManagerStatusCard() {
   });
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card/50 p-4">
+    <section className="space-y-4">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Mergeron Manager</h2>

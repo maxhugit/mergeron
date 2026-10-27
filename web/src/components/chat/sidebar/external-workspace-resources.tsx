@@ -22,11 +22,11 @@ import {
   type ProjectWorkspaceResourceSummary,
 } from '@/lib/projects-api';
 import { WorkspaceTransfers } from './workspace-transfers';
+import { GitCopyDelete } from '../git-copy-delete';
 import {
   getProjectLocations,
   connectionResourceViews,
   projectConnectionsPath,
-  projectLocationsPath,
 } from '@/lib/project-locations-api';
 
 const emptyForm = {
@@ -60,6 +60,7 @@ export function ExternalWorkspaceResources({
   const [copies, setCopies] = useState<ProjectWorkspaceCopySummary[]>([]);
   const [copying, setCopying] = useState<string | null>(null);
   const [copyBranch, setCopyBranch] = useState('');
+  const [removedCopyPath, setRemovedCopyPath] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -393,24 +394,23 @@ export function ExternalWorkspaceResources({
                 >
                   {copy.state === 'ready' ? t('ready') : t('revoked')}
                 </Badge>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive"
-                  disabled={busy}
-                  onClick={() =>
-                    void mutate(
-                      `${projectLocationsPath(project.id)}/${encodeURIComponent(`local:${copy.localWorkspaceId}`)}/working-copy`,
-                      { method: 'DELETE' },
-                    )
-                  }
-                >
-                  <Unlink className="h-3.5 w-3.5" />
-                </Button>
+                <GitCopyDelete
+                  projectId={project.id}
+                  copy={copy}
+                  onRemoved={(path) => {
+                    setRemovedCopyPath(path);
+                    void load();
+                  }}
+                />
               </div>
             ))}
         </div>
       ))}
+      {removedCopyPath && (
+        <p role="status" className="break-all text-xs">
+          {t('gitCopyRecovery', { path: removedCopyPath })}
+        </p>
+      )}
       {resources.length === 0 && !editing && (
         <p className="text-xs italic text-muted-foreground">
           {t('noExternalResource')}

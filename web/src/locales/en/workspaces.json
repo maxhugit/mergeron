@@ -1,4 +1,12 @@
 {
+  "gitCopyDelete": "Remove this copy…",
+  "gitCopyDeleteTitle": "Remove local copy “{{name}}”?",
+  "gitCopyDeleteHelp": "Only this local copy will be removed from the project. Its files, changes and local commits will be preserved in a recoverable local trash folder. The remote repository, its branches and other copies remain unchanged. A copy used by an agent or another resource cannot be removed: change its working directory first.",
+  "gitCopyInUse": "Copy in use: first select another working directory for the affected agents or resources.",
+  "gitCopyRecovery": "Copy removed. Recoverable files at: {{path}}",
+  "gitCopyDeleteFailed": "Could not remove this copy. Refresh the list and check that it is available and not in use.",
+  "gitCopyDeleteCancel": "Cancel",
+  "gitCopyDeleteConfirm": "Confirm local removal",
   "gitAgentCopy": "Copy used by the agent: {{name}}",
   "gitScopeLocal": "Local",
   "gitScopeRemote": "Remote · GitHub",

@@ -54,6 +54,9 @@ it('loads the Manager on the Infrastructure route without duplicating update con
   expect(
     await screen.findByText('Manager infrastructure inventory'),
   ).toBeVisible();
+  expect(
+    screen.getByText('Manager infrastructure inventory').closest('.max-w-4xl'),
+  ).toBeNull();
   expect(screen.queryByText('Application updates')).toBeNull();
   expect(SETTINGS_SECTIONS).toContain('infrastructure');
   expect(settingsPageLabel('infrastructure')).toBe('managerInfrastructure');
