@@ -184,6 +184,79 @@ async function begin(updater) {
   await updater.task;
 }
 
+test('managed DEV browser participates in update and rollback with persistent public DNS', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const browser = {
+    id: 'browser',
+    displayName: 'Mergeron Browser',
+    canonicalName: 'mergeron-dev-browser',
+    stackName: 'mergeron-dev',
+    legacyNames: [],
+    allowedImageRepositories: ['ghcr.io/maxhugit/mergeron-browser'],
+    requiredNetworks: [
+      'mergeron-dev-browser-control',
+      'mergeron-dev-browser-egress',
+    ],
+    protectedMounts: [],
+    dns: ['1.1.1.1'],
+  };
+  updater.manifest = {
+    ...manifest,
+    components: [...manifest.components, browser],
+  };
+  docker.values.set(
+    'original-browser',
+    docker.inspect(
+      'original-browser',
+      browser.canonicalName,
+      {
+        Image: 'ghcr.io/maxhugit/mergeron-browser:previous',
+        User: 'pwuser',
+        Env: ['BROWSER_WS_PATH=private-control-path'],
+        Labels: {
+          'io.mergeron.managed': 'true',
+          'io.mergeron.component': 'browser',
+          'io.mergeron.stack': 'mergeron-dev',
+        },
+        Healthcheck: { Test: ['CMD', 'true'] },
+        HostConfig: {
+          Dns: [],
+          ReadonlyRootfs: true,
+          CapDrop: ['ALL'],
+          SecurityOpt: ['no-new-privileges:true', 'seccomp=reviewed-profile'],
+        },
+        NetworkingConfig: {
+          EndpointsConfig: Object.fromEntries(
+            browser.requiredNetworks.map((name) => [
+              name,
+              { Aliases: [browser.canonicalName] },
+            ]),
+          ),
+        },
+      },
+      true,
+    ),
+  );
+  await begin(updater);
+  assert.equal(updater.current.status, 'succeeded');
+  const active = () =>
+    [...docker.values.values()].find((c) => c.Name === '/mergeron-dev-browser');
+  assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
+  assert.deepEqual(active().Config.Env, [
+    'BROWSER_WS_PATH=private-control-path',
+  ]);
+  assert.ok(
+    docker.calls.some(
+      ([action, id]) => action === 'stop' && id === 'original-browser',
+    ),
+  );
+  await updater.rollback();
+  assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
+  assert.deepEqual(active().Config.Env, [
+    'BROWSER_WS_PATH=private-control-path',
+  ]);
+});
+
 test('fast mode is rejected for production, unknown environments and production stack names', async (t) => {
   const { updater } = await fixture(t);
   const original = updater.manifest;

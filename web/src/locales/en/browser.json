@@ -1,4 +1,15 @@
 {
+  "notConfigured": "The isolated browser is not configured on this server. An administrator must enable its service before pages can be opened.",
+  "runtimeUnavailable": "The isolated browser service cannot be reached. Check that it is running and its connection to Mergeron is configured.",
+  "timedOut": "The browser did not respond in time. Retry or clear its session before reopening the page.",
+  "busy": "The browser is busy or at capacity. Wait for the operation to finish or close another session.",
+  "tabLimit": "The five-tab limit has been reached. Close a tab before creating another.",
+  "tabMissing": "This tab no longer exists, for example after a server restart. Close and reopen the browser panel.",
+  "invalidUrl": "Invalid address. Enter a complete http:// or https:// URL without credentials in the address.",
+  "navigationFailed": "Unable to load this page: the site, certificate or network may be unavailable, or the destination may be blocked. Only public HTTP(S) sites are allowed, not private or local addresses.",
+  "operationFailed": "This browser operation failed. Refresh the image or reopen the page. If it persists, check the isolated browser service.",
+  "accessDenied": "Access denied. Sign in with an administrator account that can access this conversation; the browser is unavailable when testing a standard user's rights.",
+  "networkFailed": "Unable to reach Mergeron. Check your connection and retry.",
   "title": "Browser",
   "endSession": "Clear session",
   "close": "Close browser",
@@ -25,7 +36,7 @@
   "annotationHeading": "Web page annotation — marker 1",
   "added": "Annotation and screenshot added to the draft. Review them, then send your message.",
   "draftUnavailable": "Could not add to this conversation’s draft. Check that it is writable.",
-  "unavailable": "Operation failed. Check the URL, administrator access and isolated browser configuration. Only public HTTP(S) sites are allowed.",
+  "unavailable": "Browser unavailable. Check your connection, administrator access and isolated browser configuration.",
   "privacy": "Temporary remote session, separate from your browser. Input fields are masked in screenshots. Pages and annotations reach the agent only after you send the message.",
   "frame": "Embedded frame: the marker identifies the frame, not its contents"
 }

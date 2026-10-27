@@ -111,6 +111,12 @@ function ComponentRow({ component }: { component: ManagerComponent }) {
               </dt>
               <dd>{component.configuration.networkMode || '—'}</dd>
             </div>
+            {Boolean(component.configuration.dns?.length) && (
+              <div>
+                <dt className="text-muted-foreground">DNS</dt>
+                <dd>{component.configuration.dns?.join(', ')}</dd>
+              </div>
+            )}
             <div>
               <dt className="text-muted-foreground">
                 {tm('managerContainerRestartPolicy')}

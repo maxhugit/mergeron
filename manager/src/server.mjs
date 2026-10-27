@@ -29,6 +29,7 @@ const manifest = scopeManifest(
   process.env.MERGERON_STACK_PREFIX,
   process.env.MERGERON_STACK_ENVIRONMENT,
   process.env.MERGERON_PROXY_NETWORK,
+  { enabled: process.env.MERGERON_MANAGE_BROWSER === 'true' },
 );
 const socketPath =
   process.env.MERGERON_MANAGER_SOCKET ?? '/run/mergeron-manager/manager.sock';

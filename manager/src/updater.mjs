@@ -272,7 +272,7 @@ export async function restorePersistentEntry(stateRoot, base, id, name) {
   if (!(await exists(source))) await durableRename(restore, source);
 }
 
-function specification(inspect, image) {
+export function specification(inspect, image, component) {
   const endpoints = Object.fromEntries(
     Object.entries(inspect.NetworkSettings.Networks).map(([name, endpoint]) => [
       name,
@@ -287,7 +287,10 @@ function specification(inspect, image) {
   return {
     ...inspect.Config,
     Image: image,
-    HostConfig: inspect.HostConfig,
+    HostConfig:
+      component?.id === 'browser'
+        ? { ...inspect.HostConfig, Dns: [...component.dns] }
+        : inspect.HostConfig,
     NetworkingConfig: { EndpointsConfig: endpoints },
   };
 }
@@ -641,6 +644,24 @@ export class TransactionalUpdater {
       if (!component.containerId) continue;
       const inspect = await this.docker.inspectContainer(component.containerId);
       if (
+        component.id === 'browser' &&
+        (inspect.HostConfig?.Privileged ||
+          inspect.Config?.User !== 'pwuser' ||
+          !inspect.HostConfig?.ReadonlyRootfs ||
+          !inspect.HostConfig?.CapDrop?.includes('ALL') ||
+          inspect.HostConfig?.CapAdd?.length ||
+          Object.keys(inspect.HostConfig?.PortBindings ?? {}).length ||
+          inspect.Mounts?.length ||
+          !inspect.HostConfig?.SecurityOpt?.includes(
+            'no-new-privileges:true',
+          ) ||
+          !inspect.HostConfig?.SecurityOpt?.some(
+            (option) =>
+              option.startsWith('seccomp=') && !option.includes('unconfined'),
+          ))
+      )
+        blockers.push('browser:updateIsolationRequired');
+      if (
         inspect.Name !==
         `/${this.manifest.components.find((c) => c.id === component.id).canonicalName}`
       )
@@ -789,13 +810,23 @@ export class TransactionalUpdater {
       for (const item of plan.containers) {
         const inspect = await this.docker.inspectContainer(item.id);
         this.current.previousImages[item.component] = inspect.Config.Image;
-        const previous = pinnedImage(
-          await this.docker.inspectImage(inspect.Image),
-          inspect.Config.Image,
+        const component = this.manifest.components.find(
+          (c) => c.id === item.component,
         );
+        const previousImage = await this.docker.inspectImage(inspect.Image);
+        // A pre-existing DEV browser can be a local build. Its immutable image
+        // ID is retained; never turn a local tag into an implicit registry pull.
+        const previous =
+          component.id === 'browser' &&
+          /^sha256:[a-f0-9]{64}$/.test(previousImage.Id ?? '') &&
+          previousImage.Id === inspect.Image &&
+          !previousImage.RepoDigests?.length
+            ? previousImage.Id
+            : pinnedImage(previousImage, inspect.Config.Image);
         const target = specification(
           inspect,
           imageIds[item.component] ?? previous,
+          component,
         );
         target.Labels = {
           ...target.Labels,
@@ -803,7 +834,7 @@ export class TransactionalUpdater {
         };
         this.current.containers.push({
           ...item,
-          original: specification(inspect, previous),
+          original: specification(inspect, previous, component),
           target,
           backupName: `${item.name}-rollback-${this.current.id}`,
         });
@@ -879,13 +910,13 @@ export class TransactionalUpdater {
   stopOrder() {
     return [...this.current.containers].sort(
       (a, b) =>
-        ['ingress', 'application', 'egress'].indexOf(a.component) -
-        ['ingress', 'application', 'egress'].indexOf(b.component),
+        ['ingress', 'application', 'browser', 'egress'].indexOf(a.component) -
+        ['ingress', 'application', 'browser', 'egress'].indexOf(b.component),
     );
   }
 
   async startAndCheck(containers) {
-    for (const component of ['egress', 'application', 'ingress']) {
+    for (const component of ['egress', 'browser', 'application', 'ingress']) {
       const item = containers.find((c) => c.component === component);
       // Preparation may fail while only part of the original specifications
       // has been journalled. Those originals were not stopped; recover the

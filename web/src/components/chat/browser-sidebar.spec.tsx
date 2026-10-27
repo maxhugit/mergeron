@@ -160,6 +160,20 @@ it('opens tabs, navigates and adds evidence only to the keyed conversation draft
     'added to the draft',
   );
 });
+it.each([
+  ['BROWSER_NOT_CONFIGURED', 'not configured on this server'],
+  ['BROWSER_RUNTIME_UNAVAILABLE', 'service cannot be reached'],
+  ['BROWSER_ACCESS_DENIED', 'Access denied'],
+])(
+  'shows the specific error %s without blaming the URL',
+  async (code, message) => {
+    api.mockRejectedValue(new Error(code));
+    render(<BrowserSidebar threadId="thread-b" onClose={vi.fn()} />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(message);
+    expect(alert).not.toHaveTextContent('Only public');
+  },
+);
 it('shows a configuration/error state without embedding remote HTML', async () => {
   api.mockRejectedValue(new Error('Unavailable'));
   const { container } = render(

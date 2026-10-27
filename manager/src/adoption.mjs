@@ -70,8 +70,15 @@ export function evaluateAdoption(inventory, record = null) {
   const blockers = adoptionBlockers(inventory);
   const alreadyManaged =
     !record &&
-    inventory.components.length === 3 &&
-    new Set(inventory.components.map((component) => component.id)).size === 3 &&
+    [3, 4].includes(inventory.components.length) &&
+    ['application', 'ingress', 'egress'].every((id) =>
+      inventory.components.some((component) => component.id === id),
+    ) &&
+    inventory.components.every((component) =>
+      ['application', 'ingress', 'egress', 'browser'].includes(component.id),
+    ) &&
+    new Set(inventory.components.map((component) => component.id)).size ===
+      inventory.components.length &&
     inventory.components.every((component) => component.adoption === 'managed');
   let state = blockers.length === 0 ? 'eligible' : 'blocked';
   if (record) {

@@ -99,7 +99,7 @@ def remove_retired(api, name, expected_id, active_id, read_status=manager):
     api('/containers/' + quote(expected_id, safe='') + '?force=false&v=false', 'DELETE')
 
 
-def replace(revision, api=docker, read_status=manager, sleep=time.sleep):
+def replace(revision, api=docker, read_status=manager, sleep=time.sleep, manage_browser=False):
     if not re.fullmatch(r'[0-9a-f]{40}', revision):
         raise RuntimeError('A full Git revision is required')
     require_idle(read_status)
@@ -120,6 +120,16 @@ def replace(revision, api=docker, read_status=manager, sleep=time.sleep):
         raise RuntimeError('Manager image revision mismatch')
     digest = next(d for d in image['RepoDigests'] if d.startswith(REPOSITORY + '@sha256:'))
     body = copy.deepcopy(old['Config'])
+    if manage_browser:
+        browser = inspect(api, 'mergeron-dev-browser')
+        if (browser.get('Name') != '/mergeron-dev-browser' or
+                browser.get('Config', {}).get('Labels', {}).get('io.mergeron.stack') != 'mergeron-dev' or
+                browser.get('Config', {}).get('Labels', {}).get('io.mergeron.component') != 'browser' or
+                browser.get('Config', {}).get('Labels', {}).get('io.mergeron.managed') != 'true' or
+                browser.get('HostConfig', {}).get('Dns') != ['1.1.1.1'] or
+                browser.get('State', {}).get('Health', {}).get('Status') != 'healthy'):
+            raise RuntimeError('Managed DEV browser must be healthy and explicitly labeled')
+        body['Env'] = [entry for entry in body.get('Env', []) if not entry.startswith('MERGERON_MANAGE_BROWSER=')] + ['MERGERON_MANAGE_BROWSER=true']
     body['Image'] = digest
     body['Labels'] = {**(body.get('Labels') or {}),
                       **{k: v for k, v in labels.items() if k.startswith('org.opencontainers.image.')}}
@@ -180,11 +190,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('revision', nargs='?')
     parser.add_argument('--confirm-replace', action='store_true')
+    parser.add_argument('--manage-browser', action='store_true')
     parser.add_argument('--cleanup-only', action='store_true')
     parser.add_argument('--retired', action='append', default=[], metavar='NAME=ID')
     args = parser.parse_args()
     if args.cleanup_only:
-        if args.revision or args.confirm_replace or not args.retired:
+        if args.revision or args.confirm_replace or args.manage_browser or not args.retired:
             parser.error('Cleanup requires explicit retired NAME=ID pairs only')
         require_idle()
         active_id = inspect(docker, NAME)['Id']
@@ -203,7 +214,7 @@ def main():
         print(json.dumps({'managerHealthy': True, 'backupCountBefore': len(before),
                           'backupCountAfter': len(after), 'backupsUnchanged': before == after}), flush=True)
     elif args.confirm_replace and args.revision and not args.retired:
-        result = replace(args.revision)
+        result = replace(args.revision, manage_browser=args.manage_browser)
         print(json.dumps(result), flush=True)
         return 2 if result['cleanupPending'] else 0
     else:

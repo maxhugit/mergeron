@@ -82,9 +82,38 @@ fourni. Un hôte incompatible doit faire échouer le démarrage : ne pas ajouter
    Sans endpoint, l’interface affiche une indisponibilité, sans lancer de navigateur
    dans l’application ni retomber sur un iframe.
 
-Ce service supplémentaire est optionnel et hors transaction Manager : prévoir
-son cycle de mise à jour séparément et vérifier le rendu Compose avant adoption.
-La présente PR ne l’active ni en dev ni en production.
+Ce service reste optionnel. En production, il conserve un cycle de déploiement
+séparé : la gestion décrite ci-dessous est activable uniquement en DEV.
+
+## Gestion par le Manager en DEV
+
+Sur une pile dédiée `mergeron-dev`, après installation et vérification du
+navigateur isolé, exécuter `scripts/configure-dev-browser.py --confirm-configure`
+sur l’hôte Docker. Cet outil vérifie l’identité et les protections du conteneur
+existant, le recrée avec ses mêmes secrets, image et réseaux, ajoute les labels
+de gestion et définit **uniquement pour lui** `HostConfig.Dns = ["1.1.1.1"]`.
+Il conserve le conteneur précédent pour retour arrière et ne modifie ni le DNS
+de l’hôte, ni les autres conteneurs. Les sessions temporaires sont perdues.
+
+Mettre ensuite à jour le Manager DEV avec
+`scripts/update-dev-manager.py REVISION --confirm-replace --manage-browser`.
+L’option persistante `MERGERON_MANAGE_BROWSER=true` ajoute le navigateur à
+l’inventaire et aux transactions. Sans elle, les trois composants historiques
+restent seuls gérés ; l’activation est refusée dans une pile de production.
+Le navigateur doit préexister : le Manager ne crée pas un runtime non configuré.
+
+Le Manager démarre le navigateur avant l’application et vérifie sa santé.
+Chaque mise à jour et restauration conserve ses réseaux, son chemin de contrôle
+secret, son sandbox et réapplique le DNS public. Une image locale préexistante
+est conservée par son identifiant immuable, sans téléchargement implicite.
+Le changement de version Playwright reste à coordonner avec l’application.
+Ne jamais ajouter de capacité Linux, désactiver le sandbox ou exposer le port
+de contrôle pour obtenir un démarrage.
+
+Le DNS public évite les réponses privées du DNS local, mais **n’autorise pas**
+les réseaux privés : les contrôles du proxy s’appliquent toujours à chaque
+destination et redirection. Par exemple une connexion à Mergeron peut rediriger
+vers Authentik ; les deux domaines doivent résoudre vers des adresses publiques.
 
 ## Vérifications
 

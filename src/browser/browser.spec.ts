@@ -59,6 +59,27 @@ it('fails closed without a configured runtime', async () => {
   await disabled.onModuleDestroy();
   expect(connect).not.toHaveBeenCalled();
 });
+it('reports an explicit configuration code without leaking the runtime endpoint', async () => {
+  const disabled = new BrowserService(new ConfigService());
+  await expect(disabled.run('owner', 'new', {})).rejects.toMatchObject({
+    response: { code: 'BROWSER_NOT_CONFIGURED' },
+  });
+  await disabled.onModuleDestroy();
+  connect.mockRejectedValue(new Error('ws://private-endpoint/secret'));
+  await expect(service.run('owner', 'new', {})).rejects.toMatchObject({
+    response: {
+      code: 'BROWSER_RUNTIME_UNAVAILABLE',
+      message: 'Browser runtime unavailable',
+    },
+  });
+});
+it('reports invalid URL codes separately from runtime configuration', () => {
+  expect(() => browserUrl('file:///private')).toThrow(
+    expect.objectContaining({
+      response: expect.objectContaining({ code: 'BROWSER_INVALID_URL' }),
+    }),
+  );
+});
 it('isolates identifiers across people and conversations', async () => {
   const first = await service.run('alice/a', 'new', {});
   const id = 'id' in first ? first.id : '';
