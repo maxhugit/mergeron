@@ -33,6 +33,10 @@ function ActionError({ error }: { error: Error | null }) {
     GIT_IDENTITY_REQUIRED: t('gitActionIdentityRequired'),
     GIT_INVALID_INPUT: t('gitActionInvalidInput'),
     GIT_OUTCOME_UNKNOWN: t('gitActionOutcomeUnknown'),
+    GIT_AUTH_REQUIRED: t('gitPushAuthRequired'),
+    GIT_REMOTE_REJECTED: t('gitPushRejected'),
+    GIT_NETWORK_UNAVAILABLE: t('gitPushNetworkUnavailable'),
+    GIT_TLS_ERROR: t('gitPushTlsError'),
   };
   return error ? (
     <p role="alert" className="text-xs text-destructive">

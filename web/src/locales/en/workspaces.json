@@ -1,4 +1,8 @@
 {
+  "gitPushAuthRequired": "GitHub authentication or write access was refused. Configure a token with repository contents write access for this connection. Credentials are never taken from the agent session.",
+  "gitPushRejected": "The remote rejected publication: check new commits and branch protections. No force push was performed.",
+  "gitPushNetworkUnavailable": "The server cannot reach the remote repository. Check the network and proxy before retrying.",
+  "gitPushTlsError": "The remote certificate cannot be verified. TLS verification remains enabled.",
   "gitCopyDelete": "Remove this copy…",
   "gitCopyDeleteTitle": "Remove local copy “{{name}}”?",
   "gitCopyDeleteHelp": "Only this local copy will be removed from the project. Its files, changes and local commits will be preserved in a recoverable local trash folder. The remote repository, its branches and other copies remain unchanged. A copy used by an agent or another resource cannot be removed: change its working directory first.",

@@ -203,6 +203,17 @@ it('never enables merge for absent, pending, failed, incomplete or unknown check
     ).toBeDisabled();
   }
 });
+it('explains missing write credentials without silently retrying the push', async () => {
+  api.mockRejectedValue(new Error('GIT_AUTH_REQUIRED'));
+  showCopy();
+  fireEvent.click(screen.getByRole('button', { name: 'Push…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer le push' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'jeton autorisant l’écriture',
+  );
+  expect(posts()).toHaveLength(1);
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+});
 it('merges only after confirmation and sends both reviewed revisions', async () => {
   render(
     <GitMergeAction
