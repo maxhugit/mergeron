@@ -99,14 +99,15 @@ export function ModelSelector() {
         variant="ghost"
         size="sm"
         className="h-7 cursor-default gap-1 rounded-lg px-2 text-xs hover:bg-transparent"
-        title={t('definedByProject')}
+        title={`${t('definedByProject')} : ${projectModel} · ${projectEffort}`}
+        aria-label={`${t('definedByProject')} : ${projectModel} · ${projectEffort}`}
         aria-readonly="true"
       >
         <Bot className="h-3.5 w-3.5" />
-        <span className="hidden max-w-[120px] truncate sm:inline">
+        <span className="hidden max-w-[120px] truncate @min-[640px]/composer:inline">
           {projectModel}
         </span>
-        <span className="hidden text-muted-foreground sm:inline">
+        <span className="hidden text-muted-foreground @min-[640px]/composer:inline">
           · {projectEffort}
         </span>
       </Button>
@@ -141,18 +142,19 @@ export function ModelSelector() {
           variant="ghost"
           size="sm"
           className="h-7 gap-1 rounded-lg px-2 text-xs"
-          title={t('modelReasoningEffort')}
+          title={`${t('modelReasoningEffort')} : ${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
+          aria-label={`${t('modelReasoningEffort')} : ${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
         >
           <Bot className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline max-w-[120px] truncate">
+          <span className="hidden @min-[640px]/composer:inline max-w-[120px] truncate">
             {displayModel}
           </span>
           {displayEffort && (
-            <span className="hidden sm:inline text-muted-foreground">
+            <span className="hidden @min-[640px]/composer:inline text-muted-foreground">
               · {displayEffort}
             </span>
           )}
-          <ChevronDown className="h-3 w-3 opacity-50" />
+          <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[640px]/composer:block" />
         </Button>
       </PopoverTrigger>
 

@@ -39,13 +39,14 @@ export function PlanModeBadge({ state, pending, disabled, onToggle }: Props) {
       disabled={disabled || pending}
       onClick={onToggle}
       title={t('planModeAppliesToTheNextTurnClickToTurnItOff')}
+      aria-label={t('planModeAppliesToTheNextTurnClickToTurnItOff')}
     >
       {pending ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : (
         <Telescope className="h-3.5 w-3.5" />
       )}
-      <span>{t('plan')}</span>
+      <span className="hidden @min-[640px]/composer:inline">{t('plan')}</span>
     </Button>
   );
 }
