@@ -21,6 +21,7 @@ import { promisify } from 'node:util';
 import { DatabaseService } from '../database/database.service';
 import { CatalogPathsService } from '../codex/catalog/catalog-paths.service';
 import { ThreadMetadataService } from '../threads/thread-metadata.service';
+import { ProjectWorkspaceLayout } from './project-workspace-layout';
 
 export const PROJECT_ARCHIVE_MAX_BYTES = 96 * 1024 * 1024;
 const PREVIEW_TTL_MS = 15 * 60_000;
@@ -304,6 +305,10 @@ export class ProjectArchivesService implements OnModuleInit, OnModuleDestroy {
           personMappings: input.personMappings,
         });
         this.metadata.invalidate();
+        if (typeof result.projectId === 'string')
+          await new ProjectWorkspaceLayout(this.database.db).migrate(
+            result.projectId,
+          );
         return result;
       } finally {
         await rm(entry.directory, { recursive: true, force: true });

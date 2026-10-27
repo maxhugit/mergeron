@@ -31,6 +31,12 @@ export function FileViewer({
 }) {
   const { t } = useTranslation();
   const selectedFile = filePath;
+  readOnly =
+    readOnly ||
+    /\/\.mergeron-system\//.test(filePath) ||
+    /\/(?:\.mergeron|\.webui)\/(?!imported-(?:workspaces|attachments)(?:\/|$))/.test(
+      filePath,
+    );
   const document = useDocumentStore((state) => {
     const id = documentId ?? state.pathIndex[filePath];
     return id ? state.documents[id] : undefined;
@@ -78,6 +84,7 @@ export function FileViewer({
       <div className="flex shrink-0 items-center border-b border-border px-3 py-1.5">
         <span className="truncate text-xs text-muted-foreground">
           {selectedFile}
+          {readOnly && <span className="ml-2"> · {t('readOnly')}</span>}
         </span>
       </div>
 

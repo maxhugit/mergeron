@@ -69,6 +69,9 @@ beforeEach(async () => {
       await fsp.mkdir(path.join(workspace, '.mergeron', 'knowledge'), {
         recursive: true,
       });
+      await fsp.mkdir(path.join(workspace, '.mergeron', 'history'), {
+        recursive: true,
+      });
       await fsp.writeFile(
         path.join(workspace, '.mergeron', 'project.json'),
         JSON.stringify({ projectId, layoutVersion: 2 }),

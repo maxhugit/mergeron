@@ -54,10 +54,10 @@ describe('unavailable document project isolation', () => {
     vi.unstubAllEnvs();
   });
 
-  function service(missingDocument: boolean) {
+  function service(missingDocument: boolean, layoutVersion = 1) {
     const project = {
       id: 'broken',
-      workspaceLayoutVersion: 1,
+      workspaceLayoutVersion: layoutVersion,
       workspacePath: '/workspaces/broken',
     };
     const records = new Map<unknown, unknown[]>([
@@ -132,6 +132,24 @@ describe('unavailable document project isolation', () => {
     expect(() =>
       protection.assertWorkspaceAvailable('/workspaces/good'),
     ).not.toThrow();
+  });
+
+  it('masks the separate system space from agents and retains the read-only deliverable boundary', async () => {
+    const plan = await service(false, 3).plan();
+    expect(plan?.privateRoots).toContain('/workspaces/.mergeron-system');
+    expect(plan?.publishedRoots).toContain('/workspaces/broken/livrables');
+    expect(plan?.publishedRoots).toContain(
+      '/workspaces/.mergeron-system/broken',
+    );
+  });
+
+  it('quarantines the working space when its system space is unavailable instead of recreating it', async () => {
+    files.missing.add('/workspaces/.mergeron-system/broken');
+    const protection = service(false, 3);
+    await protection.plan();
+    expect(() =>
+      protection.assertWorkspaceAvailable('/workspaces/broken'),
+    ).toThrow('unavailable');
   });
 
   it('relocates an external retained source directly into its protected deliverable root', async () => {

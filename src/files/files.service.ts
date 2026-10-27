@@ -14,10 +14,13 @@ import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { currentAccess } from '../auth/access-context';
 import { projects } from '../database/schema';
 import { documentPathAlias } from '../deliverables/document-path-alias';
+import { projectSystemAlias } from '../projects/project-system-paths';
 import {
   PROJECT_SYSTEM_DIRECTORY,
   LEGACY_PROJECT_SYSTEM_DIRECTORY,
   PROJECT_CONTENT_DIRECTORIES,
+  projectSystemPath,
+  isPrivateProjectSpace,
 } from '../projects/workspace-structure';
 import { BusinessException } from '../common/business.exception';
 import { ErrorCode } from '../common/error-codes';
@@ -246,7 +249,9 @@ export class FilesService implements OnModuleDestroy {
     let resolved: string;
     try {
       resolved = await fs.realpath(
-        path.resolve(documentPathAlias(this.db, inputPath)),
+        path.resolve(
+          projectSystemAlias(this.db, documentPathAlias(this.db, inputPath)),
+        ),
       );
     } catch {
       throw BusinessException.notFound(
@@ -318,6 +323,9 @@ export class FilesService implements OnModuleDestroy {
    * policy, while the final target remains a canonical absolute path.
    */
   async resolveWatchPath(inputPath: string): Promise<string> {
+    const access = currentAccess();
+    if (access && access.identity.role !== 'administrator')
+      access.identities.requireWorkspacePath(inputPath, false, access.identity);
     if (!inputPath) {
       throw BusinessException.badRequest(
         ErrorCode.files.pathRequired,
@@ -325,9 +333,15 @@ export class FilesService implements OnModuleDestroy {
       );
     }
 
-    const absolutePath = path.resolve(inputPath);
+    const absolutePath = path.resolve(projectSystemAlias(this.db, inputPath));
     try {
       const resolved = await fs.realpath(absolutePath);
+      if (access && access.identity.role !== 'administrator')
+        access.identities.requireWorkspacePath(
+          resolved,
+          false,
+          access.identity,
+        );
       if (!this.isAllowedPath(resolved)) {
         throw BusinessException.forbidden(
           ErrorCode.files.pathOutsideWorkspace,
@@ -399,6 +413,18 @@ export class FilesService implements OnModuleDestroy {
       if (this.excludedDirs.has(entry.name)) continue;
 
       const entryPath = path.join(resolved, entry.name);
+      const access = currentAccess();
+      if (access && access.identity.role !== 'administrator') {
+        try {
+          access.identities.requireWorkspacePath(
+            entryPath,
+            false,
+            access.identity,
+          );
+        } catch {
+          continue;
+        }
+      }
       const isDir = entry.isDirectory();
 
       let size: number | undefined;
@@ -990,6 +1016,14 @@ export class FilesService implements OnModuleDestroy {
       return path.join(fsSync.realpathSync(current), ...tail);
     };
     const target = canonical(targetPath);
+    if (
+      isPrivateProjectSpace(target) ||
+      isPrivateProjectSpace(path.resolve(targetPath))
+    )
+      throw BusinessException.conflict(
+        ErrorCode.files.cannotModifyRoot,
+        'System workspaces are read-only through the file API',
+      );
     const contains = (parent: string, child: string) =>
       parent === child || child.startsWith(parent + path.sep);
     for (const project of this.db?.select().from(projects).all() ?? []) {
@@ -1272,6 +1306,27 @@ export class FilesService implements OnModuleDestroy {
 
   /** Checks if a resolved path is under an allowed workspace root. */
   private isAllowedPath(resolved: string): boolean {
+    // Authenticated document transfers use a path-bound capability and no browser
+    // context. Keep their registered system history reachable even with narrow roots.
+    if (
+      this.db &&
+      (!currentAccess() || currentAccess()?.identity.role === 'administrator')
+    ) {
+      for (const project of this.db.select().from(projects).all()) {
+        const system = projectSystemPath(
+          project.workspacePath,
+          project.workspaceLayoutVersion,
+        );
+        if (project.workspaceLayoutVersion >= 3) {
+          try {
+            if (this.isPathInside(resolved, fsSync.realpathSync(system)))
+              return true;
+          } catch {
+            // Missing system spaces are reconciled separately; other roots remain usable.
+          }
+        }
+      }
+    }
     return [...this.workspaceRoots].some((root) =>
       this.isPathInside(resolved, root),
     );

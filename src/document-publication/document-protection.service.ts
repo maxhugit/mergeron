@@ -7,6 +7,7 @@ import { homedir } from 'node:os';
 import { and, eq } from 'drizzle-orm';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { DatabaseService } from '../database/database.service';
+import { projectSystemPath } from '../projects/workspace-structure';
 import {
   projects,
   projectWorkspaces,
@@ -170,6 +171,7 @@ export class DocumentProtectionService {
         'Protected agents require a working copy under /workspaces',
       );
     const publishedRoots: string[] = [];
+    const privateRoots: string[] = [];
     for (const project of this.db.select().from(projects).all()) {
       if (project.workspaceLayoutVersion < 1) continue;
       const root = await fs
@@ -186,7 +188,18 @@ export class DocumentProtectionService {
         );
       try {
         publishedRoots.push(await this.directory(root, ['livrables']));
-        publishedRoots.push(await this.directory(root, ['.mergeron']));
+        if (project.workspaceLayoutVersion >= 3) {
+          const system = projectSystemPath(root);
+          const parent = path.dirname(system);
+          for (const directory of [parent, system]) {
+            const stat = await fs.lstat(directory);
+            if (!stat.isDirectory() || stat.isSymbolicLink())
+              throw new Error('Invalid system workspace boundary');
+            if (directory === parent)
+              privateRoots.push(await fs.realpath(parent));
+          }
+          publishedRoots.push(await fs.realpath(system));
+        } else publishedRoots.push(await this.directory(root, ['.mergeron']));
       } catch (error) {
         if (!this.unavailableFile(error)) throw error;
         await quarantine(root);
@@ -327,6 +340,7 @@ export class DocumentProtectionService {
       databasePath: this.database.databasePath,
       writableRoots: [...writableRoots].sort(),
       publishedRoots: [...new Set([...publishedRoots, ...boundaries])].sort(),
+      privateRoots: [...new Set(privateRoots)].sort(),
       unavailableRoots: [...missingBoundaries].sort(),
     };
     // Validate broad roots before starting or restarting a process.

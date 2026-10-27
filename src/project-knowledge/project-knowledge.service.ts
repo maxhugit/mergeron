@@ -14,7 +14,7 @@ import * as fs from 'node:fs/promises';
 import { constants } from 'node:fs';
 import * as path from 'node:path';
 import { eq } from 'drizzle-orm';
-import { PROJECT_SYSTEM_DIRECTORY } from '../projects/workspace-structure';
+import { projectSystemPath } from '../projects/workspace-structure';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   projects,
@@ -51,8 +51,12 @@ export class ProjectKnowledgeService {
     if (!project) throw new NotFoundException('Project not found');
     if (project.workspaceLayoutVersion < 1)
       throw new ConflictException('Project workspace migration is required');
-    let directory = project.workspacePath;
-    for (const component of ['', PROJECT_SYSTEM_DIRECTORY, 'knowledge']) {
+    const system = projectSystemPath(
+      project.workspacePath,
+      project.workspaceLayoutVersion,
+    );
+    let directory = path.dirname(system);
+    for (const component of ['', path.basename(system), 'knowledge']) {
       if (component) directory = path.join(directory, component);
       const stat = await fs.lstat(directory);
       if (!stat.isDirectory() || stat.isSymbolicLink())

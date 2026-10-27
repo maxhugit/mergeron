@@ -109,6 +109,39 @@ describe('active folders', () => {
     ).toThrow('cannot leave');
   });
 
+  it('never selects a system space, including a saved resource or symlink', async () => {
+    const system = path.join(root, '.mergeron-system/primary');
+    await fsp.mkdir(system, { recursive: true });
+    database.db
+      .update(projectWorkspaces)
+      .set({ path: system })
+      .where(eq(projectWorkspaces.id, 'secondary'))
+      .run();
+    expect(() =>
+      service.set('project', 'agent', 'agent', { resourceId: 'secondary' }),
+    ).toThrow();
+    await fsp.symlink(system, path.join(primary, 'system-link'));
+    expect(() =>
+      service.set('project', 'agent', 'agent', {
+        resourceId: 'primary',
+        relativePath: 'system-link',
+      }),
+    ).toThrow();
+    database.db
+      .insert(projectActiveFolders)
+      .values({
+        contextType: 'agent',
+        contextId: 'agent',
+        projectId: 'project',
+        resourceId: 'secondary',
+        relativePath: '',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    expect(service.get('agent', 'agent')?.state).not.toBe('ready');
+  });
+
   it('requires an explicit local copy before selecting a remote resource', () => {
     const now = Date.now();
     database.db
