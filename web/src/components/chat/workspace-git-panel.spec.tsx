@@ -20,6 +20,25 @@ vi.mock('@/lib/projects-api', () => ({
   projectsApi: api,
   projectsQueryKey: ['projects'],
 }));
+vi.mock('./workspace-entry-menu', () => ({
+  WorkspaceEntryMenu: ({
+    items,
+  }: {
+    items: Array<{ label: string; disabled?: boolean; onSelect: () => void }>;
+  }) => (
+    <div>
+      {items.map((item) => (
+        <button
+          key={item.label}
+          disabled={item.disabled}
+          onClick={item.onSelect}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  ),
+}));
 vi.mock('@/generated/api', () => ({ filesAddRoot: addRoot }));
 vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => (
@@ -44,6 +63,7 @@ const resource: GitInventory['resources'][number] = {
   localPath: null,
 };
 const copy: GitInventory['copies'][number] = {
+  ownerAgentIds: ['work-agent'],
   id: 'copy',
   projectId: 'p',
   sourceResourceId: 'git',
@@ -158,7 +178,10 @@ beforeEach(async () => {
   });
 });
 afterEach(() => client.clear());
-function show(resourceId: string | null = 'git', agentThreadId?: string) {
+function show(
+  resourceId: string | null = 'git',
+  agentThreadId: string = 'work-agent',
+) {
   return render(
     <QueryClientProvider client={client}>
       <WorkspaceGitPanel
@@ -187,40 +210,34 @@ it('reserves a copy to its agent and disables creating a second copy for that ag
   inventory.copies = [{ ...copy, ownerAgentIds: ['work-agent'] }];
   show('git', 'work-agent');
   expect(
-    await screen.findByText('Copie réservée à cet agent de travail'),
+    await screen.findByText('Copie locale disponible'),
   ).toBeInTheDocument();
   expect(
-    screen.getByRole('button', { name: 'Préparer une autre copie' }),
+    screen.getByRole('button', { name: 'Préparer une copie de travail' }),
   ).toBeDisabled();
   expect(
     screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
   ).toBeEnabled();
 });
 
-it('allows browsing but not using or modifying another work agent’s copy', async () => {
+it('does not expose another agent’s copy as this agent’s local copy', async () => {
   inventory.copies = [{ ...copy, ownerAgentIds: ['other-agent'] }];
   show('git', 'work-agent');
+  await screen.findByRole('tab', { name: 'Local' });
   expect(
-    await screen.findByText(
-      'Copie réservée à un autre agent — consultation uniquement',
-    ),
-  ).toBeInTheDocument();
+    screen.getByRole('button', { name: 'Parcourir les fichiers locaux' }),
+  ).toBeDisabled();
   expect(
     screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
   ).toBeDisabled();
-  expect(
-    screen.queryByRole('button', { name: 'Commit…' }),
-  ).not.toBeInTheDocument();
-  await screen.findByRole('tab', { name: 'Modifications (1)' });
-  tab('Modifications (1)');
-  expect(
-    screen.queryByRole('button', { name: 'Préparer' }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
+  expect(api.mock.calls.some(([url]) => url.endsWith('/copies/copy'))).toBe(
+    false,
+  );
 });
-
 it('lists remote Git resources before cloning, without changing the agent context', async () => {
   show(null);
-  fireEvent.click(await screen.findByRole('button', { name: /Git Test/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Git Test/ }));
   expect(onSelect).toHaveBeenCalledWith('git');
   expect(onActive).not.toHaveBeenCalled();
   expect(useFilesStore.getState().rootDir).toBe('/original');
@@ -243,7 +260,7 @@ it('creates an explicit isolated copy and never selects it for the agent automat
     '/p/connections/git/copies',
     expect.objectContaining({
       method: 'POST',
-      body: '{"branch":"feature/test"}',
+      body: '{"branch":"feature/test","agentThreadId":"work-agent"}',
     }),
   );
   expect(onActive).not.toHaveBeenCalled();
@@ -257,6 +274,11 @@ it('separates browsing files from using the copy as the agent workspace', async 
   );
   expect(await screen.findByTestId('git-files')).toHaveTextContent('/copy');
   expect(onActive).not.toHaveBeenCalled();
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
+    ).toBeEnabled(),
+  );
   fireEvent.click(
     screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
   );
@@ -391,16 +413,11 @@ it('separates local history from live GitHub branches and never activates a copy
   expect(await screen.findByText('only-on-github')).toBeVisible();
   expect(onActive).not.toHaveBeenCalled();
   expect(useFilesStore.getState().rootDir).toBe('/original');
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Préparer une copie de travail' }),
-  );
-  expect(screen.getByRole('tab', { name: 'Local' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
   expect(
-    screen.getByLabelText('Branche distante existante (facultatif)'),
-  ).toHaveValue('only-on-github');
+    screen
+      .getAllByRole('button', { name: 'Préparer une copie de travail' })
+      .every((button) => (button as HTMLButtonElement).disabled),
+  ).toBe(true);
   expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
     false,
   );
@@ -428,6 +445,8 @@ it('keeps remote GitHub data usable without a local copy and keeps synchronizati
 it('places publication only in Synchronization and keeps commits local', async () => {
   inventory.copies = [copy];
   show();
+  await screen.findByRole('tab', { name: 'Modifications (1)' });
+  tab('Modifications (1)');
   await screen.findByRole('button', { name: 'Commit…' });
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
   tab('Synchronisation');

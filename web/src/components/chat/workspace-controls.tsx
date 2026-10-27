@@ -9,6 +9,7 @@ import {
   X,
   ChevronDown,
   GitCompareArrows,
+  GitBranch,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -47,6 +48,8 @@ export function WorkspaceControls({
   const terminals = useTerminalStore((s) => s.terminals);
   const [chooser, setChooser] = useState(false);
   const label = (tab: WorkspaceTab) => {
+    if (tab.kind === 'git-graph')
+      return `${tw('gitGraphTabTitle')} · ${tab.name}`;
     if (tab.kind === 'git-diff')
       return tw('gitDiffTabTitle', {
         name: tab.path.split('/').pop() ?? tab.path,
@@ -60,13 +63,15 @@ export function WorkspaceControls({
   };
   const selected = workspace.tabs.find((tab) => tab.id === workspace.activeId);
   const closeLabel = (tab: WorkspaceTab) =>
-    tab.kind === 'git-diff'
-      ? tw('gitCloseDiff', { name: tab.path })
-      : t(
-          translationKey(
-            tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
-          ),
-        );
+    tab.kind === 'git-graph'
+      ? tw('gitCloseGraph')
+      : tab.kind === 'git-diff'
+        ? tw('gitCloseDiff', { name: tab.path })
+        : t(
+            translationKey(
+              tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
+            ),
+          );
   const choose = (id: string) => {
     onSelect(id);
     setChooser(false);
@@ -176,7 +181,9 @@ export function WorkspaceControls({
                   }}
                   className="flex min-w-0 items-center gap-2 px-3 text-xs"
                 >
-                  {tab.kind === 'git-diff' ? (
+                  {tab.kind === 'git-graph' ? (
+                    <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                  ) : tab.kind === 'git-diff' ? (
                     <GitCompareArrows className="h-3.5 w-3.5 shrink-0" />
                   ) : tab.kind === 'file' ? (
                     <FileCode className="h-3.5 w-3.5 shrink-0" />

@@ -117,6 +117,24 @@ export class WorkspaceGitController {
     return this.git.remoteBranches(projectId, resourceId);
   }
 
+  @Get('connections/:resourceId/graph')
+  remoteGraph(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return this.git.remoteGraph(projectId, resourceId);
+  }
+
+  @Get('connections/:resourceId/files')
+  remoteFiles(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+    @Query('path') filePath: unknown,
+    @Query('ref') ref: unknown,
+  ) {
+    return this.git.remoteFiles(projectId, resourceId, filePath, ref);
+  }
+
   @Get('copies/:copyId/staged-diff')
   stagedDiff(
     @Param('projectId') projectId: string,

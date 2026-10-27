@@ -9,15 +9,23 @@ import {
   HardDrive,
   Cloud,
   ArrowLeftRight,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { WorkspaceEntryMenu } from './workspace-entry-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { GitRemoteFiles } from './git-remote-files';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
 import { GitStageChanges } from './git-stage-changes';
-import { GitBranchGraph } from './git-branch-graph';
 import { GitCopyReservation } from './git-copy-reservation';
 import { pathIsWithin } from '@/lib/file-change-events';
-import type { GitDiffTarget } from '@/stores/workspace-store';
+import type { GitDiffTarget, GitGraphTarget } from '@/stores/workspace-store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/files/file-tree';
 import { filesAddRoot } from '@/generated/api';
@@ -49,12 +57,28 @@ interface Props {
   onActiveWorkspaceChange?: (path: string) => void;
   onFile: (path: string) => void;
   onGitDiff?: (target: GitDiffTarget) => void;
+  onGitGraph?: (target: GitGraphTarget) => void;
   children: ReactNode;
 }
+
+type EntryAction = 'local' | 'remote' | 'clone' | 'info' | 'release' | 'delete';
 
 /** Browsing a repository never changes the agent's workspace. */
 export function WorkspaceGitPanel(props: Props) {
   const { t } = useTranslation('workspaces');
+  const [command, setCommand] = useState<{
+    resourceId: string;
+    action: EntryAction;
+    nonce: number;
+  } | null>(null);
+  const request = (resourceId: string, action: EntryAction) => {
+    props.onSelect(resourceId);
+    setCommand((current) => ({
+      resourceId,
+      action,
+      nonce: (current?.nonce ?? 0) + 1,
+    }));
+  };
   const inventory = useQuery({
     queryKey: gitInventoryKey(props.projectId),
     queryFn: async ({ signal }): Promise<GitInventory> => {
@@ -76,22 +100,117 @@ export function WorkspaceGitPanel(props: Props) {
           aria-label={t('gitRepositories')}
           className="shrink-0 space-y-1 border-b p-2"
         >
-          {resources.map((item) => (
-            <Button
-              key={item.id}
-              variant={item.id === props.resourceId ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-auto w-full min-w-0 justify-start gap-2 px-2 py-1 text-xs"
-              aria-pressed={item.id === props.resourceId}
-              onClick={() => props.onSelect(item.id)}
-            >
-              <GitBranch className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{item.name}</span>
-              <span className="ml-auto text-[10px] text-muted-foreground">
-                {item.enabled ? 'Git' : t('gitDisabled')}
-              </span>
-            </Button>
-          ))}
+          {resources.map((item) => {
+            const own = inventory.data?.copies.find(
+              (copy) =>
+                copy.sourceResourceId === item.id &&
+                copyOwnedByAgent(copy, props.agentThreadId) &&
+                copy.state === 'ready',
+            );
+            const agentHasCopy = inventory.data?.copies.some((copy) =>
+              copyOwnedByAgent(copy, props.agentThreadId),
+            );
+            const active = Boolean(
+              own?.localPath &&
+              props.cwd &&
+              pathIsWithin(own.localPath, props.cwd),
+            );
+            return (
+              <div key={item.id} className="flex min-w-0 items-center gap-1">
+                <Button
+                  variant={item.id === props.resourceId ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-auto min-w-0 flex-1 justify-start gap-2 px-2 py-1 text-xs"
+                  aria-pressed={item.id === props.resourceId}
+                  onClick={() => {
+                    setCommand(null);
+                    props.onSelect(item.id);
+                  }}
+                >
+                  <Star
+                    aria-label={active ? t('gitActiveForAgent') : undefined}
+                    className={`h-3.5 w-3.5 shrink-0 ${active ? 'fill-primary text-primary' : 'text-muted-foreground'}`}
+                  />
+                  <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block truncate">{item.name}</span>
+                    <span className="block whitespace-normal text-[10px] text-muted-foreground">
+                      {t(
+                        !item.enabled
+                          ? 'gitDisabled'
+                          : own
+                            ? 'gitHasAgentCopy'
+                            : 'gitNoAgentCopy',
+                      )}
+                    </span>
+                  </span>
+                </Button>
+                <WorkspaceEntryMenu
+                  label={t('gitMenu', { name: item.name })}
+                  items={[
+                    {
+                      label: t('gitBrowseLocal'),
+                      disabled: !own || !item.enabled,
+                      onSelect: () => request(item.id, 'local'),
+                    },
+                    {
+                      label: t('gitBrowseRemote'),
+                      disabled: !item.enabled,
+                      onSelect: () => request(item.id, 'remote'),
+                    },
+                    {
+                      label: t('gitOpenGraph'),
+                      disabled: !item.enabled || !props.onGitGraph,
+                      onSelect: () =>
+                        props.onGitGraph?.({
+                          projectId: props.projectId,
+                          resourceId: item.id,
+                          name: item.name,
+                          copyId: own?.id ?? null,
+                        }),
+                    },
+                    {
+                      label: t('gitPrepareCopy'),
+                      disabled: !item.enabled || agentHasCopy,
+                      reason: agentHasCopy
+                        ? t('gitAgentCopyExists')
+                        : undefined,
+                      onSelect: () => request(item.id, 'clone'),
+                    },
+                    {
+                      label: t('gitUseForAgent'),
+                      disabled:
+                        !own?.localPath ||
+                        active ||
+                        props.activeWorkspacePending ||
+                        !props.onActiveWorkspaceChange ||
+                        !item.enabled,
+                      onSelect: () =>
+                        own?.localPath &&
+                        props.onActiveWorkspaceChange?.(own.localPath),
+                    },
+                    {
+                      label: t('gitInformation'),
+                      onSelect: () => request(item.id, 'info'),
+                    },
+                    {
+                      label: t('gitCopyRelease'),
+                      disabled: !own || active,
+                      reason: active ? t('gitCopyReleaseActive') : undefined,
+                      onSelect: () => request(item.id, 'release'),
+                    },
+                    {
+                      label: t('gitCopyDelete'),
+                      destructive: true,
+                      disabled: !own || active,
+                      reason: active ? t('gitCopyInUse') : undefined,
+                      onSelect: () => request(item.id, 'delete'),
+                    },
+                  ]}
+                />
+              </div>
+            );
+          })}
         </nav>
       )}
       {inventory.error && (
@@ -112,7 +231,10 @@ export function WorkspaceGitPanel(props: Props) {
         </div>
       ) : resource ? (
         <RepositoryPanel
-          key={`${props.projectId}:${resource.id}:${props.cwd}`}
+          key={`${props.projectId}:${resource.id}:${props.cwd}:${command?.resourceId === resource.id ? command.nonce : 0}`}
+          initialAction={
+            command?.resourceId === resource.id ? command.action : undefined
+          }
           {...props}
           resource={resource}
           copies={(inventory.data?.copies ?? []).filter(
@@ -134,25 +256,28 @@ function RepositoryPanel({
   resource,
   copies,
   cwd,
-  activeWorkspacePending,
-  onActiveWorkspaceChange,
   onFile,
   onGitDiff,
+  onGitGraph,
   agentThreadId,
   agentHasCopy,
+  initialAction,
 }: Props & {
+  initialAction?: EntryAction;
   resource: GitInventory['resources'][number];
   copies: ProjectWorkspaceCopySummary[];
   agentHasCopy: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
-  const [copyId, setCopyId] = useState<string | null>(null);
   const [tab, setTab] = useState('files');
-  const [scope, setScope] = useState('local');
+  const [scope, setScope] = useState(
+    initialAction === 'remote' ? 'remote' : 'local',
+  );
   const [removedCopyPath, setRemovedCopyPath] = useState('');
   const [branch, setBranch] = useState('');
-  const [preparing, setPreparing] = useState(false);
+  const [preparing, setPreparing] = useState(initialAction === 'clone');
+  const [infoOpen, setInfoOpen] = useState(initialAction === 'info');
   const [browsed, setBrowsed] = useState<string | null>(null);
   const [browseError, setBrowseError] = useState('');
   const browseSequence = useRef(0);
@@ -162,13 +287,10 @@ function RepositoryPanel({
     },
     [],
   );
-  const ready = copies.filter(
-    (copy) => copy.state === 'ready' && copy.sourceEnabled,
-  );
-  const copy =
-    ready.find((item) => item.id === copyId) ??
-    ready.find((item) => item.localPath === cwd) ??
-    ready[0];
+  const ready = copies.filter((copy) => copy.state === 'ready');
+  const copy = agentThreadId
+    ? ready.find((item) => copyOwnedByAgent(item, agentThreadId))
+    : (ready.find((item) => item.localPath === cwd) ?? ready[0]);
   const snapshot = useQuery({
     queryKey: ['workspace-git', projectId, copy?.id],
     queryFn: ({ signal }) =>
@@ -192,8 +314,8 @@ function RepositoryPanel({
           }),
         },
       ),
-    onSuccess: async (result) => {
-      setCopyId(result.copy.id);
+    onSuccess: async () => {
+      setBrowsed(null);
       setPreparing(false);
       setBranch('');
       await Promise.all([
@@ -220,12 +342,28 @@ function RepositoryPanel({
         setBrowseError(t('gitBrowseError'));
     }
   };
-  const switchCopy = (id: string) => {
-    browseSequence.current++;
-    setCopyId(id);
-    setBrowsed(null);
-    setBrowseError('');
-  };
+  useEffect(() => {
+    if (initialAction !== 'local' || !copy?.localPath) return;
+    let cancelled = false;
+    void filesAddRoot({
+      body: { root: copy.localPath },
+      throwOnError: true,
+      meta: { silent: true },
+    }).then(
+      () => {
+        if (!cancelled) {
+          useFilesStore.getState().setRootDir(copy.localPath!);
+          setBrowsed(copy.id);
+        }
+      },
+      () => {
+        if (!cancelled) setBrowseError(t('gitBrowseError'));
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [initialAction, copy?.id, copy?.localPath, t]);
   const writable =
     Boolean(
       copy &&
@@ -238,17 +376,11 @@ function RepositoryPanel({
   const reservedElsewhere = Boolean(
     copy?.ownerAgentIds?.length && !copyOwnedByAgent(copy, agentThreadId),
   );
-  const mayClaim =
-    !reservedElsewhere &&
-    (!agentHasCopy || Boolean(copy && copyOwnedByAgent(copy, agentThreadId)));
   return (
     <section
       aria-label={resource.name}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
     >
-      <div className="sticky top-0 z-10 shrink-0 space-y-1 border-b bg-background p-3 text-xs">
-        <strong className="block break-all">{resource.name}</strong>
-      </div>
       <Tabs
         value={scope}
         onValueChange={setScope}
@@ -285,9 +417,13 @@ function RepositoryPanel({
         >
           <div className="min-w-0 shrink-0 space-y-2 border-b p-3 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <strong className="truncate">
-                {copy?.name ?? t('gitScopeLocal')}
-              </strong>
+              <span className="min-w-0 truncate">
+                <GitBranch className="mr-1 inline h-3.5 w-3.5" />
+                {snapshot.data?.branch ?? copy?.branch ?? t('gitScopeLocal')}
+                {snapshot.data?.head
+                  ? ` · ${snapshot.data.head.slice(0, 7)}`
+                  : ''}
+              </span>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -309,105 +445,8 @@ function RepositoryPanel({
               <p>{t('gitDisabledHelp')}</p>
             ) : (
               <>
-                {copy && (
-                  <>
-                    <label className="grid min-w-0 grid-cols-1 gap-1">
-                      {t('gitWorkingCopy')}
-                      <select
-                        className="w-full min-w-0 rounded-md border bg-background p-1.5"
-                        value={copy.id}
-                        onChange={(event) => switchCopy(event.target.value)}
-                      >
-                        {ready.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name} · {item.branch ?? t('gitDetached')} ·{' '}
-                            {item.id.slice(0, 8)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <p className="break-all font-mono text-muted-foreground">
-                      {copy.localPath}
-                    </p>
-                    <GitCopyReservation
-                      projectId={projectId}
-                      copy={copy}
-                      agentThreadId={agentThreadId}
-                      active={Boolean(
-                        copy.localPath &&
-                        cwd &&
-                        pathIsWithin(copy.localPath, cwd),
-                      )}
-                    />
-                    <GitCopyDelete
-                      key={copy.id}
-                      projectId={projectId}
-                      copy={copy}
-                      active={Boolean(
-                        reservedElsewhere ||
-                        (copy.localPath &&
-                          cwd &&
-                          pathIsWithin(copy.localPath, cwd)),
-                      )}
-                      onRemoved={(path) => {
-                        setCopyId(null);
-                        setBrowsed(null);
-                        setBrowseError('');
-                        setRemovedCopyPath(path);
-                      }}
-                    />
-                    {copy.localPath === cwd ? (
-                      <p className="text-primary">{t('gitActiveForAgent')}</p>
-                    ) : (
-                      onActiveWorkspaceChange && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full text-xs"
-                          disabled={
-                            activeWorkspacePending ||
-                            !copy.localPath ||
-                            !mayClaim
-                          }
-                          onClick={() =>
-                            copy.localPath &&
-                            onActiveWorkspaceChange(copy.localPath)
-                          }
-                        >
-                          {t('gitUseForAgent')}
-                        </Button>
-                      )
-                    )}
-                    {snapshot.data && !snapshot.error && (
-                      <div className="space-y-1">
-                        <p className="break-all">
-                          <GitBranch className="mr-1 inline h-3.5 w-3.5" />
-                          {snapshot.data.branch ?? t('gitDetached')} ·{' '}
-                          {snapshot.data.head.slice(0, 7) || t('gitNoCommit')}
-                        </p>
-                        <p className="text-muted-foreground">
-                          {t('gitLocalSnapshot')}
-                        </p>
-                      </div>
-                    )}
-                  </>
-                )}
                 {!copy && (
-                  <p className="text-muted-foreground">{t('gitNoCopy')}</p>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs"
-                  disabled={clone.isPending || agentHasCopy}
-                  onClick={() => setPreparing(!preparing)}
-                >
-                  {t(copy ? 'gitAnotherCopy' : 'gitPrepareCopy')}
-                </Button>
-                {agentHasCopy && (
-                  <p className="text-muted-foreground">
-                    {t('gitAgentCopyExists')}
-                  </p>
+                  <p className="text-muted-foreground">{t('gitNoAgentCopy')}</p>
                 )}
                 {preparing && !agentHasCopy && (
                   <form
@@ -448,17 +487,6 @@ function RepositoryPanel({
               <p role="alert" className="text-destructive">
                 {t('gitInspectionError')}
               </p>
-            )}
-            {copy && writable && snapshot.data && !snapshot.error && (
-              <GitCopyActions
-                key={copy.id}
-                projectId={projectId}
-                agentThreadId={agentThreadId}
-                copyId={copy.id}
-                snapshot={snapshot.data}
-                address={resource.address}
-                actionScope="commit"
-              />
             )}
           </div>
           {resource.enabled && (
@@ -517,6 +545,17 @@ function RepositoryPanel({
                 value="changes"
                 className="min-h-0 flex-1 overflow-auto p-2"
               >
+                {copy && writable && snapshot.data && !snapshot.error && (
+                  <GitCopyActions
+                    key={copy.id}
+                    projectId={projectId}
+                    agentThreadId={agentThreadId}
+                    copyId={copy.id}
+                    snapshot={snapshot.data}
+                    address={resource.address}
+                    actionScope="commit"
+                  />
+                )}
                 {copy && snapshot.data && !snapshot.error ? (
                   <Changes
                     projectId={projectId}
@@ -540,8 +579,21 @@ function RepositoryPanel({
                 value="branches"
                 className="min-h-0 flex-1 overflow-auto p-3 text-xs"
               >
-                {copy && (
-                  <GitBranchGraph projectId={projectId} copyId={copy.id} />
+                {onGitGraph && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onGitGraph({
+                        projectId,
+                        resourceId: resource.id,
+                        name: resource.name,
+                        copyId: copy?.id ?? null,
+                      })
+                    }
+                  >
+                    {t('gitOpenGraph')}
+                  </Button>
                 )}
                 <p className="mb-3 text-muted-foreground">
                   {t('gitBranchesHelp')}
@@ -596,8 +648,14 @@ function RepositoryPanel({
             {t('gitRemoteReadHelp')}
           </p>
           {resource.enabled ? (
-            <Tabs defaultValue="prs" className="gap-0">
+            <Tabs
+              defaultValue={initialAction === 'remote' ? 'files' : 'prs'}
+              className="gap-0"
+            >
               <TabsList className="flex h-auto w-full flex-wrap rounded-none border-b bg-transparent p-1">
+                <TabsTrigger value="files" className="px-2 py-1 text-xs">
+                  {t('gitTabFiles')}
+                </TabsTrigger>
                 <TabsTrigger value="prs" className="px-2 py-1 text-xs">
                   {t('gitTabPrs')}
                 </TabsTrigger>
@@ -605,6 +663,12 @@ function RepositoryPanel({
                   {t('gitPublishedBranches')}
                 </TabsTrigger>
               </TabsList>
+              <TabsContent value="files">
+                <GitRemoteFiles
+                  projectId={projectId}
+                  resourceId={resource.id}
+                />
+              </TabsContent>
               <TabsContent value="prs">
                 <PullRequests
                   projectId={projectId}
@@ -617,6 +681,7 @@ function RepositoryPanel({
                 <RemoteBranches
                   projectId={projectId}
                   resourceId={resource.id}
+                  canPrepare={!agentHasCopy}
                   onPrepare={(name) => {
                     setBranch(name);
                     setPreparing(true);
@@ -709,6 +774,48 @@ function RepositoryPanel({
           )}
         </TabsContent>
       </Tabs>
+      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('gitInformation')} · {resource.name}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="break-all text-xs">{resource.address}</p>
+          <p className="break-all font-mono text-xs">
+            {copy?.localPath ?? t('gitNoAgentCopy')}
+          </p>
+          {copy && <p className="text-xs">{t('gitCopyOwnedByAgent')}</p>}
+        </DialogContent>
+      </Dialog>
+      {copy && (
+        <>
+          <GitCopyReservation
+            projectId={projectId}
+            copy={copy}
+            agentThreadId={agentThreadId}
+            active={Boolean(
+              copy.localPath && cwd && pathIsWithin(copy.localPath, cwd),
+            )}
+            initialOpen={initialAction === 'release'}
+            hideTrigger
+          />
+          <GitCopyDelete
+            projectId={projectId}
+            copy={copy}
+            active={Boolean(
+              reservedElsewhere ||
+              (copy.localPath && cwd && pathIsWithin(copy.localPath, cwd)),
+            )}
+            initialOpen={initialAction === 'delete'}
+            hideTrigger
+            onRemoved={(path) => {
+              setBrowsed(null);
+              setRemovedCopyPath(path);
+            }}
+          />
+        </>
+      )}
       {removedCopyPath && (
         <p role="status" className="break-all p-3 text-xs">
           {t('gitCopyRecovery', { path: removedCopyPath })}
@@ -766,10 +873,12 @@ function RemoteBranches({
   projectId,
   resourceId,
   onPrepare,
+  canPrepare,
 }: {
   projectId: string;
   resourceId: string;
   onPrepare: (branch: string) => void;
+  canPrepare: boolean;
 }) {
   const { t, i18n } = useTranslation('workspaces');
   const query = useQuery({
@@ -811,6 +920,7 @@ function RemoteBranches({
               <Button
                 size="sm"
                 variant="outline"
+                disabled={!canPrepare}
                 onClick={() => onPrepare(item.name)}
               >
                 {t('gitPrepareCopy')}

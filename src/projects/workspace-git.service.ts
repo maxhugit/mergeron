@@ -446,6 +446,7 @@ export class WorkspaceGitService {
   private async githubGet<T>(
     repo: NonNullable<ReturnType<WorkspaceGitService['github']>>,
     endpoint: string,
+    emptyRepository = false,
   ): Promise<T> {
     try {
       const response = await fetch(
@@ -460,6 +461,7 @@ export class WorkspaceGitService {
           signal: AbortSignal.timeout(10000),
         },
       );
+      if (emptyRepository && response.status === 409) return [] as T;
       if (!response.ok) throw new Error();
       return (await response.json()) as T;
     } catch {
@@ -517,6 +519,163 @@ export class WorkspaceGitService {
       })),
       limited: branches.length === 100,
       inspectedAt: Date.now(),
+    };
+  }
+
+  /** Bounded remote-only inspection. No clone, fetch, checkout or local mutation. */
+  async remoteGraph(projectId: string, resourceId: string) {
+    const repo = this.github(projectId, resourceId);
+    if (!repo) throw new BadRequestException('Provider not supported');
+    const branches = await this.remoteBranches(projectId, resourceId);
+    type Commit = {
+      sha: string;
+      parents: Array<{ sha: string }>;
+      commit: {
+        author: { name: string; date: string } | null;
+        message: string;
+      };
+    };
+    const histories = await Promise.all(
+      branches.items
+        .slice(0, 8)
+        .map((branch) =>
+          this.githubGet<Commit[]>(
+            repo,
+            `commits?sha=${encodeURIComponent(branch.revision)}&per_page=30`,
+            true,
+          ),
+        ),
+    );
+    const unique = new Map(
+      histories.flat().map((commit) => [commit.sha, commit]),
+    );
+    const ordered: Commit[] = [];
+    // Children before parents, including merges; dates are only a tie-breaker.
+    while (unique.size) {
+      const parents = new Set(
+        [...unique.values()].flatMap((c) => c.parents.map((p) => p.sha)),
+      );
+      const candidates = [...unique.values()].filter(
+        (c) => !parents.has(c.sha),
+      );
+      if (!candidates.length)
+        throw new ConflictException('Invalid remote history');
+      candidates.sort((a, b) =>
+        (b.commit.author?.date ?? '').localeCompare(
+          a.commit.author?.date ?? '',
+        ),
+      );
+      for (const commit of candidates) {
+        ordered.push(commit);
+        unique.delete(commit.sha);
+      }
+    }
+    return {
+      items: ordered.slice(0, 100).map((c) => ({
+        sha: c.sha,
+        parents: c.parents.map((p) => p.sha),
+        author: c.commit.author?.name ?? '',
+        date: c.commit.author?.date ?? '',
+        subject: c.commit.message.split('\n')[0],
+        current: false,
+        refs: branches.items
+          .filter((b) => b.revision === c.sha)
+          .map((b) => ({ name: b.name, remote: true })),
+      })),
+      limited:
+        branches.limited ||
+        branches.items.length > 8 ||
+        histories.some((h) => h.length === 30) ||
+        ordered.length > 100,
+      inspectedAt: Date.now(),
+    };
+  }
+
+  async remoteFiles(
+    projectId: string,
+    resourceId: string,
+    inputPath: unknown,
+    inputRef: unknown,
+  ) {
+    const filePath = inputPath ?? '';
+    if (
+      typeof filePath !== 'string' ||
+      filePath.length > 2048 ||
+      filePath.includes('\\') ||
+      [...filePath].some(
+        (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127,
+      ) ||
+      (filePath !== '' &&
+        filePath
+          .split('/')
+          .some((part) => !part || part === '.' || part === '..'))
+    )
+      throw new BadRequestException('Invalid remote path');
+    if (
+      inputRef !== undefined &&
+      (typeof inputRef !== 'string' || !/^[a-f0-9]{40,64}$/.test(inputRef))
+    )
+      throw new BadRequestException('Invalid remote revision');
+    const repo = this.github(projectId, resourceId);
+    if (!repo) throw new BadRequestException('Provider not supported');
+    // Pin navigation to an immutable revision; never use response-provided URLs.
+    let ref = inputRef;
+    if (!ref) {
+      const commits = await this.githubGet<Array<{ sha: string }>>(
+        repo,
+        'commits?per_page=1',
+        true,
+      );
+      ref = commits[0]?.sha;
+      if (!ref)
+        return {
+          ref: null,
+          path: '',
+          items: [],
+          limited: false,
+          content: null,
+        };
+      if (!/^[a-f0-9]{40,64}$/.test(ref))
+        throw new ConflictException('Invalid remote revision');
+    }
+    type Entry = {
+      type: string;
+      name: string;
+      path: string;
+      size: number;
+      encoding?: string;
+      content?: string;
+    };
+    const data = await this.githubGet<Entry[] | Entry>(
+      repo,
+      `contents/${filePath.split('/').map(encodeURIComponent).join('/')}?ref=${ref}`,
+    );
+    if (Array.isArray(data))
+      return {
+        ref,
+        path: filePath,
+        items: data.slice(0, 200).map((item) => ({
+          name: item.name,
+          path: item.path,
+          type: item.type,
+          size: item.size,
+        })),
+        limited: data.length > 200,
+        content: null,
+      };
+    const text =
+      data.type === 'file' &&
+      data.size <= 128 * 1024 &&
+      data.encoding === 'base64' &&
+      (data.content?.length ?? 0) <= 180000
+        ? Buffer.from(data.content ?? '', 'base64').toString('utf8')
+        : null;
+    return {
+      ref,
+      path: filePath,
+      items: null,
+      limited: false,
+      content: text && !text.includes('\0') ? text : null,
     };
   }
 

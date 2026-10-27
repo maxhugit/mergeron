@@ -9,6 +9,7 @@ import { WorkspaceControls } from '@/components/chat/workspace-controls';
 import { AgentContextLinks } from '@/components/chat/agent-context-links';
 import { WorkspaceTree } from '@/components/chat/workspace-tree';
 import { WorkspaceGitDiff } from '@/components/chat/workspace-git-diff';
+import { WorkspaceGitGraph } from '@/components/chat/workspace-git-graph';
 import { useWorkspaceClose } from '@/components/chat/workspace-close-dialog';
 import { FileViewer } from '@/components/files/file-viewer';
 import { TerminalSurface } from '@/components/terminal/terminal-host';
@@ -352,7 +353,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                   aria-label={
                     tab.kind === 'file' || tab.kind === 'git-diff'
                       ? tab.path
-                      : t('terminal')
+                      : tab.kind === 'git-graph'
+                        ? tab.name
+                        : t('terminal')
                   }
                   className="absolute inset-0 flex min-h-0 flex-col"
                   inert={!active}
@@ -367,6 +370,8 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                         active={active}
                       />
                     )
+                  ) : tab.kind === 'git-graph' ? (
+                    <WorkspaceGitGraph target={tab} active={active} />
                   ) : tab.kind === 'git-diff' ? (
                     <WorkspaceGitDiff
                       target={tab}
@@ -395,6 +400,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
         </div>
       </div>
       <WorkspaceTree
+        onGitGraph={(target) =>
+          useWorkspaceStore.getState().openGitGraph(context, target)
+        }
         agentThreadId={threadId}
         onGitDiff={(target) =>
           useWorkspaceStore.getState().openGitDiff(context, target)

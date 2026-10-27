@@ -24,15 +24,19 @@ export function GitCopyDelete({
   copy,
   active = false,
   onRemoved,
+  initialOpen = false,
+  hideTrigger = false,
 }: {
   projectId: string;
   copy: ProjectWorkspaceCopySummary;
   active?: boolean;
   onRemoved?: (path: string) => void;
+  initialOpen?: boolean;
+  hideTrigger?: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen && !active);
   const [recovery, setRecovery] = useState('');
   const deletion = useMutation({
     retry: false,
@@ -69,19 +73,21 @@ export function GitCopyDelete({
   };
   return (
     <div className="space-y-1">
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-auto whitespace-normal text-xs text-destructive"
-        disabled={active || !copy.localPath || deletion.isPending}
-        onClick={() => {
-          deletion.reset();
-          setOpen(true);
-        }}
-      >
-        {t('gitCopyDelete')}
-      </Button>
-      {active && (
+      {!hideTrigger && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-auto whitespace-normal text-xs text-destructive"
+          disabled={active || !copy.localPath || deletion.isPending}
+          onClick={() => {
+            deletion.reset();
+            setOpen(true);
+          }}
+        >
+          {t('gitCopyDelete')}
+        </Button>
+      )}
+      {active && !hideTrigger && (
         <p className="text-xs text-muted-foreground">{t('gitCopyInUse')}</p>
       )}
       {recovery && (
