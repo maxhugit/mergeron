@@ -103,9 +103,14 @@ const MAX_FILE = 100 * 1024 * 1024;
 @Injectable()
 export class DeliverablesService implements OnModuleInit {
   async onModuleInit() {
-    await migrateDeliverableDocumentRoots(this.db, (message) =>
-      new Logger(DeliverablesService.name).warn(message),
+    const logger = new Logger(DeliverablesService.name);
+    const result = await migrateDeliverableDocumentRoots(this.db, (message) =>
+      logger.warn(message),
     );
+    if (result.migrated > 0)
+      logger.log(
+        `Moved ${result.migrated} retained document(s) to their deliverable root; history unchanged`,
+      );
   }
   private readonly onlyOfficeSessions = new Map<string, OnlyOfficeSession>();
   private readonly documentWrites = new Map<string, Promise<void>>();
