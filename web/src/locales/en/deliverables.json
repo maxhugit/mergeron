@@ -1,4 +1,12 @@
 {
+  "agentChoice": "Work agent",
+  "useExistingAgent": "Assign an existing agent",
+  "availableAgent": "Available project agent",
+  "selectAvailableAgent": "Select an agent",
+  "availableAgentHelp": "Only idle agents linked to neither a task nor a deliverable are listed. Their history, name and working folder are preserved.",
+  "availableAgentsError": "Unable to load available agents. Close and reopen this dialog to retry.",
+  "noAvailableAgents": "No available agents in this project.",
+  "assignExistingAgent": "Assign this agent",
   "selectDeliverableFolder": "Select active folder",
   "deliverableFolderSelectionHelp": "Choose a local workspace and an existing folder. This does not move files or change existing document links.",
   "deliverableRelativeFolder": "Relative subfolder (empty for the root)",

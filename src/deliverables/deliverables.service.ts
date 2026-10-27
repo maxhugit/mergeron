@@ -1,4 +1,8 @@
-import { requireProjectAccess, currentAccess } from '../auth/access-context';
+import {
+  requireProjectAccess,
+  currentAccess,
+  canReadThread,
+} from '../auth/access-context';
 import {
   BadRequestException,
   ConflictException,
@@ -186,6 +190,48 @@ export class DeliverablesService {
       throw new ConflictException('Deliverable changed');
     return this.activeFolders.resolve('deliverable', id);
   }
+  availableAgentIds(projectId: string, resourceId: string, id: string) {
+    this.get(projectId, resourceId, id);
+    return this.db
+      .select()
+      .from(projectAgentThreads)
+      .where(eq(projectAgentThreads.projectId, projectId))
+      .all()
+      .filter(
+        ({ threadId }) =>
+          canReadThread(threadId, 'agent') &&
+          this.isUnassignedAgent(projectId, threadId),
+      )
+      .map(({ threadId }) => threadId);
+  }
+  private isUnassignedAgent(projectId: string, threadId: string) {
+    return (
+      Boolean(
+        this.db
+          .select()
+          .from(projectAgentThreads)
+          .where(
+            and(
+              eq(projectAgentThreads.threadId, threadId),
+              eq(projectAgentThreads.projectId, projectId),
+            ),
+          )
+          .get(),
+      ) &&
+      !this.db
+        .select({ id: projectTasks.id })
+        .from(projectTasks)
+        .where(eq(projectTasks.linkedThreadId, threadId))
+        .get() &&
+      !this.db
+        .select({ id: items.id })
+        .from(items)
+        .where(
+          sql`exists (select 1 from json_each(${items.conversations}) where json_extract(value, '$.type') = 'agent' and json_extract(value, '$.id') = ${threadId})`,
+        )
+        .get()
+    );
+  }
   registerAgent(
     projectId: string,
     resourceId: string,
@@ -193,6 +239,7 @@ export class DeliverablesService {
     version: number,
     threadId: string,
     taskId?: string | null,
+    existing = false,
   ) {
     const item = this.get(projectId, resourceId, id);
     const task = taskId
@@ -242,16 +289,23 @@ export class DeliverablesService {
       throw new ConflictException('Deliverable active folder is unresolved');
     const now = Date.now();
     this.db.transaction((tx) => {
-      tx.insert(projectAgentThreads)
-        .values({
-          threadId,
-          projectId,
-          workspacePath: this.resource(projectId, resourceId).project
-            .workspacePath,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run();
+      if (existing) {
+        if (
+          !canReadThread(threadId, 'agent') ||
+          !this.isUnassignedAgent(projectId, threadId)
+        )
+          throw new ConflictException('This agent is no longer available');
+      } else
+        tx.insert(projectAgentThreads)
+          .values({
+            threadId,
+            projectId,
+            workspacePath: this.resource(projectId, resourceId).project
+              .workspacePath,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .run();
       if (
         !tx
           .update(items)
@@ -299,16 +353,17 @@ export class DeliverablesService {
           })
           .run();
       }
-      this.activeFolders.set(
-        projectId,
-        'agent',
-        threadId,
-        {
-          resourceId: folder.resourceId,
-          relativePath: folder.relativePath,
-        },
-        { allowUnboundAgent: true },
-      );
+      if (!existing)
+        this.activeFolders.set(
+          projectId,
+          'agent',
+          threadId,
+          {
+            resourceId: folder.resourceId,
+            relativePath: folder.relativePath,
+          },
+          { allowUnboundAgent: true },
+        );
     });
   }
   versionFiles(

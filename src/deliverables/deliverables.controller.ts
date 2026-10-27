@@ -17,6 +17,9 @@ import type { IdentityRequest } from '../auth/platform-access.guard';
 import { IdentityService } from '../auth/identity.service';
 import { ThreadsService } from '../threads/threads.service';
 import { ProjectsService } from '../projects/projects.service';
+import { ThreadMetadataService } from '../threads/thread-metadata.service';
+import { GitMutationGateService } from '../threads/git-mutation-gate.service';
+import { requireExecutionAccess } from '../auth/access-context';
 import {
   DeliverablesService,
   type DeliverableInput,
@@ -28,15 +31,70 @@ export class DeliverablesController {
     private readonly identities: IdentityService,
     private readonly threads: ThreadsService,
     private readonly projects: ProjectsService,
+    private readonly metadata: ThreadMetadataService,
+    private readonly mutations: GitMutationGateService,
   ) {}
+  @Get(':id/available-agents')
+  async availableAgents(
+    @Param('projectId') p: string,
+    @Param('resourceId') r: string,
+    @Param('id') id: string,
+  ) {
+    const ids = new Set(this.service.availableAgentIds(p, r, id));
+    const { entries } = await this.metadata.read();
+    return {
+      agents: entries
+        .filter(
+          ({ thread, archived }) =>
+            ids.has(thread.id) &&
+            !archived &&
+            (thread.status.type === 'idle' ||
+              thread.status.type === 'notLoaded'),
+        )
+        .map(({ thread }) => ({
+          id: thread.id,
+          title: thread.name || thread.preview || thread.id,
+        })),
+    };
+  }
   @Post(':id/agent')
   async agent(
     @Param('projectId') p: string,
     @Param('resourceId') r: string,
     @Param('id') id: string,
     @Body()
-    body: { version: number; subtaskId?: string; subtaskTitle?: string },
+    body: {
+      version: number;
+      subtaskId?: string;
+      subtaskTitle?: string;
+      existingThreadId?: string;
+    },
     @Req() request: IdentityRequest,
+  ) {
+    if (body.existingThreadId !== undefined) {
+      requireExecutionAccess();
+      if (
+        typeof body.existingThreadId !== 'string' ||
+        !body.existingThreadId.trim()
+      )
+        throw new BadRequestException('Select an existing agent');
+      const existingThreadId = body.existingThreadId;
+      return this.mutations.mutate(async () => {
+        const available = await this.availableAgents(p, r, id);
+        if (!available.agents.some((agent) => agent.id === existingThreadId))
+          throw new ConflictException('This agent is no longer available');
+        return this.assignAgent(p, r, id, body, request, existingThreadId);
+      });
+    }
+    return this.assignAgent(p, r, id, body, request);
+  }
+  private async assignAgent(
+    p: string,
+    r: string,
+    id: string,
+    body: { version: number; subtaskId?: string; subtaskTitle?: string },
+    request: IdentityRequest,
+    existingThreadId?: string,
   ) {
     const deliverable = this.service.get(p, r, id);
     const cwd = this.service.agentWorkspace(p, r, id, body.version);
@@ -113,9 +171,12 @@ export class DeliverablesController {
           );
       createdSubtask = true;
     }
-    const started = await this.threads.startThread({ cwd });
+    const started = existingThreadId
+      ? { thread: { id: existingThreadId } }
+      : await this.threads.startThread({ cwd });
     try {
-      this.threads.rememberInitialThreadCwd(started.thread.id, cwd);
+      if (!existingThreadId)
+        this.threads.rememberInitialThreadCwd(started.thread.id, cwd);
       this.service.registerAgent(
         p,
         r,
@@ -123,14 +184,17 @@ export class DeliverablesController {
         body.version,
         started.thread.id,
         subtask?.id,
+        ...(existingThreadId ? ([true] as const) : ([] as const)),
       );
     } catch (error) {
-      await this.threads.archiveThread(started.thread.id).catch(() => {});
+      if (!existingThreadId)
+        await this.threads.archiveThread(started.thread.id).catch(() => {});
       throw error;
     }
-    await this.threads
-      .setThreadName(started.thread.id, subtask?.title ?? deliverable.title)
-      .catch(() => {});
+    if (!existingThreadId)
+      await this.threads
+        .setThreadName(started.thread.id, subtask?.title ?? deliverable.title)
+        .catch(() => {});
     return {
       threadId: started.thread.id,
       taskId: subtask?.id ?? null,

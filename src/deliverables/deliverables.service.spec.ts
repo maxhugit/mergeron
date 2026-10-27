@@ -904,6 +904,88 @@ describe('project deliverables', () => {
       await fs.rm(foreign, { recursive: true, force: true });
     }
   });
+  it('reuses only free project agents and preserves their working folder', async () => {
+    const item = await service.create('p', 'r', {
+      title: 'Existing agent output',
+    });
+    const second = await service.create('p', 'r', { title: 'Other output' });
+    const now = Date.now();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'free-agent',
+        projectId: 'p',
+        workspacePath: root,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    const folders = new ActiveFoldersService(database.db);
+    folders.set(
+      'p',
+      'agent',
+      'free-agent',
+      { resourceId: 'w', relativePath: '' },
+      { allowUnboundAgent: true },
+    );
+    expect(service.availableAgentIds('p', 'r', item.id)).toEqual([
+      'free-agent',
+    ]);
+    expect(() =>
+      service.registerAgent(
+        'p',
+        'r',
+        item.id,
+        999,
+        'free-agent',
+        undefined,
+        true,
+      ),
+    ).toThrow('changed');
+    expect(service.availableAgentIds('p', 'r', item.id)).toEqual([
+      'free-agent',
+    ]);
+    service.registerAgent(
+      'p',
+      'r',
+      item.id,
+      item.version,
+      'free-agent',
+      undefined,
+      true,
+    );
+    expect(folders.resolve('agent', 'free-agent')).toBe(root);
+    expect(service.contextForConversation('free-agent')).toContain(
+      'Existing agent output',
+    );
+    expect(service.availableAgentIds('p', 'r', second.id)).toEqual([]);
+    expect(() =>
+      service.registerAgent(
+        'p',
+        'r',
+        second.id,
+        second.version,
+        'free-agent',
+        undefined,
+        true,
+      ),
+    ).toThrow('no longer available');
+    expect(() =>
+      service.registerAgent(
+        'p',
+        'r',
+        second.id,
+        second.version,
+        'unknown-agent',
+        undefined,
+        true,
+      ),
+    ).toThrow('no longer available');
+    expect(service.get('p', 'r', second.id).conversations).toEqual([]);
+    expect(database.db.select().from(projectAgentThreads).all()).toHaveLength(
+      1,
+    );
+  });
   it('registers a direct agent without creating any task and rejects stale associations atomically', async () => {
     const item = await service.create('p', 'r', {
       title: 'Standalone',
@@ -1005,6 +1087,27 @@ describe('project deliverables', () => {
     expect(service.agentWorkspace('p', 'r', item.id, 1)).toBe(
       path.join(root, 'livrables', item.id),
     );
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'task-only',
+        projectId: 'p',
+        workspacePath: root,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    database.db
+      .update(projectTasks)
+      .set({ linkedThreadId: 'task-only' })
+      .where(eq(projectTasks.id, 'main-task'))
+      .run();
+    expect(service.availableAgentIds('p', 'r', item.id)).not.toContain(
+      'task-only',
+    );
+    expect(() =>
+      service.registerAgent('p', 'r', item.id, 1, 'task-only', undefined, true),
+    ).toThrow('no longer available');
     service.registerAgent('p', 'r', item.id, 1, 'new-agent', 'agent-subtask');
     expect(service.get('p', 'r', item.id).conversations).toContainEqual({
       type: 'agent',

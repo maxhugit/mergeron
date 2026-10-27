@@ -896,6 +896,57 @@ it('submits the current document snapshot for human validation', async () => {
     version: 3,
   });
 });
+it('does not allow assigning an existing agent when none are available', async () => {
+  await setup();
+  api.mockImplementation((path) =>
+    Promise.resolve(
+      String(path).endsWith('/available-agents') ? { agents: [] } : board,
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Entrust to an agent' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Work agent' }), {
+    target: { value: 'existing' },
+  });
+  expect(
+    await screen.findByText('No available agents in this project.'),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Assign this agent' }),
+  ).toBeDisabled();
+});
+it('selects an existing free agent without creating one', async () => {
+  await setup();
+  api.mockImplementation((path, input) =>
+    Promise.resolve(
+      String(path).endsWith('/available-agents')
+        ? { agents: [{ id: 'existing', title: 'Research agent' }] }
+        : String(path).endsWith('/agent')
+          ? { threadId: 'existing', taskId: null }
+          : input
+            ? {}
+            : board,
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Entrust to an agent' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Work agent' }), {
+    target: { value: 'existing' },
+  });
+  expect(
+    screen.getByRole('button', { name: 'Assign this agent' }),
+  ).toBeDisabled();
+  await screen.findByRole('option', { name: 'Research agent' });
+  fireEvent.change(
+    screen.getByRole('combobox', { name: 'Available project agent' }),
+    { target: { value: 'existing' } },
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Assign this agent' }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d/agent', {
+      method: 'POST',
+      body: JSON.stringify({ version: 3, existingThreadId: 'existing' }),
+    }),
+  );
+});
 it('creates a linked agent only through an explicit action', async () => {
   const task = {
     id: 'parent',
