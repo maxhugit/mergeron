@@ -23,6 +23,7 @@ import {
   projectWorkspaceResources,
   projectWorkspaces,
   projectAgentThreads,
+  people,
 } from '../database/schema';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
@@ -32,6 +33,11 @@ import {
   WorkspaceGitService,
 } from './workspace-git.service';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
+import { accessContext } from '../auth/access-context';
+import {
+  IdentityService,
+  type PlatformIdentity,
+} from '../auth/identity.service';
 import { claimAgentCopy } from './git-copy-ownership';
 import { gitCredentialHelper } from './git-credentials';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
@@ -75,9 +81,37 @@ let actions: WorkspaceGitActionsService;
 let active: string[];
 let copyId: string;
 let cwd: string;
+const connectedPerson: PlatformIdentity = {
+  kind: 'person',
+  personId: 'reviewer-person',
+  name: 'Reviewer',
+  email: 'reviewer@example.invalid',
+  active: true,
+  role: 'administrator',
+};
+const asPerson = <T>(run: () => T, identity = connectedPerson) =>
+  accessContext.run(
+    { identity, identities: new IdentityService(database.db) },
+    run,
+  );
+const commit = (...args: Parameters<WorkspaceGitActionsService['commit']>) =>
+  asPerson(() => actions.commit(...args));
 const git = (args: string[]) => exec('git', ['-C', cwd, ...args]);
 beforeEach(async () => {
   database = createTestDatabase();
+  database.db
+    .insert(people)
+    .values({
+      id: 'reviewer-person',
+      reference: 'TEST-REVIEWER',
+      name: 'Reviewer',
+      email: 'reviewer@example.invalid',
+      role: 'administrator',
+      active: true,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
   root = await mkdtemp(path.join(tmpdir(), 'workspace-git-test-'));
   const primary = path.join(root, 'project');
   const remote = path.join(root, 'remote');
@@ -226,7 +260,7 @@ it('clones an empty repository and supports the first staged commit without chan
   expect(diff.diff).toContain('+staged first');
   expect(diff.diff).not.toContain('unstaged next');
   const state = await service.snapshot('p', copyId);
-  const result = await actions.commit('p', copyId, {
+  const result = await commit('p', copyId, {
     fingerprint: state.fingerprint,
     message: 'First commit',
     authorName: 'Test',
@@ -678,6 +712,67 @@ describe('confirmed actions', () => {
     authorEmail: 'reviewer@example.invalid',
   };
 
+  it('uses the connected person for author and committer, ignoring client fields and Git config', async () => {
+    writable();
+    const state = await staged();
+    await git(['config', 'user.name', 'Forged Config']);
+    await git(['config', 'user.email', 'forged-config@example.invalid']);
+    await commit('p', copyId, {
+      fingerprint: state.fingerprint,
+      message: 'Verified identity',
+      authorName: 'Forged Client',
+      authorEmail: 'forged-client@example.invalid',
+    });
+    expect(
+      (
+        await git(['show', '-s', '--format=%an|%ae|%cn|%ce', 'HEAD'])
+      ).stdout.trim(),
+    ).toBe(
+      'Reviewer|reviewer@example.invalid|Reviewer|reviewer@example.invalid',
+    );
+  });
+
+  it('requires a real active person with valid profile details, even if the client supplies an author', async () => {
+    writable();
+    const state = await staged();
+    const body = { ...identity, fingerprint: state.fingerprint };
+    await expect(actions.commit('p', copyId, body)).rejects.toThrow(
+      'GIT_IDENTITY_REQUIRED',
+    );
+    for (const person of [
+      { ...connectedPerson, kind: 'service' as const },
+      { ...connectedPerson, personId: null },
+    ]) {
+      await expect(
+        asPerson(() => actions.commit('p', copyId, body), person),
+      ).rejects.toThrow();
+    }
+    for (const profile of [
+      { name: '', email: 'reviewer@example.invalid' },
+      { name: 'Reviewer', email: null },
+      { name: 'Reviewer', email: 'invalid' },
+      { name: 'Bad\nName', email: 'reviewer@example.invalid' },
+      { name: 'Reviewer', email: 'bad\0@example.invalid' },
+    ]) {
+      database.sqlite
+        .prepare('UPDATE people SET name=?, email=? WHERE id=?')
+        .run(profile.name, profile.email, 'reviewer-person');
+      await expect(commit('p', copyId, body)).rejects.toThrow(
+        'GIT_IDENTITY_REQUIRED',
+      );
+    }
+    database.sqlite
+      .prepare('UPDATE people SET active=0 WHERE id=?')
+      .run('reviewer-person');
+    await expect(
+      asPerson(() => actions.commit('p', copyId, body), {
+        ...connectedPerson,
+        active: false,
+      }),
+    ).rejects.toThrow();
+    expect((await service.snapshot('p', copyId)).head).toBe(state.head);
+  });
+
   it('rejects stage, commit and push on another work agent’s reserved copy', async () => {
     writable();
     database.db
@@ -702,7 +797,7 @@ describe('confirmed actions', () => {
       'GIT_COPY_OWNED',
     );
     await expect(
-      actions.commit('p', copyId, { ...wrong, ...identity }),
+      commit('p', copyId, { ...wrong, ...identity }),
     ).rejects.toThrow('GIT_COPY_OWNED');
     await expect(
       actions.push('p', copyId, {
@@ -733,7 +828,7 @@ describe('confirmed actions', () => {
       'README.md',
     );
     const prepared = await service.snapshot('p', copyId);
-    await actions.commit('p', copyId, {
+    await commit('p', copyId, {
       ...identity,
       fingerprint: prepared.fingerprint,
     });
@@ -868,7 +963,7 @@ describe('confirmed actions', () => {
     expect(preview.diff).toContain('+staged');
     expect(preview.diff).not.toContain('+unstaged');
     expect(preview.fingerprint).toBe(state.fingerprint);
-    const result = await actions.commit('p', copyId, {
+    const result = await commit('p', copyId, {
       ...identity,
       fingerprint: state.fingerprint,
     });
@@ -890,7 +985,7 @@ describe('confirmed actions', () => {
       .run(copies.list('p')[0].localWorkspaceId);
     expect(copies.list('p')[0].accessMode).toBe('read_only');
     await expect(
-      actions.commit('p', copyId, {
+      commit('p', copyId, {
         ...identity,
         fingerprint: state.fingerprint,
       }),
@@ -901,7 +996,7 @@ describe('confirmed actions', () => {
   it('blocks stale index, read-only resource, busy agent and empty commits', async () => {
     let state = await staged();
     await expect(
-      actions.commit('p', copyId, {
+      commit('p', copyId, {
         ...identity,
         fingerprint: state.fingerprint,
       }),
@@ -909,21 +1004,21 @@ describe('confirmed actions', () => {
     writable();
     await git(['reset', 'HEAD', '--', 'README.md']);
     await expect(
-      actions.commit('p', copyId, {
+      commit('p', copyId, {
         ...identity,
         fingerprint: state.fingerprint,
       }),
     ).rejects.toThrow('GIT_STALE');
     state = await service.snapshot('p', copyId);
     await expect(
-      actions.commit('p', copyId, {
+      commit('p', copyId, {
         ...identity,
         fingerprint: state.fingerprint,
       }),
     ).rejects.toThrow('GIT_NOTHING_STAGED');
     active = ['running-agent'];
     await expect(
-      actions.commit('p', copyId, {
+      commit('p', copyId, {
         ...identity,
         fingerprint: state.fingerprint,
       }),
@@ -940,7 +1035,7 @@ describe('confirmed actions', () => {
     );
     await git(['config', 'commit.gpgsign', 'true']);
     await git(['config', 'gpg.program', `/not/a/program`]);
-    await actions.commit('p', copyId, {
+    await commit('p', copyId, {
       ...identity,
       fingerprint: state.fingerprint,
     });
