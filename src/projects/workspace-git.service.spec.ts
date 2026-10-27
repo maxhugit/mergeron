@@ -43,9 +43,14 @@ it.each([
   ],
   [
     'remote: Permission to example/demo.git denied to user',
-    'GIT_AUTH_REQUIRED',
+    'GIT_WRITE_ACCESS_DENIED',
   ],
   ['! [rejected] main -> main (fetch first)', 'GIT_REMOTE_REJECTED'],
+  ['fatal: requested URL returned error: 403', 'GIT_WRITE_ACCESS_DENIED'],
+  [
+    'remote: Write access to repository not granted.',
+    'GIT_WRITE_ACCESS_DENIED',
+  ],
   ['Could not resolve proxy: private-host', 'GIT_NETWORK_UNAVAILABLE'],
   [
     'SSL certificate problem: unable to get local issuer certificate',

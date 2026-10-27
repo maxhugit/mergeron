@@ -34,6 +34,7 @@ function ActionError({ error }: { error: Error | null }) {
     GIT_INVALID_INPUT: t('gitActionInvalidInput'),
     GIT_OUTCOME_UNKNOWN: t('gitActionOutcomeUnknown'),
     GIT_AUTH_REQUIRED: t('gitPushAuthRequired'),
+    GIT_WRITE_ACCESS_DENIED: t('gitPushWriteAccessDenied'),
     GIT_REMOTE_REJECTED: t('gitPushRejected'),
     GIT_NETWORK_UNAVAILABLE: t('gitPushNetworkUnavailable'),
     GIT_TLS_ERROR: t('gitPushTlsError'),

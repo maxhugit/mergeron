@@ -1,4 +1,5 @@
 {
+  "gitPushWriteAccessDenied": "GitHub refuse l’écriture sur ce dépôt (accès interdit). Vérifiez que le jeton sélectionne bien ce dépôt et autorise Contents en lecture et écriture, ainsi que les éventuelles restrictions GitHub. Aucun push forcé n’a été effectué.",
   "gitConnectionEdit": "Modifier",
   "gitConnectionEditTitle": "Modifier la connexion « {{name}} »",
   "gitConnectionEditHelp": "Modifiez le nom ou remplacez les identifiants de cette connexion. Le dépôt distant, les droits de la connexion et les copies locales restent inchangés. L’adresse est conservée pour éviter d’envoyer un jeton vers une autre destination.",

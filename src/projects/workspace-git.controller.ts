@@ -65,7 +65,7 @@ export class WorkspaceGitController {
     return this.git.commits(projectId, copyId);
   }
 
-  @Get('resources/:resourceId/branches')
+  @Get(['resources/:resourceId/branches', 'connections/:resourceId/branches'])
   remoteBranches(
     @Param('projectId') projectId: string,
     @Param('resourceId') resourceId: string,
