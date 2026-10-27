@@ -178,6 +178,18 @@ test.each([260, 330, 600])(
       await page.getByRole('button', { name: /#12/ }).click();
       await screen.findByText('En cours');
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
+      await page
+        .getByRole('tab', { name: 'Synchronisation', exact: true })
+        .click();
+      expect(
+        await screen.findByRole('region', { name: 'Synchronisation' }),
+      ).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
+      expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-sync-${width}.png`,
+      });
+      await page.getByRole('tab', { name: 'Distant · GitHub' }).click();
       await page.screenshot({
         path: `../../../.vitest-screenshots/git-panel-${width}.png`,
       });

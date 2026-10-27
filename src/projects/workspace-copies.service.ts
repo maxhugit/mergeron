@@ -4,8 +4,9 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, lstat, realpath, rename } from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
@@ -22,10 +23,14 @@ import {
   projectWorkspaces,
   projectConnections,
   projectLocations,
+  projectActiveFolders,
+  projectAgentThreads,
+  simpleChatThreads,
   projects,
   type ProjectWorkspaceCopy,
 } from '../database/schema';
 import { WorkspaceResourcesService } from './workspace-resources.service';
+import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 
 export interface WorkspaceCopyView extends ProjectWorkspaceCopy {
   localPath: string | null;
@@ -41,6 +46,7 @@ export class WorkspaceCopiesService {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     private readonly resources: WorkspaceResourcesService,
+    @Optional() private readonly gate?: GitMutationGateService,
   ) {}
 
   list(projectId: string): WorkspaceCopyView[] {
@@ -155,8 +161,25 @@ export class WorkspaceCopiesService {
     }
   }
 
-  async remove(projectId: string, id: string) {
+  async remove(
+    projectId: string,
+    id: string,
+    input?: { confirmation?: unknown; path?: unknown },
+  ) {
     requireExecutionAccess();
+    if (input?.confirmation !== 'REMOVE_WORKING_COPY')
+      throw new BadRequestException('GIT_COPY_CONFIRMATION_REQUIRED');
+    if (!this.gate) throw new ConflictException('GIT_AGENT_STATE_UNKNOWN');
+    return this.gate.mutate(() =>
+      this.removeConfirmed(projectId, id, input.path),
+    );
+  }
+
+  private async removeConfirmed(
+    projectId: string,
+    id: string,
+    expectedPath: unknown,
+  ) {
     const copy = this.copy(projectId, id);
     const workspace = this.db
       .select()
@@ -177,33 +200,117 @@ export class WorkspaceCopiesService {
     if (!primary) throw new ConflictException('Primary workspace is missing');
     const allowed = path.resolve(primary.path, 'sources', '.external');
     const target = path.resolve(workspace.path);
-    if (!target.startsWith(allowed + path.sep))
+    if (expectedPath !== workspace.path)
+      throw new ConflictException('GIT_STALE');
+    if (
+      workspace.primary ||
+      !target.startsWith(allowed + path.sep) ||
+      !/^[A-Za-z0-9_-]+$/.test(copy.sourceResourceId) ||
+      target !== path.join(allowed, copy.sourceResourceId, copy.id)
+    )
       throw new ConflictException('Working copy path is outside its project');
-    await rm(target, { recursive: true, force: true });
-    this.db.transaction((tx) => {
-      tx.delete(projectWorkspaceResources)
-        .where(eq(projectWorkspaceResources.id, copy.localWorkspaceId))
-        .run();
-      tx.delete(projectWorkspaces)
-        .where(eq(projectWorkspaces.id, copy.localWorkspaceId))
-        .run();
-      this.insertActivity(
-        tx,
-        projectId,
-        'workspace_copy_removed',
-        id,
-        copy.name,
-        {
-          sourceResourceId: copy.sourceResourceId,
-          path: target,
-          remoteDataDeleted: false,
-        },
-      );
-    });
+    const root = await realpath(primary.path);
+    for (const candidate of [
+      path.join(primary.path, 'sources'),
+      allowed,
+      path.dirname(target),
+      target,
+    ]) {
+      const entry = await lstat(candidate);
+      if (!entry.isDirectory() || entry.isSymbolicLink())
+        throw new ConflictException('GIT_COPY_PATH_UNSAFE');
+    }
+    const canonicalTarget = await realpath(target);
+    if (
+      canonicalTarget !==
+      path.join(root, 'sources', '.external', copy.sourceResourceId, copy.id)
+    )
+      throw new ConflictException('GIT_COPY_PATH_UNSAFE');
+    const contains = (value: string) =>
+      value === canonicalTarget || value.startsWith(canonicalTarget + path.sep);
+    const folders = this.db.select().from(projectActiveFolders).all();
+    const workspaces = this.db.select().from(projectWorkspaces).all();
+    const locations = this.db.select().from(projectLocations).all();
+    const aliases = new Set([
+      copy.id,
+      copy.localWorkspaceId,
+      `local:${copy.localWorkspaceId}`,
+      ...locations
+        .filter((row) => row.localWorkspaceId === copy.localWorkspaceId)
+        .map((row) => row.id),
+    ]);
+    if (folders.some((row) => aliases.has(row.resourceId)))
+      throw new ConflictException('GIT_COPY_IN_USE');
+    const paths = [
+      ...this.db
+        .select()
+        .from(projectAgentThreads)
+        .all()
+        .map((row) => row.workspacePath),
+      ...this.db
+        .select()
+        .from(simpleChatThreads)
+        .all()
+        .map((row) => row.cwd),
+      ...folders.map((row) => {
+        const base =
+          workspaces.find(
+            (item) =>
+              item.id === row.resourceId ||
+              `local:${item.id}` === row.resourceId,
+          )?.path ??
+          locations.find(
+            (item) =>
+              item.id === row.resourceId ||
+              item.legacyResourceId === row.resourceId,
+          )?.path;
+        return base ? path.resolve(base, row.relativePath) : null;
+      }),
+    ].filter((value): value is string => Boolean(value));
+    for (const value of paths)
+      if (contains(await realpath(value).catch(() => path.resolve(value))))
+        throw new ConflictException('GIT_COPY_IN_USE');
+    const trash = path.join(root, 'sources', '.external', '.trash');
+    await mkdir(trash, { recursive: true, mode: 0o700 });
+    if (
+      (await lstat(trash)).isSymbolicLink() ||
+      (await realpath(trash)) !== trash
+    )
+      throw new ConflictException('GIT_COPY_PATH_UNSAFE');
+    const recoveryPath = path.join(trash, `${copy.id}-${randomUUID()}`);
+    await rename(target, recoveryPath);
+    try {
+      this.db.transaction((tx) => {
+        tx.delete(projectWorkspaceResources)
+          .where(eq(projectWorkspaceResources.id, copy.localWorkspaceId))
+          .run();
+        tx.delete(projectWorkspaces)
+          .where(eq(projectWorkspaces.id, copy.localWorkspaceId))
+          .run();
+        this.insertActivity(
+          tx,
+          projectId,
+          'workspace_copy_removed',
+          id,
+          copy.name,
+          {
+            sourceResourceId: copy.sourceResourceId,
+            path: target,
+            remoteDataDeleted: false,
+            recoveryPath,
+          },
+        );
+      });
+    } catch (error) {
+      await rename(recoveryPath, target);
+      throw error;
+    }
     return {
       ok: true,
       preservedRemote: true,
       activeReferencesPreserved: true,
+      recoveryPath,
+      preservedLocal: true,
     };
   }
 

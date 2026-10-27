@@ -3,7 +3,15 @@ import { execFile } from 'node:child_process';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+  rename,
+  symlink,
+} from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CodexService } from '../codex/codex.service';
 import {
@@ -19,6 +27,7 @@ import {
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { ProjectConnectionPolicyService } from '../threads/project-connection-policy.service';
+import type { GitMutationGateService } from '../threads/git-mutation-gate.service';
 
 const run = promisify(execFile);
 
@@ -93,7 +102,9 @@ describe('WorkspaceCopiesService', () => {
       database.db,
       new ConfigService({ WEBUI_CONNECTION_SECRET_KEY: 'test-key' }),
     );
-    copies = new WorkspaceCopiesService(database.db, resources);
+    copies = new WorkspaceCopiesService(database.db, resources, {
+      mutate: (operation: () => Promise<unknown>) => operation(),
+    } as GitMutationGateService);
   });
 
   afterEach(async () => {
@@ -175,21 +186,134 @@ describe('WorkspaceCopiesService', () => {
       'disabled or detached',
     );
 
-    await expect(copies.remove('project', copy.id)).resolves.toEqual({
+    const input = { confirmation: 'REMOVE_WORKING_COPY', path: copy.localPath };
+    await expect(copies.remove('project', copy.id, input)).rejects.toThrow(
+      'GIT_COPY_IN_USE',
+    );
+    database.db.delete(projectActiveFolders).run();
+    const result = await copies.remove('project', copy.id, input);
+    expect(result).toMatchObject({
       ok: true,
       preservedRemote: true,
       activeReferencesPreserved: true,
+      preservedLocal: true,
     });
+    expect(
+      await readFile(path.join(result.recoveryPath, 'README.md'), 'utf8'),
+    ).toBe('source repository\n');
     await expect(
       readFile(path.join(remote, 'README.md'), 'utf8'),
     ).resolves.toBe('source repository\n');
-    expect(database.db.select().from(projectActiveFolders).get()).toMatchObject(
-      {
-        contextId: 'thread',
-        resourceId: copy.id,
-      },
-    );
+    expect(
+      database.db.select().from(projectActiveFolders).get(),
+    ).toBeUndefined();
     expect(copies.list('project')).toEqual([]);
+  });
+
+  it('requires confirmation and the current path before touching files', async () => {
+    const copy = await copies.create('project', 'git-source', {});
+    await expect(copies.remove('project', copy.id)).rejects.toThrow(
+      'GIT_COPY_CONFIRMATION_REQUIRED',
+    );
+    await expect(
+      copies.remove('project', copy.id, {
+        confirmation: 'REMOVE_WORKING_COPY',
+        path: remote,
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    expect(
+      await readFile(path.join(copy.localPath!, 'README.md'), 'utf8'),
+    ).toBe('source repository\n');
+    expect(copies.list('project')).toHaveLength(1);
+  });
+
+  it('preserves dirty files and unpublished commits while removing only the selected duplicate', async () => {
+    const first = await copies.create('project', 'git-source', {
+      name: 'Same name',
+    });
+    const second = await copies.create('project', 'git-source', {
+      name: 'Same name',
+    });
+    await run('git', [
+      '-C',
+      first.localPath!,
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.test',
+      'commit',
+      '--allow-empty',
+      '-m',
+      'unpublished',
+    ]);
+    const { stdout: head } = await run('git', [
+      '-C',
+      first.localPath!,
+      'rev-parse',
+      'HEAD',
+    ]);
+    await writeFile(path.join(first.localPath!, 'README.md'), 'dirty changes');
+    await writeFile(path.join(first.localPath!, 'untracked.txt'), 'keep me');
+    const result = await copies.remove('project', first.id, {
+      confirmation: 'REMOVE_WORKING_COPY',
+      path: first.localPath,
+    });
+    expect(
+      await readFile(path.join(result.recoveryPath, 'README.md'), 'utf8'),
+    ).toBe('dirty changes');
+    expect(
+      await readFile(path.join(result.recoveryPath, 'untracked.txt'), 'utf8'),
+    ).toBe('keep me');
+    expect(
+      (await run('git', ['-C', result.recoveryPath, 'rev-parse', 'HEAD']))
+        .stdout,
+    ).toBe(head);
+    expect(
+      await readFile(path.join(second.localPath!, 'README.md'), 'utf8'),
+    ).toBe('source repository\n');
+    expect(copies.list('project').map((item) => item.id)).toEqual([second.id]);
+  });
+
+  it('rejects symlink replacements without moving the linked data', async () => {
+    const copy = await copies.create('project', 'git-source', {});
+    const preserved = path.join(root, 'preserved');
+    await rename(copy.localPath!, preserved);
+    await symlink(remote, copy.localPath!);
+    await expect(
+      copies.remove('project', copy.id, {
+        confirmation: 'REMOVE_WORKING_COPY',
+        path: copy.localPath,
+      }),
+    ).rejects.toThrow('GIT_COPY_PATH_UNSAFE');
+    expect(await readFile(path.join(remote, 'README.md'), 'utf8')).toBe(
+      'source repository\n',
+    );
+    expect(copies.list('project')).toHaveLength(1);
+  });
+
+  it('blocks references through a parent workspace relative path', async () => {
+    const copy = await copies.create('project', 'git-source', {});
+    database.db
+      .insert(projectActiveFolders)
+      .values({
+        contextType: 'agent',
+        contextId: 'thread',
+        projectId: 'project',
+        resourceId: 'local:primary',
+        relativePath: path.relative(primary, copy.localPath!),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .run();
+    await expect(
+      copies.remove('project', copy.id, {
+        confirmation: 'REMOVE_WORKING_COPY',
+        path: copy.localPath,
+      }),
+    ).rejects.toThrow('GIT_COPY_IN_USE');
+    expect(
+      await readFile(path.join(copy.localPath!, 'README.md'), 'utf8'),
+    ).toBe('source repository\n');
   });
 });
 import { ActiveFoldersService } from '../active-folders/active-folders.service';

@@ -74,8 +74,9 @@ export class WorkspaceResourcesController {
   removeCopy(
     @Param('projectId') projectId: string,
     @Param('copyId') copyId: string,
+    @Body() body?: { confirmation?: unknown; path?: unknown },
   ) {
-    return this.copies.remove(projectId, copyId);
+    return this.copies.remove(projectId, copyId, body);
   }
 
   @Post()

@@ -226,6 +226,50 @@ it('separates browsing files from using the copy as the agent workspace', async 
   );
   expect(onActive).toHaveBeenCalledWith('/copy');
 });
+it('confirms recoverable removal of the selected copy without changing the agent folder', async () => {
+  inventory.copies = [copy];
+  const implementation = api.getMockImplementation()!;
+  api.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'DELETE') {
+      inventory.copies = [];
+      return { recoveryPath: '/project/sources/.external/.trash/copy' };
+    }
+    return implementation(url, options);
+  });
+  show();
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Supprimer cette copie…' }),
+  );
+  const dialog = screen.getByRole('alertdialog');
+  expect(within(dialog).getByText('/copy')).toBeVisible();
+  expect(
+    api.mock.calls.some(([, options]) => options?.method === 'DELETE'),
+  ).toBe(false);
+  fireEvent.click(
+    within(dialog).getByRole('button', {
+      name: 'Confirmer la suppression locale',
+    }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      '/p/workspace-resources/copies/copy',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({
+          confirmation: 'REMOVE_WORKING_COPY',
+          path: '/copy',
+        }),
+      }),
+    ),
+  );
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    '/project/sources/.external/.trash/copy',
+  );
+  expect(onActive).not.toHaveBeenCalled();
+  expect(
+    screen.queryByText(/Copie utilisée par l’agent/),
+  ).not.toBeInTheDocument();
+});
 it('opens a change comparison and an explicit file, without exposing mutating actions', async () => {
   inventory.copies = [copy];
   show();
@@ -331,6 +375,8 @@ it('keeps remote GitHub data usable without a local copy and keeps synchronizati
   await screen.findByRole('tab', { name: 'Local' });
   tab('Distant · GitHub');
   expect(await screen.findByText(/#12 Feature/)).toBeVisible();
+  expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
+  tab('Synchronisation');
   expect(
     screen.getByRole('button', { name: '↓ Intégrer les commits…' }),
   ).toBeDisabled();
@@ -347,6 +393,8 @@ it('places publication only in Synchronization and keeps commits local', async (
   inventory.copies = [copy];
   show();
   await screen.findByRole('button', { name: 'Commit…' });
+  expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
+  tab('Synchronisation');
   const sync = screen.getByRole('region', { name: 'Synchronisation' });
   expect(
     within(sync).getByRole('button', { name: '↑ Publier les commits…' }),
@@ -354,9 +402,7 @@ it('places publication only in Synchronization and keeps commits local', async (
   expect(within(sync).queryByRole('button', { name: 'Commit…' })).toBeNull();
   tab('Distant · GitHub');
   expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
-  expect(
-    within(sync).getByRole('button', { name: '↑ Publier les commits…' }),
-  ).toBeVisible();
+  expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
 });
 
 it('does not expose publication for a read-only resource', async () => {

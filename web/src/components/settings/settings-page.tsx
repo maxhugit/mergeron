@@ -111,7 +111,10 @@ export function SettingsPage() {
           'mx-auto w-full',
           usesFullHeightLayout
             ? 'flex min-h-0 flex-1 flex-col'
-            : 'max-w-4xl space-y-6 px-4 py-4 sm:px-6',
+            : cn(
+                'space-y-6 px-4 py-4 sm:px-6',
+                !['infrastructure', 'people'].includes(section) && 'max-w-4xl',
+              ),
         )}
       >
         <Suspense
