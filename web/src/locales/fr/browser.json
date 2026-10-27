@@ -1,4 +1,15 @@
 {
+  "notConfigured": "Le navigateur isolé n’est pas configuré sur ce serveur. Un administrateur doit activer son service avant de pouvoir ouvrir une page.",
+  "runtimeUnavailable": "Le service du navigateur isolé est inaccessible. Vérifiez qu’il est démarré et que sa connexion à Mergeron est configurée.",
+  "timedOut": "Le navigateur n’a pas répondu à temps. Réessayez ou effacez sa session avant de rouvrir la page.",
+  "busy": "Le navigateur est occupé ou sa capacité est atteinte. Attendez la fin de l’opération ou fermez une autre session.",
+  "tabLimit": "La limite de cinq onglets est atteinte. Fermez un onglet avant d’en créer un autre.",
+  "tabMissing": "Cet onglet n’existe plus, par exemple après un redémarrage du serveur. Fermez puis rouvrez le panneau navigateur.",
+  "invalidUrl": "Adresse invalide. Saisissez une URL complète en http:// ou https://, sans identifiants dans l’adresse.",
+  "navigationFailed": "Impossible de charger cette page : le site, son certificat ou le réseau peut être indisponible, ou la destination peut être bloquée. Le navigateur autorise uniquement les sites publics HTTP(S), pas les adresses privées ou locales.",
+  "operationFailed": "Cette opération du navigateur a échoué. Actualisez l’image ou rouvrez la page. Si le problème persiste, vérifiez le service du navigateur isolé.",
+  "accessDenied": "Accès refusé. Reconnectez-vous avec un compte administrateur ayant accès à cette conversation ; le navigateur n’est pas disponible en test de droits d’un profil standard.",
+  "networkFailed": "Impossible de joindre Mergeron. Vérifiez votre connexion puis réessayez.",
   "title": "Navigateur",
   "endSession": "Effacer la session",
   "close": "Fermer le navigateur",
@@ -25,7 +36,7 @@
   "annotationHeading": "Annotation de page web — repère 1",
   "added": "Annotation et capture ajoutées au brouillon. Vérifiez-les puis envoyez votre message.",
   "draftUnavailable": "Impossible d’ajouter au brouillon de cette conversation. Vérifiez qu’elle est accessible en écriture.",
-  "unavailable": "Opération impossible. Vérifiez l’URL, votre accès administrateur et la configuration du navigateur isolé. Seuls les sites publics HTTP(S) sont autorisés.",
+  "unavailable": "Le navigateur n’est pas disponible. Vérifiez votre connexion, votre accès administrateur et la configuration du service du navigateur isolé.",
   "privacy": "Session distante temporaire, distincte de votre navigateur. Les champs de saisie sont masqués sur les captures. Les pages et annotations ne sont transmises à l’agent qu’après l’envoi du message.",
   "frame": "Cadre intégré : le repère désigne le cadre, pas son contenu"
 }

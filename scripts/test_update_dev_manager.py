@@ -99,6 +99,22 @@ class CleanupTests(unittest.TestCase):
         self.assertNotIn(OLD, api.containers)
         self.assertEqual(api.containers[NEW]['Name'], '/' + updater.NAME)
 
+    def test_browser_enablement_is_explicit_and_persists(self):
+        api = Docker()
+        browser_id = 'f' * 64
+        api.containers[browser_id] = {'Id': browser_id, 'Name': '/mergeron-dev-browser',
+            'Config': {'Labels': {'io.mergeron.stack': 'mergeron-dev', 'io.mergeron.component': 'browser', 'io.mergeron.managed': 'true'}},
+            'HostConfig': {'Dns': ['1.1.1.1']}, 'State': {'Health': {'Status': 'healthy'}}}
+        updater.replace(REVISION, api, status, lambda _: None, manage_browser=True)
+        self.assertIn('MERGERON_MANAGE_BROWSER=true', api.containers[NEW]['Config']['Env'])
+        self.assertIn(browser_id, api.containers)
+
+    def test_browser_enablement_refuses_unverified_browser(self):
+        api = Docker()
+        with self.assertRaises(RuntimeError):
+            updater.replace(REVISION, api, status, lambda _: None, manage_browser=True)
+        self.assertFalse(any('/stop' in path for path, _ in api.calls))
+
     def test_failed_health_restores_old_manager_without_deleting_it(self):
         api = Docker()
         api.fail_health = True

@@ -19,19 +19,28 @@ import {
 export const VIEWPORT = { width: 1000, height: 700 };
 export function browserUrl(value: unknown): string {
   if (typeof value !== 'string' || value.length > 4096)
-    throw new BadRequestException('Invalid URL');
+    throw new BadRequestException({
+      code: 'BROWSER_INVALID_URL',
+      message: 'Invalid URL',
+    });
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new BadRequestException('Invalid URL');
+    throw new BadRequestException({
+      code: 'BROWSER_INVALID_URL',
+      message: 'Invalid URL',
+    });
   }
   if (
     !['http:', 'https:'].includes(url.protocol) ||
     url.username ||
     url.password
   )
-    throw new BadRequestException('Use HTTP(S) without URL credentials');
+    throw new BadRequestException({
+      code: 'BROWSER_INVALID_URL',
+      message: 'Use HTTP(S) without URL credentials',
+    });
   return url.href;
 }
 type Tab = {
@@ -73,11 +82,15 @@ export class BrowserService implements OnModuleDestroy {
     if (existing) return existing;
     const endpoint = this.config.get<string>('MERGERON_BROWSER_ENDPOINT');
     if (!endpoint)
-      throw new ServiceUnavailableException(
-        'Browser runtime is not configured',
-      );
+      throw new ServiceUnavailableException({
+        code: 'BROWSER_NOT_CONFIGURED',
+        message: 'Browser runtime is not configured',
+      });
     if (this.opening.has(key) || this.sessions.size + this.opening.size >= 8)
-      throw new ConflictException('Browser capacity reached');
+      throw new ConflictException({
+        code: 'BROWSER_BUSY',
+        message: 'Browser capacity reached',
+      });
     this.opening.add(key);
     let browser: Browser | undefined;
     try {
@@ -121,7 +134,10 @@ export class BrowserService implements OnModuleDestroy {
       return session;
     } catch {
       await browser?.close().catch(() => {});
-      throw new ServiceUnavailableException('Browser runtime unavailable');
+      throw new ServiceUnavailableException({
+        code: 'BROWSER_RUNTIME_UNAVAILABLE',
+        message: 'Browser runtime unavailable',
+      });
     } finally {
       this.opening.delete(key);
     }
@@ -135,9 +151,10 @@ export class BrowserService implements OnModuleDestroy {
           timer = setTimeout(() => {
             void this.close(key);
             reject(
-              new ServiceUnavailableException(
-                'Browser operation timed out; session closed',
-              ),
+              new ServiceUnavailableException({
+                code: 'BROWSER_TIMEOUT',
+                message: 'Browser operation timed out; session closed',
+              }),
             );
           }, 35_000);
         }),
@@ -159,21 +176,31 @@ export class BrowserService implements OnModuleDestroy {
     }
     const session = await this.session(key);
     if (session.busy)
-      throw new ConflictException('Browser operation in progress');
+      throw new ConflictException({
+        code: 'BROWSER_BUSY',
+        message: 'Browser operation in progress',
+      });
     session.busy = true;
     session.touched = Date.now();
     try {
       if (action === 'tabs') return await this.tabs(session);
       if (action === 'new') {
         if (session.tabs.size >= 5)
-          throw new ConflictException('Maximum five browser tabs');
+          throw new ConflictException({
+            code: 'BROWSER_TAB_LIMIT',
+            message: 'Maximum five browser tabs',
+          });
         const id = randomUUID();
         session.tabs.set(id, { page: await session.context.newPage() });
         return { id, ...(await this.tabs(session)) };
       }
       const id = typeof body.tabId === 'string' ? body.tabId : '';
       const tab = session.tabs.get(id);
-      if (!tab) throw new NotFoundException('Browser tab not found');
+      if (!tab)
+        throw new NotFoundException({
+          code: 'BROWSER_TAB_MISSING',
+          message: 'Browser tab not found',
+        });
       const page = tab.page;
       if (action === 'remove') {
         session.tabs.delete(id);
@@ -306,9 +333,12 @@ export class BrowserService implements OnModuleDestroy {
       return await this.snapshot(tab);
     } catch (error) {
       if (error instanceof HttpException) throw error;
-      throw new ServiceUnavailableException(
-        'Browser operation failed; refresh or navigate again',
-      );
+      throw new ServiceUnavailableException({
+        code: ['navigate', 'back', 'forward', 'reload'].includes(action)
+          ? 'BROWSER_NAVIGATION_FAILED'
+          : 'BROWSER_OPERATION_FAILED',
+        message: 'Browser operation failed; refresh or navigate again',
+      });
     } finally {
       session.busy = false;
       session.touched = Date.now();

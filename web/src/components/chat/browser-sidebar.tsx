@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { browserApi } from '@/lib/browser-api';
+import { translationKey } from '@/locales/translation-key';
 import {
   insertBrowserAnnotation,
   markedScreenshot,
@@ -44,6 +45,19 @@ interface Tab {
   title: string;
   url: string;
 }
+const errorLabels: Record<string, string> = {
+  BROWSER_NOT_CONFIGURED: 'notConfigured',
+  BROWSER_RUNTIME_UNAVAILABLE: 'runtimeUnavailable',
+  BROWSER_TIMEOUT: 'timedOut',
+  BROWSER_BUSY: 'busy',
+  BROWSER_TAB_LIMIT: 'tabLimit',
+  BROWSER_TAB_MISSING: 'tabMissing',
+  BROWSER_INVALID_URL: 'invalidUrl',
+  BROWSER_NAVIGATION_FAILED: 'navigationFailed',
+  BROWSER_OPERATION_FAILED: 'operationFailed',
+  BROWSER_ACCESS_DENIED: 'accessDenied',
+  BROWSER_NETWORK_ERROR: 'networkFailed',
+};
 export function BrowserSidebar({
   threadId,
   onClose,
@@ -129,8 +143,18 @@ export function BrowserSidebar({
           setPointing(false);
         }
       }
-    } catch {
-      if (alive.current) setError(t('unavailable'));
+    } catch (error) {
+      if (alive.current)
+        setError(
+          t(
+            translationKey(
+              error instanceof Error &&
+                Object.hasOwn(errorLabels, error.message)
+                ? errorLabels[error.message]
+                : 'unavailable',
+            ),
+          ),
+        );
     } finally {
       locked.current = false;
       if (alive.current) setBusy(false);

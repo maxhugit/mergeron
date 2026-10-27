@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ConfigService } from '@nestjs/config';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { BrowserService, browserUrl } from './browser.service';
 import { BrowserController } from './browser.controller';
 const connect = vi.hoisted(() => vi.fn());
@@ -58,6 +58,32 @@ it('fails closed without a configured runtime', async () => {
   );
   await disabled.onModuleDestroy();
   expect(connect).not.toHaveBeenCalled();
+});
+it('reports an explicit configuration code without leaking the runtime endpoint', async () => {
+  const disabled = new BrowserService(new ConfigService());
+  await expect(disabled.run('owner', 'new', {})).rejects.toMatchObject({
+    response: { code: 'BROWSER_NOT_CONFIGURED' },
+  });
+  await disabled.onModuleDestroy();
+  connect.mockRejectedValue(new Error('ws://private-endpoint/secret'));
+  await expect(service.run('owner', 'new', {})).rejects.toMatchObject({
+    response: {
+      code: 'BROWSER_RUNTIME_UNAVAILABLE',
+      message: 'Browser runtime unavailable',
+    },
+  });
+});
+it('reports invalid URL codes separately from runtime configuration', () => {
+  expect.assertions(2);
+  try {
+    browserUrl('file:///private');
+  } catch (error) {
+    expect(error).toBeInstanceOf(BadRequestException);
+    if (error instanceof BadRequestException)
+      expect(error.getResponse()).toMatchObject({
+        code: 'BROWSER_INVALID_URL',
+      });
+  }
 });
 it('isolates identifiers across people and conversations', async () => {
   const first = await service.run('alice/a', 'new', {});

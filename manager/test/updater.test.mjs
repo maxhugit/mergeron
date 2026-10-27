@@ -184,6 +184,112 @@ async function begin(updater) {
   await updater.task;
 }
 
+for (const local of [false, true])
+  test(`managed DEV browser participates in update and rollback with persistent public DNS (local image: ${local})`, async (t) => {
+    const { updater, docker } = await fixture(t);
+    const localId = 'sha256:' + 'c'.repeat(64);
+    const localTag = 'mergeron-dev-browser:existing';
+    if (local) {
+      const image = docker.image.bind(docker);
+      const inspectImage = docker.inspectImage.bind(docker);
+      docker.image = (reference) =>
+        [localTag, localId].includes(reference) ? localId : image(reference);
+      docker.inspectImage = async (reference) =>
+        [localTag, localId].includes(reference)
+          ? { Id: localId, RepoTags: [localTag], RepoDigests: [] }
+          : inspectImage(reference);
+    }
+    const browser = {
+      id: 'browser',
+      displayName: 'Mergeron Browser',
+      canonicalName: 'mergeron-dev-browser',
+      stackName: 'mergeron-dev',
+      legacyNames: [],
+      allowedImageRepositories: [
+        'ghcr.io/maxhugit/mergeron-browser',
+        'mergeron-dev-browser',
+      ],
+      requiredNetworks: [
+        'mergeron-dev-browser-control',
+        'mergeron-dev-browser-egress',
+      ],
+      protectedMounts: [],
+      dns: ['1.1.1.1'],
+    };
+    updater.manifest = {
+      ...manifest,
+      components: [...manifest.components, browser],
+    };
+    docker.values.set(
+      'original-browser',
+      docker.inspect(
+        'original-browser',
+        browser.canonicalName,
+        {
+          Image: local
+            ? localTag
+            : 'ghcr.io/maxhugit/mergeron-browser:previous',
+          User: 'pwuser',
+          Env: ['BROWSER_WS_PATH=' + 'x'.repeat(32)],
+          Labels: {
+            'io.mergeron.managed': 'true',
+            'io.mergeron.component': 'browser',
+            'io.mergeron.stack': 'mergeron-dev',
+          },
+          Healthcheck: { Test: ['CMD', 'true'] },
+          HostConfig: {
+            Dns: [],
+            ReadonlyRootfs: true,
+            CapDrop: ['ALL'],
+            SecurityOpt: ['no-new-privileges:true', 'seccomp=reviewed-profile'],
+          },
+          NetworkingConfig: {
+            EndpointsConfig: Object.fromEntries(
+              browser.requiredNetworks.map((name) => [
+                name,
+                { Aliases: [browser.canonicalName] },
+              ]),
+            ),
+          },
+        },
+        true,
+      ),
+    );
+    await begin(updater);
+    assert.equal(updater.current.status, 'succeeded');
+    const active = () =>
+      [...docker.values.values()].find(
+        (c) => c.Name === '/mergeron-dev-browser',
+      );
+    assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
+    assert.deepEqual(active().Config.Env, [
+      'BROWSER_WS_PATH=' + 'x'.repeat(32),
+    ]);
+    const application = [...docker.values.values()].find(
+      (c) => c.Name === '/mergeron-dev-ui',
+    );
+    assert.ok(
+      application.Config.Env.includes(
+        'MERGERON_BROWSER_ENDPOINT=ws://mergeron-dev-browser:3000/' +
+          'x'.repeat(32),
+      ),
+    );
+    assert.ok(
+      application.NetworkSettings.Networks['mergeron-dev-browser-control'],
+    );
+    assert.ok(!JSON.stringify(updater.status()).includes('x'.repeat(32)));
+    assert.ok(
+      docker.calls.some(
+        ([action, id]) => action === 'stop' && id === 'original-browser',
+      ),
+    );
+    await updater.rollback();
+    assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
+    assert.deepEqual(active().Config.Env, [
+      'BROWSER_WS_PATH=' + 'x'.repeat(32),
+    ]);
+  });
+
 test('fast mode is rejected for production, unknown environments and production stack names', async (t) => {
   const { updater } = await fixture(t);
   const original = updater.manifest;

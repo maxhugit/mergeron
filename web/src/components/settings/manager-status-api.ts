@@ -22,7 +22,7 @@ export interface ManagerProtectedMount {
 }
 
 export interface ManagerComponent {
-  id: 'application' | 'ingress' | 'egress';
+  id: 'application' | 'ingress' | 'egress' | 'browser';
   displayName: string;
   state: ManagerComponentState;
   adoption: 'managed' | 'adoptable' | 'missing' | 'conflict';
@@ -38,6 +38,7 @@ export interface ManagerComponent {
     readOnlyRoot: boolean;
     restartPolicy: string | null;
     networkMode: string | null;
+    dns?: string[];
     environment: { name: string; value: string | null }[];
   };
   networks: string[];

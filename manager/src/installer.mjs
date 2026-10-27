@@ -278,6 +278,13 @@ export async function createInstallPlan(
       continue;
     }
     if (component.state === 'missing') {
+      if (
+        manifest.components.find((item) => item.id === component.id)
+          ?.existingOnly
+      ) {
+        blockers.push(`${component.id}:existingContainerRequired`);
+        continue;
+      }
       if (!availableImages.has(configuration.images[component.id]))
         actions.push({
           type: 'pullImage',

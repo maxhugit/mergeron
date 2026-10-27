@@ -7,7 +7,16 @@ export function scopeManifest(
   stackPrefix = manifest.stack,
   stackEnvironment = 'production',
   proxyNetwork = 'mergeron-proxy',
+  browser = {},
 ) {
+  if (browser.enabled && stackEnvironment !== 'development')
+    throw new Error('Managed browser is currently development-only');
+  const browserDns = browser.dns ?? ['1.1.1.1'];
+  if (
+    browser.enabled &&
+    JSON.stringify(browserDns) !== JSON.stringify(['1.1.1.1'])
+  )
+    throw new Error('Managed browser requires its reviewed public DNS');
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(stackPrefix)) {
     throw new Error('MERGERON_STACK_PREFIX is invalid');
   }
@@ -46,7 +55,27 @@ export function scopeManifest(
     application: `${stackPrefix}-ui`,
     ingress: `${stackPrefix}-ingress`,
     egress: `${stackPrefix}-squid`,
+    browser: `${stackPrefix}-browser`,
   };
+  const components = [...manifest.components];
+  if (browser.enabled)
+    components.push({
+      id: 'browser',
+      displayName: 'Mergeron Browser',
+      canonicalName: `${stackPrefix}-browser`,
+      legacyNames: [],
+      allowedImageRepositories: [
+        'ghcr.io/maxhugit/mergeron-browser',
+        `${stackPrefix}-browser`,
+      ],
+      requiredNetworks: [
+        `${manifest.stack}-browser-control`,
+        `${manifest.stack}-browser-egress`,
+      ],
+      protectedMounts: [],
+      dns: browserDns,
+      existingOnly: true,
+    });
   return {
     ...manifest,
     stack: stackPrefix,
@@ -55,7 +84,7 @@ export function scopeManifest(
       ...network,
       name: scopedNetwork(network.name),
     })),
-    components: manifest.components.map((component) => ({
+    components: components.map((component) => ({
       ...component,
       stackName: stackPrefix,
       canonicalName:
@@ -179,6 +208,20 @@ async function inspectComponent(component, containers, docker) {
   const networks = Object.keys(inspect.NetworkSettings?.Networks ?? {}).sort();
   const image = inspect.Config?.Image ?? summary.Image ?? null;
   const repository = imageRepository(image);
+  let imageRepositoryAllowed =
+    component.allowedImageRepositories.includes(repository);
+  if (
+    component.id === 'browser' &&
+    /^sha256:[a-f0-9]{64}$/.test(image ?? '') &&
+    inspect.Image === image
+  ) {
+    const localImage = await docker.inspectImage(image);
+    imageRepositoryAllowed =
+      localImage.Id === image &&
+      (localImage.RepoTags ?? []).some((tag) =>
+        component.allowedImageRepositories.includes(imageRepository(tag)),
+      );
+  }
   return {
     id: component.id,
     displayName: component.displayName,
@@ -197,8 +240,7 @@ async function inspectComponent(component, containers, docker) {
       null,
     image,
     imageId: inspect.Image ?? null,
-    imageRepositoryAllowed:
-      component.allowedImageRepositories.includes(repository),
+    imageRepositoryAllowed,
     health: inspect.State?.Health?.Status ?? null,
     restartCount: Number(inspect.RestartCount ?? 0),
     configuration: {
@@ -206,6 +248,7 @@ async function inspectComponent(component, containers, docker) {
       readOnlyRoot: inspect.HostConfig?.ReadonlyRootfs === true,
       restartPolicy: inspect.HostConfig?.RestartPolicy?.Name || null,
       networkMode: inspect.HostConfig?.NetworkMode || null,
+      dns: inspect.HostConfig?.Dns ?? [],
       environment: (inspect.Config?.Env ?? []).map((entry) => {
         const separator = entry.indexOf('=');
         const name = separator < 0 ? entry : entry.slice(0, separator);
