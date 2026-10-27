@@ -711,7 +711,7 @@ export async function applyInstallPlan({
     applied.push(action);
   }
 
-  const order = ['egress', 'application', 'ingress'];
+  const order = ['egress', 'browser', 'application', 'ingress'];
   for (const id of order) {
     const action = plan.actions.find(
       (item) => item.type === 'createContainer' && item.component === id,

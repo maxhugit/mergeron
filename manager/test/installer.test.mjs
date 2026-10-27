@@ -141,6 +141,62 @@ async function fixtureConfiguration(directory) {
   return configuration;
 }
 
+test('starts an existing managed DEV browser without inventing an installation image', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mergeron-browser-install-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const scoped = scopeManifest(
+    sourceManifest,
+    'mergeron-dev',
+    'development',
+    undefined,
+    { enabled: true },
+  );
+  const configuration = await fixtureConfiguration(directory);
+  const docker = new FixtureDocker();
+  const browser = scoped.components.find((c) => c.id === 'browser');
+  const created = await docker.createContainer(browser.canonicalName, {
+    Image: 'mergeron-dev-browser:existing',
+    Labels: {
+      'io.mergeron.managed': 'true',
+      'io.mergeron.stack': 'mergeron-dev',
+      'io.mergeron.component': 'browser',
+    },
+    HostConfig: {},
+    NetworkingConfig: {
+      EndpointsConfig: Object.fromEntries(
+        browser.requiredNetworks.map((name) => [name, {}]),
+      ),
+    },
+  });
+  docker.calls = [];
+  const plan = await createInstallPlan(scoped, docker, configuration);
+  assert.equal(plan.applicable, true);
+  await applyInstallPlan({
+    manifest: scoped,
+    docker,
+    configuration,
+    expectedFingerprint: plan.fingerprint,
+    confirmation: 'INSTALL',
+  });
+  assert.ok(
+    docker.calls.some(
+      ([action, id]) => action === 'startContainer' && id === created.Id,
+    ),
+  );
+  assert.ok(
+    !docker.calls.some(
+      ([action, image]) =>
+        action === 'pullImage' && String(image).includes('browser'),
+    ),
+  );
+  assert.ok(
+    !docker.calls.some(
+      ([action, name]) =>
+        action === 'createContainer' && name === browser.canonicalName,
+    ),
+  );
+});
+
 test('plans only missing declared resources and exposes zero destructive actions', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'mergeron-install-'));
   try {
