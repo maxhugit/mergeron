@@ -78,6 +78,13 @@ Les fichiers de travail sont dans le workspace principal permanent :
 ne change pas ce chemin. On peut importer/remplacer ces fichiers ou soumettre
 des fichiers existants dans les workspaces rattachés au projet.
 
+L'enregistrement protégé place le fichier courant directement à cette racine,
+par exemple `Présentation/Qualité PLM.pptx` dans l'explorateur, sans
+`published/<id-document>/`. Les anciennes projections sont migrées au démarrage
+avec conservation des liens par alias et sans modification de l'historique.
+Une collision conserve les deux fichiers et signale le déplacement bloqué dans
+les logs ; aucun écrasement automatique n'est effectué.
+
 La soumission historique héritée crée une copie séparée dans
 `.mergeron/history/deliverables/<id-livrable>/<id-version>/` du principal.
 Une version comprend de 1 à 10 fichiers, de 100 Mio maximum chacun, avec un total

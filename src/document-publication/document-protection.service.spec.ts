@@ -9,7 +9,11 @@ import {
 import type { AppDatabase } from '../database/database.constants';
 import type { DatabaseService } from '../database/database.service';
 
-const files = vi.hoisted(() => ({ missing: new Set<string>() }));
+const files = vi.hoisted(() => ({
+  missing: new Set<string>(),
+  copy: vi.fn(),
+  updates: [] as unknown[],
+}));
 vi.mock('node:fs/promises', () => {
   const check = (target: string) => {
     if (files.missing.has(target))
@@ -19,7 +23,8 @@ vi.mock('node:fs/promises', () => {
     return Promise.resolve(target);
   };
   return {
-    constants: { X_OK: 1 },
+    constants: { X_OK: 1, COPYFILE_EXCL: 2 },
+    copyFile: files.copy,
     access: check,
     realpath: check,
     mkdir: () => Promise.resolve(undefined),
@@ -39,6 +44,8 @@ vi.mock('node:fs/promises', () => {
 describe('unavailable document project isolation', () => {
   beforeEach(() => {
     files.missing.clear();
+    files.copy.mockReset().mockResolvedValue(undefined);
+    files.updates.length = 0;
     vi.stubEnv('MERGERON_PUBLISHED_DOCUMENT_PROTECTION', 'required');
     vi.stubGlobal('process', { ...process, platform: 'linux' });
   });
@@ -81,6 +88,8 @@ describe('unavailable document project isolation', () => {
                 document: {
                   id: 'd',
                   deliverableId: 'l',
+                  name: 'report.docx',
+                  previousSourcePaths: [],
                   sourcePath: '/workspaces/broken/report.docx',
                 },
               },
@@ -90,6 +99,12 @@ describe('unavailable document project isolation', () => {
       [projectDeliverableDocumentVersions, []],
     ]);
     const db = {
+      update: () => ({
+        set: (value: unknown) => {
+          files.updates.push(value);
+          return { where: () => ({ run: () => ({ changes: 1 }) }) };
+        },
+      }),
       select: () => ({
         from: (table: unknown) => {
           const query = {
@@ -117,6 +132,42 @@ describe('unavailable document project isolation', () => {
     expect(() =>
       protection.assertWorkspaceAvailable('/workspaces/good'),
     ).not.toThrow();
+  });
+
+  it('relocates an external retained source directly into its protected deliverable root', async () => {
+    const protection = service(true);
+    vi.spyOn(
+      protection as unknown as { fileHash: (file: string) => Promise<string> },
+      'fileHash',
+    ).mockResolvedValue('same-hash');
+    const plan = await protection.plan();
+    expect(files.copy).toHaveBeenCalledWith(
+      '/workspaces/broken/report.docx',
+      '/workspaces/broken/livrables/l/report.docx',
+      2,
+    );
+    expect(files.updates).toContainEqual({
+      sourcePath: '/workspaces/broken/livrables/l/report.docx',
+      previousSourcePaths: ['/workspaces/broken/report.docx'],
+    });
+    expect(plan?.publishedRoots).toContain('/workspaces/broken/livrables');
+  });
+
+  it('does not replace metadata when an occupied root destination has different content', async () => {
+    const protection = service(true);
+    files.copy.mockRejectedValue(
+      Object.assign(new Error('exists'), { code: 'EEXIST' }),
+    );
+    vi.spyOn(
+      protection as unknown as { fileHash: (file: string) => Promise<string> },
+      'fileHash',
+    ).mockImplementation((file) =>
+      Promise.resolve(file.includes('/livrables/') ? 'different' : 'source'),
+    );
+    await expect(protection.plan()).rejects.toThrow(
+      'changed during protected relocation',
+    );
+    expect(files.updates).toHaveLength(0);
   });
 
   it('masks a missing workspace without making its parent read-only or recreating it', async () => {

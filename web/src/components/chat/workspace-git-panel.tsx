@@ -25,6 +25,7 @@ import { GitCopyDelete } from './git-copy-delete';
 import { GitStageChanges } from './git-stage-changes';
 import { GitCopyReservation } from './git-copy-reservation';
 import { GitCreateBranch } from './git-create-branch';
+import { GitLocalBranchActions } from './git-local-branch-actions';
 import { pathIsWithin } from '@/lib/file-change-events';
 import type {
   GitDiffTarget,
@@ -666,6 +667,19 @@ function RepositoryPanel({
                             )}{' '}
                             · {item.revision.slice(0, 7) || t('gitNoCommit')}
                           </p>
+                          {copy && (
+                            <GitLocalBranchActions
+                              projectId={projectId}
+                              copyId={copy.id}
+                              snapshot={snapshot.data!}
+                              branch={item}
+                              agentThreadId={agentThreadId}
+                              readOnly={
+                                resource.accessMode !== 'read_write' ||
+                                copy.accessMode !== 'read_write'
+                              }
+                            />
+                          )}
                         </div>
                       ))}
                   </>

@@ -41,6 +41,8 @@ export function ActionError({ error }: { error: Error | null }) {
     GIT_BRANCH_NAME_INVALID: t('gitBranchNameInvalid'),
     GIT_BRANCH_EXISTS: t('gitBranchExists'),
     GIT_WORKTREE_DIRTY: t('gitBranchDirty'),
+    GIT_LOCAL_MERGE_CONFLICT: t('gitLocalConflict'),
+    GIT_CUSTOM_MERGE_DRIVER: t('gitLocalCustomDriver'),
     GIT_OUTCOME_UNKNOWN: t('gitActionOutcomeUnknown'),
     GIT_AUTH_REQUIRED: t('gitPushAuthRequired'),
     GIT_WRITE_ACCESS_DENIED: t('gitPushWriteAccessDenied'),

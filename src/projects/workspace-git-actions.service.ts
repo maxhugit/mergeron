@@ -467,6 +467,168 @@ export class WorkspaceGitActionsService {
     });
   }
 
+  async localBranchAction(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    if (
+      !['switch', 'merge'].includes(String(body.action)) ||
+      body.confirmation !== 'LOCAL_BRANCH_ACTION' ||
+      typeof body.name !== 'string' ||
+      typeof body.revision !== 'string'
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    return this.gate.mutate(async () => {
+      this.assertCopyAgent(projectId, copyId, body);
+      const { cwd, state } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      const target = state.branches.find(
+        (b) => !b.remote && b.name === body.name,
+      );
+      if (
+        !target ||
+        target.revision !== body.revision ||
+        target.name === state.branch ||
+        !/^[a-f0-9]{40,64}$/.test(target.revision)
+      )
+        throw new ConflictException('GIT_STALE');
+      await this.git.git(cwd, ['check-ref-format', '--branch', target.name]);
+      const clean = async () => {
+        await this.copyState(projectId, copyId, body.fingerprint);
+        if (
+          (
+            await this.git.git(cwd, [
+              'status',
+              '--porcelain=v1',
+              '--untracked-files=all',
+              '--ignore-submodules=none',
+            ])
+          ).trim()
+        )
+          throw new ConflictException('GIT_WORKTREE_DIRTY');
+        if (
+          (
+            await this.git.git(cwd, [
+              'rev-parse',
+              '--verify',
+              `refs/heads/${target.name}`,
+            ])
+          ).trim() !== target.revision
+        )
+          throw new ConflictException('GIT_STALE');
+      };
+      await clean();
+      let revision = target.revision;
+      if (body.action === 'merge') {
+        const base = (
+          await this.git.git(
+            cwd,
+            ['merge-base', state.head, target.revision],
+            {},
+            15000,
+            [0, 1],
+          )
+        ).trim();
+        if (base === target.revision)
+          return { branch: state.branch, sha: state.head };
+        if (base !== state.head) {
+          // Never run repository-defined merge programs. Compute the result without
+          // touching the index/worktree; conflicts therefore leave no partial merge.
+          if (
+            (
+              await this.git.git(
+                cwd,
+                [
+                  'config',
+                  '--name-only',
+                  '--get-regexp',
+                  '^merge\\..*\\.driver$',
+                ],
+                {},
+                15000,
+                [0, 1],
+              )
+            ).trim()
+          )
+            throw new ConflictException('GIT_CUSTOM_MERGE_DRIVER');
+          let tree: string;
+          try {
+            tree = (
+              await this.git.git(cwd, [
+                'merge-tree',
+                '--write-tree',
+                state.head,
+                target.revision,
+              ])
+            ).trim();
+          } catch {
+            throw new ConflictException('GIT_LOCAL_MERGE_CONFLICT');
+          }
+          if (!/^[a-f0-9]{40,64}$/.test(tree))
+            throw new ConflictException('GIT_LOCAL_MERGE_CONFLICT');
+          const access = currentAccess();
+          const person =
+            access?.identity.kind === 'person' && access.identity.personId
+              ? access.identities.resolvePerson(access.identity.personId)
+              : undefined;
+          const name = person?.name?.trim() ?? '';
+          const email = person?.email?.trim() ?? '';
+          if (
+            person?.kind !== 'person' ||
+            !person.personId ||
+            !person?.active ||
+            !name ||
+            name.length > 120 ||
+            email.length > 254 ||
+            /[<>]/.test(name + email) ||
+            [...name, ...email].some(
+              (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127,
+            ) ||
+            !/^[^\s<>@]+@[^\s<>@]+$/.test(email)
+          )
+            throw new BadRequestException('GIT_IDENTITY_REQUIRED');
+          revision = (
+            await this.git.git(
+              cwd,
+              ['commit-tree', tree, '-p', state.head, '-p', target.revision],
+              {
+                GIT_AUTHOR_NAME: name,
+                GIT_AUTHOR_EMAIL: email,
+                GIT_COMMITTER_NAME: name,
+                GIT_COMMITTER_EMAIL: email,
+              },
+              15000,
+              [0],
+              Buffer.from(`Merge ${target.name} into ${state.branch}\n`),
+            )
+          ).trim();
+        }
+      }
+      await clean();
+      await this.git.git(
+        cwd,
+        body.action === 'switch'
+          ? ['switch', '--no-guess', '--no-overwrite-ignore', target.name]
+          : ['merge', '--ff-only', '--no-overwrite-ignore', revision],
+      );
+      this.audit(projectId, copyId, `git_local_${String(body.action)}`, {
+        from: state.branch,
+        source: target.name,
+        sha: revision,
+      });
+      return {
+        branch: body.action === 'switch' ? target.name : state.branch,
+        sha: revision,
+      };
+    });
+  }
+
   private async copyState(
     projectId: string,
     copyId: string,
@@ -499,6 +661,8 @@ export class WorkspaceGitActionsService {
       'REVERT_HEAD',
       'rebase-merge',
       'rebase-apply',
+      'sequencer',
+      'BISECT_START',
     ]) {
       if (await lstat(path.join(cwd, '.git', entry)).catch(() => null))
         throw new ConflictException('GIT_IN_PROGRESS');

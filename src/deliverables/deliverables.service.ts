@@ -9,6 +9,8 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createHash, randomUUID } from 'node:crypto';
@@ -47,6 +49,8 @@ import { IdentityService } from '../auth/identity.service';
 import { PROJECT_SYSTEM_DIRECTORY } from '../projects/workspace-structure';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { documentProtectionEnabled as protectedDocuments } from '../document-publication/document-isolation';
+import { documentPathAlias } from './document-path-alias';
+import { migrateDeliverableDocumentRoots } from './document-root-migration';
 
 type Item = typeof items.$inferSelect;
 export type DeliverableLifecycleStatus =
@@ -97,7 +101,17 @@ const LIFECYCLE_TRANSITIONS: Record<
 const MAX_FILE = 100 * 1024 * 1024;
 
 @Injectable()
-export class DeliverablesService {
+export class DeliverablesService implements OnModuleInit {
+  async onModuleInit() {
+    const logger = new Logger(DeliverablesService.name);
+    const result = await migrateDeliverableDocumentRoots(this.db, (message) =>
+      logger.warn(message),
+    );
+    if (result.migrated > 0)
+      logger.log(
+        `Moved ${result.migrated} retained document(s) to their deliverable root; history unchanged`,
+      );
+  }
   private readonly onlyOfficeSessions = new Map<string, OnlyOfficeSession>();
   private readonly documentWrites = new Map<string, Promise<void>>();
 
@@ -1522,7 +1536,7 @@ export class DeliverablesService {
     const id = document?.id ?? randomUUID();
     let replacedProjection = false;
     let projectionPath: string | undefined;
-    let newProjectionFolder: string | undefined;
+    let newProjectionPath: string | undefined;
     let folder: string | undefined;
     try {
       if (protectedDocuments()) {
@@ -1546,15 +1560,12 @@ export class DeliverablesService {
           throw new ConflictException(
             'Choose the existing document when publishing a new version',
           );
-        if (!document)
-          newProjectionFolder = await this.directory(projectId, [
-            'livrables',
-            deliverableId,
-            'published',
-            id,
-          ]);
+        const projectionFolder = await this.directory(projectId, [
+          'livrables',
+          deliverableId,
+        ]);
         const target =
-          document?.sourcePath ?? path.join(newProjectionFolder!, fileName);
+          document?.sourcePath ?? path.join(projectionFolder, fileName);
         if (sourcePath !== target) {
           if (this.blockingOnlyOfficeSession(deliverableId))
             throw new ConflictException(
@@ -1570,11 +1581,20 @@ export class DeliverablesService {
             );
           projectionPath = target;
           replacedProjection = Boolean(document);
-          await fs.copyFile(
-            sourcePath,
-            target,
-            document ? 0 : constants.COPYFILE_EXCL,
-          );
+          try {
+            await fs.copyFile(
+              sourcePath,
+              target,
+              document ? 0 : constants.COPYFILE_EXCL,
+            );
+          } catch (error) {
+            if (!document && (error as NodeJS.ErrnoException).code === 'EEXIST')
+              throw new ConflictException(
+                'A file with this name already exists in the deliverable; it was not overwritten',
+              );
+            throw error;
+          }
+          if (!document) newProjectionPath = target;
           if ((await this.hash(target)).sha256 !== digest.sha256) {
             if (document && latest)
               await fs.copyFile(latest.snapshotPath, target);
@@ -1705,8 +1725,7 @@ export class DeliverablesService {
       if (folder) await fs.rm(folder, { recursive: true, force: true });
       if (replacedProjection && latest && projectionPath)
         await fs.copyFile(latest.snapshotPath, projectionPath);
-      if (newProjectionFolder)
-        await fs.rm(newProjectionFolder, { recursive: true, force: true });
+      if (newProjectionPath) await fs.unlink(newProjectionPath);
       throw error;
     }
   }
@@ -1716,6 +1735,7 @@ export class DeliverablesService {
     actor: DeliverableDocumentActor,
     metadata: OnlyOfficeVersionMetadata,
   ) {
+    sourcePath = documentPathAlias(this.db, sourcePath);
     const linked = this.db
       .select({
         document: documents,
@@ -1771,6 +1791,7 @@ export class DeliverablesService {
   }
 
   onlyOfficeHistory(sourcePath: string) {
+    sourcePath = documentPathAlias(this.db, sourcePath);
     const document = this.db
       .select()
       .from(documents)
@@ -1789,6 +1810,7 @@ export class DeliverablesService {
   }
 
   onlyOfficeAccess(sourcePath: string) {
+    sourcePath = documentPathAlias(this.db, sourcePath);
     const linked = this.db
       .select({ document: documents, deliverable: items })
       .from(documents)
@@ -1805,6 +1827,7 @@ export class DeliverablesService {
   }
 
   updateOnlyOfficeSession(sourcePath: string, state: OnlyOfficeSessionState) {
+    sourcePath = documentPathAlias(this.db, sourcePath);
     if (state === 'saved') {
       this.onlyOfficeSessions.delete(sourcePath);
       return;

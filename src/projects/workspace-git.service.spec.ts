@@ -867,6 +867,170 @@ describe('confirmed actions', () => {
     );
     expect(fetch).toHaveBeenCalledOnce();
   });
+  const branchAction = async (
+    action: 'switch' | 'merge',
+    name: string,
+    overrides = {},
+  ) => {
+    const state = await service.snapshot('p', copyId);
+    return asPerson(() =>
+      actions.localBranchAction('p', copyId, {
+        action,
+        name,
+        revision: state.branches.find((b) => !b.remote && b.name === name)
+          ?.revision,
+        fingerprint: state.fingerprint,
+        confirmation: 'LOCAL_BRANCH_ACTION',
+        ...overrides,
+      }),
+    );
+  };
+  it('switches existing local branches without publishing', async () => {
+    writable();
+    await git(['branch', 'feature']);
+    await branchAction('switch', 'feature');
+    expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+      'feature',
+    );
+    expect((await git(['branch', '-r'])).stdout).not.toContain(
+      'origin/feature',
+    );
+  });
+  it('fast-forwards and treats an already merged branch as a no-op', async () => {
+    writable();
+    await git(['config', 'user.name', 'Test']);
+    await git(['config', 'user.email', 'test@example.invalid']);
+    await git(['switch', '-c', 'feature']);
+    await writeFile(path.join(cwd, 'README.md'), 'new\n');
+    await git(['add', '.']);
+    await git(['commit', '-m', 'advance']);
+    const sha = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+    await git(['switch', 'main']);
+    await branchAction('merge', 'feature');
+    expect((await git(['rev-parse', 'HEAD'])).stdout.trim()).toBe(sha);
+    await branchAction('merge', 'feature');
+    expect((await git(['rev-parse', 'HEAD'])).stdout.trim()).toBe(sha);
+  });
+  it.each(['switch', 'merge'] as const)(
+    'never overwrites ignored files during %s',
+    async (action) => {
+      writable();
+      await git(['config', 'user.name', 'Test']);
+      await git(['config', 'user.email', 'test@example.invalid']);
+      await git(['switch', '-c', 'feature']);
+      await writeFile(path.join(cwd, 'ignored.txt'), 'tracked on feature');
+      await git(['add', '.']);
+      await git(['commit', '-m', 'tracked file']);
+      await git(['switch', 'main']);
+      await writeFile(path.join(cwd, '.git/info/exclude'), 'ignored.txt\n');
+      await writeFile(path.join(cwd, 'ignored.txt'), 'keep ignored');
+      await expect(branchAction(action, 'feature')).rejects.toThrow();
+      expect(await readFile(path.join(cwd, 'ignored.txt'), 'utf8')).toBe(
+        'keep ignored',
+      );
+      expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+        'main',
+      );
+    },
+  );
+  it('blocks read-only copies and never invokes a custom merge driver', async () => {
+    await git(['branch', 'feature']);
+    await expect(branchAction('switch', 'feature')).rejects.toThrow(
+      'GIT_READ_ONLY',
+    );
+    writable();
+    await git(['branch', '-D', 'feature']);
+    await diverge();
+    await git(['config', 'merge.custom.driver', 'false']);
+    await expect(branchAction('merge', 'feature')).rejects.toThrow(
+      'GIT_CUSTOM_MERGE_DRIVER',
+    );
+  });
+  it.each(['untracked', 'unstaged', 'staged'])(
+    'preserves %s changes and blocks both actions',
+    async (kind) => {
+      writable();
+      await git(['branch', 'feature']);
+      const file = path.join(
+        cwd,
+        kind === 'untracked' ? 'new.txt' : 'README.md',
+      );
+      await writeFile(file, 'precious edits');
+      if (kind === 'staged') await git(['add', 'README.md']);
+      const index = await readFile(path.join(cwd, '.git/index'));
+      for (const action of ['switch', 'merge'] as const)
+        await expect(branchAction(action, 'feature')).rejects.toThrow(
+          'GIT_WORKTREE_DIRTY',
+        );
+      expect(await readFile(file, 'utf8')).toBe('precious edits');
+      expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+      expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+        'main',
+      );
+    },
+  );
+  const diverge = async (conflict = false) => {
+    await git(['config', 'user.name', 'Test']);
+    await git(['config', 'user.email', 'test@example.invalid']);
+    await git(['switch', '-c', 'feature']);
+    await writeFile(path.join(cwd, 'README.md'), 'feature\n');
+    await git(['add', '.']);
+    await git(['commit', '-m', 'feature']);
+    await git(['switch', 'main']);
+    await writeFile(
+      path.join(cwd, conflict ? 'README.md' : 'other.md'),
+      'main\n',
+    );
+    await git(['add', '.']);
+    await git(['commit', '-m', 'main']);
+  };
+  it('merges divergent branches with two parents and authenticated author', async () => {
+    writable();
+    await diverge();
+    const head = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+    const source = (await git(['rev-parse', 'feature'])).stdout.trim();
+    await branchAction('merge', 'feature');
+    expect((await git(['show', '-s', '--format=%P'])).stdout.trim()).toBe(
+      `${head} ${source}`,
+    );
+    expect((await git(['show', '-s', '--format=%ae'])).stdout.trim()).toBe(
+      connectedPerson.email,
+    );
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'feature\n',
+    );
+    expect((await git(['status', '--porcelain'])).stdout).toBe('');
+  });
+  it('refuses conflicts without touching HEAD, index or worktree', async () => {
+    writable();
+    await diverge(true);
+    const before = await service.snapshot('p', copyId);
+    const index = await readFile(path.join(cwd, '.git/index'));
+    await expect(branchAction('merge', 'feature')).rejects.toThrow(
+      'GIT_LOCAL_MERGE_CONFLICT',
+    );
+    expect((await service.snapshot('p', copyId)).head).toBe(before.head);
+    expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe('main\n');
+  });
+  it('blocks stale revisions, missing confirmation, active agents and unfinished operations', async () => {
+    writable();
+    await git(['branch', 'feature']);
+    await expect(
+      branchAction('switch', 'feature', { revision: '0'.repeat(40) }),
+    ).rejects.toThrow('GIT_STALE');
+    await expect(
+      branchAction('switch', 'feature', { confirmation: '' }),
+    ).rejects.toThrow('GIT_INVALID_INPUT');
+    active.push('busy');
+    await expect(branchAction('switch', 'feature')).rejects.toThrow('GIT_BUSY');
+    active.length = 0;
+    await writeFile(path.join(cwd, '.git/MERGE_HEAD'), 'unfinished');
+    await expect(branchAction('switch', 'feature')).rejects.toThrow(
+      'GIT_IN_PROGRESS',
+    );
+  });
+
   it('creates a local branch at a pinned starting point without switching or publishing', async () => {
     writable();
     const snapshot = await service.snapshot('p', copyId);
