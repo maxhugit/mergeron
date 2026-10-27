@@ -475,8 +475,11 @@ export class WorkspaceGitActionsService {
     requireExecutionAccess();
     this.body(body);
     if (
-      !['switch', 'merge'].includes(String(body.action)) ||
-      body.confirmation !== 'LOCAL_BRANCH_ACTION' ||
+      !['switch', 'merge', 'delete'].includes(String(body.action)) ||
+      body.confirmation !==
+        (body.action === 'delete'
+          ? 'DELETE_LOCAL_BRANCH'
+          : 'LOCAL_BRANCH_ACTION') ||
       typeof body.name !== 'string' ||
       typeof body.revision !== 'string'
     )
@@ -491,6 +494,8 @@ export class WorkspaceGitActionsService {
       const target = state.branches.find(
         (b) => !b.remote && b.name === body.name,
       );
+      if (body.action === 'delete' && target?.name === state.branch)
+        throw new ConflictException('GIT_BRANCH_ACTIVE');
       if (
         !target ||
         target.revision !== body.revision ||
@@ -524,6 +529,44 @@ export class WorkspaceGitActionsService {
           throw new ConflictException('GIT_STALE');
       };
       await clean();
+      if (body.action === 'delete') {
+        const worktrees = await this.git.git(cwd, [
+          'worktree',
+          'list',
+          '--porcelain',
+          '-z',
+        ]);
+        if (worktrees.split('\0').includes(`branch refs/heads/${target.name}`))
+          throw new ConflictException('GIT_BRANCH_ACTIVE');
+        const base = (
+          await this.git.git(
+            cwd,
+            ['merge-base', state.head, target.revision],
+            {},
+            15000,
+            [0, 1],
+          )
+        ).trim();
+        if (base !== target.revision)
+          throw new ConflictException('GIT_BRANCH_UNMERGED');
+        await clean();
+        // Disable upstream resolution for this command only: branch -d must
+        // check HEAD, not a configured upstream (merge is a multi-valued key).
+        // An unconfigured random remote has no fetch mapping and cannot resolve
+        // an upstream. This command does not contact a remote or edit config.
+        // Git also refuses deletion if checked out in ANY linked worktree.
+        await this.git.git(cwd, ['branch', '--delete', '--', target.name], {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: `branch.${target.name}.remote`,
+          GIT_CONFIG_VALUE_0: `mergeron-delete-${randomUUID()}`,
+        });
+        this.audit(projectId, copyId, 'git_local_delete', {
+          branch: target.name,
+          sha: target.revision,
+          mergedInto: state.branch,
+        });
+        return { branch: state.branch, sha: state.head, deleted: target.name };
+      }
       let revision = target.revision;
       if (body.action === 'merge') {
         const base = (
@@ -863,6 +906,143 @@ export class WorkspaceGitActionsService {
     });
   }
 
+  async createPullRequest(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    if (
+      body.confirmation !== 'CREATE_PULL_REQUEST' ||
+      typeof body.title !== 'string' ||
+      !body.title.trim() ||
+      body.title.length > 256 ||
+      typeof body.description !== 'string' ||
+      body.description.length > 60000 ||
+      typeof body.base !== 'string' ||
+      !body.base ||
+      body.base.length > 200 ||
+      body.base.startsWith('-') ||
+      typeof body.draft !== 'boolean'
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const pr = {
+      title: body.title.trim(),
+      base: body.base,
+      description: body.description,
+      draft: body.draft,
+    };
+    return this.gate.mutate(async () => {
+      this.assertCopyAgent(projectId, copyId, body);
+      const { copy, source, cwd, state, branch } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      if (
+        !state.head ||
+        body.head !== state.head ||
+        body.address !== source.resource.address
+      )
+        throw new ConflictException('GIT_STALE');
+      if (pr.base === branch)
+        throw new BadRequestException('GIT_PR_SAME_BRANCH');
+      try {
+        if (
+          (
+            await this.git.git(cwd, ['check-ref-format', '--branch', pr.base])
+          ).trim() !== pr.base
+        )
+          throw new Error();
+      } catch {
+        throw new BadRequestException('GIT_INVALID_INPUT');
+      }
+      const repo = this.git.github(projectId, copy.sourceResourceId);
+      if (!repo?.token)
+        throw new ForbiddenException('GIT_GITHUB_TOKEN_REQUIRED');
+      const prepared = await this.git.pullRequestPreparation(
+        projectId,
+        copy.sourceResourceId,
+        branch,
+        pr.base,
+      );
+      if (prepared.head !== state.head)
+        throw new ConflictException('GIT_PR_PUSH_REQUIRED');
+      if (prepared.existingNumber)
+        return {
+          number: prepared.existingNumber,
+          url: `https://github.com/${repo.owner}/${repo.repo}/pull/${prepared.existingNumber}`,
+          existing: true,
+        };
+      const current = await this.copyState(projectId, copyId, body.fingerprint);
+      if (current.source.resource.address !== body.address)
+        throw new ConflictException('GIT_STALE');
+      this.assertCopyAgent(projectId, copyId, body);
+      if (
+        this.git.github(projectId, copy.sourceResourceId)?.token !== repo.token
+      )
+        throw new ConflictException('GIT_STALE');
+      let response: Response;
+      try {
+        response = await fetch(
+          `https://api.github.com/repos/${repo.owner}/${repo.repo}/pulls`,
+          {
+            method: 'POST',
+            redirect: 'error',
+            signal: AbortSignal.timeout(20000),
+            headers: {
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              Authorization: `Bearer ${repo.token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              title: pr.title,
+              body: pr.description,
+              head: branch,
+              base: pr.base,
+              draft: pr.draft,
+              maintainer_can_modify: false,
+            }),
+          },
+        );
+      } catch {
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      }
+      if (!response.ok)
+        throw new ConflictException(
+          response.status >= 500
+            ? 'GIT_OUTCOME_UNKNOWN'
+            : 'GIT_PR_CREATE_FAILED',
+        );
+      let result: { number?: number };
+      try {
+        result = (await response.json()) as { number?: number };
+      } catch {
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      }
+      if (
+        !Number.isSafeInteger(result.number) ||
+        !result.number ||
+        result.number < 1
+      )
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      this.audit(projectId, copyId, 'git_pr_created', {
+        number: result.number,
+        branch,
+        base: pr.base,
+        head: state.head,
+        draft: pr.draft,
+      });
+      return {
+        number: result.number,
+        url: `https://github.com/${repo.owner}/${repo.repo}/pull/${result.number}`,
+        existing: false,
+      };
+    });
+  }
+
   async merge(
     projectId: string,
     resourceId: string,
@@ -974,7 +1154,9 @@ export class WorkspaceGitActionsService {
                   ? 'Push Git'
                   : action === 'git_branch_created'
                     ? 'Création de branche Git locale'
-                    : 'Fusion de pull request',
+                    : action === 'git_pr_created'
+                      ? 'Création de pull request'
+                      : 'Fusion de pull request',
         details,
         actorPersonId: identity?.personId ?? null,
         actorName: identity?.name ?? 'Système',

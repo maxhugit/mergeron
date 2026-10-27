@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
+import { GitCreatePullRequest } from './git-create-pull-request';
 import {
   gitGet,
   gitPath,
@@ -34,8 +35,13 @@ export function ActionError({ error }: { error: Error | null }) {
     GIT_GITHUB_TOKEN_REQUIRED: t('gitActionTokenRequired'),
     GIT_IDENTITY_REQUIRED: t('gitActionIdentityRequired'),
     GIT_INVALID_INPUT: t('gitActionInvalidInput'),
+    GIT_PR_SAME_BRANCH: t('gitPrSameBranch'),
+    GIT_PR_PUSH_REQUIRED: t('gitPrPushRequired'),
+    GIT_PR_CREATE_FAILED: t('gitPrCreateFailed'),
     GIT_BRANCH_NAME_INVALID: t('gitBranchNameInvalid'),
     GIT_BRANCH_EXISTS: t('gitBranchExists'),
+    GIT_BRANCH_ACTIVE: t('gitLocalDeleteActive'),
+    GIT_BRANCH_UNMERGED: t('gitLocalDeleteUnmerged'),
     GIT_WORKTREE_DIRTY: t('gitBranchDirty'),
     GIT_LOCAL_MERGE_CONFLICT: t('gitLocalConflict'),
     GIT_CUSTOM_MERGE_DRIVER: t('gitLocalCustomDriver'),
@@ -60,6 +66,7 @@ export function GitCopyActions({
   address,
   actionScope = 'all',
   agentThreadId,
+  resourceId,
 }: {
   projectId: string;
   copyId: string;
@@ -67,6 +74,7 @@ export function GitCopyActions({
   address: string | null;
   actionScope?: 'all' | 'commit' | 'push';
   agentThreadId?: string;
+  resourceId?: string;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
@@ -74,6 +82,11 @@ export function GitCopyActions({
   const [reviewed, setReviewed] = useState<GitSnapshot | null>(null);
   const [reviewAddress, setReviewAddress] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [published, setPublished] = useState<{
+    sha: string;
+    branch: string;
+    address: string;
+  } | null>(null);
   const session = usePlatformSession();
   const name = session.data?.name?.trim() ?? '';
   const email = session.data?.email?.trim() ?? '';
@@ -129,6 +142,12 @@ export function GitCopyActions({
       );
     },
     onSuccess: async (value) => {
+      if (mode === 'push' && reviewed?.branch && reviewAddress)
+        setPublished({
+          sha: value.sha,
+          branch: reviewed.branch,
+          address: reviewAddress,
+        });
       setResult(value.sha.slice(0, 7));
       setMode(null);
       setMessage('');
@@ -212,6 +231,20 @@ export function GitCopyActions({
           {t('gitActionSuccess', { sha: result })}
         </p>
       )}
+      {published &&
+        resourceId &&
+        actionScope !== 'commit' &&
+        /^https:\/\/github\.com\//.test(published.address) && (
+          <GitCreatePullRequest
+            key={`${projectId}:${copyId}:${published.sha}`}
+            projectId={projectId}
+            copyId={copyId}
+            resourceId={resourceId}
+            agentThreadId={agentThreadId}
+            snapshot={snapshot}
+            published={published}
+          />
+        )}
       <Dialog
         open={mode !== null}
         onOpenChange={(value) => {
