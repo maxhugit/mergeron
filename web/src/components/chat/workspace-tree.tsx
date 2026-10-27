@@ -95,12 +95,12 @@ export function WorkspaceTree({
               );
               const isActive = Boolean(
                 cwd &&
-                pathIsWithin(workspace.path, cwd) &&
+                pathIsWithin(cwd, workspace.path) &&
                 !project.workspaces.some(
                   (other) =>
                     other.id !== workspace.id &&
-                    pathIsWithin(workspace.path, other.path) &&
-                    pathIsWithin(other.path, cwd),
+                    pathIsWithin(other.path, workspace.path) &&
+                    pathIsWithin(cwd, other.path),
                 ),
               );
               return (
@@ -132,7 +132,7 @@ export function WorkspaceTree({
                     </span>
                   </Button>
                   <WorkspaceEntryMenu
-                  label={`${tw('gitWorkspaceMenu')} · ${workspace.name}`}
+                    label={`${tw('gitWorkspaceMenu')} · ${workspace.name}`}
                     items={[
                       {
                         label: t('useForThisConversation'),
@@ -144,14 +144,14 @@ export function WorkspaceTree({
                           onActiveWorkspaceChange?.(workspace.path),
                       },
                       {
-                      label: tw('gitBrowseLocal'),
+                        label: tw('gitBrowseLocal'),
                         onSelect: () => {
                           setGitResourceId(null);
                           useFilesStore.getState().setRootDir(workspace.path);
                         },
                       },
                       {
-                      label: tw('gitCopyPath'),
+                        label: tw('gitCopyPath'),
                         onSelect: () => {
                           void navigator.clipboard.writeText(workspace.path);
                         },

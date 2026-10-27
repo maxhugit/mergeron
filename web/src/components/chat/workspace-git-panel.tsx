@@ -113,7 +113,7 @@ export function WorkspaceGitPanel(props: Props) {
             const active = Boolean(
               own?.localPath &&
               props.cwd &&
-              pathIsWithin(own.localPath, props.cwd),
+              pathIsWithin(props.cwd, own.localPath),
             );
             return (
               <div key={item.id} className="flex min-w-0 items-center gap-1">
@@ -795,7 +795,7 @@ function RepositoryPanel({
             copy={copy}
             agentThreadId={agentThreadId}
             active={Boolean(
-              copy.localPath && cwd && pathIsWithin(copy.localPath, cwd),
+              copy.localPath && cwd && pathIsWithin(cwd, copy.localPath),
             )}
             initialOpen={initialAction === 'release'}
             hideTrigger
@@ -805,7 +805,7 @@ function RepositoryPanel({
             copy={copy}
             active={Boolean(
               reservedElsewhere ||
-              (copy.localPath && cwd && pathIsWithin(copy.localPath, cwd)),
+              (copy.localPath && cwd && pathIsWithin(cwd, copy.localPath)),
             )}
             initialOpen={initialAction === 'delete'}
             hideTrigger

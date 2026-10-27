@@ -62,6 +62,59 @@ beforeEach(() => {
 });
 
 describe('explorer readiness gate', () => {
+  it.each([
+    ['/workspaces/main', true],
+    ['/workspaces/main/documents', true],
+    ['/workspaces/main/sources/copy', false],
+    ['/workspaces/main/sources/copy/src', false],
+  ])(
+    'does not mark the parent workspace active when a nested Git copy owns cwd %s',
+    async (cwd, primaryActive) => {
+      render(
+        <WorkspaceTree
+          cwd={cwd}
+          project={{
+            id: 'p',
+            name: 'Test',
+            workspacePath: '/workspaces/main',
+            createdAt: 1,
+            updatedAt: 1,
+            resources: [],
+            workspaces: [
+              {
+                id: 'main',
+                projectId: 'p',
+                name: 'Principal',
+                path: '/workspaces/main',
+                primary: true,
+                createdAt: 1,
+                updatedAt: 1,
+              },
+              {
+                id: 'copy',
+                projectId: 'p',
+                name: 'Git copy',
+                path: '/workspaces/main/sources/copy',
+                sourceResourceId: 'git',
+                primary: false,
+                createdAt: 1,
+                updatedAt: 1,
+              },
+            ],
+          }}
+          desktop
+          mobileOpen={false}
+          onMobileClose={() => undefined}
+          onFile={() => undefined}
+        />,
+      );
+      await screen.findByTestId('file-tree');
+      expect(screen.queryByLabelText('Active working directory') !== null).toBe(
+        primaryActive,
+      );
+    },
+  );
+
   it('waits while no root has been established', () => {
     useFilesStore.setState({ rootDir: null });
     renderTree(null);

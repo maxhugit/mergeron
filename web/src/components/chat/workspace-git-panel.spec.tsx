@@ -181,6 +181,7 @@ afterEach(() => client.clear());
 function show(
   resourceId: string | null = 'git',
   agentThreadId: string = 'work-agent',
+  cwd: string = '/original',
 ) {
   return render(
     <QueryClientProvider client={client}>
@@ -189,7 +190,7 @@ function show(
         projectId="p"
         resourceId={resourceId}
         onSelect={onSelect}
-        cwd="/original"
+        cwd={cwd}
         activeWorkspacePending={false}
         onActiveWorkspaceChange={onActive}
         onFile={onFile}
@@ -205,6 +206,23 @@ const tab = (name: string) =>
     button: 0,
     ctrlKey: false,
   });
+
+it.each([
+  ['/original', '/original/sources/copy', false],
+  ['/original/sources/copy', '/original/sources/copy', true],
+  ['/original/sources/copy/src', '/original/sources/copy', true],
+  ['/original/sources/copy-other', '/original/sources/copy', false],
+])(
+  'marks a Git copy active only when cwd %s is inside %s',
+  async (cwd, localPath, active) => {
+    inventory.copies = [{ ...copy, localPath, ownerAgentIds: ['work-agent'] }];
+    show(null, 'work-agent', cwd);
+    await screen.findByText('Copie locale disponible');
+    expect(screen.queryByLabelText('Active pour cet agent') !== null).toBe(
+      active,
+    );
+  },
+);
 
 it('reserves a copy to its agent and disables creating a second copy for that agent', async () => {
   inventory.copies = [{ ...copy, ownerAgentIds: ['work-agent'] }];
