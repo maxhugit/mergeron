@@ -75,12 +75,34 @@ export function BrowserSidebar({
     setBusy(true);
     setError('');
     try {
-      const target = typeof body.tabId === 'string' ? body.tabId : active;
+      let target = typeof body.tabId === 'string' ? body.tabId : active;
+      if (action === 'navigate' && !target) {
+        target = tabs[0]?.id ?? '';
+        if (!target) {
+          const created = await browserApi<{ id: string; tabs: Tab[] }>(
+            `${root}/new`,
+            {},
+          );
+          if (!alive.current) return;
+          target = created.id;
+          setTabs(created.tabs);
+        }
+        setActive(target);
+      }
       const result = await browserApi<
         Frame & { id?: string; tabs?: Tab[]; selection?: Selection }
       >(`${root}/${action}`, { tabId: target, ...body });
       if (!alive.current) return;
-      if (result.tabs) setTabs(result.tabs);
+      if (result.tabs) {
+        setTabs(result.tabs);
+        if (action === 'tabs' && !active && result.tabs.length) {
+          const first = result.tabs[0];
+          setActive(first.id);
+          setUrl(
+            first.url === 'about:blank' ? 'https://example.com' : first.url,
+          );
+        }
+      }
       if (result.id) {
         setActive(result.id);
         setFrame(null);
@@ -260,9 +282,9 @@ export function BrowserSidebar({
           onChange={(e) => setUrl(e.target.value)}
           className="min-w-0 flex-1 rounded border bg-background px-2 text-xs"
           required
-          disabled={!active || busy}
+          disabled={busy}
         />
-        <Button type="submit" size="sm" disabled={!active || busy}>
+        <Button type="submit" size="sm" disabled={busy}>
           {t('go')}
         </Button>
       </form>

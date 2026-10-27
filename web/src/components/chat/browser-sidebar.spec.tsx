@@ -54,6 +54,70 @@ beforeEach(async () => {
     return Promise.resolve(frame);
   });
 });
+it('accepts an address in an empty session and creates a tab only when submitted', async () => {
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  const address = screen.getByRole('textbox', { name: 'Page address' });
+  await waitFor(() => expect(address).toBeEnabled());
+  fireEvent.change(address, { target: { value: 'https://example.org/new' } });
+  expect(address).toHaveValue('https://example.org/new');
+  expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
+    false,
+  );
+  fireEvent.submit(address.closest('form')!);
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith('/thread-a/navigate', {
+      tabId: 'tab',
+      url: 'https://example.org/new',
+    }),
+  );
+  expect(
+    api.mock.calls.filter(([path]) => String(path).endsWith('/new')),
+  ).toHaveLength(1);
+});
+
+it('selects a restored tab and navigates it without creating another', async () => {
+  api.mockImplementation((path: string) =>
+    Promise.resolve(
+      path.endsWith('/tabs')
+        ? {
+            tabs: [
+              {
+                id: 'restored',
+                title: 'Existing',
+                url: 'https://example.net/',
+              },
+            ],
+          }
+        : frame,
+    ),
+  );
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  const address = screen.getByRole('textbox', { name: 'Page address' });
+  await waitFor(() => expect(address).toHaveValue('https://example.net/'));
+  fireEvent.change(address, { target: { value: 'https://example.org/next' } });
+  fireEvent.click(screen.getByRole('button', { name: /^Open$/ }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith('/thread-a/navigate', {
+      tabId: 'restored',
+      url: 'https://example.org/next',
+    }),
+  );
+  expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
+    false,
+  );
+});
+
+it('keeps the address editable after browser initialization fails', async () => {
+  api.mockRejectedValue(new Error('Unavailable'));
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  await screen.findByRole('alert');
+  const address = screen.getByRole('textbox', { name: 'Page address' });
+  expect(address).toBeEnabled();
+  fireEvent.change(address, { target: { value: 'https://example.org/retry' } });
+  expect(address).toHaveValue('https://example.org/retry');
+  expect(screen.getByRole('button', { name: /^Open$/ })).toBeEnabled();
+});
+
 it('opens tabs, navigates and adds evidence only to the keyed conversation draft', async () => {
   render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
   await waitFor(() =>

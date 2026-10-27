@@ -12,7 +12,7 @@
   "reload": "Reload",
   "point": "Point at an element",
   "loading": "Loading",
-  "intro": "Create a tab and open a URL. Click the page to navigate, or enable pointing to annotate an element.",
+  "intro": "Enter a URL and click Open. A tab is created if needed. Click the page to navigate, or enable pointing to annotate an element.",
   "pageImage": "Remote web page",
   "up": "Scroll up",
   "down": "Scroll down",
