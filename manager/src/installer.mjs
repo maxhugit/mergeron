@@ -138,6 +138,9 @@ export function readInstallConfiguration(manifest, env = process.env) {
   if (!privateIpv4Cidr(configuration.adminSubnet))
     throw new Error('MERGERON_ADMIN_SUBNET is invalid');
   for (const component of manifest.components) {
+    // Existing-only companions have no installation image: their inspected
+    // image is validated by inventory/adoption and retained by the updater.
+    if (component.existingOnly) continue;
     const repository = imageRepository(configuration.images[component.id]);
     if (!component.allowedImageRepositories.includes(repository))
       throw new Error(`${component.id}:imageRepositoryNotAllowed`);
@@ -708,7 +711,7 @@ export async function applyInstallPlan({
     applied.push(action);
   }
 
-  const order = ['egress', 'application', 'ingress'];
+  const order = ['egress', 'browser', 'application', 'ingress'];
   for (const id of order) {
     const action = plan.actions.find(
       (item) => item.type === 'createContainer' && item.component === id,
