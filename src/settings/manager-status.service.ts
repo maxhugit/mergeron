@@ -146,6 +146,7 @@ export class ManagerStatusService {
       confirmation?: unknown;
       expectedFingerprint?: unknown;
       operationId?: unknown;
+      mode?: unknown;
     },
   ) {
     const path = action === 'apply' ? '/v1/update' : `/v1/update/${action}`;
@@ -154,6 +155,7 @@ export class ManagerStatusService {
       confirmation: input?.confirmation,
       expectedFingerprint: input?.expectedFingerprint,
       operationId: input?.operationId,
+      ...(input?.mode !== undefined ? { mode: input.mode } : {}),
     });
   }
 

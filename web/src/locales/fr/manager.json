@@ -1,4 +1,8 @@
 {
+  "updateInvalidMode": "Mode de mise à jour invalide.",
+  "updateFastDevelopmentOnly": "La mise à jour rapide est réservée à une stack de développement isolée.",
+  "managerFastDevUpdate": "Mise à jour rapide — dev uniquement",
+  "managerFastDevUpdateHelp": "Copie parallèle bornée et réutilisation des images locales identifiées par leur empreinte. La sauvegarde complète, les contrôles de santé et la restauration des données sont conservés. Désactivez pour utiliser la procédure standard.",
   "managerContainerNetworks": "Réseaux",
   "managerContainerRestarts": "Nombre de redémarrages",
   "managerContainerNetworkMode": "Mode réseau",

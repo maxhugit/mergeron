@@ -46,7 +46,7 @@ export interface ManagerComponent {
 }
 
 export interface ManagerStatus {
-  capabilities?: { backupManagement?: boolean };
+  capabilities?: { backupManagement?: boolean; devFastUpdate?: boolean };
   available: boolean;
   schemaVersion?: number;
   stack?: string;
@@ -84,6 +84,7 @@ export interface ManagerStatus {
 }
 
 export interface ManagerUpdatePlan {
+  mode?: 'standard' | 'dev-fast';
   fingerprint: string;
   applicable: boolean;
   blockers: string[];

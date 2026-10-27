@@ -234,7 +234,12 @@ const server = http.createServer(async (request, response) => {
       ...snapshot,
       events: [...events],
       update: updater.status(),
-      capabilities: { backupManagement: true },
+      capabilities: {
+        backupManagement: true,
+        devFastUpdate:
+          manifest.environment === 'development' &&
+          manifest.stack !== 'mergeron',
+      },
     });
     return;
   }
@@ -252,7 +257,7 @@ const server = http.createServer(async (request, response) => {
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
       if (request.url === '/v1/update/plan')
-        json(response, 200, await updater.plan(body.images));
+        json(response, 200, await updater.plan(body.images, body.mode));
       else if (request.url === '/v1/update/rollback')
         json(response, 200, await updater.requestRollback(body));
       else if (request.url === '/v1/update/recover') {

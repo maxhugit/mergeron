@@ -106,7 +106,9 @@ async function durableRename(source, destination) {
 
 // Never follow a symlink out of the state directory, or copy transient sockets.
 // Set ownership last: the Manager intentionally does not have CAP_FOWNER.
-export async function copyPersistentTree(source, destination) {
+export async function copyPersistentTree(source, destination, concurrency = 1) {
+  if (![1, 8].includes(concurrency))
+    throw new Error('updateInvalidCopyConcurrency');
   const info = await lstat(source);
   if (info.isSocket()) return;
   if (info.isSymbolicLink()) {
@@ -116,8 +118,36 @@ export async function copyPersistentTree(source, destination) {
   }
   if (info.isDirectory()) {
     await mkdir(destination, { mode: 0o700 });
-    for (const name of await readdir(source))
-      await copyPersistentTree(join(source, name), join(destination, name));
+    const entries = await readdir(source, { withFileTypes: true });
+    if (concurrency === 1) {
+      for (const { name } of entries)
+        await copyPersistentTree(join(source, name), join(destination, name));
+    } else {
+      // Subdirectories stay sequential: the limit is global, not multiplied at
+      // every recursion level. Symlinks are still handled with lstat/no-follow.
+      const files = entries.filter((entry) => !entry.isDirectory());
+      for (let index = 0; index < files.length; index += concurrency) {
+        const results = await Promise.allSettled(
+          files
+            .slice(index, index + concurrency)
+            .map(({ name }) =>
+              copyPersistentTree(
+                join(source, name),
+                join(destination, name),
+                concurrency,
+              ),
+            ),
+        );
+        const failed = results.find((result) => result.status === 'rejected');
+        if (failed) throw failed.reason;
+      }
+      for (const { name } of entries.filter((entry) => entry.isDirectory()))
+        await copyPersistentTree(
+          join(source, name),
+          join(destination, name),
+          concurrency,
+        );
+    }
   } else if (info.isFile()) {
     // libuv copyFile can change ownership before chmod on Linux, which would
     // need CAP_FOWNER. Stream into a root-owned exclusive file instead.
@@ -271,6 +301,7 @@ export class TransactionalUpdater {
         images: operation.images,
         previousImages: operation.previousImages,
         backupRetained: operation.backupComplete === true,
+        mode: operation.mode ?? 'standard',
       },
     };
   }
@@ -474,7 +505,15 @@ export class TransactionalUpdater {
     await atomicJson(join(this.directory, 'transaction.json'), this.current);
   }
 
-  async plan(images) {
+  async plan(images, mode = 'standard') {
+    if (!['standard', 'dev-fast'].includes(mode))
+      throw new Error('updateInvalidMode');
+    if (
+      mode === 'dev-fast' &&
+      (this.manifest.environment !== 'development' ||
+        this.manifest.stack === 'mergeron')
+    )
+      throw new Error('updateFastDevelopmentOnly');
     if (
       !images ||
       Object.keys(images).length === 0 ||
@@ -569,6 +608,7 @@ export class TransactionalUpdater {
     const stable = {
       stack: this.manifest.stack,
       environment: this.manifest.environment,
+      mode,
       images,
       containers,
       blockers: [...new Set(blockers)].sort(),
@@ -583,13 +623,18 @@ export class TransactionalUpdater {
     };
   }
 
-  async begin({ images, confirmation, expectedFingerprint }) {
+  async begin({
+    images,
+    confirmation,
+    expectedFingerprint,
+    mode = 'standard',
+  }) {
     if (this.busy) throw new Error('managerOperationInProgress');
     if (confirmation !== 'UPDATE_WITH_ROLLBACK')
       throw new Error('updateConfirmationRequired');
     this.busy = true;
     try {
-      const plan = await this.plan(images);
+      const plan = await this.plan(images, mode);
       if (plan.fingerprint !== expectedFingerprint)
         throw new Error('updatePlanChanged');
       if (plan.blockers.length) throw new Error('updateBlocked');
@@ -609,6 +654,7 @@ export class TransactionalUpdater {
         status: 'running',
         phase: 'preparing',
         startedAt: new Date().toISOString(),
+        mode,
         images,
         previousImages: {},
         containers: [],
@@ -632,13 +678,22 @@ export class TransactionalUpdater {
       // Pull every requested image before stopping anything, then pin its immutable ID.
       const imageIds = {};
       for (const [component, reference] of Object.entries(plan.images)) {
-        await this.docker.pullImage(reference);
+        let cached;
+        if (plan.mode === 'dev-fast' && reference.includes('@sha256:')) {
+          try {
+            const local = await this.docker.inspectImage(reference);
+            if (pinnedImage(local, reference) === reference) cached = local;
+          } catch {
+            /* Missing or unverifiable image: pull normally. */
+          }
+        }
+        if (!cached) await this.docker.pullImage(reference);
         imageIds[component] = pinnedImage(
-          await this.docker.inspectImage(reference),
+          cached ?? (await this.docker.inspectImage(reference)),
           reference,
         );
       }
-      const rechecked = await this.plan(plan.images);
+      const rechecked = await this.plan(plan.images, plan.mode);
       if (rechecked.fingerprint !== plan.fingerprint)
         throw new Error('updatePlanChanged');
       for (const item of plan.containers) {
@@ -684,6 +739,7 @@ export class TransactionalUpdater {
         await copyPersistentTree(
           join(this.configuration.hostStatePath, name),
           join(backup, name),
+          plan.mode === 'dev-fast' ? 8 : 1,
         );
       this.current.backupComplete = true;
       await this.save('replacing');

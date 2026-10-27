@@ -53,6 +53,34 @@ beforeEach(async () => {
   vi.mocked(requestServerRelease).mockResolvedValue(release);
   await i18n.changeLanguage('fr');
 });
+
+it('offers fast updates only when a development Manager explicitly supports them', async () => {
+  const view = fixture.render(
+    <ManagerUpdateControls
+      status={{ ...status, capabilities: { devFastUpdate: true } }}
+    />,
+  );
+  expect(
+    screen.queryByRole('checkbox', {
+      name: 'Mise à jour rapide — dev uniquement',
+    }),
+  ).not.toBeInTheDocument();
+  view.unmount();
+  fixture.render(
+    <ManagerUpdateControls
+      status={{
+        ...status,
+        environment: 'development',
+        capabilities: { devFastUpdate: true },
+      }}
+    />,
+  );
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Mise à jour rapide — dev uniquement',
+    }),
+  ).toBeChecked();
+});
 afterEach(() => {
   sessionStorage.clear();
   fixture.dispose();
