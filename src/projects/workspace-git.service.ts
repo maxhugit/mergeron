@@ -499,7 +499,13 @@ export class WorkspaceGitService {
 /** Never expose raw Git diagnostics: they can contain credentials and paths. */
 export function gitFailureCode(diagnostics: string): string {
   if (
-    /authentication failed|could not read Username|invalid username or (?:password|token)|permission to .* denied|write access to repository not granted|requested URL returned error: (?:401|403)/i.test(
+    /permission to .* denied|write access to repository not granted|requested URL returned error: 403/i.test(
+      diagnostics,
+    )
+  )
+    return 'GIT_WRITE_ACCESS_DENIED';
+  if (
+    /authentication failed|could not read Username|invalid username or (?:password|token)|requested URL returned error: 401/i.test(
       diagnostics,
     )
   )

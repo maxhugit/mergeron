@@ -214,6 +214,14 @@ it('explains missing write credentials without silently retrying the push', asyn
   expect(posts()).toHaveLength(1);
   expect(screen.getByRole('dialog')).toBeInTheDocument();
 });
+it('distinguishes forbidden write access from missing credentials without retrying', async () => {
+  api.mockRejectedValue(new Error('GIT_WRITE_ACCESS_DENIED'));
+  showCopy();
+  fireEvent.click(screen.getByRole('button', {name:'Push…'}));
+  fireEvent.click(screen.getByRole('button', {name:'Confirmer le push'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('GitHub refuse l’écriture');
+  expect(posts()).toHaveLength(1);
+});
 it('merges only after confirmation and sends both reviewed revisions', async () => {
   render(
     <GitMergeAction

@@ -1,4 +1,5 @@
 {
+  "gitPushWriteAccessDenied": "GitHub refuses write access to this repository (forbidden). Check that the token selects this repository and grants Contents read and write access, along with any GitHub restrictions. No force push was performed.",
   "gitConnectionEdit": "Edit",
   "gitConnectionEditTitle": "Edit connection “{{name}}”",
   "gitConnectionEditHelp": "Change the name or replace credentials for this connection. The remote repository, connection permissions and local copies remain unchanged. The address is kept to avoid sending a token to another destination.",
