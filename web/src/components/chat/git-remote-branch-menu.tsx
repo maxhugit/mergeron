@@ -19,6 +19,7 @@ import {
 } from '@/lib/workspace-git-api';
 import { WorkspaceEntryMenu } from './workspace-entry-menu';
 import { ActionError } from './workspace-git-actions';
+import { GitCreatePullRequest } from './git-create-pull-request';
 
 export function GitRemoteBranchMenu({
   projectId,
@@ -51,6 +52,7 @@ export function GitRemoteBranchMenu({
   const client = useQueryClient();
   const trigger = useRef<HTMLButtonElement>(null);
   const submitted = useRef(false);
+  const [prOpen, setPrOpen] = useState(false);
   const [review, setReview] = useState<{
     fingerprint: string;
     revision: string;
@@ -115,9 +117,14 @@ export function GitRemoteBranchMenu({
         label={t('gitRemoteBranchMenu', { name: branch })}
         triggerRef={trigger}
         onCloseAutoFocus={(event) => {
-          if (review) event.preventDefault();
+          if (review || prOpen) event.preventDefault();
         }}
         items={[
+          {
+            label: t('gitCreatePr'),
+            disabled: !canWrite || !address,
+            onSelect: () => setPrOpen(true),
+          },
           {
             label: t('gitRetrieveBranch'),
             disabled: Boolean(disabled || action.isPending),
@@ -149,6 +156,17 @@ export function GitRemoteBranchMenu({
           },
         ]}
       />
+      {prOpen && address && (
+        <GitCreatePullRequest
+          remote
+          open={prOpen}
+          onOpenChange={setPrOpen}
+          onCloseFocus={() => trigger.current?.focus()}
+          projectId={projectId}
+          resourceId={resourceId}
+          published={{ branch, sha: revision, address }}
+        />
+      )}
       <Dialog
         open={!!review}
         onOpenChange={(open) => {

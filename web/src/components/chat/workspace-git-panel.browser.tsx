@@ -1,6 +1,12 @@
 /** Real responsive layout, using fixtures only (no user repository access). */
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
@@ -109,6 +115,7 @@ vi.mock('@/lib/projects-api', () => ({
             revision: 'b'.repeat(40),
             protected: false,
           },
+          { name: 'main', revision: 'a'.repeat(40), protected: true },
         ],
         limited: false,
         inspectedAt: Date.now(),
@@ -320,6 +327,27 @@ test.each([260, 330, 600])(
       expect(retrieveDialog.scrollWidth).toBeLessThanOrEqual(
         retrieveDialog.clientWidth,
       );
+      await page.getByRole('button', { name: 'Annuler', exact: true }).click();
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: remoteMenuName }),
+        ).toHaveFocus(),
+      );
+      await page.getByRole('button', { name: remoteMenuName }).click();
+      await page
+        .getByRole('menuitem', { name: 'Créer une pull request' })
+        .click();
+      const prDialog = await screen.findByRole('dialog');
+      await screen.findByRole('option', { name: 'main' });
+      expect(prDialog).toHaveTextContent('feature/publiee-sur-github');
+      expect(prDialog).toHaveTextContent('Aucune copie locale');
+      fireEvent.change(screen.getByLabelText('Branche cible'), {
+        target: { value: 'main' },
+      });
+      expect(prDialog.scrollWidth).toBeLessThanOrEqual(prDialog.clientWidth);
+      expect(
+        screen.getByRole('button', { name: 'Créer une pull request' }),
+      ).toBeEnabled();
       await page.getByRole('button', { name: 'Annuler', exact: true }).click();
       await waitFor(() =>
         expect(
