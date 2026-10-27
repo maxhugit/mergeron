@@ -1,0 +1,150 @@
+import { useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { projectsApi } from '@/lib/projects-api';
+import { gitPath, type GitSnapshot } from '@/lib/workspace-git-api';
+import { ActionError } from './workspace-git-actions';
+
+export function GitLocalBranchActions({
+  projectId,
+  copyId,
+  snapshot,
+  branch,
+  agentThreadId,
+  readOnly,
+}: {
+  projectId: string;
+  copyId: string;
+  snapshot: GitSnapshot;
+  branch: GitSnapshot['branches'][number];
+  agentThreadId?: string;
+  readOnly: boolean;
+}) {
+  const { t } = useTranslation('workspaces');
+  const client = useQueryClient();
+  const submitted = useRef(false);
+  const [review, setReview] = useState<{
+    action: 'switch' | 'merge';
+    fingerprint?: string;
+    revision: string;
+    current: string | null;
+  } | null>(null);
+  const action = useMutation({
+    retry: false,
+    mutationFn: () =>
+      projectsApi(
+        gitPath(
+          projectId,
+          `copies/${encodeURIComponent(copyId)}/branch-action`,
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ...review,
+            name: branch.name,
+            agentThreadId,
+            confirmation: 'LOCAL_BRANCH_ACTION',
+          }),
+        },
+      ),
+    onSuccess: async () => {
+      setReview(null);
+      await Promise.all([
+        client.invalidateQueries({
+          queryKey: ['workspace-git', projectId, copyId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['workspace-git-commits', projectId, copyId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['workspace-git-graph', projectId, copyId],
+        }),
+        client.invalidateQueries({ queryKey: [{ _id: 'filesReadTree' }] }),
+      ]);
+    },
+    onSettled: () => {
+      submitted.current = false;
+    },
+  });
+  const disabled =
+    readOnly ||
+    !snapshot.fingerprint ||
+    !snapshot.head ||
+    !snapshot.branch ||
+    snapshot.changes.length > 0;
+  if (branch.remote || branch.name === snapshot.branch) return null;
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(['switch', 'merge'] as const).map((mode) => (
+          <Button
+            key={mode}
+            size="sm"
+            variant="outline"
+            disabled={disabled || action.isPending}
+            onClick={() => {
+              action.reset();
+              setReview({
+                action: mode,
+                fingerprint: snapshot.fingerprint,
+                revision: branch.revision,
+                current: snapshot.branch,
+              });
+            }}
+          >
+            {t(mode === 'switch' ? 'gitLocalSwitch' : 'gitLocalMerge')}
+          </Button>
+        ))}
+      </div>
+      {snapshot.changes.length > 0 && (
+        <p className="mt-1 text-muted-foreground">
+          {t('gitLocalCleanRequired')}
+        </p>
+      )}
+      <Dialog
+        open={!!review}
+        onOpenChange={(open) => {
+          if (!open && !action.isPending) setReview(null);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>
+            {t(
+              review?.action === 'switch' ? 'gitLocalSwitch' : 'gitLocalMerge',
+            )}
+          </DialogTitle>
+          <DialogDescription>{t('gitLocalActionHelp')}</DialogDescription>
+          <p className="break-all">
+            {review?.action === 'switch'
+              ? `${review.current ?? ''} → ${branch.name}`
+              : `${branch.name} → ${review?.current ?? ''}`}
+          </p>
+          <p className="break-all font-mono text-xs">{review?.revision}</p>
+          <ActionError error={action.error} />
+          <Button
+            disabled={
+              action.isPending ||
+              review?.fingerprint !== snapshot.fingerprint ||
+              review?.revision !== branch.revision
+            }
+            onClick={() => {
+              if (!submitted.current) {
+                submitted.current = true;
+                action.mutate();
+              }
+            }}
+          >
+            {t('gitLocalConfirm')}
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
