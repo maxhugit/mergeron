@@ -8,6 +8,15 @@ chargé de l'observer.
 
 ## Chemin et espace disque des sauvegardes
 
+La suppression invalide durablement le retour arrière avant de retirer uniquement
+le sous-dossier `backup` sélectionné. Avec les capacités minimales `CHOWN` et
+`DAC_READ_SEARCH`, le Manager reprend la propriété des seuls répertoires de cette
+copie abandonnée, puis leur donne le mode `0700` pour les retirer. Il ne modifie
+ni les permissions des fichiers (qui peuvent être des liens physiques), ni les
+données actives, ni les autres sauvegardes ou quarantaines. Les liens symboliques
+sont supprimés sans être suivis. Aucun ajout de `DAC_OVERRIDE` ou `FOWNER` n’est
+nécessaire. Les journaux de transaction sont conservés.
+
 Ces métadonnées nécessitent un Manager à jour, pas seulement une nouvelle image
 de l’application. Le chemin hôte n’est affiché qu’après vérification du montage ;
 sinon, le chemin interne au Manager est indiqué sans inventer de chemin serveur.

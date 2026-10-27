@@ -10,6 +10,7 @@ import {
   symlink,
   truncate,
   link,
+  chmod,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -230,6 +231,33 @@ test('lists dated backups without transaction secrets and deletes only the selec
     (await lstat(join(options.directory, second, 'backup'))).isDirectory(),
     true,
   );
+});
+
+test('deletes read-only backup directories without following links or changing live hardlinked files', async (t) => {
+  const { root, updater, options } = await fixture(t);
+  await begin(updater);
+  const id = updater.current.id;
+  const backup = join(options.directory, id, 'backup');
+  await link(join(root, 'home/database'), join(backup, 'home/live-hardlink'));
+  await symlink(join(root, 'home'), join(backup, 'home/live-directory'));
+  const original = await lstat(join(root, 'home/database'));
+  await chmod(join(backup, 'home'), 0o500);
+  await chmod(backup, 0o500);
+  await updater.deleteBackup({
+    operationId: id,
+    confirmation: 'DELETE_UPDATE_BACKUP',
+  });
+  await assert.rejects(lstat(backup), { code: 'ENOENT' });
+  const live = await lstat(join(root, 'home/database'));
+  assert.equal(live.uid, original.uid);
+  assert.equal(live.gid, original.gid);
+  assert.equal(live.mode, original.mode);
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'original');
+  const journal = JSON.parse(
+    await readFile(join(options.directory, 'transaction.json'), 'utf8'),
+  );
+  assert.equal(journal.backupComplete, false);
+  assert.ok(journal.backupDeletedAt);
 });
 
 test('measures allocated backup blocks without following links or counting hardlinks twice', async (t) => {
