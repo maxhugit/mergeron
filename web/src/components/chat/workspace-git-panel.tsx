@@ -26,7 +26,11 @@ import { GitStageChanges } from './git-stage-changes';
 import { GitCopyReservation } from './git-copy-reservation';
 import { GitCreateBranch } from './git-create-branch';
 import { pathIsWithin } from '@/lib/file-change-events';
-import type { GitDiffTarget, GitGraphTarget } from '@/stores/workspace-store';
+import type {
+  GitDiffTarget,
+  GitGraphTarget,
+  GitRemoteFileTarget,
+} from '@/stores/workspace-store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/files/file-tree';
 import { filesAddRoot } from '@/generated/api';
@@ -59,6 +63,7 @@ interface Props {
   onFile: (path: string) => void;
   onGitDiff?: (target: GitDiffTarget) => void;
   onGitGraph?: (target: GitGraphTarget) => void;
+  onGitRemoteFile?: (target: GitRemoteFileTarget) => void;
   children: ReactNode;
 }
 
@@ -260,6 +265,7 @@ function RepositoryPanel({
   onFile,
   onGitDiff,
   onGitGraph,
+  onGitRemoteFile,
   agentThreadId,
   agentHasCopy,
   initialAction,
@@ -281,13 +287,7 @@ function RepositoryPanel({
   const [infoOpen, setInfoOpen] = useState(initialAction === 'info');
   const [browsed, setBrowsed] = useState<string | null>(null);
   const [browseError, setBrowseError] = useState('');
-  const browseSequence = useRef(0);
-  useEffect(
-    () => () => {
-      browseSequence.current++;
-    },
-    [],
-  );
+  const [browseAttempt, setBrowseAttempt] = useState(0);
   const ready = copies.filter((copy) => copy.state === 'ready');
   const copy = agentThreadId
     ? ready.find((item) => copyOwnedByAgent(item, agentThreadId))
@@ -325,26 +325,14 @@ function RepositoryPanel({
       ]);
     },
   });
-  const browse = async () => {
-    if (!copy?.localPath) return;
-    const sequence = ++browseSequence.current;
-    setBrowseError('');
-    try {
-      await filesAddRoot({
-        body: { root: copy.localPath },
-        throwOnError: true,
-        meta: { silent: true },
-      });
-      if (sequence !== browseSequence.current) return;
-      useFilesStore.getState().setRootDir(copy.localPath);
-      setBrowsed(copy.id);
-    } catch {
-      if (sequence === browseSequence.current)
-        setBrowseError(t('gitBrowseError'));
-    }
-  };
   useEffect(() => {
-    if (initialAction !== 'local' || !copy?.localPath) return;
+    if (
+      scope !== 'local' ||
+      tab !== 'files' ||
+      !copy?.localPath ||
+      browsed === copy.id
+    )
+      return;
     let cancelled = false;
     void filesAddRoot({
       body: { root: copy.localPath },
@@ -354,6 +342,7 @@ function RepositoryPanel({
       () => {
         if (!cancelled) {
           useFilesStore.getState().setRootDir(copy.localPath!);
+          setBrowseError('');
           setBrowsed(copy.id);
         }
       },
@@ -364,7 +353,7 @@ function RepositoryPanel({
     return () => {
       cancelled = true;
     };
-  }, [initialAction, copy?.id, copy?.localPath, t]);
+  }, [scope, tab, copy?.id, copy?.localPath, browsed, browseAttempt, t]);
   const writable =
     Boolean(
       copy &&
@@ -525,21 +514,30 @@ function RepositoryPanel({
                 {copy && browsed === copy.id ? (
                   <FileTree onFileClick={onFile} />
                 ) : copy ? (
-                  <div className="p-3">
-                    <Button size="sm" onClick={() => void browse()}>
-                      {t('gitBrowse')}
-                    </Button>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {t('gitBrowseHelp')}
+                  !browseError && (
+                    <p role="status" className="p-3 text-xs">
+                      {t('gitLoading')}
                     </p>
-                  </div>
+                  )
                 ) : (
                   <p className="p-3 text-xs">{t('gitNoCopy')}</p>
                 )}
                 {browseError && (
-                  <p role="alert" className="p-3 text-xs text-destructive">
-                    {browseError}
-                  </p>
+                  <div className="p-3 text-xs">
+                    <p role="alert" className="text-destructive">
+                      {browseError}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setBrowseError('');
+                        setBrowseAttempt((value) => value + 1);
+                      }}
+                    >
+                      {t('gitRetry')}
+                    </Button>
+                  </div>
                 )}
               </TabsContent>
               <TabsContent
@@ -680,6 +678,7 @@ function RepositoryPanel({
                 <GitRemoteFiles
                   projectId={projectId}
                   resourceId={resource.id}
+                  onFile={onGitRemoteFile}
                 />
               </TabsContent>
               <TabsContent value="prs">

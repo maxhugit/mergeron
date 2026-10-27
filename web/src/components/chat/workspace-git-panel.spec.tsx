@@ -297,15 +297,18 @@ it('creates an explicit isolated copy and never selects it for the agent automat
     }),
   );
   expect(onActive).not.toHaveBeenCalled();
-  expect(useFilesStore.getState().rootDir).toBe('/original');
+  expect(await screen.findByTestId('git-files')).toHaveTextContent('/copy');
 });
 it('separates browsing files from using the copy as the agent workspace', async () => {
   inventory.copies = [copy];
   show();
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Parcourir les fichiers' }),
-  );
   expect(await screen.findByTestId('git-files')).toHaveTextContent('/copy');
+  expect(
+    screen.queryByRole('button', {
+      name: 'Parcourir les fichiers',
+    }),
+  ).toBeNull();
+  expect(addRoot).toHaveBeenCalledTimes(1);
   expect(onActive).not.toHaveBeenCalled();
   await waitFor(() =>
     expect(
@@ -364,7 +367,7 @@ it('confirms recoverable removal of the selected copy without changing the agent
 it('opens a change comparison and an explicit file, without exposing mutating actions', async () => {
   inventory.copies = [copy];
   show();
-  await screen.findByRole('button', { name: 'Parcourir les fichiers' });
+  await screen.findByTestId('git-files');
   await waitFor(() =>
     expect(
       screen.getByRole('tab', { name: /Modifications/ }),
@@ -424,18 +427,52 @@ it('ignores a file registration completed after leaving the repository', async (
     }),
   );
   const view = show();
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Parcourir les fichiers' }),
-  );
+  await waitFor(() => expect(addRoot).toHaveBeenCalled());
   view.unmount();
   await act(async () => finish());
   expect(useFilesStore.getState().rootDir).toBe('/original');
 });
 
+it('retries an automatic tree load after failure without activating the agent folder', async () => {
+  inventory.copies = [copy];
+  addRoot.mockRejectedValueOnce(new Error('unavailable'));
+  show();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Impossible');
+  expect(useFilesStore.getState().rootDir).toBe('/original');
+  fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+  expect(await screen.findByTestId('git-files')).toHaveTextContent('/copy');
+  expect(onActive).not.toHaveBeenCalled();
+});
+
+it('does not adopt a late root after switching away from Files, and loads on return', async () => {
+  inventory.copies = [copy];
+  let finish!: () => void;
+  addRoot.mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  show();
+  await waitFor(() => expect(addRoot).toHaveBeenCalledTimes(1));
+  tab('Distant · GitHub');
+  await act(async () => finish());
+  expect(useFilesStore.getState().rootDir).toBe('/original');
+  tab('Local');
+  expect(await screen.findByTestId('git-files')).toHaveTextContent('/copy');
+  act(() => useFilesStore.getState().setRootDir('/copy/subdirectory'));
+  tab('Commits');
+  tab('Fichiers');
+  expect(await screen.findByTestId('git-files')).toHaveTextContent(
+    '/copy/subdirectory',
+  );
+  expect(addRoot).toHaveBeenCalledTimes(2);
+  expect(onActive).not.toHaveBeenCalled();
+});
+
 it('separates local history from live GitHub branches and never activates a copy by browsing remote data', async () => {
   inventory.copies = [copy];
   show();
-  await screen.findByRole('button', { name: 'Parcourir les fichiers' });
+  await screen.findByTestId('git-files');
   expect(screen.queryByRole('tab', { name: 'PR / checks' })).toBeNull();
   tab('Commits');
   expect(await screen.findByText('Local change')).toBeVisible();
@@ -446,7 +483,7 @@ it('separates local history from live GitHub branches and never activates a copy
   tab('Branches publiées');
   expect(await screen.findByText('only-on-github')).toBeVisible();
   expect(onActive).not.toHaveBeenCalled();
-  expect(useFilesStore.getState().rootDir).toBe('/original');
+  expect(useFilesStore.getState().rootDir).toBe('/copy');
   expect(
     screen
       .getAllByRole('button', { name: 'Préparer une copie de travail' })
@@ -500,7 +537,7 @@ it('does not expose publication for a read-only resource', async () => {
     copies: [copy],
   };
   show();
-  await screen.findByRole('button', { name: 'Parcourir les fichiers' });
+  await screen.findByTestId('git-files');
   expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
   expect(
     screen.queryByRole('button', { name: '↑ Publier les commits…' }),

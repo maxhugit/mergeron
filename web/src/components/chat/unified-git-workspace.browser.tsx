@@ -1,11 +1,12 @@
 /** Real menus and workspace tabs, fixture data only: no user Git mutations. */
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
 import { WorkspaceGitGraph } from './workspace-git-graph';
+import { WorkspaceGitRemoteFile } from './workspace-git-remote-file';
 import { WorkspaceControls } from './workspace-controls';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { EMPTY_WORKSPACE, useWorkspaceStore } from '@/stores/workspace-store';
@@ -127,11 +128,13 @@ vi.mock('@/lib/projects-api', () => ({
     if (url.includes('/files?'))
       return {
         ref: 'a'.repeat(40),
-        path: '',
-        items: [
-          { name: 'coucou.js', path: 'coucou.js', type: 'file', size: 23 },
-        ],
-        content: null,
+        path: url.includes('path=coucou.js') ? 'coucou.js' : '',
+        items: url.includes('path=coucou.js')
+          ? null
+          : [{ name: 'coucou.js', path: 'coucou.js', type: 'file', size: 23 }],
+        content: url.includes('path=coucou.js')
+          ? "console.log('remote only');"
+          : null,
       };
     if (url.endsWith('/pull-requests'))
       return { supported: true, limited: false, items: [] };
@@ -168,10 +171,12 @@ export function Fixture() {
         ) : (
           workspace.tabs.map(
             (tab) =>
-              tab.kind === 'git-graph' &&
-              tab.id === workspace.activeId && (
+              tab.id === workspace.activeId &&
+              (tab.kind === 'git-graph' ? (
                 <WorkspaceGitGraph key={tab.id} target={tab} active />
-              ),
+              ) : tab.kind === 'git-remote-file' ? (
+                <WorkspaceGitRemoteFile key={tab.id} target={tab} active />
+              ) : null),
           )
         )}
       </main>
@@ -184,6 +189,10 @@ export function Fixture() {
           }}
         >
           <WorkspaceGitPanel
+            onGitRemoteFile={(target) => {
+              useWorkspaceStore.getState().openGitRemoteFile(context, target);
+              if (!desktop) setExplorerOpen(false);
+            }}
             projectId="p"
             agentThreadId="agent"
             resourceId={resourceId}
@@ -254,7 +263,7 @@ test.each([1100, 390])(
         1,
       );
       expect(activeFolder).not.toHaveBeenCalled();
-      expect(useFilesStore.getState().rootDir).toBe('/original');
+      expect(useFilesStore.getState().rootDir).toBe('/copy');
       await page.screenshot({
         path: `../../../.vitest-screenshots/unified-git-graph-${width}.png`,
       });
@@ -286,8 +295,35 @@ test.each([1100, 390])(
         .getByRole('menuitem', { name: 'Parcourir les fichiers distants' })
         .click();
       await screen.findByRole('button', { name: 'coucou.js' });
+      await page
+        .getByRole('button', { name: 'coucou.js', exact: true })
+        .click();
+      expect(
+        await screen.findByText("console.log('remote only');"),
+      ).toBeVisible();
+      expect(
+        within(screen.getByRole('main')).getByText('Lecture seule', {
+          exact: false,
+        }),
+      ).toBeVisible();
+      expect(screen.queryByRole('textbox')).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: /enregistrer|save/i }),
+      ).toBeNull();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-remote-file-${width}.png`,
+      });
+      expect(
+        state.requests
+          .filter((r) => r.url.includes('path=coucou.js'))
+          .every((r) => r.url.includes(`ref=${'a'.repeat(40)}`)),
+      ).toBe(true);
+      if (width < 768)
+        await page
+          .getByRole('button', { name: 'Explorateur', exact: true })
+          .click();
       expect(activeFolder).not.toHaveBeenCalled();
-      expect(useFilesStore.getState().rootDir).toBe('/original');
+      expect(useFilesStore.getState().rootDir).toBe('/copy');
       await page
         .getByRole('button', { name: 'Actions Git · Git Test' })
         .click();

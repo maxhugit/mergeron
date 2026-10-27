@@ -8,6 +8,35 @@ beforeEach(() => {
   useTerminalViewStore.setState({ retained: {}, target: null });
 });
 
+it('isolates remote files by repository, path and immutable revision, without editable documents', () => {
+  const store = useWorkspaceStore.getState();
+  const target = {
+    projectId: 'p',
+    resourceId: 'r',
+    path: 'coucou.js',
+    ref: 'a'.repeat(40),
+  };
+  store.openGitRemoteFile('thread:a', target);
+  store.openGitRemoteFile('thread:a', target);
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
+    1,
+  );
+  store.openGitRemoteFile('thread:a', { ...target, ref: 'b'.repeat(40) });
+  const current = useWorkspaceStore.getState().contexts['thread:a'];
+  expect(current.tabs).toHaveLength(2);
+  expect(
+    current.tabs.every(
+      (tab) => tab.kind === 'git-remote-file' && !('documentId' in tab),
+    ),
+  ).toBe(true);
+  expect(useWorkspaceStore.getState().fileViews).toEqual({});
+  expect(useWorkspaceStore.getState().contexts['thread:b']).toBeUndefined();
+  for (const tab of current.tabs) store.remove('thread:a', tab.id);
+  expect(useWorkspaceStore.getState().contexts['thread:a'].activeId).toBe(
+    'conversation',
+  );
+});
+
 it('opens one graph per repository beside conversation and updates its copy without duplicating tabs', () => {
   const store = useWorkspaceStore.getState();
   const target = {
