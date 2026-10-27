@@ -22,13 +22,20 @@ interface RemoteFiles {
 export function GitRemoteFiles({
   projectId,
   resourceId,
+  refreshVersion = 0,
 }: {
   projectId: string;
   resourceId: string;
+  refreshVersion?: number;
 }) {
   const { t } = useTranslation('workspaces');
-  const [path, setPath] = useState('');
-  const [ref, setRef] = useState<string | null>(null);
+  const [navigation, setNavigation] = useState<{
+    path: string;
+    ref: string | null;
+    version: number;
+  }>({ path: '', ref: null, version: refreshVersion });
+  const path = navigation.path;
+  const ref = navigation.version === refreshVersion ? navigation.ref : null;
   const query = useQuery({
     queryKey: ['workspace-git-remote-files', projectId, resourceId, path, ref],
     queryFn: ({ signal }) =>
@@ -40,8 +47,11 @@ export function GitRemoteFiles({
     retry: false,
   });
   const navigate = (next: string) => {
-    setRef(query.data?.ref ?? ref);
-    setPath(next);
+    setNavigation({
+      path: next,
+      ref: query.data?.ref ?? ref,
+      version: refreshVersion,
+    });
   };
   return (
     <section
@@ -60,18 +70,6 @@ export function GitRemoteFiles({
           </Button>
         )}
         <span className="min-w-0 flex-1 break-all font-mono">/{path}</span>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={query.isFetching}
-          onClick={() => {
-            setRef(null);
-            setPath('');
-            void query.refetch();
-          }}
-        >
-          {t('gitRefresh')}
-        </Button>
       </div>
       {query.data?.ref && (
         <p className="text-muted-foreground">

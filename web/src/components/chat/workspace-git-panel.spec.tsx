@@ -467,13 +467,97 @@ it('keeps remote GitHub data usable without a local copy and keeps synchronizati
   expect(
     screen.getByRole('button', { name: '↓ Intégrer les commits…' }),
   ).toBeDisabled();
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Actualiser les données GitHub' }),
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Actualiser le dépôt' }));
   expect(onActive).not.toHaveBeenCalled();
   expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
     false,
   );
+});
+
+it('has one shared refresh after the scope tabs and refreshes inactive data for this repository only', async () => {
+  inventory.copies = [copy];
+  const local = vi.fn().mockResolvedValue({ items: [], limited: false });
+  const remote = vi.fn().mockResolvedValue({ items: [], supported: true });
+  const checks = vi.fn().mockResolvedValue({ items: [] });
+  const other = vi.fn().mockResolvedValue({ items: [] });
+  await client.fetchQuery({
+    queryKey: ['workspace-git-commits', 'p', 'copy'],
+    queryFn: local,
+  });
+  await client.fetchQuery({
+    queryKey: ['workspace-git-remote-branches', 'p', 'git'],
+    queryFn: remote,
+  });
+  await client.fetchQuery({
+    queryKey: ['workspace-git-checks', 'p', 'git', 12],
+    queryFn: checks,
+  });
+  await client.fetchQuery({
+    queryKey: ['workspace-git-checks', 'other-project', 'git', 12],
+    queryFn: other,
+  });
+  show();
+  const refresh = await screen.findByRole('button', {
+    name: 'Actualiser le dépôt',
+  });
+  expect(
+    refresh.parentElement?.querySelector('[role="tablist"]'),
+  ).not.toBeNull();
+  fireEvent.click(refresh);
+  await waitFor(() => expect(local).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(remote).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(checks).toHaveBeenCalledTimes(2));
+  expect(other).toHaveBeenCalledTimes(1);
+  for (const scope of ['Distant · GitHub', 'Synchronisation', 'Local']) {
+    tab(scope);
+    expect(
+      screen.getAllByRole('button', { name: 'Actualiser le dépôt' }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: 'Actualiser les données GitHub' }),
+    ).toBeNull();
+  }
+  expect(onActive).not.toHaveBeenCalled();
+  expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+    false,
+  );
+});
+
+it('refreshes remote files at the latest revision while preserving the browsed directory', async () => {
+  const fallback = api.getMockImplementation()!;
+  api.mockImplementation((url: string, options?: RequestInit) => {
+    if (url.includes('/files?'))
+      return Promise.resolve({
+        ref: 'head-sha',
+        path: '',
+        items: [{ name: 'docs', path: 'docs', type: 'dir', size: 0 }],
+        limited: false,
+        content: null,
+      });
+    return fallback(url, options);
+  });
+  show();
+  await screen.findByRole('tab', { name: 'Local' });
+  tab('Distant · GitHub');
+  tab('Fichiers');
+  fireEvent.click(await screen.findByRole('button', { name: 'docs' }));
+  await waitFor(() =>
+    expect(
+      api.mock.calls.some(([url]) =>
+        String(url).includes('path=docs&ref=head-sha'),
+      ),
+    ).toBe(true),
+  );
+  const before = api.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Actualiser le dépôt' }));
+  await waitFor(() =>
+    expect(
+      api.mock.calls
+        .slice(before)
+        .some(([url]) => String(url).endsWith('/files?path=docs')),
+    ).toBe(true),
+  );
+  expect(screen.queryByRole('button', { name: /^Actualiser$/ })).toBeNull();
 });
 
 it('places publication only in Synchronization and keeps commits local', async () => {

@@ -1,4 +1,6 @@
 {
+  "gitRefreshAll": "Refresh repository",
+  "gitRefreshAllHelp": "Refresh local, GitHub and synchronization data without fetching, pulling or changing files.",
   "browser": "Browser",
   "gitCreateBranch": "Create branch",
   "gitCreateBranchHelp": "Creates a branch in this local copy only. Nothing is published to or fetched from GitHub.",
