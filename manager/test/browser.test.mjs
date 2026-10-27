@@ -33,6 +33,10 @@ test('managed browser is explicit and DEV-only', () => {
   const browser = dev.components.find((c) => c.id === 'browser');
   assert.equal(browser.canonicalName, 'mergeron-dev-browser');
   assert.equal(browser.existingOnly, true);
+  assert.deepEqual(browser.requiredNetworks, [
+    'mergeron-dev-browser-control',
+    'mergeron-dev-browser-egress',
+  ]);
   assert.deepEqual(browser.dns, ['1.1.1.1']);
 });
 test('browser recreation and rollback enforce DNS while preserving sandbox and secret', () => {

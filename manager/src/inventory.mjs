@@ -69,8 +69,8 @@ export function scopeManifest(
         `${stackPrefix}-browser`,
       ],
       requiredNetworks: [
-        `${stackPrefix}-browser-control`,
-        `${stackPrefix}-browser-egress`,
+        `${manifest.stack}-browser-control`,
+        `${manifest.stack}-browser-egress`,
       ],
       protectedMounts: [],
       dns: browserDns,
