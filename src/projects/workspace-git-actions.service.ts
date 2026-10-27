@@ -467,6 +467,182 @@ export class WorkspaceGitActionsService {
     });
   }
 
+  async retrieveBranch(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    if (
+      body.confirmation !== 'RETRIEVE_REMOTE_BRANCH' ||
+      typeof body.name !== 'string' ||
+      !body.name ||
+      body.name.length > 200 ||
+      body.name.startsWith('-') ||
+      typeof body.revision !== 'string' ||
+      !/^[a-f0-9]{40,64}$/.test(body.revision)
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const name = body.name;
+    return this.gate.mutate(async () => {
+      this.assertCopyAgent(projectId, copyId, body);
+      const { source, cwd, state } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      if (!state.head) throw new ConflictException('GIT_NO_COMMIT');
+      if (source.resource.address !== body.address)
+        throw new ConflictException('GIT_STALE');
+      let url: URL;
+      try {
+        url = new URL(source.resource.address!);
+      } catch {
+        throw new BadRequestException('GIT_HTTPS_REQUIRED');
+      }
+      if (
+        url.protocol !== 'https:' ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      )
+        throw new BadRequestException('GIT_HTTPS_REQUIRED');
+      try {
+        if (
+          (
+            await this.git.git(cwd, ['check-ref-format', '--branch', name])
+          ).trim() !== name
+        )
+          throw new Error();
+      } catch {
+        throw new BadRequestException('GIT_BRANCH_NAME_INVALID');
+      }
+      const ref = `refs/heads/${name}`;
+      const checkAbsent = async () => {
+        if (
+          (
+            await this.git.git(
+              cwd,
+              ['symbolic-ref', '--quiet', ref],
+              {},
+              15000,
+              [0, 1],
+            )
+          ).trim()
+        )
+          throw new ConflictException('GIT_BRANCH_EXISTS');
+        if (
+          (
+            await this.git.git(cwd, [
+              'for-each-ref',
+              '--format=%(refname)',
+              ref,
+            ])
+          )
+            .trim()
+            .split('\n')
+            .includes(ref)
+        )
+          throw new ConflictException('GIT_BRANCH_EXISTS');
+      };
+      await checkAbsent();
+      const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-retrieve-'));
+      try {
+        const format = (
+          await this.git.git(cwd, ['rev-parse', '--show-object-format'])
+        ).trim();
+        if (!['sha1', 'sha256'].includes(format))
+          throw new ConflictException('GIT_UNAVAILABLE');
+        await this.git.git(folder, [
+          'init',
+          '--quiet',
+          `--object-format=${format}`,
+        ]);
+        // Network Git runs in a clean repository: no local URL rewrites,
+        // credential programs, hooks or remote settings can redirect secrets.
+        // Only immutable Git objects are added to the destination. No refs,
+        // FETCH_HEAD, index or files in the working copy are touched by fetch.
+        const env = {
+          GIT_OBJECT_DIRECTORY: path.join(cwd, '.git/objects'),
+          MERGERON_GIT_USERNAME: source.secret?.username || 'oauth2',
+          MERGERON_GIT_TOKEN:
+            source.secret?.token || source.secret?.password || '',
+        };
+        await this.git.git(
+          folder,
+          [
+            '-c',
+            'credential.helper=',
+            '-c',
+            `credential.helper=${gitCredentialHelper}`,
+            '-c',
+            'http.followRedirects=false',
+            '-c',
+            'http.sslVerify=true',
+            '-c',
+            'protocol.allow=never',
+            '-c',
+            'protocol.https.allow=always',
+            '-c',
+            'fetch.fsckObjects=true',
+            '-c',
+            'gc.auto=0',
+            'fetch',
+            '--no-tags',
+            '--no-recurse-submodules',
+            '--no-auto-maintenance',
+            '--no-write-fetch-head',
+            '--',
+            url.href,
+            `refs/heads/${name}:refs/mergeron/retrieved`,
+          ],
+          env,
+          120000,
+        );
+        const sha = (
+          await this.git.git(
+            folder,
+            ['rev-parse', '--verify', 'refs/mergeron/retrieved^{commit}'],
+            env,
+          )
+        ).trim();
+        if (sha !== body.revision) throw new ConflictException('GIT_STALE');
+        this.assertCopyAgent(projectId, copyId, body);
+        const current = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+        );
+        if (
+          current.cwd !== cwd ||
+          current.source.resource.address !== body.address
+        )
+          throw new ConflictException('GIT_STALE');
+        await checkAbsent();
+        // Git's create transaction refuses existing branch tips atomically, including
+        // a branch created concurrently after the last UI/server inspection.
+        await this.git.git(
+          cwd,
+          ['update-ref', '--stdin'],
+          {},
+          15000,
+          [0],
+          Buffer.from(`option no-deref\ncreate ${ref} ${sha}\n`),
+        );
+        this.audit(projectId, copyId, 'git_remote_branch_retrieved', {
+          branch: name,
+          sha,
+          activeBranch: state.branch,
+        });
+        return { branch: name, sha, activeBranch: state.branch };
+      } finally {
+        await rm(folder, { recursive: true, force: true });
+      }
+    });
+  }
+
   async localBranchAction(
     projectId: string,
     copyId: string,

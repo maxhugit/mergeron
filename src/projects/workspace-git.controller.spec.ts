@@ -7,6 +7,27 @@ import type { WorkspaceGitService } from './workspace-git.service';
 import type { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import type { WorkspaceCopiesService } from './workspace-copies.service';
 
+it('routes confirmed remote retrieval through the mutation service', async () => {
+  const retrieveBranch = vi.fn().mockResolvedValue({ branch: 'dev' });
+  const controller = new WorkspaceGitController(
+    {} as WorkspaceGitService,
+    { retrieveBranch } as unknown as WorkspaceGitActionsService,
+    {} as WorkspaceCopiesService,
+  );
+  const body = { confirmation: 'RETRIEVE_REMOTE_BRANCH', name: 'dev' };
+  await controller.retrieveBranch('p', 'copy', body);
+  expect(retrieveBranch).toHaveBeenCalledWith('p', 'copy', body);
+  expect(
+    Reflect.getMetadata(
+      PATH_METADATA,
+      Object.getOwnPropertyDescriptor(
+        WorkspaceGitController.prototype,
+        'retrieveBranch',
+      )!.value as object,
+    ),
+  ).toBe('copies/:copyId/retrieve-branch');
+});
+
 it('routes explicit PR creation to the action service', async () => {
   const createPullRequest = vi.fn().mockResolvedValue({ number: 12 });
   const controller = new WorkspaceGitController(

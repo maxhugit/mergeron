@@ -5,6 +5,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
   rename,
   rm,
   symlink,
@@ -693,6 +694,283 @@ it('parses porcelain without splitting whitespace or renames into phantom change
     { path: 'new', originalPath: 'old', status: 'R ' },
     { path: 'new\nfile', status: '??' },
   ]);
+});
+
+describe('remote branch retrieval', () => {
+  const writable = () =>
+    resources.update('p', 'remote', {
+      accessMode: 'read_write',
+      address: 'https://github.com/example/demo.git',
+    });
+  const prepare = async () => {
+    writable();
+    resources.update('p', 'remote', {
+      address: 'https://github.com/example/demo.git',
+      secret: { password: 'retrieve-test-secret' },
+    });
+    const remote = path.join(root, 'remote');
+    await exec('git', ['-C', remote, 'switch', '-c', 'dev']);
+    await writeFile(
+      path.join(remote, 'remote-only.txt'),
+      'remote branch content\n',
+    );
+    await exec('git', ['-C', remote, 'add', '.']);
+    await exec('git', ['-C', remote, 'commit', '-m', 'remote dev commit']);
+    const revision = (
+      await exec('git', ['-C', remote, 'rev-parse', 'HEAD'])
+    ).stdout.trim();
+    const state = await service.snapshot('p', copyId);
+    return {
+      name: 'dev',
+      revision,
+      fingerprint: state.fingerprint,
+      address: 'https://github.com/example/demo.git',
+      confirmation: 'RETRIEVE_REMOTE_BRANCH',
+    };
+  };
+  const fixtureTransport = (
+    beforeFetch?: () => Promise<void>,
+    beforeCreate?: () => Promise<void>,
+  ) => {
+    const runGit = service.git.bind(service) as WorkspaceGitService['git'];
+    let calls = 0;
+    vi.spyOn(service, 'git').mockImplementation(
+      async (dir, args, env, timeout, accepted, input) => {
+        if (args.includes('fetch')) {
+          calls++;
+          expect(dir).not.toBe(cwd);
+          expect(args).toContain('https://github.com/example/demo.git');
+          expect(args).toContain('refs/heads/dev:refs/mergeron/retrieved');
+          expect(args).toContain('http.followRedirects=false');
+          expect(args).toContain('http.sslVerify=true');
+          expect(args).toContain('protocol.allow=never');
+          expect(args).toContain(`credential.helper=${gitCredentialHelper}`);
+          expect(args.join(' ')).not.toContain('retrieve-test-secret');
+          expect(env?.MERGERON_GIT_TOKEN).toBe('retrieve-test-secret');
+          expect(env?.GIT_OBJECT_DIRECTORY).toBe(
+            path.join(await realpath(cwd), '.git/objects'),
+          );
+          await beforeFetch?.();
+          // Fixture-only transport substitution. Production accepts HTTPS only.
+          return runGit(
+            dir,
+            [
+              '-c',
+              'protocol.file.allow=always',
+              'fetch',
+              '--no-tags',
+              '--no-recurse-submodules',
+              '--no-auto-maintenance',
+              '--no-write-fetch-head',
+              '--',
+              path.join(root, 'remote'),
+              'refs/heads/dev:refs/mergeron/retrieved',
+            ],
+            env,
+            timeout,
+          );
+        }
+        if (args[0] === 'update-ref' && args.includes('--stdin'))
+          await beforeCreate?.();
+        return runGit(dir, args, env, timeout, accepted, input);
+      },
+    );
+    return () => calls;
+  };
+  it('downloads missing objects without relying on origin or touching local work, index, HEAD or remote refs', async () => {
+    const body = await prepare();
+    await git(['remote', 'remove', 'origin']);
+    await writeFile(path.join(cwd, 'README.md'), 'staged work\n');
+    await git(['add', 'README.md']);
+    await writeFile(path.join(cwd, 'README.md'), 'unstaged work\n');
+    await writeFile(path.join(cwd, 'untracked.txt'), 'precious untracked\n');
+    await writeFile(
+      path.join(cwd, '.git/FETCH_HEAD'),
+      'existing fetch record\n',
+    );
+    body.fingerprint = (await service.snapshot('p', copyId)).fingerprint;
+    const index = await readFile(path.join(cwd, '.git/index'));
+    const head = (await git(['rev-parse', 'HEAD'])).stdout;
+    const calls = fixtureTransport();
+    await actions.retrieveBranch('p', copyId, body);
+    expect(calls()).toBe(1);
+    expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(body.revision);
+    expect((await git(['show', 'dev:remote-only.txt'])).stdout).toBe(
+      'remote branch content\n',
+    );
+    expect((await git(['rev-parse', 'HEAD'])).stdout).toBe(head);
+    expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+      'main',
+    );
+    expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'unstaged work\n',
+    );
+    expect(await readFile(path.join(cwd, 'untracked.txt'), 'utf8')).toBe(
+      'precious untracked\n',
+    );
+    expect((await git(['for-each-ref', 'refs/remotes/'])).stdout).toBe('');
+    expect(await readFile(path.join(cwd, '.git/FETCH_HEAD'), 'utf8')).toBe(
+      'existing fetch record\n',
+    );
+  });
+  it('never overwrites an existing local branch, including one created during download', async () => {
+    const body = await prepare();
+    const head = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+    const calls = fixtureTransport(async () => {
+      await git(['branch', 'dev']);
+    });
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_BRANCH_EXISTS',
+    );
+    expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(head);
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_BRANCH_EXISTS',
+    );
+    expect(calls()).toBe(1);
+  });
+  it('atomically refuses a branch created immediately before publishing the new ref', async () => {
+    const body = await prepare();
+    fixtureTransport(undefined, async () => {
+      await git(['branch', 'dev']);
+    });
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow();
+    expect((await git(['rev-parse', 'dev'])).stdout.trim()).not.toBe(
+      body.revision,
+    );
+  });
+  it('never replaces a symbolic branch created concurrently', async () => {
+    const body = await prepare();
+    fixtureTransport(undefined, async () => {
+      await git(['symbolic-ref', 'refs/heads/dev', 'refs/heads/main']);
+    });
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow();
+    expect((await git(['symbolic-ref', 'refs/heads/dev'])).stdout.trim()).toBe(
+      'refs/heads/main',
+    );
+  });
+  it('refuses a changed remote revision without creating a local branch', async () => {
+    const body = await prepare();
+    fixtureTransport();
+    await expect(
+      actions.retrieveBranch('p', copyId, {
+        ...body,
+        revision: '0'.repeat(40),
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    await expect(
+      git(['rev-parse', '--verify', 'refs/heads/dev']),
+    ).rejects.toThrow();
+  });
+  it('refuses stale state, changed source, missing confirmation and unsafe branch names before fetching', async () => {
+    const body = await prepare();
+    const calls = fixtureTransport();
+    for (const override of [
+      { confirmation: '' },
+      { name: '--upload-pack=evil' },
+      { name: 'dev\nmain' },
+      { name: '../dev' },
+      { revision: 'HEAD' },
+    ])
+      await expect(
+        actions.retrieveBranch('p', copyId, { ...body, ...override }),
+      ).rejects.toThrow();
+    await expect(
+      actions.retrieveBranch('p', copyId, { ...body, fingerprint: 'stale' }),
+    ).rejects.toThrow('GIT_STALE');
+    await expect(
+      actions.retrieveBranch('p', copyId, {
+        ...body,
+        address: 'https://other.invalid/repo',
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    expect(calls()).toBe(0);
+  });
+  it('blocks read-only access, busy agents and incomplete Git operations', async () => {
+    const body = await prepare();
+    const calls = fixtureTransport();
+    resources.update('p', 'remote', { accessMode: 'read_only' });
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_READ_ONLY',
+    );
+    writable();
+    active.push('busy');
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_BUSY',
+    );
+    active.length = 0;
+    await writeFile(path.join(cwd, '.git/MERGE_HEAD'), body.revision);
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_IN_PROGRESS',
+    );
+    expect(calls()).toBe(0);
+  });
+  it('checks copy ownership before downloading and rechecks index changes after download', async () => {
+    const body = await prepare();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'owner',
+        projectId: 'p',
+        workspacePath: path.join(root, 'project'),
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    claimAgentCopy(database.db, 'p', 'owner', copyId);
+    const calls = fixtureTransport(async () => {
+      await writeFile(path.join(cwd, 'README.md'), 'new staged edits\n');
+      await git(['add', 'README.md']);
+    });
+    await expect(
+      actions.retrieveBranch('p', copyId, { ...body, agentThreadId: 'other' }),
+    ).rejects.toThrow('GIT_COPY_OWNED');
+    expect(calls()).toBe(0);
+    await expect(
+      actions.retrieveBranch('p', copyId, { ...body, agentThreadId: 'owner' }),
+    ).rejects.toThrow('GIT_STALE');
+    await expect(
+      git(['rev-parse', '--verify', 'refs/heads/dev']),
+    ).rejects.toThrow();
+    expect((await git(['show', ':README.md'])).stdout).toBe(
+      'new staged edits\n',
+    );
+  });
+  it('fails closed on download failure without changing refs or exposing credentials', async () => {
+    const body = await prepare();
+    const runGit = service.git.bind(service) as WorkspaceGitService['git'];
+    vi.spyOn(service, 'git').mockImplementation(async (dir, args, ...rest) => {
+      if (args.includes('fetch')) throw new Error('GIT_NETWORK_UNAVAILABLE');
+      return runGit(dir, args, ...rest);
+    });
+    const before = await service.snapshot('p', copyId);
+    await expect(actions.retrieveBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_NETWORK_UNAVAILABLE',
+    );
+    expect((await service.snapshot('p', copyId)).branches).toEqual(
+      before.branches,
+    );
+    expect((await service.snapshot('p', copyId)).head).toBe(before.head);
+  });
+  it('rejects unsafe transports instead of using local SSH or credentials', async () => {
+    const body = await prepare();
+    const calls = fixtureTransport();
+    for (const address of [
+      'git@github.com:example/demo.git',
+      'http://github.com/example/demo.git',
+    ]) {
+      resources.update('p', 'remote', { address });
+      await expect(
+        actions.retrieveBranch('p', copyId, { ...body, address }),
+      ).rejects.toThrow('GIT_HTTPS_REQUIRED');
+    }
+    expect(() =>
+      resources.update('p', 'remote', {
+        address: 'https://user:secret@github.com/example/demo.git',
+      }),
+    ).toThrow('Credentials must be stored');
+    expect(calls()).toBe(0);
+  });
 });
 
 describe('confirmed actions', () => {

@@ -301,6 +301,31 @@ test.each([260, 330, 600])(
       await page.getByRole('button', { name: /#12/ }).click();
       await screen.findByText('En cours');
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
+      await page.getByRole('tab', { name: 'Branches publiées' }).click();
+      const remoteMenuName =
+        'Actions de la branche distante feature/publiee-sur-github';
+      const remoteTrigger = await screen.findByRole('button', {
+        name: remoteMenuName,
+      });
+      expect(remoteTrigger.getBoundingClientRect().right).toBeLessThanOrEqual(
+        width,
+      );
+      await page.getByRole('button', { name: remoteMenuName }).click();
+      await page
+        .getByRole('menuitem', { name: 'Récupérer cette branche en local…' })
+        .click();
+      const retrieveDialog = await screen.findByRole('dialog');
+      expect(retrieveDialog).toHaveTextContent('feature/publiee-sur-github');
+      expect(retrieveDialog).toHaveTextContent('Branche active conservée');
+      expect(retrieveDialog.scrollWidth).toBeLessThanOrEqual(
+        retrieveDialog.clientWidth,
+      );
+      await page.getByRole('button', { name: 'Annuler', exact: true }).click();
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: remoteMenuName }),
+        ).toHaveFocus(),
+      );
       await page
         .getByRole('tab', { name: 'Synchronisation', exact: true })
         .click();
