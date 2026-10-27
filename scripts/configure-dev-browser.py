@@ -48,6 +48,11 @@ def configure():
     api = manager.docker
     old = manager.inspect(api, NAME)
     body = specification(old)
+    if old['Config'].get('Labels', {}).get('io.mergeron.managed') == 'true':
+        if old['Config']['Labels'] == body['Labels'] and old['HostConfig'].get('Dns') == ['1.1.1.1']:
+            print(json.dumps({'healthy': True, 'alreadyConfigured': True, 'dns': ['1.1.1.1']}))
+            return
+        raise RuntimeError('Use a Manager update to repair an already managed browser')
     suffix = uuid.uuid4().hex[:10]
     candidate_name = NAME + '-candidate-' + suffix
     rollback = NAME + '-rollback-' + suffix

@@ -212,7 +212,7 @@ test('managed DEV browser participates in update and rollback with persistent pu
       {
         Image: 'ghcr.io/maxhugit/mergeron-browser:previous',
         User: 'pwuser',
-        Env: ['BROWSER_WS_PATH=private-control-path'],
+        Env: ['BROWSER_WS_PATH=' + 'x'.repeat(32)],
         Labels: {
           'io.mergeron.managed': 'true',
           'io.mergeron.component': 'browser',
@@ -242,9 +242,20 @@ test('managed DEV browser participates in update and rollback with persistent pu
   const active = () =>
     [...docker.values.values()].find((c) => c.Name === '/mergeron-dev-browser');
   assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
-  assert.deepEqual(active().Config.Env, [
-    'BROWSER_WS_PATH=private-control-path',
-  ]);
+  assert.deepEqual(active().Config.Env, ['BROWSER_WS_PATH=' + 'x'.repeat(32)]);
+  const application = [...docker.values.values()].find(
+    (c) => c.Name === '/mergeron-dev-ui',
+  );
+  assert.ok(
+    application.Config.Env.includes(
+      'MERGERON_BROWSER_ENDPOINT=ws://mergeron-dev-browser:3000/' +
+        'x'.repeat(32),
+    ),
+  );
+  assert.ok(
+    application.NetworkSettings.Networks['mergeron-dev-browser-control'],
+  );
+  assert.ok(!JSON.stringify(updater.status()).includes('x'.repeat(32)));
   assert.ok(
     docker.calls.some(
       ([action, id]) => action === 'stop' && id === 'original-browser',
@@ -252,9 +263,7 @@ test('managed DEV browser participates in update and rollback with persistent pu
   );
   await updater.rollback();
   assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
-  assert.deepEqual(active().Config.Env, [
-    'BROWSER_WS_PATH=private-control-path',
-  ]);
+  assert.deepEqual(active().Config.Env, ['BROWSER_WS_PATH=' + 'x'.repeat(32)]);
 });
 
 test('fast mode is rejected for production, unknown environments and production stack names', async (t) => {

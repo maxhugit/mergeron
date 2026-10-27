@@ -645,6 +645,15 @@ export class TransactionalUpdater {
       const inspect = await this.docker.inspectContainer(component.containerId);
       if (
         component.id === 'browser' &&
+        !/^BROWSER_WS_PATH=[A-Za-z0-9_-]{32,128}$/.test(
+          inspect.Config?.Env?.find((entry) =>
+            entry.startsWith('BROWSER_WS_PATH='),
+          ) ?? '',
+        )
+      )
+        blockers.push('browser:updateBrowserConfigurationInvalid');
+      if (
+        component.id === 'browser' &&
         (inspect.HostConfig?.Privileged ||
           inspect.Config?.User !== 'pwuser' ||
           !inspect.HostConfig?.ReadonlyRootfs ||
@@ -807,6 +816,12 @@ export class TransactionalUpdater {
       const rechecked = await this.plan(plan.images, plan.mode);
       if (rechecked.fingerprint !== plan.fingerprint)
         throw new Error('updatePlanChanged');
+      const browserItem = plan.containers.find(
+        (item) => item.component === 'browser',
+      );
+      const browserInspect = browserItem
+        ? await this.docker.inspectContainer(browserItem.id)
+        : null;
       for (const item of plan.containers) {
         const inspect = await this.docker.inspectContainer(item.id);
         this.current.previousImages[item.component] = inspect.Config.Image;
@@ -828,6 +843,25 @@ export class TransactionalUpdater {
           imageIds[item.component] ?? previous,
           component,
         );
+        if (component.id === 'application' && browserInspect) {
+          const browserComponent = this.manifest.components.find(
+            (c) => c.id === 'browser',
+          );
+          const controlPath = browserInspect.Config.Env.find((entry) =>
+            entry.startsWith('BROWSER_WS_PATH='),
+          ).slice('BROWSER_WS_PATH='.length);
+          // The secret is only persisted in the private transaction journal,
+          // never in a status response, plan or diagnostic.
+          target.Env = (target.Env ?? []).filter(
+            (entry) => !entry.startsWith('MERGERON_BROWSER_ENDPOINT='),
+          );
+          target.Env.push(
+            `MERGERON_BROWSER_ENDPOINT=ws://${browserComponent.canonicalName}:3000/${controlPath}`,
+          );
+          target.NetworkingConfig.EndpointsConfig[
+            `${this.manifest.stack}-browser-control`
+          ] ??= { Aliases: [component.canonicalName] };
+        }
         target.Labels = {
           ...target.Labels,
           'io.mergeron.transaction': this.current.id,

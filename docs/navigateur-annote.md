@@ -103,6 +103,9 @@ restent seuls gérés ; l’activation est refusée dans une pile de production.
 Le navigateur doit préexister : le Manager ne crée pas un runtime non configuré.
 
 Le Manager démarre le navigateur avant l’application et vérifie sa santé.
+Lors de la transaction, il raccorde l’application au réseau de contrôle interne
+et configure son endpoint depuis le chemin secret du navigateur existant, sans
+l’exposer dans les plans ou réponses de statut.
 Chaque mise à jour et restauration conserve ses réseaux, son chemin de contrôle
 secret, son sandbox et réapplique le DNS public. Une image locale préexistante
 est conservée par son identifiant immuable, sans téléchargement implicite.
