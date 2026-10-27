@@ -192,14 +192,16 @@ export class DeliverablesService {
     id: string,
     version: number,
     threadId: string,
-    taskId: string,
+    taskId?: string | null,
   ) {
     const item = this.get(projectId, resourceId, id);
-    const task = this.db
-      .select()
-      .from(projectTasks)
-      .where(eq(projectTasks.id, taskId))
-      .get();
+    const task = taskId
+      ? this.db
+          .select()
+          .from(projectTasks)
+          .where(eq(projectTasks.id, taskId))
+          .get()
+      : null;
     const parent = task?.parentTaskId
       ? this.db
           .select()
@@ -215,19 +217,29 @@ export class DeliverablesService {
           .get()
       : null;
     const belongsToVisibleTask =
-      Boolean(item.primaryTaskId) && task?.parentTaskId === item.primaryTaskId;
+      Boolean(item.primaryTaskId) &&
+      task?.parentTaskId === item.primaryTaskId &&
+      taskResource?.projectId === projectId &&
+      parent?.resourceId === task?.resourceId;
     const belongsToInternalExecution =
       !item.primaryTaskId &&
       taskResource?.projectId === projectId &&
       taskResource.config.internal === true &&
       taskResource.config.purpose === 'deliverable_execution' &&
+      parent?.resourceId === task?.resourceId &&
       parent?.labels.includes(`mergeron:deliverable:${item.id}`);
-    if (!task || (!belongsToVisibleTask && !belongsToInternalExecution))
+    if (
+      taskId &&
+      (!task || (!belongsToVisibleTask && !belongsToInternalExecution))
+    )
       throw new BadRequestException(
         'The agent must be assigned through an execution subtask associated with the deliverable',
       );
-    if (task.linkedThreadId)
+    if (task?.linkedThreadId)
       throw new ConflictException('This subtask already has an agent');
+    const folder = this.activeFolders.get('deliverable', id);
+    if (!folder || folder.state !== 'ready')
+      throw new ConflictException('Deliverable active folder is unresolved');
     const now = Date.now();
     this.db.transaction((tx) => {
       tx.insert(projectAgentThreads)
@@ -258,47 +270,46 @@ export class DeliverablesService {
         throw new ConflictException(
           'Deliverable changed during agent creation',
         );
-      tx.update(projectTasks)
-        .set({
-          linkedThreadId: threadId,
-          executionMode: 'agent',
-          agentState: 'ready',
-          updatedAt: now,
-        })
-        .where(eq(projectTasks.id, task.id))
-        .run();
-      tx.insert(projectTaskActivity)
-        .values({
-          id: randomUUID(),
-          resourceId: task.resourceId,
-          taskId: task.id,
-          taskTitle: task.title,
-          parentTaskId: task.parentTaskId,
-          action: 'updated',
-          changes: {
-            linkedThreadId: { before: null, after: threadId },
-            executionMode: { before: task.executionMode, after: 'agent' },
-            agentState: { before: task.agentState, after: 'ready' },
-          },
-          actorPersonId: currentAccess()?.identity.personId ?? null,
-          actorName: currentAccess()?.identity.name ?? 'Système',
-          createdAt: now,
-        })
-        .run();
+      if (task) {
+        tx.update(projectTasks)
+          .set({
+            linkedThreadId: threadId,
+            executionMode: 'agent',
+            agentState: 'ready',
+            updatedAt: now,
+          })
+          .where(eq(projectTasks.id, task.id))
+          .run();
+        tx.insert(projectTaskActivity)
+          .values({
+            id: randomUUID(),
+            resourceId: task.resourceId,
+            taskId: task.id,
+            taskTitle: task.title,
+            parentTaskId: task.parentTaskId,
+            action: 'updated',
+            changes: {
+              linkedThreadId: { before: null, after: threadId },
+              executionMode: { before: task.executionMode, after: 'agent' },
+              agentState: { before: task.agentState, after: 'ready' },
+            },
+            actorPersonId: currentAccess()?.identity.personId ?? null,
+            actorName: currentAccess()?.identity.name ?? 'Système',
+            createdAt: now,
+          })
+          .run();
+      }
+      this.activeFolders.set(
+        projectId,
+        'agent',
+        threadId,
+        {
+          resourceId: folder.resourceId,
+          relativePath: folder.relativePath,
+        },
+        { allowUnboundAgent: true },
+      );
     });
-    const folder = this.activeFolders.get('deliverable', id);
-    if (!folder || folder.state !== 'ready')
-      throw new ConflictException('Deliverable active folder is unresolved');
-    this.activeFolders.set(
-      projectId,
-      'agent',
-      threadId,
-      {
-        resourceId: folder.resourceId,
-        relativePath: folder.relativePath,
-      },
-      { allowUnboundAgent: true },
-    );
   }
   versionFiles(
     projectId: string,

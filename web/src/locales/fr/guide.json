@@ -42,7 +42,7 @@
   "deliverablesButton2": "Changement de statut",
   "deliverablesEffect2": "Présente uniquement les transitions autorisées. Finaliser fige un instantané ; cela ne signifie pas qu’un humain l’a approuvé. La validation n’est demandée que si elle est obligatoire.",
   "deliverablesButton3": "Confier à un agent",
-  "deliverablesEffect3": "Associe le travail d’un agent au livrable. Les documents conservés passent par un brouillon puis un enregistrement versionné ; les fichiers de code et temporaires ne sont pas des documents publiés.",
+  "deliverablesEffect3": "Affecte directement un agent au livrable sans tâche obligatoire. Une sous-tâche peut être choisie ou créée explicitement si une tâche principale est associée : les deux liens sont alors conservés. Les documents conservés passent par un brouillon puis un enregistrement versionné ; les fichiers de code et temporaires ne sont pas des documents publiés.",
   "automationsStep1": "Ajoutez le gestionnaire d’automatisations au projet, puis créez une automatisation avec une consigne explicite et sa fréquence.",
   "automationsStep2": "Vérifiez le périmètre, les permissions et le calendrier avant activation. Une automatisation peut rencontrer les mêmes demandes d’approbation qu’un travail manuel.",
   "automationsStep3": "Consultez les exécutions et leur résultat. Une exécution en erreur doit être diagnostiquée ; elle ne prouve pas que toutes les actions précédentes ont été annulées.",

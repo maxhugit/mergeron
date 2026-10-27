@@ -40,11 +40,25 @@ export class DeliverablesController {
   ) {
     const deliverable = this.service.get(p, r, id);
     const cwd = this.service.agentWorkspace(p, r, id, body.version);
+    if (
+      (body.subtaskId !== undefined &&
+        (typeof body.subtaskId !== 'string' || !body.subtaskId.trim())) ||
+      (body.subtaskTitle !== undefined &&
+        (typeof body.subtaskTitle !== 'string' || !body.subtaskTitle.trim())) ||
+      (body.subtaskId !== undefined && body.subtaskTitle !== undefined)
+    )
+      throw new BadRequestException(
+        'Select one subtask or create one, not both',
+      );
     const board = this.service.board(p, r);
     const primaryTask = deliverable.primaryTaskId
       ? board.tasks.find((task) => task.id === deliverable.primaryTaskId)
       : undefined;
-    if (deliverable.primaryTaskId && !primaryTask)
+    if (
+      (body.subtaskId || body.subtaskTitle) &&
+      deliverable.primaryTaskId &&
+      !primaryTask
+    )
       throw new BadRequestException('The primary task no longer exists');
     let createdSubtask = false;
     let subtask:
@@ -65,7 +79,7 @@ export class DeliverablesController {
         );
       if (subtask.linkedThreadId)
         throw new ConflictException('This subtask already has an agent');
-    } else {
+    } else if (body.subtaskTitle !== undefined) {
       const actor = {
         personId: request.platformIdentity?.personId ?? null,
         name: request.platformIdentity?.name ?? 'Système',
@@ -99,8 +113,6 @@ export class DeliverablesController {
           );
       createdSubtask = true;
     }
-    if (!subtask)
-      throw new BadRequestException('An execution subtask is required');
     const started = await this.threads.startThread({ cwd });
     try {
       this.threads.rememberInitialThreadCwd(started.thread.id, cwd);
@@ -110,18 +122,18 @@ export class DeliverablesController {
         id,
         body.version,
         started.thread.id,
-        subtask.id,
+        subtask?.id,
       );
     } catch (error) {
       await this.threads.archiveThread(started.thread.id).catch(() => {});
       throw error;
     }
     await this.threads
-      .setThreadName(started.thread.id, subtask.title)
+      .setThreadName(started.thread.id, subtask?.title ?? deliverable.title)
       .catch(() => {});
     return {
       threadId: started.thread.id,
-      taskId: subtask.id,
+      taskId: subtask?.id ?? null,
       createdSubtask,
     };
   }

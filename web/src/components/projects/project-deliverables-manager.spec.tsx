@@ -249,8 +249,12 @@ it('merges document versions, removals, restorations and deliverable edits in hi
   const historyRegion = screen.getByRole('region', { name: 'History' });
   expect(historyRegion).toHaveClass('min-h-0', 'overflow-auto');
   expect(historyRegion).toHaveAttribute('tabindex', '0');
-  expect(screen.getByRole('columnheader', { name: 'History' }).closest('thead')).toHaveClass('sticky', 'top-0', 'bg-card');
-  expect(historyRegion.parentElement?.parentElement).toHaveClass('overflow-hidden');
+  expect(
+    screen.getByRole('columnheader', { name: 'History' }).closest('thead'),
+  ).toHaveClass('sticky', 'top-0', 'bg-card');
+  expect(historyRegion.parentElement?.parentElement).toHaveClass(
+    'overflow-hidden',
+  );
   const rows = screen.getAllByRole('row');
   expect(rows).toHaveLength(6);
   expect(rows[1]).toHaveTextContent('Deliverable modified — Report');
@@ -296,8 +300,12 @@ it('includes required validation and highlights the waiting stage', async () => 
   expect(flow.querySelector('[aria-current="step"]')).toHaveTextContent(
     'Awaiting validation',
   );
-  expect(flow.querySelectorAll('[data-stage-state="complete"]')).toHaveLength(2);
-  expect(flow.querySelectorAll('[data-stage-state="upcoming"]')).toHaveLength(2);
+  expect(flow.querySelectorAll('[data-stage-state="complete"]')).toHaveLength(
+    2,
+  );
+  expect(flow.querySelectorAll('[data-stage-state="upcoming"]')).toHaveLength(
+    2,
+  );
   expect(flow.querySelectorAll('[data-stage-state="current"]')).toHaveLength(1);
 });
 it('keeps modal content local and protects unsaved changes when closing', async () => {
@@ -924,35 +932,40 @@ it('creates a linked agent only through an explicit action', async () => {
   );
   fireEvent.click(screen.getByRole('button', { name: 'Entrust to an agent' }));
   expect(
-    screen.getByText(/always be assigned through that subtask/i),
+    screen.getByText(/agent can work directly on this deliverable/i),
   ).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Agent assignment' }), {
+    target: { value: 'child' },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Create work agent' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d/agent', {
       method: 'POST',
       body: JSON.stringify({
         version: 3,
-        subtaskTitle: 'Produce — Report',
+        subtaskId: 'child',
       }),
     }),
   );
 });
-it('creates an internal execution unit when no task manager is configured', async () => {
+it('assigns directly without a task manager or hidden execution unit', async () => {
   await setup();
   api.mockImplementation((path, input) =>
     Promise.resolve(
       String(path).endsWith('/agent')
-        ? { threadId: 'new-agent', taskId: 'internal-subtask' }
+        ? { threadId: 'new-agent', taskId: null }
         : input
           ? {}
           : board,
     ),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Entrust to an agent' }));
-  expect(screen.getByText(/No task manager is required/i)).toBeInTheDocument();
+  expect(
+    screen.getByText(/agent can work directly on this deliverable/i),
+  ).toBeInTheDocument();
   expect(
     screen.getByRole('option', {
-      name: 'Create an execution unit automatically',
+      name: 'Directly to the deliverable (no subtask)',
     }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Create work agent' }));
@@ -961,7 +974,6 @@ it('creates an internal execution unit when no task manager is configured', asyn
       method: 'POST',
       body: JSON.stringify({
         version: 3,
-        subtaskTitle: 'Produce — Report',
       }),
     }),
   );
@@ -1351,16 +1363,40 @@ it('offers Preview instead of Open and opens a read-only document sheet', async 
 it('uploads a version candidate without overwriting the protected retained source', async () => {
   const sourcePath = '/workspaces/p/livrables/d/published/doc/report.docx';
   const version = (number: number, authorName: string) => ({
-    id: `v${number}`, documentId: 'doc', number, fileName: 'report.docx', sourcePath,
-    snapshotPath: `/history/v${number}/report.docx`, size: 42, sha256: `hash-${number}`,
-    authorPersonId: null, authorName, comment: '', restoredFromVersionId: null, createdAt: number,
+    id: `v${number}`,
+    documentId: 'doc',
+    number,
+    fileName: 'report.docx',
+    sourcePath,
+    snapshotPath: `/history/v${number}/report.docx`,
+    size: 42,
+    sha256: `hash-${number}`,
+    authorPersonId: null,
+    authorName,
+    comment: '',
+    restoredFromVersionId: null,
+    createdAt: number,
   });
-  const document = { id: 'doc', deliverableId: 'd', name: 'report.docx', format: 'docx',
-    sourcePath, protectedSource: true, currentVersionNumber: 2, deletedAt: null,
-    createdAt: 1, updatedAt: 2, versions: [version(2, 'New writer'), version(1, 'Old writer')] };
-  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({
-    files: [{ path: '/workspaces/p/livrables/d/report.docx' }],
-  }) });
+  const document = {
+    id: 'doc',
+    deliverableId: 'd',
+    name: 'report.docx',
+    format: 'docx',
+    sourcePath,
+    protectedSource: true,
+    currentVersionNumber: 2,
+    deletedAt: null,
+    createdAt: 1,
+    updatedAt: 2,
+    versions: [version(2, 'New writer'), version(1, 'Old writer')],
+  };
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        files: [{ path: '/workspaces/p/livrables/d/report.docx' }],
+      }),
+  });
   vi.stubGlobal('fetch', fetchMock);
   await setup({ ...board, deliverables: [{ ...item, documents: [document] }] });
   fireEvent.click(screen.getByRole('tab', { name: /Documents/ }));
@@ -1371,11 +1407,23 @@ it('uploads a version candidate without overwriting the protected retained sourc
     target: { files: [new File(['candidate'], 'report.docx')] },
   });
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  expect(String(fetchMock.mock.calls[0][0])).toContain('destinationPath=%2Fworkspaces%2Fp%2Flivrables%2Fd&');
+  expect(String(fetchMock.mock.calls[0][0])).toContain(
+    'destinationPath=%2Fworkspaces%2Fp%2Flivrables%2Fd&',
+  );
   expect(String(fetchMock.mock.calls[0][0])).not.toContain('published');
-  await waitFor(() => expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d/documents/doc/versions', {
-    method: 'POST', body: JSON.stringify({ path: '/workspaces/p/livrables/d/report.docx', comment: '', expectedVersion: 2 }),
-  }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      '/p/resources/r/deliverables/d/documents/doc/versions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          path: '/workspaces/p/livrables/d/report.docx',
+          comment: '',
+          expectedVersion: 2,
+        }),
+      },
+    ),
+  );
 });
 
 it('uploads selected files before creating their document records', async () => {

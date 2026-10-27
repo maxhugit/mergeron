@@ -126,6 +126,7 @@ jobs:
           src/project-knowledge/project-knowledge.service.spec.ts
           src/project-knowledge/knowledge-proposals.service.spec.ts
           src/deliverables/deliverables.service.spec.ts
+          src/deliverables/deliverables-agent.controller.spec.ts
           src/files/files.service.spec.ts
           src/auth/project-authorization.spec.ts
           src/auth/auth-config.service.spec.ts
