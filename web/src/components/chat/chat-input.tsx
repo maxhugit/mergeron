@@ -461,7 +461,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             and even where it does apply, a tint light enough to read as glass
             leaves the text underneath legible. The transcript masks its own
             bottom edge so rows dissolve before reaching this pane. */}
-        <div className="rounded-2xl border border-border bg-card shadow-lg transition-all duration-200 focus-within:outline-2 focus-within:outline-primary/40">
+        <div className="@container/composer min-w-0 rounded-2xl border border-border bg-card shadow-lg transition-all duration-200 focus-within:outline-2 focus-within:outline-primary/40">
           <AttachmentChips
             attachments={chipAttachments}
             onRemove={handleRemoveAttachment}
@@ -487,8 +487,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             rows={1}
             className="max-h-40 min-h-20 resize-none overflow-y-auto border-none bg-transparent pr-4 pt-2.5 shadow-none focus-visible:ring-0"
           />
-          <div className="flex items-center justify-between px-2 pb-2">
-            <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
               <ModelSelector />
               <PlanModeBadge
                 state={slashDispatch.collaborationMode}
@@ -504,7 +504,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <TokenUsageRing />
               <VoiceDictationButton
                 disabled={!threadId || readOnly || policySettling}

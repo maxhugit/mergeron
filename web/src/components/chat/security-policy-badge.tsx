@@ -214,14 +214,15 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
           variant="ghost"
           size="sm"
           className="h-7 gap-1 rounded-lg px-2 text-xs"
-          title={t('securityPolicyForThisConversation')}
+          title={`${t('securityPolicyForThisConversation')} : ${t(translationKey(sandboxLabel))} · ${t(translationKey(observedApproval))}`}
+          aria-label={`${t('securityPolicyForThisConversation')} : ${t(translationKey(sandboxLabel))} · ${t(translationKey(observedApproval))}`}
         >
           {policy.isSettling ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Icon className="h-3.5 w-3.5" />
           )}
-          <span className="hidden sm:inline">
+          <span className="hidden @min-[640px]/composer:inline">
             {t(translationKey(sandboxLabel))}
             <span className="mx-1 text-muted-foreground">·</span>
             {t(translationKey(observedApproval))}

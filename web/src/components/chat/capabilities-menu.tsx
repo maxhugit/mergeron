@@ -29,10 +29,13 @@ export function CapabilitiesMenu({ cwd, disabled, onSelectSkill }: Props) {
           size="sm"
           className="h-7 gap-1 rounded-lg px-2 text-xs"
           title={t('chatCapabilities')}
+          aria-label={t('chatCapabilities')}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t('chatCapabilities')}</span>
-          <ChevronDown className="h-3 w-3 opacity-50" />
+          <span className="hidden @min-[640px]/composer:inline">
+            {t('chatCapabilities')}
+          </span>
+          <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[640px]/composer:block" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" side="top" className="w-72 space-y-1 p-2">
