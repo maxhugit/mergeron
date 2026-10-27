@@ -475,8 +475,11 @@ export class WorkspaceGitActionsService {
     requireExecutionAccess();
     this.body(body);
     if (
-      !['switch', 'merge'].includes(String(body.action)) ||
-      body.confirmation !== 'LOCAL_BRANCH_ACTION' ||
+      !['switch', 'merge', 'delete'].includes(String(body.action)) ||
+      body.confirmation !==
+        (body.action === 'delete'
+          ? 'DELETE_LOCAL_BRANCH'
+          : 'LOCAL_BRANCH_ACTION') ||
       typeof body.name !== 'string' ||
       typeof body.revision !== 'string'
     )
@@ -491,6 +494,8 @@ export class WorkspaceGitActionsService {
       const target = state.branches.find(
         (b) => !b.remote && b.name === body.name,
       );
+      if (body.action === 'delete' && target?.name === state.branch)
+        throw new ConflictException('GIT_BRANCH_ACTIVE');
       if (
         !target ||
         target.revision !== body.revision ||
@@ -524,6 +529,44 @@ export class WorkspaceGitActionsService {
           throw new ConflictException('GIT_STALE');
       };
       await clean();
+      if (body.action === 'delete') {
+        const worktrees = await this.git.git(cwd, [
+          'worktree',
+          'list',
+          '--porcelain',
+          '-z',
+        ]);
+        if (worktrees.split('\0').includes(`branch refs/heads/${target.name}`))
+          throw new ConflictException('GIT_BRANCH_ACTIVE');
+        const base = (
+          await this.git.git(
+            cwd,
+            ['merge-base', state.head, target.revision],
+            {},
+            15000,
+            [0, 1],
+          )
+        ).trim();
+        if (base !== target.revision)
+          throw new ConflictException('GIT_BRANCH_UNMERGED');
+        await clean();
+        // Disable upstream resolution for this command only: branch -d must
+        // check HEAD, not a configured upstream (merge is a multi-valued key).
+        // An unconfigured random remote has no fetch mapping and cannot resolve
+        // an upstream. This command does not contact a remote or edit config.
+        // Git also refuses deletion if checked out in ANY linked worktree.
+        await this.git.git(cwd, ['branch', '--delete', '--', target.name], {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: `branch.${target.name}.remote`,
+          GIT_CONFIG_VALUE_0: `mergeron-delete-${randomUUID()}`,
+        });
+        this.audit(projectId, copyId, 'git_local_delete', {
+          branch: target.name,
+          sha: target.revision,
+          mergedInto: state.branch,
+        });
+        return { branch: state.branch, sha: state.head, deleted: target.name };
+      }
       let revision = target.revision;
       if (body.action === 'merge') {
         const base = (

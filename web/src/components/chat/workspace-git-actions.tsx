@@ -40,6 +40,8 @@ export function ActionError({ error }: { error: Error | null }) {
     GIT_PR_CREATE_FAILED: t('gitPrCreateFailed'),
     GIT_BRANCH_NAME_INVALID: t('gitBranchNameInvalid'),
     GIT_BRANCH_EXISTS: t('gitBranchExists'),
+    GIT_BRANCH_ACTIVE: t('gitLocalDeleteActive'),
+    GIT_BRANCH_UNMERGED: t('gitLocalDeleteUnmerged'),
     GIT_WORKTREE_DIRTY: t('gitBranchDirty'),
     GIT_LOCAL_MERGE_CONFLICT: t('gitLocalConflict'),
     GIT_CUSTOM_MERGE_DRIVER: t('gitLocalCustomDriver'),

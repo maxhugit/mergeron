@@ -31,7 +31,7 @@ CAPABILITIES = {'relational-v1', 'workspace-tree-v1', 'simple-chat-v1',
                 'tasks-v1', 'deliverables-v1', 'knowledge-v1', 'automation-v1',
                 'workspace-connections-v1', 'conversation-branches-v1', 'codex-history-0.153',
                 'agent-display-detail-v1', 'codex-history-state5-v2', 'autonomous-branches-v1',
-                'operational-path-relocation-v1'}
+                'operational-path-relocation-v1', 'system-spaces-v1'}
 MAX_BYTES = 1024 ** 3
 MAX_ZIP = 96 * 1024 ** 2
 MAX_ENTRY = 256 * 1024 ** 2
@@ -509,6 +509,12 @@ def export_snapshot(options, source_db):
     for workspace in data.get('project_workspaces', []):
         roots.append({'key': 'workspace-' + str(len(roots)), 'source': workspace['path'], 'kind': 'workspace'})
     primary = data['projects'][0]['workspace_path']
+    separated_system = data['projects'][0].get('workspace_layout_version', 0) >= 3
+    if separated_system:
+        system = Path(primary).parent / '.mergeron-system' / Path(primary).name
+        if system.is_symlink() or not system.is_dir():
+            fail('Espace système du projet absent ou invalide.')
+        roots.append({'key': 'system', 'source': str(system), 'kind': 'system'})
     if primary not in {r['source'] for r in roots}:
         fail('Espace principal absent du projet.')
     if any(r['source'] != primary and Path(primary).is_relative_to(r['source']) for r in roots):
@@ -543,7 +549,7 @@ def export_snapshot(options, source_db):
         safe_file(file, upload_root)
         roots.append({'key': 'attachment-' + str(len(roots)), 'source': file, 'kind': 'attachment'})
     manifest = {'kind': 'mergeron.project', 'formatVersion': FORMAT,
-                'requiredCapabilities': sorted((CAPABILITIES - set(AGENT_CODECS.values()) - {'autonomous-branches-v1', 'operational-path-relocation-v1'}) | ({codec} if native else set()) | ({'autonomous-branches-v1'} if warnings else set()) | ({'operational-path-relocation-v1'} if relocations else set())),
+                'requiredCapabilities': sorted((CAPABILITIES - set(AGENT_CODECS.values()) - {'autonomous-branches-v1', 'operational-path-relocation-v1', 'system-spaces-v1'}) | ({codec} if native else set()) | ({'autonomous-branches-v1'} if warnings else set()) | ({'operational-path-relocation-v1'} if relocations else set()) | ({'system-spaces-v1'} if separated_system else set())),
                 'applicationVersion': options.get('version', 'unknown'), 'exportedAt': int(time.time() * 1000),
                 'project': {'id': options['projectId'], 'name': data['projects'][0]['name']},
                 'tables': data, 'schemas': {n: columns(source_db, n) for n in data},
@@ -563,12 +569,12 @@ def export_snapshot(options, source_db):
         with zipfile.ZipFile(output, 'x', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
             for root in roots:
                 source = Path(root['source'])
-                if root['kind'] == 'workspace':
+                if root['kind'] in ('workspace', 'system'):
                     watched.append((source, source.stat()))
                     # A nested workspace is already included by its parent tree.
                     if any(r['kind'] == 'workspace' and r['source'] != root['source'] and source.is_relative_to(r['source']) for r in roots):
                         continue
-                candidates = [source] if root['kind'] != 'workspace' else source.rglob('*')
+                candidates = source.rglob('*') if root['kind'] in ('workspace', 'system') else [source]
                 for file in candidates:
                     if file.is_dir() and not file.is_symlink():
                         manifest['directories'].append({'root': root['key'], 'relative': safe_entry(file.relative_to(source).as_posix())})
@@ -576,19 +582,19 @@ def export_snapshot(options, source_db):
                         if len(manifest['directories']) > MAX_ENTRIES:
                             fail('Le projet contient trop de dossiers.')
                         continue
-                    real = safe_file(file, options['codexHome'] if root['kind'] != 'workspace' else source)
+                    real = safe_file(file, source if root['kind'] in ('workspace', 'system') else options['codexHome'])
                     before = real.stat()
                     if before.st_size > MAX_ENTRY:
                         fail('Un fichier dépasse la limite de 256 Mio : ' + file.name)
                     if len(manifest['files']) >= MAX_ENTRIES:
                         fail('Le projet dépasse la limite de 20 000 fichiers.')
-                    relative = 'file' + file.suffix if root['kind'] != 'workspace' else file.relative_to(source).as_posix()
+                    relative = file.relative_to(source).as_posix() if root['kind'] in ('workspace', 'system') else 'file' + file.suffix
                     entry = safe_entry('content/' + root['key'] + '/' + relative)
                     if entry.casefold() in seen:
                         fail('Deux noms de fichiers ne sont pas portables entre systèmes : ' + file.name)
                     seen.add(entry.casefold())
                     digest = hashlib.sha256()
-                    with open_project_file(file, options['codexHome'] if root['kind'] != 'workspace' else source) as input_file, archive.open(entry, 'w') as target:
+                    with open_project_file(file, source if root['kind'] in ('workspace', 'system') else options['codexHome']) as input_file, archive.open(entry, 'w') as target:
                         for block in iter(lambda: input_file.read(1024 * 1024), b''):
                             size += len(block)
                             if size > MAX_BYTES:
@@ -749,7 +755,7 @@ def validate_project_content(manifest):
     inventory = {}
     for file in manifest['files']:
         root = roots[file['root']]
-        source = str(PurePosixPath(root['source']) / file['relative']) if root['kind'] == 'workspace' else root['source']
+        source = str(PurePosixPath(root['source']) / file['relative']) if root['kind'] in ('workspace', 'system') else root['source']
         inventory[source] = file
     versions = {r['id']: r for r in manifest['tables'].get('project_deliverable_document_versions', [])}
     for version in versions.values():
@@ -789,13 +795,18 @@ def preview(options, manifest):
     root_keys, root_sources = set(), set()
     for root in manifest['roots']:
         key = safe_entry(root['key'])
-        if root['kind'] not in ('workspace', 'agent', 'attachment') or '/' in key or key in root_keys or root['source'] in root_sources or not Path(root['source']).is_absolute() or '..' in PurePosixPath(root['source']).parts or '\\' in root['source'] or '\x00' in root['source']:
+        if root['kind'] not in ('workspace', 'system', 'agent', 'attachment') or '/' in key or key in root_keys or root['source'] in root_sources or not Path(root['source']).is_absolute() or '..' in PurePosixPath(root['source']).parts or '\\' in root['source'] or '\x00' in root['source']:
             fail('Inventaire des espaces de travail invalide.')
         root_keys.add(key)
         root_sources.add(root['source'])
     if manifest['tables']['projects'][0]['workspace_path'] not in root_sources:
         fail('L’espace principal est absent du ZIP.')
     primary = manifest['tables']['projects'][0]['workspace_path']
+    systems = [r for r in manifest['roots'] if r['kind'] == 'system']
+    needs_system = manifest['tables']['projects'][0].get('workspace_layout_version', 0) >= 3
+    expected_system = str(Path(primary).parent / '.mergeron-system' / Path(primary).name)
+    if (needs_system and (len(systems) != 1 or systems[0]['source'] != expected_system or 'system-spaces-v1' not in manifest['requiredCapabilities'])) or (not needs_system and systems):
+        fail('Inventaire de l’espace système invalide.')
     if any(r['kind'] == 'workspace' and r['source'] != primary and Path(primary).is_relative_to(r['source']) for r in manifest['roots']):
         fail('Un espace secondaire contient l’espace principal : cette organisation ne peut pas être restaurée sans duplication.')
     if {r['source'] for r in manifest['roots'] if r['kind'] == 'workspace'} != {r['path'] for r in manifest['tables'].get('project_workspaces', [])}:
@@ -948,7 +959,7 @@ def select_import_content(manifest, selection):
                         or (name not in core | conversations and 'work' in selected)}
     if 'conversations' not in selected:
         result.pop('agents', None)
-        result['roots'] = [r for r in result['roots'] if r['kind'] == 'workspace']
+        result['roots'] = [r for r in result['roots'] if r['kind'] in ('workspace', 'system')]
     roots = {r['key'] for r in result['roots']}
     result['files'] = [r for r in result['files'] if 'files' in selected and r['root'] in roots]
     result['directories'] = [r for r in result.get('directories', []) if 'files' in selected and r['root'] in roots]
@@ -1000,6 +1011,10 @@ def import_archive(options, archive, manifest):
             fail('Racine de contenu invalide.')
         if record['source'] == source_project['workspace_path']:
             location = target
+        elif record['kind'] == 'system':
+            # Restore inside the single transactional staging root. The app's
+            # replayable layout migration separates it before agents run.
+            location = target / '.mergeron'
         elif record['kind'] == 'workspace':
             ancestors = [r for r in ordered_roots if r['kind'] == 'workspace' and r['key'] in root_targets and Path(record['source']).is_relative_to(r['source'])]
             if ancestors:
@@ -1007,7 +1022,7 @@ def import_archive(options, archive, manifest):
                 relative = Path(record['source']).relative_to(ancestor['source'])
                 location = root_targets[ancestor['key']] / Path(*(ids.get(part, part) for part in relative.parts))
             else:
-                location = target / '.mergeron' / 'imported-workspaces' / key
+                location = target / 'sources' / 'imported-workspaces' / key
         elif record['kind'] == 'agent' and native:
             thread_id = ids[key.removeprefix('agent-')]
             instant = datetime.now().astimezone()
@@ -1017,12 +1032,14 @@ def import_archive(options, archive, manifest):
             folder = partition if original.get('archived') else partition / instant.strftime('%Y/%m/%d')
             location = folder / ('rollout-' + stamp + '-' + thread_id + '.jsonl')
         elif record['kind'] == 'attachment':
-            location = target / '.mergeron' / 'imported-attachments' / (key + Path(record['source']).suffix)
+            location = target / 'documents' / 'imported-attachments' / (key + Path(record['source']).suffix)
         else:
             fail('Racine de contenu inconnue.')
         paths[record['source']] = str(location)
         root_targets[key] = location
     records = remap(manifest['tables'], ids, paths)
+    if source_project.get('workspace_layout_version', 0) >= 3:
+        records['projects'][0]['workspace_layout_version'] = 2
     # Existing identities are referenced, never overwritten with archive profiles.
     existing = {value for value in person_mappings.values() if value is not None}
     records['people'] = [p for p in records.get('people', []) if p['id'] not in existing]
@@ -1218,6 +1235,8 @@ def import_archive(options, archive, manifest):
             sync_directory(agent_dir)
         marker = staging / '.mergeron' / 'project.json'
         marker.parent.mkdir(exist_ok=True)
+        for name in ('knowledge', 'history'):
+            (marker.parent / name).mkdir(exist_ok=True)
         durable_text(marker, json.dumps({'projectId': project_id, 'layoutVersion': records['projects'][0]['workspace_layout_version']}))
         for directory, _, _ in os.walk(staging, topdown=False):
             sync_directory(directory)

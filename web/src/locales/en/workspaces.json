@@ -1,4 +1,13 @@
 {
+  "projectWorkingSpace": "Project work space",
+  "systemWorkspace": "System space",
+  "systemWorkspaceHelp": "Internal data · Administrator · Read only",
+  "systemWorkspaceError": "Cannot browse the system space. Check your permissions and its availability.",
+  "gitLocalBranchMenu": "Actions for branch {{name}}",
+  "gitLocalDelete": "Delete local branch…",
+  "gitLocalDeleteHelp": "Delete only this local branch? Its commits must already be included in the current branch. A branch checked out in this copy or another worktree cannot be deleted. No files or remote branches will be removed. No force deletion.",
+  "gitLocalDeleteActive": "Cannot delete a branch checked out in this copy or another worktree. Switch to another branch first.",
+  "gitLocalDeleteUnmerged": "Deletion refused: this branch contains commits absent from the current branch. Merge it first.",
   "gitCreatePr": "Create pull request",
   "gitCreatePrHelp": "Opens a pull request on GitHub for this published branch. No merge or deployment is performed. Future commits pushed to this branch will also update this pull request.",
   "gitPrBase": "Target branch",

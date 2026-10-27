@@ -210,6 +210,7 @@ function show(
         onActiveWorkspaceChange={onActive}
         onFile={onFile}
         onGitDiff={onGitDiff}
+        onGitGraph={() => undefined}
       >
         <div>Local tree</div>
       </WorkspaceGitPanel>
@@ -467,6 +468,30 @@ it('does not adopt a late root after switching away from Files, and loads on ret
   );
   expect(addRoot).toHaveBeenCalledTimes(2);
   expect(onActive).not.toHaveBeenCalled();
+});
+
+it('keeps the branch pane compact without duplicating graph access or help text', async () => {
+  inventory.copies = [copy];
+  show();
+  await screen.findByTestId('git-files');
+  tab('Branches');
+  expect(
+    await screen.findByRole('button', { name: 'Créer une branche' }),
+  ).toBeVisible();
+  const pane = within(
+    screen.getByRole('tabpanel', { name: 'Branches' }),
+  );
+  expect(
+    pane.queryByRole('button', {
+      name: 'Afficher le graphe des branches et commits',
+    }),
+  ).toBeNull();
+  expect(
+    screen.getByRole('button', {
+      name: 'Afficher le graphe des branches et commits',
+    }),
+  ).toBeEnabled();
+  expect(screen.queryByText(/Branches locales de cette copie/)).toBeNull();
 });
 
 it('separates local history from live GitHub branches and never activates a copy by browsing remote data', async () => {

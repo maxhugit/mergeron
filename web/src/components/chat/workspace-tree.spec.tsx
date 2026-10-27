@@ -14,6 +14,15 @@ import { useFilesStore } from '@/stores/files-store';
 import { useLayoutStore } from '@/stores/layout-store';
 
 const addRoot = vi.hoisted(() => vi.fn());
+const session = vi.hoisted(() => ({ isAdministrator: false }));
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => session,
+}));
+vi.mock('./system-workspace-tree', () => ({
+  SystemWorkspaceTree: ({ root }: { root: string }) => (
+    <div data-testid="system-tree">{root}</div>
+  ),
+}));
 vi.mock('./workspace-git-panel', () => ({
   WorkspaceGitPanel: ({
     children,
@@ -50,6 +59,7 @@ function renderTree(cwd: string | null = '/w') {
 }
 
 beforeEach(() => {
+  session.isAdministrator = false;
   addRoot.mockReset().mockResolvedValue({});
   useFilesStore.setState({
     rootDir: null,
@@ -195,6 +205,44 @@ describe('explorer readiness gate', () => {
 });
 
 describe('project workspaces', () => {
+  it.each([false, true])(
+    'exposes the separate system space only to administrators (%s)',
+    async (administrator) => {
+      session.isAdministrator = administrator;
+      const onActive = vi.fn();
+      render(
+        <WorkspaceTree
+          cwd="/workspaces/main"
+          project={{
+            id: 'p',
+            name: 'Project',
+            workspacePath: '/workspaces/main',
+            systemWorkspacePath: '/workspaces/.mergeron-system/main',
+            resources: [],
+            createdAt: 1,
+            updatedAt: 1,
+            workspaces: [],
+          }}
+          desktop
+          mobileOpen={false}
+          onMobileClose={() => {}}
+          onFile={() => {}}
+          onActiveWorkspaceChange={onActive}
+        />,
+      );
+      await screen.findByTestId('file-tree');
+      const system = screen.queryByRole('button', { name: 'System space' });
+      expect(Boolean(system)).toBe(administrator);
+      if (system) {
+        fireEvent.click(system);
+        expect(screen.getByTestId('system-tree')).toHaveTextContent(
+          '/workspaces/.mergeron-system/main',
+        );
+        expect(useFilesStore.getState().rootDir).toBe('/workspaces/main');
+        expect(onActive).not.toHaveBeenCalled();
+      }
+    },
+  );
   it('lists every project workspace and keeps default selection explicit', async () => {
     const onActiveWorkspaceChange = vi.fn();
     render(

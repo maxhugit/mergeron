@@ -13,6 +13,11 @@ import {
   projectDeliverableVersions,
   projectDeliverableDocuments,
   projectDeliverableDocumentVersions,
+  projectLocations,
+  projectAgentThreads,
+  simpleChatThreads,
+  projectTasks,
+  projectActiveFolders,
 } from '../database/schema';
 import {
   WORKSPACE_LAYOUT_VERSION,
@@ -21,6 +26,10 @@ import {
   PROJECT_CONTENT_DIRECTORIES,
   PROJECT_WORKSPACE_INSTRUCTIONS,
   LEGACY_PROJECT_WORKSPACE_INSTRUCTIONS,
+  projectSystemPath,
+  PROJECT_SYSTEM_SPACES_DIRECTORY,
+  EMBEDDED_PROJECT_WORKSPACE_INSTRUCTIONS,
+  projectDraftPath,
 } from './workspace-structure';
 
 /** Files belong to the primary workspace; the database only records their location. */
@@ -34,6 +43,19 @@ export class ProjectWorkspaceLayout {
     if (!id || path.basename(id) !== id || id === '.' || id === '..')
       throw new ConflictException('Invalid project identifier');
     return path.join(this.root, id);
+  }
+
+  private async ensureSystemParent(root: string) {
+    const parent = path.join(
+      path.dirname(root),
+      PROJECT_SYSTEM_SPACES_DIRECTORY,
+    );
+    await fs.mkdir(parent, { recursive: true });
+    const stat = await fs.lstat(parent);
+    if (!stat.isDirectory() || stat.isSymbolicLink())
+      throw new ConflictException(
+        'System workspace parent must be a regular directory',
+      );
   }
 
   async prepare(id: string): Promise<string> {
@@ -88,13 +110,22 @@ export class ProjectWorkspaceLayout {
         );
       await this.migrateSystemDirectory(target, id);
     }
+    const system = projectSystemPath(target);
+    await this.ensureSystemParent(target);
+    if (created && (await this.statIfPresent(system)))
+      await this.readMarker(system, id);
+    await fs.mkdir(system, { recursive: true });
     for (const relative of [
       PROJECT_SYSTEM_DIRECTORY,
       `${PROJECT_SYSTEM_DIRECTORY}/knowledge`,
       `${PROJECT_SYSTEM_DIRECTORY}/history`,
       ...PROJECT_CONTENT_DIRECTORIES,
     ]) {
-      const directory = path.join(target, relative);
+      const directory =
+        relative === PROJECT_SYSTEM_DIRECTORY ||
+        relative.startsWith(PROJECT_SYSTEM_DIRECTORY + '/')
+          ? path.join(system, ...relative.split('/').slice(1))
+          : path.join(target, relative);
       await fs.mkdir(directory, { recursive: true });
       const stat = await fs.lstat(directory);
       if (!stat.isDirectory() || stat.isSymbolicLink())
@@ -119,7 +150,10 @@ export class ProjectWorkspaceLayout {
     };
     for (const [relative, content] of Object.entries(files)) {
       try {
-        await fs.writeFile(path.join(target, relative), content, {
+        const file = relative.startsWith(PROJECT_SYSTEM_DIRECTORY + '/')
+          ? path.join(system, ...relative.split('/').slice(1))
+          : path.join(target, relative);
+        await fs.writeFile(file, content, {
           flag: 'wx',
         });
       } catch (error) {
@@ -129,10 +163,11 @@ export class ProjectWorkspaceLayout {
     return target;
   }
 
-  async migrate(): Promise<void> {
+  async migrate(onlyProjectId?: string): Promise<void> {
     for (const project of this.db.select().from(projects).all()) {
+      if (onlyProjectId && project.id !== onlyProjectId) continue;
       if (project.workspaceLayoutVersion >= WORKSPACE_LAYOUT_VERSION) continue;
-      if (project.workspaceLayoutVersion === 1) {
+      if (project.workspaceLayoutVersion >= 1) {
         // Missing permanent roots are reported by reconciliation, never recreated.
         if (!(await this.statIfPresent(project.workspacePath))) continue;
         await this.migrateSystemDirectory(project.workspacePath, project.id);
@@ -232,7 +267,7 @@ export class ProjectWorkspaceLayout {
         throw new ConflictException(
           'Primary workspace belongs to another project',
         );
-      if (![1, WORKSPACE_LAYOUT_VERSION].includes(marker.layoutVersion ?? 0))
+      if (![1, 2, WORKSPACE_LAYOUT_VERSION].includes(marker.layoutVersion ?? 0))
         throw new ConflictException('Unsupported workspace layout version');
       return marker;
     } catch (error) {
@@ -253,20 +288,26 @@ export class ProjectWorkspaceLayout {
         'Primary workspace path is not a regular directory',
       );
     const legacy = path.join(root, LEGACY_PROJECT_SYSTEM_DIRECTORY);
-    const destination = path.join(root, PROJECT_SYSTEM_DIRECTORY);
+    const embedded = path.join(root, PROJECT_SYSTEM_DIRECTORY);
+    const destination = projectSystemPath(root);
     const [oldStat, newStat] = await Promise.all([
       this.statIfPresent(legacy),
-      this.statIfPresent(destination),
+      this.statIfPresent(embedded),
     ]);
     if (oldStat && newStat)
       throw new ConflictException(
         `Both .webui and .mergeron exist; restore a single owned system directory before retrying: ${root}`,
       );
-    if (!oldStat && !newStat)
+    const separated = await this.statIfPresent(destination);
+    if (separated && (oldStat || newStat))
+      throw new ConflictException(
+        'Both embedded and separated system spaces exist; no directories were merged',
+      );
+    if (!oldStat && !newStat && !separated)
       throw new ConflictException(
         `Primary workspace already exists without an ownership marker: ${root}`,
       );
-    const source = oldStat ? legacy : destination;
+    const source = oldStat ? legacy : newStat ? embedded : destination;
     const marker = await this.readMarker(source, projectId);
     // Validate the reserved subdirectories before moving any data.
     for (const name of ['knowledge', 'history']) {
@@ -285,7 +326,58 @@ export class ProjectWorkspaceLayout {
           `Workspace layout contains an invalid directory: ${directory}`,
         );
     }
-    if (oldStat) await fs.rename(legacy, destination);
+    await this.ensureSystemParent(root);
+    // Older imports placed actual user workspaces/attachments under the internal folder.
+    // Extract those business files before isolating the system space.
+    for (const [name, category] of [
+      ['imported-workspaces', 'sources'],
+      ['imported-attachments', 'documents'],
+    ]) {
+      const from = path.join(source, name),
+        to = path.join(root, category, name);
+      const stat = await this.statIfPresent(from);
+      if (!stat) continue;
+      if (
+        !stat.isDirectory() ||
+        stat.isSymbolicLink() ||
+        (await this.statIfPresent(to))
+      )
+        throw new ConflictException(
+          'Imported project files have an ambiguous destination; no files were merged',
+        );
+      await fs.mkdir(path.join(root, category), { recursive: true });
+      await fs.rename(from, to);
+    }
+    if (source !== destination) await fs.rename(source, destination);
+    for (const [former, name] of [
+      ['.agent-document-drafts', 'draft-archive'],
+      ['livrables/.version-staging', 'staging-archive'],
+    ]) {
+      const from = path.join(root, former),
+        to = path.join(destination, name);
+      const stat = await this.statIfPresent(from);
+      if (!stat) continue;
+      if (
+        !stat.isDirectory() ||
+        stat.isSymbolicLink() ||
+        (await this.statIfPresent(to))
+      )
+        throw new ConflictException(
+          'Ambiguous project scratch migration; original data preserved',
+        );
+      await fs.rename(from, to);
+    }
+    const draft = projectDraftPath(root);
+    const draftStat = await this.statIfPresent(draft);
+    if (draftStat) {
+      if (!draftStat.isDirectory() || draftStat.isSymbolicLink())
+        throw new ConflictException('Invalid agent draft directory');
+      const archive = path.join(destination, 'draft-archive');
+      await fs.mkdir(archive, { recursive: true });
+      if ((await fs.lstat(archive)).isSymbolicLink())
+        throw new ConflictException('Invalid draft archive');
+      await fs.rename(draft, path.join(archive, randomUUID()));
+    }
     for (const name of PROJECT_CONTENT_DIRECTORIES)
       await fs.mkdir(path.join(root, name), { recursive: true });
     if (marker.layoutVersion !== WORKSPACE_LAYOUT_VERSION) {
@@ -310,8 +402,10 @@ export class ProjectWorkspaceLayout {
     if (
       instructionsStat?.isFile() &&
       !instructionsStat.isSymbolicLink() &&
-      (await fs.readFile(instructions, 'utf8')) ===
-        LEGACY_PROJECT_WORKSPACE_INSTRUCTIONS
+      [
+        LEGACY_PROJECT_WORKSPACE_INSTRUCTIONS,
+        EMBEDDED_PROJECT_WORKSPACE_INSTRUCTIONS,
+      ].includes(await fs.readFile(instructions, 'utf8'))
     ) {
       const temporary = path.join(root, `.${randomUUID()}.tmp`);
       try {
@@ -327,13 +421,155 @@ export class ProjectWorkspaceLayout {
 
   /** Replayable after a crash between the filesystem rename and this transaction. */
   private migrateHistoryReferences(projectId: string, root: string) {
-    const legacy = path.join(root, LEGACY_PROJECT_SYSTEM_DIRECTORY);
-    const destination = path.join(root, PROJECT_SYSTEM_DIRECTORY);
-    const relocate = (value: string) =>
-      value.startsWith(legacy + path.sep)
-        ? destination + value.slice(legacy.length)
-        : value;
+    const destination = projectSystemPath(root);
+    const relocate = (value: string) => {
+      for (const name of [
+        LEGACY_PROJECT_SYSTEM_DIRECTORY,
+        PROJECT_SYSTEM_DIRECTORY,
+      ]) {
+        const former = path.join(root, name);
+        for (const [sub, category] of [
+          ['imported-workspaces', 'sources'],
+          ['imported-attachments', 'documents'],
+        ]) {
+          const business = path.join(former, sub);
+          if (value === business || value.startsWith(business + path.sep))
+            return path.join(
+              root,
+              category,
+              sub,
+              path.relative(business, value),
+            );
+        }
+        if (value === former || value.startsWith(former + path.sep))
+          return destination + value.slice(former.length);
+      }
+      return value;
+    };
     this.db.transaction((tx) => {
+      for (const workspace of tx
+        .select()
+        .from(projectWorkspaces)
+        .where(eq(projectWorkspaces.projectId, projectId))
+        .all()) {
+        const relocated = relocate(workspace.path);
+        if (relocated !== workspace.path)
+          tx.update(projectWorkspaces)
+            .set({ path: relocated })
+            .where(eq(projectWorkspaces.id, workspace.id))
+            .run();
+      }
+      for (const location of tx
+        .select()
+        .from(projectLocations)
+        .where(eq(projectLocations.projectId, projectId))
+        .all()) {
+        if (location.path)
+          tx.update(projectLocations)
+            .set({ path: relocate(location.path) })
+            .where(eq(projectLocations.id, location.id))
+            .run();
+      }
+      const workspaces = tx
+        .select()
+        .from(projectWorkspaces)
+        .where(eq(projectWorkspaces.projectId, projectId))
+        .all();
+      const retainChoice = (
+        contextType: 'agent' | 'simple_chat',
+        contextId: string,
+        cwd: string,
+      ) => {
+        const workspace = workspaces
+          .filter(
+            (item) => cwd === item.path || cwd.startsWith(item.path + path.sep),
+          )
+          .sort((a, b) => b.path.length - a.path.length)[0];
+        if (workspace)
+          tx.insert(projectActiveFolders)
+            .values({
+              contextType,
+              contextId,
+              projectId,
+              resourceId: workspace.id,
+              relativePath: path.relative(workspace.path, cwd),
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            })
+            .onConflictDoNothing()
+            .run();
+      };
+      for (const agent of tx
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.projectId, projectId))
+        .all()) {
+        const cwd = relocate(agent.workspacePath);
+        if (cwd !== agent.workspacePath) {
+          tx.update(projectAgentThreads)
+            .set({ workspacePath: cwd })
+            .where(eq(projectAgentThreads.threadId, agent.threadId))
+            .run();
+          retainChoice('agent', agent.threadId, cwd);
+        }
+      }
+      for (const chat of tx
+        .select()
+        .from(simpleChatThreads)
+        .where(eq(simpleChatThreads.projectId, projectId))
+        .all()) {
+        if (chat.cwd) {
+          const cwd = relocate(chat.cwd);
+          if (cwd !== chat.cwd) {
+            tx.update(simpleChatThreads)
+              .set({ cwd })
+              .where(eq(simpleChatThreads.id, chat.id))
+              .run();
+            retainChoice('simple_chat', chat.id, cwd);
+          }
+        }
+      }
+      const boards = tx
+        .select()
+        .from(projectResources)
+        .where(eq(projectResources.projectId, projectId))
+        .all();
+      const relocateConfig = (value: unknown): unknown => {
+        if (typeof value === 'string') return relocate(value);
+        if (Array.isArray(value)) return value.map(relocateConfig);
+        if (value && typeof value === 'object')
+          return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [
+              key,
+              relocateConfig(item),
+            ]),
+          );
+        return value;
+      };
+      for (const board of boards)
+        tx.update(projectResources)
+          .set({
+            config: relocateConfig(board.config) as Record<string, unknown>,
+          })
+          .where(eq(projectResources.id, board.id))
+          .run();
+      for (const board of boards)
+        for (const task of tx
+          .select()
+          .from(projectTasks)
+          .where(eq(projectTasks.resourceId, board.id))
+          .all())
+          tx.update(projectTasks)
+            .set({
+              workspacePath: task.workspacePath
+                ? relocate(task.workspacePath)
+                : null,
+              linkedFilePath: task.linkedFilePath
+                ? relocate(task.linkedFilePath)
+                : null,
+            })
+            .where(eq(projectTasks.id, task.id))
+            .run();
       const deliverables = tx
         .select({ id: projectDeliverables.id })
         .from(projectDeliverables)
@@ -368,6 +604,20 @@ export class ProjectWorkspaceLayout {
           .from(projectDeliverableDocuments)
           .where(eq(projectDeliverableDocuments.deliverableId, deliverable.id))
           .all()) {
+          const source = relocate(document.sourcePath);
+          if (source !== document.sourcePath)
+            tx.update(projectDeliverableDocuments)
+              .set({
+                sourcePath: source,
+                previousSourcePaths: [
+                  ...new Set([
+                    ...document.previousSourcePaths,
+                    document.sourcePath,
+                  ]),
+                ],
+              })
+              .where(eq(projectDeliverableDocuments.id, document.id))
+              .run();
           for (const version of tx
             .select()
             .from(projectDeliverableDocumentVersions)

@@ -34,6 +34,26 @@ describe('protected document execution boundary', () => {
         documentIsolationArgs({ ...plan, writableRoots: [root] }, 'codex', []),
       ).toThrow();
   });
+
+  it('masks system workspaces after every writable mount instead of merely making them read-only', () => {
+    const root = '/workspaces/.mergeron-system';
+    const args = documentIsolationArgs(
+      {
+        ...plan,
+        writableRoots: [...plan.writableRoots, root + '/p'],
+        privateRoots: [root],
+      },
+      'codex',
+      [],
+    );
+    const mask = args.indexOf(root);
+    expect(args[mask - 1]).toBe('--tmpfs');
+    expect(args.slice(mask + 1, mask + 3)).toEqual(['--remount-ro', root]);
+    expect(mask).toBeGreaterThan(args.indexOf(root + '/p'));
+    expect(() =>
+      documentIsolationArgs({ ...plan, privateRoots: ['/etc'] }, 'codex', []),
+    ).toThrow('Invalid system');
+  });
   it('does not forward the backend key, identity settings or manager configuration', () => {
     expect(
       documentAgentEnvironment({

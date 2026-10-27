@@ -30,7 +30,11 @@ Le fichier courant est conservé directement dans
 identifiant de document. L'explorateur affiche ce dossier sous le titre du livrable.
 Les identifiants du livrable et du document restent stables en base ; ils ne sont
 pas ajoutés au nom du fichier. Les versions restent séparées dans
-`.mergeron/history/deliverables/<id-livrable>/documents/<id-document>/<id-version>/`.
+`/workspaces/.mergeron-system/<id-projet>/history/deliverables/<id-livrable>/documents/<id-document>/<id-version>/`.
+Cet espace système est distinct du dossier de travail et n'est consultable
+directement que par les administrateurs. Les membres continuent de consulter
+les versions via les fonctions du livrable et OnlyOffice, avec contrôle de leur
+accès au projet, sans accès générique aux fichiers internes.
 
 Au démarrage, les anciennes projections `published/<id-document>/fichier` sont
 recopiées à la racine, contrôlées par empreinte SHA-256, puis leur référence est
@@ -52,8 +56,10 @@ Une destination identique permet de reprendre une copie interrompue sans
 
 `MERGERON_PUBLISHED_DOCUMENT_PROTECTION=required` impose une frontière de montage
 externe à Codex. Elle ne peut pas être levée par son mode accès complet ou une
-approbation de commande. Les dossiers `livrables` et `.mergeron` sont en lecture
-seule pour ses descendants. Mergeron reste leur écrivain côté application.
+approbation de commande. Le dossier `livrables` est en lecture seule pour ses
+descendants ; l'espace système séparé est masqué. Mergeron reste leur écrivain
+côté application. Les brouillons de publication sont préparés dans un espace
+technique distinct, hors du dossier de travail et des historiques protégés.
 
 Le runtime masque les clés et le socket du Manager, la base WebUI et ses fichiers
 SQLite auxiliaires, ainsi que l'alias `/appdata` pouvant contenir les sauvegardes

@@ -8,6 +8,9 @@ import '@/index.css';
 import '@/i18n';
 
 vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({ isAdministrator: false }),
+}));
 vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => <div>fixture.ts</div>,
 }));

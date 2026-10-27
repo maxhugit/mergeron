@@ -868,7 +868,7 @@ describe('confirmed actions', () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
   const branchAction = async (
-    action: 'switch' | 'merge',
+    action: 'switch' | 'merge' | 'delete',
     name: string,
     overrides = {},
   ) => {
@@ -880,7 +880,8 @@ describe('confirmed actions', () => {
         revision: state.branches.find((b) => !b.remote && b.name === name)
           ?.revision,
         fingerprint: state.fingerprint,
-        confirmation: 'LOCAL_BRANCH_ACTION',
+        confirmation:
+          action === 'delete' ? 'DELETE_LOCAL_BRANCH' : 'LOCAL_BRANCH_ACTION',
         ...overrides,
       }),
     );
@@ -895,6 +896,89 @@ describe('confirmed actions', () => {
     expect((await git(['branch', '-r'])).stdout).not.toContain(
       'origin/feature',
     );
+  });
+  it.each(['feature', 'feature=local'])(
+    'deletes only the merged local branch %s without touching files, index or remote refs',
+    async (name) => {
+      writable();
+      await git(['branch', name]);
+      const state = await service.snapshot('p', copyId);
+      const index = await readFile(path.join(cwd, '.git/index'));
+      const remote = (await git(['rev-parse', 'refs/remotes/origin/main']))
+        .stdout;
+      await branchAction('delete', name);
+      await expect(
+        git(['rev-parse', '--verify', `refs/heads/${name}`]),
+      ).rejects.toThrow();
+      expect((await service.snapshot('p', copyId)).head).toBe(state.head);
+      expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+      expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+        'initial\n',
+      );
+      expect(
+        (await git(['rev-parse', 'refs/remotes/origin/main'])).stdout,
+      ).toBe(remote);
+    },
+  );
+  it('rejects the active branch and a branch checked out in another worktree', async () => {
+    writable();
+    await expect(branchAction('delete', 'main')).rejects.toThrow(
+      'GIT_BRANCH_ACTIVE',
+    );
+    await git(['branch', 'feature']);
+    await git(['worktree', 'add', path.join(root, 'linked'), 'feature']);
+    await expect(branchAction('delete', 'feature')).rejects.toThrow(
+      'GIT_BRANCH_ACTIVE',
+    );
+    expect((await git(['rev-parse', 'feature'])).stdout.trim()).toBeTruthy();
+  });
+  it('refuses unique commits even when already merged into the configured upstream', async () => {
+    writable();
+    await diverge();
+    await git(['branch', 'upstream-copy', 'feature']);
+    await git(['branch', '--set-upstream-to=upstream-copy', 'feature']);
+    const state = await service.snapshot('p', copyId);
+    await expect(branchAction('delete', 'feature')).rejects.toThrow(
+      'GIT_BRANCH_UNMERGED',
+    );
+    expect((await git(['rev-parse', 'feature'])).stdout.trim()).toBe(
+      state.branches.find((b) => b.name === 'feature')?.revision,
+    );
+    expect((await git(['config', 'branch.feature.merge'])).stdout.trim()).toBe(
+      'refs/heads/upstream-copy',
+    );
+  });
+  it('requires deletion-specific confirmation and a current pinned revision', async () => {
+    writable();
+    await git(['branch', 'feature']);
+    await expect(
+      branchAction('delete', 'feature', {
+        confirmation: 'LOCAL_BRANCH_ACTION',
+      }),
+    ).rejects.toThrow('GIT_INVALID_INPUT');
+    await expect(
+      branchAction('delete', 'feature', { revision: '0'.repeat(40) }),
+    ).rejects.toThrow('GIT_STALE');
+    await expect(branchAction('delete', 'origin/main')).rejects.toThrow(
+      'GIT_INVALID_INPUT',
+    );
+    expect((await git(['rev-parse', 'feature'])).stdout.trim()).toBeTruthy();
+  });
+  it('still refuses deletion if unique commits appear after the last inspection', async () => {
+    writable();
+    await diverge();
+    const unique = (await git(['rev-parse', 'feature'])).stdout.trim();
+    await git(['branch', 'upstream-copy', 'feature']);
+    await git(['branch', '-f', 'feature', 'main']);
+    await git(['branch', '--set-upstream-to=upstream-copy', 'feature']);
+    const runGit: WorkspaceGitService['git'] = service.git.bind(service);
+    vi.spyOn(service, 'git').mockImplementation(async (dir, args, ...rest) => {
+      if (args[0] === 'branch' && args.includes('--delete'))
+        await git(['update-ref', 'refs/heads/feature', unique]);
+      return runGit(dir, args, ...rest);
+    });
+    await expect(branchAction('delete', 'feature')).rejects.toThrow();
+    expect((await git(['rev-parse', 'feature'])).stdout.trim()).toBe(unique);
   });
   it('fast-forwards and treats an already merged branch as a no-op', async () => {
     writable();

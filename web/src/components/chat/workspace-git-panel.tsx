@@ -266,7 +266,6 @@ function RepositoryPanel({
   cwd,
   onFile,
   onGitDiff,
-  onGitGraph,
   onGitRemoteFile,
   agentThreadId,
   agentHasCopy,
@@ -612,25 +611,6 @@ function RepositoryPanel({
                 value="branches"
                 className="min-h-0 flex-1 overflow-auto p-3 text-xs"
               >
-                {onGitGraph && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      onGitGraph({
-                        projectId,
-                        resourceId: resource.id,
-                        name: resource.name,
-                        copyId: copy?.id ?? null,
-                      })
-                    }
-                  >
-                    {t('gitOpenGraph')}
-                  </Button>
-                )}
-                <p className="mb-3 text-muted-foreground">
-                  {t('gitBranchesHelp')}
-                </p>
                 {snapshot.data && !snapshot.error ? (
                   <>
                     {copy && (
@@ -651,34 +631,39 @@ function RepositoryPanel({
                       .map((item) => (
                         <div
                           key={`${item.remote}:${item.name}`}
-                          className="border-b py-2"
+                          className="flex items-center gap-2 border-b py-2"
                         >
-                          <p className="break-all font-medium">
-                            {item.name}
-                            {!item.remote && item.name === snapshot.data.branch
-                              ? ` · ${t('gitCurrent')}`
-                              : ''}
-                          </p>
-                          <p className="text-muted-foreground">
-                            {t(
-                              item.remote
-                                ? 'gitRemoteBranch'
-                                : 'gitLocalBranch',
-                            )}{' '}
-                            · {item.revision.slice(0, 7) || t('gitNoCommit')}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <p className="break-all font-medium">
+                              {item.name}
+                              {!item.remote &&
+                              item.name === snapshot.data.branch
+                                ? ` · ${t('gitCurrent')}`
+                                : ''}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {t(
+                                item.remote
+                                  ? 'gitRemoteBranch'
+                                  : 'gitLocalBranch',
+                              )}{' '}
+                              · {item.revision.slice(0, 7) || t('gitNoCommit')}
+                            </p>
+                          </div>
                           {copy && (
-                            <GitLocalBranchActions
-                              projectId={projectId}
-                              copyId={copy.id}
-                              snapshot={snapshot.data!}
-                              branch={item}
-                              agentThreadId={agentThreadId}
-                              readOnly={
-                                resource.accessMode !== 'read_write' ||
-                                copy.accessMode !== 'read_write'
-                              }
-                            />
+                            <div className="shrink-0">
+                              <GitLocalBranchActions
+                                projectId={projectId}
+                                copyId={copy.id}
+                                snapshot={snapshot.data!}
+                                branch={item}
+                                agentThreadId={agentThreadId}
+                                readOnly={
+                                  resource.accessMode !== 'read_write' ||
+                                  copy.accessMode !== 'read_write'
+                                }
+                              />
+                            </div>
                           )}
                         </div>
                       ))}
