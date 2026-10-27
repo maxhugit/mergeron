@@ -330,6 +330,8 @@ it('reserves agent and automation execution for administrators while allowing si
     '/threads',
     '/threads/t/turns',
     '/threads/t/review',
+    '/projects/p/agents',
+    '/projects/p/agents/t',
     '/projects/p/resources/r/automations',
   ]) {
     expect(() => guard.canActivate(http(path, 'POST').context)).toThrow(

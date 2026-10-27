@@ -1048,6 +1048,34 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       }));
   }
 
+  /** Complete project membership before returning a newly created conversation. */
+  async createAgent(projectId: string, workspacePath: string) {
+    requireExecutionAccess();
+    const folder = this.folders.validateAbsoluteSelection(
+      projectId,
+      workspacePath,
+    );
+    if (!folder.effectivePath)
+      throw new ConflictException('Active folder is unresolved');
+    const response = await this.threads.startThread({
+      cwd: folder.effectivePath,
+    });
+    try {
+      // No rollout exists before the first turn: do not resume a fresh thread.
+      await this.associateAgent(
+        projectId,
+        response.thread.id,
+        workspacePath,
+        true,
+      );
+      this.metadata.invalidate();
+      return response;
+    } catch (error) {
+      await this.threads.archiveThread(response.thread.id).catch(() => {});
+      throw error;
+    }
+  }
+
   async associateAgent(
     projectId: string,
     threadId: string,
