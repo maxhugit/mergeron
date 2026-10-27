@@ -23,6 +23,7 @@ import {
 } from '@/lib/projects-api';
 import { WorkspaceTransfers } from './workspace-transfers';
 import { GitCopyDelete } from '../git-copy-delete';
+import { GitConnectionEdit } from './git-connection-edit';
 import {
   getProjectLocations,
   connectionResourceViews,
@@ -292,6 +293,14 @@ export function ExternalWorkspaceResources({
               )}
             </div>
             <div className="ml-auto flex w-full flex-wrap justify-end gap-1 sm:w-auto">
+              {resource.type === 'git' && (
+                <GitConnectionEdit
+                  projectId={project.id}
+                  resource={resource}
+                  disabled={pending || busy}
+                  onSaved={load}
+                />
+              )}
               <Button
                 size="sm"
                 variant="ghost"

@@ -86,6 +86,116 @@ async function mount() {
     name: 'Détacher « Git Test » de ce projet ?',
   });
 }
+async function openEditor() {
+  render(
+    <QueryClientProvider client={client}>
+      <ExternalWorkspaceResources
+        project={project}
+        pending={false}
+        allowCreate={false}
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
+  return screen.getByRole('dialog', {
+    name: 'Modifier la connexion « Git Test »',
+  });
+}
+it('edits the existing connection with a write-only token, preserving address and permissions', async () => {
+  const dialog = await openEditor();
+  const token = within(dialog).getByLabelText('Nouveau jeton d’accès', {
+    exact: true,
+  });
+  expect(token).toHaveAttribute('type', 'password');
+  expect(token).toHaveValue('');
+  expect(within(dialog).getByLabelText('Adresse de connexion')).toHaveAttribute(
+    'readonly',
+  );
+  fireEvent.change(token, { target: { value: 'fake-token-for-test' } });
+  expect(api.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(
+    false,
+  );
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Enregistrer la connexion' }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      '/p/connections/git',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'Git Test',
+          expectedAddress: resource.address,
+          secret: { token: 'fake-token-for-test' },
+        }),
+      }),
+    ),
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(screen.queryByDisplayValue('fake-token-for-test')).toBeNull();
+  expect(
+    api.mock.calls.some(
+      ([, init]) => init?.method === 'DELETE' || init?.method === 'POST',
+    ),
+  ).toBe(false);
+});
+it('preserves stored credentials when saving with an empty token field', async () => {
+  const dialog = await openEditor();
+  fireEvent.change(within(dialog).getByLabelText('Nom de la connexion'), {
+    target: { value: 'Renamed' },
+  });
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Enregistrer la connexion' }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      '/p/connections/git',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'Renamed',
+          expectedAddress: resource.address,
+        }),
+      }),
+    ),
+  );
+});
+it('clears a token on cancellation and does not submit it', async () => {
+  const dialog = await openEditor();
+  fireEvent.change(
+    within(dialog).getByLabelText('Nouveau jeton d’accès', { exact: true }),
+    { target: { value: 'fake-token-for-test' } },
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Modifier' }));
+  expect(
+    screen.getByLabelText('Nouveau jeton d’accès', { exact: true }),
+  ).toHaveValue('');
+  expect(api.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(
+    false,
+  );
+});
+it('shows a safe error and clears the token when saving fails', async () => {
+  const dialog = await openEditor();
+  const original = api.getMockImplementation()!;
+  api.mockImplementation((url, init) =>
+    init?.method === 'PATCH'
+      ? Promise.reject(new Error('do-not-display-secret'))
+      : original(url, init),
+  );
+  fireEvent.change(
+    within(dialog).getByLabelText('Nouveau jeton d’accès', { exact: true }),
+    { target: { value: 'fake-token-for-test' } },
+  );
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Enregistrer la connexion' }),
+  );
+  await screen.findByRole('alert');
+  expect(
+    screen.getByLabelText('Nouveau jeton d’accès', { exact: true }),
+  ).toHaveValue('');
+  expect(screen.queryByText('do-not-display-secret')).toBeNull();
+});
 it('explains that repository and files are preserved and Cancel does not detach anything', async () => {
   const dialog = await mount();
   expect(dialog).toHaveTextContent(
