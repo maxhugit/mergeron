@@ -136,6 +136,11 @@ export class WorkspaceResourcesService {
   ): WorkspaceResourceView {
     requireExecutionAccess();
     const resource = this.raw(projectId, id);
+    if (
+      input.expectedAddress !== undefined &&
+      input.expectedAddress !== resource.address
+    )
+      throw new ConflictException('Connection changed; reload before saving');
     if (resource.type === 'local')
       throw new ConflictException(
         'Local compatibility resources are managed as workspaces',

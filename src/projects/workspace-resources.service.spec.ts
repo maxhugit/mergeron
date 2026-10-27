@@ -166,6 +166,49 @@ it('requires explicit opt-in for plaintext FTP and confines the allowed root', (
   ).toThrow('Credentials must be stored as a connection secret');
 });
 
+it('replaces Git credentials without exposing them and preserves them when omitted', () => {
+  asAdmin(() => {
+    const address = 'https://github.com/example/test.git';
+    const resource = service.create('p', {
+      type: 'git',
+      name: 'Git',
+      address,
+      accessMode: 'read_write',
+      secret: { token: 'old-fake-token' },
+    });
+    const updated = service.update('p', resource.id, {
+      name: 'Git Test',
+      expectedAddress: address,
+      secret: { token: 'new-fake-token' },
+    });
+    expect(updated).toMatchObject({
+      hasSecret: true,
+      address,
+      accessMode: 'read_write',
+    });
+    expect(JSON.stringify(updated)).not.toContain('new-fake-token');
+    expect(service.resolveForTransfer('p', resource.id).secret?.token).toBe(
+      'new-fake-token',
+    );
+    service.update('p', resource.id, {
+      name: 'Renamed',
+      expectedAddress: address,
+    });
+    expect(service.resolveForTransfer('p', resource.id).secret?.token).toBe(
+      'new-fake-token',
+    );
+    expect(() =>
+      service.update('p', resource.id, {
+        expectedAddress: 'https://github.com/example/other.git',
+        secret: { token: 'rejected-fake-token' },
+      }),
+    ).toThrow('Connection changed');
+    expect(service.resolveForTransfer('p', resource.id).secret?.token).toBe(
+      'new-fake-token',
+    );
+  });
+});
+
 it('detaches a definition without claiming to delete remote data', () => {
   const resource = asAdmin(() =>
     service.create('p', {
