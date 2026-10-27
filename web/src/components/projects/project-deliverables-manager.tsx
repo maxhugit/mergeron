@@ -988,6 +988,18 @@ function DeliverableDetail({
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState(item.title);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
+  const { t: agentText } = useTranslation('deliverables');
+  const [agentMode, setAgentMode] = useState('new');
+  const [existingThreadId, setExistingThreadId] = useState('');
+  const availableAgents = useQuery({
+    queryKey: ['deliverable-available-agents', base, item.id],
+    queryFn: () =>
+      projectsApi<{ agents: { id: string; title: string }[] }>(
+        `${base}/${item.id}/available-agents`,
+      ),
+    enabled: agentDialogOpen && agentMode === 'existing',
+    staleTime: 0,
+  });
   const [agentSubtaskId, setAgentSubtaskId] = useState('__direct__');
   const [agentSubtaskTitle, setAgentSubtaskTitle] = useState(
     t('produceDeliverableSubtask', { title: item.title }),
@@ -1033,7 +1045,11 @@ function DeliverableDetail({
     onError: fail,
   });
   const agent = useMutation({
-    mutationFn: (input: { subtaskId?: string; subtaskTitle?: string }) =>
+    mutationFn: (input: {
+      subtaskId?: string;
+      subtaskTitle?: string;
+      existingThreadId?: string;
+    }) =>
       projectsApi<{ threadId: string; taskId: string | null }>(
         `${base}/${item.id}/agent`,
         {
@@ -1400,13 +1416,74 @@ function DeliverableDetail({
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (agentSubtaskId === '__direct__') agent.mutate({});
+              if (
+                agentMode === 'existing' &&
+                !availableAgents.data?.agents.some(
+                  (agent) => agent.id === existingThreadId,
+                )
+              )
+                return;
+              const selection =
+                agentMode === 'existing' ? { existingThreadId } : {};
+              if (agentSubtaskId === '__direct__') agent.mutate(selection);
               else if (agentSubtaskId === '__new__') {
                 if (agentSubtaskTitle.trim())
-                  agent.mutate({ subtaskTitle: agentSubtaskTitle.trim() });
-              } else agent.mutate({ subtaskId: agentSubtaskId });
+                  agent.mutate({
+                    ...selection,
+                    subtaskTitle: agentSubtaskTitle.trim(),
+                  });
+              } else agent.mutate({ ...selection, subtaskId: agentSubtaskId });
             }}
           >
+            <label className="block space-y-1 text-sm">
+              <span>{agentText('agentChoice')}</span>
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={agentMode}
+                disabled={agent.isPending}
+                onChange={(event) => setAgentMode(event.target.value)}
+              >
+                <option value="new">{t('createWorkAgent')}</option>
+                <option value="existing">
+                  {agentText('useExistingAgent')}
+                </option>
+              </select>
+            </label>
+            {agentMode === 'existing' && (
+              <div className="space-y-2">
+                <label className="block space-y-1 text-sm">
+                  <span>{agentText('availableAgent')}</span>
+                  <select
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={existingThreadId}
+                    disabled={agent.isPending || availableAgents.isFetching}
+                    onChange={(event) =>
+                      setExistingThreadId(event.target.value)
+                    }
+                  >
+                    <option value="">
+                      {agentText('selectAvailableAgent')}
+                    </option>
+                    {availableAgents.data?.agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  {agentText('availableAgentHelp')}
+                </p>
+                {availableAgents.isError && (
+                  <p role="alert">{agentText('availableAgentsError')}</p>
+                )}
+                {!availableAgents.isPending &&
+                  !availableAgents.isError &&
+                  !availableAgents.data?.agents.length && (
+                    <p role="status">{agentText('noAvailableAgents')}</p>
+                  )}
+              </div>
+            )}
             <label className="block space-y-1 text-sm">
               <span>{t('deliverableAgentAssignment')}</span>
               <select
@@ -1454,10 +1531,18 @@ function DeliverableDetail({
               <Button
                 disabled={
                   agent.isPending ||
+                  (agentMode === 'existing' &&
+                    (availableAgents.isFetching ||
+                      availableAgents.isError ||
+                      !availableAgents.data?.agents.some(
+                        (agent) => agent.id === existingThreadId,
+                      ))) ||
                   (agentSubtaskId === '__new__' && !agentSubtaskTitle.trim())
                 }
               >
-                {t('createWorkAgent')}
+                {agentMode === 'existing'
+                  ? agentText('assignExistingAgent')
+                  : t('createWorkAgent')}
               </Button>
             </DialogFooter>
           </form>

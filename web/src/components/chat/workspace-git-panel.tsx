@@ -24,6 +24,7 @@ import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
 import { GitStageChanges } from './git-stage-changes';
 import { GitCopyReservation } from './git-copy-reservation';
+import { GitCreateBranch } from './git-create-branch';
 import { pathIsWithin } from '@/lib/file-change-events';
 import type { GitDiffTarget, GitGraphTarget } from '@/stores/workspace-store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -599,27 +600,44 @@ function RepositoryPanel({
                   {t('gitBranchesHelp')}
                 </p>
                 {snapshot.data && !snapshot.error ? (
-                  snapshot.data.branches
-                    .filter((item) => !item.remote)
-                    .map((item) => (
-                      <div
-                        key={`${item.remote}:${item.name}`}
-                        className="border-b py-2"
-                      >
-                        <p className="break-all font-medium">
-                          {item.name}
-                          {!item.remote && item.name === snapshot.data.branch
-                            ? ` · ${t('gitCurrent')}`
-                            : ''}
-                        </p>
-                        <p className="text-muted-foreground">
-                          {t(
-                            item.remote ? 'gitRemoteBranch' : 'gitLocalBranch',
-                          )}{' '}
-                          · {item.revision.slice(0, 7) || t('gitNoCommit')}
-                        </p>
-                      </div>
-                    ))
+                  <>
+                    {copy && (
+                      <GitCreateBranch
+                        key={`${projectId}:${copy.id}:${agentThreadId ?? ''}`}
+                        projectId={projectId}
+                        copyId={copy.id}
+                        snapshot={snapshot.data}
+                        agentThreadId={agentThreadId}
+                        readOnly={
+                          resource.accessMode !== 'read_write' ||
+                          copy.accessMode !== 'read_write'
+                        }
+                      />
+                    )}
+                    {snapshot.data.branches
+                      .filter((item) => !item.remote)
+                      .map((item) => (
+                        <div
+                          key={`${item.remote}:${item.name}`}
+                          className="border-b py-2"
+                        >
+                          <p className="break-all font-medium">
+                            {item.name}
+                            {!item.remote && item.name === snapshot.data.branch
+                              ? ` · ${t('gitCurrent')}`
+                              : ''}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {t(
+                              item.remote
+                                ? 'gitRemoteBranch'
+                                : 'gitLocalBranch',
+                            )}{' '}
+                            · {item.revision.slice(0, 7) || t('gitNoCommit')}
+                          </p>
+                        </div>
+                      ))}
+                  </>
                 ) : (
                   <p>{t('gitNoSnapshot')}</p>
                 )}
@@ -642,11 +660,6 @@ function RepositoryPanel({
           value="remote"
           className="min-h-0 min-w-0 flex-1 overflow-auto"
         >
-          <p className="break-all border-b p-3 text-xs text-muted-foreground">
-            {resource.address}
-            <br />
-            {t('gitRemoteReadHelp')}
-          </p>
           {resource.enabled ? (
             <Tabs
               defaultValue={initialAction === 'remote' ? 'files' : 'prs'}

@@ -53,6 +53,8 @@ import {
   FILES_SETTING_KEYS,
 } from '../settings/settings.definitions';
 import { ThreadsService } from '../threads/threads.service';
+import { ThreadMetadataService } from '../threads/thread-metadata.service';
+import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { OnlyOfficeController } from '../onlyoffice/onlyoffice.controller';
 import { DeliverablesController } from '../deliverables/deliverables.controller';
 import { DeliverablesService } from '../deliverables/deliverables.service';
@@ -226,6 +228,8 @@ beforeEach(async () => {
         useValue: new SimpleChatService(database.db, {} as never, {} as never),
       },
       { provide: ThreadsService, useValue: {} },
+      { provide: ThreadMetadataService, useValue: {} },
+      { provide: GitMutationGateService, useValue: {} },
       { provide: APP_GUARD, useClass: ApiKeyGuard },
       { provide: APP_GUARD, useClass: PlatformAccessGuard },
       { provide: APP_INTERCEPTOR, useClass: AccessContextInterceptor },

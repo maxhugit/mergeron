@@ -43,6 +43,8 @@ import { ProjectKnowledgeController } from '../project-knowledge/project-knowled
 import { DeliverablesController } from '../deliverables/deliverables.controller';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { ThreadsService } from '../threads/threads.service';
+import { ThreadMetadataService } from '../threads/thread-metadata.service';
+import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 
 let app: NestFastifyApplication;
 let database: TestDatabase;
@@ -160,6 +162,8 @@ beforeEach(async () => {
         },
       },
       { provide: ThreadsService, useValue: {} },
+      { provide: ThreadMetadataService, useValue: {} },
+      { provide: GitMutationGateService, useValue: {} },
       { provide: DRIZZLE_DB, useValue: database.db },
       { provide: ProjectsService, useValue: projectsService },
       {
