@@ -1,6 +1,6 @@
 /** Real responsive layout, using fixtures only (no user repository access). */
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
@@ -72,7 +72,15 @@ vi.mock('@/lib/projects-api', () => ({
             status: ' M',
           },
         ],
-        branches: [],
+        branches: [
+          {
+            name: 'main',
+            revision: 'b'.repeat(40),
+            remote: false,
+            upstream: '',
+            tracking: '',
+          },
+        ],
         inspectedAt: 1,
       };
     if (url.endsWith('/staged-diff'))
@@ -170,21 +178,31 @@ test.each([330, 600])(
         />
       </QueryClientProvider>,
     );
+    const menuLabel = `Actions de la branche ${branch.name}`;
+    await page.getByRole('button', { name: menuLabel }).click();
     await page
-      .getByRole('button', { name: 'Fusionner dans la branche actuelle…' })
+      .getByRole('menuitem', { name: 'Fusionner dans la branche actuelle…' })
       .click();
     const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(dialog.contains(document.activeElement)).toBe(true),
+    );
     expect(dialog).toHaveTextContent(`${branch.name} → main`);
     expect(dialog.getBoundingClientRect().right).toBeLessThanOrEqual(width);
     expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await page.getByRole('button', { name: 'Changer de branche…' }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: menuLabel })).toHaveFocus(),
+    );
+    await page.getByRole('button', { name: menuLabel }).click();
+    await page.getByRole('menuitem', { name: 'Changer de branche…' }).click();
     expect(await screen.findByRole('dialog')).toHaveTextContent(
       `main → ${branch.name}`,
     );
     await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: menuLabel }).click();
     await page
-      .getByRole('button', { name: 'Supprimer la branche locale…' })
+      .getByRole('menuitem', { name: 'Supprimer la branche locale…' })
       .click();
     const deletion = await screen.findByRole('dialog');
     expect(deletion).toHaveTextContent(branch.name);
@@ -234,6 +252,24 @@ test.each([260, 330, 600])(
       expect(refresh.getBoundingClientRect().left).toBeGreaterThanOrEqual(
         scopeTabs.getBoundingClientRect().right - 1,
       );
+      await page.getByRole('tab', { name: 'Branches', exact: true }).click();
+      const branchMenu = await screen.findByRole('button', {
+        name: 'Actions de la branche main',
+      });
+      const branchRow = branchMenu.closest('.border-b')!;
+      expect(branchMenu.getBoundingClientRect().right).toBeLessThanOrEqual(
+        width,
+      );
+      expect(branchMenu.getBoundingClientRect().right).toBeGreaterThanOrEqual(
+        branchRow.getBoundingClientRect().right - 4,
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Changer de branche…' }),
+      ).toBeNull();
+      expect(screen.queryByText(/Branches locales de cette copie/)).toBeNull();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-branches-${width}.png`,
+      });
       await page.getByRole('tab', { name: /Modifications/ }).click();
       await screen.findByRole('button', { name: /un-fichier/ });
       const fixture =

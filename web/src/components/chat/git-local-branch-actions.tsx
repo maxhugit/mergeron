@@ -11,6 +11,7 @@ import {
 import { projectsApi } from '@/lib/projects-api';
 import { gitPath, type GitSnapshot } from '@/lib/workspace-git-api';
 import { ActionError } from './workspace-git-actions';
+import { WorkspaceEntryMenu } from './workspace-entry-menu';
 
 export function GitLocalBranchActions({
   projectId,
@@ -30,6 +31,7 @@ export function GitLocalBranchActions({
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
   const submitted = useRef(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const [review, setReview] = useState<{
     action: 'switch' | 'merge' | 'delete';
     fingerprint?: string;
@@ -85,46 +87,51 @@ export function GitLocalBranchActions({
   if (branch.remote || branch.name === snapshot.branch) return null;
   return (
     <>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {(['switch', 'merge', 'delete'] as const).map((mode) => (
-          <Button
-            key={mode}
-            size="sm"
-            variant="outline"
-            className={mode === 'delete' ? 'text-destructive' : undefined}
-            disabled={disabled || action.isPending}
-            onClick={() => {
-              action.reset();
-              setReview({
-                action: mode,
-                fingerprint: snapshot.fingerprint,
-                revision: branch.revision,
-                current: snapshot.branch,
-              });
-            }}
-          >
-            {t(
-              mode === 'delete'
-                ? 'gitLocalDelete'
-                : mode === 'switch'
-                  ? 'gitLocalSwitch'
-                  : 'gitLocalMerge',
-            )}
-          </Button>
-        ))}
-      </div>
-      {snapshot.changes.length > 0 && (
-        <p className="mt-1 text-muted-foreground">
-          {t('gitLocalCleanRequired')}
-        </p>
-      )}
+      <WorkspaceEntryMenu
+        label={t('gitLocalBranchMenu', { name: branch.name })}
+        triggerRef={trigger}
+        onCloseAutoFocus={(event) => {
+          if (review) event.preventDefault();
+        }}
+        items={(['switch', 'merge', 'delete'] as const).map((mode) => ({
+          label: t(
+            mode === 'delete'
+              ? 'gitLocalDelete'
+              : mode === 'switch'
+                ? 'gitLocalSwitch'
+                : 'gitLocalMerge',
+          ),
+          destructive: mode === 'delete',
+          disabled: disabled || action.isPending,
+          reason:
+            snapshot.changes.length > 0
+              ? t('gitLocalCleanRequired')
+              : undefined,
+          onSelect: () => {
+            action.reset();
+            setReview({
+              action: mode,
+              fingerprint: snapshot.fingerprint,
+              revision: branch.revision,
+              current: snapshot.branch,
+            });
+          },
+        }))}
+      />
       <Dialog
         open={!!review}
         onOpenChange={(open) => {
           if (!open && !action.isPending) setReview(null);
         }}
       >
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            if (trigger.current?.isConnected) {
+              event.preventDefault();
+              trigger.current.focus();
+            }
+          }}
+        >
           <DialogTitle>
             {t(
               review?.action === 'delete'

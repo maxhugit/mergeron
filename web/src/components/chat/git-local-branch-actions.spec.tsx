@@ -55,6 +55,17 @@ function show(state = snapshot, readOnly = false) {
     </QueryClientProvider>,
   );
 }
+async function openMenu() {
+  fireEvent.pointerDown(
+    screen.getByRole('button', { name: 'Actions de la branche feature' }),
+    { button: 0, ctrlKey: false },
+  );
+  return screen.findByRole('menu');
+}
+async function choose(label: string) {
+  await openMenu();
+  fireEvent.click(screen.getByRole('menuitem', { name: label }));
+}
 it.each([
   ['Changer de branche…', 'switch'],
   ['Fusionner dans la branche actuelle…', 'merge'],
@@ -63,7 +74,8 @@ it.each([
   'confirms %s with pinned source and reviewed state',
   async (label, action) => {
     show();
-    fireEvent.click(screen.getByRole('button', { name: label }));
+    expect(screen.queryByRole('button', { name: label })).toBeNull();
+    await choose(label);
     expect(api).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toHaveTextContent(
       action === 'delete'
@@ -87,29 +99,31 @@ it.each([
     });
   },
 );
-it('disables operations for dirty and read-only copies', () => {
+it('disables operations for dirty and read-only copies', async () => {
   show({ ...snapshot, changes: [{ path: 'file', status: '??' }] });
+  await openMenu();
   expect(
-    screen.getByRole('button', { name: 'Changer de branche…' }),
-  ).toBeDisabled();
+    screen.getByRole('menuitem', { name: /Changer de branche…/ }),
+  ).toHaveAttribute('aria-disabled', 'true');
   cleanup();
   show(snapshot, true);
+  await openMenu();
   expect(
-    screen.getByRole('button', { name: 'Fusionner dans la branche actuelle…' }),
-  ).toBeDisabled();
+    screen.getByRole('menuitem', {
+      name: 'Fusionner dans la branche actuelle…',
+    }),
+  ).toHaveAttribute('aria-disabled', 'true');
 });
 it('does not offer deletion for the current branch', () => {
   show({ ...snapshot, branch: branch.name });
   expect(
-    screen.queryByRole('button', { name: 'Supprimer la branche locale…' }),
+    screen.queryByRole('button', { name: 'Actions de la branche feature' }),
   ).toBeNull();
 });
 it('explains unmerged commits and keeps the confirmation open on refusal', async () => {
   api.mockRejectedValue(new Error('GIT_BRANCH_UNMERGED'));
   show();
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Supprimer la branche locale…' }),
-  );
+  await choose('Supprimer la branche locale…');
   expect(screen.getByRole('dialog')).toHaveTextContent(
     'Aucun fichier ni branche distante',
   );
@@ -122,9 +136,7 @@ it('explains unmerged commits and keeps the confirmation open on refusal', async
 it('shows the localized refusal without retrying', async () => {
   api.mockRejectedValue(new Error('GIT_LOCAL_MERGE_CONFLICT'));
   show();
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Fusionner dans la branche actuelle…' }),
-  );
+  await choose('Fusionner dans la branche actuelle…');
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Aucun fichier');
   expect(api).toHaveBeenCalledOnce();
