@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import * as path from 'node:path';
 import { homedir } from 'node:os';
 import { and, eq } from 'drizzle-orm';
@@ -24,6 +25,12 @@ import {
 /** Fail closed when a deployment requests protection but cannot establish it. */
 @Injectable()
 export class DocumentProtectionService {
+  private async fileHash(file: string) {
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(file))
+      hash.update(chunk as Buffer);
+    return hash.digest('hex');
+  }
   private fingerprint: string | null = null;
   private unavailableRoots: string[] = [];
 
@@ -243,20 +250,40 @@ export class DocumentProtectionService {
       const folder = await this.directory(root, [
         'livrables',
         document.deliverableId,
-        'published',
-        createHash('sha256').update(document.id).digest('hex'),
       ]);
       const target = path.join(folder, path.basename(document.name));
       const before = await fs.stat(source);
-      await fs.copyFile(source, target);
+      const sourceHash = await this.fileHash(source);
+      try {
+        await fs.copyFile(source, target, fs.constants.COPYFILE_EXCL);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        const stat = await fs.lstat(target);
+        if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1)
+          throw new Error('Invalid retained document destination');
+      }
       const after = await fs.stat(source);
-      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs)
+      if (
+        before.size !== after.size ||
+        before.mtimeMs !== after.mtimeMs ||
+        (await this.fileHash(source)) !== sourceHash ||
+        (await this.fileHash(target)) !== sourceHash
+      )
         throw new Error(
           'A document changed during protected relocation; retry after its editor closes',
         );
       this.db
         .update(projectDeliverableDocuments)
-        .set({ sourcePath: target })
+        .set({
+          sourcePath: target,
+          previousSourcePaths: [
+            ...new Set([
+              ...(document.previousSourcePaths ?? []),
+              document.sourcePath,
+              source,
+            ]),
+          ],
+        })
         .where(
           and(
             eq(projectDeliverableDocuments.id, document.id),

@@ -739,6 +739,10 @@ export const projectDeliverableDocuments = sqliteTable(
     name: text('name').notNull(),
     format: text('format').notNull(),
     sourcePath: text('source_path').notNull(),
+    previousSourcePaths: text('previous_source_paths', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     currentVersionNumber: integer('current_version_number')
       .notNull()
       .default(0),

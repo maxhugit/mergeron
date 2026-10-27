@@ -23,6 +23,31 @@ un protocole interne, utilisable aussi par les conversations existantes. L'agent
 reçoit le format et les identifiants autorisés dans son contexte ; aucun nouvel
 endpoint public ou secret d'administration n'est nécessaire.
 
+## Rangement des fichiers et migration
+
+Le fichier courant est conservé directement dans
+`livrables/<id-livrable>/<nom-du-document>`, sans sous-dossier `published` ni
+identifiant de document. L'explorateur affiche ce dossier sous le titre du livrable.
+Les identifiants du livrable et du document restent stables en base ; ils ne sont
+pas ajoutés au nom du fichier. Les versions restent séparées dans
+`.mergeron/history/deliverables/<id-livrable>/documents/<id-document>/<id-version>/`.
+
+Au démarrage, les anciennes projections `published/<id-document>/fichier` sont
+recopiées à la racine, contrôlées par empreinte SHA-256, puis leur référence est
+mise à jour. L'ancien fichier n'est retiré qu'après cette validation et
+l'enregistrement en base ; seuls ses dossiers devenus vides sont retirés.
+Les anciens chemins sont conservés comme alias pour les liens existants et
+OnlyOffice. Ces alias ne donnent aucun droit supplémentaire : les contrôles
+d'accès s'appliquent aussi au chemin courant. Les lignes d'historique, les
+instantanés, leurs empreintes et les numéros de version ne changent pas.
+
+Une collision avec un autre document, un fichier de contenu différent, un lien
+symbolique/physique ou un fichier manquant bloque uniquement ce déplacement.
+Le fichier original et l'historique sont conservés et un avertissement
+`root migration needs attention` identifie le document à réparer dans les logs.
+Une destination identique permet de reprendre une copie interrompue sans
+écrasement. Aucun fichier inconnu ni aucune sauvegarde de données n'est supprimé.
+
 ## Protection Linux
 
 `MERGERON_PUBLISHED_DOCUMENT_PROTECTION=required` impose une frontière de montage

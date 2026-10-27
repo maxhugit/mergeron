@@ -13,6 +13,7 @@ import {
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { currentAccess } from '../auth/access-context';
 import { projects } from '../database/schema';
+import { documentPathAlias } from '../deliverables/document-path-alias';
 import {
   PROJECT_SYSTEM_DIRECTORY,
   LEGACY_PROJECT_SYSTEM_DIRECTORY,
@@ -244,7 +245,9 @@ export class FilesService implements OnModuleDestroy {
 
     let resolved: string;
     try {
-      resolved = await fs.realpath(path.resolve(inputPath));
+      resolved = await fs.realpath(
+        path.resolve(documentPathAlias(this.db, inputPath)),
+      );
     } catch {
       throw BusinessException.notFound(
         ErrorCode.files.pathNotFound,
@@ -259,6 +262,9 @@ export class FilesService implements OnModuleDestroy {
         'Path outside allowed workspace roots',
       );
     }
+
+    if (access && access.identity.role !== 'administrator')
+      access.identities.requireWorkspacePath(resolved, false, access.identity);
 
     return resolved;
   }
