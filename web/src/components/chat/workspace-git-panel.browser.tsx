@@ -9,6 +9,7 @@ vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => <div>Arborescence locale</div>,
 }));
 import { GitCopyActions } from './workspace-git-actions';
+import { GitLocalBranchActions } from './git-local-branch-actions';
 import type { GitSnapshot } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
@@ -133,6 +134,56 @@ vi.mock('@/lib/projects-api', () => ({
   },
 }));
 afterEach(cleanup);
+test.each([330, 600])(
+  'local branch confirmation fits at %ipx',
+  async (width) => {
+    await page.viewport(width, 800);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    const branch = {
+      name: 'feature/une-branche-locale-très-longue',
+      revision: 'b'.repeat(40),
+      remote: false,
+      upstream: '',
+      tracking: '',
+    };
+    const snapshot: GitSnapshot = {
+      fingerprint: 'reviewed',
+      branch: 'main',
+      head: 'a'.repeat(40),
+      changes: [],
+      branches: [branch],
+      ahead: 0,
+      behind: 0,
+      upstream: null,
+      inspectedAt: 1,
+      branchesLimited: false,
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <GitLocalBranchActions
+          projectId="p"
+          copyId="copy"
+          snapshot={snapshot}
+          branch={branch}
+          readOnly={false}
+        />
+      </QueryClientProvider>,
+    );
+    await page
+      .getByRole('button', { name: 'Fusionner dans la branche actuelle…' })
+      .click();
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(`${branch.name} → main`);
+    expect(dialog.getBoundingClientRect().right).toBeLessThanOrEqual(width);
+    expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: 'Changer de branche…' }).click();
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      `main → ${branch.name}`,
+    );
+  },
+);
 test.each([260, 330, 600])(
   'fits the Git panel at %ipx without clipping its controls',
   async (width) => {

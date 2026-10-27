@@ -1,4 +1,11 @@
 {
+  "gitLocalSwitch": "Changer de branche…",
+  "gitLocalMerge": "Fusionner dans la branche actuelle…",
+  "gitLocalConfirm": "Confirmer",
+  "gitLocalCleanRequired": "Enregistrez vos modifications dans un commit avant de changer de branche ou de fusionner.",
+  "gitLocalActionHelp": "Opération locale uniquement, sans publication. La copie doit être propre et les agents inactifs. Aucun forçage ni rangement automatique des modifications. Une fusion conflictuelle est refusée sans modifier les fichiers.",
+  "gitLocalConflict": "Fusion impossible automatiquement (conflit, historique incompatible ou Git non compatible). Aucun fichier n’a été modifié.",
+  "gitLocalCustomDriver": "Les pilotes de fusion personnalisés ne sont pas autorisés pour cette opération.",
   "gitRefreshAll": "Actualiser le dépôt",
   "gitRefreshAllHelp": "Actualise les données locales, GitHub et la synchronisation, sans fetch, pull ni modification des fichiers.",
   "gitRemoteReadOnly": "Lecture seule",
