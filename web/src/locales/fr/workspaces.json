@@ -1,4 +1,5 @@
 {
+  "browser": "Navigateur",
   "gitGraphTabTitle": "Graphe Git",
   "gitWorkspaceMenu": "Actions du dossier de travail",
   "gitMenu": "Actions Git · {{name}}",

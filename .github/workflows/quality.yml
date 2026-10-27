@@ -100,6 +100,10 @@ jobs:
             pnpm --dir web lint
           fi
 
+      - name: Test browser public-only egress policy
+        if: matrix.part == 'backend'
+        run: node --test deployment/browser/public-proxy.test.mjs
+
       - name: Test backend startup and migrations
         if: matrix.part == 'backend'
         run: >-
@@ -110,6 +114,7 @@ jobs:
           src/database/project-locations-migration.spec.ts
           src/http-stack.spec.ts
           src/archive
+          src/browser
           src/document-publication
           src/threads/project-connection-policy.service.spec.ts
           src/threads/project-connection-runtime.service.spec.ts

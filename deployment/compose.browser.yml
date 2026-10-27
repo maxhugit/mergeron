@@ -1,0 +1,32 @@
+# Optional overlay: see docs/navigateur-annote.md. No host port, data mount,
+# credentials from Mergeron, privileged mode, or extra Linux capabilities.
+services:
+  mergeron-ui:
+    environment:
+      MERGERON_BROWSER_ENDPOINT: ws://mergeron-browser:3000/${BROWSER_WS_PATH:?Set a random browser path}
+    networks:
+      mergeron-browser-control: {}
+  mergeron-browser:
+    build: ./browser
+    init: true
+    restart: unless-stopped
+    environment:
+      BROWSER_WS_PATH: ${BROWSER_WS_PATH:?Set a random browser path}
+    networks:
+      - mergeron-browser-control
+      - mergeron-browser-egress
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m,mode=1777
+    shm_size: 256m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=${DEPLOY_ROOT}/config/seccomp-bwrap.json
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.5
+networks:
+  mergeron-browser-control:
+    internal: true
+  mergeron-browser-egress: {}

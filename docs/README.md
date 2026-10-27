@@ -40,3 +40,4 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 `upstream/` conserve des références officielles figées dans leur langue d’origine.
 Ces documents ne sont pas nécessaires à l’installation.
+- [Navigateur annoté](navigateur-annote.md)
