@@ -12,6 +12,24 @@ import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import i18n from '@/i18n';
 import type { GitSnapshot, GitChecks } from '@/lib/workspace-git-api';
 const api = vi.hoisted(() => vi.fn());
+const session = vi.hoisted(() => ({
+  data: {
+    kind: 'person' as 'person' | 'service',
+    personId: 'person',
+    active: true,
+    name: 'Test Reviewer',
+    email: 'test@example.invalid',
+  },
+  isError: false,
+  isFetching: false,
+}));
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({
+    ...session,
+    isPending: false,
+    refetch: vi.fn().mockResolvedValue({}),
+  }),
+}));
 vi.mock('@/lib/projects-api', () => ({ projectsApi: api }));
 let client: QueryClient;
 const snapshot: GitSnapshot = {
@@ -41,6 +59,15 @@ const checks: GitChecks = {
 };
 beforeEach(async () => {
   await i18n.changeLanguage('fr');
+  session.data = {
+    kind: 'person',
+    personId: 'person',
+    active: true,
+    name: 'Test Reviewer',
+    email: 'test@example.invalid',
+  };
+  session.isError = false;
+  session.isFetching = false;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -75,12 +102,14 @@ async function fillCommit() {
   fireEvent.change(screen.getByLabelText('Message du commit'), {
     target: { value: 'Reviewed change' },
   });
-  fireEvent.change(screen.getByLabelText('Nom de l’auteur'), {
-    target: { value: 'Test Reviewer' },
-  });
-  fireEvent.change(screen.getByLabelText('E-mail de l’auteur'), {
-    target: { value: 'test@example.invalid' },
-  });
+  expect(screen.getByLabelText('Nom de l’auteur')).toHaveValue('Test Reviewer');
+  expect(screen.getByLabelText('Nom de l’auteur')).toHaveAttribute('readonly');
+  expect(screen.getByLabelText('E-mail de l’auteur')).toHaveValue(
+    'test@example.invalid',
+  );
+  expect(screen.getByLabelText('E-mail de l’auteur')).toHaveAttribute(
+    'readonly',
+  );
   await screen.findByText('+only-staged');
 }
 
@@ -106,9 +135,9 @@ it('requires staged review, identity and explicit commit confirmation', async ()
   expect(body).toMatchObject({
     fingerprint: snapshot.fingerprint,
     message: 'Reviewed change',
-    authorName: 'Test Reviewer',
-    authorEmail: 'test@example.invalid',
   });
+  expect(body).not.toHaveProperty('authorName');
+  expect(body).not.toHaveProperty('authorEmail');
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 it('blocks committing when the staged preview no longer matches the reviewed index', async () => {
@@ -124,6 +153,32 @@ it('blocks committing when the staged preview no longer matches the reviewed ind
   ).toBeDisabled();
   expect(posts()).toHaveLength(0);
 });
+
+it.each(['missing-email', 'service', 'session-error', 'refreshing'])(
+  'blocks commit for an unavailable connected identity: %s',
+  async (mode) => {
+    if (mode === 'missing-email') session.data.email = '';
+    if (mode === 'service') session.data.kind = 'service';
+    if (mode === 'session-error') session.isError = true;
+    if (mode === 'refreshing') session.isFetching = true;
+    showCopy();
+    fireEvent.click(screen.getByRole('button', { name: 'Commit…' }));
+    await screen.findByText('+only-staged');
+    fireEvent.change(screen.getByLabelText('Message du commit'), {
+      target: { value: 'Cannot override the identity' },
+    });
+    expect(
+      screen.getByRole('button', { name: 'Confirmer le commit' }),
+    ).toBeDisabled();
+    expect(screen.getByLabelText('Nom de l’auteur')).toHaveAttribute(
+      'readonly',
+    );
+    expect(screen.getByLabelText('E-mail de l’auteur')).toHaveAttribute(
+      'readonly',
+    );
+    expect(posts()).toHaveLength(0);
+  },
+);
 it('cancels push without a write and freezes the confirmed destination', async () => {
   const view = showCopy();
   fireEvent.click(screen.getByRole('button', { name: 'Push…' }));
@@ -217,9 +272,11 @@ it('explains missing write credentials without silently retrying the push', asyn
 it('distinguishes forbidden write access from missing credentials without retrying', async () => {
   api.mockRejectedValue(new Error('GIT_WRITE_ACCESS_DENIED'));
   showCopy();
-  fireEvent.click(screen.getByRole('button', {name:'Push…'}));
-  fireEvent.click(screen.getByRole('button', {name:'Confirmer le push'}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('GitHub refuse l’écriture');
+  fireEvent.click(screen.getByRole('button', { name: 'Push…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer le push' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'GitHub refuse l’écriture',
+  );
   expect(posts()).toHaveLength(1);
 });
 it('merges only after confirmation and sends both reviewed revisions', async () => {

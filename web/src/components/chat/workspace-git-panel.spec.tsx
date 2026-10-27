@@ -16,6 +16,21 @@ import type { GitInventory, GitSnapshot } from '@/lib/workspace-git-api';
 
 const api = vi.hoisted(() => vi.fn());
 const addRoot = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({
+    data: {
+      kind: 'person',
+      personId: 'person',
+      name: 'Utilisateur Test',
+      email: 'test@example.invalid',
+      active: true,
+    },
+    isPending: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn().mockResolvedValue({}),
+  }),
+}));
 vi.mock('@/lib/projects-api', () => ({
   projectsApi: api,
   projectsQueryKey: ['projects'],

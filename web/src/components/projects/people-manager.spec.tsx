@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -124,7 +125,9 @@ it('shows live presence and lets an administrator revoke all sessions', async ()
     </QueryClientProvider>,
   );
 
-  expect(await screen.findByText(/Connected since/)).toBeInTheDocument();
+  expect(
+    await screen.findByRole('cell', { name: /^Connected$/ }),
+  ).toBeInTheDocument();
   expect(screen.getByRole('table')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /^Actions —/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Force sign out' }));
@@ -134,4 +137,117 @@ it('shows live presence and lets an administrator revoke all sessions', async ()
       method: 'POST',
     }),
   );
+});
+
+function tablePeople() {
+  peopleState.people = [
+    {
+      id: 'z',
+      name: 'Zoé Test',
+      reference: 'TEST-2',
+      firstName: 'Zoé',
+      lastName: 'Test',
+      email: 'a@example.invalid',
+      active: true,
+      role: 'standard',
+      phone: '02',
+      identityLinked: true,
+    },
+    {
+      id: 'a',
+      name: 'Alice Test',
+      reference: 'TEST-10',
+      firstName: 'Alice',
+      lastName: 'Test',
+      email: 'z@example.invalid',
+      active: false,
+      role: 'administrator',
+      phone: '10',
+      identityLinked: false,
+    },
+    {
+      id: 'n',
+      name: 'Sans Email',
+      reference: 'TEST-11',
+      firstName: 'Sans',
+      lastName: 'Email',
+      email: null,
+      active: true,
+      role: 'standard',
+      phone: '',
+      identityLinked: false,
+    },
+  ];
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <PeopleManager />
+    </QueryClientProvider>,
+  );
+}
+
+const bodyRows = () => screen.getAllByRole('row').slice(1);
+const firstName = () =>
+  within(bodyRows()[0]).getAllByRole('cell')[0].textContent?.trim();
+
+it('shows one piece of information per cell, with sortable accessible column headers', () => {
+  tablePeople();
+  expect(screen.getAllByRole('columnheader')).toHaveLength(10);
+  const row = bodyRows().find((row) => within(row).queryByText('Zoé Test'))!;
+  expect(
+    within(row)
+      .getAllByRole('cell')
+      .slice(0, 7)
+      .map((cell) => cell.textContent?.trim()),
+  ).toEqual([
+    'Zoé Test',
+    'TEST-2',
+    'a@example.invalid',
+    'Active',
+    'Standard user',
+    '02',
+    'Login linked',
+  ]);
+  const header = screen.getByRole('columnheader', { name: 'Manual reference' });
+  fireEvent.click(within(header).getByRole('button'));
+  expect(header).toHaveAttribute('aria-sort', 'ascending');
+  expect(firstName()).toBe('Zoé Test');
+  fireEvent.click(within(header).getByRole('button'));
+  expect(header).toHaveAttribute('aria-sort', 'descending');
+  expect(firstName()).toBe('Sans Email');
+  expect(api).not.toHaveBeenCalled();
+});
+
+it('keeps missing values last in both sort directions and preserves sorting when searching', () => {
+  tablePeople();
+  const header = screen.getByRole('columnheader', { name: 'Email' });
+  fireEvent.click(within(header).getByRole('button'));
+  expect(firstName()).toBe('Zoé Test');
+  expect(bodyRows().at(-1)?.textContent).toContain('Sans Email');
+  fireEvent.click(within(header).getByRole('button'));
+  expect(firstName()).toBe('Alice Test');
+  expect(bodyRows().at(-1)?.textContent).toContain('Sans Email');
+  fireEvent.change(screen.getByRole('textbox'), {
+    target: { value: 'TEST-2' },
+  });
+  expect(bodyRows()).toHaveLength(1);
+  expect(firstName()).toBe('Zoé Test');
+  expect(header).toHaveAttribute('aria-sort', 'descending');
+});
+
+it('sorts connection dates by timestamps rather than their formatted text', async () => {
+  auth.accounts = [
+    { personId: 'z', connected: true, connectedSince: Date.UTC(2026, 9, 31) },
+    { personId: 'a', connected: true, connectedSince: Date.UTC(2026, 10, 1) },
+  ];
+  tablePeople();
+  await waitFor(() =>
+    expect(screen.getAllByRole('cell', { name: /^Connected$/ })).toHaveLength(
+      2,
+    ),
+  );
+  const header = screen.getByRole('columnheader', { name: 'Connected since' });
+  fireEvent.click(within(header).getByRole('button'));
+  expect(firstName()).toBe('Zoé Test');
+  fireEvent.click(within(header).getByRole('button'));
+  expect(firstName()).toBe('Alice Test');
 });

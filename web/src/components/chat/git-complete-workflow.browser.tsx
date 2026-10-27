@@ -13,6 +13,21 @@ const server = vi.hoisted(() => ({
   committed: false,
   posts: [] as Array<{ url: string; body: Record<string, unknown> }>,
 }));
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({
+    data: {
+      kind: 'person',
+      personId: 'person',
+      name: 'Utilisateur Test',
+      email: 'test@example.invalid',
+      active: true,
+    },
+    isPending: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn().mockResolvedValue({}),
+  }),
+}));
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
   projectsApi: async (url: string, options?: RequestInit) => {
@@ -157,12 +172,19 @@ test.each([390, 1100])(
       await page
         .getByRole('textbox', { name: 'Message du commit' })
         .fill('Mettre à jour coucou');
-      await page
-        .getByRole('textbox', { name: 'Nom de l’auteur' })
-        .fill('Utilisateur Test');
-      await page
-        .getByRole('textbox', { name: 'E-mail de l’auteur' })
-        .fill('test@example.invalid');
+      expect(
+        screen.getByRole('textbox', { name: 'Nom de l’auteur' }),
+      ).toHaveValue('Utilisateur Test');
+      expect(
+        screen.getByRole('textbox', { name: 'Nom de l’auteur' }),
+      ).toHaveAttribute('readonly');
+      expect(
+        screen.getByRole('textbox', { name: 'E-mail de l’auteur' }),
+      ).toHaveValue('test@example.invalid');
+      expect(
+        screen.getByRole('textbox', { name: 'E-mail de l’auteur' }),
+      ).toHaveAttribute('readonly');
+      await page.screenshot({path: `../../../.vitest-screenshots/git-connected-author-${width}.png`});
       await page.getByRole('button', { name: 'Confirmer le commit' }).click();
       await expect.poll(() => server.committed).toBe(true);
       await expect.poll(() => screen.queryByRole('dialog')).toBeNull();

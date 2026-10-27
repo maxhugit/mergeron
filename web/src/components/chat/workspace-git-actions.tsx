@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { projectsApi } from '@/lib/projects-api';
+import { usePlatformSession } from '@/lib/platform-session';
 import {
   gitGet,
   gitPath,
@@ -68,8 +69,24 @@ export function GitCopyActions({
   const [reviewed, setReviewed] = useState<GitSnapshot | null>(null);
   const [reviewAddress, setReviewAddress] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const session = usePlatformSession();
+  const name = session.data?.name?.trim() ?? '';
+  const email = session.data?.email?.trim() ?? '';
+  const identityReady =
+    !session.isPending &&
+    !session.isError &&
+    !session.isFetching &&
+    session.data?.kind === 'person' &&
+    session.data.active &&
+    Boolean(session.data.personId) &&
+    Boolean(name) &&
+    name.length <= 120 &&
+    email.length <= 254 &&
+    !/[<>]/.test(name) &&
+    /^[^\s<>@]+@[^\s<>@]+$/.test(email) &&
+    ![...name, ...email].some(
+      (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127,
+    );
   const [result, setResult] = useState('');
   const submitted = useRef(false);
   const trigger = useRef<HTMLButtonElement | null>(null);
@@ -101,9 +118,7 @@ export function GitCopyActions({
             fingerprint: reviewed.fingerprint,
             agentThreadId,
             address: reviewAddress,
-            ...(mode === 'commit'
-              ? { message, authorName: name, authorEmail: email }
-              : {}),
+            ...(mode === 'commit' ? { message } : {}),
           }),
         },
       );
@@ -132,6 +147,7 @@ export function GitCopyActions({
     },
   });
   const open = (value: 'commit' | 'push') => {
+    if (value === 'commit') void session.refetch();
     action.reset();
     setResult('');
     setReviewed(snapshot);
@@ -260,9 +276,7 @@ export function GitCopyActions({
                   <input
                     className="min-w-0 rounded-md border bg-background p-2"
                     value={name}
-                    maxLength={120}
-                    disabled={action.isPending}
-                    onChange={(event) => setName(event.target.value)}
+                    readOnly
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
@@ -271,12 +285,20 @@ export function GitCopyActions({
                     type="email"
                     className="min-w-0 rounded-md border bg-background p-2"
                     value={email}
-                    maxLength={254}
-                    disabled={action.isPending}
-                    onChange={(event) => setEmail(event.target.value)}
+                    readOnly
                   />
                 </label>
               </div>
+              <p className="text-xs text-muted-foreground">
+                {t('gitAuthorFromSession')}
+              </p>
+              {!identityReady && (
+                <p role="status" className="text-xs">
+                  {session.isPending || session.isFetching
+                    ? t('gitLoading')
+                    : t('gitActionIdentityRequired')}
+                </p>
+              )}
             </>
           )}
           <ActionError error={action.error} />
@@ -298,8 +320,7 @@ export function GitCopyActions({
                     Boolean(preview.error) ||
                     stale ||
                     !message.trim() ||
-                    !name.trim() ||
-                    !email.trim()))
+                    !identityReady))
               }
               onClick={() => {
                 if (!submitted.current) {
