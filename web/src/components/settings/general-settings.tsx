@@ -90,7 +90,12 @@ export function GeneralSettings() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-4 sm:px-6">
+        <div
+          className={cn(
+            'mx-auto w-full min-w-0 space-y-4 px-4 py-4 sm:px-6',
+            tab !== 'backups' && 'max-w-4xl',
+          )}
+        >
           {/* Keep update controls mounted so changing tabs cannot reset a plan or its progress dialog. */}
           <div
             hidden={tab === 'socket'}
