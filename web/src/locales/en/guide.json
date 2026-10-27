@@ -42,7 +42,7 @@
   "deliverablesButton2": "Change status",
   "deliverablesEffect2": "Shows allowed transitions only. Finalizing freezes a snapshot; it does not mean a human has approved it. Validation is requested only when required.",
   "deliverablesButton3": "Assign to an agent",
-  "deliverablesEffect3": "Links agent work to the deliverable. Retained documents go through a draft and versioned recording; code and temporary files are not published documents.",
+  "deliverablesEffect3": "Assigns an agent directly to the deliverable without a required task. If a primary task is linked, a subtask can optionally be selected or explicitly created, retaining both links. Retained documents go through a draft and versioned recording; code and temporary files are not published documents.",
   "automationsStep1": "Add the automations manager to the project, then create an automation with an explicit instruction and schedule.",
   "automationsStep2": "Check scope, permissions and timing before activation. An automation may face the same approval requests as manual work.",
   "automationsStep3": "Review runs and their results. Diagnose a failed run; failure does not prove that earlier actions were undone.",

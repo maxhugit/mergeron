@@ -988,7 +988,7 @@ function DeliverableDetail({
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState(item.title);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
-  const [agentSubtaskId, setAgentSubtaskId] = useState('__new__');
+  const [agentSubtaskId, setAgentSubtaskId] = useState('__direct__');
   const [agentSubtaskTitle, setAgentSubtaskTitle] = useState(
     t('produceDeliverableSubtask', { title: item.title }),
   );
@@ -1034,7 +1034,7 @@ function DeliverableDetail({
   });
   const agent = useMutation({
     mutationFn: (input: { subtaskId?: string; subtaskTitle?: string }) =>
-      projectsApi<{ threadId: string; taskId: string }>(
+      projectsApi<{ threadId: string; taskId: string | null }>(
         `${base}/${item.id}/agent`,
         {
           method: 'POST',
@@ -1068,7 +1068,10 @@ function DeliverableDetail({
     (task) => task.id === item.primaryTaskId,
   );
   const availableSubtasks = board.tasks.filter(
-    (task) => task.parentTaskId === item.primaryTaskId && !task.linkedThreadId,
+    (task) =>
+      primaryTask &&
+      task.parentTaskId === primaryTask.id &&
+      !task.linkedThreadId,
   );
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -1183,8 +1186,20 @@ function DeliverableDetail({
           </div>
         </div>
       </div>
-      <div className={tab === 'history' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto'}>
-        <div className={tab === 'history' ? 'flex min-h-0 w-full flex-1 flex-col p-4 md:p-6' : 'w-full space-y-4 p-4 md:p-6'}>
+      <div
+        className={
+          tab === 'history'
+            ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
+            : 'min-h-0 flex-1 overflow-y-auto'
+        }
+      >
+        <div
+          className={
+            tab === 'history'
+              ? 'flex min-h-0 w-full flex-1 flex-col p-4 md:p-6'
+              : 'w-full space-y-4 p-4 md:p-6'
+          }
+        >
           {tab === 'overview' && (
             <Overview
               item={item}
@@ -1204,17 +1219,17 @@ function DeliverableDetail({
             />
           )}
           {tab === 'documents' && (
-              <DeliverableDocuments
-                item={item}
-                base={base}
-                disabled={
-                  busy ||
-                  revisionDirty ||
-                  !['draft', 'in_constitution'].includes(item.lifecycleStatus)
-                }
-                refresh={refresh}
-                onError={fail}
-              />
+            <DeliverableDocuments
+              item={item}
+              base={base}
+              disabled={
+                busy ||
+                revisionDirty ||
+                !['draft', 'in_constitution'].includes(item.lifecycleStatus)
+              }
+              refresh={refresh}
+              onError={fail}
+            />
           )}
           {tab === 'history' && (
             <DeliverableHistory item={item} download={download} />
@@ -1378,34 +1393,34 @@ function DeliverableDetail({
           <DialogHeader>
             <DialogTitle>{t('entrustDeliverableToAgent')}</DialogTitle>
             <DialogDescription>
-              {primaryTask
-                ? t('deliverableAgentRequiresSubtask')
-                : t('deliverableAgentAutomaticExecution')}
+              {t('deliverableAgentOptionalSubtask')}
             </DialogDescription>
           </DialogHeader>
           <form
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (agentSubtaskId === '__new__') {
+              if (agentSubtaskId === '__direct__') agent.mutate({});
+              else if (agentSubtaskId === '__new__') {
                 if (agentSubtaskTitle.trim())
                   agent.mutate({ subtaskTitle: agentSubtaskTitle.trim() });
               } else agent.mutate({ subtaskId: agentSubtaskId });
             }}
           >
             <label className="block space-y-1 text-sm">
-              <span>{t('executionSubtask')}</span>
+              <span>{t('deliverableAgentAssignment')}</span>
               <select
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 value={agentSubtaskId}
                 disabled={agent.isPending}
                 onChange={(event) => setAgentSubtaskId(event.target.value)}
               >
-                <option value="__new__">
-                  {primaryTask
-                    ? t('createDedicatedSubtask')
-                    : t('createAutomaticExecutionUnit')}
+                <option value="__direct__">
+                  {t('deliverableAgentDirect')}
                 </option>
+                {primaryTask && (
+                  <option value="__new__">{t('createDedicatedSubtask')}</option>
+                )}
                 {availableSubtasks.map((task) => (
                   <option key={task.id} value={task.id}>
                     {task.title}
@@ -2317,7 +2332,11 @@ export function DeliverableHistory({
   ];
   events.sort((a, b) => b.date - a.date || a.id.localeCompare(b.id));
   return (
-    <section aria-label={t('history')} tabIndex={0} className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card">
+    <section
+      aria-label={t('history')}
+      tabIndex={0}
+      className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card"
+    >
       <table className="w-full text-left text-sm">
         <caption className="p-4 text-left font-semibold">
           {t('history')}

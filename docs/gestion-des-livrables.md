@@ -24,8 +24,13 @@ associées à la fiche.
 
 À chaque message suivant dans une conversation liée, le modèle reçoit le brief,
 les critères et le dossier de travail, en complément des connaissances partagées.
-Le bouton **Travailler sur ce livrable**, réservé aux administrateurs comme les
-autres exécutions serveur, crée et ouvre une conversation Codex liée. L’utilisateur
+Le bouton **Confier à un agent**, réservé aux administrateurs comme les
+autres exécutions serveur, crée et ouvre une conversation liée directement au
+livrable, sans tâche ni sous-tâche obligatoire et sans tâche cachée automatique.
+Si une tâche principale est associée, on peut aussi sélectionner une de ses
+sous-tâches disponibles ou en créer une explicitement : l’agent est alors lié à
+la fois à cette sous-tâche et au livrable. Le lien avec une tâche principale ne
+force pas l’affectation à une sous-tâche. L’utilisateur
 envoie ensuite son message pour lancer le travail. La nouvelle conversation
 reprend la sélection de connecteurs MCP et d’applications Codex du projet.
 

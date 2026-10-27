@@ -904,6 +904,47 @@ describe('project deliverables', () => {
       await fs.rm(foreign, { recursive: true, force: true });
     }
   });
+  it('registers a direct agent without creating any task and rejects stale associations atomically', async () => {
+    const item = await service.create('p', 'r', {
+      title: 'Standalone',
+      criteria: 'Publishable',
+    });
+    service.registerAgent('p', 'r', item.id, item.version, 'direct-agent');
+    expect(service.get('p', 'r', item.id).conversations).toContainEqual({
+      type: 'agent',
+      id: 'direct-agent',
+    });
+    expect(service.contextForConversation('direct-agent')).toContain(
+      'Publishable',
+    );
+    expect(database.db.select().from(projectTasks).all()).toEqual([]);
+    expect(
+      new ActiveFoldersService(database.db).resolve('agent', 'direct-agent'),
+    ).toBe(path.join(root, 'livrables', item.id));
+    expect(() =>
+      service.registerAgent('p', 'r', item.id, item.version, 'stale-direct'),
+    ).toThrow('changed');
+    expect(service.contextForConversation('stale-direct')).toBeNull();
+    expect(
+      database.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, 'stale-direct'))
+        .get(),
+    ).toBeUndefined();
+    expect(() =>
+      service.registerAgent(
+        'p',
+        'r',
+        item.id,
+        item.version + 1,
+        'invalid-subtask-agent',
+        'missing',
+      ),
+    ).toThrow();
+    expect(service.contextForConversation('invalid-subtask-agent')).toBeNull();
+  });
+
   it('registers an agent in the primary workspace and rolls back stale associations', async () => {
     const now = Date.now();
     database.db
@@ -965,6 +1006,10 @@ describe('project deliverables', () => {
       path.join(root, 'livrables', item.id),
     );
     service.registerAgent('p', 'r', item.id, 1, 'new-agent', 'agent-subtask');
+    expect(service.get('p', 'r', item.id).conversations).toContainEqual({
+      type: 'agent',
+      id: 'new-agent',
+    });
     expect(service.contextForConversation('new-agent')).toContain(
       'Publishable',
     );
