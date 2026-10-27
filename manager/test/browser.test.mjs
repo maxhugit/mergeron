@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { scopeManifest } from '../src/inventory.mjs';
 import { specification, TransactionalUpdater } from '../src/updater.mjs';
+import { readInstallConfiguration } from '../src/installer.mjs';
 const manifest = JSON.parse(
   await readFile(new URL('../stack-manifest.json', import.meta.url)),
 );
@@ -38,6 +39,9 @@ test('managed browser is explicit and DEV-only', () => {
     'mergeron-dev-browser-egress',
   ]);
   assert.deepEqual(browser.dns, ['1.1.1.1']);
+  const configuration = readInstallConfiguration(dev, {});
+  assert.equal(configuration.images.browser, undefined);
+  assert.match(configuration.images.application, /mergeron:edge$/);
 });
 test('browser recreation and rollback enforce DNS while preserving sandbox and secret', () => {
   const browser = { id: 'browser', dns: ['1.1.1.1'] };

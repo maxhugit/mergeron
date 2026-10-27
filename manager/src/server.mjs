@@ -95,6 +95,7 @@ async function refresh() {
               ),
           ),
         inspectContainer: (id) => docker.inspectContainer(id),
+        inspectImage: (reference) => docker.inspectImage(reference),
       });
       snapshot = evaluateAdoption(
         inventory,
