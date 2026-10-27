@@ -34,6 +34,7 @@ import type {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/files/file-tree';
 import { filesAddRoot } from '@/generated/api';
+import { filesReadTreeQueryKey } from '@/generated/api/@tanstack/react-query.gen';
 import { useFilesStore } from '@/stores/files-store';
 import {
   projectsApi,
@@ -288,6 +289,38 @@ function RepositoryPanel({
   const [browsed, setBrowsed] = useState<string | null>(null);
   const [browseError, setBrowseError] = useState('');
   const [browseAttempt, setBrowseAttempt] = useState(0);
+  const refreshButton = useRef<HTMLButtonElement | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const refresh = useMutation({
+    mutationFn: async () => {
+      setRefreshVersion((version) => version + 1);
+      await Promise.all([
+        ...(copy?.localPath
+          ? [...new Set([copy.localPath, useFilesStore.getState().rootDir])]
+              .filter((root): root is string =>
+                Boolean(root && pathIsWithin(root, copy.localPath!)),
+              )
+              .map((root) =>
+                client.invalidateQueries({
+                  queryKey: filesReadTreeQueryKey({ query: { root } }),
+                  refetchType: 'all',
+                }),
+              )
+          : []),
+        client.invalidateQueries({ queryKey: gitInventoryKey(projectId) }),
+        ...[
+          ['workspace-git', projectId, copy?.id],
+          ['workspace-git-commits', projectId, copy?.id],
+          ['workspace-git-remote-files', projectId, resource.id],
+          ['workspace-git-remote-branches', projectId, resource.id],
+          ['workspace-git-prs', projectId, resource.id],
+          ['workspace-git-checks', projectId, resource.id],
+        ].map((queryKey) =>
+          client.invalidateQueries({ queryKey, refetchType: 'all' }),
+        ),
+      ]);
+    },
+  });
   const ready = copies.filter((copy) => copy.state === 'ready');
   const copy = agentThreadId
     ? ready.find((item) => copyOwnedByAgent(item, agentThreadId))
@@ -376,29 +409,45 @@ function RepositoryPanel({
         onValueChange={setScope}
         className="flex min-w-0 shrink-0 flex-col gap-0"
       >
-        <TabsList className="flex h-auto w-full shrink-0 flex-wrap rounded-none border-b bg-transparent p-1">
-          <TabsTrigger
-            value="local"
-            className="inline-flex min-w-0 items-center gap-1 px-3 py-2 text-xs"
+        <div className="flex min-w-0 shrink-0 items-center border-b">
+          <TabsList className="flex h-auto min-w-0 flex-1 flex-wrap rounded-none bg-transparent p-1">
+            <TabsTrigger
+              value="local"
+              className="inline-flex min-w-0 items-center gap-1 px-3 py-2 text-xs"
+            >
+              <HardDrive className="h-3.5 w-3.5" />
+              {t('gitScopeLocal')}
+            </TabsTrigger>
+            <TabsTrigger
+              value="remote"
+              className="inline-flex min-w-0 items-center gap-1 px-3 py-2 text-xs"
+            >
+              <Cloud className="h-3.5 w-3.5" />
+              {t('gitScopeRemote')}
+            </TabsTrigger>
+            <TabsTrigger
+              value="sync"
+              className="inline-flex min-w-0 items-center gap-1 px-3 py-2 text-xs"
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+              {t('gitSynchronization')}
+            </TabsTrigger>
+          </TabsList>
+          <Button
+            ref={refreshButton}
+            variant="ghost"
+            size="icon-sm"
+            className="mr-1 shrink-0"
+            aria-label={t('gitRefreshAll')}
+            title={t('gitRefreshAllHelp')}
+            disabled={!resource.enabled || refresh.isPending}
+            onClick={() => refresh.mutate()}
           >
-            <HardDrive className="h-3.5 w-3.5" />
-            {t('gitScopeLocal')}
-          </TabsTrigger>
-          <TabsTrigger
-            value="remote"
-            className="inline-flex min-w-0 items-center gap-1 px-3 py-2 text-xs"
-          >
-            <Cloud className="h-3.5 w-3.5" />
-            {t('gitScopeRemote')}
-          </TabsTrigger>
-          <TabsTrigger
-            value="sync"
-            className="inline-flex min-w-0 items-center gap-1 px-3 py-2 text-xs"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            {t('gitSynchronization')}
-          </TabsTrigger>
-        </TabsList>
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${refresh.isPending ? 'animate-spin' : ''}`}
+            />
+          </Button>
+        </div>
         <TabsContent
           value="local"
           forceMount
@@ -414,22 +463,6 @@ function RepositoryPanel({
                   ? ` · ${snapshot.data.head.slice(0, 7)}`
                   : ''}
               </span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('gitRefreshLocal')}
-                disabled={!copy || snapshot.isFetching}
-                onClick={() => {
-                  void snapshot.refetch();
-                  void client.invalidateQueries({
-                    queryKey: ['workspace-git-commits', projectId, copy?.id],
-                  });
-                }}
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${snapshot.isFetching ? 'animate-spin' : ''}`}
-                />
-              </Button>
             </div>
             {!resource.enabled ? (
               <p>{t('gitDisabledHelp')}</p>
@@ -678,6 +711,7 @@ function RepositoryPanel({
                 <GitRemoteFiles
                   projectId={projectId}
                   resourceId={resource.id}
+                  refreshVersion={refreshVersion}
                   onFile={onGitRemoteFile}
                 />
               </TabsContent>
@@ -687,6 +721,7 @@ function RepositoryPanel({
                   resourceId={resource.id}
                   canWrite={resource.accessMode === 'read_write'}
                   resourceAddress={resource.address}
+                  onCloseFocus={() => refreshButton.current?.focus()}
                 />
               </TabsContent>
               <TabsContent value="published">
@@ -736,30 +771,6 @@ function RepositoryPanel({
                       ).toLocaleTimeString(),
                     })
                   : t('gitNoTrackingComparison')}
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  void client.invalidateQueries({
-                    queryKey: [
-                      'workspace-git-remote-branches',
-                      projectId,
-                      resource.id,
-                    ],
-                  });
-                  void client.invalidateQueries({
-                    queryKey: ['workspace-git-prs', projectId, resource.id],
-                  });
-                  void client.invalidateQueries({
-                    queryKey: ['workspace-git-checks', projectId, resource.id],
-                  });
-                }}
-              >
-                {t('gitRefreshRemote')}
-              </Button>
-              <p className="text-muted-foreground">
-                {t('gitRefreshRemoteHelp')}
               </p>
               {writable && copy && snapshot.data && !snapshot.error && (
                 <GitCopyActions
@@ -987,16 +998,17 @@ function PullRequests({
   resourceId,
   canWrite,
   resourceAddress,
+  onCloseFocus,
 }: {
   projectId: string;
   resourceId: string;
   canWrite: boolean;
   resourceAddress: string | null;
+  onCloseFocus: () => void;
 }) {
   const { t } = useTranslation('workspaces');
   const [number, setNumber] = useState<number | null>(null);
   const [lastMerged, setLastMerged] = useState<number | null>(null);
-  const refreshButton = useRef<HTMLButtonElement | null>(null);
   const statusLabels: Record<string, string> = {
     success: t('gitCheckSuccess'),
     failure: t('gitCheckFailure'),
@@ -1038,18 +1050,6 @@ function PullRequests({
   });
   return (
     <div className="space-y-3 p-3 text-xs">
-      <Button
-        ref={refreshButton}
-        size="sm"
-        variant="outline"
-        disabled={prs.isFetching || checks.isFetching}
-        onClick={() => {
-          void prs.refetch();
-          if (number) void checks.refetch();
-        }}
-      >
-        {t('gitRefresh')}
-      </Button>
       {lastMerged !== null && (
         <p role="status">
           #{lastMerged} · {t('gitActionMerged')}
@@ -1147,7 +1147,7 @@ function PullRequests({
                           checks={checks.data}
                           address={resourceAddress}
                           onMerged={() => setLastMerged(pr.number)}
-                          onCloseFocus={() => refreshButton.current?.focus()}
+                          onCloseFocus={onCloseFocus}
                         />
                       )}
                     </div>

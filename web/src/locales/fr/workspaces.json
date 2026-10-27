@@ -1,4 +1,6 @@
 {
+  "gitRefreshAll": "Actualiser le dépôt",
+  "gitRefreshAllHelp": "Actualise les données locales, GitHub et la synchronisation, sans fetch, pull ni modification des fichiers.",
   "gitRemoteReadOnly": "Lecture seule",
   "gitCloseRemoteFile": "Fermer le fichier distant {{name}}",
   "gitRemoteReadOnlyHelp": "Fichier distant provenant de GitHub, sur la révision affichée. Modification et enregistrement indisponibles ; les fichiers locaux restent inchangés.",

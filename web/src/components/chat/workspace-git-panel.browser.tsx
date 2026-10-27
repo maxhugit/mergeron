@@ -166,6 +166,15 @@ test.each([260, 330, 600])(
     );
     try {
       await screen.findByRole('tab', { name: 'Fichiers' });
+      const refresh = screen.getByRole('button', {
+        name: 'Actualiser le dépôt',
+      });
+      const scopeTabs =
+        refresh.parentElement!.querySelector('[role="tablist"]')!;
+      expect(scopeTabs).not.toBeNull();
+      expect(refresh.getBoundingClientRect().left).toBeGreaterThanOrEqual(
+        scopeTabs.getBoundingClientRect().right - 1,
+      );
       await page.getByRole('tab', { name: /Modifications/ }).click();
       await screen.findByRole('button', { name: /un-fichier/ });
       const fixture =
@@ -203,6 +212,9 @@ test.each([260, 330, 600])(
       expect(
         await screen.findByRole('region', { name: 'Synchronisation' }),
       ).toBeVisible();
+      expect(
+        screen.getAllByRole('button', { name: 'Actualiser le dépôt' }),
+      ).toHaveLength(1);
       expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
       await page.screenshot({
