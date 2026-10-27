@@ -7,6 +7,27 @@ import type { WorkspaceGitService } from './workspace-git.service';
 import type { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import type { WorkspaceCopiesService } from './workspace-copies.service';
 
+it('routes confirmed local branch creation to the action service', async () => {
+  const createBranch = vi.fn().mockResolvedValue({ branch: 'feature/test' });
+  const controller = new WorkspaceGitController(
+    {} as WorkspaceGitService,
+    { createBranch } as unknown as WorkspaceGitActionsService,
+    {} as WorkspaceCopiesService,
+  );
+  const body = { name: 'feature/test', confirmation: 'CREATE_LOCAL_BRANCH' };
+  await controller.createBranch('p', 'copy', body);
+  expect(createBranch).toHaveBeenCalledWith('p', 'copy', body);
+  expect(
+    Reflect.getMetadata(
+      PATH_METADATA,
+      Object.getOwnPropertyDescriptor(
+        WorkspaceGitController.prototype,
+        'createBranch',
+      )!.value as object,
+    ),
+  ).toBe('copies/:copyId/branches');
+});
+
 it('exposes remote branch inspection at the canonical connections path and the legacy path', async () => {
   const remoteBranches = vi.fn().mockResolvedValue({
     supported: true,

@@ -45,6 +45,15 @@ export class WorkspaceGitController {
     return this.copies.releaseOwner(projectId, copyId, body);
   }
 
+  @Post('copies/:copyId/branches')
+  createBranch(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.createBranch(projectId, copyId, body);
+  }
+
   @Post('copies/:copyId/commit')
   commit(
     @Param('projectId') projectId: string,

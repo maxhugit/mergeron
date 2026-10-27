@@ -696,6 +696,116 @@ it('parses porcelain without splitting whitespace or renames into phantom change
 });
 
 describe('confirmed actions', () => {
+  it('creates a local branch at a pinned starting point without switching or publishing', async () => {
+    writable();
+    const snapshot = await service.snapshot('p', copyId);
+    await git(['branch', 'base-old', snapshot.head]);
+    await git(['config', 'user.name', 'Test']);
+    await git(['config', 'user.email', 'test@example.invalid']);
+    await writeFile(path.join(cwd, 'README.md'), 'newer commit\n');
+    await git(['add', 'README.md']);
+    await git(['commit', '-m', 'advance main']);
+    const current = await service.snapshot('p', copyId);
+    await writeFile(path.join(cwd, 'README.md'), 'keep local edits\n');
+    await actions.createBranch('p', copyId, {
+      name: 'feature/local',
+      startRef: 'refs/heads/base-old',
+      startRevision: snapshot.head,
+      checkout: false,
+      fingerprint: current.fingerprint,
+      confirmation: 'CREATE_LOCAL_BRANCH',
+    });
+    expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+      'main',
+    );
+    expect((await git(['rev-parse', 'feature/local'])).stdout.trim()).toBe(
+      snapshot.head,
+    );
+    expect((await git(['rev-parse', 'HEAD'])).stdout.trim()).toBe(current.head);
+    expect(current.head).not.toBe(snapshot.head);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'keep local edits\n',
+    );
+    await expect(
+      git(['rev-parse', '--verify', 'refs/remotes/origin/feature/local']),
+    ).rejects.toThrow();
+  });
+
+  it('creates and switches only on a clean copy and keeps an existing branch intact', async () => {
+    writable();
+    const snapshot = await service.snapshot('p', copyId);
+    const body = {
+      name: 'feature/switch',
+      startRef: 'refs/remotes/origin/main',
+      startRevision: snapshot.head,
+      checkout: true,
+      fingerprint: snapshot.fingerprint,
+      confirmation: 'CREATE_LOCAL_BRANCH',
+    };
+    await writeFile(path.join(cwd, 'untracked.txt'), 'keep');
+    await expect(actions.createBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_WORKTREE_DIRTY',
+    );
+    await expect(
+      git(['rev-parse', '--verify', 'refs/heads/feature/switch']),
+    ).rejects.toThrow();
+    await rm(path.join(cwd, 'untracked.txt'));
+    await expect(
+      actions.createBranch('p', copyId, body),
+    ).resolves.toMatchObject({ branch: 'feature/switch', checkedOut: true });
+    expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+      'feature/switch',
+    );
+    const updated = await service.snapshot('p', copyId);
+    await expect(
+      actions.createBranch('p', copyId, {
+        ...body,
+        fingerprint: updated.fingerprint,
+      }),
+    ).rejects.toThrow('GIT_BRANCH_EXISTS');
+    expect((await git(['rev-parse', 'main'])).stdout.trim()).toBe(
+      snapshot.head,
+    );
+  });
+
+  it('rejects invalid names, stale references, readonly copies and active agents without mutations', async () => {
+    const snapshot = await service.snapshot('p', copyId);
+    const body = {
+      name: 'feature/safe',
+      startRef: 'HEAD',
+      startRevision: snapshot.head,
+      checkout: false,
+      fingerprint: snapshot.fingerprint,
+      confirmation: 'CREATE_LOCAL_BRANCH',
+    };
+    await expect(actions.createBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_READ_ONLY',
+    );
+    writable();
+    for (const name of ['bad..name', 'bad name', '@{-1}', 'refs/heads/../bad'])
+      await expect(
+        actions.createBranch('p', copyId, { ...body, name }),
+      ).rejects.toThrow('GIT_BRANCH_NAME_INVALID');
+    await expect(
+      actions.createBranch('p', copyId, {
+        ...body,
+        startRevision: '0'.repeat(40),
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    await expect(
+      actions.createBranch('p', copyId, { ...body, fingerprint: 'stale' }),
+    ).rejects.toThrow('GIT_STALE');
+    active.push('agent');
+    await expect(actions.createBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_BUSY',
+    );
+    expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+      'main',
+    );
+    await expect(
+      git(['rev-parse', '--verify', 'refs/heads/feature/safe']),
+    ).rejects.toThrow();
+  });
   const writable = () =>
     resources.update('p', 'remote', {
       accessMode: 'read_write',
@@ -793,6 +903,16 @@ describe('confirmed actions', () => {
       fingerprint: state.fingerprint,
       paths: ['README.md'],
     };
+    await expect(
+      actions.createBranch('p', copyId, {
+        ...wrong,
+        name: 'feature/forbidden',
+        startRef: 'HEAD',
+        startRevision: state.head,
+        checkout: false,
+        confirmation: 'CREATE_LOCAL_BRANCH',
+      }),
+    ).rejects.toThrow('GIT_COPY_OWNED');
     await expect(actions.stageReview('p', copyId, wrong)).rejects.toThrow(
       'GIT_COPY_OWNED',
     );

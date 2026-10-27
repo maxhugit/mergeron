@@ -17,7 +17,7 @@ import {
   type GitChecks,
 } from '@/lib/workspace-git-api';
 
-function ActionError({ error }: { error: Error | null }) {
+export function ActionError({ error }: { error: Error | null }) {
   const { t } = useTranslation('workspaces');
   const labels: Record<string, string> = {
     GIT_COPY_OWNED: t('gitCopyOwnedElsewhere'),
@@ -34,6 +34,9 @@ function ActionError({ error }: { error: Error | null }) {
     GIT_GITHUB_TOKEN_REQUIRED: t('gitActionTokenRequired'),
     GIT_IDENTITY_REQUIRED: t('gitActionIdentityRequired'),
     GIT_INVALID_INPUT: t('gitActionInvalidInput'),
+    GIT_BRANCH_NAME_INVALID: t('gitBranchNameInvalid'),
+    GIT_BRANCH_EXISTS: t('gitBranchExists'),
+    GIT_WORKTREE_DIRTY: t('gitBranchDirty'),
     GIT_OUTCOME_UNKNOWN: t('gitActionOutcomeUnknown'),
     GIT_AUTH_REQUIRED: t('gitPushAuthRequired'),
     GIT_WRITE_ACCESS_DENIED: t('gitPushWriteAccessDenied'),

@@ -379,6 +379,94 @@ export class WorkspaceGitActionsService {
     });
   }
 
+  async createBranch(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    if (
+      body.confirmation !== 'CREATE_LOCAL_BRANCH' ||
+      typeof body.name !== 'string' ||
+      !body.name ||
+      body.name.length > 200 ||
+      body.name.startsWith('-') ||
+      typeof body.startRef !== 'string' ||
+      typeof body.startRevision !== 'string' ||
+      typeof body.checkout !== 'boolean'
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const name = body.name;
+    return this.gate.mutate(async () => {
+      this.assertCopyAgent(projectId, copyId, body);
+      const { cwd, state } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      try {
+        if (
+          (
+            await this.git.git(cwd, ['check-ref-format', '--branch', name])
+          ).trim() !== name
+        )
+          throw new Error('Invalid name');
+      } catch {
+        throw new BadRequestException('GIT_BRANCH_NAME_INVALID');
+      }
+      const start =
+        body.startRef === 'HEAD'
+          ? state.head
+          : state.branches.find(
+              (branch) =>
+                `${branch.remote ? 'refs/remotes/' : 'refs/heads/'}${branch.name}` ===
+                body.startRef,
+            )?.revision;
+      if (
+        !start ||
+        start !== body.startRevision ||
+        !/^[a-f0-9]{40,64}$/.test(start)
+      )
+        throw new ConflictException('GIT_STALE');
+      const ref = `refs/heads/${name}`;
+      if (
+        (await this.git.git(cwd, ['for-each-ref', '--format=%(refname)', ref]))
+          .trim()
+          .split('\n')
+          .includes(ref)
+      )
+        throw new ConflictException('GIT_BRANCH_EXISTS');
+      if (
+        body.checkout &&
+        (
+          await this.git.git(cwd, [
+            'status',
+            '--porcelain=v1',
+            '--untracked-files=all',
+            '--ignore-submodules=none',
+          ])
+        ).trim()
+      )
+        throw new ConflictException('GIT_WORKTREE_DIRTY');
+      await this.copyState(projectId, copyId, body.fingerprint);
+      // Never reset an existing branch, force a checkout, fetch or push here.
+      await this.git.git(
+        cwd,
+        body.checkout
+          ? ['switch', '--no-track', '-c', name, start]
+          : ['branch', '--no-track', '--', name, start],
+      );
+      this.audit(projectId, copyId, 'git_branch_created', {
+        branch: name,
+        startRef: body.startRef,
+        sha: start,
+        checkedOut: body.checkout,
+      });
+      return { branch: name, sha: start, checkedOut: body.checkout };
+    });
+  }
+
   private async copyState(
     projectId: string,
     copyId: string,
@@ -720,7 +808,9 @@ export class WorkspaceGitActionsService {
                 ? 'Commit Git'
                 : action === 'git_push'
                   ? 'Push Git'
-                  : 'Fusion de pull request',
+                  : action === 'git_branch_created'
+                    ? 'Création de branche Git locale'
+                    : 'Fusion de pull request',
         details,
         actorPersonId: identity?.personId ?? null,
         actorName: identity?.name ?? 'Système',
