@@ -23,7 +23,7 @@ import { SurfaceActivityContext } from '@/lib/surface-activity';
 import { useTerminalStore } from '@/stores/terminal-store';
 import type { WorkspaceContext, WorkspaceTab } from '@/stores/workspace-store';
 import '@/index.css';
-import '@/i18n';
+import { i18nReady } from '@/i18n';
 
 vi.mock('@/socket', () => ({
   getSocket: () => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn() }),
@@ -66,6 +66,8 @@ export function Controls({
 const strip = () => document.querySelector<HTMLElement>('[role="tablist"]')!;
 
 beforeEach(async () => {
+  // Locale loading can suspend the tab shell; measure only after it is ready.
+  await i18nReady;
   await page.viewport(1280, 900);
   useTerminalStore.setState({ terminals: {}, contexts: {} });
 });

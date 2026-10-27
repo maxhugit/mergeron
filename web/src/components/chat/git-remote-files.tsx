@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Folder, File } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { gitGet } from '@/lib/workspace-git-api';
+import type { GitRemoteFileTarget } from '@/stores/workspace-store';
 
-interface RemoteFiles {
+export interface RemoteFiles {
   ref: string | null;
   path: string;
   items: Array<{
@@ -23,10 +24,12 @@ export function GitRemoteFiles({
   projectId,
   resourceId,
   refreshVersion = 0,
+  onFile,
 }: {
   projectId: string;
   resourceId: string;
   refreshVersion?: number;
+  onFile?: (target: GitRemoteFileTarget) => void;
 }) {
   const { t } = useTranslation('workspaces');
   const [navigation, setNavigation] = useState<{
@@ -88,8 +91,20 @@ export function GitRemoteFiles({
               variant="ghost"
               size="sm"
               className="h-auto w-full justify-start whitespace-normal break-all text-left text-xs"
-              disabled={!['dir', 'file'].includes(item.type)}
-              onClick={() => navigate(item.path)}
+              disabled={
+                !['dir', 'file'].includes(item.type) ||
+                (item.type === 'file' && (!query.data.ref || !onFile))
+              }
+              onClick={() => {
+                if (item.type === 'dir') navigate(item.path);
+                else if (query.data.ref)
+                  onFile?.({
+                    projectId,
+                    resourceId,
+                    path: item.path,
+                    ref: query.data.ref,
+                  });
+              }}
             >
               {item.type === 'dir' ? (
                 <Folder className="h-3.5 w-3.5 shrink-0" />
@@ -100,14 +115,6 @@ export function GitRemoteFiles({
             </Button>
           ))}
           {query.data.items?.length === 0 && <p>{t('gitRemoteEmpty')}</p>}
-          {query.data.items === null &&
-            (query.data.content !== null ? (
-              <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded border p-2">
-                {query.data.content}
-              </pre>
-            ) : (
-              <p>{t('gitRemoteNoPreview')}</p>
-            ))}
           {query.data.limited && <p>{t('gitLimited')}</p>}
         </>
       )}

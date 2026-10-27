@@ -100,6 +100,22 @@ Un principal déjà migré qui disparaît du disque n'est pas recréé automatiq
 
 ## Suppression et exploitation
 
+### Création d’un agent dans un projet
+
+La création depuis le projet utilise une seule requête serveur qui crée la
+conversation dans le dossier choisi puis enregistre son rattachement au projet
+et son dossier actif avant de répondre. Une conversation neuve n’a pas encore
+d’historique sur disque : elle ne doit pas être reprise simplement pour réappliquer
+le même dossier. Un échec de rattachement n’est pas annoncé comme une création
+réussie ; le serveur tente d’archiver uniquement la conversation qu’il vient de
+créer. Les appels de rattachement de conversations existantes restent inchangés.
+
+La présence d’une conversation sous un projet dans la sidebar peut aussi provenir
+de son ancien chemin de travail. Ce classement historique n’est pas un rattachement
+enregistré : il ne suffit pas à la proposer dans les listes d’affectation aux
+livrables. Les anciens cas doivent être rattachés explicitement après vérification,
+sans migration automatique fondée uniquement sur un chemin partagé.
+
 Le principal ne peut pas être détaché, remplacé, renommé, déplacé ou supprimé seul via les API Mergeron. Les opérations génériques sur un dossier parent qui supprimeraient le principal sont également refusées. Cette protection ne remplace pas les permissions système face à un accès direct au serveur, ni le confinement des commandes d'un agent disposant d'un accès au disque.
 
 La suppression confirmée du projet conserve le choix existant : préserver ses dossiers ou sélectionner ceux à supprimer physiquement, principal compris. Les secondaires détachés restent sur disque. Les activités qui les référencent passent à l'état **À résoudre** et ne basculent pas vers le principal.

@@ -189,7 +189,7 @@ export class PlatformAccessGuard implements CanActivate {
       const serverExecution =
         /\/deliverables\/[^/]+\/agent$/.test(url) ||
         /\/(?:ai-plan|ai-replan|ai-advice|ai-subtasks)$/.test(url) ||
-        /^\/projects\/[^/]+\/agents\//.test(url) ||
+        /^\/projects\/[^/]+\/agents(?:\/|$)/.test(url) ||
         (url.startsWith('/threads') && url !== '/threads/turn-counts') ||
         /\/automations(?:\/|$)|\/automation-runs(?:\/|$)/.test(url) ||
         request.body?.type === 'automation_board' ||

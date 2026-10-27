@@ -3,7 +3,7 @@
  * Rendering is split into sidebar/ sub-components; this file orchestrates
  * state, queries, mutations, and view routing.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { DragDropProvider } from '@dnd-kit/react';
 import { BookOpen, FolderKanban, FolderOpen, House, Plus } from 'lucide-react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
@@ -28,10 +28,10 @@ import {
   threadsForkThreadMutation,
   threadsListOverviewOptions,
   threadsSetThreadNameMutation,
-  threadsStartThreadMutation,
   threadsUnarchiveThreadMutation,
 } from '@/generated/api/@tanstack/react-query.gen';
 import type { ThreadDto } from '@/generated/api';
+import { createProjectAgent } from '@/lib/project-agent-creation';
 import { selectSidebarRows } from '@/lib/sidebar-rows';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { useLayoutStore } from '@/stores/layout-store';
@@ -201,10 +201,6 @@ export function ThreadSidebar() {
   const [pendingConversation, setPendingConversation] = useState<{
     kind: 'agent' | 'simple';
     group: WorkspaceGroup;
-  } | null>(null);
-  const pendingAgentProject = useRef<{
-    projectId: string;
-    workspacePath: string;
   } | null>(null);
   const [deleteProjectWorkspaceIds, setDeleteProjectWorkspaceIds] = useState<
     Set<string>
@@ -472,21 +468,15 @@ export function ThreadSidebar() {
 
   // ── Mutations ───────────────────────────────────────────────────────
   const createThread = useMutation({
-    ...threadsStartThreadMutation(),
-    onSuccess: async (res) => {
-      const target = pendingAgentProject.current;
-      pendingAgentProject.current = null;
-      if (target)
-        await projectsApi(`/${target.projectId}/agents/${res.thread.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ workspacePath: target.workspacePath }),
-        });
+    mutationFn: createProjectAgent,
+    onSuccess: (res) => {
       void setActiveThread(
         res.thread.id,
         res.cwd,
         threadLabel(res.thread, t('newWorkAgent')),
       );
       invalidateThreads();
+      void queryClient.invalidateQueries({ queryKey: projectsQueryKey });
       void navigate({
         to: '/t/$threadId',
         params: { threadId: res.thread.id },
@@ -1024,8 +1014,7 @@ export function ThreadSidebar() {
   ) => {
     setPendingConversation(null);
     if (kind === 'agent') {
-      pendingAgentProject.current = { projectId, workspacePath: cwd };
-      createThread.mutate({ body: { cwd } });
+      createThread.mutate({ projectId, workspacePath: cwd });
     } else createSimpleChatThread.mutate({ projectId });
   };
 

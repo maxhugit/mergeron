@@ -1,6 +1,9 @@
 {
   "gitRefreshAll": "Refresh repository",
   "gitRefreshAllHelp": "Refresh local, GitHub and synchronization data without fetching, pulling or changing files.",
+  "gitRemoteReadOnly": "Read only",
+  "gitCloseRemoteFile": "Close remote file {{name}}",
+  "gitRemoteReadOnlyHelp": "Remote file from GitHub at the displayed revision. Editing and saving are unavailable; local files remain unchanged.",
   "browser": "Browser",
   "gitCreateBranch": "Create branch",
   "gitCreateBranchHelp": "Creates a branch in this local copy only. Nothing is published to or fetched from GitHub.",

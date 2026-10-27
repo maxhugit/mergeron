@@ -4,6 +4,10 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
+vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/components/files/file-tree', () => ({
+  FileTree: () => <div>Arborescence locale</div>,
+}));
 import { GitCopyActions } from './workspace-git-actions';
 import type { GitSnapshot } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
@@ -161,7 +165,7 @@ test.each([260, 330, 600])(
       </QueryClientProvider>,
     );
     try {
-      await screen.findByRole('button', { name: 'Parcourir les fichiers' });
+      await screen.findByRole('tab', { name: 'Fichiers' });
       const refresh = screen.getByRole('button', {
         name: 'Actualiser le dépôt',
       });

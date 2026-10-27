@@ -12,7 +12,11 @@ import { filesAddRoot } from '@/generated/api';
 import { pathIsWithin } from '@/lib/file-change-events';
 import { type ProjectSummary } from '@/lib/projects-api';
 import { WorkspaceGitPanel } from './workspace-git-panel';
-import type { GitDiffTarget, GitGraphTarget } from '@/stores/workspace-store';
+import type {
+  GitDiffTarget,
+  GitGraphTarget,
+  GitRemoteFileTarget,
+} from '@/stores/workspace-store';
 
 interface Props {
   agentThreadId?: string;
@@ -26,6 +30,7 @@ interface Props {
   onFile: (path: string) => void;
   onGitDiff?: (target: GitDiffTarget) => void;
   onGitGraph?: (target: GitGraphTarget) => void;
+  onGitRemoteFile?: (target: GitRemoteFileTarget) => void;
 }
 
 /** Adapts only explorer presentation; the conversation and tab content keep their tree positions. */
@@ -41,6 +46,7 @@ export function WorkspaceTree({
   onFile,
   onGitDiff,
   onGitGraph,
+  onGitRemoteFile,
 }: Props) {
   const { t } = useTranslation();
   const { t: tw } = useTranslation('workspaces');
@@ -168,6 +174,14 @@ export function WorkspaceTree({
           conversation's tree while this one's metadata/request is pending. */}
       {project ? (
         <WorkspaceGitPanel
+          onGitRemoteFile={
+            onGitRemoteFile
+              ? (target) => {
+                  onGitRemoteFile(target);
+                  onMobileClose();
+                }
+              : undefined
+          }
           agentThreadId={agentThreadId}
           key={project.id}
           projectId={project.id}
