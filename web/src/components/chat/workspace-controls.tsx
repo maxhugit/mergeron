@@ -11,6 +11,7 @@ import {
   GitCompareArrows,
   GitBranch,
   Cloud,
+  Globe,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -26,6 +27,7 @@ interface Props {
   onSelect: (id: string) => void;
   onClose: (tab: WorkspaceTab) => void;
   onExplorer: () => void;
+  onBrowser?: () => void;
   onNewTerminal: () => void;
   canCreateTerminal?: boolean;
   terminalCreationDisabled?: boolean;
@@ -39,6 +41,7 @@ export function WorkspaceControls({
   onSelect,
   onClose,
   onExplorer,
+  onBrowser,
   onNewTerminal,
   canCreateTerminal = true,
   terminalCreationDisabled,
@@ -237,6 +240,17 @@ export function WorkspaceControls({
           disabled={terminalCreationDisabled}
         >
           <TerminalSquare className="h-4 w-4" />
+        </button>
+      )}
+      {onBrowser && (
+        <button
+          type="button"
+          className="h-10 shrink-0 px-3 hover:bg-accent"
+          title={tw('browser')}
+          aria-label={tw('browser')}
+          onClick={onBrowser}
+        >
+          <Globe className="h-4 w-4" />
         </button>
       )}
       <button

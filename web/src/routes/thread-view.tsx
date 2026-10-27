@@ -1,5 +1,5 @@
 /** Conversation workspace: one permanent transcript with sibling file and terminal views. */
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +51,11 @@ import { showSnackbar } from '@/stores/snackbar-store';
 import { useThreadSecurityPolicy } from '@/hooks/use-thread-security-policy';
 import { invalidateThreadListSoon } from '@/lib/query-invalidation';
 import { usePlatformSession } from '@/lib/platform-session';
+const BrowserSidebar = lazy(() =>
+  import('@/components/chat/browser-sidebar').then((module) => ({
+    default: module.BrowserSidebar,
+  })),
+);
 
 /** URL identity owns opening; tab identity controls only presentation and never subscription. */
 export function ThreadView() {
@@ -177,6 +182,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   });
   const desktop = useBreakpoint() === 'desktop';
   const [mobileTree, setMobileTree] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [creatingTerminal, setCreatingTerminal] = useState(false);
   const { requestClose, dialog } = useWorkspaceClose(context);
   const { mutate: openThread } = useOpenThread();
@@ -304,14 +310,25 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           onNewTerminal={() => void newTerminal()}
           canCreateTerminal={session.isAdministrator}
           terminalCreationDisabled={creatingTerminal || !cwd}
-          onExplorer={() =>
-            desktop
-              ? useLayoutStore
-                  .getState()
-                  .setWorkspaceTreeCollapsed(
-                    !useLayoutStore.getState().workspaceTreeCollapsed,
-                  )
-              : setMobileTree(true)
+          onExplorer={() => {
+            setBrowserOpen(false);
+            if (desktop)
+              useLayoutStore
+                .getState()
+                .setWorkspaceTreeCollapsed(
+                  !useLayoutStore.getState().workspaceTreeCollapsed,
+                );
+            else setMobileTree(true);
+          }}
+          onBrowser={
+            session.isAdministrator
+              ? () => {
+                  select(context, 'conversation');
+                  setBrowserOpen((open) => !open);
+                  setMobileTree(false);
+                  useLayoutStore.getState().setWorkspaceTreeCollapsed(true);
+                }
+              : undefined
           }
         />
         <AgentContextLinks
@@ -404,6 +421,21 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           })}
         </div>
       </div>
+      {browserOpen && (
+        <Suspense
+          fallback={
+            <div role="status" className="p-4">
+              …
+            </div>
+          }
+        >
+          <BrowserSidebar
+            key={threadId}
+            threadId={threadId}
+            onClose={() => setBrowserOpen(false)}
+          />
+        </Suspense>
+      )}
       <WorkspaceTree
         onGitRemoteFile={(target) =>
           useWorkspaceStore.getState().openGitRemoteFile(context, target)

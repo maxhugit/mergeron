@@ -138,6 +138,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     handleSkillSelect,
     toRelativePath,
   } = useChatAttachments({
+    threadId,
+    readOnly,
     textareaRef,
     valueRef,
     setValue,

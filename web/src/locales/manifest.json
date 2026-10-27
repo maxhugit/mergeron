@@ -6,6 +6,7 @@
     { "code": "fr", "nativeLabel": "Français" }
   ],
   "namespaces": [
+    "browser",
     "pwa",
     "guide",
     "authentication",

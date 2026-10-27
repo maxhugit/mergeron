@@ -1,5 +1,38 @@
 # Mergeron Manager
 
+## Remplacement du Manager dev sur Unraid
+
+La mise à jour de l’application et le remplacement du Manager lui-même sont
+deux opérations distinctes. Pour remplacer le Manager dev, utiliser depuis
+l’hôte Unraid le script versionné `scripts/update-dev-manager.py` avec la
+révision Git complète de l’image publiée :
+
+```sh
+python3 scripts/update-dev-manager.py REVISION_GIT_COMPLETE --confirm-replace
+```
+
+Cette procédure est limitée à `mergeron-dev-manager` et à l’état dev sous
+`/mnt/pool/appdata/mergeron-dev/state`. Elle refuse une transaction applicative
+en cours et préserve les paramètres de sécurité, montages et configuration du
+Manager existant. L’image doit porter la révision demandée et est épinglée par
+son empreinte. Elle ne remplace pas le Manager de production.
+
+L’ancien conteneur reste arrêté pendant la validation du remplaçant. Si la
+validation échoue, il est redémarré sous son nom initial. Après validation du
+nouveau Manager sain et au repos, l’ancien conteneur est supprimé par son ID
+exact, avec `force=false` et `v=false`. Aucune image, volume, sauvegarde de
+données ou quarantaine n’est supprimé. Un échec du nettoyage est signalé par
+`cleanupPending` et un code de sortie 2 ; il ne déclenche pas le rollback d’un
+Manager déjà validé.
+
+Les anciens conteneurs laissés par les procédures historiques peuvent être
+retirés séparément, après autorisation explicite, avec
+`--cleanup-only --retired NOM=IDENTIFIANT_DOCKER_COMPLET` pour chaque cible.
+Il n’y a ni recherche par joker ni purge globale. Les identités de toutes les
+cibles sont vérifiées avant la première suppression, puis avant chacune ; le
+Manager actif doit rester identique, sain et au repos. Les identifiants des
+sauvegardes de données sont comparés avant et après cette opération.
+
 Mergeron Manager est le futur gestionnaire local de la pile Docker Mergeron. Il
 doit à terme installer, mettre à jour, surveiller et réparer les trois
 conteneurs de la plateforme. Son déploiement est séparé de l'application afin
