@@ -13,6 +13,7 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
+  | ({ id: string; kind: 'git-remote-file' } & GitRemoteFileTarget)
   | ({ id: string; kind: 'git-graph' } & GitGraphTarget)
   | ({ id: string; kind: 'git-diff' } & GitDiffTarget)
   | { id: string; kind: 'file'; path: string; documentId: string }
@@ -24,6 +25,14 @@ export interface GitDiffTarget {
   path: string;
   localPath: string | null;
   status: string;
+}
+
+/** Immutable remote content, deliberately separate from editable local documents. */
+export interface GitRemoteFileTarget {
+  projectId: string;
+  resourceId: string;
+  path: string;
+  ref: string;
 }
 
 export interface GitGraphTarget {
@@ -56,6 +65,7 @@ interface WorkspaceState {
   openFile: (context: string, path: string, line?: number | null) => void;
   openGitDiff: (context: string, target: GitDiffTarget) => void;
   openGitGraph: (context: string, target: GitGraphTarget) => void;
+  openGitRemoteFile: (context: string, target: GitRemoteFileTarget) => void;
   openTerminal: (context: string, terminalId: string) => void;
   adoptTerminal: (context: string, terminalId: string) => void;
   select: (context: string, id: string) => void;
@@ -91,6 +101,26 @@ function clearActiveReveal(state: WorkspaceState, context: string) {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   contexts: {},
   fileViews: {},
+  openGitRemoteFile: (context, target) =>
+    set((state) => {
+      const current = state.contexts[context] ?? EMPTY_WORKSPACE;
+      const id = `git-remote-file:${JSON.stringify([target.projectId, target.resourceId, target.ref, target.path])}`;
+      return {
+        contexts: {
+          ...state.contexts,
+          [context]: {
+            tabs: current.tabs.some((tab) => tab.id === id)
+              ? current.tabs
+              : [
+                  ...current.tabs,
+                  { ...target, id, kind: 'git-remote-file' as const },
+                ],
+            activeId: id,
+          },
+        },
+        fileViews: clearActiveReveal(state, context),
+      };
+    }),
   openGitGraph: (context, target) =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;

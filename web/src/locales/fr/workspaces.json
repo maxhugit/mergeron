@@ -1,4 +1,7 @@
 {
+  "gitRemoteReadOnly": "Lecture seule",
+  "gitCloseRemoteFile": "Fermer le fichier distant {{name}}",
+  "gitRemoteReadOnlyHelp": "Fichier distant provenant de GitHub, sur la révision affichée. Modification et enregistrement indisponibles ; les fichiers locaux restent inchangés.",
   "browser": "Navigateur",
   "gitCreateBranch": "Créer une branche",
   "gitCreateBranchHelp": "Crée une branche dans cette copie locale uniquement. Aucune publication ni récupération sur GitHub n’est effectuée.",

@@ -4,6 +4,10 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
+vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/components/files/file-tree', () => ({
+  FileTree: () => <div>Arborescence locale</div>,
+}));
 import { locationInventoryFixture } from '@/test/project-locations-fixture';
 import type { GitInventory } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
@@ -184,7 +188,9 @@ test.each([390, 1100])(
       expect(
         screen.getByRole('textbox', { name: 'E-mail de l’auteur' }),
       ).toHaveAttribute('readonly');
-      await page.screenshot({path: `../../../.vitest-screenshots/git-connected-author-${width}.png`});
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-connected-author-${width}.png`,
+      });
       await page.getByRole('button', { name: 'Confirmer le commit' }).click();
       await expect.poll(() => server.committed).toBe(true);
       await expect.poll(() => screen.queryByRole('dialog')).toBeNull();

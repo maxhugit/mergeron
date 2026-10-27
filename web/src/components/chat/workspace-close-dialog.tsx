@@ -48,7 +48,11 @@ export function useWorkspaceClose(context: string) {
     }
   };
   const requestClose = (tab: WorkspaceTab) => {
-    if (tab.kind === 'git-diff' || tab.kind === 'git-graph') {
+    if (
+      tab.kind === 'git-diff' ||
+      tab.kind === 'git-graph' ||
+      tab.kind === 'git-remote-file'
+    ) {
       remove(tab);
       return;
     }

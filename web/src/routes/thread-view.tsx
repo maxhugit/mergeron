@@ -10,6 +10,7 @@ import { AgentContextLinks } from '@/components/chat/agent-context-links';
 import { WorkspaceTree } from '@/components/chat/workspace-tree';
 import { WorkspaceGitDiff } from '@/components/chat/workspace-git-diff';
 import { WorkspaceGitGraph } from '@/components/chat/workspace-git-graph';
+import { WorkspaceGitRemoteFile } from '@/components/chat/workspace-git-remote-file';
 import { useWorkspaceClose } from '@/components/chat/workspace-close-dialog';
 import { FileViewer } from '@/components/files/file-viewer';
 import { TerminalSurface } from '@/components/terminal/terminal-host';
@@ -368,7 +369,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                 <div
                   role="tabpanel"
                   aria-label={
-                    tab.kind === 'file' || tab.kind === 'git-diff'
+                    tab.kind === 'file' ||
+                    tab.kind === 'git-diff' ||
+                    tab.kind === 'git-remote-file'
                       ? tab.path
                       : tab.kind === 'git-graph'
                         ? tab.name
@@ -387,6 +390,8 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                         active={active}
                       />
                     )
+                  ) : tab.kind === 'git-remote-file' ? (
+                    <WorkspaceGitRemoteFile target={tab} active={active} />
                   ) : tab.kind === 'git-graph' ? (
                     <WorkspaceGitGraph target={tab} active={active} />
                   ) : tab.kind === 'git-diff' ? (
@@ -432,6 +437,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
         </Suspense>
       )}
       <WorkspaceTree
+        onGitRemoteFile={(target) =>
+          useWorkspaceStore.getState().openGitRemoteFile(context, target)
+        }
         onGitGraph={(target) =>
           useWorkspaceStore.getState().openGitGraph(context, target)
         }
