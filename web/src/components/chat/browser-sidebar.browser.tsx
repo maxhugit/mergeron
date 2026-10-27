@@ -1,14 +1,59 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { BrowserSidebar } from './browser-sidebar';
 import { markedScreenshot } from '@/lib/browser-annotations';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
-vi.mock('@/lib/browser-api', () => ({
-  browserApi: () => Promise.resolve({ tabs: [] }),
-}));
+const api = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/browser-api', () => ({ browserApi: api }));
+beforeEach(() => {
+  api.mockReset().mockResolvedValue({ tabs: [] });
+});
 afterEach(cleanup);
+test('edits an address and opens it with Enter from an empty browser session', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  await page.viewport(1214, 988);
+  api.mockImplementation((path: string) =>
+    Promise.resolve(
+      path.endsWith('/new')
+        ? {
+            id: 'created',
+            tabs: [{ id: 'created', url: 'about:blank', title: '' }],
+          }
+        : path.endsWith('/navigate')
+          ? {
+              frameId: 'frame',
+              url: 'https://example.org/',
+              title: 'Example',
+              image:
+                'data:image/svg+xml,' +
+                encodeURIComponent(
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><text x="20" y="40">Example</text></svg>',
+                ),
+              width: 600,
+              height: 200,
+            }
+          : { tabs: [] },
+    ),
+  );
+  render(<BrowserSidebar threadId="fixture" onClose={() => {}} />);
+  const address = page.getByRole('textbox', { name: 'Adresse de la page' });
+  await expect.element(address).toBeEnabled();
+  await address.fill('https://example.org/');
+  await userEvent.keyboard('{Enter}');
+  await expect
+    .element(page.getByRole('img', { name: 'Page web distante' }))
+    .toBeVisible();
+  expect(api).toHaveBeenCalledWith('/fixture/navigate', {
+    tabId: 'created',
+    url: 'https://example.org/',
+  });
+  expect(
+    api.mock.calls.filter(([path]) => String(path).endsWith('/new')),
+  ).toHaveLength(1);
+});
 test.each([390, 1280])('browser panel fits a %s px viewport', async (width) => {
   await i18nReady;
   await i18n.changeLanguage('fr');

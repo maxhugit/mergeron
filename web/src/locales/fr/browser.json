@@ -12,7 +12,7 @@
   "reload": "Recharger",
   "point": "Pointer un élément",
   "loading": "Chargement",
-  "intro": "Créez un onglet puis ouvrez une URL. Cliquez sur la page pour naviguer, ou activez le pointage pour annoter un élément.",
+  "intro": "Saisissez une URL puis cliquez sur Ouvrir. Un onglet est créé si nécessaire. Cliquez sur la page pour naviguer, ou activez le pointage pour annoter un élément.",
   "pageImage": "Page web distante",
   "up": "Monter",
   "down": "Descendre",
