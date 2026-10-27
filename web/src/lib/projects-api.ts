@@ -165,6 +165,8 @@ export interface ProjectWorkspaceResourceSummary {
 }
 
 export interface ProjectWorkspaceCopySummary {
+  ownerAgentIds?: string[];
+  ownerThreadIds?: string[];
   id: string;
   projectId: string;
   sourceResourceId: string;

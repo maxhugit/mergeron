@@ -14,6 +14,7 @@ import {
   currentAccess,
   requireExecutionAccess,
   requireProjectAccess,
+  requireThreadAccess,
 } from '../auth/access-context';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
@@ -25,14 +26,24 @@ import {
   projectLocations,
   projectActiveFolders,
   projectAgentThreads,
+  projectGitCopyOwners,
   simpleChatThreads,
   projects,
   type ProjectWorkspaceCopy,
 } from '../database/schema';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
+import {
+  assertAgentCanOwnCopy,
+  claimAgentCopy,
+  copyAgentIds,
+  copyAgentThreadIds,
+  workAgentId,
+} from './git-copy-ownership';
 
 export interface WorkspaceCopyView extends ProjectWorkspaceCopy {
+  ownerAgentIds: string[];
+  ownerThreadIds: string[];
   localPath: string | null;
   sourceName: string | null;
   sourceType: string | null;
@@ -62,9 +73,24 @@ export class WorkspaceCopiesService {
   async create(
     projectId: string,
     sourceResourceId: string,
-    input: { name?: unknown; branch?: unknown },
+    input: { name?: unknown; branch?: unknown; agentThreadId?: unknown },
   ): Promise<WorkspaceCopyView> {
     requireExecutionAccess();
+    const agentId =
+      typeof input.agentThreadId === 'string' ? input.agentThreadId : null;
+    if (input.agentThreadId !== undefined && !agentId)
+      throw new BadRequestException('GIT_COPY_AGENT_REQUIRED');
+    if (agentId) {
+      requireThreadAccess(agentId);
+      const agent = this.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, agentId))
+        .get();
+      if (agent?.projectId !== projectId)
+        throw new BadRequestException('GIT_COPY_AGENT_REQUIRED');
+      assertAgentCanOwnCopy(this.db, projectId, agentId);
+    }
     const project = this.db
       .select()
       .from(projects)
@@ -147,6 +173,7 @@ export class WorkspaceCopiesService {
           revision: git.revision,
           path: target,
         });
+        if (agentId) claimAgentCopy(tx, projectId, agentId, id);
       });
       return this.view(
         this.db
@@ -173,6 +200,39 @@ export class WorkspaceCopiesService {
     return this.gate.mutate(() =>
       this.removeConfirmed(projectId, id, input.path),
     );
+  }
+
+  async releaseOwner(
+    projectId: string,
+    id: string,
+    body: { agentThreadId?: unknown; confirmation?: unknown },
+  ) {
+    requireExecutionAccess();
+    this.copy(projectId, id);
+    if (
+      typeof body.agentThreadId !== 'string' ||
+      body.confirmation !== 'RELEASE_COPY_OWNER'
+    )
+      throw new BadRequestException('GIT_COPY_CONFIRMATION_REQUIRED');
+    requireThreadAccess(body.agentThreadId);
+    const agentId = workAgentId(this.db, body.agentThreadId);
+    if (!this.gate) throw new ConflictException('GIT_AGENT_STATE_UNKNOWN');
+    return this.gate.mutate(() => {
+      if (!copyAgentIds(this.db, projectId, id).includes(agentId))
+        throw new ConflictException('GIT_COPY_OWNED');
+      if (copyAgentIds(this.db, projectId, id, false).length)
+        throw new ConflictException('GIT_COPY_IN_USE');
+      this.db
+        .delete(projectGitCopyOwners)
+        .where(
+          and(
+            eq(projectGitCopyOwners.copyId, id),
+            eq(projectGitCopyOwners.agentThreadId, agentId),
+          ),
+        )
+        .run();
+      return Promise.resolve({ released: true });
+    });
   }
 
   private async removeConfirmed(
@@ -370,6 +430,8 @@ export class WorkspaceCopiesService {
       .get();
     return {
       ...copy,
+      ownerAgentIds: copyAgentIds(this.db, copy.projectId, copy.id),
+      ownerThreadIds: copyAgentThreadIds(this.db, copy.projectId, copy.id),
       state:
         source && source.enabled && location?.path === workspace?.path
           ? copy.state

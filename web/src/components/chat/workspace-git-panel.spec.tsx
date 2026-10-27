@@ -158,10 +158,11 @@ beforeEach(async () => {
   });
 });
 afterEach(() => client.clear());
-function show(resourceId: string | null = 'git') {
+function show(resourceId: string | null = 'git', agentThreadId?: string) {
   return render(
     <QueryClientProvider client={client}>
       <WorkspaceGitPanel
+        agentThreadId={agentThreadId}
         projectId="p"
         resourceId={resourceId}
         onSelect={onSelect}
@@ -181,6 +182,41 @@ const tab = (name: string) =>
     button: 0,
     ctrlKey: false,
   });
+
+it('reserves a copy to its agent and disables creating a second copy for that agent', async () => {
+  inventory.copies = [{ ...copy, ownerAgentIds: ['work-agent'] }];
+  show('git', 'work-agent');
+  expect(
+    await screen.findByText('Copie réservée à cet agent de travail'),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Préparer une autre copie' }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
+  ).toBeEnabled();
+});
+
+it('allows browsing but not using or modifying another work agent’s copy', async () => {
+  inventory.copies = [{ ...copy, ownerAgentIds: ['other-agent'] }];
+  show('git', 'work-agent');
+  expect(
+    await screen.findByText(
+      'Copie réservée à un autre agent — consultation uniquement',
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByRole('button', { name: 'Commit…' }),
+  ).not.toBeInTheDocument();
+  await screen.findByRole('tab', { name: 'Modifications (1)' });
+  tab('Modifications (1)');
+  expect(
+    screen.queryByRole('button', { name: 'Préparer' }),
+  ).not.toBeInTheDocument();
+});
 
 it('lists remote Git resources before cloning, without changing the agent context', async () => {
   show(null);

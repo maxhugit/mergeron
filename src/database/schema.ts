@@ -1260,6 +1260,18 @@ export const projectWorkspaceCopies = sqliteTable(
 
 export type ProjectWorkspaceCopy = typeof projectWorkspaceCopies.$inferSelect;
 
+/** Persistent one-to-one reservation, independent of the currently selected cwd. */
+export const projectGitCopyOwners = sqliteTable('project_git_copy_owners', {
+  copyId: text('copy_id')
+    .primaryKey()
+    .references(() => projectWorkspaceCopies.id, { onDelete: 'cascade' }),
+  agentThreadId: text('agent_thread_id').notNull().unique(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull(),
+});
+
 /** Reusable one-way copy rule. Synchronization is always explicit. */
 export const projectWorkspaceTransfers = sqliteTable(
   'project_workspace_transfers',

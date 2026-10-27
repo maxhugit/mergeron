@@ -941,7 +941,7 @@ def select_import_content(manifest, selection):
             'project_person_groups', 'project_person_group_members', 'project_workspaces',
             'project_workspace_resources', 'project_workspace_copies',
             'project_workspace_transfers', 'project_workspace_transfer_runs'}
-    conversations = THREAD_TABLES | {'project_agent_threads', 'project_active_folders',
+    conversations = THREAD_TABLES | {'project_agent_threads', 'project_active_folders', 'project_git_copy_owners',
                                     'simple_chat_threads', 'simple_chat_messages', 'settings'}
     result['tables'] = {name: rows for name, rows in result['tables'].items()
                         if name in core or (name in conversations and 'conversations' in selected)

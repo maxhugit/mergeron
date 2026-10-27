@@ -1078,6 +1078,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('Active folder is unresolved');
     const workspace = this.getWorkspace(projectId, folder.resourceId);
     if (!workspace) throw new NotFoundException('Project resource not found');
+    this.folders.reserveAgentCopy(projectId, threadId, folder.effectivePath);
     const threadIds = alreadyAtWorkspace
       ? this.threads.rememberInitialThreadCwd(threadId, folder.effectivePath)
       : await this.threads.setThreadCwd(threadId, folder.effectivePath);

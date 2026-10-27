@@ -261,13 +261,89 @@ export class WorkspaceGitService {
     };
   }
 
+  async graph(projectId: string, copyId: string) {
+    const state = await this.snapshot(projectId, copyId);
+    if (!state.head)
+      return { items: [], limited: false, inspectedAt: Date.now() };
+    const cwd = await this.directory(projectId, copyId);
+    const output = await this.git(cwd, [
+      'log',
+      '--all',
+      '--topo-order',
+      '-101',
+      '--format=%H%x00%P%x00%aI%x00%an%x00%s',
+      state.head,
+      '--',
+    ]);
+    const rows = output.trim().split('\n').filter(Boolean);
+    return {
+      items: rows.slice(0, 100).map((row) => {
+        const [sha, parents, date, author, subject] = row.split('\0');
+        return {
+          sha,
+          parents: parents ? parents.split(' ') : [],
+          date,
+          author,
+          subject,
+          current: sha === state.head,
+          refs: state.branches
+            .filter((b) => b.revision === sha)
+            .map((b) => ({ name: b.name, remote: b.remote })),
+        };
+      }),
+      limited: rows.length > 100 || state.branchesLimited,
+      inspectedAt: Date.now(),
+    };
+  }
+
   /** Bounded, shell-free runner; callers own all arguments and environment overrides. */
-  git(
+  async git(
     cwd: string,
     args: string[],
     extraEnv: Record<string, string> = {},
     timeoutMs = 15000,
     acceptedExitCodes: number[] = [0],
+    input?: Buffer,
+  ): Promise<string> {
+    // Even `status` can invoke clean/process filters for tracked files. Read
+    // names only (never values/secrets) and disable every configured filter.
+    const keys = await this.runGit(
+      cwd,
+      [
+        'config',
+        '--null',
+        '--name-only',
+        '--get-regexp',
+        '^filter\\..*\\.(clean|smudge|process|required)$',
+      ],
+      extraEnv,
+      15000,
+      [0, 1],
+    );
+    const overrides = keys
+      .split('\0')
+      .filter(Boolean)
+      .flatMap((key) => [
+        '-c',
+        `${key}=${key.endsWith('.required') ? 'false' : ''}`,
+      ]);
+    return this.runGit(
+      cwd,
+      [...overrides, ...args],
+      extraEnv,
+      timeoutMs,
+      acceptedExitCodes,
+      input,
+    );
+  }
+
+  private runGit(
+    cwd: string,
+    args: string[],
+    extraEnv: Record<string, string> = {},
+    timeoutMs = 15000,
+    acceptedExitCodes: number[] = [0],
+    input?: Buffer,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const env = Object.fromEntries(
@@ -301,10 +377,14 @@ export class WorkspaceGitService {
             GIT_NO_REPLACE_OBJECTS: '1',
             ...extraEnv,
           },
-          stdio: ['ignore', 'pipe', 'pipe'],
+          stdio: [input ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         },
       );
       const output: Buffer[] = [];
+      if (input) {
+        child.stdin?.on('error', () => undefined);
+        child.stdin?.end(input);
+      }
       let size = 0;
       let failed = false;
       let diagnostics = '';
@@ -317,13 +397,13 @@ export class WorkspaceGitService {
         reject(new ConflictException(message));
       };
       const timer = setTimeout(fail, timeoutMs);
-      child.stdout.on('data', (data: Buffer) => {
+      child.stdout!.on('data', (data: Buffer) => {
         size += data.length;
         if (size > 1024 * 1024) fail();
         else output.push(data);
       });
       // Do not relay diagnostics: local config/paths may contain credentials.
-      child.stderr.on('data', (data: Buffer) => {
+      child.stderr!.on('data', (data: Buffer) => {
         if (diagnostics.length < 16384)
           diagnostics += data
             .toString('utf8')

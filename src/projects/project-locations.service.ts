@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { requireProjectAccess } from '../auth/access-context';
+import { copyAgentIds, copyAgentThreadIds } from './git-copy-ownership';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   projectConnections,
@@ -141,6 +142,8 @@ export class ProjectLocationsService {
         );
         return {
           ...copy,
+          ownerAgentIds: copyAgentIds(this.db, projectId, copy.id),
+          ownerThreadIds: copyAgentThreadIds(this.db, projectId, copy.id),
           locationId: location?.id ?? null,
           sourceConnectionId: connection?.id ?? null,
           localPath: location?.path ?? null,

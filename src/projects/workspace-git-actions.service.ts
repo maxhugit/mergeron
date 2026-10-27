@@ -5,11 +5,26 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import { mkdtemp, readFile, writeFile, rm, lstat } from 'node:fs/promises';
+import {
+  mkdtemp,
+  readFile,
+  writeFile,
+  rm,
+  lstat,
+  open,
+  rename,
+  realpath,
+} from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { currentAccess, requireExecutionAccess } from '../auth/access-context';
+import { randomUUID, createHash } from 'node:crypto';
+import {
+  currentAccess,
+  requireExecutionAccess,
+  requireThreadAccess,
+} from '../auth/access-context';
+import { copyAgentIds, workAgentId } from './git-copy-ownership';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { projectActivity } from '../database/schema';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
@@ -41,6 +56,327 @@ export class WorkspaceGitActionsService {
     )
       throw new ForbiddenException('GIT_READ_ONLY');
     return result;
+  }
+
+  private assertCopyAgent(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    const owners = copyAgentIds(this.db, projectId, copyId);
+    if (!owners.length) return;
+    if (
+      typeof body.agentThreadId !== 'string' ||
+      owners.length !== 1 ||
+      owners[0] !== workAgentId(this.db, body.agentThreadId)
+    )
+      throw new ForbiddenException('GIT_COPY_OWNED');
+    requireThreadAccess(body.agentThreadId);
+  }
+
+  private async stageInputs(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    this.assertCopyAgent(projectId, copyId, body);
+    const { cwd, state } = await this.copyState(
+      projectId,
+      copyId,
+      body.fingerprint,
+    );
+    if (
+      !Array.isArray(body.paths) ||
+      !body.paths.length ||
+      body.paths.length > 100
+    )
+      throw new BadRequestException('GIT_FILES_REQUIRED');
+    if ((await this.git.git(cwd, ['ls-files', '--unmerged'])).trim())
+      throw new ConflictException('GIT_IN_PROGRESS');
+    const records: {
+      path: string;
+      mode: string;
+      data: Buffer;
+      digest: string;
+    }[] = [];
+    const names = new Set<string>();
+    for (const name of body.paths as unknown[]) {
+      if (
+        typeof name !== 'string' ||
+        !state.changes.some((c) => c.path === name)
+      )
+        throw new ConflictException('GIT_STALE');
+      const change = state.changes.find((c) => c.path === name)!;
+      for (const entry of [
+        name,
+        ...(change.originalPath ? [change.originalPath] : []),
+      ])
+        names.add(entry);
+    }
+    let total = 0;
+    for (const name of names) {
+      if (
+        name.includes('\0') ||
+        path.isAbsolute(name) ||
+        name.split('/').some((p) => p === '..' || p.toLowerCase() === '.git')
+      )
+        throw new BadRequestException('GIT_FILE_UNSAFE');
+      const target = path.join(cwd, name);
+      for (
+        let parent = path.dirname(target);
+        parent !== cwd;
+        parent = path.dirname(parent)
+      ) {
+        if (
+          !parent.startsWith(cwd + path.sep) ||
+          (await lstat(parent)).isSymbolicLink()
+        )
+          throw new ConflictException('GIT_FILE_UNSAFE');
+      }
+      const entry = await lstat(target).catch(() => null);
+      if (!entry) {
+        records.push({
+          path: name,
+          mode: '0',
+          data: Buffer.alloc(0),
+          digest: '',
+        });
+        continue;
+      }
+      if (
+        !entry.isFile() ||
+        entry.isSymbolicLink() ||
+        entry.size > 8 * 1024 * 1024 ||
+        total + entry.size > 16 * 1024 * 1024
+      )
+        throw new ConflictException('GIT_FILE_UNSAFE');
+      if (!(await realpath(target)).startsWith(cwd + path.sep))
+        throw new ConflictException('GIT_FILE_UNSAFE');
+      const file = await open(
+        target,
+        constants.O_RDONLY | constants.O_NOFOLLOW,
+      );
+      let data: Buffer;
+      try {
+        const stat = await file.stat();
+        if (!stat.isFile() || stat.size > 8 * 1024 * 1024)
+          throw new ConflictException('GIT_FILE_UNSAFE');
+        const buffer = Buffer.alloc(stat.size + 1);
+        let length = 0;
+        while (length < buffer.length) {
+          const result = await file.read(
+            buffer,
+            length,
+            buffer.length - length,
+            length,
+          );
+          if (!result.bytesRead) break;
+          length += result.bytesRead;
+        }
+        if (length > stat.size) throw new ConflictException('GIT_STALE');
+        data = Buffer.from(buffer.subarray(0, length));
+      } finally {
+        await file.close();
+      }
+      total += data.length;
+      if (data.length > 8 * 1024 * 1024 || total > 16 * 1024 * 1024)
+        throw new ConflictException('GIT_FILE_UNSAFE');
+      records.push({
+        path: name,
+        mode: entry.mode & 0o111 ? '100755' : '100644',
+        data,
+        digest: createHash('sha256').update(data).digest('hex'),
+      });
+    }
+    const reviewFingerprint = createHash('sha256')
+      .update(state.fingerprint)
+      .update(
+        JSON.stringify(
+          records.map(({ path, mode, digest }) => ({ path, mode, digest })),
+        ),
+      )
+      .digest('hex');
+    return { cwd, state, records, reviewFingerprint };
+  }
+
+  async stageReview(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    this.body(body);
+    const { records, reviewFingerprint } = await this.stageInputs(
+      projectId,
+      copyId,
+      body,
+    );
+    return {
+      reviewFingerprint,
+      files: records.map((r) => ({
+        path: r.path,
+        deleted: r.mode === '0',
+        binary: r.data.includes(0),
+        text: r.data.includes(0)
+          ? ''
+          : r.data.subarray(0, 65536).toString('utf8'),
+        truncated: r.data.length > 65536,
+      })),
+    };
+  }
+
+  async stage(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    this.body(body);
+    return this.gate.mutate(async () => {
+      const reviewed = await this.stageInputs(projectId, copyId, body);
+      if (body.reviewFingerprint !== reviewed.reviewFingerprint)
+        throw new ConflictException('GIT_STALE');
+      const { cwd, state, records } = reviewed;
+      const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-stage-'));
+      const index = path.join(cwd, '.git/index');
+      const lockPath = index + '.lock';
+      let lock: Awaited<ReturnType<typeof open>> | null = null;
+      try {
+        lock = await open(lockPath, 'wx', 0o600).catch(() => {
+          throw new ConflictException('GIT_BUSY');
+        });
+        const frozen = path.join(folder, 'index');
+        const previous = await readFile(index).catch(
+          (error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return null;
+            throw error;
+          },
+        );
+        const env = { GIT_INDEX_FILE: frozen };
+        if (previous) await writeFile(frozen, previous, { mode: 0o600 });
+        else await this.git.git(cwd, ['read-tree', '--empty'], env);
+        let entries = '';
+        for (const record of records) {
+          const sha =
+            record.mode === '0'
+              ? '0'.repeat(state.head.length || 40)
+              : (
+                  await this.git.git(
+                    cwd,
+                    ['hash-object', '-w', '--no-filters', '--stdin'],
+                    {},
+                    15000,
+                    [0],
+                    record.data,
+                  )
+                ).trim();
+          if (!/^[a-f0-9]{40,64}$/.test(sha))
+            throw new ConflictException('GIT_OPERATION_FAILED');
+          entries += `${record.mode} ${sha}\t${record.path}\0`;
+        }
+        await this.git.git(
+          cwd,
+          ['update-index', '-z', '--index-info'],
+          env,
+          15000,
+          [0],
+          Buffer.from(entries),
+        );
+        if (
+          (await this.stageInputs(projectId, copyId, body))
+            .reviewFingerprint !== reviewed.reviewFingerprint
+        )
+          throw new ConflictException('GIT_STALE');
+        await lock.writeFile(await readFile(frozen));
+        await lock.close();
+        await rename(lockPath, index);
+        lock = null;
+        this.audit(projectId, copyId, 'git_stage', {
+          paths: records.map((r) => r.path),
+        });
+        return { prepared: true };
+      } finally {
+        if (lock) {
+          await lock.close().catch(() => undefined);
+          await rm(lockPath, { force: true });
+        }
+        await rm(folder, { recursive: true, force: true });
+      }
+    });
+  }
+
+  async unstage(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    this.body(body);
+    return this.gate.mutate(async () => {
+      this.assertCopyAgent(projectId, copyId, body);
+      const { cwd, state } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      if (
+        !Array.isArray(body.paths) ||
+        !body.paths.length ||
+        body.paths.length > 100
+      )
+        throw new BadRequestException('GIT_FILES_REQUIRED');
+      const names = new Set<string>();
+      for (const name of body.paths as unknown[]) {
+        const change = state.changes.find(
+          (c) => c.path === name && ![' ', '?'].includes(c.status[0]),
+        );
+        if (!change) throw new ConflictException('GIT_STALE');
+        names.add(change.path);
+        if (change.originalPath) names.add(change.originalPath);
+      }
+      const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-unstage-'));
+      const index = path.join(cwd, '.git/index');
+      const lockPath = index + '.lock';
+      let lock: Awaited<ReturnType<typeof open>> | null = null;
+      try {
+        lock = await open(lockPath, 'wx', 0o600).catch(() => {
+          throw new ConflictException('GIT_BUSY');
+        });
+        await this.copyState(projectId, copyId, body.fingerprint);
+        const frozen = path.join(folder, 'index');
+        await writeFile(frozen, await readFile(index), { mode: 0o600 });
+        const env = { GIT_INDEX_FILE: frozen };
+        // A pathspec reset changes only the private index, never the files.
+        if (state.head)
+          await this.git.git(
+            cwd,
+            [
+              'reset',
+              '-q',
+              state.head,
+              '--',
+              ...[...names].map((n) => `:(literal)${n}`),
+            ],
+            env,
+          );
+        else
+          await this.git.git(
+            cwd,
+            ['update-index', '--force-remove', '--', ...names],
+            env,
+          );
+        await this.copyState(projectId, copyId, body.fingerprint);
+        await lock.writeFile(await readFile(frozen));
+        await lock.close();
+        await rename(lockPath, index);
+        lock = null;
+      } finally {
+        if (lock) {
+          await lock.close().catch(() => undefined);
+          await rm(lockPath, { force: true });
+        }
+        await rm(folder, { recursive: true, force: true });
+      }
+      this.audit(projectId, copyId, 'git_unstage', { paths: [...names] });
+      return { prepared: false };
+    });
   }
 
   private async copyState(
@@ -90,6 +426,7 @@ export class WorkspaceGitActionsService {
     requireExecutionAccess();
     this.body(body);
     return this.gate.mutate(async () => {
+      this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state, branch } = await this.copyState(
         projectId,
         copyId,
@@ -168,6 +505,7 @@ export class WorkspaceGitActionsService {
     requireExecutionAccess();
     this.body(body);
     return this.gate.mutate(async () => {
+      this.assertCopyAgent(projectId, copyId, body);
       const { source, cwd, state, branch } = await this.copyState(
         projectId,
         copyId,
@@ -357,11 +695,15 @@ export class WorkspaceGitActionsService {
         entityId,
         action,
         label:
-          action === 'git_commit'
-            ? 'Commit Git'
-            : action === 'git_push'
-              ? 'Push Git'
-              : 'Fusion de pull request',
+          action === 'git_stage'
+            ? 'Préparation de fichiers pour un commit'
+            : action === 'git_unstage'
+              ? 'Retrait de fichiers du prochain commit'
+              : action === 'git_commit'
+                ? 'Commit Git'
+                : action === 'git_push'
+                  ? 'Push Git'
+                  : 'Fusion de pull request',
         details,
         actorPersonId: identity?.personId ?? null,
         actorName: identity?.name ?? 'Système',

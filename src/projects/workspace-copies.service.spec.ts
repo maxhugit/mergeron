@@ -23,6 +23,7 @@ import {
   projects,
   projectWorkspaceResources,
   projectWorkspaces,
+  projectAgentThreads,
 } from '../database/schema';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
@@ -110,6 +111,30 @@ describe('WorkspaceCopiesService', () => {
   afterEach(async () => {
     database.sqlite.close();
     await rm(root, { recursive: true, force: true });
+  });
+
+  it('reserves a new copy for its work agent and rejects a second clone before creating files', async () => {
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'work-agent',
+        projectId: 'project',
+        workspacePath: primary,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    const copy = await copies.create('project', 'git-source', {
+      agentThreadId: 'work-agent',
+    });
+    expect(copy.ownerAgentIds).toEqual(['work-agent']);
+    await expect(
+      copies.create('project', 'git-source', { agentThreadId: 'work-agent' }),
+    ).rejects.toThrow('GIT_AGENT_COPY_EXISTS');
+    expect(copies.list('project')).toHaveLength(1);
+    expect(
+      await readFile(path.join(copy.localPath!, 'README.md'), 'utf8'),
+    ).toBe('source repository\n');
   });
 
   it('creates isolated Git copies and retains their branch and revision', async () => {
