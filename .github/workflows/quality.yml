@@ -119,6 +119,7 @@ jobs:
           src/projects/project-workspace-layout.spec.ts
           src/projects/project-locations.service.spec.ts
           src/projects/project-location-selection.spec.ts
+          src/projects/project-agent-creation.spec.ts
           src/projects/workspace-copies.service.spec.ts
           src/projects/workspace-git.service.spec.ts
           src/projects/workspace-git.controller.spec.ts

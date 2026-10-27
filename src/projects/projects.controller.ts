@@ -633,6 +633,16 @@ export class ProjectsController {
     return result;
   }
 
+  @Post(':id/agents')
+  createAgent(
+    @Param('id') id: string,
+    @Body() body: { workspacePath?: string },
+  ) {
+    if (typeof body?.workspacePath !== 'string' || !body.workspacePath.trim())
+      throw new BadRequestException('Select a project workspace');
+    return this.projects.createAgent(id, body.workspacePath);
+  }
+
   @Put(':id/agents/:threadId')
   associateAgent(
     @Param('id') id: string,
