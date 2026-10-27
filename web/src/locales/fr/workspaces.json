@@ -1,4 +1,9 @@
 {
+  "gitLocalBranchMenu": "Actions de la branche {{name}}",
+  "gitLocalDelete": "Supprimer la branche locale…",
+  "gitLocalDeleteHelp": "Supprimer uniquement cette branche locale ? Ses commits doivent être déjà intégrés à la branche actuelle. Une branche active dans cette copie ou un autre arbre de travail ne peut pas être supprimée. Aucun fichier ni branche distante ne sera supprimé. Aucun forçage.",
+  "gitLocalDeleteActive": "Impossible de supprimer une branche active dans cette copie ou un autre arbre de travail. Changez d’abord de branche.",
+  "gitLocalDeleteUnmerged": "Suppression refusée : cette branche contient des commits absents de la branche actuelle. Fusionnez-la d’abord.",
   "gitCreatePr": "Créer une pull request",
   "gitCreatePrHelp": "Ouvre une demande de fusion sur GitHub pour cette branche publiée. Aucun merge ni déploiement n’est lancé. Les prochains commits publiés sur la branche mettront aussi cette PR à jour.",
   "gitPrBase": "Branche cible",

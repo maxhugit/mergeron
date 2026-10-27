@@ -1,12 +1,17 @@
 import { DropdownMenu } from 'radix-ui';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { Ref } from 'react';
 
 export function WorkspaceEntryMenu({
   label,
   items,
+  triggerRef,
+  onCloseAutoFocus,
 }: {
   label: string;
+  triggerRef?: Ref<HTMLButtonElement>;
+  onCloseAutoFocus?: (event: Event) => void;
   items: Array<{
     label: string;
     disabled?: boolean;
@@ -18,7 +23,12 @@ export function WorkspaceEntryMenu({
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label}>
+        <Button
+          ref={triggerRef}
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+        >
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenu.Trigger>
@@ -26,6 +36,7 @@ export function WorkspaceEntryMenu({
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
+          onCloseAutoFocus={onCloseAutoFocus}
           className="z-50 max-h-[70vh] max-w-[min(320px,90vw)] overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
         >
           {items.map((item) => (
