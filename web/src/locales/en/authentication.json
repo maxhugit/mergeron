@@ -1,4 +1,8 @@
 {
+  "peopleTable": {
+    "presence": "Presence",
+    "connectedSince": "Connected since"
+  },
   "impersonation": {
     "audit": "Permission test audit",
     "loading": "Loading audit…",

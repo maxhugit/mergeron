@@ -1,4 +1,8 @@
 {
+  "peopleTable": {
+    "presence": "Présence",
+    "connectedSince": "En ligne depuis"
+  },
   "impersonation": {
     "audit": "Journal des tests de droits",
     "loading": "Chargement du journal…",

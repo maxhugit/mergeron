@@ -14,6 +14,9 @@ import {
   UserRound,
   UserPlus,
   MoreHorizontal,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   Popover,
@@ -48,6 +51,19 @@ import {
   type Participant,
 } from '@/lib/people-api';
 
+const PEOPLE_COLUMNS = [
+  ['name', 'fullName'],
+  ['reference', 'manualReference'],
+  ['email', 'email'],
+  ['active', 'status'],
+  ['role', 'platformRole'],
+  ['phone', 'phoneNumber'],
+  ['identityLinked', 'loginLinked'],
+  ['presence', 'peopleTable.presence'],
+  ['connectedSince', 'peopleTable.connectedSince'],
+] as const;
+type PeopleSort = (typeof PEOPLE_COLUMNS)[number][0];
+
 export function ResponsiblePerson({ id }: { id: string | null | undefined }) {
   const { t } = useTranslation();
   const people = usePeople();
@@ -78,6 +94,12 @@ export function PeopleManager({
   mode?: 'full' | 'activeAdministrators';
 }) {
   const { t, i18n } = useTranslation();
+  const { t: ta } = useTranslation('authentication');
+  const adminTable = !projectId && mode === 'full';
+  const [sort, setSort] = useState<{ key: PeopleSort; descending: boolean }>({
+    key: 'name',
+    descending: false,
+  });
   const client = useQueryClient();
   const people = usePeople();
   const participants = useParticipants(projectId ?? '');
@@ -180,6 +202,56 @@ export function PeopleManager({
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  if (adminTable) {
+    const collator = new Intl.Collator(i18n.resolvedLanguage ?? i18n.language, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    const accounts = new Map(
+      localAccounts.data?.accounts.map((account) => [
+        account.personId,
+        account,
+      ]),
+    );
+    const value = (person: Person): string | number | null => {
+      const account = accounts.get(person.id);
+      switch (sort.key) {
+        case 'active':
+          return t(person.active ? 'active' : 'inactive');
+        case 'role':
+          return t(
+            person.role === 'administrator' ? 'administrator' : 'standardUser',
+          );
+        case 'identityLinked':
+          return t(person.identityLinked ? 'loginLinked' : 'loginNotLinked');
+        case 'presence':
+          return account
+            ? t(account.connected ? 'connected' : 'offline')
+            : null;
+        case 'connectedSince':
+          return account?.connected ? account.connectedSince : null;
+        default:
+          return person[sort.key] || null;
+      }
+    };
+    rows.sort((left, right) => {
+      const a = value(left),
+        b = value(right);
+      if (a == null && b != null) return 1;
+      if (a != null && b == null) return -1;
+      const compared =
+        a == null || b == null
+          ? 0
+          : typeof a === 'number' && typeof b === 'number'
+            ? a - b
+            : collator.compare(String(a), String(b));
+      return (
+        (sort.descending ? -compared : compared) ||
+        collator.compare(left.name, right.name) ||
+        left.id.localeCompare(right.id)
+      );
+    });
+  }
   const editPerson = (person: Person, account?: LocalAccount) => {
     mutation.reset();
     setEditing(person.id);
@@ -299,16 +371,69 @@ export function PeopleManager({
           )}
         </p>
       )}
-      <div className="max-h-[65vh] overflow-auto">
+      <div
+        className="max-h-[65vh] min-w-0 max-w-full overflow-auto"
+        role="region"
+        aria-label={t('people')}
+        tabIndex={0}
+      >
         <table className="w-full text-left text-sm" aria-label={t('people')}>
           <thead className="sticky top-0 z-10 bg-background">
             <tr className="border-b">
-              <th scope="col" className="px-3 py-2">
-                {t('people')}
-              </th>
-              <th scope="col" className="px-3 py-2">
-                {t('email')}
-              </th>
+              {adminTable ? (
+                PEOPLE_COLUMNS.map(([key, label]) => {
+                  const selected = sort.key === key;
+                  const Icon = selected
+                    ? sort.descending
+                      ? ArrowDown
+                      : ArrowUp
+                    : ArrowUpDown;
+                  return (
+                    <th
+                      key={key}
+                      scope="col"
+                      aria-sort={
+                        selected
+                          ? sort.descending
+                            ? 'descending'
+                            : 'ascending'
+                          : 'none'
+                      }
+                      className="px-3 py-2"
+                    >
+                      <button
+                        type="button"
+                        className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-sm text-left focus-visible:outline-2 focus-visible:outline-ring"
+                        onClick={() =>
+                          setSort({
+                            key,
+                            descending: selected ? !sort.descending : false,
+                          })
+                        }
+                      >
+                        {key === 'presence'
+                          ? ta('peopleTable.presence')
+                          : key === 'connectedSince'
+                            ? ta('peopleTable.connectedSince')
+                            : t(translationKey(label))}
+                        <Icon
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 shrink-0"
+                        />
+                      </button>
+                    </th>
+                  );
+                })
+              ) : (
+                <>
+                  <th scope="col" className="px-3 py-2">
+                    {t('people')}
+                  </th>
+                  <th scope="col" className="px-3 py-2">
+                    {t('email')}
+                  </th>
+                </>
+              )}
               <th scope="col" className="px-3 py-2">
                 {t('actions')}
               </th>
@@ -373,59 +498,101 @@ export function PeopleManager({
                   <td className="min-w-48 px-3 py-3">
                     <div className="break-words font-medium">
                       {person.name}{' '}
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {person.reference}
-                      </span>
+                      {!adminTable && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {person.reference}
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td className="min-w-48 px-3 py-3">
-                    <p className="break-all text-xs text-muted-foreground">
-                      {!projectId && <>{person.email || t('noEmail')} · </>}
-                      {t(person.active ? 'active' : 'inactive')}
-                      {!projectId && (
-                        <>
-                          {' '}
-                          ·{' '}
-                          {t(
-                            person.role === 'administrator'
-                              ? 'administrator'
-                              : 'standardUser',
-                          )}{' '}
-                          · {person.phone} ·{' '}
-                          {t(
-                            person.identityLinked
-                              ? 'loginLinked'
-                              : 'loginNotLinked',
-                          )}
-                        </>
+                  {adminTable && (
+                    <>
+                      <td className="px-3 py-3">{person.reference}</td>
+                      <td className="min-w-48 break-words px-3 py-3 [overflow-wrap:anywhere]">
+                        {person.email || '—'}
+                      </td>
+                      <td className="px-3 py-3">
+                        {t(person.active ? 'active' : 'inactive')}
+                      </td>
+                      <td className="px-3 py-3">
+                        {t(
+                          person.role === 'administrator'
+                            ? 'administrator'
+                            : 'standardUser',
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {person.phone || '—'}
+                      </td>
+                      <td className="px-3 py-3">
+                        {t(
+                          person.identityLinked
+                            ? 'loginLinked'
+                            : 'loginNotLinked',
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        {account
+                          ? t(account.connected ? 'connected' : 'offline')
+                          : '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {account?.connected && connectedSince
+                          ? connectedSince
+                          : '—'}
+                      </td>
+                    </>
+                  )}
+                  {!adminTable && (
+                    <td className="min-w-48 px-3 py-3">
+                      <p className="break-all text-xs text-muted-foreground">
+                        {!projectId && <>{person.email || t('noEmail')} · </>}
+                        {t(person.active ? 'active' : 'inactive')}
+                        {!projectId && (
+                          <>
+                            {' '}
+                            ·{' '}
+                            {t(
+                              person.role === 'administrator'
+                                ? 'administrator'
+                                : 'standardUser',
+                            )}{' '}
+                            · {person.phone} ·{' '}
+                            {t(
+                              person.identityLinked
+                                ? 'loginLinked'
+                                : 'loginNotLinked',
+                            )}
+                          </>
+                        )}
+                      </p>
+                      {!projectId && account && (
+                        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span
+                            aria-hidden="true"
+                            className={`h-2 w-2 rounded-full ${
+                              account.connected
+                                ? 'bg-emerald-500'
+                                : 'bg-muted-foreground/40'
+                            }`}
+                          />
+                          {account.connected && connectedSince
+                            ? t('connectedSinceDate', {
+                                date: connectedSince,
+                              })
+                            : t('offline')}
+                        </p>
                       )}
-                    </p>
-                    {!projectId && account && (
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span
-                          aria-hidden="true"
-                          className={`h-2 w-2 rounded-full ${
-                            account.connected
-                              ? 'bg-emerald-500'
-                              : 'bg-muted-foreground/40'
-                          }`}
-                        />
-                        {account.connected && connectedSince
-                          ? t('connectedSinceDate', {
-                              date: connectedSince,
-                            })
-                          : t('offline')}
-                      </p>
-                    )}
-                    {member && (
-                      <p className="text-xs text-muted-foreground">
-                        {t('countAssignmentsIncludingOpenOpen', {
-                          count: member.assignmentCount,
-                          open: member.openAssignmentCount,
-                        })}
-                      </p>
-                    )}
-                  </td>
+                      {member && (
+                        <p className="text-xs text-muted-foreground">
+                          {t('countAssignmentsIncludingOpenOpen', {
+                            count: member.assignmentCount,
+                            open: member.openAssignmentCount,
+                          })}
+                        </p>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-3">
                     {projectId && !readOnly ? (
                       <Button
