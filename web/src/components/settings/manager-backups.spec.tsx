@@ -10,11 +10,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ManagerBackups } from './manager-backups';
 import type { ManagerStatus } from './manager-status-api';
-const api = vi.hoisted(() => ({ list: vi.fn(), remove: vi.fn() }));
+const api = vi.hoisted(() => ({
+  list: vi.fn(),
+  remove: vi.fn(),
+  retention: vi.fn(),
+  save: vi.fn(),
+}));
 vi.mock('./manager-status-api', async (original) => ({
   ...(await original<typeof import('./manager-status-api')>()),
   requestManagerBackups: api.list,
   deleteManagerBackup: api.remove,
+  requestManagerRetention: api.retention,
+  saveManagerRetention: api.save,
 }));
 const status = {
   available: true,
@@ -33,6 +40,8 @@ const backup = {
   protectionReason: null,
 };
 beforeEach(() => {
+  api.retention.mockResolvedValue({ maxBackups: 10 });
+  api.save.mockImplementation(async (maxBackups: number) => ({ maxBackups }));
   api.list.mockResolvedValue({ backups: [backup], totalSizeBytes: 2048 });
   api.remove.mockResolvedValue({ ok: true });
 });
@@ -56,6 +65,24 @@ function setup(value = status) {
     </QueryClientProvider>,
   );
 }
+
+it('loads ten by default and saves a validated limit without deleting any backup', async () => {
+  setup({
+    ...status,
+    capabilities: { backupManagement: true, backupRetention: true },
+  });
+  const input = await screen.findByRole('spinbutton', {
+    name: 'Number of backups to keep',
+  });
+  expect(input).toHaveValue(10);
+  fireEvent.change(input, { target: { value: '0' } });
+  expect(screen.getByRole('button', { name: 'Save limit' })).toBeDisabled();
+  fireEvent.change(input, { target: { value: '2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save limit' }));
+  await screen.findByText('Limit saved.');
+  expect(api.save).toHaveBeenCalledWith(2, expect.anything());
+  expect(api.remove).not.toHaveBeenCalled();
+});
 
 it('shows the verified server path, disk usage and total usage', async () => {
   setup();

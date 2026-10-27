@@ -315,6 +315,87 @@ test('fast mode still pulls mutable tags and missing immutable images', async (t
   }
 });
 
+test('retains ten backups by default and persists a validated stack-scoped limit', async (t) => {
+  const { updater, options } = await fixture(t);
+  assert.deepEqual(await updater.backupRetention(), { maxBackups: 10 });
+  for (const maxBackups of [0, -1, 1.5, 1001, '10', null])
+    await assert.rejects(updater.setBackupRetention({ maxBackups }), /Invalid/);
+  await updater.setBackupRetention({ maxBackups: 2 });
+  assert.deepEqual(await new TransactionalUpdater(options).backupRetention(), {
+    maxBackups: 2,
+  });
+  updater.busy = true;
+  await assert.rejects(
+    updater.setBackupRetention({ maxBackups: 3 }),
+    /InProgress/,
+  );
+  updater.busy = false;
+  await writeFile(
+    join(options.directory, '..', 'backup-retention.json'),
+    JSON.stringify({
+      stack: 'another',
+      environment: 'development',
+      maxBackups: 1,
+    }),
+  );
+  await assert.rejects(updater.backupRetention(), /Invalid/);
+});
+
+test('applies retention only after successful updates and preserves current rollback and journals', async (t) => {
+  const { updater, options, root } = await fixture(t);
+  await begin(updater);
+  const oldest = updater.current.id;
+  const quarantine = join(options.directory, oldest, 'quarantine');
+  await mkdir(quarantine);
+  await writeFile(join(quarantine, 'sentinel'), 'keep');
+  await begin(updater);
+  const second = updater.current.id;
+  await updater.setBackupRetention({ maxBackups: 1 });
+  assert.equal(
+    (await updater.listBackups()).backups.length,
+    2,
+    'Saving must not delete immediately',
+  );
+  const unknown = join(
+    options.directory,
+    'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+    'backup',
+  );
+  await mkdir(unknown, { recursive: true });
+  await begin(updater);
+  const backups = (await updater.listBackups()).backups;
+  assert.deepEqual(
+    backups.filter((b) => b.status !== 'unknown').map((b) => b.id),
+    [updater.current.id],
+  );
+  assert.equal(backups.find((b) => b.current).restorable, true);
+  assert.ok((await lstat(unknown)).isDirectory());
+  assert.equal(await readFile(join(quarantine, 'sentinel'), 'utf8'), 'keep');
+  for (const id of [oldest, second]) {
+    assert.equal(
+      JSON.parse(await readFile(join(options.directory, id + '.json'), 'utf8'))
+        .backupComplete,
+      false,
+    );
+    await assert.rejects(lstat(join(options.directory, id, 'backup')), {
+      code: 'ENOENT',
+    });
+  }
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'original');
+});
+
+test('invalid retention never rolls back an otherwise successful update or deletes backups', async (t) => {
+  const { updater, options } = await fixture(t);
+  await begin(updater);
+  await writeFile(
+    join(options.directory, '..', 'backup-retention.json'),
+    'invalid',
+  );
+  await begin(updater);
+  assert.equal(updater.current.status, 'succeeded');
+  assert.equal((await updater.listBackups()).backups.length, 2);
+});
+
 test('lists dated backups without transaction secrets and deletes only the selected copy', async (t) => {
   const { root, updater, options } = await fixture(t);
   await begin(updater);

@@ -18,9 +18,104 @@ import {
   managerBackupsQueryKey,
   managerStatusQueryKey,
   requestManagerBackups,
+  requestManagerRetention,
+  saveManagerRetention,
+  managerRetentionQueryKey,
   type ManagerBackup,
   type ManagerStatus,
 } from './manager-status-api';
+
+function BackupRetention({ busy }: { busy: boolean }) {
+  const { t } = useTranslation('manager');
+  const query = useQuery({
+    queryKey: managerRetentionQueryKey,
+    queryFn: requestManagerRetention,
+    retry: false,
+  });
+  if (query.isError) return <p role="alert">{t('managerRetentionError')}</p>;
+  return query.data ? (
+    <BackupRetentionForm initial={query.data.maxBackups} busy={busy} />
+  ) : null;
+}
+
+function BackupRetentionForm({
+  initial,
+  busy,
+}: {
+  initial: number;
+  busy: boolean;
+}) {
+  const { t } = useTranslation('manager');
+  const client = useQueryClient();
+  const [value, setValue] = useState(String(initial));
+  const [saved, setSaved] = useState(initial);
+  const mutation = useMutation({
+    mutationFn: saveManagerRetention,
+    onSuccess: async (result) => {
+      setSaved(result.maxBackups);
+      await client.invalidateQueries({ queryKey: managerRetentionQueryKey });
+    },
+  });
+  const number = Number(value);
+  const valid =
+    value.trim() !== '' &&
+    Number.isInteger(number) &&
+    number >= 1 &&
+    number <= 1000;
+  return (
+    <form
+      className="space-y-2 rounded-lg border border-border p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (valid && !busy && !mutation.isPending) mutation.mutate(number);
+      }}
+    >
+      <label
+        className="block text-sm font-medium"
+        htmlFor="backup-retention-count"
+      >
+        {t('managerRetentionCount')}
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          id="backup-retention-count"
+          type="number"
+          min={1}
+          max={1000}
+          step={1}
+          required
+          className="w-28 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={value}
+          disabled={busy || mutation.isPending}
+          onChange={(event) => {
+            setValue(event.target.value);
+            mutation.reset();
+          }}
+        />
+        <Button
+          type="submit"
+          variant="outline"
+          disabled={busy || mutation.isPending || !valid || number === saved}
+        >
+          {t('managerRetentionSave')}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {t('managerRetentionHelp')}
+      </p>
+      {mutation.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {t('managerRetentionError')}
+        </p>
+      )}
+      {mutation.isSuccess && (
+        <p role="status" className="text-sm">
+          {t('managerRetentionSaved')}
+        </p>
+      )}
+    </form>
+  );
+}
 
 export function ManagerBackups({ status }: { status: ManagerStatus }) {
   const { t, i18n } = useTranslation('manager');
@@ -63,6 +158,7 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
     <section className="space-y-3" aria-label={t('managerBackupsTitle')}>
       <h3 className="font-medium">{t('managerBackupsTitle')}</h3>
       <p className="text-xs text-muted-foreground">{t('managerBackupsHelp')}</p>
+      {status.capabilities?.backupRetention && <BackupRetention busy={busy} />}
       {query.data && (
         <p className="text-sm font-medium">
           {t('managerBackupsTotalSize', {

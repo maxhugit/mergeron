@@ -215,6 +215,7 @@ it.each([
   '/settings',
   '/settings/manager/backups',
   '/settings/manager/backups/delete',
+  '/settings/manager/backups/retention',
   '/settings/general.onlyofficeJwtSecret',
   '/codex/config/raw',
   '/codex/catalog/draft',

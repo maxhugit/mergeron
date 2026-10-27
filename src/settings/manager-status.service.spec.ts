@@ -29,6 +29,10 @@ describe('ManagerStatusService', () => {
     }
     const service = new BackupFixture(new ConfigService());
     await service.backups();
+    await service.backupRetention();
+    await service.setBackupRetention({ maxBackups: 10, path: '/outside' } as {
+      maxBackups: number;
+    });
     await service.deleteBackup({
       operationId: 'backup',
       confirmation: 'DELETE_UPDATE_BACKUP',
@@ -36,6 +40,8 @@ describe('ManagerStatusService', () => {
     } as { operationId: string; confirmation: string });
     expect(service.requests).toEqual([
       ['/v1/backups', undefined, undefined],
+      ['/v1/backups/retention', undefined, undefined],
+      ['/v1/backups/retention', 'POST', { maxBackups: 10 }],
       [
         '/v1/backups/delete',
         'POST',
