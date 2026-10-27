@@ -1,4 +1,8 @@
 {
+  "projectWorkingSpace": "Project work space",
+  "systemWorkspace": "System space",
+  "systemWorkspaceHelp": "Internal data · Administrator · Read only",
+  "systemWorkspaceError": "Cannot browse the system space. Check your permissions and its availability.",
   "gitLocalSwitch": "Switch branch…",
   "gitLocalMerge": "Merge into current branch…",
   "gitLocalConfirm": "Confirm",

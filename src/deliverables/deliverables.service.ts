@@ -46,10 +46,13 @@ import {
 } from '../database/schema';
 import { FilesService } from '../files/files.service';
 import { IdentityService } from '../auth/identity.service';
-import { PROJECT_SYSTEM_DIRECTORY } from '../projects/workspace-structure';
+import {
+  PROJECT_SYSTEM_DIRECTORY,
+  projectSystemPath,
+} from '../projects/workspace-structure';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { documentProtectionEnabled as protectedDocuments } from '../document-publication/document-isolation';
-import { documentPathAlias } from './document-path-alias';
+import { registeredDocumentPath } from './document-path-alias';
 import { migrateDeliverableDocumentRoots } from './document-root-migration';
 
 type Item = typeof items.$inferSelect;
@@ -923,8 +926,20 @@ export class DeliverablesService implements OnModuleInit {
       .get();
     if (!project || project.workspaceLayoutVersion < 1)
       throw new ConflictException('Primary workspace is required');
-    let directory = project.workspacePath;
-    for (const part of ['', ...parts]) {
+    const system =
+      parts[0] === PROJECT_SYSTEM_DIRECTORY &&
+      project.workspaceLayoutVersion >= 3;
+    let directory = system
+      ? path.dirname(project.workspacePath)
+      : project.workspacePath;
+    const resolvedParts = system
+      ? [
+          path.basename(path.dirname(projectSystemPath(project.workspacePath))),
+          path.basename(project.workspacePath),
+          ...parts.slice(1),
+        ]
+      : parts;
+    for (const part of ['', ...resolvedParts]) {
       if (part) {
         directory = path.join(directory, part);
         if (create)
@@ -1735,7 +1750,7 @@ export class DeliverablesService implements OnModuleInit {
     actor: DeliverableDocumentActor,
     metadata: OnlyOfficeVersionMetadata,
   ) {
-    sourcePath = documentPathAlias(this.db, sourcePath);
+    sourcePath = registeredDocumentPath(this.db, sourcePath);
     const linked = this.db
       .select({
         document: documents,
@@ -1791,7 +1806,7 @@ export class DeliverablesService implements OnModuleInit {
   }
 
   onlyOfficeHistory(sourcePath: string) {
-    sourcePath = documentPathAlias(this.db, sourcePath);
+    sourcePath = registeredDocumentPath(this.db, sourcePath);
     const document = this.db
       .select()
       .from(documents)
@@ -1810,7 +1825,7 @@ export class DeliverablesService implements OnModuleInit {
   }
 
   onlyOfficeAccess(sourcePath: string) {
-    sourcePath = documentPathAlias(this.db, sourcePath);
+    sourcePath = registeredDocumentPath(this.db, sourcePath);
     const linked = this.db
       .select({ document: documents, deliverable: items })
       .from(documents)
@@ -1827,7 +1842,7 @@ export class DeliverablesService implements OnModuleInit {
   }
 
   updateOnlyOfficeSession(sourcePath: string, state: OnlyOfficeSessionState) {
-    sourcePath = documentPathAlias(this.db, sourcePath);
+    sourcePath = registeredDocumentPath(this.db, sourcePath);
     if (state === 'saved') {
       this.onlyOfficeSessions.delete(sourcePath);
       return;

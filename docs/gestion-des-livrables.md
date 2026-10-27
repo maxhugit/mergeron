@@ -86,7 +86,8 @@ Une collision conserve les deux fichiers et signale le déplacement bloqué dans
 les logs ; aucun écrasement automatique n'est effectué.
 
 La soumission historique héritée crée une copie séparée dans
-`.mergeron/history/deliverables/<id-livrable>/<id-version>/` du principal.
+`/workspaces/.mergeron-system/<id-projet>/history/deliverables/<id-livrable>/<id-version>/`,
+dans l'espace système séparé réservé aux administrateurs.
 Une version comprend de 1 à 10 fichiers, de 100 Mio maximum chacun, avec un total
 de 200 Mio maximum. Une empreinte SHA-256 détecte les modifications extérieures
 avant téléchargement ou validation. Les dossiers réservés et les fichiers hors
@@ -137,4 +138,5 @@ lorsqu’il désigne une tâche principale valide du même projet. Aucun gestion
 de livrables n’est créé automatiquement.
 
 Sauvegarder ensemble la base SQLite et le workspace principal, y compris
-`.mergeron/history`, pour conserver métadonnées, copies et version de référence.
+`/workspaces/.mergeron-system/<id-projet>/history`, pour conserver métadonnées,
+copies et version de référence.

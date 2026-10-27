@@ -1,7 +1,7 @@
 /** Right-hand explorer with a divider preview: dragging never reflows the transcript. */
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Folder, Star } from 'lucide-react';
+import { X, Loader2, Folder, Star, LockKeyhole } from 'lucide-react';
 import { FileTree } from '@/components/files/file-tree';
 import { WorkspaceEntryMenu } from './workspace-entry-menu';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import { filesAddRoot } from '@/generated/api';
 import { pathIsWithin } from '@/lib/file-change-events';
 import { type ProjectSummary } from '@/lib/projects-api';
 import { WorkspaceGitPanel } from './workspace-git-panel';
+import { usePlatformSession } from '@/lib/platform-session';
+import { SystemWorkspaceTree } from './system-workspace-tree';
 import type {
   GitDiffTarget,
   GitGraphTarget,
@@ -50,6 +52,8 @@ export function WorkspaceTree({
 }: Props) {
   const { t } = useTranslation();
   const { t: tw } = useTranslation('workspaces');
+  const session = usePlatformSession();
+  const [systemOpen, setSystemOpen] = useState(false);
   const currentRoot = useFilesStore((s) => s.rootDir);
   const [adoptedCwd, setAdoptedCwd] = useState<string | null>(null);
   const [gitResourceId, setGitResourceId] = useState<string | null>(null);
@@ -96,6 +100,7 @@ export function WorkspaceTree({
             .map((workspace) => {
               const selected = Boolean(
                 !gitResourceId &&
+                !systemOpen &&
                 currentRoot &&
                 pathIsWithin(currentRoot, workspace.path),
               );
@@ -123,6 +128,7 @@ export function WorkspaceTree({
                     title={workspace.path}
                     onClick={() => {
                       setGitResourceId(null);
+                      setSystemOpen(false);
                       useFilesStore.getState().setRootDir(workspace.path);
                     }}
                   >
@@ -133,7 +139,7 @@ export function WorkspaceTree({
                     <Folder className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">
                       {workspace.primary
-                        ? t('primaryWorkspace')
+                        ? tw('projectWorkingSpace')
                         : workspace.name}
                     </span>
                   </Button>
@@ -153,6 +159,7 @@ export function WorkspaceTree({
                         label: tw('gitBrowseLocal'),
                         onSelect: () => {
                           setGitResourceId(null);
+                          setSystemOpen(false);
                           useFilesStore.getState().setRootDir(workspace.path);
                         },
                       },
@@ -167,6 +174,21 @@ export function WorkspaceTree({
                 </div>
               );
             })}
+          {session.isAdministrator && project.systemWorkspacePath && (
+            <Button
+              size="sm"
+              variant={systemOpen ? 'secondary' : 'ghost'}
+              aria-pressed={systemOpen}
+              className="h-7 w-full justify-start text-xs"
+              onClick={() => {
+                setGitResourceId(null);
+                setSystemOpen(true);
+              }}
+            >
+              <LockKeyhole className="h-3.5 w-3.5" />
+              {tw('systemWorkspace')}
+            </Button>
+          )}
         </div>
       )}
       {/* Never compare the browsed root to cwd: entering folders and going up
@@ -194,7 +216,10 @@ export function WorkspaceTree({
             onMobileClose();
           }}
           resourceId={gitResourceId}
-          onSelect={setGitResourceId}
+          onSelect={(id) => {
+            setSystemOpen(false);
+            setGitResourceId(id);
+          }}
           cwd={cwd}
           activeWorkspacePending={activeWorkspacePending}
           onActiveWorkspaceChange={onActiveWorkspaceChange}
@@ -203,7 +228,15 @@ export function WorkspaceTree({
             onMobileClose();
           }}
         >
-          {cwd && adoptedCwd === cwd && currentRoot ? (
+          {systemOpen &&
+          session.isAdministrator &&
+          project.systemWorkspacePath ? (
+            <SystemWorkspaceTree
+              key={project.systemWorkspacePath}
+              root={project.systemWorkspacePath}
+              onFile={onFile}
+            />
+          ) : cwd && adoptedCwd === cwd && currentRoot ? (
             <FileTree
               project={project}
               onFileClick={(path) => {

@@ -18,14 +18,18 @@ import {
   projectDeliverableVersions,
   projectDeliverableDocuments,
   projectDeliverableDocumentVersions,
+  people,
+  projectParticipants,
 } from '../database/schema';
 import { ProjectWorkspaceLayout } from './project-workspace-layout';
+import { projectSystemPath } from './workspace-structure';
 import { FilesService } from '../files/files.service';
 import type { SettingsService } from '../settings/settings.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
 import { ProjectsService } from './projects.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { IdentityService } from '../auth/identity.service';
+import { accessContext } from '../auth/access-context';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import {
@@ -111,10 +115,7 @@ describe('permanent project workspaces', () => {
   async function legacyPrimary() {
     await layout.migrate();
     const primary = path.join(root, 'project-id');
-    await fs.rename(
-      path.join(primary, '.mergeron'),
-      path.join(primary, '.webui'),
-    );
+    await fs.rename(projectSystemPath(primary), path.join(primary, '.webui'));
     await fs.writeFile(
       path.join(primary, '.webui/project.json'),
       JSON.stringify({ projectId: 'project-id', layoutVersion: 1 }),
@@ -130,6 +131,183 @@ describe('permanent project workspaces', () => {
       .run();
     return primary;
   }
+
+  it('migrates an embedded v2 system while preserving working files, history and old administrative links', async () => {
+    await layout.migrate();
+    const primary = path.join(root, 'project-id');
+    const system = projectSystemPath(primary);
+    await fs.rename(system, path.join(primary, '.mergeron'));
+    await fs.writeFile(
+      path.join(primary, '.mergeron/project.json'),
+      JSON.stringify({ projectId: 'project-id', layoutVersion: 2 }),
+    );
+    await fs.writeFile(
+      path.join(primary, '.mergeron/history/keep.bin'),
+      'historical bytes',
+    );
+    await fs.writeFile(
+      path.join(primary, 'documents/report.txt'),
+      'working bytes',
+    );
+    await fs.mkdir(path.join(primary, '.agent-document-drafts/lease'), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(primary, '.agent-document-drafts/lease/draft.pptx'),
+      'unfinished draft',
+    );
+    database.db.update(projects).set({ workspaceLayoutVersion: 2 }).run();
+    await layout.migrate();
+    expect(
+      await fs.readFile(path.join(system, 'history/keep.bin'), 'utf8'),
+    ).toBe('historical bytes');
+    expect(
+      await fs.readFile(
+        path.join(system, 'draft-archive/lease/draft.pptx'),
+        'utf8',
+      ),
+    ).toBe('unfinished draft');
+    expect(
+      await fs.readFile(path.join(primary, 'documents/report.txt'), 'utf8'),
+    ).toBe('working bytes');
+    expect(
+      await files.resolveSafePath(
+        path.join(primary, '.mergeron/history/keep.bin'),
+      ),
+    ).toBe(await fs.realpath(path.join(system, 'history/keep.bin')));
+    await expect(
+      fs.lstat(path.join(primary, '.mergeron')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      files.writeFile(path.join(system, 'history/keep.bin'), 'forbidden'),
+    ).rejects.toThrow('read-only');
+    await layout.migrate();
+    expect(
+      await fs.readFile(path.join(system, 'history/keep.bin'), 'utf8'),
+    ).toBe('historical bytes');
+  });
+
+  it('refuses system access for project members through direct, legacy and symbolic-link paths', async () => {
+    await layout.migrate();
+    database.db
+      .insert(people)
+      .values({
+        id: 'reader',
+        reference: 'reader',
+        name: 'Reader',
+        role: 'standard',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(projectParticipants)
+      .values({ projectId: 'project-id', personId: 'reader', createdAt: 1 })
+      .run();
+    const identity = {
+      kind: 'person' as const,
+      personId: 'reader',
+      name: 'Reader',
+      role: 'standard' as const,
+      active: true,
+    };
+    const identities = new IdentityService(database.db);
+    const primary = path.join(root, 'project-id');
+    const system = projectSystemPath(primary);
+    await fs.symlink(system, path.join(primary, 'documents/system-link'));
+    const context = { identity, identities };
+    for (const denied of [
+      system,
+      path.join(system, 'knowledge/AGENTS.md'),
+      path.join(primary, '.mergeron/knowledge/AGENTS.md'),
+      path.join(primary, 'documents/system-link/knowledge/AGENTS.md'),
+    ]) {
+      await expect(
+        accessContext.run(context, () => files.resolveSafePath(denied)),
+      ).rejects.toThrow();
+      await expect(
+        accessContext.run(context, () => files.resolveWatchPath(denied)),
+      ).rejects.toThrow();
+    }
+    expect(
+      await accessContext.run(context, () =>
+        files.resolveSafePath(path.join(primary, 'documents')),
+      ),
+    ).toContain('documents');
+    const entries = await accessContext.run(context, () =>
+      files.readDirectory(path.join(primary, 'documents')),
+    );
+    expect(entries.some((entry) => entry.name === 'system-link')).toBe(false);
+  });
+
+  it('extracts imported business files and retains workspace and conversation references', async () => {
+    const primary = await legacyPrimary();
+    const oldWorkspace = path.join(
+      primary,
+      '.webui/imported-workspaces/source',
+    );
+    const oldAttachment = path.join(
+      primary,
+      '.webui/imported-attachments/notes.txt',
+    );
+    await fs.mkdir(oldWorkspace, { recursive: true });
+    await fs.mkdir(path.dirname(oldAttachment), { recursive: true });
+    await fs.writeFile(path.join(oldWorkspace, 'keep.txt'), 'source bytes');
+    await fs.writeFile(oldAttachment, 'attachment bytes');
+    database.db
+      .insert(projectWorkspaces)
+      .values({
+        id: 'imported',
+        projectId: 'project-id',
+        name: 'Imported',
+        path: oldWorkspace,
+        primary: false,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .update(projectAgentThreads)
+      .set({ workspacePath: oldWorkspace })
+      .run();
+    database.db.update(simpleChatThreads).set({ cwd: oldWorkspace }).run();
+    await layout.migrate();
+    const destination = path.join(
+      primary,
+      'sources/imported-workspaces/source',
+    );
+    expect(await fs.readFile(path.join(destination, 'keep.txt'), 'utf8')).toBe(
+      'source bytes',
+    );
+    expect(
+      await fs.readFile(
+        path.join(primary, 'documents/imported-attachments/notes.txt'),
+        'utf8',
+      ),
+    ).toBe('attachment bytes');
+    expect(
+      database.db
+        .select()
+        .from(projectWorkspaces)
+        .where(eq(projectWorkspaces.id, 'imported'))
+        .get()?.path,
+    ).toBe(destination);
+    expect(
+      database.db.select().from(projectAgentThreads).get()?.workspacePath,
+    ).toBe(destination);
+    expect(database.db.select().from(simpleChatThreads).get()?.cwd).toBe(
+      destination,
+    );
+    expect(await files.resolveSafePath(oldAttachment)).toBe(
+      await fs.realpath(
+        path.join(primary, 'documents/imported-attachments/notes.txt'),
+      ),
+    );
+    await layout.migrate();
+    expect(await fs.readFile(path.join(destination, 'keep.txt'), 'utf8')).toBe(
+      'source bytes',
+    );
+  });
 
   async function historicalDeliverable(primary: string) {
     const now = Date.now();
@@ -289,9 +467,9 @@ describe('permanent project workspaces', () => {
     expect(
       database.db.select().from(projects).get()?.workspaceLayoutVersion,
     ).toBe(1);
-    expect(
-      (await fs.lstat(path.join(primary, '.mergeron'))).isDirectory(),
-    ).toBe(true);
+    expect((await fs.lstat(projectSystemPath(primary))).isDirectory()).toBe(
+      true,
+    );
     expect(
       database.db.select().from(projectDeliverableVersions).get()?.files[0]
         .snapshotPath,
@@ -299,10 +477,10 @@ describe('permanent project workspaces', () => {
     await layout.migrate();
     expect(
       database.db.select().from(projects).get()?.workspaceLayoutVersion,
-    ).toBe(2);
+    ).toBe(3);
     const file = database.db.select().from(projectDeliverableVersions).get()!
       .files[0];
-    expect(file.snapshotPath).toContain('/.mergeron/');
+    expect(file.snapshotPath).toContain('/.mergeron-system/');
     expect(await fs.readFile(file.snapshotPath, 'utf8')).toBe(
       'Preserved report',
     );
@@ -365,7 +543,7 @@ describe('permanent project workspaces', () => {
         id: 'other',
         name: 'Other',
         workspacePath: path.join(root, 'other'),
-        workspaceLayoutVersion: 2,
+        workspaceLayoutVersion: 3,
         createdAt: 1,
         updatedAt: 1,
       })
@@ -534,9 +712,11 @@ describe('permanent project workspaces', () => {
     const project = await service.create('Renamable project');
     expect(project.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(project.workspacePath).toBe(path.join(root, project.id));
-    expect(project.workspaceLayoutVersion).toBe(2);
+    expect(project.workspaceLayoutVersion).toBe(3);
     expect(
-      await fs.stat(path.join(project.workspacePath, '.mergeron/history')),
+      await fs.stat(
+        path.join(projectSystemPath(project.workspacePath), 'history'),
+      ),
     ).toMatchObject({});
     await expect(service.create('Custom', legacy)).rejects.toThrow(
       'generated from the project ID',
@@ -546,16 +726,16 @@ describe('permanent project workspaces', () => {
   it('recovers filesystem preparation completed before a database transaction', async () => {
     const primary = await layout.prepare('project-id');
     await fs.writeFile(
-      path.join(primary, '.mergeron/knowledge/CONNAISSANCES.md'),
+      path.join(projectSystemPath(primary), 'knowledge/CONNAISSANCES.md'),
       'Preserved',
     );
     await layout.migrate();
     expect(
       database.db.select().from(projects).get()?.workspaceLayoutVersion,
-    ).toBe(2);
+    ).toBe(3);
     expect(
       await fs.readFile(
-        path.join(primary, '.mergeron/knowledge/CONNAISSANCES.md'),
+        path.join(projectSystemPath(primary), 'knowledge/CONNAISSANCES.md'),
         'utf8',
       ),
     ).toBe('Preserved');
@@ -566,7 +746,7 @@ describe('permanent project workspaces', () => {
     const primary = path.join(root, 'project-id');
     expect(database.db.select().from(projects).get()).toMatchObject({
       workspacePath: primary,
-      workspaceLayoutVersion: 2,
+      workspaceLayoutVersion: 3,
     });
     expect(database.db.select().from(projectWorkspaces).all()).toEqual(
       expect.arrayContaining([
@@ -584,14 +764,14 @@ describe('permanent project workspaces', () => {
       'Existing instructions',
     );
     await fs.writeFile(
-      path.join(primary, '.mergeron/knowledge/DECISIONS.md'),
+      path.join(projectSystemPath(primary), 'knowledge/DECISIONS.md'),
       'A decision',
     );
     await layout.migrate();
     expect(database.db.select().from(projectWorkspaces).all()).toHaveLength(2);
     expect(
       await fs.readFile(
-        path.join(primary, '.mergeron/knowledge/DECISIONS.md'),
+        path.join(projectSystemPath(primary), 'knowledge/DECISIONS.md'),
         'utf8',
       ),
     ).toBe('A decision');
@@ -656,7 +836,7 @@ describe('permanent project workspaces', () => {
     expect(result.preservedWorkspaces).toContain(path.join(root, 'project-id'));
     expect(database.db.select().from(projects).all()).toHaveLength(0);
     expect(
-      await fs.stat(path.join(root, 'project-id', '.mergeron')),
+      await fs.stat(projectSystemPath(path.join(root, 'project-id'))),
     ).toMatchObject({});
   });
 
@@ -711,7 +891,7 @@ describe('permanent project workspaces', () => {
     await expect(files.renamePath(primary, 'renamed')).rejects.toThrow();
     await expect(
       files.writeFile(
-        path.join(primary, '.mergeron/knowledge/DECISIONS.md'),
+        path.join(projectSystemPath(primary), 'knowledge/DECISIONS.md'),
         'Overwrite',
       ),
     ).rejects.toThrow();

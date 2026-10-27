@@ -8,7 +8,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ProjectWorkspaceLayout } from './project-workspace-layout';
-import { WORKSPACE_LAYOUT_VERSION } from './workspace-structure';
+import {
+  WORKSPACE_LAYOUT_VERSION,
+  projectSystemPath,
+} from './workspace-structure';
 import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { identityEvents } from '../auth/identity-events';
@@ -924,6 +927,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   async list(): Promise<
     Array<
       Project & {
+        systemWorkspacePath?: string;
         workspaces: Array<
           ProjectWorkspace & {
             readOnly: boolean;
@@ -995,6 +999,10 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       )
       .map((project) => ({
         ...project,
+        ...(project.workspaceLayoutVersion >= 3 &&
+        (!currentAccess() || currentAccess()?.identity.role === 'administrator')
+          ? { systemWorkspacePath: projectSystemPath(project.workspacePath) }
+          : {}),
         workspaces: workspaces
           .filter((workspace) => workspace.projectId === project.id)
           .map((workspace) => {

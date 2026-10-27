@@ -59,6 +59,7 @@ import { OnlyOfficeController } from '../onlyoffice/onlyoffice.controller';
 import { DeliverablesController } from '../deliverables/deliverables.controller';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { sign } from 'jsonwebtoken';
+import { projectSystemPath } from '../projects/workspace-structure';
 
 let app: NestFastifyApplication;
 let database: TestDatabase;
@@ -360,6 +361,49 @@ it('filters simple chats and rejects guessed IDs, forged project IDs and unknown
       .where(eq(simpleChatThreads.id, 'legacy'))
       .get()?.projectId,
   ).toBeNull();
+});
+
+it('reserves raw system files for administrators, including guessed old URLs and symbolic links', async () => {
+  const system = projectSystemPath(join(root, 'a'));
+  const file = join(system, 'history/admin.txt');
+  writeFileSync(file, 'ADMIN_ONLY');
+  symlinkSync(system, join(root, 'a/system-link'));
+  for (const target of [
+    file,
+    join(root, 'a/.mergeron/history/admin.txt'),
+    join(root, 'a/system-link/history/admin.txt'),
+  ]) {
+    const response = await app.inject({
+      url: `/api/files/read?path=${encodeURIComponent(target)}`,
+      headers: headers(),
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.body).not.toContain('ADMIN_ONLY');
+  }
+  const administrator = await app.inject({
+    url: `/api/files/read?path=${encodeURIComponent(file)}`,
+    headers: headers('admin'),
+  });
+  expect(administrator.statusCode).toBe(200);
+  expect(administrator.body).toContain('ADMIN_ONLY');
+  const write = await app.inject({
+    method: 'POST',
+    url: '/api/files/write',
+    headers: headers('admin'),
+    payload: { path: file, content: 'forbidden' },
+  });
+  expect(write.statusCode).toBe(409);
+  expect(readFileSync(file, 'utf8')).toBe('ADMIN_ONLY');
+  const memberList = await app.inject({
+    url: '/api/projects',
+    headers: headers(),
+  });
+  expect(memberList.body).not.toContain('systemWorkspacePath');
+  const adminList = await app.inject({
+    url: '/api/projects',
+    headers: headers('admin'),
+  });
+  expect(adminList.body).toContain('systemWorkspacePath');
 });
 
 it('checks file reads, writes, roots, copies and symlink targets against project membership', async () => {
@@ -761,6 +805,30 @@ it('checks live OnlyOffice download and save callbacks, including readonly and r
     authorization: 'Bearer project-isolation-test',
     'x-webui-auth-source': 'document',
   };
+  const historyData = await app.inject({
+    url: `/api/onlyoffice/history-data?path=${encodeURIComponent(path)}&version=2`,
+    headers: headers(),
+  });
+  expect(historyData.statusCode).toBe(200);
+  const historical = historyData.json<{
+    url: string;
+    changesUrl: string;
+    previous: { url: string };
+  }>();
+  const historyUrls = [
+    historical.url,
+    historical.changesUrl,
+    historical.previous.url,
+  ].map((item) => {
+    const parsed = new URL(item);
+    return parsed.pathname + parsed.search;
+  });
+  for (const historicalUrl of historyUrls) {
+    expect(
+      (await app.inject({ url: historicalUrl, headers: transferHeaders }))
+        .statusCode,
+    ).toBe(200);
+  }
   expect(
     (
       await app.inject({
@@ -774,6 +842,12 @@ it('checks live OnlyOffice download and save callbacks, including readonly and r
     url: '/api/projects/a/participants/alice',
     headers: headers('admin'),
   });
+  for (const historicalUrl of historyUrls) {
+    expect(
+      (await app.inject({ url: historicalUrl, headers: transferHeaders }))
+        .statusCode,
+    ).toBe(403);
+  }
   expect(
     (
       await app.inject({

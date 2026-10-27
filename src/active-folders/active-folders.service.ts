@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { requireProjectAccess } from '../auth/access-context';
 import { claimAgentCopy } from '../projects/git-copy-ownership';
+import { isPrivateProjectSpace } from '../projects/workspace-structure';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   projectActiveFolders,
@@ -135,6 +136,8 @@ export class ActiveFoldersService {
     cwd: string,
   ): string | null {
     const target = path.resolve(cwd);
+    if (isPrivateProjectSpace(target))
+      throw new ConflictException('System workspaces cannot be used by agents');
     const workspaces = this.db.select().from(projectWorkspaces).all();
     const copy = this.db
       .select()
@@ -194,6 +197,11 @@ export class ActiveFoldersService {
     const workspace = this.workspace(projectId, input.resourceId);
     const relativePath = this.normalizeRelativePath(input.relativePath);
     const inspected = this.inspect(workspace, relativePath);
+    if (
+      inspected.effectivePath &&
+      isPrivateProjectSpace(inspected.effectivePath)
+    )
+      throw new ConflictException('System workspaces cannot be used by agents');
     if (inspected.state !== 'ready')
       throw new ConflictException(
         'The active folder must exist as a regular directory inside the selected resource',
@@ -554,6 +562,8 @@ export class ActiveFoldersService {
   ): Pick<ActiveFolderView, 'effectivePath' | 'state'> {
     const root = path.resolve(workspace.path);
     const candidate = path.resolve(root, relativePath || '.');
+    if (isPrivateProjectSpace(candidate))
+      return { effectivePath: null, state: 'invalid' };
     if (candidate !== root && !candidate.startsWith(root + path.sep))
       return { effectivePath: null, state: 'invalid' };
     try {
@@ -567,6 +577,8 @@ export class ActiveFoldersService {
       }
       const physicalRoot = realpathSync(root);
       const physicalCandidate = realpathSync(candidate);
+      if (isPrivateProjectSpace(physicalCandidate))
+        return { effectivePath: null, state: 'invalid' };
       if (
         physicalCandidate !== physicalRoot &&
         !physicalCandidate.startsWith(physicalRoot + path.sep)

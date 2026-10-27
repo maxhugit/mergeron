@@ -12,6 +12,12 @@ import {
 import { ProjectArchivesService } from './project-archives.service';
 
 const services: ProjectArchivesService[] = [];
+const migrated = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('./project-workspace-layout', () => ({
+  ProjectWorkspaceLayout: class {
+    migrate = migrated;
+  },
+}));
 const metadata = { invalidate: vi.fn() };
 
 function service() {
@@ -122,6 +128,7 @@ describe('staged ZIP imports', () => {
       instance.importProject('alice', 'person', { token: preview.token }),
     ).rejects.toThrow('expiré');
     expect(metadata.invalidate).toHaveBeenCalledOnce();
+    expect(migrated).toHaveBeenCalledWith('new-project');
   });
 
   it('removes temporary data after an incompatible ZIP', async () => {

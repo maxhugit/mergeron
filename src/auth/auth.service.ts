@@ -33,7 +33,11 @@ export class AuthService {
   private readonly apiKey: string;
   private readonly jwtSecret: string;
 
-  createDocumentSession(path: string, writable = false): string {
+  createDocumentSession(
+    path: string,
+    writable = false,
+    historySourcePath?: string,
+  ): string {
     const access = currentAccess();
     return this.identities.createDocumentSession(
       access?.identity ?? {
@@ -45,6 +49,7 @@ export class AuthService {
       },
       path,
       writable,
+      historySourcePath,
     );
   }
 

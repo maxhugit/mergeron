@@ -5,9 +5,15 @@ import {
   Injectable,
   Optional,
 } from '@nestjs/common';
-import { eq, and, isNull, lte, desc } from 'drizzle-orm';
+import { eq, and, or, isNull, lte, desc } from 'drizzle-orm';
 import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import {
+  isPrivateProjectSpace,
+  PROJECT_SYSTEM_DIRECTORY,
+  LEGACY_PROJECT_SYSTEM_DIRECTORY,
+} from '../projects/workspace-structure';
+import { projectSystemAlias } from '../projects/project-system-paths';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { LocalAuthService } from './local-auth.service';
 import { identityEvents } from './identity-events';
@@ -25,6 +31,8 @@ import {
   conversationOwners,
   conversationBranchEdges,
   documentAccessSessions,
+  projectDeliverableDocuments,
+  projectDeliverableDocumentVersions,
   impersonationAudit,
 } from '../database/schema';
 
@@ -634,7 +642,35 @@ export class IdentityService {
         }
       }
     };
-    const target = canonical(value);
+    const aliased = projectSystemAlias(this.db, value);
+    const target = canonical(aliased);
+    if (
+      identity?.role !== 'administrator' &&
+      (isPrivateProjectSpace(target) ||
+        isPrivateProjectSpace(value) ||
+        this.db
+          .select()
+          .from(projects)
+          .all()
+          .some((project) =>
+            [
+              PROJECT_SYSTEM_DIRECTORY,
+              LEGACY_PROJECT_SYSTEM_DIRECTORY,
+              '.agent-document-drafts',
+            ].some((name) => {
+              const root = resolve(project.workspacePath, name);
+              return (
+                target === root ||
+                target.startsWith(root + '/') ||
+                aliased === root ||
+                aliased.startsWith(root + '/')
+              );
+            }),
+          ))
+    )
+      throw new ForbiddenException(
+        'System workspaces are reserved for administrators',
+      );
     const contains = (root: string, candidate: string) => {
       const rel = relative(root, candidate);
       return (
@@ -733,14 +769,23 @@ export class IdentityService {
     identity: PlatformIdentity,
     path: string,
     writable: boolean,
+    historySourcePath?: string,
   ): string {
     identity = this.current(identity);
     this.requireActive(identity);
+    // Only the history workflow may mint a read-only capability for a registered
+    // snapshot. Generic workspace access remains forbidden for system paths.
+    if (
+      historySourcePath &&
+      (writable || this.historySourcePath(path) !== historySourcePath)
+    )
+      throw new ForbiddenException('Invalid document history path');
+    const authorizationPath = historySourcePath ?? path;
     if (identity.role !== 'administrator')
-      this.requireWorkspacePath(path, false, identity);
+      this.requireWorkspacePath(authorizationPath, false, identity);
     let projectId: string | null = null;
     try {
-      projectId = this.projectForPath(path);
+      projectId = this.projectForPath(authorizationPath);
     } catch (error) {
       if (identity.role !== 'administrator') throw error;
     }
@@ -764,6 +809,25 @@ export class IdentityService {
       })
       .run();
     return id;
+  }
+
+  private historySourcePath(path: string): string | undefined {
+    const versions = projectDeliverableDocumentVersions;
+    const documents = projectDeliverableDocuments;
+    return this.db
+      .select({ source: documents.sourcePath })
+      .from(versions)
+      .innerJoin(documents, eq(documents.id, versions.documentId))
+      .where(
+        and(
+          isNull(documents.deletedAt),
+          or(
+            eq(versions.snapshotPath, path),
+            eq(versions.onlyofficeChangesPath, path),
+          ),
+        ),
+      )
+      .get()?.source;
   }
 
   verifyDocumentSession(id: unknown, path: string, writable = false): boolean {
@@ -814,10 +878,16 @@ export class IdentityService {
         role: person.role,
         active: person.active,
       };
-      if (!session.projectId || this.projectForPath(path) !== session.projectId)
+      const authorizationPath = !session.writable
+        ? (this.historySourcePath(path) ?? path)
+        : path;
+      if (
+        !session.projectId ||
+        this.projectForPath(authorizationPath) !== session.projectId
+      )
         return false;
       this.requireProject(identity, session.projectId);
-      this.requireWorkspacePath(path, false, identity);
+      this.requireWorkspacePath(authorizationPath, false, identity);
       return true;
     } catch {
       return false;

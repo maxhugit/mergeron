@@ -1,4 +1,8 @@
 {
+  "projectWorkingSpace": "Espace de travail",
+  "systemWorkspace": "Espace système",
+  "systemWorkspaceHelp": "Données internes · Administrateur · Lecture seule",
+  "systemWorkspaceError": "Impossible de consulter l’espace système. Vérifiez vos droits et sa disponibilité.",
   "gitLocalSwitch": "Changer de branche…",
   "gitLocalMerge": "Fusionner dans la branche actuelle…",
   "gitLocalConfirm": "Confirmer",

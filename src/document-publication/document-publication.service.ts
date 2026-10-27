@@ -192,8 +192,9 @@ export class DocumentPublicationService implements OnModuleDestroy {
       if (!project || project.workspaceLayoutVersion < 1)
         throw new Error('A primary project workspace is required');
       const root = await fs.realpath(project.workspacePath);
-      const directory = await this.protection.directory(root, [
-        '.agent-document-drafts',
+      const directory = await this.protection.directory(path.dirname(root), [
+        '.mergeron-agent-drafts',
+        path.basename(root),
         createHash('sha256').update(threadId).digest('hex'),
         randomUUID(),
       ]);
@@ -372,8 +373,11 @@ export class DocumentPublicationService implements OnModuleDestroy {
           'Publication failed. Check the selected deliverable, document version and draft; the draft is preserved.',
       }).catch(() => {});
     } finally {
-      if (stage)
+      if (stage) {
         await fs.rm(stage, { recursive: true, force: true }).catch(() => {});
+        // Never leave a technical staging folder in the working-space explorer.
+        await fs.rmdir(path.dirname(stage)).catch(() => {});
+      }
     }
   }
 

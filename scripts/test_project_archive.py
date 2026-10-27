@@ -56,6 +56,31 @@ class ProjectArchiveTest(unittest.TestCase):
         with self.assertRaises(engine.ArchiveError):
             self.import_project()
 
+    def test_separate_system_space_is_exported_and_restored_with_its_history(self):
+        system = self.project.parent / '.mergeron-system' / self.project.name
+        (system / 'history').mkdir(parents=True)
+        (system / 'knowledge').mkdir()
+        (system / 'history' / 'version.bin').write_bytes(b'preserved-version')
+        (system / 'project.json').write_text(json.dumps({'projectId': 'project-source', 'layoutVersion': 3}))
+        with engine.connect(self.source_db) as db:
+            db.execute('UPDATE projects SET workspace_layout_version=3')
+        self.export()
+        archive, manifest = self.load()
+        self.assertIn('system-spaces-v1', manifest['requiredCapabilities'])
+        self.assertEqual(len([r for r in manifest['roots'] if r['kind'] == 'system']), 1)
+        result = engine.import_archive(self.target, archive, manifest)
+        restored = self.target_root / result['projectId']
+        self.assertEqual((restored / '.mergeron/history/version.bin').read_bytes(), b'preserved-version')
+        with engine.connect(self.target_db) as db:
+            self.assertEqual(db.execute('SELECT workspace_layout_version FROM projects').fetchone()[0], 2)
+        # Layout 2 is intentional until the app atomically separates this imported root.
+
+    def test_missing_or_forged_system_inventory_is_rejected(self):
+        self.export()
+        self.rewrite_manifest(lambda m: m['roots'].append({'key': 'system', 'kind': 'system', 'source': '/unrelated/private'}))
+        with self.assertRaises(engine.ArchiveError):
+            self.import_project()
+
     def test_export_refuses_to_silently_lose_an_unrepresentable_location(self):
         with engine.connect(self.source_db) as db:
             db.execute("UPDATE project_locations SET path='/outside' WHERE id='local:workspace'")
@@ -632,7 +657,7 @@ class ProjectArchiveTest(unittest.TestCase):
             db.execute('UPDATE simple_chat_messages SET content=?', ('Image: ' + str(upload),))
         self.export()
         result = self.import_project()
-        copies = list((self.target_root / result['projectId'] / '.mergeron/imported-attachments').iterdir())
+        copies = list((self.target_root / result['projectId'] / 'documents/imported-attachments').iterdir())
         self.assertEqual(len(copies), 1)
         self.assertEqual(copies[0].read_bytes(), b'image-data')
         with engine.connect(self.target_db) as db:

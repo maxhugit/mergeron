@@ -6,6 +6,7 @@ export interface DocumentIsolationPlan {
   databasePath: string;
   writableRoots: string[];
   publishedRoots: string[];
+  privateRoots?: string[];
   unavailableRoots?: string[];
 }
 
@@ -97,6 +98,12 @@ export function documentIsolationArgs(
   // Overlay after every writable bind, including nested workspace roots.
   for (const root of [...new Set(plan.publishedRoots)].sort())
     result.push('--ro-bind', root, root);
+  // Administrative data is not merely read-only: it is invisible to agent processes.
+  for (const root of [...new Set(plan.privateRoots ?? [])].sort()) {
+    if (!root.startsWith('/workspaces/'))
+      throw new Error('Invalid system workspace boundary');
+    result.push('--tmpfs', root, '--remount-ro', root);
+  }
   // Missing paths are masked inside the namespace only, never recreated on disk.
   for (const root of [...new Set(plan.unavailableRoots ?? [])].sort()) {
     if (!root.startsWith('/workspaces/'))
