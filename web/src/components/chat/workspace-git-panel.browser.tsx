@@ -11,6 +11,21 @@ import '@/index.css';
 import { locationInventoryFixture } from '@/test/project-locations-fixture';
 import type { GitInventory } from '@/lib/workspace-git-api';
 
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({
+    data: {
+      kind: 'person',
+      personId: 'person',
+      name: 'Utilisateur Test',
+      email: 'test@example.invalid',
+      active: true,
+    },
+    isPending: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn().mockResolvedValue({}),
+  }),
+}));
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
   projectsApi: async (url: string) => {

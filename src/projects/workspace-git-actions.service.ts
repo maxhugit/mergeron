@@ -425,6 +425,27 @@ export class WorkspaceGitActionsService {
   ) {
     requireExecutionAccess();
     this.body(body);
+    const access = currentAccess();
+    const person =
+      access?.identity.kind === 'person' && access.identity.personId
+        ? access.identities.resolvePerson(access.identity.personId)
+        : undefined;
+    const authorName = person?.name?.trim() ?? '';
+    const authorEmail = person?.email?.trim() ?? '';
+    if (
+      person?.kind !== 'person' ||
+      !person.personId ||
+      !person.active ||
+      !authorName ||
+      authorName.length > 120 ||
+      authorEmail.length > 254 ||
+      /[<>]/.test(authorName) ||
+      !/^[^\s<>@]+@[^\s<>@]+$/.test(authorEmail) ||
+      [...authorName, ...authorEmail].some(
+        (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127,
+      )
+    )
+      throw new BadRequestException('GIT_IDENTITY_REQUIRED');
     return this.gate.mutate(async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state, branch } = await this.copyState(
@@ -433,10 +454,6 @@ export class WorkspaceGitActionsService {
         body.fingerprint,
       );
       const message = this.text(body.message, 4000);
-      const name = this.text(body.authorName, 120);
-      const email = this.text(body.authorEmail, 254);
-      if (/[<>\r\n]/.test(name) || !/^[^\s<>@]+@[^\s<>@]+$/.test(email))
-        throw new BadRequestException('GIT_IDENTITY_REQUIRED');
       if (
         !state.changes.some(
           (item) => item.status[0] !== ' ' && item.status[0] !== '?',
@@ -456,10 +473,10 @@ export class WorkspaceGitActionsService {
         await writeFile(frozenIndex, index, { mode: 0o600 });
         const env = {
           GIT_INDEX_FILE: frozenIndex,
-          GIT_AUTHOR_NAME: name,
-          GIT_AUTHOR_EMAIL: email,
-          GIT_COMMITTER_NAME: name,
-          GIT_COMMITTER_EMAIL: email,
+          GIT_AUTHOR_NAME: authorName,
+          GIT_AUTHOR_EMAIL: authorEmail,
+          GIT_COMMITTER_NAME: authorName,
+          GIT_COMMITTER_EMAIL: authorEmail,
         };
         const tree = (await this.git.git(cwd, ['write-tree'], env)).trim();
         const sha = (
