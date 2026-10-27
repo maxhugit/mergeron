@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -61,6 +62,21 @@ it('shows the verified server path, disk usage and total usage', async () => {
   expect(await screen.findByText(/Server path: \/srv\/mergeron/)).toBeVisible();
   expect(screen.getByText('Disk usage: 2 KiB')).toBeVisible();
   expect(screen.getByText('Total backup disk usage: 2 KiB')).toBeVisible();
+});
+it('keeps date and identifier in separate columns', async () => {
+  setup();
+  const table = await screen.findByRole('table');
+  await screen.findByText('backup');
+  expect(
+    within(table)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent),
+  ).toEqual(['Date', 'Identifier', 'Server path', 'Size', 'Status', 'Actions']);
+  const row = within(table).getAllByRole('row')[1];
+  const cells = within(row).getAllByRole('cell');
+  expect(cells).toHaveLength(6);
+  expect(cells[0].querySelector('time')).not.toBeNull();
+  expect(cells[1]).toHaveTextContent('backup');
 });
 
 it('distinguishes a background calculation from unavailable disk usage', async () => {

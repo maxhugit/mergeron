@@ -97,14 +97,23 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
           )}
           <div className="max-h-[65vh] overflow-auto">
             <table
-              className="w-full text-left text-sm"
+              className="w-full min-w-[800px] table-fixed text-left text-sm"
               aria-label={t('managerBackupsTitle')}
             >
+              <colgroup>
+                <col className="w-[12%]" />
+                <col className="w-[17%]" />
+                <col className="w-[28%]" />
+                <col className="w-[10%]" />
+                <col className="w-[15%]" />
+                <col className="w-[18%]" />
+              </colgroup>
               <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b">
                   {(
                     [
                       'managerBackupDateColumn',
+                      'managerBackupIdColumn',
                       'managerBackupHostPath',
                       'managerBackupSizeColumn',
                       'managerBackupStatusColumn',
@@ -124,11 +133,13 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                       <time dateTime={backup.createdAt}>
                         {date(backup.createdAt)}
                       </time>
+                    </td>
+                    <td className="px-3 py-3">
                       <p className="break-all font-mono text-xs text-muted-foreground">
                         {backup.id}
                       </p>
                     </td>
-                    <td className="min-w-48 max-w-md px-3 py-3">
+                    <td className="px-3 py-3">
                       <p className="break-all font-mono text-xs text-muted-foreground">
                         {t(
                           backup.path
@@ -141,7 +152,7 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                           t('managerBackupSizeUnknown')}
                       </p>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-3">
+                    <td className="break-words px-3 py-3">
                       <p className="text-xs">
                         {t('managerBackupDiskSize', {
                           size:
@@ -151,7 +162,7 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                         })}
                       </p>
                     </td>
-                    <td className="min-w-40 px-3 py-3">
+                    <td className="break-words px-3 py-3">
                       {backup.current && (
                         <p className="text-xs">{t('managerBackupsLatest')}</p>
                       )}
@@ -174,6 +185,7 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                     <td className="px-3 py-3">
                       <Button
                         variant="outline"
+                        className="h-auto min-h-8 w-full whitespace-normal break-words px-2 py-2 text-xs"
                         disabled={busy || !backup.canDelete}
                         onClick={() => {
                           deletion.reset();
