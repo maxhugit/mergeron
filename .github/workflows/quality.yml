@@ -78,6 +78,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_authentik_ingress.py
           python3 -m unittest discover -s scripts -p test_project_archive.py
           python3 -m unittest discover -s scripts -p test_manager_deployment.py
+          python3 -m unittest discover -s scripts -p test_update_dev_manager.py
 
       - name: Validate translation catalogs
         if: matrix.part == 'frontend'
