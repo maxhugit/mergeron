@@ -17,6 +17,7 @@ export interface ProjectSummary {
   id: string;
   name: string;
   workspacePath: string;
+  systemWorkspacePath?: string;
   createdAt: number;
   updatedAt: number;
   mcpServerIds?: string[];

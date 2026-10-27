@@ -281,13 +281,18 @@ export class OnlyOfficeController {
     const data: Record<string, unknown> = {
       fileType: version.fileName.split('.').pop()?.toLowerCase(),
       key: this.versionKey(version),
-      url: this.historyFileUrl(baseUrl, version.snapshotPath),
+      url: this.historyFileUrl(
+        baseUrl,
+        version.snapshotPath,
+        history.document.sourcePath,
+      ),
       version: version.number,
       ...(version.onlyofficeChangesPath
         ? {
             changesUrl: this.historyFileUrl(
               baseUrl,
               version.onlyofficeChangesPath,
+              history.document.sourcePath,
             ),
           }
         : {}),
@@ -296,7 +301,11 @@ export class OnlyOfficeController {
             previous: {
               fileType: previous.fileName.split('.').pop()?.toLowerCase(),
               key: this.versionKey(previous),
-              url: this.historyFileUrl(baseUrl, previous.snapshotPath),
+              url: this.historyFileUrl(
+                baseUrl,
+                previous.snapshotPath,
+                history.document.sourcePath,
+              ),
             },
           }
         : {}),
@@ -349,12 +358,20 @@ export class OnlyOfficeController {
     );
   }
 
-  private historyFileUrl(baseUrl: string, filePath: string) {
+  private historyFileUrl(
+    baseUrl: string,
+    filePath: string,
+    sourcePath: string,
+  ) {
     // Use the same Authentik-exempt, path-bound transfer endpoint as the
     // current document. A separate public history endpoint is redirected by
     // the deployment authentication proxy, and OnlyOffice deliberately refuses
     // to forward the signed URL through that 302 response.
-    const sessionId = this.authService.createDocumentSession(filePath, false);
+    const sessionId = this.authService.createDocumentSession(
+      filePath,
+      false,
+      sourcePath,
+    );
     return this.buildDocumentUrl(baseUrl, filePath, sessionId);
   }
 

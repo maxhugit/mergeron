@@ -28,6 +28,10 @@ import {
 } from '../database/schema';
 import { migrateDeliverableDocumentRoots } from '../deliverables/document-root-migration';
 import { accessContext } from '../auth/access-context';
+import {
+  projectDraftPath,
+  projectSystemPath,
+} from '../projects/workspace-structure';
 import type { CodexProcessManager } from '../codex/codex-process-manager.service';
 
 // macOS has no /proc. Preserve the same opened-handle path check in local tests;
@@ -143,6 +147,8 @@ describe('agent saves retained documents as new versions', () => {
   });
 
   afterEach(async () => {
+    await fs.rm(projectDraftPath(root), { recursive: true, force: true });
+    await fs.rm(projectSystemPath(root), { recursive: true, force: true });
     publication.onModuleDestroy();
     database.sqlite.close();
     await fs.rm(root, { recursive: true, force: true });
@@ -198,6 +204,30 @@ describe('agent saves retained documents as new versions', () => {
     expect(await fs.readFile(document.sourcePath, 'utf8')).toBe('Version one');
     expect(await fs.readFile(document.versions[0].snapshotPath, 'utf8')).toBe(
       'Version one',
+    );
+  });
+
+  it('keeps versions in the separate system space while the current file remains in the working space', async () => {
+    const system = projectSystemPath(root);
+    await fs.mkdir(path.dirname(system), { recursive: true });
+    await fs.rename(path.join(root, '.mergeron'), system);
+    database.db.update(projects).set({ workspaceLayoutVersion: 3 }).run();
+    expect((await request({})).result.status).toBe('published');
+    const document = deliverables.board('p', 'r').deliverables[0].documents[0];
+    expect(document.sourcePath).toBe(
+      path.join(root, 'livrables', item.id, 'report.docx'),
+    );
+    expect(document.versions[0].snapshotPath).toContain(
+      path.join(system, 'history'),
+    );
+    expect(await fs.readFile(document.versions[0].snapshotPath, 'utf8')).toBe(
+      'Version one',
+    );
+    expect(
+      deliverables.onlyOfficeHistory(document.sourcePath)?.versions,
+    ).toHaveLength(1);
+    expect((await publication.prepare('agent'))?.draftDirectory).toContain(
+      projectDraftPath(root),
     );
   });
 

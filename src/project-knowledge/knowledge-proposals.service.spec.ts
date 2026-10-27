@@ -53,7 +53,7 @@ beforeEach(async () => {
       id: 'p',
       name: 'Project',
       workspacePath: primary,
-      workspaceLayoutVersion: 1,
+      workspaceLayoutVersion: 3,
       createdAt: 1,
       updatedAt: 1,
     })

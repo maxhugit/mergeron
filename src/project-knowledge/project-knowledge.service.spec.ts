@@ -12,6 +12,7 @@ import {
   projectAgentThreads,
 } from '../database/schema';
 import { ProjectWorkspaceLayout } from '../projects/project-workspace-layout';
+import { projectSystemPath } from '../projects/workspace-structure';
 import { ProjectKnowledgeService } from './project-knowledge.service';
 
 vi.mock('node:fs/promises', async (original) => {
@@ -30,14 +31,14 @@ describe('shared project knowledge', () => {
     const primary = await new ProjectWorkspaceLayout(database.db, root).prepare(
       'p',
     );
-    directory = path.join(primary, '.mergeron/knowledge');
+    directory = path.join(projectSystemPath(primary), 'knowledge');
     database.db
       .insert(projects)
       .values({
         id: 'p',
         name: 'Project',
         workspacePath: primary,
-        workspaceLayoutVersion: 1,
+        workspaceLayoutVersion: 3,
         createdAt: 1,
         updatedAt: 1,
       })
@@ -140,14 +141,17 @@ describe('shared project knowledge', () => {
         id: 'other',
         name: 'Other',
         workspacePath: path.join(root, 'other'),
-        workspaceLayoutVersion: 1,
+        workspaceLayoutVersion: 3,
         createdAt: 1,
         updatedAt: 1,
       })
       .run();
     await new ProjectWorkspaceLayout(database.db, root).prepare('other');
     await fs.writeFile(
-      path.join(root, 'other/.mergeron/knowledge/AGENTS.md'),
+      path.join(
+        projectSystemPath(path.join(root, 'other')),
+        'knowledge/AGENTS.md',
+      ),
       'Private to other project',
     );
     expect(
