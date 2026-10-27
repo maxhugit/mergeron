@@ -126,7 +126,7 @@ export function GitLocalBranchActions({
               ? `${review.current ?? ''} → ${branch.name}`
               : `${branch.name} → ${review?.current ?? ''}`}
           </p>
-          <p className="font-mono text-xs">{review?.revision}</p>
+          <p className="break-all font-mono text-xs">{review?.revision}</p>
           <ActionError error={action.error} />
           <Button
             disabled={
