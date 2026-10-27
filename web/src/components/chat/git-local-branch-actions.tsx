@@ -31,7 +31,7 @@ export function GitLocalBranchActions({
   const client = useQueryClient();
   const submitted = useRef(false);
   const [review, setReview] = useState<{
-    action: 'switch' | 'merge';
+    action: 'switch' | 'merge' | 'delete';
     fingerprint?: string;
     revision: string;
     current: string | null;
@@ -50,7 +50,10 @@ export function GitLocalBranchActions({
             ...review,
             name: branch.name,
             agentThreadId,
-            confirmation: 'LOCAL_BRANCH_ACTION',
+            confirmation:
+              review?.action === 'delete'
+                ? 'DELETE_LOCAL_BRANCH'
+                : 'LOCAL_BRANCH_ACTION',
           }),
         },
       ),
@@ -83,11 +86,12 @@ export function GitLocalBranchActions({
   return (
     <>
       <div className="mt-2 flex flex-wrap gap-2">
-        {(['switch', 'merge'] as const).map((mode) => (
+        {(['switch', 'merge', 'delete'] as const).map((mode) => (
           <Button
             key={mode}
             size="sm"
             variant="outline"
+            className={mode === 'delete' ? 'text-destructive' : undefined}
             disabled={disabled || action.isPending}
             onClick={() => {
               action.reset();
@@ -99,7 +103,13 @@ export function GitLocalBranchActions({
               });
             }}
           >
-            {t(mode === 'switch' ? 'gitLocalSwitch' : 'gitLocalMerge')}
+            {t(
+              mode === 'delete'
+                ? 'gitLocalDelete'
+                : mode === 'switch'
+                  ? 'gitLocalSwitch'
+                  : 'gitLocalMerge',
+            )}
           </Button>
         ))}
       </div>
@@ -117,18 +127,31 @@ export function GitLocalBranchActions({
         <DialogContent>
           <DialogTitle>
             {t(
-              review?.action === 'switch' ? 'gitLocalSwitch' : 'gitLocalMerge',
+              review?.action === 'delete'
+                ? 'gitLocalDelete'
+                : review?.action === 'switch'
+                  ? 'gitLocalSwitch'
+                  : 'gitLocalMerge',
             )}
           </DialogTitle>
-          <DialogDescription>{t('gitLocalActionHelp')}</DialogDescription>
+          <DialogDescription>
+            {t(
+              review?.action === 'delete'
+                ? 'gitLocalDeleteHelp'
+                : 'gitLocalActionHelp',
+            )}
+          </DialogDescription>
           <p className="break-all">
-            {review?.action === 'switch'
-              ? `${review.current ?? ''} → ${branch.name}`
-              : `${branch.name} → ${review?.current ?? ''}`}
+            {review?.action === 'delete'
+              ? branch.name
+              : review?.action === 'switch'
+                ? `${review.current ?? ''} → ${branch.name}`
+                : `${branch.name} → ${review?.current ?? ''}`}
           </p>
           <p className="break-all font-mono text-xs">{review?.revision}</p>
           <ActionError error={action.error} />
           <Button
+            variant={review?.action === 'delete' ? 'destructive' : 'default'}
             disabled={
               action.isPending ||
               review?.fingerprint !== snapshot.fingerprint ||

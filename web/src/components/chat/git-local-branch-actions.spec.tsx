@@ -58,6 +58,7 @@ function show(state = snapshot, readOnly = false) {
 it.each([
   ['Changer de branche…', 'switch'],
   ['Fusionner dans la branche actuelle…', 'merge'],
+  ['Supprimer la branche locale…', 'delete'],
 ])(
   'confirms %s with pinned source and reviewed state',
   async (label, action) => {
@@ -65,7 +66,11 @@ it.each([
     fireEvent.click(screen.getByRole('button', { name: label }));
     expect(api).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      action === 'switch' ? 'main → feature' : 'feature → main',
+      action === 'delete'
+        ? 'feature'
+        : action === 'switch'
+          ? 'main → feature'
+          : 'feature → main',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
     await waitFor(() => expect(api).toHaveBeenCalledOnce());
@@ -77,7 +82,8 @@ it.each([
       revision: branch.revision,
       fingerprint: 'reviewed',
       agentThreadId: 'agent',
-      confirmation: 'LOCAL_BRANCH_ACTION',
+      confirmation:
+        action === 'delete' ? 'DELETE_LOCAL_BRANCH' : 'LOCAL_BRANCH_ACTION',
     });
   },
 );
@@ -91,6 +97,27 @@ it('disables operations for dirty and read-only copies', () => {
   expect(
     screen.getByRole('button', { name: 'Fusionner dans la branche actuelle…' }),
   ).toBeDisabled();
+});
+it('does not offer deletion for the current branch', () => {
+  show({ ...snapshot, branch: branch.name });
+  expect(
+    screen.queryByRole('button', { name: 'Supprimer la branche locale…' }),
+  ).toBeNull();
+});
+it('explains unmerged commits and keeps the confirmation open on refusal', async () => {
+  api.mockRejectedValue(new Error('GIT_BRANCH_UNMERGED'));
+  show();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Supprimer la branche locale…' }),
+  );
+  expect(screen.getByRole('dialog')).toHaveTextContent(
+    'Aucun fichier ni branche distante',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Fusionnez-la d’abord',
+  );
+  expect(screen.getByRole('dialog')).toBeVisible();
 });
 it('shows the localized refusal without retrying', async () => {
   api.mockRejectedValue(new Error('GIT_LOCAL_MERGE_CONFLICT'));

@@ -182,6 +182,14 @@ test.each([330, 600])(
     expect(await screen.findByRole('dialog')).toHaveTextContent(
       `main → ${branch.name}`,
     );
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Supprimer la branche locale…' })
+      .click();
+    const deletion = await screen.findByRole('dialog');
+    expect(deletion).toHaveTextContent(branch.name);
+    expect(deletion).toHaveTextContent('Aucun fichier ni branche distante');
+    expect(deletion.scrollWidth).toBeLessThanOrEqual(deletion.clientWidth);
   },
 );
 test.each([260, 330, 600])(
