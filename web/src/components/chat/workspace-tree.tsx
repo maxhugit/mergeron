@@ -15,6 +15,7 @@ import { WorkspaceGitPanel } from './workspace-git-panel';
 import type { GitDiffTarget } from '@/stores/workspace-store';
 
 interface Props {
+  agentThreadId?: string;
   cwd: string | null;
   project?: ProjectSummary;
   activeWorkspacePending?: boolean;
@@ -28,6 +29,7 @@ interface Props {
 
 /** Adapts only explorer presentation; the conversation and tab content keep their tree positions. */
 export function WorkspaceTree({
+  agentThreadId,
   cwd,
   project,
   activeWorkspacePending = false,
@@ -140,6 +142,7 @@ export function WorkspaceTree({
           conversation's tree while this one's metadata/request is pending. */}
       {project ? (
         <WorkspaceGitPanel
+          agentThreadId={agentThreadId}
           key={project.id}
           projectId={project.id}
           onGitDiff={(target) => {

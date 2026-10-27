@@ -1,13 +1,49 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import { WorkspaceGitService } from './workspace-git.service';
+import { WorkspaceCopiesService } from './workspace-copies.service';
 
 @Controller(['projects/:projectId/workspace-git', 'projects/:projectId/git'])
 export class WorkspaceGitController {
   constructor(
     private readonly git: WorkspaceGitService,
     private readonly actions: WorkspaceGitActionsService,
+    private readonly copies: WorkspaceCopiesService,
   ) {}
+
+  @Post('copies/:copyId/stage-review')
+  stageReview(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.stageReview(projectId, copyId, body);
+  }
+  @Post('copies/:copyId/stage')
+  stage(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.stage(projectId, copyId, body);
+  }
+  @Post('copies/:copyId/unstage')
+  unstage(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.unstage(projectId, copyId, body);
+  }
+
+  @Post('copies/:copyId/release-owner')
+  releaseOwner(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.copies.releaseOwner(projectId, copyId, body);
+  }
 
   @Post('copies/:copyId/commit')
   commit(
@@ -63,6 +99,14 @@ export class WorkspaceGitController {
     @Param('copyId') copyId: string,
   ) {
     return this.git.commits(projectId, copyId);
+  }
+
+  @Get('copies/:copyId/graph')
+  graph(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+  ) {
+    return this.git.graph(projectId, copyId);
   }
 
   @Get(['resources/:resourceId/branches', 'connections/:resourceId/branches'])

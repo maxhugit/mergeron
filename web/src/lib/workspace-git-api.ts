@@ -8,6 +8,17 @@ export interface GitInventory {
   resources: ProjectWorkspaceResourceSummary[];
   copies: ProjectWorkspaceCopySummary[];
 }
+
+export function copyOwnedByAgent(
+  copy: ProjectWorkspaceCopySummary,
+  agentId: string | undefined,
+): boolean {
+  return Boolean(
+    agentId &&
+    copy.ownerAgentIds?.length === 1 &&
+    (copy.ownerThreadIds ?? copy.ownerAgentIds).includes(agentId),
+  );
+}
 export interface GitSnapshot {
   fingerprint?: string;
   branch: string | null;
@@ -49,6 +60,19 @@ export interface GitRemoteBranches {
 export interface GitCommits {
   limited: boolean;
   items: Array<{ sha: string; date: string; author: string; subject: string }>;
+}
+export interface GitGraph {
+  limited: boolean;
+  inspectedAt: number;
+  items: Array<{
+    sha: string;
+    parents: string[];
+    date: string;
+    author: string;
+    subject: string;
+    current: boolean;
+    refs: Array<{ name: string; remote: boolean }>;
+  }>;
 }
 export interface GitChecks {
   baseHead?: string | null;

@@ -116,8 +116,18 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
         message?: string;
         threadIds?: string[];
       };
-      if (!response.ok)
-        throw new Error(payload.message || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const ownershipErrors: Record<string, string> = {
+          GIT_COPY_OWNED: t('gitCopyOwnedElsewhere', { ns: 'workspaces' }),
+          GIT_AGENT_COPY_EXISTS: t('gitAgentCopyExists', { ns: 'workspaces' }),
+          GIT_COPY_AGENT_REQUIRED: t('gitCopyUnassigned', { ns: 'workspaces' }),
+        };
+        throw new Error(
+          ownershipErrors[payload.message ?? ''] ||
+            payload.message ||
+            `HTTP ${response.status}`,
+        );
+      }
       return payload.threadIds?.length ? payload.threadIds : [threadId];
     },
     onSuccess: (threadIds, nextCwd) => {
@@ -385,6 +395,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
         </div>
       </div>
       <WorkspaceTree
+        agentThreadId={threadId}
         onGitDiff={(target) =>
           useWorkspaceStore.getState().openGitDiff(context, target)
         }

@@ -65,7 +65,7 @@ export class WorkspaceResourcesController {
   async createCopy(
     @Param('projectId') projectId: string,
     @Param('resourceId') resourceId: string,
-    @Body() body: { name?: unknown; branch?: unknown },
+    @Body() body: { name?: unknown; branch?: unknown; agentThreadId?: unknown },
   ) {
     return { copy: await this.copies.create(projectId, resourceId, body) };
   }

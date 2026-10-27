@@ -19,6 +19,7 @@ import {
 function ActionError({ error }: { error: Error | null }) {
   const { t } = useTranslation('workspaces');
   const labels: Record<string, string> = {
+    GIT_COPY_OWNED: t('gitCopyOwnedElsewhere'),
     GIT_AGENT_STATE_UNKNOWN: t('gitActionAgentStateUnknown'),
     GIT_BUSY: t('gitActionBusy'),
     GIT_READ_ONLY: t('gitActionReadOnly'),
@@ -52,12 +53,14 @@ export function GitCopyActions({
   snapshot,
   address,
   actionScope = 'all',
+  agentThreadId,
 }: {
   projectId: string;
   copyId: string;
   snapshot: GitSnapshot;
   address: string | null;
   actionScope?: 'all' | 'commit' | 'push';
+  agentThreadId?: string;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
@@ -96,6 +99,7 @@ export function GitCopyActions({
           method: 'POST',
           body: JSON.stringify({
             fingerprint: reviewed.fingerprint,
+            agentThreadId,
             address: reviewAddress,
             ...(mode === 'commit'
               ? { message, authorName: name, authorEmail: email }
@@ -114,6 +118,9 @@ export function GitCopyActions({
         }),
         client.invalidateQueries({
           queryKey: ['workspace-git-commits', projectId, copyId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['workspace-git-graph', projectId, copyId],
         }),
         client.invalidateQueries({
           queryKey: ['workspace-git-remote-branches', projectId],

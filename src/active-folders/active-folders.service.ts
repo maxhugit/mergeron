@@ -9,6 +9,7 @@ import { lstatSync, realpathSync } from 'node:fs';
 import * as path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { requireProjectAccess } from '../auth/access-context';
+import { claimAgentCopy } from '../projects/git-copy-ownership';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   projectActiveFolders,
@@ -83,6 +84,22 @@ export class ActiveFoldersService {
       options.allowUnboundAgent === true,
     );
     const selection = this.validateSelection(projectId, input);
+    const agentId =
+      contextType === 'agent'
+        ? contextId
+        : contextType === 'task'
+          ? this.db
+              .select()
+              .from(projectTasks)
+              .where(eq(projectTasks.id, contextId))
+              .get()?.linkedThreadId
+          : null;
+    if (selection.effectivePath)
+      this.reserveAgentCopy(
+        projectId,
+        agentId ?? null,
+        selection.effectivePath,
+      );
     const now = Date.now();
     this.db
       .insert(projectActiveFolders)
@@ -109,6 +126,44 @@ export class ActiveFoldersService {
       })
       .run();
     return this.get(contextType, contextId)!;
+  }
+
+  /** The same guard is used before changing runtime cwd and before execution. */
+  reserveAgentCopy(
+    projectId: string,
+    agentId: string | null,
+    cwd: string,
+  ): string | null {
+    const target = path.resolve(cwd);
+    const workspaces = this.db.select().from(projectWorkspaces).all();
+    const copy = this.db
+      .select()
+      .from(projectWorkspaceCopies)
+      .where(eq(projectWorkspaceCopies.projectId, projectId))
+      .all()
+      .find((item) => {
+        const root = workspaces.find(
+          (w) => w.id === item.localWorkspaceId,
+        )?.path;
+        if (!root) return false;
+        let physical = path.resolve(root);
+        let candidate = target;
+        try {
+          physical = realpathSync(root);
+          candidate = realpathSync(cwd);
+        } catch {
+          /* validation reports missing folders separately */
+        }
+        return (
+          candidate === physical || candidate.startsWith(physical + path.sep)
+        );
+      });
+    if (!copy) return null;
+    if (!agentId) throw new ConflictException('GIT_COPY_AGENT_REQUIRED');
+    this.db.transaction((tx) =>
+      claimAgentCopy(tx as unknown as AppDatabase, projectId, agentId, copy.id),
+    );
+    return copy.id;
   }
 
   setFromAbsolutePath(
@@ -358,8 +413,13 @@ export class ActiveFoldersService {
       .from(projectTasks)
       .where(eq(projectTasks.linkedThreadId, threadId))
       .get();
-    if (task) return this.resolve('task', task.id);
-    return this.get('agent', threadId) ? this.resolve('agent', threadId) : null;
+    const folder = task
+      ? this.get('task', task.id)
+      : this.get('agent', threadId);
+    if (!folder) return null;
+    const cwd = this.resolve(task ? 'task' : 'agent', task?.id ?? threadId);
+    this.reserveAgentCopy(folder.projectId, threadId, cwd);
+    return cwd;
   }
 
   removeContext(contextType: ActiveFolderContext, contextId: string): void {

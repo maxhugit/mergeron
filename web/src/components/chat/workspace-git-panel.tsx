@@ -13,6 +13,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
+import { GitStageChanges } from './git-stage-changes';
+import { GitBranchGraph } from './git-branch-graph';
+import { GitCopyReservation } from './git-copy-reservation';
 import { pathIsWithin } from '@/lib/file-change-events';
 import type { GitDiffTarget } from '@/stores/workspace-store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,6 +30,7 @@ import {
 import {
   gitGet,
   gitInventoryKey,
+  copyOwnedByAgent,
   type GitInventory,
   type GitSnapshot,
   type GitPullRequests,
@@ -36,6 +40,7 @@ import {
 } from '@/lib/workspace-git-api';
 
 interface Props {
+  agentThreadId?: string;
   projectId: string;
   resourceId: string | null;
   onSelect: (id: string | null) => void;
@@ -113,6 +118,9 @@ export function WorkspaceGitPanel(props: Props) {
           copies={(inventory.data?.copies ?? []).filter(
             (copy) => copy.sourceResourceId === resource.id,
           )}
+          agentHasCopy={(inventory.data?.copies ?? []).some((copy) =>
+            copyOwnedByAgent(copy, props.agentThreadId),
+          )}
         />
       ) : (
         props.children
@@ -130,9 +138,12 @@ function RepositoryPanel({
   onActiveWorkspaceChange,
   onFile,
   onGitDiff,
+  agentThreadId,
+  agentHasCopy,
 }: Props & {
   resource: GitInventory['resources'][number];
   copies: ProjectWorkspaceCopySummary[];
+  agentHasCopy: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
@@ -175,7 +186,10 @@ function RepositoryPanel({
         `${projectConnectionsPath(projectId)}/${encodeURIComponent(resource.id)}/copies`,
         {
           method: 'POST',
-          body: JSON.stringify(branch.trim() ? { branch: branch.trim() } : {}),
+          body: JSON.stringify({
+            ...(branch.trim() ? { branch: branch.trim() } : {}),
+            agentThreadId,
+          }),
         },
       ),
     onSuccess: async (result) => {
@@ -212,11 +226,21 @@ function RepositoryPanel({
     setBrowsed(null);
     setBrowseError('');
   };
-  const writable = Boolean(
-    copy &&
-    copy.accessMode === 'read_write' &&
-    resource.accessMode === 'read_write',
+  const writable =
+    Boolean(
+      copy &&
+      copy.accessMode === 'read_write' &&
+      resource.accessMode === 'read_write',
+    ) &&
+    (!agentThreadId
+      ? !copy?.ownerAgentIds?.length
+      : Boolean(copy && copyOwnedByAgent(copy, agentThreadId)));
+  const reservedElsewhere = Boolean(
+    copy?.ownerAgentIds?.length && !copyOwnedByAgent(copy, agentThreadId),
   );
+  const mayClaim =
+    !reservedElsewhere &&
+    (!agentHasCopy || Boolean(copy && copyOwnedByAgent(copy, agentThreadId)));
   return (
     <section
       aria-label={resource.name}
@@ -305,14 +329,25 @@ function RepositoryPanel({
                     <p className="break-all font-mono text-muted-foreground">
                       {copy.localPath}
                     </p>
+                    <GitCopyReservation
+                      projectId={projectId}
+                      copy={copy}
+                      agentThreadId={agentThreadId}
+                      active={Boolean(
+                        copy.localPath &&
+                        cwd &&
+                        pathIsWithin(copy.localPath, cwd),
+                      )}
+                    />
                     <GitCopyDelete
                       key={copy.id}
                       projectId={projectId}
                       copy={copy}
                       active={Boolean(
-                        copy.localPath &&
-                        cwd &&
-                        pathIsWithin(copy.localPath, cwd),
+                        reservedElsewhere ||
+                        (copy.localPath &&
+                          cwd &&
+                          pathIsWithin(copy.localPath, cwd)),
                       )}
                       onRemoved={(path) => {
                         setCopyId(null);
@@ -329,7 +364,11 @@ function RepositoryPanel({
                           size="sm"
                           variant="outline"
                           className="w-full text-xs"
-                          disabled={activeWorkspacePending || !copy.localPath}
+                          disabled={
+                            activeWorkspacePending ||
+                            !copy.localPath ||
+                            !mayClaim
+                          }
                           onClick={() =>
                             copy.localPath &&
                             onActiveWorkspaceChange(copy.localPath)
@@ -360,12 +399,17 @@ function RepositoryPanel({
                   variant="outline"
                   size="sm"
                   className="w-full text-xs"
-                  disabled={clone.isPending}
+                  disabled={clone.isPending || agentHasCopy}
                   onClick={() => setPreparing(!preparing)}
                 >
                   {t(copy ? 'gitAnotherCopy' : 'gitPrepareCopy')}
                 </Button>
-                {preparing && (
+                {agentHasCopy && (
+                  <p className="text-muted-foreground">
+                    {t('gitAgentCopyExists')}
+                  </p>
+                )}
+                {preparing && !agentHasCopy && (
                   <form
                     className="space-y-2"
                     onSubmit={(event) => {
@@ -405,20 +449,17 @@ function RepositoryPanel({
                 {t('gitInspectionError')}
               </p>
             )}
-            {copy &&
-              copy.accessMode === 'read_write' &&
-              resource.accessMode === 'read_write' &&
-              snapshot.data &&
-              !snapshot.error && (
-                <GitCopyActions
-                  key={copy.id}
-                  projectId={projectId}
-                  copyId={copy.id}
-                  snapshot={snapshot.data}
-                  address={resource.address}
-                  actionScope="commit"
-                />
-              )}
+            {copy && writable && snapshot.data && !snapshot.error && (
+              <GitCopyActions
+                key={copy.id}
+                projectId={projectId}
+                agentThreadId={agentThreadId}
+                copyId={copy.id}
+                snapshot={snapshot.data}
+                address={resource.address}
+                actionScope="commit"
+              />
+            )}
           </div>
           {resource.enabled && (
             <Tabs
@@ -482,6 +523,8 @@ function RepositoryPanel({
                     copy={copy}
                     snapshot={snapshot.data}
                     onGitDiff={onGitDiff}
+                    agentThreadId={agentThreadId}
+                    writable={writable}
                   />
                 ) : (
                   <p className="p-1 text-xs">
@@ -497,6 +540,9 @@ function RepositoryPanel({
                 value="branches"
                 className="min-h-0 flex-1 overflow-auto p-3 text-xs"
               >
+                {copy && (
+                  <GitBranchGraph projectId={projectId} copyId={copy.id} />
+                )}
                 <p className="mb-3 text-muted-foreground">
                   {t('gitBranchesHelp')}
                 </p>
@@ -642,6 +688,7 @@ function RepositoryPanel({
                 <GitCopyActions
                   key={`publish:${copy.id}`}
                   projectId={projectId}
+                  agentThreadId={agentThreadId}
                   copyId={copy.id}
                   snapshot={snapshot.data}
                   address={resource.address}
@@ -782,50 +829,34 @@ function Changes({
   copy,
   snapshot,
   onGitDiff,
+  agentThreadId,
+  writable,
 }: {
   projectId: string;
   copy: ProjectWorkspaceCopySummary;
   snapshot: GitSnapshot;
   onGitDiff?: (target: GitDiffTarget) => void;
+  agentThreadId?: string;
+  writable: boolean;
 }) {
-  const { t } = useTranslation('workspaces');
   return (
-    <>
-      {snapshot.changes.length === 0 ? (
-        <p className="p-1 text-xs text-muted-foreground">{t('gitClean')}</p>
-      ) : (
-        snapshot.changes.map((change) => (
-          <Button
-            key={change.path}
-            size="sm"
-            variant="ghost"
-            className="h-auto w-full min-w-0 justify-start gap-2 py-2 text-xs"
-            title={
-              change.originalPath
-                ? `${change.originalPath} → ${change.path}`
-                : change.path
-            }
-            onClick={() =>
-              onGitDiff?.({
-                projectId,
-                copyId: copy.id,
-                path: change.path,
-                localPath: copy.localPath,
-                status: change.status,
-              })
-            }
-          >
-            <code className="shrink-0 whitespace-pre text-primary">
-              {change.status}
-            </code>
-            <span className="truncate">{change.path}</span>
-          </Button>
-        ))
-      )}
-      <p className="mt-3 text-xs text-muted-foreground">
-        {t('gitChangesHelp')}
-      </p>
-    </>
+    <GitStageChanges
+      key={`${copy.id}:${agentThreadId ?? ''}`}
+      projectId={projectId}
+      copyId={copy.id}
+      snapshot={snapshot}
+      agentThreadId={agentThreadId}
+      writable={writable}
+      onDiff={(path) =>
+        onGitDiff?.({
+          projectId,
+          copyId: copy.id,
+          path,
+          localPath: copy.localPath,
+          status: snapshot.changes.find((c) => c.path === path)?.status ?? '',
+        })
+      }
+    />
   );
 }
 

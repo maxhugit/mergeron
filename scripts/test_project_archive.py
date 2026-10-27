@@ -26,6 +26,16 @@ def database(path):
 
 
 class ProjectArchiveTest(unittest.TestCase):
+    def test_copy_ownership_follows_the_conversation_import_bundle(self):
+        owner = {'copy_id': 'copy', 'agent_thread_id': 'agent', 'project_id': 'p', 'created_at': 1}
+        manifest = {'tables': {'projects': [{'id': 'p', 'sidebar_order': '[]'}],
+                               'project_git_copy_owners': [owner]},
+                    'roots': [], 'files': [], 'directories': []}
+        for selection in (['conversations'], ['work']):
+            self.assertEqual(engine.select_import_content(manifest, selection)['tables']['project_git_copy_owners'], [owner])
+        for selection in ([], ['files']):
+            self.assertNotIn('project_git_copy_owners', engine.select_import_content(manifest, selection)['tables'])
+
     def test_normalized_locations_roundtrip_and_legacy_archive_compatibility(self):
         self.export()
         archive, manifest = self.load()

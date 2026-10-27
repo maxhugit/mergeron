@@ -85,7 +85,7 @@ export class ProjectConnectionsController {
   async createCopy(
     @Param('projectId') projectId: string,
     @Param('connectionId') id: string,
-    @Body() body: { name?: unknown; branch?: unknown },
+    @Body() body: { name?: unknown; branch?: unknown; agentThreadId?: unknown },
   ) {
     this.locations.connection(projectId, id);
     const copy = await this.copies.create(projectId, id, body);

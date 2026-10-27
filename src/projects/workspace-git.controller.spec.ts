@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest';
 import { WorkspaceGitController } from './workspace-git.controller';
 import type { WorkspaceGitService } from './workspace-git.service';
 import type { WorkspaceGitActionsService } from './workspace-git-actions.service';
+import type { WorkspaceCopiesService } from './workspace-copies.service';
 
 it('exposes remote branch inspection at the canonical connections path and the legacy path', async () => {
   const remoteBranches = vi.fn().mockResolvedValue({
@@ -16,6 +17,7 @@ it('exposes remote branch inspection at the canonical connections path and the l
   const controller = new WorkspaceGitController(
     { remoteBranches } as unknown as WorkspaceGitService,
     {} as WorkspaceGitActionsService,
+    {} as WorkspaceCopiesService,
   );
   const handler = Object.getOwnPropertyDescriptor(
     WorkspaceGitController.prototype,
