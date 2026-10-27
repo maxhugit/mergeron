@@ -16,10 +16,8 @@ import {
 import { Socket } from 'node:net';
 import { connect as connectTls } from 'node:tls';
 import { spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
+import { gitCredentialHelper } from './git-credentials';
 import {
   requireExecutionAccess,
   requireProjectAccess,
@@ -630,22 +628,19 @@ export class WorkspaceResourcesService {
     acceptedExitCodes: number[] = [0],
   ): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
-      let askpassDirectory: string | null = null;
       const env: NodeJS.ProcessEnv = {
         ...process.env,
         GIT_TERMINAL_PROMPT: '0',
       };
       const token = secret?.token || secret?.password;
       if (token && args.some((argument) => /^https:\/\//i.test(argument))) {
-        askpassDirectory = mkdtempSync(join(tmpdir(), 'mergeron-git-'));
-        const askpass = join(askpassDirectory, 'askpass.sh');
-        writeFileSync(
-          askpass,
-          '#!/bin/sh\ncase "$1" in *Username*) printf %s "$MERGERON_GIT_USERNAME";; *) printf %s "$MERGERON_GIT_TOKEN";; esac\n',
-          { mode: 0o700 },
-        );
-        chmodSync(askpass, 0o700);
-        env.GIT_ASKPASS = askpass;
+        args = [
+          '-c',
+          'credential.helper=',
+          '-c',
+          `credential.helper=${gitCredentialHelper}`,
+          ...args,
+        ];
         env.MERGERON_GIT_USERNAME = secret.username || 'oauth2';
         env.MERGERON_GIT_TOKEN = token;
       }
@@ -667,14 +662,10 @@ export class WorkspaceResourcesService {
       }, timeoutMs);
       child.on('error', (cause) => {
         clearTimeout(timeout);
-        if (askpassDirectory)
-          rmSync(askpassDirectory, { recursive: true, force: true });
         reject(cause);
       });
       child.on('close', (code) => {
         clearTimeout(timeout);
-        if (askpassDirectory)
-          rmSync(askpassDirectory, { recursive: true, force: true });
         if (code !== null && acceptedExitCodes.includes(code))
           resolve({ stdout: output, stderr: error });
         else

@@ -15,6 +15,7 @@ import { projectActivity } from '../database/schema';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
+import { gitCredentialHelper } from './git-credentials';
 import {
   WorkspaceGitService,
   gitStateFingerprint,
@@ -210,16 +211,9 @@ export class WorkspaceGitActionsService {
           path.join(folder, '.git/objects/info/alternates'),
           `${path.join(cwd, '.git/objects')}\n`,
         );
-        const askpass = path.join(folder, 'askpass.sh');
-        await writeFile(
-          askpass,
-          '#!/bin/sh\ncase "$1" in *Username*) printf %s "$MERGERON_GIT_USER";; *) printf %s "$MERGERON_GIT_PASSWORD";; esac\n',
-          { mode: 0o700 },
-        );
         const env = {
-          GIT_ASKPASS: askpass,
-          MERGERON_GIT_USER: source.secret?.username || 'oauth2',
-          MERGERON_GIT_PASSWORD:
+          MERGERON_GIT_USERNAME: source.secret?.username || 'oauth2',
+          MERGERON_GIT_TOKEN:
             source.secret?.token || source.secret?.password || '',
         };
         const current = await this.copyState(
@@ -234,6 +228,8 @@ export class WorkspaceGitActionsService {
           [
             '-c',
             'credential.helper=',
+            '-c',
+            `credential.helper=${gitCredentialHelper}`,
             '-c',
             'http.followRedirects=false',
             '-c',
