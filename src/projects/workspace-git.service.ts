@@ -307,13 +307,14 @@ export class WorkspaceGitService {
       const output: Buffer[] = [];
       let size = 0;
       let failed = false;
-      const fail = () => {
+      let diagnostics = '';
+      const fail = (
+        message = 'Git inspection failed or exceeded its limit',
+      ) => {
         if (failed) return;
         failed = true;
         child.kill('SIGKILL');
-        reject(
-          new ConflictException('Git inspection failed or exceeded its limit'),
-        );
+        reject(new ConflictException(message));
       };
       const timer = setTimeout(fail, timeoutMs);
       child.stdout.on('data', (data: Buffer) => {
@@ -322,7 +323,12 @@ export class WorkspaceGitService {
         else output.push(data);
       });
       // Do not relay diagnostics: local config/paths may contain credentials.
-      child.stderr.resume();
+      child.stderr.on('data', (data: Buffer) => {
+        if (diagnostics.length < 16384)
+          diagnostics += data
+            .toString('utf8')
+            .slice(0, 16384 - diagnostics.length);
+      });
       child.on('error', () => {
         clearTimeout(timer);
         fail();
@@ -330,7 +336,8 @@ export class WorkspaceGitService {
       child.on('close', (code) => {
         clearTimeout(timer);
         if (failed) return;
-        if (code === null || !acceptedExitCodes.includes(code)) fail();
+        if (code === null || !acceptedExitCodes.includes(code))
+          fail(gitFailureCode(diagnostics));
         else resolve(Buffer.concat(output).toString('utf8'));
       });
     });
@@ -487,6 +494,31 @@ export class WorkspaceGitService {
       inspectedAt: Date.now(),
     };
   }
+}
+
+/** Never expose raw Git diagnostics: they can contain credentials and paths. */
+export function gitFailureCode(diagnostics: string): string {
+  if (
+    /authentication failed|could not read Username|invalid username or (?:password|token)|permission to .* denied|write access to repository not granted|requested URL returned error: (?:401|403)/i.test(
+      diagnostics,
+    )
+  )
+    return 'GIT_AUTH_REQUIRED';
+  if (
+    /non-fast-forward|fetch first|remote rejected|\[rejected\]|protected branch/i.test(
+      diagnostics,
+    )
+  )
+    return 'GIT_REMOTE_REJECTED';
+  if (
+    /could not resolve (?:host|proxy)|failed to connect|couldn't connect|connection timed out/i.test(
+      diagnostics,
+    )
+  )
+    return 'GIT_NETWORK_UNAVAILABLE';
+  if (/SSL certificate problem|certificate verify failed/i.test(diagnostics))
+    return 'GIT_TLS_ERROR';
+  return 'Git inspection failed or exceeded its limit';
 }
 
 export async function readGitIndex(cwd: string): Promise<Buffer> {

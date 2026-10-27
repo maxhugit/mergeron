@@ -1,4 +1,8 @@
 {
+  "gitPushAuthRequired": "GitHub refuse l’authentification ou l’écriture. Configurez pour cette connexion un jeton autorisant l’écriture du contenu de ce dépôt. Aucun identifiant n’est récupéré dans la session de l’agent.",
+  "gitPushRejected": "Le dépôt distant a refusé la publication : vérifiez les nouveaux commits et les protections de branche. Aucun push forcé n’a été effectué.",
+  "gitPushNetworkUnavailable": "Le serveur ne peut pas joindre le dépôt distant. Vérifiez la connexion réseau et le proxy avant de réessayer.",
+  "gitPushTlsError": "Le certificat du dépôt distant ne peut pas être vérifié. La vérification TLS reste activée.",
   "gitCopyDelete": "Supprimer cette copie…",
   "gitCopyDeleteTitle": "Supprimer la copie locale « {{name}} » ?",
   "gitCopyDeleteHelp": "Seule cette copie locale sera retirée du projet. Ses fichiers, modifications et commits locaux seront conservés dans une corbeille locale récupérable. Le dépôt distant, ses branches et les autres copies ne seront pas modifiés. Une copie utilisée par un agent ou une autre ressource ne peut pas être supprimée : changez d’abord son dossier de travail.",

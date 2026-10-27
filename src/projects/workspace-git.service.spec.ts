@@ -25,13 +25,39 @@ import {
 } from '../database/schema';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
-import { parseGitChanges, WorkspaceGitService } from './workspace-git.service';
+import {
+  gitFailureCode,
+  parseGitChanges,
+  WorkspaceGitService,
+} from './workspace-git.service';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import type { ThreadExecutionInventoryService } from '../threads/thread-execution-inventory.service';
 import type { CodexProcessManager } from '../codex/codex-process-manager.service';
 
 const exec = promisify(execFile);
+it.each([
+  [
+    'fatal: Authentication failed for https://secret@example.test',
+    'GIT_AUTH_REQUIRED',
+  ],
+  [
+    'remote: Permission to example/demo.git denied to user',
+    'GIT_AUTH_REQUIRED',
+  ],
+  ['! [rejected] main -> main (fetch first)', 'GIT_REMOTE_REJECTED'],
+  ['Could not resolve proxy: private-host', 'GIT_NETWORK_UNAVAILABLE'],
+  [
+    'SSL certificate problem: unable to get local issuer certificate',
+    'GIT_TLS_ERROR',
+  ],
+  [
+    'unknown diagnostic with secret-token',
+    'Git inspection failed or exceeded its limit',
+  ],
+])('sanitizes Git failure %s', (diagnostic, code) => {
+  expect(gitFailureCode(diagnostic)).toBe(code);
+});
 let root: string;
 let database: TestDatabase;
 let resources: WorkspaceResourcesService;
@@ -568,6 +594,19 @@ describe('confirmed actions', () => {
       address: 'https://github.com/example/demo.git',
     });
     expect(pushed).toHaveLength(1);
+  });
+  it('requires explicit connection credentials before attempting a push', async () => {
+    writable();
+    resources.update('p', 'remote', {
+      address: 'https://github.com/example/demo.git',
+    });
+    const state = await service.snapshot('p', copyId);
+    await expect(
+      actions.push('p', copyId, {
+        fingerprint: state.fingerprint,
+        address: 'https://github.com/example/demo.git',
+      }),
+    ).rejects.toThrow('GIT_AUTH_REQUIRED');
   });
   it('refuses SSH pushes from this panel rather than using uncontrolled SSH configuration', async () => {
     writable();

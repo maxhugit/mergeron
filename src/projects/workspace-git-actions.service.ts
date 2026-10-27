@@ -190,6 +190,8 @@ export class WorkspaceGitActionsService {
         url.hash
       )
         throw new BadRequestException('GIT_HTTPS_REQUIRED');
+      if (!source.secret?.token && !source.secret?.password)
+        throw new ForbiddenException('GIT_AUTH_REQUIRED');
       const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-push-'));
       try {
         // A clean temporary Git config prevents local url rewrites, pushurls,
