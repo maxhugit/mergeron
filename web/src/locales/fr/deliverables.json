@@ -1,4 +1,12 @@
 {
+  "agentChoice": "Agent de travail",
+  "useExistingAgent": "Affecter un agent existant",
+  "availableAgent": "Agent disponible du projet",
+  "selectAvailableAgent": "Sélectionner un agent",
+  "availableAgentHelp": "Seuls les agents inactifs sans lien avec une tâche ni un livrable sont proposés. Leur historique, leur nom et leur dossier de travail sont conservés.",
+  "availableAgentsError": "Impossible de charger les agents disponibles. Réessayez en rouvrant cette fenêtre.",
+  "noAvailableAgents": "Aucun agent disponible dans ce projet.",
+  "assignExistingAgent": "Affecter cet agent",
   "selectDeliverableFolder": "Sélectionner le dossier actif",
   "deliverableFolderSelectionHelp": "Choisissez un espace de travail local et un dossier existant. Ce choix ne déplace aucun fichier et ne modifie pas les liens des documents existants.",
   "deliverableRelativeFolder": "Sous-dossier relatif (vide pour la racine)",
