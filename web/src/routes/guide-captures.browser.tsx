@@ -11,32 +11,55 @@ import { HelpRoute } from './help-route';
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, '', '/');
   document.documentElement.classList.remove('dark');
 });
 
 test.each([390, 1100])(
-  'keeps guide tabs fixed while the panel scrolls at %ipx',
+  'keeps searchable guide header fixed while articles scroll at %ipx',
   async (width) => {
     await i18nReady;
     await i18n.changeLanguage('fr');
     await page.viewport(width, 900);
+    document.documentElement.classList.add('dark');
+    window.history.replaceState(null, '', '/help#guide/task-board');
     render(
       <div style={{ display: 'flex', height: 720, minHeight: 0 }}>
         <HelpRoute />
       </div>,
     );
-    const strip = screen.getByRole('tablist');
-    const panel = screen.getByRole('tabpanel');
+    const strip = screen.getByRole('search');
+    const panel = screen.getByRole('article');
     const top = strip.getBoundingClientRect().top;
     panel.scrollTop = 300;
     expect(panel.scrollTop).toBeGreaterThan(0);
     expect(strip.getBoundingClientRect().top).toBe(top);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
-    const tabs = screen.getAllByRole('tab');
-    tabs[0].focus();
-    fireEvent.keyDown(tabs[0], { key: 'End' });
-    expect(tabs.at(-1)?.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(tabs.at(-1));
+    if (width < 768)
+      fireEvent.click(screen.getByRole('button', { name: 'Sommaire' }));
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'passkey' },
+    });
+    expect(
+      screen.getByRole('link', { name: /Naviguer dans une page en direct/ }),
+    ).toBeVisible();
+    if (width === 1100)
+      await page
+        .getByRole('main')
+        .screenshot({
+          path: '../../.vitest-screenshots/guide-search-1100.png',
+        });
+    fireEvent.click(
+      screen.getByRole('link', { name: /Naviguer dans une page en direct/ }),
+    );
+    expect(panel).toHaveAccessibleName('Naviguer dans une page en direct');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Effacer la recherche' }),
+    );
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.getByRole('main').screenshot({
+      path: `../../.vitest-screenshots/guide-manual-${width}.png`,
+    });
   },
 );
 test.skipIf(import.meta.env.VITE_CAPTURE_GUIDE !== '1').each(['fr', 'en'])(

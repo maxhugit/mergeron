@@ -1,46 +1,112 @@
-import { afterEach, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { HelpRoute } from './help-route';
 import i18n from '@/i18n';
-
-afterEach(async () => {
+beforeEach(async () => {
+  window.history.replaceState(null, '', '/help');
   await i18n.changeLanguage('en');
 });
-
-it('uses the task-manager tab strip with keyboard navigation and a separate scrolling panel', () => {
-  render(<HelpRoute />);
-  const tabs = screen.getAllByRole('tab');
-  expect(screen.getByRole('tablist')).toHaveClass(
-    'h-10',
-    'shrink-0',
-    'border-b',
-  );
-  expect(screen.getByRole('tabpanel')).toHaveClass(
-    'overflow-y-auto',
-    'min-h-0',
-  );
-  expect(tabs[0]).toHaveAttribute('tabindex', '0');
-  tabs[0].focus();
-  fireEvent.keyDown(tabs[0], { key: 'End' });
-  expect(tabs.at(-1)).toHaveFocus();
-  expect(tabs.at(-1)).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByText('Update / Refresh detection')).toBeInTheDocument();
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, '', '/');
 });
 
-it('documents actions and localized screenshots in both languages', async () => {
-  for (const language of ['en', 'fr']) {
+it('separates simple conversations from work agents in an expandable contents list', () => {
+  render(<HelpRoute />);
+  expect(
+    screen.getByRole('button', { name: /Simple conversations/ }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(screen.getByRole('button', { name: /Work agents/ }));
+  fireEvent.click(
+    within(document.getElementById('guide-navigation')!).getByRole('link', {
+      name: 'Create and assign an agent',
+    }),
+  );
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Create and assign an agent',
+  );
+  expect(screen.getByRole('article')).toHaveFocus();
+  expect(window.location.hash).toBe('#guide/agent-create');
+  expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+});
+it('searches full article text without accents and opens the result', async () => {
+  await i18n.changeLanguage('fr');
+  render(<HelpRoute />);
+  fireEvent.change(screen.getByRole('searchbox'), {
+    target: { value: 'retention' },
+  });
+  const navigation = within(document.getElementById('guide-navigation')!);
+  fireEvent.click(
+    navigation.getByRole('link', {
+      name: /Sauvegardes, rétention et restauration/,
+    }),
+  );
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Sauvegardes, rétention et restauration',
+  );
+  expect(screen.getByRole('article')).toHaveTextContent(
+    'après une mise à jour réussie',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Effacer la recherche' }));
+  expect(screen.getByRole('searchbox')).toHaveValue('');
+});
+it('reports no results without hiding the selected article', () => {
+  render(<HelpRoute />);
+  fireEvent.change(screen.getByRole('searchbox'), {
+    target: { value: '<script>not-found</script>' },
+  });
+  expect(screen.getByText(/No matching articles/)).toBeInTheDocument();
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Understand the platform',
+  );
+});
+it('supports direct links and browser history events', () => {
+  window.history.replaceState(null, '', '/help#guide/git-pr');
+  render(<HelpRoute />);
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Create and follow a pull request',
+  );
+  window.history.replaceState(null, '', '/help#guide/simple-chat');
+  fireEvent.popState(window);
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Create a simple conversation',
+  );
+});
+it('falls back safely for unknown or malformed links', () => {
+  window.history.replaceState(null, '', '/help#guide/%E0%A4%A');
+  render(<HelpRoute />);
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Understand the platform',
+  );
+});
+it('keeps the same article when the interface language changes', async () => {
+  window.history.replaceState(null, '', '/help#guide/infrastructure');
+  render(<HelpRoute />);
+  await i18n.changeLanguage('fr');
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Infrastructure et Mergeron Manager',
+  );
+  expect(screen.getByRole('article')).toHaveTextContent(
+    'ne signifie pas qu’un bouton individuel',
+  );
+});
+it.each(['fr', 'en'])(
+  'retains real localized captures and action explanations in %s',
+  async (language) => {
     await i18n.changeLanguage(language);
-    const { unmount } = render(<HelpRoute />);
-    fireEvent.click(screen.getAllByRole('tab')[2]);
-    const panel = screen.getByRole('tabpanel');
-    expect(within(panel).getByRole('table')).toBeInTheDocument();
-    expect(within(panel).getAllByRole('row')).toHaveLength(4);
-    expect(within(panel).getByRole('img')).toHaveAttribute(
+    window.history.replaceState(null, '', '/help#guide/task-board');
+    render(<HelpRoute />);
+    const article = screen.getByRole('article');
+    expect(within(article).getByRole('img')).toHaveAttribute(
       'src',
       `/guide/tasks-${language}.png`,
     );
-    expect(within(panel).getByRole('img')).toHaveAttribute('alt');
-    expect(panel).not.toHaveTextContent('guide:tasks');
-    unmount();
-  }
-});
+    expect(within(article).getAllByRole('list').length).toBeGreaterThan(0);
+  },
+);
