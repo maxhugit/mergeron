@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `browser_settings` text DEFAULT '{"homeUrl":"https://www.google.com","desktopSplit":true,"allowPopups":true}' NOT NULL;

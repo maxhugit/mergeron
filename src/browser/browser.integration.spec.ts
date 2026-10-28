@@ -4,6 +4,80 @@ import { chromium } from 'playwright-core';
 import { ConfigService } from '@nestjs/config';
 import { BrowserService } from './browser.service';
 
+it.skipIf(!process.env.MERGERON_BROWSER_TEST_EXECUTABLE)(
+  'keeps authentication popups in the isolated session, restores the opener and honors blocking',
+  async () => {
+    const fixture = createServer((req, res) => {
+      res.end(
+        req.url === '/popup'
+          ? '<title>Authentication</title><button style="width:200px;height:100px" onclick="window.close()">Close</button>'
+          : '<title>Opener</title><button style="width:200px;height:100px" onclick="window.open(\'/popup\')">Authenticate</button>',
+      );
+    });
+    await new Promise<void>((resolve) =>
+      fixture.listen(0, '127.0.0.1', resolve),
+    );
+    const address = fixture.address();
+    if (!address || typeof address === 'string') throw new Error('No fixture');
+    const server = await chromium.launchServer({
+      executablePath: process.env.MERGERON_BROWSER_TEST_EXECUTABLE,
+      headless: true,
+      chromiumSandbox: true,
+    });
+    const service = new BrowserService(
+      new ConfigService({ MERGERON_BROWSER_ENDPOINT: server.wsEndpoint() }),
+    );
+    try {
+      for (const allowPopups of [true, false]) {
+        const key = `popup-${allowPopups}`;
+        const main = await service.run(key, 'new', { allowPopups });
+        const tabId = 'id' in main ? main.id : '';
+        const frame = await service.run(key, 'navigate', {
+          tabId,
+          url: `http://127.0.0.1:${address.port}/`,
+        });
+        await service.run(key, 'click', {
+          tabId,
+          frameId: 'frameId' in frame ? frame.frameId : '',
+          x: 50,
+          y: 50,
+        });
+        if (allowPopups) {
+          await expect
+            .poll(async () => {
+              const result = await service.run(key, 'tabs', {});
+              return 'tabs' in result ? result.tabs.length : 0;
+            })
+            .toBe(2);
+          const result = await service.run(key, 'tabs', {});
+          const popup =
+            'tabs' in result ? result.tabs.find((tab) => tab.popup) : undefined;
+          expect(popup).toBeTruthy();
+          await expect
+            .poll(async () => {
+              const result = await service.run(key, 'snapshot', {
+                tabId: popup!.id,
+              });
+              return 'title' in result ? result.title : '';
+            })
+            .toBe('Authentication');
+          await service.run(key, 'remove', { tabId: popup!.id });
+        }
+        const remaining = await service.run(key, 'tabs', {});
+        expect(
+          'tabs' in remaining && remaining.tabs.map((tab) => tab.id),
+        ).toEqual([tabId]);
+        await service.run(key, 'dispose', {});
+      }
+    } finally {
+      await service.onModuleDestroy();
+      await server.close();
+      await new Promise<void>((resolve) => fixture.close(() => resolve()));
+    }
+  },
+  30_000,
+);
+
 // Explicit opt-in; loopback fixture access is for tests only. Production uses
 // the public-only proxy and never accepts this executable/fixture override.
 it.skipIf(!process.env.MERGERON_BROWSER_TEST_EXECUTABLE)(

@@ -2,6 +2,22 @@
 
 Le bouton Navigateur ouvre un onglet à côté de Conversation. Sur ordinateur,
 « Côte à côte » conserve la conversation à gauche et le navigateur à droite.
+Chaque clic crée une nouvelle vue (cinq maximum par conversation), sans onglets
+imbriqués. Sur grand écran, le côte-à-côte est activé par défaut ; sur mobile,
+la vue utilise toute la largeur. Ouvrir ou fermer l’explorateur ne masque pas
+le navigateur. Les commandes de disposition et d’effacement de session sont des
+icônes dans la barre d’adresse.
+
+L’onglet Navigateur du projet permet à un administrateur de choisir la page
+d’accueil (https://www.google.com par défaut), le côte-à-côte initial et
+l’autorisation des fenêtres secondaires. Ces réglages concernent les nouvelles
+sessions. Chaque vue possède son propre contexte isolé. Une fenêtre secondaire
+est affichée dans la même vue et conserve les cookies de son opener ; sa fermeture
+rend la page d’origine. Les limites de pages et de réseau restent inchangées.
+Les boîtes de dialogue natives Chromium/WebAuthn (par exemple le QR code de
+connexion par passkey sur téléphone) ne font pas partie des pixels de la page et
+ne sont pas prises en charge par ce flux. Ne pas confondre cette limite avec les
+fenêtres web d’authentification, désormais conservées.
 Le navigateur utilise toujours le runtime Chromium isolé et son proxy public :
 aucun port CDP, WebSocket de contrôle ou accès réseau privé n’est exposé au client.
 

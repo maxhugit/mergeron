@@ -14,6 +14,11 @@ export interface ProjectAgentThreadSummary {
 }
 
 export interface ProjectSummary {
+  browserSettings?: {
+    homeUrl: string;
+    desktopSplit: boolean;
+    allowPopups: boolean;
+  };
   id: string;
   name: string;
   workspacePath: string;

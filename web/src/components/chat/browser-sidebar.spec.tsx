@@ -20,14 +20,16 @@ vi.mock('@/lib/browser-api', () => ({ browserApi: api }));
 vi.mock('./browser-live-viewport', () => ({
   BrowserLiveViewport: ({
     onControl,
+    tabId,
   }: {
     onControl: (id: string | null) => void;
+    tabId: string;
   }) => {
     useEffect(() => {
       ready.onControl = onControl;
       if (ready.auto) onControl('test-control');
     }, [onControl]);
-    return <div>Live view</div>;
+    return <div data-tab-id={tabId}>Live view</div>;
   },
 }));
 vi.mock('@/lib/browser-annotations', () => ({
@@ -80,20 +82,21 @@ beforeEach(async () => {
     return Promise.resolve(frame);
   });
 });
-it('accepts an address in an empty session and creates a tab only when submitted', async () => {
-  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
-  const address = screen.getByRole('textbox', { name: 'Page address' });
-  await waitFor(() => expect(address).toBeEnabled());
-  fireEvent.change(address, { target: { value: 'https://example.org/new' } });
-  expect(address).toHaveValue('https://example.org/new');
-  expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
-    false,
+it('automatically opens the project default page in its own browser instance', async () => {
+  render(
+    <BrowserSidebar
+      threadId="thread-a"
+      instanceId="view-a"
+      homeUrl="https://example.org/new"
+      onClose={vi.fn()}
+    />,
   );
-  fireEvent.submit(address.closest('form')!);
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/thread-a/navigate', {
       tabId: 'tab',
       url: 'https://example.org/new',
+      instanceId: 'view-a',
+      allowPopups: true,
     }),
   );
   expect(
@@ -150,6 +153,8 @@ it('selects a restored tab and navigates it without creating another', async () 
       tabId: 'restored',
       url: 'https://example.org/next',
       controlId: 'test-control',
+      instanceId: undefined,
+      allowPopups: true,
     }),
   );
   expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
@@ -199,17 +204,18 @@ it('keeps reload and point actions in the address form without submitting it', a
   }
 });
 
-it('changes live tabs without a competing screenshot request', async () => {
+it('restores the secondary window without displaying an internal tab bar', async () => {
   api.mockResolvedValue({
     tabs: [
       { id: 'first', title: 'First', url: frame.url },
-      { id: 'second', title: 'Second', url: frame.url },
+      { id: 'second', title: 'Second', url: frame.url, popup: true },
     ],
   });
   render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
-  const second = await screen.findByRole('tab', { name: 'Second' });
-  fireEvent.click(second);
-  expect(second).toHaveAttribute('aria-selected', 'true');
+  expect(
+    await screen.findByText('Secondary window · same session'),
+  ).toBeVisible();
+  expect(screen.queryByRole('tablist')).toBeNull();
   expect(api.mock.calls.map(([path]) => path)).toEqual(['/thread-a/tabs']);
 });
 
@@ -223,15 +229,57 @@ it('keeps the address editable after browser initialization fails', async () => 
   expect(address).toHaveValue('https://example.org/retry');
   expect(screen.getByRole('button', { name: /^Open$/ })).toBeEnabled();
 });
+it('shows a newly opened authentication window and returns to its opener after it closes', async () => {
+  const main = { id: 'main', title: 'Main', url: frame.url };
+  const popup = {
+    id: 'popup',
+    title: 'Authenticate',
+    url: 'https://example.org/login',
+    popup: true,
+  };
+  let entries = [main];
+  api.mockImplementation((path: string) => {
+    if (path.endsWith('/tabs')) return Promise.resolve({ tabs: entries });
+    return Promise.resolve(frame);
+  });
+  render(
+    <BrowserSidebar
+      threadId="thread-a"
+      instanceId="browser-1"
+      onClose={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText('Live view')).toHaveAttribute(
+    'data-tab-id',
+    'main',
+  );
+  entries = [main, popup];
+  await waitFor(
+    () =>
+      expect(screen.getByText('Live view')).toHaveAttribute(
+        'data-tab-id',
+        'popup',
+      ),
+    { timeout: 2500 },
+  );
+  expect(screen.getByText('Secondary window · same session')).toBeVisible();
+  entries = [main];
+  await waitFor(
+    () =>
+      expect(screen.getByText('Live view')).toHaveAttribute(
+        'data-tab-id',
+        'main',
+      ),
+    { timeout: 2500 },
+  );
+  expect(screen.queryByText('Secondary window · same session')).toBeNull();
+});
 
 it('opens tabs, navigates and adds evidence only to the keyed conversation draft', async () => {
   render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/thread-a/tabs', expect.anything()),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'New tab' }));
-  await screen.findByRole('tab');
-  fireEvent.click(screen.getByRole('button', { name: /^Open$/ }));
   await waitFor(() =>
     expect(
       screen.getByRole('button', { name: 'Point at an element' }),

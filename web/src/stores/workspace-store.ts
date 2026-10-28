@@ -13,7 +13,7 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
-  | { id: 'browser'; kind: 'browser' }
+  | { id: string; kind: 'browser'; number?: number }
   | ({ id: string; kind: 'git-remote-file' } & GitRemoteFileTarget)
   | ({ id: string; kind: 'git-graph' } & GitGraphTarget)
   | ({ id: string; kind: 'git-diff' } & GitDiffTarget)
@@ -106,14 +106,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   openBrowser: (context) =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;
+      if (current.tabs.filter((tab) => tab.kind === 'browser').length >= 5)
+        return state;
+      // Stable slots restore a session after a page refresh rather than leaking
+      // abandoned contexts until their idle timeout.
+      const id = Array.from(
+        { length: 5 },
+        (_, index) => `browser-${index + 1}`,
+      ).find((candidate) => !current.tabs.some((tab) => tab.id === candidate))!;
+      const number =
+        Math.max(
+          0,
+          ...current.tabs
+            .filter((tab) => tab.kind === 'browser')
+            .map((tab) => tab.number ?? 1),
+        ) + 1;
       return {
         contexts: {
           ...state.contexts,
           [context]: {
-            tabs: current.tabs.some((tab) => tab.kind === 'browser')
-              ? current.tabs
-              : [...current.tabs, { id: 'browser', kind: 'browser' }],
-            activeId: 'browser',
+            tabs: [...current.tabs, { id, kind: 'browser', number }],
+            activeId: id,
           },
         },
         fileViews: clearActiveReveal(state, context),

@@ -53,7 +53,7 @@ export function WorkspaceControls({
   const terminals = useTerminalStore((s) => s.terminals);
   const [chooser, setChooser] = useState(false);
   const label = (tab: WorkspaceTab) => {
-    if (tab.kind === 'browser') return tb('title');
+    if (tab.kind === 'browser') return `${tb('title')} ${tab.number ?? 1}`;
     if (tab.kind === 'git-remote-file')
       return `${tab.path.split('/').pop()} · GitHub`;
     if (tab.kind === 'git-graph')
@@ -255,6 +255,9 @@ export function WorkspaceControls({
           title={tw('browser')}
           aria-label={tw('browser')}
           onClick={onBrowser}
+          disabled={
+            workspace.tabs.filter((tab) => tab.kind === 'browser').length >= 5
+          }
         >
           <Globe className="h-4 w-4" />
         </button>
