@@ -42,6 +42,8 @@ import {
 import { isSupportedLocale } from '@/locales';
 import { MobileRefresh } from '@/components/mobile-refresh';
 import { ImpersonationBanner } from '@/components/impersonation-controls';
+import { installBrowserWorkspaceSessions } from '@/lib/browser-workspace-sessions';
+import { useWorkspaceStore } from '@/stores/workspace-store';
 
 /**
  * Bound on retained per-conversation state.
@@ -158,6 +160,10 @@ function AuthenticatedContent() {
     <AuthenticatedWorkspace
       key={session.data.personId ?? session.data.kind}
       isAdministrator={session.isAdministrator}
+      browserOwner={JSON.stringify([
+        session.data.personId ?? session.data.subject ?? session.data.kind,
+        session.data.impersonation?.sessionId ?? '',
+      ])}
       profileTheme={session.data.theme}
       profileLanguage={session.data.language}
     />
@@ -168,11 +174,20 @@ function AuthenticatedWorkspace({
   isAdministrator,
   profileTheme,
   profileLanguage,
+  browserOwner,
 }: {
   isAdministrator: boolean;
   profileTheme?: string;
   profileLanguage?: string;
+  browserOwner: string;
 }) {
+  useEffect(() => {
+    if (!isAdministrator) {
+      useWorkspaceStore.getState().restoreBrowsers({});
+      return;
+    }
+    return installBrowserWorkspaceSessions(browserOwner);
+  }, [browserOwner, isAdministrator]);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const administrationView = [

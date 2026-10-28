@@ -22,6 +22,26 @@ it('creates independent browser views beside conversation, capped at five per ag
   );
   expect(useWorkspaceStore.getState().contexts['thread:b']).toBeUndefined();
 });
+it('retains browser layout when other workspace surfaces are opened or closed', () => {
+  const store = useWorkspaceStore.getState();
+  store.openBrowser('thread:a');
+  store.setBrowserLayout('thread:a', {
+    browserDocked: true,
+    lastBrowserId: 'browser-1',
+  });
+  store.openFile('thread:a', '/a.ts');
+  store.openTerminal('thread:a', 'terminal-a');
+  store.select('thread:a', 'conversation');
+  expect(useWorkspaceStore.getState().contexts['thread:a']).toMatchObject({
+    browserDocked: true,
+    lastBrowserId: 'browser-1',
+  });
+  store.remove('thread:a', 'terminal:terminal-a');
+  expect(useWorkspaceStore.getState().contexts['thread:a']).toMatchObject({
+    browserDocked: true,
+    lastBrowserId: 'browser-1',
+  });
+});
 
 it('isolates remote files by repository, path and immutable revision, without editable documents', () => {
   const store = useWorkspaceStore.getState();

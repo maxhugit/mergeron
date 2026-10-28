@@ -1,4 +1,5 @@
 {
+  "sessionExpired": "The remote session expired or the service restarted. Its pages and inputs cannot be restored. This tab is retained; click Open to start a new page.",
   "projectSettings": "Project browser settings",
   "homeUrl": "Default page",
   "desktopSplitDefault": "Open side by side on large screens",
