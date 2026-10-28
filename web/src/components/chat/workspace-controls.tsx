@@ -12,6 +12,7 @@ import {
   GitBranch,
   Cloud,
   Globe,
+  Plug,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -28,6 +29,8 @@ interface Props {
   onClose: (tab: WorkspaceTab) => void;
   onExplorer: () => void;
   onBrowser?: () => void;
+  onLocalBrowser?: () => void;
+  localBrowserStatus?: string;
   onNewTerminal: () => void;
   canCreateTerminal?: boolean;
   terminalCreationDisabled?: boolean;
@@ -42,6 +45,8 @@ export function WorkspaceControls({
   onClose,
   onExplorer,
   onBrowser,
+  onLocalBrowser,
+  localBrowserStatus = 'disconnected',
   onNewTerminal,
   canCreateTerminal = true,
   terminalCreationDisabled,
@@ -256,11 +261,39 @@ export function WorkspaceControls({
           title={tw('browser')}
           aria-label={tw('browser')}
           onClick={onBrowser}
-          disabled={
-            workspace.tabs.filter((tab) => tab.kind === 'browser').length >= 5
-          }
         >
           <Globe className="h-4 w-4" />
+        </button>
+      )}
+      {onLocalBrowser && (
+        <button
+          type="button"
+          className="relative h-10 shrink-0 px-3 hover:bg-accent"
+          title={tb('localConnection')}
+          aria-label={tb('localConnection')}
+          onClick={onLocalBrowser}
+        >
+          <Plug className="h-4 w-4" />
+          <span className="sr-only">
+            {tb(
+              localBrowserStatus === 'shared'
+                ? 'localStateShared'
+                : localBrowserStatus === 'pairing'
+                  ? 'localStatePairing'
+                  : localBrowserStatus === 'attention'
+                    ? 'localAttention'
+                    : 'localStatePaused',
+            )}
+          </span>
+          {localBrowserStatus !== 'disconnected' && (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'absolute right-2 top-2 h-1.5 w-1.5 rounded-full',
+                localBrowserStatus === 'shared' ? 'bg-primary' : 'bg-amber-500',
+              )}
+            />
+          )}
         </button>
       )}
       <button

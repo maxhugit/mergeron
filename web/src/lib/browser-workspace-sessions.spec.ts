@@ -119,7 +119,7 @@ it('validates metadata and never persists page contents, URLs or credentials', (
   expect(readBrowserWorkspaces('bad json')).toEqual({});
   expect(readBrowserWorkspaces('x'.repeat(64_001))).toEqual({});
 });
-it('preserves local mode without reviving it as an isolated session or sending container keepalives', async () => {
+it('retires legacy local panels without reviving them as isolated sessions or sending container keepalives', async () => {
   vi.useFakeTimers();
   stop = installBrowserWorkspaceSessions('alice');
   useWorkspaceStore.getState().openBrowser('thread:a', 'local');
@@ -129,7 +129,32 @@ it('preserves local mode without reviving it as an isolated session or sending c
       browserWorkspaceSnapshot(useWorkspaceStore.getState().contexts),
     ),
   );
-  expect(saved['thread:a'].tabs[0]).toMatchObject({ mode: 'local' });
+  expect(saved['thread:a']).toBeUndefined();
+  expect(
+    readBrowserWorkspaces(
+      JSON.stringify({
+        'thread:old': {
+          tabs: [{ id: 'browser-1', kind: 'browser', mode: 'local' }],
+          activeId: 'browser-1',
+        },
+      }),
+    ),
+  ).toEqual({});
+  const mixed = readBrowserWorkspaces(
+    JSON.stringify({
+      'thread:mixed': {
+        tabs: [
+          { id: 'browser-1', kind: 'browser', mode: 'local' },
+          { id: 'browser-2', kind: 'browser', opened: true },
+        ],
+        activeId: 'browser-1',
+      },
+    }),
+  );
+  expect(mixed['thread:mixed']).toMatchObject({
+    activeId: 'conversation',
+    tabs: [{ id: 'browser-2', opened: true }],
+  });
   await vi.advanceTimersByTimeAsync(60_000);
   expect(api).not.toHaveBeenCalled();
 });

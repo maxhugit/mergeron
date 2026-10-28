@@ -34,18 +34,16 @@ document
   .addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!image || submit.disabled) return;
-    const comment = document.querySelector('#comment').value.trim();
-    if (!comment) return;
     submit.disabled = true;
     try {
-      await call('annotationSubmit', { image, comment });
+      await call('annotationSubmit', { image, comment: '' });
       status.textContent =
-        'Annotation disponible dans Mergeron. Revenez à la conversation pour vérifier le brouillon puis envoyer votre message.';
+        'Capture ajoutée à la zone de saisie Mergeron. Complétez votre message puis envoyez-le depuis la conversation.';
       window.close();
     } catch {
       // No automatic retransmission after uncertainty; keep the private draft visible.
       status.textContent =
-        'Envoi non confirmé ou partage interrompu. Vérifiez Mergeron avant de recommencer. Votre commentaire reste visible ici.';
+        'Ajout non confirmé ou partage interrompu. Vérifiez la zone de saisie Mergeron avant de recommencer.';
     }
   });
 document.querySelector('#cancel').addEventListener('click', async () => {

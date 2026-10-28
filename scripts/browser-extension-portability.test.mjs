@@ -82,6 +82,7 @@ function fixture() {
       executeScript: async () => {},
     },
     tabs: {
+      update: async () => {},
       get: async (id) => ({
         id,
         active: true,
@@ -341,6 +342,120 @@ test('old Mergeron clients and stale injected scripts produce an explicit upgrad
     'RELOAD_TARGET_PAGE_AFTER_EXTENSION_UPDATE',
   );
   assert.equal(f.session().slots[sessionId].shared, false);
+});
+
+test('Point explicitly resumes the foreground tab after navigation and switches targets without replaying old commands', async () => {
+  const f = fixture();
+  await f.call(
+    'configure',
+    { origin: 'https://mergeron.fixture.test' },
+    optionsSender,
+  );
+  const id = crypto.randomUUID();
+  await f.call(
+    'pair',
+    { sessionId: id, threadId: 'agent', annotationProtocol: 3 },
+    pageSender,
+  );
+  await f.call('approvePair', { id }, popupSender);
+  assert.deepEqual(
+    plain(await f.call('point', { id, tabId: 2 }, popupSender)),
+    { ok: true },
+  );
+  const oldEpoch = f.session().slots[id].epoch;
+  f.browser.tabs.onUpdated.listeners[0](2, { status: 'loading' });
+  await vm.runInContext('operations', f.context);
+  assert.equal(f.session().slots[id].shared, false); // no automatic background resume
+  assert.equal(f.session().slots[id].paired, true);
+  assert.deepEqual(
+    plain(await f.call('point', { id, tabId: 2 }, popupSender)),
+    { ok: true },
+  );
+  assert.notEqual(f.session().slots[id].epoch, oldEpoch);
+  f.browser.tabs.get = async (tabId) => ({
+    id: tabId,
+    active: true,
+    url: 'https://new.fixture.test/page',
+  });
+  assert.deepEqual(
+    plain(await f.call('point', { id, tabId: 3 }, popupSender)),
+    { ok: true },
+  );
+  assert.equal(f.session().slots[id].tabId, 3);
+  assert.equal(f.session().slots[id].allowedOrigin, 'https://new.fixture.test');
+  const command = {
+    action: 'observe',
+    executionId: 'old',
+    expiresAt: Date.now() + 60_000,
+    epoch: oldEpoch,
+  };
+  assert.ok(
+    (await f.call('execute', { sessionId: id, command }, pageSender)).error,
+  );
+  const slot = f.session().slots[id];
+  delete slot.pointingUntil;
+  await f.browser.storage.session.set({ slots: { [id]: slot } });
+  assert.ok(
+    (await f.call('execute', { sessionId: id, command }, pageSender)).error,
+  ); // epoch, not just pointer lock
+  assert.equal(
+    f.messages.some((message) => message.action === 'command'),
+    false,
+  );
+  slot.annotation = {
+    id: 'pending',
+    created: Date.now(),
+    comment: '',
+    image: 'processed',
+  };
+  await f.browser.storage.session.set({ slots: { [id]: slot } });
+  assert.ok((await f.call('point', { id, tabId: 4 }, popupSender)).error);
+  assert.equal(f.session().slots[id].annotation.id, 'pending');
+  assert.equal(f.session().slots[id].tabId, 3);
+});
+
+test('Point refuses inactive, restricted, authentication and unpaired targets; self pointing is annotation only', async () => {
+  const f = fixture();
+  await f.call(
+    'configure',
+    { origin: 'https://mergeron.fixture.test' },
+    optionsSender,
+  );
+  const id = crypto.randomUUID();
+  await f.call(
+    'pair',
+    { sessionId: id, threadId: 'agent', annotationProtocol: 3 },
+    pageSender,
+  );
+  assert.ok((await f.call('point', { id, tabId: 2 }, popupSender)).error);
+  await f.call('approvePair', { id }, popupSender);
+  for (const tab of [
+    { active: false, url: 'https://page.fixture.test' },
+    { active: true, url: 'chrome://settings' },
+    { active: true, url: 'https://chromewebstore.google.com/' },
+  ]) {
+    f.browser.tabs.get = async (id) => ({ id, ...tab });
+    assert.ok((await f.call('point', { id, tabId: 2 }, popupSender)).error);
+    assert.equal(f.session().slots[id].shared, false);
+  }
+  f.browser.tabs.get = async (id) => ({
+    id,
+    active: true,
+    url: 'https://mergeron.fixture.test/agent',
+  });
+  assert.deepEqual(
+    plain(await f.call('point', { id, tabId: 1 }, popupSender)),
+    { ok: true },
+  );
+  assert.equal(f.session().slots[id].annotationOnly, true);
+  f.browser.tabs.sendMessage = async (_id, message) =>
+    message.action === 'init'
+      ? { documentId: 'doc', protocolVersion: 3 }
+      : message.action === 'point'
+        ? { error: 'AUTHENTICATION_REQUIRED' }
+        : { ok: true };
+  assert.ok((await f.call('point', { id, tabId: 1 }, popupSender)).error);
+  assert.equal(f.session().slots[id].shared, false);
 });
 
 test('Safari sender URLs pair and share, then updates restore only the authorized bridge and revoke sharing', async () => {

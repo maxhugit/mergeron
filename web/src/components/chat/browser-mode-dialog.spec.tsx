@@ -28,3 +28,19 @@ it.each(['isolated', 'local'] as const)(
     expect(choose).toHaveBeenCalledExactlyOnceWith(mode);
   },
 );
+it('keeps the extension connection available when the isolated browser limit is reached', () => {
+  render(
+    <BrowserModeDialog
+      open
+      onOpenChange={vi.fn()}
+      onChoose={vi.fn()}
+      isolatedDisabled
+    />,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Isolated browser (existing)' }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Local browser · extension (test)' }),
+  ).toBeEnabled();
+});

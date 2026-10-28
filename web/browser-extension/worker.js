@@ -44,6 +44,51 @@ async function stop(slot) {
       { frameId: 0 },
     ).catch(() => {});
 }
+/** A toolbar gesture grants activeTab for this tab only. Never follow navigation in the background. */
+async function shareTab(all, slot, tabId, origin) {
+  const tab = await extension.tabs.get(tabId);
+  const url = new URL(safeUrl(tab.url));
+  if (
+    !tab.active ||
+    [
+      'chromewebstore.google.com',
+      'chrome.google.com',
+      'microsoftedge.microsoft.com',
+    ].includes(url.hostname)
+  )
+    throw Error('RESTRICTED_OR_INACTIVE_TAB');
+  const affected = Object.values(all).filter(
+    (other) => other.id === slot.id || other.tabId === tab.id,
+  );
+  // Switching targets must not silently destroy a capture awaiting confirmation/delivery.
+  if (affected.some((other) => other.draft || other.annotation))
+    throw Error('ANNOTATION_PENDING');
+  for (const other of affected) await stop(other);
+  await save(all);
+  await extension.scripting.executeScript({
+    target: { tabId: tab.id },
+    files: ['tab-agent.js'],
+  });
+  const result = await pageMessage(
+    tab.id,
+    { channel: CHANNEL, action: 'init', annotationOnly: url.origin === origin },
+    { frameId: 0 },
+  );
+  if (result?.protocolVersion !== 3 || typeof result.documentId !== 'string')
+    throw Error('RELOAD_TARGET_PAGE_AFTER_EXTENSION_UPDATE');
+  // Every explicit resume invalidates document handles AND already-dispatched commands.
+  Object.assign(slot, {
+    tabId: tab.id,
+    allowedOrigin: url.origin,
+    documentId: result.documentId,
+    epoch: crypto.randomUUID(),
+    shared: true,
+    touched: Date.now(),
+    seen: [],
+    annotationOnly: url.origin === origin,
+  });
+  await save(all);
+}
 async function run(message, sender) {
   const editor =
     sender.id === extension.runtime.id &&
@@ -234,7 +279,6 @@ async function run(message, sender) {
       const { image, comment } = message.payload;
       if (
         typeof comment !== 'string' ||
-        !comment.trim() ||
         comment.length > 2000 ||
         typeof image !== 'string' ||
         image.length > 750_000 ||
@@ -257,6 +301,10 @@ async function run(message, sender) {
       };
       clearDraft(slot);
       await save(all);
+      // Explicit screenshot confirmation returns the user to the normal message composer.
+      await extension.tabs
+        .update(slot.mergeronTab, { active: true })
+        .catch(() => {});
       return { ok: true };
     }
     throw Error('INVALID_EDITOR_ACTION');
@@ -289,57 +337,13 @@ async function run(message, sender) {
     }
     if (!slot.paired) throw Error('PAIRING_REQUIRED');
     if (message.action === 'share') {
-      const tab = await extension.tabs.get(message.payload.tabId);
-      const url = new URL(safeUrl(tab.url));
-      if (
-        [
-          'chromewebstore.google.com',
-          'chrome.google.com',
-          'microsoftedge.microsoft.com',
-        ].includes(url.hostname)
-      )
-        throw Error('RESTRICTED_TAB');
-      await extension.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['tab-agent.js'],
-      });
-      for (const other of Object.values(all))
-        if (other.tabId === tab.id) await stop(other);
-      const result = await pageMessage(
-        tab.id,
-        {
-          channel: CHANNEL,
-          action: 'init',
-          annotationOnly: url.origin === origin,
-        },
-        { frameId: 0 },
-      );
-      if (
-        result?.protocolVersion !== 3 ||
-        typeof result.documentId !== 'string'
-      )
-        throw Error('RELOAD_TARGET_PAGE_AFTER_EXTENSION_UPDATE');
-      Object.assign(slot, {
-        tabId: tab.id,
-        allowedOrigin: url.origin,
-        documentId: result.documentId,
-        epoch: crypto.randomUUID(),
-        shared: true,
-        touched: Date.now(),
-        seen: [],
-        annotationOnly: url.origin === origin,
-      });
-      await save(all);
+      await shareTab(all, slot, message.payload.tabId, origin);
       return { ok: true };
     }
     if (message.action === 'point') {
       if (slot.annotationProtocol !== 3)
         throw Error('UPDATE_MERGERON_FOR_ANNOTATIONS');
-      if (!slot.shared || slot.draft || slot.annotation)
-        throw Error('NOT_SHARED_OR_ANNOTATION_PENDING');
-      const tab = await extension.tabs.get(slot.tabId);
-      if (!tab.active || new URL(tab.url).origin !== slot.allowedOrigin)
-        throw Error('ORIGIN_CHANGED');
+      await shareTab(all, slot, message.payload.tabId ?? slot.tabId, origin);
       slot.pointingUntil = Date.now() + 60_000;
       await save(all);
       const result = await pageMessage(
@@ -348,7 +352,7 @@ async function run(message, sender) {
         { frameId: 0 },
       );
       if (!result?.ok) {
-        delete slot.pointingUntil;
+        await stop(slot);
         await save(all);
         throw Error('POINT_UNAVAILABLE');
       }
@@ -458,6 +462,7 @@ async function run(message, sender) {
     if (
       !slot.paired ||
       !slot.shared ||
+      command.epoch !== slot.epoch ||
       slot.annotationOnly ||
       slot.draft ||
       slot.pointingUntil > Date.now() ||
