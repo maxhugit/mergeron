@@ -1,6 +1,7 @@
 # Navigateur annoté dans une conversation
 
-L’icône **Navigateur**, à gauche de l’explorateur, ouvre un panneau à droite.
+L’icône **Navigateur**, à gauche de l’explorateur, ouvre un onglet à côté de
+Conversation, avec une vue côte à côte optionnelle sur ordinateur.
 Créez un onglet, saisissez une URL puis choisissez **Pointer un élément**.
 Cliquez dans l’image de la page, rédigez votre consigne et choisissez
 **Ajouter au brouillon du chat**. Le message existant est conservé. L’annotation
@@ -41,8 +42,9 @@ Sources : [politique de même origine](https://developer.mozilla.org/en-US/docs/
   Fermer le panneau seul conserve temporairement ses onglets. Un redémarrage
   serveur perd ces sessions.
 - Navigation au clic, historique, rechargement, défilement et saisie dans le champ
-  ciblé. Pour la saisie, cliquez le champ puis utilisez la zone de saisie masquée.
-  Tous les champs input/textarea/contenteditable sont masqués dans les captures.
+  ciblé. Hors pointage, la souris et le clavier agissent directement dans le
+  [flux continu](live-browser.md). Les captures de pointage ne comportent plus de
+  cache rose sur les champs : vérifiez leur contenu avant d’envoyer le brouillon.
   Aucun stockage des valeurs saisies dans Mergeron.
 - Les images sont actualisées après les commandes ou sur demande, pas en vidéo.
   Une page ayant changé entre l’image et le pointage impose une actualisation.
@@ -110,6 +112,10 @@ Chaque mise à jour et restauration conserve ses réseaux, son chemin de contrô
 secret, son sandbox et réapplique le DNS public. Une image locale préexistante
 est conservée par son identifiant immuable, sans téléchargement implicite.
 Le changement de version Playwright reste à coordonner avec l’application.
+La détection des nouvelles images publiée par les réglages Serveur concerne
+actuellement l’application Mergeron, pas le runtime du navigateur. Le Manager
+surveille sa santé, mais ne détecte ni n’installe automatiquement une nouvelle
+image navigateur ; une mise à jour explicite et compatible reste nécessaire.
 Ne jamais ajouter de capacité Linux, désactiver le sandbox ou exposer le port
 de contrôle pour obtenir un démarrage.
 

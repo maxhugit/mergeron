@@ -6,6 +6,7 @@ import { BrowserController } from './browser.controller';
 const connect = vi.hoisted(() => vi.fn());
 vi.mock('playwright-core', () => ({ chromium: { connect } }));
 let service: BrowserService;
+let lastPage: ReturnType<typeof page> | undefined;
 const page = () => ({
   url: () => 'https://example.com/',
   title: vi.fn().mockResolvedValue('Example'),
@@ -27,7 +28,10 @@ beforeEach(() => {
         route: vi.fn().mockResolvedValue(undefined),
         routeWebSocket: vi.fn().mockResolvedValue(undefined),
         on: vi.fn(),
-        newPage: vi.fn().mockImplementation(() => Promise.resolve(page())),
+        newPage: vi.fn().mockImplementation(() => {
+          lastPage = page();
+          return Promise.resolve(lastPage);
+        }),
       }),
     }),
   );
@@ -96,6 +100,19 @@ it('isolates identifiers across people and conversations', async () => {
     service.run('alice/b', 'snapshot', { tabId: id }),
   ).rejects.toThrow('not found');
   expect(connect).toHaveBeenCalledTimes(3);
+});
+
+it('captures the visible page without adding pink input masks', async () => {
+  const created = await service.run('owner', 'new', {});
+  await service.run('owner', 'snapshot', {
+    tabId: 'id' in created ? created.id : '',
+  });
+  expect(lastPage?.screenshot).toHaveBeenCalledWith({
+    type: 'jpeg',
+    animations: 'disabled',
+    quality: 65,
+    timeout: 8000,
+  });
 });
 it('limits tabs and rejects stale images and invalid coordinates', async () => {
   const first = await service.run('alice', 'new', {});

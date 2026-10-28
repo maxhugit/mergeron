@@ -49,6 +49,6 @@
   "added": "Annotation and screenshot added to the draft. Review them, then send your message.",
   "draftUnavailable": "Could not add to this conversation’s draft. Check that it is writable.",
   "unavailable": "Browser unavailable. Check your connection, administrator access and isolated browser configuration.",
-  "privacy": "Temporary remote session, separate from your browser. Live view is for you only. Input fields are masked in annotation screenshots; only annotations added to the draft and sent reach the agent.",
+  "privacy": "Temporary remote session. Screenshots may show text entered in fields: review them before sending. Only annotations added to the draft and sent reach the agent.",
   "frame": "Embedded frame: the marker identifies the frame, not its contents"
 }
