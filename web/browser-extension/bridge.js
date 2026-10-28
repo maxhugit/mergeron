@@ -2,6 +2,7 @@
 (() => {
   if (window !== window.top || globalThis.__mergeronLocalBridge) return;
   globalThis.__mergeronLocalBridge = true;
+  const extension = globalThis.browser ?? globalThis.chrome;
   const channel = 'mergeron-local-browser-v1';
   window.addEventListener('message', (event) => {
     const message = event.data;
@@ -15,11 +16,18 @@
     )
       return;
     if (
-      !['pair', 'state', 'execute', 'revoke'].includes(message.action) ||
+      ![
+        'pair',
+        'state',
+        'execute',
+        'revoke',
+        'annotation',
+        'annotationAck',
+      ].includes(message.action) ||
       JSON.stringify(message).length > 64000
     )
       return;
-    chrome.runtime
+    extension.runtime
       .sendMessage({
         channel,
         action: message.action,

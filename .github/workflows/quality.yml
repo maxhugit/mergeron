@@ -109,8 +109,10 @@ jobs:
       - name: Test local browser extension with synthetic HTTPS pages
         if: matrix.part == 'backend'
         run: |
-          node node_modules/playwright-core/cli.js install --with-deps chromium
+          node --test scripts/browser-extension-portability.test.mjs
+          node node_modules/playwright-core/cli.js install --with-deps chromium webkit
           node scripts/test-local-browser-extension.mjs
+          node scripts/test-local-browser-webkit.mjs
 
       - name: Test backend startup and migrations
         if: matrix.part == 'backend'

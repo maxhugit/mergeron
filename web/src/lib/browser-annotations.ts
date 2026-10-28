@@ -6,6 +6,22 @@ export interface BrowserAnnotationRequest {
   accepted?: boolean;
   complete: (error?: string) => void;
 }
+/** The bridge accepts a bounded raster only: no external URL, SVG or HTML. */
+export function localAnnotationImage(image: string): File {
+  if (
+    typeof image !== 'string' ||
+    image.length > 750_000 ||
+    !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image)
+  )
+    throw new Error('Invalid annotation image');
+  const bytes = Uint8Array.from(
+    atob(image.slice(image.indexOf(',') + 1)),
+    (value) => value.charCodeAt(0),
+  );
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff)
+    throw new Error('Invalid JPEG');
+  return new File([bytes], 'browser-annotation.jpg', { type: 'image/jpeg' });
+}
 export async function markedScreenshot(
   image: string,
   box: { x: number; y: number; width: number; height: number },

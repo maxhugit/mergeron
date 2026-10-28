@@ -100,7 +100,11 @@ try {
     );
   const sessionId = crypto.randomUUID();
   assert.deepEqual(
-    await rpc(mergeron, 'pair', { sessionId, threadId: 'agent' }),
+    await rpc(mergeron, 'pair', {
+      sessionId,
+      threadId: 'agent',
+      annotationProtocol: 3,
+    }),
     { ok: true },
   );
   assert.equal((await rpc(mergeron, 'state', { sessionId })).state, 'pairing');
@@ -245,14 +249,104 @@ try {
   );
   assert.equal(retained.paired, true);
   assert.ok(retained.seen.includes(once));
-  // Pointer adds only evidence; pausing cancels any outstanding click interception.
+  // Headless cannot grant native activeTab through the toolbar. Supply a genuine
+  // screenshot of this synthetic fixture to the capture API only; production
+  // captureVisibleTab permissions must still be verified manually on each browser.
+  await page.bringToFront();
+  const pixels =
+    'data:image/jpeg;base64,' +
+    (await page.screenshot({ type: 'jpeg', quality: 75 })).toString('base64');
+  await worker.evaluate((pixels) => {
+    chrome.tabs.captureVisibleTab = async () => pixels;
+  }, pixels);
+  // Nothing leaves the extension before the editor's explicit submit.
   await popupCall('point', { id: sessionId });
+  await page.locator('#save').hover();
+  assert.equal(await page.locator('[data-mergeron-pointer]').isVisible(), true);
+  const editorOpened = context.waitForEvent('page');
   await page.locator('#save').click();
+  const editor = await editorOpened;
+  await editor.waitForURL(
+    `chrome-extension://${extensionId}/annotation.html#*`,
+  );
+  await editor.locator('#submit:not([disabled])').waitFor();
   assert.equal(
-    (await rpc(mergeron, 'state', { sessionId })).selection.text,
-    'Save',
+    (await rpc(mergeron, 'state', { sessionId })).annotation,
+    undefined,
+  );
+  assert.ok((await execute('observe')).error);
+  await editor.locator('#comment').fill('Please improve this button');
+  const preview = await editor.locator('#preview').getAttribute('src');
+  if (process.env.ANNOTATION_PREVIEW_PATH)
+    await editor.screenshot({ path: process.env.ANNOTATION_PREVIEW_PATH });
+  assert.match(preview, /^data:image\/jpeg;base64,/);
+  // Processed preview masks the input. It is the exact image later delivered.
+  const fieldBox = await page.locator('#name').boundingBox();
+  const color = await editor.evaluate(
+    async ({ x, y }) => {
+      const img = document.querySelector('#preview');
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return [...ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data];
+    },
+    { x: fieldBox.x + fieldBox.width / 2, y: fieldBox.y + fieldBox.height / 2 },
+  );
+  assert.ok(
+    Math.abs(color[0] - 52) < 12 &&
+      Math.abs(color[1] - 65) < 12 &&
+      Math.abs(color[2] - 85) < 12,
+  );
+  await editor.locator('#submit').click();
+  const ready = (await rpc(mergeron, 'state', { sessionId })).annotation;
+  assert.ok(ready?.id);
+  const annotation = await rpc(mergeron, 'annotation', {
+    sessionId,
+    annotationId: ready.id,
+  });
+  assert.equal(annotation.comment, 'Please improve this button');
+  assert.equal(annotation.selection.text, 'Save');
+  assert.equal(annotation.image, preview);
+  assert.notEqual(annotation.image, pixels);
+  assert.ok(
+    (await rpc(other, 'annotation', { sessionId, annotationId: ready.id }))
+      .error,
+  );
+  await rpc(mergeron, 'annotationAck', { sessionId, annotationId: ready.id });
+  assert.equal(
+    (await rpc(mergeron, 'state', { sessionId })).annotation,
+    undefined,
   );
   assert.equal(await page.locator('#count').innerText(), '1');
+  await page.bringToFront();
+  const cancelledEditor = context.waitForEvent('page');
+  await popupCall('point', { id: sessionId });
+  await page.locator('#save').click();
+  const cancelled = await cancelledEditor;
+  await cancelled.waitForURL(
+    `chrome-extension://${extensionId}/annotation.html#*`,
+  );
+  await cancelled.locator('#submit:not([disabled])').waitFor();
+  await cancelled
+    .locator('#comment')
+    .fill('Do not transmit this private draft');
+  await cancelled.locator('#cancel').click();
+  assert.equal(
+    (await rpc(mergeron, 'state', { sessionId })).annotation,
+    undefined,
+  );
+  await page.bringToFront();
+  await popupCall('point', { id: sessionId });
+  await page.locator('#save').hover();
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('[data-mergeron-pointer]').count(), 0);
+  assert.equal(
+    (await rpc(mergeron, 'state', { sessionId })).inputBlocked,
+    false,
+  );
   await popupCall('point', { id: sessionId });
   await popupCall('pause');
   await page.locator('#save').click();
@@ -282,8 +376,42 @@ try {
       })
     ).error,
   );
+  // Mergeron can be annotated but never read or clicked by its own agent.
+  const selfId = await worker.evaluate(
+    async () =>
+      (
+        await chrome.tabs.query({ url: 'https://mergeron.fixture.test/agent' })
+      )[0].id,
+  );
+  const selfSession = crypto.randomUUID();
+  await rpc(mergeron, 'pair', {
+    sessionId: selfSession,
+    threadId: 'self-annotation',
+  });
+  await popupCall('approvePair', { id: selfSession });
+  assert.deepEqual(
+    await popupCall('share', { id: selfSession, tabId: selfId }),
+    { ok: true },
+  );
+  assert.equal(
+    (await rpc(mergeron, 'state', { sessionId: selfSession })).annotationOnly,
+    true,
+  );
+  assert.ok(
+    (
+      await rpc(mergeron, 'execute', {
+        sessionId: selfSession,
+        command: {
+          action: 'observe',
+          executionId: crypto.randomUUID(),
+          expiresAt: Date.now() + 60_000,
+        },
+      })
+    ).error,
+  );
+  await rpc(mergeron, 'revoke', { sessionId: selfSession });
   console.log(
-    'PASS: MV3 pairing, native tab sharing, sanitized observation, fill, at-most-once click, stale handles, origin isolation, pointer cancellation, navigation pause, authentication pause and revocation.',
+    'PASS: MV3 pairing, sanitized observation, approved actions, blue hover frame, private comment editor, redacted screenshot preview, explicit annotation submission, cancellation, self-annotation without self-approval, navigation/authentication pause and revocation. Native capture permissions still require manual validation.',
   );
 } finally {
   await context.close();

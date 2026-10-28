@@ -15,6 +15,21 @@ export interface ExtensionState {
   url?: string;
   title?: string;
   selection?: { id: string; url: string; tag: string; text: string };
+  annotation?: { id: string; text: string };
+  annotationOnly?: boolean;
+  inputBlocked?: boolean;
+}
+export interface ExtensionAnnotation {
+  id: string;
+  selection: {
+    id: string;
+    url: string;
+    tag: string;
+    text: string;
+    capturedAt?: string;
+  };
+  comment: string;
+  image: string;
 }
 export interface LocalPoll {
   dispatch: LocalCommand[];
@@ -50,7 +65,13 @@ export async function localBrowserApi<T>(
 
 /** A narrow, bounded RPC. No bearer tokens, cookies, arbitrary scripts or selectors. */
 export function extensionRequest<T>(
-  action: 'pair' | 'state' | 'execute' | 'revoke',
+  action:
+    | 'pair'
+    | 'state'
+    | 'execute'
+    | 'revoke'
+    | 'annotation'
+    | 'annotationAck',
   payload: Record<string, unknown>,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -73,7 +94,8 @@ export function extensionRequest<T>(
       if (
         data.error ||
         (action !== 'execute' && data.result?.error) ||
-        JSON.stringify(data).length > 64_000
+        JSON.stringify(data).length >
+          (action === 'annotation' ? 800_000 : 64_000)
       )
         reject(new Error('EXTENSION_UNAVAILABLE_OR_DENIED'));
       else resolve(data.result as T);

@@ -14,7 +14,7 @@ it.each(['isolated', 'local'] as const)(
       screen.getByRole('button', { name: 'Isolated browser (existing)' }),
     ).toBeEnabled();
     expect(
-      screen.getByRole('button', { name: 'Local Chrome / Edge (test)' }),
+      screen.getByRole('button', { name: 'Local browser · extension (test)' }),
     ).toBeEnabled();
     expect(choose).not.toHaveBeenCalled();
     fireEvent.click(
@@ -22,7 +22,7 @@ it.each(['isolated', 'local'] as const)(
         name:
           mode === 'isolated'
             ? 'Isolated browser (existing)'
-            : 'Local Chrome / Edge (test)',
+            : 'Local browser · extension (test)',
       }),
     );
     expect(choose).toHaveBeenCalledExactlyOnceWith(mode);

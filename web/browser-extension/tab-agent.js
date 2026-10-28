@@ -2,16 +2,21 @@
 (() => {
   if (globalThis.__mergeronTabAgent) return;
   globalThis.__mergeronTabAgent = true;
+  const extension = globalThis.browser ?? globalThis.chrome;
   const CHANNEL = 'mergeron-local-browser-v1';
   let documentId,
     snapshotId,
     revision = 0,
     capturedRevision = -1,
-    selection,
-    picker;
+    picker,
+    capturing = false,
+    captureEvidence,
+    annotationOnly = false;
   const stop = () => {
-    if (picker) window.removeEventListener('click', picker, true);
+    picker?.();
     picker = undefined;
+    captureEvidence = undefined;
+    capturing = false;
     snapshotId = undefined;
     elements.clear();
   };
@@ -85,6 +90,139 @@
     text: label(element),
     role: element.getAttribute('role'),
   });
+  const clip = (rect) => ({
+    x: Math.max(0, rect.x),
+    y: Math.max(0, rect.y),
+    width: Math.max(0, Math.min(innerWidth, rect.right) - Math.max(0, rect.x)),
+    height: Math.max(
+      0,
+      Math.min(innerHeight, rect.bottom) - Math.max(0, rect.y),
+    ),
+  });
+  function geometry(element) {
+    if (!element.isConnected || !visible(element) || authRequired())
+      throw Error('PAGE_CHANGED');
+    const masks = [];
+    // Values stay visible during pointing; only the resulting image is redacted.
+    for (const field of document.querySelectorAll(
+      'input,textarea,select,[contenteditable],iframe',
+    )) {
+      if (!visible(field)) continue;
+      const rect = clip(field.getBoundingClientRect());
+      if (rect.width && rect.height) masks.push(rect);
+      if (masks.length > 400) throw Error('TOO_MANY_FIELDS');
+    }
+    return {
+      width: innerWidth,
+      height: innerHeight,
+      scrollX,
+      scrollY,
+      revision,
+      box: clip(element.getBoundingClientRect()),
+      masks,
+    };
+  }
+  function notice(text) {
+    const box = document.createElement('div');
+    box.setAttribute('role', 'status');
+    box.style.cssText =
+      'position:fixed!important;bottom:16px!important;left:16px!important;z-index:2147483647!important;padding:12px!important;background:#182234!important;color:white!important;border:2px solid #168bff!important;border-radius:8px!important;font:14px system-ui!important;max-width:420px!important';
+    box.textContent = text;
+    document.documentElement.append(box);
+    setTimeout(() => box.remove(), 7000);
+  }
+  function beginPoint() {
+    if (capturing) throw Error('CAPTURE_PENDING');
+    stop();
+    const outline = document.createElement('div');
+    outline.setAttribute('data-mergeron-pointer', '');
+    outline.setAttribute('aria-hidden', 'true');
+    outline.style.cssText =
+      'position:fixed!important;display:none;pointer-events:none!important;z-index:2147483647!important;border:2px solid #168bff!important;background:rgba(22,139,255,.06)!important;box-sizing:border-box!important;border-radius:3px!important;';
+    document.documentElement.append(outline);
+    let x, y;
+    const paint = () => {
+      const target = document.elementFromPoint(x ?? -1, y ?? -1);
+      if (!(target instanceof Element) || sensitive(target)) {
+        outline.style.display = 'none';
+        return;
+      }
+      const rect = clip(target.getBoundingClientRect());
+      Object.assign(outline.style, {
+        display: 'block',
+        left: rect.x + 'px',
+        top: rect.y + 'px',
+        width: rect.width + 'px',
+        height: rect.height + 'px',
+      });
+    };
+    const move = (event) => {
+      if (!event.isTrusted) return;
+      x = event.clientX;
+      y = event.clientY;
+      paint();
+    };
+    const key = (event) => {
+      if (event.isTrusted && event.key === 'Escape') stop();
+    };
+    const click = async (event) => {
+      if (!event.isTrusted || event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const target = event.target;
+      picker?.();
+      picker = undefined;
+      if (!(target instanceof Element) || sensitive(target)) return;
+      capturing = true;
+      try {
+        // Remove our overlay and let mutation notifications/layout settle first.
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        );
+        if (!capturing || !documentId) return;
+        const selection = {
+          id: crypto.randomUUID(),
+          url: url(),
+          ...descriptor(target),
+          capturedAt: new Date().toISOString(),
+        };
+        const snapshot = geometry(target);
+        captureEvidence = {
+          id: selection.id,
+          target,
+          key: JSON.stringify(snapshot),
+        };
+        const result = await extension.runtime.sendMessage({
+          channel: CHANNEL,
+          action: 'captureAnnotation',
+          payload: { documentId, selection, geometry: snapshot },
+        });
+        if (!result?.ok) throw Error('CAPTURE_FAILED');
+      } catch {
+        notice(
+          'Capture impossible ou page modifiée. Gardez cet onglet au premier plan, puis relancez le pointeur depuis l’extension.',
+        );
+      } finally {
+        capturing = false;
+        captureEvidence = undefined;
+      }
+    };
+    const timer = setTimeout(() => stop(), 60_000);
+    picker = () => {
+      clearTimeout(timer);
+      outline.remove();
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('click', click, true);
+      window.removeEventListener('keydown', key, true);
+      window.removeEventListener('scroll', paint, true);
+      window.removeEventListener('resize', paint, true);
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('click', click, true);
+    window.addEventListener('keydown', key, true);
+    window.addEventListener('scroll', paint, true);
+    window.addEventListener('resize', paint, true);
+  }
   function observe() {
     snapshotId = crypto.randomUUID();
     elements.clear();
@@ -142,6 +280,8 @@
     const { action, args = {} } = command;
     if (!Number.isFinite(command.expiresAt) || Date.now() > command.expiresAt)
       return { error: 'COMMAND_EXPIRED_DO_NOT_RETRY' };
+    if (annotationOnly || picker || capturing)
+      return { error: 'ANNOTATION_MODE_NO_AGENT_COMMANDS' };
     if (authRequired())
       return { error: 'AUTHENTICATION_REQUIRED_PAUSE_AND_SIGN_IN_MANUALLY' };
     if (action === 'observe') return observe();
@@ -212,14 +352,15 @@
       notice: 'Inspect a fresh observation before another action.',
     };
   }
-  chrome.runtime.onMessage.addListener((message, sender, respond) => {
-    if (sender.id !== chrome.runtime.id || message?.channel !== CHANNEL) return;
+  extension.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id !== extension.runtime.id || message?.channel !== CHANNEL)
+      return;
     try {
       if (message.action === 'init') {
         stop();
         documentId = crypto.randomUUID();
-        selection = undefined;
-        respond({ documentId });
+        annotationOnly = message.annotationOnly === true;
+        respond({ documentId, protocolVersion: 3 });
         return;
       }
       if (!documentId || message.documentId !== documentId)
@@ -231,7 +372,21 @@
         return;
       }
       if (message.action === 'state') {
-        respond({ authRequired: authRequired(), selection });
+        respond({
+          authRequired: authRequired(),
+          pointing: Boolean(picker || capturing),
+        });
+        return;
+      }
+      if (message.action === 'captureCheck') {
+        respond({
+          ok: Boolean(
+            capturing &&
+            captureEvidence?.id === message.id &&
+            captureEvidence.key ===
+              JSON.stringify(geometry(captureEvidence.target)),
+          ),
+        });
         return;
       }
       if (message.action === 'command') {
@@ -240,23 +395,7 @@
       }
       if (message.action === 'point') {
         if (authRequired()) throw Error('AUTHENTICATION_REQUIRED');
-        if (picker) window.removeEventListener('click', picker, true);
-        picker = (event) => {
-          if (!event.isTrusted) return;
-          window.removeEventListener('click', picker, true);
-          picker = undefined;
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          const element = event.target;
-          if (element instanceof Element && !sensitive(element))
-            selection = {
-              id: crypto.randomUUID(),
-              url: url(),
-              ...descriptor(element),
-              capturedAt: new Date().toISOString(),
-            };
-        };
-        window.addEventListener('click', picker, { capture: true });
+        beginPoint();
         respond({ ok: true });
         return;
       }
