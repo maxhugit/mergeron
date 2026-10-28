@@ -3,13 +3,26 @@ import { afterEach, expect, test } from 'vitest';
 import { page } from 'vitest/browser';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
-import { DEFAULT_AGENT_INSTRUCTIONS } from '../../../../src/settings/agent-instructions';
 import { AgentInstructionsSettings } from './agent-instructions-settings';
 import { catalogFixture, json } from './catalog/catalog.testing';
 
 afterEach(cleanup);
 
-test('shows the actual common policy and keeps the editor and save actions within desktop/mobile bounds', async () => {
+// A representative administrator-saved text: frontend builds intentionally
+// contain only web/, so browser fixtures must not import backend sources.
+const DEFAULT_AGENT_INSTRUCTIONS = `Vérification visuelle des interfaces web
+
+Lorsque vous créez ou modifiez une interface web, effectuez automatiquement une vérification visuelle avant de déclarer le travail terminé. Une simple question, une revue sans modification ou un travail en mode plan n'autorise pas à modifier ou démarrer des services.
+
+Utilisez mergeron-visual-check --help dans l'environnement des agents. Pour le vrai site, indiquez son URL et un sélecteur réel de la fonctionnalité attendue. Si nécessaire, fournissez sa commande de démarrage avec --start. Attendez une réponse du serveur, puis vérifiez desktop.png, mobile.png et report.json dans artifacts/visual-check. Le test autonome --smoke ne remplace pas celui du vrai site.
+
+Ouvrez réellement les captures ordinateur ET mobile avec un outil de consultation d'images. Examinez la lisibilité, la disposition, les débordements, les superpositions, les éléments coupés et les contrôles essentiels. Corrigez les défauts dans le périmètre demandé, puis relancez les tests et examinez les nouvelles captures. La création des PNG ne démontre pas à elle seule que le rendu a été examiné.
+
+Respectez les permissions, le sandbox, TLS et le proxy existants. Testez uniquement les sites de travail de confiance. Si le serveur tourne dans un autre conteneur, utilisez son adresse de service autorisée, pas localhost. Ne publiez pas de port et ne transmettez pas les captures confidentielles sans autorisation.
+
+Si le serveur, les droits, un outil de consultation d'images ou le navigateur manquent, expliquez ce qui bloque et ce qui n'a pas pu être vérifié. Ne contournez pas les protections. Ne prétendez jamais avoir exécuté un test ou examiné une capture sans l'avoir fait. Dans le résultat final, distinguez les vérifications automatiques, l'examen visuel et les limites ; indiquez où trouver les captures.`;
+
+test('shows the saved common policy and keeps the editor and save actions within desktop/mobile bounds', async () => {
   await i18nReady;
   const fixture = catalogFixture();
   await i18n.changeLanguage('fr');
