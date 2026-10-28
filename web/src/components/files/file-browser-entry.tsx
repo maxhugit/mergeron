@@ -7,7 +7,10 @@ import type { useFileOperations } from '@/hooks/use-file-operations';
 import type { InlineFileEdit as InlineEdit } from '@/hooks/use-inline-file-edit';
 import { cn } from '@/lib/utils';
 import { InlineEntryEditor } from './inline-entry-editor';
-import { FileContextMenu } from './file-context-menu';
+import {
+  FileContextMenu,
+  type DeliverableContextActions,
+} from './file-context-menu';
 type EntryType = 'file' | 'directory';
 
 interface FileBrowserEntryProps {
@@ -30,6 +33,7 @@ interface FileBrowserEntryProps {
   setEdit: (edit: Omit<InlineEdit, 'id' | 'pending' | 'error'> | null) => void;
   commitEdit: (value: string) => void;
   onNavigateCreate: (kind: 'newFile' | 'newFolder') => void;
+  documentActions?: DeliverableContextActions;
 }
 
 /** Keeps dnd-kit on the outer div and native upload/menu/keyboard interaction on the entry. */
@@ -48,6 +52,7 @@ export function FileBrowserEntry({
   setEdit,
   commitEdit,
   onNavigateCreate,
+  documentActions,
 }: FileBrowserEntryProps) {
   const isDir = icon === 'directory';
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +60,7 @@ export function FileBrowserEntry({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { ref: dragRef, isDragging } = useDraggable({
     id: `drag-${entryPath}`,
+    disabled: Boolean(documentActions),
     data: { path: entryPath, name, type: icon },
     plugins: [Feedback.configure({ feedback: 'clone' })],
   });
@@ -122,6 +128,7 @@ export function FileBrowserEntry({
       )}
     >
       <FileContextMenu
+        documentActions={documentActions}
         type={icon}
         actions={actions}
         onOpenChange={setIsMenuOpen}

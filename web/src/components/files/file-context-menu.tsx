@@ -3,6 +3,9 @@
  * Actions vary based on whether the target is a file or directory.
  */
 import { useRef } from 'react';
+import type { ComponentProps } from 'react';
+import { DeliverableDocuments } from '@/components/projects/deliverable-documents';
+import { showSnackbar } from '@/stores/snackbar-store';
 import { useTranslation } from 'react-i18next';
 import {
   Copy,
@@ -45,7 +48,13 @@ interface FileContextMenuProps {
   /** Called when context menu open state changes — for highlighting the target row. */
   onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
+  documentActions?: DeliverableContextActions;
 }
+
+export type DeliverableContextActions = Omit<
+  ComponentProps<typeof DeliverableDocuments>,
+  'children' | 'onError'
+>;
 
 /**
  * Defers a chosen action until the menu has finished closing.
@@ -81,10 +90,21 @@ export function FileContextMenu({
   actions,
   onOpenChange,
   children,
+  documentActions,
 }: FileContextMenuProps) {
   const { t } = useTranslation();
   const { select, afterClose } = useDeferredMenuAction();
   const isDir = type === 'directory';
+
+  if (documentActions)
+    return (
+      <DeliverableDocuments
+        {...documentActions}
+        onError={() => showSnackbar(t('unableToUpdateDocument'), 'error')}
+      >
+        {children}
+      </DeliverableDocuments>
+    );
 
   return (
     <ContextMenu onOpenChange={onOpenChange}>

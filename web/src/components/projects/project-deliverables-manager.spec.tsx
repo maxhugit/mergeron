@@ -1459,25 +1459,17 @@ it('uploads a version candidate without overwriting the protected retained sourc
   });
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   expect(String(fetchMock.mock.calls[0][0])).toContain(
-    'destinationPath=%2Fworkspaces%2Fp%2Flivrables%2Fd&',
+    '/api/projects/p/resources/r/deliverables/d/documents/upload?documentId=doc&expectedVersion=2',
   );
   expect(String(fetchMock.mock.calls[0][0])).not.toContain('published');
-  await waitFor(() =>
-    expect(api).toHaveBeenCalledWith(
-      '/p/resources/r/deliverables/d/documents/doc/versions',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          path: '/workspaces/p/livrables/d/report.docx',
-          comment: '',
-          expectedVersion: 2,
-        }),
-      },
+  expect(
+    api.mock.calls.some((call) =>
+      String(call[0]).endsWith('/documents/doc/versions'),
     ),
-  );
+  ).toBe(false);
 });
 
-it('uploads selected files before creating their document records', async () => {
+it('uploads and registers selected documents with a single scoped request', async () => {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     json: () =>
@@ -1505,19 +1497,16 @@ it('uploads selected files before creating their document records', async () => 
   fireEvent.click(addDocumentButtons[addDocumentButtons.length - 1]);
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  await waitFor(() =>
-    expect(api).toHaveBeenCalledWith(
-      '/p/resources/r/deliverables/d/documents',
-      expect.objectContaining({ method: 'POST' }),
-    ),
+  expect(String(fetchMock.mock.calls[0][0])).toBe(
+    '/api/projects/p/resources/r/deliverables/d/documents/upload?comment=Initial+document',
   );
-  const request = api.mock.calls.find((call) =>
-    String(call[0]).endsWith('/documents'),
-  )?.[1] as RequestInit;
-  expect(JSON.parse(request.body as string)).toEqual({
-    path: '/workspaces/p/livrables/d/brief.pdf',
-    comment: 'Initial document',
+  expect(fetchMock.mock.calls[0][1]).toMatchObject({
+    method: 'POST',
+    body: expect.any(FormData),
   });
+  expect(
+    api.mock.calls.some((call) => String(call[0]).endsWith('/documents')),
+  ).toBe(false);
 
   vi.unstubAllGlobals();
 });

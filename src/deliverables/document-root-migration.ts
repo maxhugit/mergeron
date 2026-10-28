@@ -19,7 +19,7 @@ async function digest(file: string): Promise<string> {
 }
 
 /** Validate every parent, not just realpath: an old projection must never escape via a link. */
-async function regularPath(root: string, file: string) {
+export async function regularPath(root: string, file: string) {
   const relative = path.relative(root, file);
   if (
     !relative ||
@@ -55,7 +55,7 @@ function managedPath(root: string, deliverableId: string, source: string) {
   );
 }
 
-async function retireProjection(
+export async function retireProjection(
   root: string,
   former: string,
   target: string,
@@ -117,8 +117,16 @@ export async function migrateDeliverableDocumentRoots(
       document.deliverableId,
       document.sourcePath,
     );
-    const retired = document.previousSourcePaths.filter((former) =>
-      managedPath(project.workspacePath, document.deliverableId, former),
+    const retired = document.previousSourcePaths.filter(
+      (former) =>
+        managedPath(project.workspacePath, document.deliverableId, former) ||
+        (former !== document.sourcePath &&
+          path.dirname(former) ===
+            path.join(
+              project.workspacePath,
+              'livrables',
+              document.deliverableId,
+            )),
     );
     if (!legacy && retired.length === 0) continue;
     try {

@@ -193,6 +193,61 @@ it('shows deliverable aliases but navigates and renames using the real directory
   );
 });
 
+it('recognizes a deliverable document and replaces filesystem actions with its shared menu', async () => {
+  const document = {
+    id: 'doc',
+    deliverableId: 'd',
+    name: 'report.docx',
+    sourcePath: '/work/report.docx',
+    format: 'docx',
+    deletedAt: null,
+    currentVersionNumber: 1,
+    versions: [],
+  };
+  projects.mockImplementation(async (url: string) =>
+    url.includes('/tree')
+      ? [{ path: document.sourcePath, name: document.name, type: 'file' }]
+      : {
+          deliverables: [
+            {
+              id: 'd',
+              directory: '/work',
+              title: 'Report',
+              lifecycleStatus: 'in_constitution',
+              documents: [document],
+            },
+          ],
+        },
+  );
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <FileTree
+        project={
+          {
+            id: 'p',
+            resources: [{ id: 'r', type: 'deliverable_board' }],
+            workspaces: [{ id: 'main', path: '/work', primary: true }],
+          } as ProjectSummary
+        }
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.contextMenu(await screen.findByText('report.docx'));
+  expect(
+    await screen.findByRole('menuitem', { name: 'History' }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('menuitem', { name: 'Save a new version' }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole('menuitem', { name: 'Move to…' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+  expect(
+    await screen.findByRole('dialog', { name: 'Rename document' }),
+  ).toBeInTheDocument();
+});
+
 it('rolls back directory and selection when row-menu navigation cannot list its destination', async () => {
   render(
     <QueryClientProvider
