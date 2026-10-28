@@ -1,5 +1,25 @@
 # Thread policy and history recovery contracts
 
+## Fresh agents and document-isolation restarts
+
+A newly started paginated agent has no native rollout before its first user
+message. Replacing Core in that interval can make the same ID return
+`thread not loaded`; resuming is not a way to recover history that was never
+materialized. Do not replay user input, fabricate a seed turn, edit the native
+database or silently substitute a different agent to hide this failure.
+
+Adding a Git copy inside the already mounted `/workspaces` tree does not change
+the outer document boundary. Writable mount roots are validated first, then
+canonicalized to their outermost ancestors for **both** bwrap arguments and the
+plan fingerprint. This prevents the unnecessary first-turn restart that used
+to discard a fresh agent after associating a new Git copy. Published documents,
+hidden system folders, quarantined paths and database masking remain separate
+overlays; changes to those still require a new protected namespace.
+
+This fixes that redundant-mount restart, not arbitrary crashes or all lifecycle
+changes before first materialization. An already lost empty native session is
+not automatically reconstructed or deleted by this fix.
+
 ## Next-turn security policy
 
 `GET /api/threads/:threadId/security-policy` reads the backend's current

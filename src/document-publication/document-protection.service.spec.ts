@@ -8,6 +8,7 @@ import {
 } from '../database/schema';
 import type { AppDatabase } from '../database/database.constants';
 import type { DatabaseService } from '../database/database.service';
+import { CodexProcessManager } from '../codex/codex-process-manager.service';
 
 const files = vi.hoisted(() => ({
   missing: new Set<string>(),
@@ -132,6 +133,56 @@ describe('unavailable document project isolation', () => {
     expect(() =>
       protection.assertWorkspaceAvailable('/workspaces/good'),
     ).not.toThrow();
+  });
+
+  it('does not restart a fresh agent when a Git copy only adds a redundant writable mount', async () => {
+    const protection = service(false, 3);
+    const initial = (await protection.plan())!;
+    protection.accept(initial);
+    const clone = '/workspaces/broken/sources/.external/connection/copy';
+    vi.spyOn(protection, 'plan').mockResolvedValue({
+      ...initial,
+      writableRoots: [...initial.writableRoots, clone],
+    });
+    const manager = new CodexProcessManager(
+      null as never,
+      null as never,
+      protection,
+    );
+    const restart = vi.spyOn(manager, 'restartControlled').mockResolvedValue();
+    await manager.ensureDocumentIsolation(clone);
+    expect(restart).not.toHaveBeenCalled();
+  });
+
+  it('still detects every real document, system, quarantine and outer writable boundary change', async () => {
+    const protection = service(false, 3);
+    const initial = (await protection.plan())!;
+    protection.accept(initial);
+    for (const plan of [
+      {
+        ...initial,
+        publishedRoots: [
+          ...initial.publishedRoots,
+          '/workspaces/other/livrables',
+        ],
+      },
+      {
+        ...initial,
+        privateRoots: [...initial.privateRoots, '/workspaces/other-system'],
+      },
+      {
+        ...initial,
+        unavailableRoots: [
+          ...initial.unavailableRoots,
+          '/workspaces/broken/missing',
+        ],
+      },
+      { ...initial, writableRoots: ['/workspaces/good'] },
+      { ...initial, databasePath: initial.databasePath + '.new' },
+      { ...initial, home: '/home/codex/other' },
+    ])
+      expect(protection.changed(plan)).toBe(true);
+    expect(protection.changed(initial)).toBe(false);
   });
 
   it('masks the separate system space from agents and retains the read-only deliverable boundary', async () => {
