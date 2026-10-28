@@ -5,6 +5,64 @@ import { ConfigService } from '@nestjs/config';
 import { BrowserService } from './browser.service';
 
 it.skipIf(!process.env.MERGERON_BROWSER_TEST_EXECUTABLE)(
+  'returns to the same remote form and scroll position after using another agent',
+  async () => {
+    const fixture = createServer((_req, res) => {
+      res.end(
+        '<title>Fresh</title><body style="margin:0;height:3000px"><input style="width:200px;height:80px" oninput="document.title=this.value+\'|\'+scrollY"><script>onscroll=()=>document.title=document.querySelector("input").value+"|"+scrollY</script></body>',
+      );
+    });
+    await new Promise<void>((resolve) =>
+      fixture.listen(0, '127.0.0.1', resolve),
+    );
+    const address = fixture.address();
+    if (!address || typeof address === 'string') throw new Error('No fixture');
+    const server = await chromium.launchServer({
+      executablePath: process.env.MERGERON_BROWSER_TEST_EXECUTABLE,
+      headless: true,
+      chromiumSandbox: true,
+    });
+    const service = new BrowserService(
+      new ConfigService({ MERGERON_BROWSER_ENDPOINT: server.wsEndpoint() }),
+    );
+    try {
+      const created = await service.run('agent-a', 'new', {});
+      const tabId = 'id' in created ? created.id : '';
+      const url = `http://127.0.0.1:${address.port}/`;
+      const frame = await service.run('agent-a', 'navigate', { tabId, url });
+      await service.run('agent-a', 'click', {
+        tabId,
+        frameId: 'frameId' in frame ? frame.frameId : '',
+        x: 50,
+        y: 30,
+      });
+      await service.run('agent-a', 'text', { tabId, text: 'Retained form' });
+      await service.run('agent-a', 'scroll', { tabId, delta: 500 });
+      await expect
+        .poll(async () => {
+          const result = await service.run('agent-a', 'snapshot', { tabId });
+          return 'title' in result ? result.title : '';
+        })
+        .toMatch(/^Retained form\|[1-9][0-9]*$/);
+      const before = await service.run('agent-a', 'snapshot', { tabId });
+      await service.run('agent-b', 'new', {});
+      await service.run('agent-a', 'keepalive', {});
+      const tabs = await service.run('agent-a', 'tabs', { restoreOnly: true });
+      expect('tabs' in tabs && tabs.tabs[0].id).toBe(tabId);
+      const after = await service.run('agent-a', 'snapshot', { tabId });
+      expect('title' in after && after.title).toBe(
+        'title' in before && before.title,
+      );
+    } finally {
+      await service.onModuleDestroy();
+      await server.close();
+      await new Promise<void>((resolve) => fixture.close(() => resolve()));
+    }
+  },
+  30_000,
+);
+
+it.skipIf(!process.env.MERGERON_BROWSER_TEST_EXECUTABLE)(
   'keeps authentication popups in the isolated session, restores the opener and honors blocking',
   async () => {
     const fixture = createServer((req, res) => {

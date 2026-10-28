@@ -72,6 +72,8 @@ export function BrowserSidebar({
   instanceId,
   homeUrl = 'https://www.google.com',
   allowPopups = true,
+  wasOpened = false,
+  onSessionChange,
 }: {
   threadId: string;
   onClose: () => void;
@@ -81,6 +83,8 @@ export function BrowserSidebar({
   instanceId?: string;
   homeUrl?: string;
   allowPopups?: boolean;
+  wasOpened?: boolean;
+  onSessionChange?: (opened: boolean) => void;
 }) {
   const { t } = useTranslation('browser');
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -99,6 +103,7 @@ export function BrowserSidebar({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(false);
+  const [expired, setExpired] = useState(false);
   const locked = useRef(false);
   const alive = useRef(true);
   const initialized = useRef(false);
@@ -152,6 +157,8 @@ export function BrowserSidebar({
       // Do not mount the live viewer until the first navigation releases the
       // server operation lock. Restored/already-active pages keep their stream.
       if (action === 'navigate') {
+        setExpired(false);
+        onSessionChange?.(true);
         if (target !== active) setControlled(false);
         setActive(target);
       }
@@ -169,6 +176,8 @@ export function BrowserSidebar({
         setFrame(null);
       }
       if (action === 'close') {
+        setExpired(false);
+        onSessionChange?.(false);
         setControlled(false);
         setTabs([]);
         setActive('');
@@ -213,18 +222,21 @@ export function BrowserSidebar({
     alive.current = true;
     if (!initialized.current) {
       initialized.current = true;
-      void browserApi<{ tabs: Tab[] }>(`${root}/tabs`, {
+      void browserApi<{ tabs: Tab[]; alive?: boolean }>(`${root}/tabs`, {
         instanceId,
         allowPopups,
+        restoreOnly: true,
       })
         .then((result) => {
           if (!alive.current) return;
           setTabs(result.tabs);
           const restored = result.tabs.at(-1);
           if (restored) {
+            onSessionChange?.(true);
             setActive(restored.id);
             setUrl(restored.url === 'about:blank' ? homeUrl : restored.url);
-          } else void command('navigate', { url: homeUrl });
+          } else if (wasOpened) setExpired(true);
+          else void command('navigate', { url: homeUrl });
         })
         .catch((reason: unknown) => {
           if (alive.current)
@@ -252,13 +264,20 @@ export function BrowserSidebar({
     if (!visible || !active || busy || annotating) return;
     const abort = new AbortController();
     const timer = setInterval(() => {
-      void browserApi<{ tabs: Tab[] }>(
+      void browserApi<{ tabs: Tab[]; alive?: boolean }>(
         `${root}/tabs`,
-        { instanceId },
+        { instanceId, restoreOnly: true },
         abort.signal,
       )
         .then((result) => {
           if (abort.signal.aborted) return;
+          if (result.alive === false) {
+            setExpired(true);
+            setActive('');
+            setFrame(null);
+            setControlled(false);
+            return;
+          }
           setTabs(result.tabs);
           const next =
             result.tabs.filter((tab) => tab.popup).at(-1) ?? result.tabs[0];
@@ -443,6 +462,11 @@ export function BrowserSidebar({
       {error && (
         <p role="alert" className="px-3 text-xs text-destructive">
           {error}
+        </p>
+      )}
+      {expired && (
+        <p role="alert" className="p-3 text-sm text-muted-foreground">
+          {t('sessionExpired')}
         </p>
       )}
       {added && (

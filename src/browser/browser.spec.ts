@@ -42,6 +42,24 @@ beforeEach(() => {
   );
 });
 afterEach(() => service.onModuleDestroy());
+it('keeps existing sessions alive without creating or navigating a page', async () => {
+  expect(await service.run('absent', 'keepalive', {})).toEqual({
+    alive: false,
+  });
+  expect(await service.run('absent', 'tabs', { restoreOnly: true })).toEqual({
+    alive: false,
+    tabs: [],
+  });
+  expect(connect).not.toHaveBeenCalled();
+  const created = await service.run('owner', 'new', {});
+  expect(await service.run('owner', 'keepalive', {})).toEqual({ alive: true });
+  const restored = await service.run('owner', 'tabs', { restoreOnly: true });
+  expect('tabs' in restored && restored.tabs.map((tab) => tab.id)).toEqual([
+    'id' in created ? created.id : '',
+  ]);
+  expect(connect).toHaveBeenCalledTimes(1);
+  expect(lastPage?.goto).not.toHaveBeenCalled();
+});
 it.each([
   'file:///etc/passwd',
   'javascript:alert(1)',

@@ -229,6 +229,72 @@ it('keeps the address editable after browser initialization fails', async () => 
   expect(address).toHaveValue('https://example.org/retry');
   expect(screen.getByRole('button', { name: /^Open$/ })).toBeEnabled();
 });
+it('restores a retained remote page on remount without navigating or resetting its state', async () => {
+  api.mockImplementation((path: string) =>
+    Promise.resolve(
+      path.endsWith('/tabs')
+        ? {
+            alive: true,
+            tabs: [
+              {
+                id: 'retained',
+                title: 'Retained',
+                url: 'https://example.org/form',
+              },
+            ],
+          }
+        : frame,
+    ),
+  );
+  const view = render(
+    <BrowserSidebar
+      threadId="thread-a"
+      instanceId="browser-1"
+      wasOpened
+      onClose={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText('Live view')).toHaveAttribute(
+    'data-tab-id',
+    'retained',
+  );
+  view.unmount();
+  render(
+    <BrowserSidebar
+      threadId="thread-a"
+      instanceId="browser-1"
+      wasOpened
+      onClose={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText('Live view')).toHaveAttribute(
+    'data-tab-id',
+    'retained',
+  );
+  expect(
+    api.mock.calls.some(([path]) =>
+      /\/(new|navigate|close|dispose)$/.test(String(path)),
+    ),
+  ).toBe(false);
+});
+it('warns when a retained session is gone without silently opening Google', async () => {
+  api.mockResolvedValue({ alive: false, tabs: [] });
+  render(
+    <BrowserSidebar
+      threadId="thread-a"
+      instanceId="browser-1"
+      wasOpened
+      onClose={vi.fn()}
+    />,
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'remote session expired',
+  );
+  expect(api.mock.calls.every(([path]) => String(path).endsWith('/tabs'))).toBe(
+    true,
+  );
+  expect(screen.getByRole('button', { name: /^Open$/ })).toBeEnabled();
+});
 it('shows a newly opened authentication window and returns to its opener after it closes', async () => {
   const main = { id: 'main', title: 'Main', url: frame.url };
   const popup = {

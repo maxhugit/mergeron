@@ -13,7 +13,7 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
-  | { id: string; kind: 'browser'; number?: number }
+  | { id: string; kind: 'browser'; number?: number; opened?: boolean }
   | ({ id: string; kind: 'git-remote-file' } & GitRemoteFileTarget)
   | ({ id: string; kind: 'git-graph' } & GitGraphTarget)
   | ({ id: string; kind: 'git-diff' } & GitDiffTarget)
@@ -46,6 +46,8 @@ export interface GitGraphTarget {
 export interface WorkspaceContext {
   tabs: WorkspaceTab[];
   activeId: string;
+  browserDocked?: boolean;
+  lastBrowserId?: string;
 }
 
 export interface FileViewState {
@@ -65,6 +67,12 @@ interface WorkspaceState {
   fileViews: Record<string, FileViewState>;
   openFile: (context: string, path: string, line?: number | null) => void;
   openBrowser: (context: string) => void;
+  setBrowserLayout: (
+    context: string,
+    layout: { browserDocked?: boolean; lastBrowserId?: string },
+  ) => void;
+  setBrowserOpened: (context: string, id: string, opened: boolean) => void;
+  restoreBrowsers: (contexts: Record<string, WorkspaceContext>) => void;
   openGitDiff: (context: string, target: GitDiffTarget) => void;
   openGitGraph: (context: string, target: GitGraphTarget) => void;
   openGitRemoteFile: (context: string, target: GitRemoteFileTarget) => void;
@@ -103,6 +111,62 @@ function clearActiveReveal(state: WorkspaceState, context: string) {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   contexts: {},
   fileViews: {},
+  setBrowserLayout: (context, layout) =>
+    set((state) => ({
+      contexts: {
+        ...state.contexts,
+        [context]: {
+          ...(state.contexts[context] ?? EMPTY_WORKSPACE),
+          ...layout,
+        },
+      },
+    })),
+  setBrowserOpened: (context, id, opened) =>
+    set((state) => {
+      const current = state.contexts[context];
+      if (!current) return state;
+      return {
+        contexts: {
+          ...state.contexts,
+          [context]: {
+            ...current,
+            tabs: current.tabs.map((tab) =>
+              tab.id === id && tab.kind === 'browser'
+                ? { ...tab, opened }
+                : tab,
+            ),
+          },
+        },
+      };
+    }),
+  restoreBrowsers: (saved) =>
+    set((state) => {
+      const contexts: Record<string, WorkspaceContext> = Object.fromEntries(
+        Object.entries(state.contexts).map(([key, current]) => [
+          key,
+          {
+            ...current,
+            tabs: current.tabs.filter((tab) => tab.kind !== 'browser'),
+            activeId: current.tabs.some(
+              (tab) => tab.id === current.activeId && tab.kind === 'browser',
+            )
+              ? 'conversation'
+              : current.activeId,
+            browserDocked: false,
+            lastBrowserId: undefined,
+          },
+        ]),
+      );
+      for (const [key, restored] of Object.entries(saved)) {
+        const current = contexts[key] ?? EMPTY_WORKSPACE;
+        contexts[key] = {
+          ...current,
+          ...restored,
+          tabs: [...current.tabs, ...restored.tabs],
+        };
+      }
+      return { contexts };
+    }),
   openBrowser: (context) =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;
@@ -125,8 +189,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         contexts: {
           ...state.contexts,
           [context]: {
+            ...current,
             tabs: [...current.tabs, { id, kind: 'browser', number }],
             activeId: id,
+            lastBrowserId: id,
           },
         },
         fileViews: clearActiveReveal(state, context),
@@ -140,6 +206,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         contexts: {
           ...state.contexts,
           [context]: {
+            ...current,
             tabs: current.tabs.some((tab) => tab.id === id)
               ? current.tabs
               : [
@@ -161,6 +228,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         contexts: {
           ...state.contexts,
           [context]: {
+            ...current,
             tabs: current.tabs.some((entry) => entry.id === id)
               ? current.tabs.map((entry) => (entry.id === id ? tab : entry))
               : [...current.tabs, tab],
@@ -179,6 +247,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         contexts: {
           ...state.contexts,
           [context]: {
+            ...current,
             tabs: current.tabs.some((entry) => entry.id === id)
               ? current.tabs.map((entry) => (entry.id === id ? tab : entry))
               : [...current.tabs, tab],
@@ -221,6 +290,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         contexts: {
           ...state.contexts,
           [context]: {
+            ...current,
             tabs: existing
               ? current.tabs
               : [...current.tabs, { id, kind: 'file', path, documentId }],
@@ -244,6 +314,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         contexts: {
           ...state.contexts,
           [context]: {
+            ...current,
             tabs: current.tabs.some((tab) => tab.id === id)
               ? current.tabs
               : [...current.tabs, { id, kind: 'terminal', terminalId }],
@@ -287,6 +358,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         contexts: {
           ...state.contexts,
           [context]: {
+            ...current,
             tabs,
             activeId:
               current.activeId === id
