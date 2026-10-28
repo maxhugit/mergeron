@@ -75,6 +75,7 @@ codex_probe/**/*.d.ts
 codex_probe/**/*.js.map
 web/node_modules
 web/public/mergeron-browser-extension.zip
+web/public/mergeron-browser-extension-safari.zip
 
 # Real-browser test failure screenshots. Written per failing case per run and
 # never pruned by Vitest, so they are collected in one directory that

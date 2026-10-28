@@ -27,6 +27,20 @@ beforeEach(async () => {
       ),
     );
 });
+it('offers separate manual packages for Chromium and Safari Mac while keeping the isolated mode separate', () => {
+  render(<LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />);
+  fireEvent.click(screen.getByText('Install the extension manually'));
+  expect(screen.getByRole('link', { name: /Chrome \/ Edge:/ })).toHaveAttribute(
+    'href',
+    '/mergeron-browser-extension.zip',
+  );
+  expect(screen.getByRole('link', { name: /Safari on Mac:/ })).toHaveAttribute(
+    'href',
+    '/mergeron-browser-extension-safari.zip',
+  );
+  expect(screen.getByText(/Safari removes the extension/)).toBeInTheDocument();
+  expect(api).not.toHaveBeenCalled();
+});
 it('never connects on mount, never falls back when extension is absent, and closes the failed association', async () => {
   extension.mockRejectedValue(Error('missing'));
   render(<LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />);

@@ -1,6 +1,7 @@
+import { extension } from './browser-api.js';
 const status = document.querySelector('#status');
 async function call(action, payload = {}) {
-  const result = await chrome.runtime.sendMessage({
+  const result = await extension.runtime.sendMessage({
     channel: 'mergeron-local-browser-v1',
     action,
     payload,
@@ -44,10 +45,10 @@ async function render() {
   document.querySelector('#point').disabled = !select.options.length;
 }
 document.querySelector('#options').onclick = () =>
-  chrome.runtime.openOptionsPage();
+  extension.runtime.openOptionsPage();
 document.querySelector('#share').onclick = async () => {
   try {
-    const [tab] = await chrome.tabs.query({
+    const [tab] = await extension.tabs.query({
       active: true,
       currentWindow: true,
     });

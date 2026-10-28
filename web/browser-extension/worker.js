@@ -1,13 +1,14 @@
 import { CHANNEL, bounded, safeUrl, instanceOrigin } from './protocol.js';
+import { extension } from './browser-api.js';
 const slots = async () =>
-  (await chrome.storage.session.get('slots')).slots ?? {};
-const save = (value) => chrome.storage.session.set({ slots: value });
+  (await extension.storage.session.get('slots')).slots ?? {};
+const save = (value) => extension.storage.session.set({ slots: value });
 let operations = Promise.resolve();
 async function pageMessage(...args) {
   let timer;
   try {
     return await Promise.race([
-      chrome.tabs.sendMessage(...args),
+      extension.tabs.sendMessage(...args),
       new Promise((_, reject) => {
         timer = setTimeout(
           () => reject(Error('PAGE_TIMEOUT_DO_NOT_RETRY')),
@@ -35,10 +36,10 @@ async function stop(slot) {
 }
 async function run(message, sender) {
   bounded(message);
-  const origin = (await chrome.storage.local.get('origin')).origin;
+  const origin = (await extension.storage.local.get('origin')).origin;
   const popup =
-    sender.id === chrome.runtime.id &&
-    sender.url === chrome.runtime.getURL('popup.html');
+    sender.id === extension.runtime.id &&
+    sender.url === extension.runtime.getURL('popup.html');
   const all = await slots();
   for (const [id, slot] of Object.entries(all))
     if (Date.now() - slot.touched > 15 * 60_000) {
@@ -46,8 +47,8 @@ async function run(message, sender) {
       delete all[id];
     }
   if (
-    sender.id === chrome.runtime.id &&
-    sender.url === chrome.runtime.getURL('options.html')
+    sender.id === extension.runtime.id &&
+    sender.url === extension.runtime.getURL('options.html')
   ) {
     if (message.action !== 'configure') throw Error('INVALID_OPTIONS_ACTION');
     const next = message.payload?.origin
@@ -55,35 +56,27 @@ async function run(message, sender) {
       : null;
     if (
       next &&
-      !(await chrome.permissions.contains({ origins: [next + '/*'] }))
+      !(await extension.permissions.contains({ origins: [next + '/*'] }))
     )
       throw Error('PERMISSION_REQUIRED');
     for (const slot of Object.values(all)) await stop(slot);
-    await chrome.storage.session.clear();
-    await chrome.scripting.unregisterContentScripts().catch(() => {});
-    await chrome.storage.local.clear();
+    await extension.storage.session.clear();
+    await extension.scripting.unregisterContentScripts();
+    await extension.storage.local.clear();
     if (next) {
-      await chrome.storage.local.set({ origin: next });
-      await chrome.scripting.registerContentScripts([
-        {
-          id: 'mergeron-bridge',
-          matches: [next + '/*'],
-          js: ['bridge.js'],
-          runAt: 'document_start',
-          allFrames: false,
-        },
-      ]);
+      await extension.storage.local.set({ origin: next });
+      await registerBridge(next);
     }
     if (origin && origin !== next)
-      await chrome.permissions.remove({ origins: [origin + '/*'] });
+      await extension.permissions.remove({ origins: [origin + '/*'] });
     return { ok: true };
   }
   if (
     origin &&
-    !(await chrome.permissions.contains({ origins: [origin + '/*'] }))
+    !(await extension.permissions.contains({ origins: [origin + '/*'] }))
   ) {
     for (const slot of Object.values(all)) await stop(slot);
-    await chrome.storage.session.clear();
+    await extension.storage.session.clear();
     throw Error('INSTANCE_PERMISSION_REVOKED');
   }
   if (popup) {
@@ -114,7 +107,7 @@ async function run(message, sender) {
     }
     if (!slot.paired) throw Error('PAIRING_REQUIRED');
     if (message.action === 'share') {
-      const tab = await chrome.tabs.get(message.payload.tabId);
+      const tab = await extension.tabs.get(message.payload.tabId);
       const url = new URL(safeUrl(tab.url));
       if (
         url.origin === origin ||
@@ -125,7 +118,7 @@ async function run(message, sender) {
         ].includes(url.hostname)
       )
         throw Error('RESTRICTED_TAB');
-      await chrome.scripting.executeScript({
+      await extension.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['tab-agent.js'],
       });
@@ -151,7 +144,7 @@ async function run(message, sender) {
     if (message.action === 'point') {
       if (!slot.shared) throw Error('NOT_SHARED');
       if (
-        new URL((await chrome.tabs.get(slot.tabId)).url).origin !==
+        new URL((await extension.tabs.get(slot.tabId)).url).origin !==
         slot.allowedOrigin
       )
         throw Error('ORIGIN_CHANGED');
@@ -213,7 +206,7 @@ async function run(message, sender) {
       return { state: slot.paired ? 'paused' : 'pairing' };
     }
     try {
-      const tab = await chrome.tabs.get(slot.tabId);
+      const tab = await extension.tabs.get(slot.tabId);
       if (new URL(tab.url).origin !== slot.allowedOrigin)
         throw Error('ORIGIN_CHANGED');
       const result = await pageMessage(
@@ -247,7 +240,7 @@ async function run(message, sender) {
       slot.seen.includes(command.executionId)
     )
       throw Error('COMMAND_UNAVAILABLE_DO_NOT_RETRY');
-    const tab = await chrome.tabs.get(slot.tabId);
+    const tab = await extension.tabs.get(slot.tabId);
     if (new URL(tab.url).origin !== slot.allowedOrigin) {
       slot.shared = false;
       await save(all);
@@ -278,7 +271,7 @@ async function run(message, sender) {
   }
   throw Error('INVALID_BRIDGE_ACTION');
 }
-chrome.runtime.onMessage.addListener((message, sender, respond) => {
+extension.runtime.onMessage.addListener((message, sender, respond) => {
   if (message?.channel !== CHANNEL) return;
   const operation = operations.catch(() => {}).then(() => run(message, sender));
   operations = operation;
@@ -287,7 +280,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   );
   return true;
 });
-chrome.tabs.onUpdated.addListener((tabId, change) => {
+extension.tabs.onUpdated.addListener((tabId, change) => {
   if (change.status !== 'loading') return;
   operations = operations
     .catch(() => {})
@@ -298,7 +291,7 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
       await save(all);
     });
 });
-chrome.tabs.onRemoved.addListener((tabId) => {
+extension.tabs.onRemoved.addListener((tabId) => {
   operations = operations
     .catch(() => {})
     .then(async () => {
@@ -312,17 +305,51 @@ chrome.tabs.onRemoved.addListener((tabId) => {
       await save(all);
     });
 });
-chrome.permissions.onRemoved.addListener(() => {
+extension.permissions.onRemoved.addListener(() => {
   operations = operations
     .catch(() => {})
     .then(async () => {
-      const origin = (await chrome.storage.local.get('origin')).origin;
+      const origin = (await extension.storage.local.get('origin')).origin;
       if (
         origin &&
-        !(await chrome.permissions.contains({ origins: [origin + '/*'] }))
+        !(await extension.permissions.contains({ origins: [origin + '/*'] }))
       ) {
         for (const slot of Object.values(await slots())) await stop(slot);
-        await chrome.storage.session.clear();
+        await extension.storage.session.clear();
       }
     });
 });
+
+async function registerBridge(origin) {
+  const allowed = instanceOrigin(origin);
+  if (!(await extension.permissions.contains({ origins: [allowed + '/*'] })))
+    return;
+  await extension.scripting.registerContentScripts([
+    {
+      id: 'mergeron-bridge',
+      matches: [allowed + '/*'],
+      js: ['bridge.js'],
+      runAt: 'document_start',
+      allFrames: false,
+      persistAcrossSessions: true,
+    },
+  ]);
+}
+
+// Safari drops dynamic registrations on extension updates. Restore only the
+// already configured/authorized origin; never re-pair or re-share a native tab.
+const restoreBridge = () => {
+  operations = operations
+    .catch(() => {})
+    .then(async () => {
+      for (const slot of Object.values(await slots())) await stop(slot);
+      await extension.storage.session.clear();
+      await extension.scripting.unregisterContentScripts();
+      const origin = (await extension.storage.local.get('origin')).origin;
+      if (origin) await registerBridge(origin);
+    });
+  // A failed recovery remains closed and is recoverable in extension options.
+  void operations.catch(() => {});
+};
+extension.runtime.onInstalled.addListener(restoreBridge);
+extension.runtime.onStartup.addListener(restoreBridge);

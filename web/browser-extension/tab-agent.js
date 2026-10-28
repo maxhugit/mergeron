@@ -2,6 +2,7 @@
 (() => {
   if (globalThis.__mergeronTabAgent) return;
   globalThis.__mergeronTabAgent = true;
+  const extension = globalThis.browser ?? globalThis.chrome;
   const CHANNEL = 'mergeron-local-browser-v1';
   let documentId,
     snapshotId,
@@ -212,8 +213,9 @@
       notice: 'Inspect a fresh observation before another action.',
     };
   }
-  chrome.runtime.onMessage.addListener((message, sender, respond) => {
-    if (sender.id !== chrome.runtime.id || message?.channel !== CHANNEL) return;
+  extension.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id !== extension.runtime.id || message?.channel !== CHANNEL)
+      return;
     try {
       if (message.action === 'init') {
         stop();

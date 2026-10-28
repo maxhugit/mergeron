@@ -11,7 +11,7 @@ import {
 import { insertBrowserAnnotation } from '@/lib/browser-annotations';
 import { showSnackbar } from '@/stores/snackbar-store';
 
-/** Native pages remain in Chrome/Edge. This panel is the consent/relay surface, not an iframe. */
+/** Native pages remain in Chrome/Edge/Safari. This is the consent/relay surface, not an iframe. */
 export function LocalBrowserSidebar({
   threadId,
   docked,
@@ -177,6 +177,19 @@ export function LocalBrowserSidebar({
               </a>
             </li>
             <li>{t('localInstallSteps')}</li>
+            <li>
+              <a
+                className="text-primary underline"
+                download
+                href={withBasePath('/mergeron-browser-extension-safari.zip')}
+              >
+                {t('localSafariDownload')}
+              </a>
+              <p className="mt-1">{t('localSafariInstall')}</p>
+              <p className="mt-1 text-muted-foreground">
+                {t('localSafariTemporary')}
+              </p>
+            </li>
             <li>{t('localConfigure', { origin: location.origin })}</li>
           </ol>
         </details>

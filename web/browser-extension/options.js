@@ -1,16 +1,17 @@
 import { instanceOrigin, CHANNEL } from './protocol.js';
+import { extension } from './browser-api.js';
 const field = document.querySelector('#origin'),
   status = document.querySelector('#status');
-field.value = (await chrome.storage.local.get('origin')).origin ?? '';
+field.value = (await extension.storage.local.get('origin')).origin ?? '';
 document
   .querySelector('#settings')
   .addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
       const origin = instanceOrigin(field.value);
-      if (!(await chrome.permissions.request({ origins: [origin + '/*'] })))
+      if (!(await extension.permissions.request({ origins: [origin + '/*'] })))
         throw Error('PERMISSION_DENIED');
-      const result = await chrome.runtime.sendMessage({
+      const result = await extension.runtime.sendMessage({
         channel: CHANNEL,
         action: 'configure',
         payload: { origin },
@@ -24,7 +25,7 @@ document
     }
   });
 document.querySelector('#disconnect').addEventListener('click', async () => {
-  await chrome.runtime.sendMessage({
+  await extension.runtime.sendMessage({
     channel: CHANNEL,
     action: 'configure',
     payload: {},
