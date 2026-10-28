@@ -1,4 +1,4 @@
-MERGERON — NAVIGATEUR LOCAL — PREVERSION 0.3.0
+MERGERON — NAVIGATEUR LOCAL — PREVERSION 0.4.0
 
 Chrome / Edge sur ordinateur et Safari sur Mac (18.4 minimum).
 Ne remplace pas le navigateur isolé existant. Pas de version iPhone/iPad.
@@ -10,7 +10,7 @@ Utilisez mergeron-browser-extension.zip.
 3. Activez le mode développeur, puis « Charger l'extension non empaquetée ».
 4. Sélectionnez ce dossier. Épinglez l'extension si nécessaire.
 5. Dans ses options, autorisez uniquement l'origine HTTPS de votre Mergeron.
-6. Rechargez Mergeron, ouvrez un agent, puis Navigateur > Local (extension).
+6. Rechargez Mergeron, ouvrez un agent, puis le bouton Association de l’extension.
 7. Créez la connexion ; confirmez l'appairage dans l'icône de l'extension.
 8. Ouvrez la page HTTPS à partager, cliquez sur l'extension et choisissez l'agent.
 
@@ -23,8 +23,8 @@ Utilisez mergeron-browser-extension-safari.zip, pas le paquet Chrome/Edge.
 4. Sélectionnez le ZIP Safari ou son dossier extrait.
 5. Depuis l'icône de l'extension, ouvrez Configurer l'instance ; autorisez
    uniquement l'origine HTTPS de votre Mergeron. Rechargez Mergeron.
-6. Navigateur > Navigateur local · extension (test), puis associez cet agent.
-7. Confirmez l'association dans l'extension ; partagez l'onglet HTTPS choisi.
+6. Depuis le bouton Association de l’extension, associez cet agent.
+7. Confirmez l'association dans l'extension, puis cliquez sur Pointer dans l'onglet HTTPS choisi.
 Gardez Mergeron et la page partagée dans le même navigateur/profil.
 Safari retire cette installation après 24 heures ou à sa fermeture : il faut
 réinstaller l'extension puis refaire l'association. Il ne s'agit pas d'une app
@@ -41,17 +41,20 @@ Ne partagez pas des pages contenant des informations que vous ne souhaitez pas
 transmettre à l'agent. Cookies et clés passkey ne sont pas transmis. La lecture
 n'inclut pas les valeurs des champs ; du texte sensible ailleurs peut être lu.
 
-POINTER ET COMMENTER
-Dans l'onglet partagé, ouvrez l'icône puis Pointer un élément. Le survol montre
-un cadre bleu. Échap annule. Cliquez : un éditeur privé à l'extension s'ouvre
-avec une capture et son repère bleu. Saisissez votre commentaire et vérifiez
-l'image, puis choisissez Ajouter au brouillon Mergeron. Annuler n'envoie rien.
+POINTER ET REDIGER DANS MERGERON
+Dans l'onglet de votre choix, ouvrez l'icône, choisissez l'agent puis Pointer
+un élément. Le partage de cet onglet est repris automatiquement. Le survol montre
+un cadre bleu. Échap annule. Cliquez : une prévisualisation privée à l'extension
+s'ouvre avec une capture et son repère bleu. Vérifiez l'image, puis choisissez
+Ajouter au message dans Mergeron. Annuler n'envoie rien. Aucun commentaire à
+saisir dans cette fenêtre : la rédaction se fait uniquement dans la conversation.
 Les champs et iframes sont masqués sur l'image, pas sur la page ; cela ne détecte
 pas tous les secrets (notamment les champs personnalisés). Vérifiez l'aperçu.
-Après validation, texte et image sont ajoutés au brouillon de cet agent : vous
-devez encore envoyer le message vous-même. Aucune transmission avant validation.
+Après validation, le repère et l'image sont ajoutés à la zone de saisie normale
+de cet agent, en conservant le texte déjà saisi. Complétez puis envoyez le message
+vous-même. Aucune transmission avant validation, aucun message envoyé automatiquement.
 Mergeron lui-même peut être annoté, mais aucune commande de l'agent n'y est permise.
-En cas d'erreur, aucun envoi automatique n'est rejoué. Vérifiez le brouillon.
+En cas d'erreur, aucun envoi automatique n'est rejoué. Vérifiez la zone de saisie.
 Le frontend Mergeron doit aussi être à jour (protocole d'annotation 3) : sinon
 le popup l'indique. Une mise à jour de l'extension seule ne suffit pas.
 
@@ -59,8 +62,12 @@ Authentifiez-vous vous-même (passkey, téléphone, mot de passe). Suspendez le
 partage pendant cette opération. Les champs mot de passe/OTP sont bloqués ;
 les dialogues natifs et les iframes tierces ne sont pas pilotables.
 
-Une navigation/recharge suspend le partage : reprenez-le explicitement avec
-l'icône. Une fermeture de Mergeron, du navigateur, une expiration ou un redémarrage
+Une navigation/recharge suspend les commandes : un clic sur Pointer reprend
+automatiquement le partage de l'onglet au premier plan, sans refaire l'association.
+La fenêtre d'association peut être fermée sans interrompre le relais : aucun
+panneau de navigateur local n'occupe la conversation. Les demandes de consentement
+ouvrent cette fenêtre et restent manuelles. Quitter la conversation révoque le partage.
+Une fermeture de Mergeron, du navigateur, une expiration ou un redémarrage
 du serveur nécessite un nouvel appairage/partage ; les onglets locaux ne sont
 pas fermés. Les commandes incertaines ne sont jamais rejouées automatiquement.
 Les deux modes ne transfèrent ni session ni authentification entre eux.

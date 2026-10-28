@@ -12,10 +12,12 @@ export function BrowserModeDialog({
   open,
   onOpenChange,
   onChoose,
+  isolatedDisabled = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChoose: (mode: 'isolated' | 'local') => void;
+  isolatedDisabled?: boolean;
 }) {
   const { t } = useTranslation('browser');
   return (
@@ -26,7 +28,12 @@ export function BrowserModeDialog({
           <DialogDescription>{t('chooseModeDescription')}</DialogDescription>
         </DialogHeader>
         {(['isolated', 'local'] as const).map((mode) => (
-          <Button key={mode} variant="outline" onClick={() => onChoose(mode)}>
+          <Button
+            key={mode}
+            variant="outline"
+            disabled={mode === 'isolated' && isolatedDisabled}
+            onClick={() => onChoose(mode)}
+          >
             {t(mode === 'local' ? 'localTitle' : 'isolatedTitle')}
           </Button>
         ))}

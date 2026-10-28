@@ -70,13 +70,20 @@ document.querySelector('#pause').onclick = async () => {
 };
 document.querySelector('#point').onclick = async () => {
   try {
-    await call('point', { id: document.querySelector('#session').value });
+    const [tab] = await extension.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    await call('point', {
+      id: document.querySelector('#session').value,
+      tabId: tab.id,
+    });
     window.close();
   } catch (error) {
     status.textContent =
       error.message === 'UPDATE_MERGERON_FOR_ANNOTATIONS'
         ? 'Cette instance Mergeron doit être mise à jour pour recevoir les commentaires et images. Rechargez Mergeron après sa mise à jour, puis créez une nouvelle association.'
-        : 'Gardez l’onglet partagé au premier plan. Terminez ou annulez l’annotation en cours avant de recommencer.';
+        : 'Impossible de pointer cet onglet. Utilisez une page HTTPS hors authentification et terminez ou annulez la capture en cours avant de recommencer.';
   }
 };
 render().catch(() => {

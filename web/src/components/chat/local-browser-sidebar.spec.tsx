@@ -58,7 +58,15 @@ it('adds only a submitted annotation and image to this draft, without relaying p
           : { ok: true },
     ),
   );
-  render(<LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />);
+  const added = vi.fn();
+  render(
+    <LocalBrowserSidebar
+      threadId="agent"
+      open
+      onOpenChange={vi.fn()}
+      onAnnotationAdded={added}
+    />,
+  );
   fireEvent.click(
     screen.getByRole('button', { name: 'Pair the extension with this agent' }),
   );
@@ -69,6 +77,7 @@ it('adds only a submitted annotation and image to this draft, without relaying p
     image: expect.any(File),
   });
   expect(insert.mock.calls[0][0].image.type).toBe('image/jpeg');
+  expect(added).toHaveBeenCalledTimes(1);
   await waitFor(() =>
     expect(extension).toHaveBeenCalledWith('annotationAck', {
       sessionId: 'session',
@@ -100,12 +109,12 @@ it('never uploads twice if acknowledgement fails; manual retry only retries ackn
           : { ok: true },
     );
   });
-  render(<LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />);
+  render(<LocalBrowserSidebar threadId="agent" open onOpenChange={vi.fn()} />);
   fireEvent.click(
     screen.getByRole('button', { name: 'Pair the extension with this agent' }),
   );
   fireEvent.click(
-    await screen.findByRole('button', { name: 'Resume adding to the draft' }),
+    await screen.findByRole('button', { name: 'Resume adding to the message' }),
   );
   await waitFor(() => expect(attempts).toBe(2));
   expect(insert).toHaveBeenCalledTimes(1);
@@ -139,7 +148,7 @@ it('pauses the broker and refuses dispatched commands while annotating Mergeron 
           },
     ),
   );
-  render(<LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />);
+  render(<LocalBrowserSidebar threadId="agent" open onOpenChange={vi.fn()} />);
   fireEvent.click(
     screen.getByRole('button', { name: 'Pair the extension with this agent' }),
   );
@@ -155,7 +164,7 @@ it('pauses the broker and refuses dispatched commands while annotating Mergeron 
   );
 });
 it('offers separate manual packages for Chromium and Safari Mac while keeping the isolated mode separate', () => {
-  render(<LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />);
+  render(<LocalBrowserSidebar threadId="agent" open onOpenChange={vi.fn()} />);
   fireEvent.click(screen.getByText('Install the extension manually'));
   expect(screen.getByRole('link', { name: /Chrome \/ Edge:/ })).toHaveAttribute(
     'href',
@@ -170,7 +179,7 @@ it('offers separate manual packages for Chromium and Safari Mac while keeping th
 });
 it('never connects on mount, never falls back when extension is absent, and closes the failed association', async () => {
   extension.mockRejectedValue(Error('missing'));
-  render(<LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />);
+  render(<LocalBrowserSidebar threadId="agent" open onOpenChange={vi.fn()} />);
   expect(api).not.toHaveBeenCalled();
   fireEvent.click(
     screen.getByRole('button', { name: 'Pair the extension with this agent' }),
@@ -198,7 +207,7 @@ it('relays a command once, shows approvals and revokes sharing when the panel un
     });
   });
   const view = render(
-    <LocalBrowserSidebar threadId="agent" docked onClose={vi.fn()} />,
+    <LocalBrowserSidebar threadId="agent" open onOpenChange={vi.fn()} />,
   );
   fireEvent.click(
     screen.getByRole('button', { name: 'Pair the extension with this agent' }),
@@ -222,4 +231,81 @@ it('relays a command once, shows approvals and revokes sharing when the panel un
   view.unmount();
   expect(extension).toHaveBeenCalledWith('revoke', { sessionId: 'session' });
   expect(api).toHaveBeenCalledWith('agent', 'session/close');
+});
+it('keeps the relay alive when the compact dialog closes and receives captures without reopening a panel', async () => {
+  const change = vi.fn();
+  const view = render(
+    <LocalBrowserSidebar threadId="agent" open onOpenChange={change} />,
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Pair the extension with this agent' }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      'agent',
+      'session/poll',
+      expect.anything(),
+    ),
+  );
+  view.rerender(
+    <LocalBrowserSidebar threadId="agent" open={false} onOpenChange={change} />,
+  );
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(extension.mock.calls.some(([action]) => action === 'revoke')).toBe(
+    false,
+  );
+  extension.mockImplementation((action) =>
+    Promise.resolve(
+      action === 'state'
+        ? {
+            state: 'shared',
+            epoch: 'e',
+            annotation: { id: 'capture', text: '' },
+          }
+        : action === 'annotation'
+          ? {
+              id: 'capture',
+              comment: '',
+              selection: { text: 'Save' },
+              image: 'data:image/jpeg;base64,/9j/AA==',
+            }
+          : { ok: true },
+    ),
+  );
+  await waitFor(() => expect(insert).toHaveBeenCalledTimes(1), {
+    timeout: 2500,
+  });
+  expect(insert.mock.calls[0][0].text).not.toContain('Commentaire utilisateur');
+  expect(change).not.toHaveBeenCalledWith(true);
+  view.unmount();
+  expect(extension).toHaveBeenCalledWith('revoke', { sessionId: 'session' });
+});
+it('opens the compact consent dialog for a new approval, but never approves automatically', async () => {
+  const change = vi.fn();
+  const view = render(
+    <LocalBrowserSidebar threadId="agent" open onOpenChange={change} />,
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Pair the extension with this agent' }),
+  );
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      'agent',
+      'session/poll',
+      expect.anything(),
+    ),
+  );
+  view.rerender(
+    <LocalBrowserSidebar threadId="agent" open={false} onOpenChange={change} />,
+  );
+  api.mockResolvedValue({
+    dispatch: [],
+    approvals: [{ id: 'new', action: 'click', args: {} }],
+  });
+  await waitFor(() => expect(change).toHaveBeenCalledWith(true), {
+    timeout: 2500,
+  });
+  expect(api.mock.calls.some(([, path]) => path.endsWith('/decide'))).toBe(
+    false,
+  );
 });

@@ -152,6 +152,7 @@ try {
       })
     ).error,
   );
+  let relayEpoch = initial.epoch;
   const execute = async (
     action,
     args = {},
@@ -162,6 +163,7 @@ try {
       command: {
         id: crypto.randomUUID(),
         executionId,
+        epoch: relayEpoch,
         action,
         args,
         expiresAt: Date.now() + 60_000,
@@ -275,7 +277,7 @@ try {
     undefined,
   );
   assert.ok((await execute('observe')).error);
-  await editor.locator('#comment').fill('Please improve this button');
+  assert.equal(await editor.locator('textarea').count(), 0); // write only in the normal Mergeron composer
   const preview = await editor.locator('#preview').getAttribute('src');
   if (process.env.ANNOTATION_PREVIEW_PATH)
     await editor.screenshot({ path: process.env.ANNOTATION_PREVIEW_PATH });
@@ -307,7 +309,7 @@ try {
     sessionId,
     annotationId: ready.id,
   });
-  assert.equal(annotation.comment, 'Please improve this button');
+  assert.equal(annotation.comment, '');
   assert.equal(annotation.selection.text, 'Save');
   assert.equal(annotation.image, preview);
   assert.notEqual(annotation.image, pixels);
@@ -330,9 +332,6 @@ try {
     `chrome-extension://${extensionId}/annotation.html#*`,
   );
   await cancelled.locator('#submit:not([disabled])').waitFor();
-  await cancelled
-    .locator('#comment')
-    .fill('Do not transmit this private draft');
   await cancelled.locator('#cancel').click();
   assert.equal(
     (await rpc(mergeron, 'state', { sessionId })).annotation,
@@ -355,7 +354,57 @@ try {
   await share();
   await page.reload();
   assert.equal((await rpc(mergeron, 'state', { sessionId })).state, 'paused');
-  await share();
+  const oldEpoch = (
+    await worker.evaluate(
+      async (id) => (await chrome.storage.session.get('slots')).slots[id],
+      sessionId,
+    )
+  ).epoch;
+  assert.deepEqual(await popupCall('point', { id: sessionId, tabId }), {
+    ok: true,
+  });
+  await page.locator('#save').hover();
+  assert.equal(await page.locator('[data-mergeron-pointer]').isVisible(), true);
+  await page.keyboard.press('Escape');
+  const afterReload = await rpc(mergeron, 'state', { sessionId });
+  assert.equal(afterReload.state, 'shared');
+  assert.notEqual(afterReload.epoch, oldEpoch);
+  // A new foreground tab/origin is bound only by the explicit toolbar gesture.
+  await other.bringToFront();
+  const otherTabId = await worker.evaluate(
+    async () =>
+      (
+        await chrome.tabs.query({ url: 'https://mergeron.fixture.test/other' })
+      )[0].id,
+  );
+  assert.deepEqual(
+    await popupCall('point', { id: sessionId, tabId: otherTabId }),
+    { ok: true },
+  );
+  assert.equal(
+    (await rpc(mergeron, 'state', { sessionId })).annotationOnly,
+    true,
+  );
+  await other.keyboard.press('Escape');
+  await page.bringToFront();
+  assert.deepEqual(await popupCall('point', { id: sessionId, tabId }), {
+    ok: true,
+  });
+  await page.keyboard.press('Escape');
+  assert.ok(
+    (
+      await rpc(mergeron, 'execute', {
+        sessionId,
+        command: {
+          action: 'observe',
+          executionId: 'old-epoch',
+          epoch: oldEpoch,
+          expiresAt: Date.now() + 60000,
+        },
+      })
+    ).error,
+  );
+  relayEpoch = (await rpc(mergeron, 'state', { sessionId })).epoch;
   await page.evaluate(() => {
     const input = document.createElement('input');
     input.type = 'password';
@@ -389,6 +438,7 @@ try {
     threadId: 'self-annotation',
   });
   await popupCall('approvePair', { id: selfSession });
+  await mergeron.bringToFront();
   assert.deepEqual(
     await popupCall('share', { id: selfSession, tabId: selfId }),
     { ok: true },
@@ -411,7 +461,7 @@ try {
   );
   await rpc(mergeron, 'revoke', { sessionId: selfSession });
   console.log(
-    'PASS: MV3 pairing, sanitized observation, approved actions, blue hover frame, private comment editor, redacted screenshot preview, explicit annotation submission, cancellation, self-annotation without self-approval, navigation/authentication pause and revocation. Native capture permissions still require manual validation.',
+    'PASS: MV3 pairing, sanitized observation, approved actions, blue hover frame, screenshot-only preview, explicit submission to the conversation, cancellation, Point resumes after reload/switch with fresh epoch, self-annotation without self-approval, authentication pause and revocation. Native capture permissions still require manual validation.',
   );
 } finally {
   await context.close();

@@ -15,18 +15,20 @@ export function browserWorkspaceSnapshot(
       .filter(
         ([key, context]) =>
           key.startsWith('thread:') &&
-          context.tabs.some((tab) => tab.kind === 'browser'),
+          context.tabs.some(
+            (tab) => tab.kind === 'browser' && tab.mode !== 'local',
+          ),
       )
       .slice(-64)
       .map(([key, context]) => {
         const tabs = context.tabs
           .filter((tab) => tab.kind === 'browser')
+          .filter((tab) => tab.mode !== 'local')
           .map((tab) => ({
             id: tab.id,
             kind: 'browser' as const,
             number: tab.number,
             opened: tab.opened === true,
-            ...(tab.mode === 'local' ? { mode: 'local' as const } : {}),
           }));
         return [
           key,
@@ -67,6 +69,7 @@ export function readBrowserWorkspaces(
         const tab = item as Record<string, unknown>;
         if (
           tab.kind !== 'browser' ||
+          tab.mode === 'local' ||
           typeof tab.id !== 'string' ||
           !/^browser-[1-5]$/.test(tab.id) ||
           tabs.some((entry) => entry.id === tab.id)
@@ -76,7 +79,6 @@ export function readBrowserWorkspaces(
           id: tab.id,
           kind: 'browser',
           opened: tab.opened === true,
-          ...(tab.mode === 'local' ? { mode: 'local' as const } : {}),
           number:
             typeof tab.number === 'number' &&
             Number.isSafeInteger(tab.number) &&
