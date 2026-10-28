@@ -236,7 +236,7 @@ describe('project context and business tools', () => {
       tools.context('agent', '/unrelated/git'),
     )!;
     expect(context).toContain('Tests 2');
-    expect(context).toContain('Presentation');
+    expect(context).not.toContain('Presentation');
     expect(context).toContain('/unrelated/git');
     expect(context).not.toContain('Foreign');
     expect(context).not.toContain('Internal execution');
@@ -285,9 +285,10 @@ describe('project context and business tools', () => {
       ).toHaveLength(1);
       const context = tools.context('agent')!;
       const snapshot = JSON.parse(context.split('\n')[2]) as {
-        tasks: { items: unknown[] };
+        tasks?: unknown;
       };
-      expect(snapshot.tasks.items).toHaveLength(25);
+      expect(snapshot.tasks).toBeUndefined();
+      expect(context).not.toContain('Task 54');
     });
   });
 
