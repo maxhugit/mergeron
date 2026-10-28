@@ -34,7 +34,7 @@ describe('ProjectResourceRow', () => {
         }),
       ).toBeEnabled();
       expect(
-        screen.getByRole('button', { name: 'Board', exact: true }),
+      screen.getByRole('button', { name: 'Board' }),
       ).toHaveClass('cursor-pointer');
     },
   );
