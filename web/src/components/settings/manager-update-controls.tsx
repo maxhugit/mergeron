@@ -295,7 +295,12 @@ export function ManagerUpdateControls({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setProgressOpen(true)}
+                onClick={() => {
+                  setProgressOperation(operation ?? progressOperation);
+                  setExcludedOperationId(null);
+                  setProgressSession(Date.now());
+                  setProgressOpen(true);
+                }}
               >
                 {t('managerViewUpdateProgress')}
               </Button>
