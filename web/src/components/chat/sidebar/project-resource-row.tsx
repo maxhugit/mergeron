@@ -39,7 +39,7 @@ export function ProjectResourceRow({
   const { t } = useTranslation();
   const { ref, handleRef, isDragging } = useDraggable({
     id: `project-resource-${resource.id}`,
-    disabled: pending || resource.type === 'deliverable_board',
+    disabled: pending,
     data: {
       kind: 'project-resource',
       resourceId: resource.id,
@@ -59,17 +59,17 @@ export function ProjectResourceRow({
       <button
         ref={handleRef}
         type="button"
-        disabled={pending || resource.type === 'deliverable_board'}
+        disabled={pending}
         className="touch-none cursor-grab rounded p-0.5 text-muted-foreground/50 hover:bg-accent/50 hover:text-foreground active:cursor-grabbing disabled:cursor-not-allowed"
-        aria-label={t('moveTaskManager')}
-        title={t('moveTaskManager')}
+        aria-label={t('moveProjectEntry', { name: resource.name })}
+        title={t('moveProjectEntry', { name: resource.name })}
       >
         <GripVertical className="h-3.5 w-3.5" />
       </button>
       <button
         type="button"
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
+          'flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors',
           active
             ? 'bg-accent text-accent-foreground'
             : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',

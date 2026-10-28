@@ -104,10 +104,10 @@ export function ModelSelector() {
         aria-readonly="true"
       >
         <Bot className="h-3.5 w-3.5" />
-        <span className="hidden max-w-[120px] truncate @min-[640px]/composer:inline">
+        <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
           {projectModel}
         </span>
-        <span className="hidden text-muted-foreground @min-[640px]/composer:inline">
+        <span className="text-muted-foreground">
           · {projectEffort}
         </span>
       </Button>
@@ -146,11 +146,11 @@ export function ModelSelector() {
           aria-label={`${t('modelReasoningEffort')} : ${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
         >
           <Bot className="h-3.5 w-3.5" />
-          <span className="hidden @min-[640px]/composer:inline max-w-[120px] truncate">
+          <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
             {displayModel}
           </span>
           {displayEffort && (
-            <span className="hidden @min-[640px]/composer:inline text-muted-foreground">
+            <span className="text-muted-foreground">
               · {displayEffort}
             </span>
           )}

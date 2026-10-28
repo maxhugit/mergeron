@@ -225,7 +225,9 @@ export class InternalMcpService implements OnModuleDestroy {
         lease.access.identities.requireAdministrator(identity);
       }
       this.tools.assertProject(cap.threadId, cap.projectId);
-      if (!readOnly && !lease.writes) throw new Error('READ_ONLY');
+      // Renaming is conversation metadata, independent of filesystem access.
+      if (!readOnly && name !== 'rename_agent' && !lease.writes)
+        throw new Error('READ_ONLY');
     };
     check();
     if (++lease!.calls > 100) throw new Error('RATE_LIMIT');

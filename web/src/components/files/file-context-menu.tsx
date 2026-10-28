@@ -2,10 +2,11 @@
  * Right-click context menu for file tree entries.
  * Actions vary based on whether the target is a file or directory.
  */
-import { useRef } from 'react';
+import { useDeferredMenuAction } from '@/hooks/use-deferred-menu-action';
 import type { ComponentProps } from 'react';
 import { DeliverableDocuments } from '@/components/projects/deliverable-documents';
 import { showSnackbar } from '@/stores/snackbar-store';
+import { FileActionsMenu, type FileMenuAction } from './file-actions-menu';
 import { useTranslation } from 'react-i18next';
 import {
   Copy,
@@ -13,6 +14,7 @@ import {
   FilePlus,
   FolderPlus,
   FolderUp,
+  GitBranch,
   MessageSquarePlus,
   Move,
   Pencil,
@@ -41,6 +43,11 @@ export interface FileContextMenuActions {
   onUploadFolder?: () => void;
   onAttachToChat?: () => void;
 }
+export interface FileExtraAction {
+  label: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
 
 interface FileContextMenuProps {
   type: 'file' | 'directory';
@@ -49,6 +56,8 @@ interface FileContextMenuProps {
   onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
   documentActions?: DeliverableContextActions;
+  extraActions?: FileExtraAction[];
+  label?: string;
 }
 
 export type DeliverableContextActions = Omit<
@@ -56,41 +65,14 @@ export type DeliverableContextActions = Omit<
   'children' | 'onError'
 >;
 
-/**
- * Defers a chosen action until the menu has finished closing.
- *
- * Radix returns focus to the trigger on close. An action that mounts an inline
- * input must therefore run after that restoration is suppressed, or the row
- * steals focus back from the editor it just opened.
- *
- * @returns `select` to record the chosen action, and the `onCloseAutoFocus`
- *          handler that suppresses focus restoration and runs it.
- */
-function useDeferredMenuAction(): {
-  select: (action: (() => void) | undefined) => void;
-  afterClose: (event: Event) => void;
-} {
-  const pendingAction = useRef<(() => void) | null>(null);
-  return {
-    select: (action) => {
-      pendingAction.current = action ?? null;
-    },
-    afterClose: (event) => {
-      const action = pendingAction.current;
-      pendingAction.current = null;
-      if (!action) return;
-      event.preventDefault();
-      requestAnimationFrame(action);
-    },
-  };
-}
-
 export function FileContextMenu({
   type,
   actions,
   onOpenChange,
   children,
   documentActions,
+  extraActions = [],
+  label,
 }: FileContextMenuProps) {
   const { t } = useTranslation();
   const { select, afterClose } = useDeferredMenuAction();
@@ -101,16 +83,74 @@ export function FileContextMenu({
       <DeliverableDocuments
         {...documentActions}
         onAttachToChat={actions.onAttachToChat}
+        extraActions={extraActions}
+        menuLabel={label}
         onError={() => showSnackbar(t('unableToUpdateDocument'), 'error')}
       >
         {children}
       </DeliverableDocuments>
     );
 
+  if (!isDir) {
+    const items: FileMenuAction[] = [];
+    const add = (
+      id: string,
+      label: string,
+      icon: FileMenuAction['icon'],
+      onSelect?: () => void,
+      separated = false,
+      destructive = false,
+    ) => {
+      if (onSelect)
+        items.push({ id, label, icon, onSelect, separated, destructive });
+    };
+    add('rename', t('rename'), Pencil, actions.onRename);
+    add('copy', t('copyTo'), Copy, actions.onCopy);
+    add('move', t('moveTo'), Move, actions.onMove);
+    add('download', t('download'), Download, actions.onDownload);
+    add('refresh', t('refresh'), RefreshCw, actions.onRefresh, true);
+    items.push(
+      ...extraActions.map((action, index) => ({
+        id: `git:${action.label}`,
+        label: action.label,
+        icon: GitBranch,
+        disabled: action.disabled,
+        onSelect: action.onSelect,
+        separated: index === 0,
+      })),
+    );
+    add(
+      'attach',
+      t('attachToChat'),
+      MessageSquarePlus,
+      actions.onAttachToChat,
+      true,
+    );
+    add('delete', t('delete'), Trash2, actions.onDelete, true, true);
+    return (
+      <FileActionsMenu
+        actions={items}
+        onOpenChange={onOpenChange}
+        buttonLabel={label}
+      >
+        {children}
+      </FileActionsMenu>
+    );
+  }
+
   return (
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-48" onCloseAutoFocus={afterClose}>
+        {extraActions.map((action) => (
+          <ContextMenuItem
+            key={action.label}
+            disabled={action.disabled}
+            onSelect={() => select(action.onSelect)}
+          >
+            {action.label}
+          </ContextMenuItem>
+        ))}
         {isDir && (actions.onNewFile || actions.onNewFolder) && (
           <>
             {actions.onNewFile && (
@@ -169,15 +209,6 @@ export function FileContextMenu({
             )}
           </>
         )}
-        {actions.onAttachToChat && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => select(actions.onAttachToChat)}>
-              <MessageSquarePlus className="h-3.5 w-3.5" />
-              {t('attachToChat')}
-            </ContextMenuItem>
-          </>
-        )}
         {actions.onRefresh && (
           <>
             <ContextMenuSeparator />
@@ -185,6 +216,16 @@ export function FileContextMenu({
               <RefreshCw className="h-3.5 w-3.5" />
               {t('refresh')}
             </ContextMenuItem>
+          </>
+        )}
+        {actions.onAttachToChat && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => select(actions.onAttachToChat)}>
+              <MessageSquarePlus className="h-3.5 w-3.5" />
+              {t('attachToChat')}
+            </ContextMenuItem>
+            {!actions.onDelete && <ContextMenuSeparator />}
           </>
         )}
         {actions.onDelete && (

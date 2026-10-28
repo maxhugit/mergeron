@@ -98,7 +98,8 @@ test.each([320, 500, 800])(
     }
     expect(composer.scrollWidth).toBeLessThanOrEqual(composer.clientWidth);
     const modelLabel = screen.getByText('GPT-6-Sol');
-    expect(getComputedStyle(modelLabel).display === 'none').toBe(width < 640);
+    expect(modelLabel).toBeVisible();
+    expect(screen.getByText('· medium')).toBeVisible();
     expect(
       screen.getByRole('button', { name: /GPT-6-Sol/ }).getAttribute('title'),
     ).toContain('medium');

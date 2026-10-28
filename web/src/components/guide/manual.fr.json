@@ -339,6 +339,7 @@
             "title": "Liens et réutilisation",
             "paragraphs": [
               "Un agent peut travailler directement pour un livrable sans sous-tâche obligatoire. Si une tâche principale est liée au livrable, une sous-tâche peut être choisie explicitement : l’agent conserve alors les deux liens.",
+              "Dans l’en-tête Lié à, le titre du livrable ouvre sa fiche. L’icône de dossier juste à côté ouvre l’explorateur droit directement dans son répertoire, sans changer le dossier d’exécution de l’agent.",
               "Lorsque le dialogue propose un agent existant, choisissez une session disponible du même projet et non déjà affectée à une autre tâche ou un autre livrable. Sa réutilisation ne signifie pas l’effacement de son historique."
             ],
             "warning": "Les commandes d’exécution peuvent être réservées aux administrateurs. L’accès à un projet ou la création d’une fiche ne garantit pas le droit de lancer des outils."
@@ -385,7 +386,7 @@
           {
             "title": "Mode compact et commandes rapides",
             "paragraphs": [
-              "Quand le champ est étroit, certains réglages sont représentés seulement par des icônes. Leur survol ou leur nom accessible permet de retrouver leur fonction ; cela ne modifie pas leur valeur.",
+              "Quand le champ est étroit, le modèle et l’effort restent visibles. Les permissions et capacités sont représentées par leurs icônes ; leur survol ou leur nom accessible permet de retrouver leur fonction, sans modifier leur valeur.",
               "Saisir / au début du brouillon ouvre les commandes proposées par cette version : plan, objectif, revue, condensation ou retour. Relisez le dialogue de la commande avant de confirmer. Ces commandes ne remplacent pas les réglages du modèle ou des connecteurs."
             ],
             "warning": "Ne choisissez pas un accès complet simplement pour masquer une erreur de dossier. Corrigez d’abord l’emplacement ou les droits concernés."
@@ -1002,6 +1003,8 @@
             "title": "Lire le dépôt",
             "paragraphs": [
               "La vue Locale montre la copie de travail : branche courante, changements et références déjà connues. Le graphe relie les commits à leurs parents ; cliquer un commit permet d’en consulter les détails.",
+              "Sous le nom du dépôt, Local indique la branche et la révision de la copie de cet agent, ou Aucune copie locale. L’explorateur affiche le nom de l’emplacement et le chemin relatif ; le chemin technique complet reste au survol.",
+              "Dans Fichiers, le rouge signale des modifications non préparées, y compris les nouveaux fichiers. Le bouton … en fin de ligne regroupe les actions de fichier et Git : voir les différences, préparer pour le commit ou retirer de la préparation. Les suppressions sont aussi affichées pour pouvoir être préparées.",
               "Une référence distante affichée dans l’historique local n’est pas nécessairement à jour sur GitHub. Actualiser la vue relit son état ; les opérations réseau restent distinctes."
             ]
           },
@@ -1009,7 +1012,8 @@
             "title": "Enregistrer un changement",
             "steps": [
               "Vérifiez la copie sélectionnée et consultez les différences des fichiers modifiés.",
-              "Préparez les fichiers voulus dans l’index avec les actions proposées.",
+              "Dans le menu du fichier, préparez les modifications voulues et confirmez le contenu présenté.",
+              "Ouvrez Préparation du commit : seuls les fichiers déjà préparés sont listés et leurs différences excluent les modifications non préparées. Un fichier préparé puis modifié à nouveau reste rouge dans Fichiers : sa version préparée est conservée jusqu’à une nouvelle préparation.",
               "Utilisez Commit, relisez le périmètre et donnez un message décrivant le changement.",
               "Après confirmation, vérifiez le nouveau commit dans l’historique. Publiez séparément si nécessaire."
             ],

@@ -10,6 +10,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { WorkspaceTree } from './workspace-tree';
+import type { WorkspaceTreeHandle } from './workspace-tree';
+import { createRef } from 'react';
 import { useFilesStore } from '@/stores/files-store';
 import { useLayoutStore } from '@/stores/layout-store';
 
@@ -72,6 +74,36 @@ beforeEach(() => {
 });
 
 describe('explorer readiness gate', () => {
+  it('reveals a requested directory even during adoption without changing agent cwd', async () => {
+    let finish!: (value: object) => void;
+    addRoot.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const ref = createRef<WorkspaceTreeHandle>();
+    const onActiveWorkspaceChange = vi.fn();
+    render(
+      <WorkspaceTree
+        ref={ref}
+        cwd="/w"
+        desktop
+        mobileOpen={false}
+        onMobileClose={() => undefined}
+        onFile={() => undefined}
+        onActiveWorkspaceChange={onActiveWorkspaceChange}
+      />,
+    );
+    act(() => ref.current!.openDirectory('/w/livrables/design'));
+    await act(async () => {
+      finish({});
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('file-tree')).toHaveTextContent(
+      '/w/livrables/design',
+    );
+    expect(onActiveWorkspaceChange).not.toHaveBeenCalled();
+  });
   it.each([
     ['/workspaces/main', true],
     ['/workspaces/main/documents', true],
@@ -221,7 +253,17 @@ describe('project workspaces', () => {
             resources: [],
             createdAt: 1,
             updatedAt: 1,
-            workspaces: [],
+            workspaces: [
+              {
+                id: 'main',
+                projectId: 'p',
+                name: 'Main',
+                path: '/workspaces/main',
+                primary: true,
+                createdAt: 1,
+                updatedAt: 1,
+              },
+            ],
           }}
           desktop
           mobileOpen={false}
@@ -232,8 +274,10 @@ describe('project workspaces', () => {
       );
       await screen.findByTestId('file-tree');
       const system = screen.queryByRole('button', { name: 'System space' });
+      expect(screen.getByText('Project').parentElement).toHaveClass('h-11');
       expect(Boolean(system)).toBe(administrator);
       if (system) {
+        expect(system.parentElement?.firstElementChild).toBe(system);
         fireEvent.click(system);
         expect(screen.getByTestId('system-tree')).toHaveTextContent(
           '/workspaces/.mergeron-system/main',

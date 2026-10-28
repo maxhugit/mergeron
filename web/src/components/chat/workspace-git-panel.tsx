@@ -22,7 +22,7 @@ import {
 import { GitRemoteFiles } from './git-remote-files';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
-import { GitStageChanges } from './git-stage-changes';
+import { GitStageChanges, type GitStageHandle } from './git-stage-changes';
 import { GitCopyReservation } from './git-copy-reservation';
 import { GitCreateBranch } from './git-create-branch';
 import { GitLocalBranchActions } from './git-local-branch-actions';
@@ -144,13 +144,11 @@ export function WorkspaceGitPanel(props: Props) {
                   <span className="min-w-0 flex-1 text-left">
                     <span className="block truncate">{item.name}</span>
                     <span className="block whitespace-normal text-[10px] text-muted-foreground">
-                      {t(
-                        !item.enabled
-                          ? 'gitDisabled'
-                          : own
-                            ? 'gitHasAgentCopy'
-                            : 'gitNoAgentCopy',
-                      )}
+                      <LocalCopySummary
+                        projectId={props.projectId}
+                        copy={own}
+                        enabled={item.enabled}
+                      />
                     </span>
                   </span>
                 </Button>
@@ -260,6 +258,35 @@ export function WorkspaceGitPanel(props: Props) {
   );
 }
 
+function LocalCopySummary({
+  projectId,
+  copy,
+  enabled,
+}: {
+  projectId: string;
+  copy?: ProjectWorkspaceCopySummary;
+  enabled: boolean;
+}) {
+  const { t } = useTranslation('workspaces');
+  const snapshot = useQuery({
+    queryKey: ['workspace-git', projectId, copy?.id],
+    queryFn: ({ signal }) =>
+      gitGet<GitSnapshot>(
+        projectId,
+        `copies/${encodeURIComponent(copy!.id)}`,
+        signal,
+      ),
+    enabled: Boolean(copy && enabled),
+    refetchInterval: 15000,
+  });
+  if (!enabled) return t('gitDisabled');
+  if (!copy) return t('gitNoLocalCopy');
+  const branch =
+    (snapshot.data ? snapshot.data.branch : copy.branch) ?? t('gitDetached');
+  const revision = snapshot.data?.head ?? copy.revision;
+  return t('gitLocalSummary', { branch, revision: revision.slice(0, 7) });
+}
+
 function RepositoryPanel({
   projectId,
   resource,
@@ -291,6 +318,7 @@ function RepositoryPanel({
   const [browseError, setBrowseError] = useState('');
   const [browseAttempt, setBrowseAttempt] = useState(0);
   const refreshButton = useRef<HTMLButtonElement | null>(null);
+  const fileStage = useRef<GitStageHandle>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const refresh = useMutation({
     mutationFn: async () => {
@@ -455,16 +483,13 @@ function RepositoryPanel({
           hidden={scope !== 'local'}
           className="flex min-w-0 flex-col data-[state=inactive]:hidden"
         >
-          <div className="min-w-0 shrink-0 space-y-2 border-b p-3 text-xs">
-            <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate">
-                <GitBranch className="mr-1 inline h-3.5 w-3.5" />
-                {snapshot.data?.branch ?? copy?.branch ?? t('gitScopeLocal')}
-                {snapshot.data?.head
-                  ? ` · ${snapshot.data.head.slice(0, 7)}`
-                  : ''}
-              </span>
-            </div>
+          <div
+            className={
+              !resource.enabled || !copy || clone.error || snapshot.error
+                ? 'min-w-0 shrink-0 space-y-2 border-b p-3 text-xs'
+                : undefined
+            }
+          >
             {!resource.enabled ? (
               <p>{t('gitDisabledHelp')}</p>
             ) : (
@@ -536,7 +561,7 @@ function RepositoryPanel({
                             : 'gitTabCommits',
                     )}
                     {id === 'changes' && snapshot.data && !snapshot.error
-                      ? ` (${snapshot.data.changes.length})`
+                      ? ` (${snapshot.data.changes.filter((change) => ![' ', '?'].includes(change.status[0])).length})`
                       : ''}
                   </TabsTrigger>
                 ))}
@@ -546,7 +571,68 @@ function RepositoryPanel({
                 className="flex min-h-0 flex-1 flex-col"
               >
                 {copy && browsed === copy.id ? (
-                  <FileTree onFileClick={onFile} />
+                  <FileTree
+                    onFileClick={onFile}
+                    gitFileState={(path) => {
+                      if (!copy.localPath || !snapshot.data || snapshot.error)
+                        return undefined;
+                      const prefix = `${copy.localPath.replace(/\/+$/, '')}/`;
+                      if (!path.startsWith(prefix)) return undefined;
+                      const relative = path.slice(prefix.length);
+                      const change = snapshot.data.changes.find(
+                        (item) => item.path === relative,
+                      );
+                      if (!change) return undefined;
+                      const unstaged =
+                        change.status === '??' || change.status[1] !== ' ';
+                      const staged = ![' ', '?'].includes(change.status[0]);
+                      return {
+                        unstaged,
+                        actions: [
+                          {
+                            label: t('gitViewFileDiff'),
+                            disabled: !onGitDiff,
+                            onSelect: () =>
+                              onGitDiff?.({
+                                projectId,
+                                copyId: copy.id,
+                                path: relative,
+                                localPath: copy.localPath,
+                                status: change.status,
+                              }),
+                          },
+                          ...(unstaged
+                            ? [
+                                {
+                                  label: t('gitStage'),
+                                  disabled: !writable,
+                                  onSelect: () =>
+                                    fileStage.current?.review(relative),
+                                },
+                              ]
+                            : []),
+                          ...(staged
+                            ? [
+                                {
+                                  label: t('gitUnstage'),
+                                  disabled: !writable,
+                                  onSelect: () =>
+                                    fileStage.current?.unstage(relative),
+                                },
+                              ]
+                            : []),
+                        ],
+                      };
+                    }}
+                    workspaceRoot={
+                      copy.localPath
+                        ? {
+                            path: copy.localPath,
+                            name: resource.name,
+                          }
+                        : undefined
+                    }
+                  />
                 ) : copy ? (
                   !browseError && (
                     <p role="status" className="p-3 text-xs">
@@ -555,6 +641,73 @@ function RepositoryPanel({
                   )
                 ) : (
                   <p className="p-3 text-xs">{t('gitNoCopy')}</p>
+                )}
+                {copy &&
+                  snapshot.data &&
+                  !snapshot.error &&
+                  snapshot.data.changes
+                    .filter((change) => change.status.includes('D'))
+                    .map((change) => (
+                      <div
+                        key={change.path}
+                        className="flex min-w-0 items-center gap-2 px-3 py-1 text-xs"
+                      >
+                        <span
+                          className={`min-w-0 flex-1 truncate ${change.status[1] === 'D' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground'}`}
+                          title={change.path}
+                        >
+                          {change.path} · {t('gitDeletedFile')}
+                        </span>
+                        <WorkspaceEntryMenu
+                          label={`${t('gitFileActions')} · ${change.path}`}
+                          items={[
+                            {
+                              label: t('gitViewFileDiff'),
+                              disabled: !onGitDiff,
+                              onSelect: () =>
+                                onGitDiff?.({
+                                  projectId,
+                                  copyId: copy.id,
+                                  path: change.path,
+                                  localPath: copy.localPath,
+                                  status: change.status,
+                                }),
+                            },
+                            ...(change.status[1] === 'D'
+                              ? [
+                                  {
+                                    label: t('gitStage'),
+                                    disabled: !writable,
+                                    onSelect: () =>
+                                      fileStage.current?.review(change.path),
+                                  },
+                                ]
+                              : []),
+                            ...(![' ', '?'].includes(change.status[0])
+                              ? [
+                                  {
+                                    label: t('gitUnstage'),
+                                    disabled: !writable,
+                                    onSelect: () =>
+                                      fileStage.current?.unstage(change.path),
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
+                      </div>
+                    ))}
+                {copy && snapshot.data && !snapshot.error && (
+                  <GitStageChanges
+                    ref={fileStage}
+                    view="actions"
+                    projectId={projectId}
+                    copyId={copy.id}
+                    agentThreadId={agentThreadId}
+                    snapshot={snapshot.data}
+                    writable={writable}
+                    onDiff={() => undefined}
+                  />
                 )}
                 {browseError && (
                   <div className="p-3 text-xs">
@@ -1007,6 +1160,7 @@ function Changes({
 }) {
   return (
     <GitStageChanges
+      view="prepared"
       key={`${copy.id}:${agentThreadId ?? ''}`}
       projectId={projectId}
       copyId={copy.id}
@@ -1020,6 +1174,7 @@ function Changes({
           path,
           localPath: copy.localPath,
           status: snapshot.changes.find((c) => c.path === path)?.status ?? '',
+          staged: true,
         })
       }
     />

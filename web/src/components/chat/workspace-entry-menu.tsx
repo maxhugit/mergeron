@@ -8,16 +8,19 @@ export function WorkspaceEntryMenu({
   items,
   triggerRef,
   onCloseAutoFocus,
+  onAction,
 }: {
   label: string;
   triggerRef?: Ref<HTMLButtonElement>;
   onCloseAutoFocus?: (event: Event) => void;
+  onAction?: (action: string) => void;
   items: Array<{
     label: string;
     disabled?: boolean;
     reason?: string;
     destructive?: boolean;
-    onSelect: () => void;
+    onSelect?: () => void;
+    action?: string;
   }>;
 }) {
   return (
@@ -44,7 +47,10 @@ export function WorkspaceEntryMenu({
               key={item.label}
               disabled={item.disabled}
               title={item.reason}
-              onSelect={item.onSelect}
+              onSelect={() => {
+                item.onSelect?.();
+                if (item.action) onAction?.(item.action);
+              }}
               className={`cursor-default rounded px-3 py-2 text-xs outline-none focus:bg-accent data-[disabled]:opacity-50 ${item.destructive ? 'text-destructive' : ''}`}
             >
               {item.label}

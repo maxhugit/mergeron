@@ -489,9 +489,6 @@ export class ThreadsService {
       effectiveCwd,
       params.threadId,
     );
-    const deliverableContext = this.deliverables?.contextForConversation(
-      params.threadId,
-    );
     const projectContext = this.projectTools?.context(
       params.threadId,
       effectiveCwd,
@@ -523,20 +520,12 @@ export class ThreadsService {
             },
           }
         : {}),
-      ...(sharedKnowledge ||
-      deliverableContext ||
-      publication?.context ||
-      projectContext
+      ...(sharedKnowledge || publication?.context || projectContext
         ? {
             input: [
               {
                 type: 'text' as const,
-                text: [
-                  projectContext,
-                  sharedKnowledge,
-                  deliverableContext,
-                  publication?.context,
-                ]
+                text: [projectContext, sharedKnowledge, publication?.context]
                   .filter(Boolean)
                   .join('\n\n'),
                 text_elements: [],

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useImperativeHandle, type Ref } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,11 @@ interface Review {
     truncated: boolean;
   }>;
 }
+export interface GitStageHandle {
+  review: (path: string) => void;
+  unstage: (path: string) => void;
+}
+
 export function GitStageChanges({
   projectId,
   copyId,
@@ -30,6 +35,8 @@ export function GitStageChanges({
   agentThreadId,
   writable,
   onDiff,
+  view = 'all',
+  ref,
 }: {
   projectId: string;
   copyId: string;
@@ -37,6 +44,8 @@ export function GitStageChanges({
   agentThreadId?: string;
   writable: boolean;
   onDiff: (path: string) => void;
+  view?: 'all' | 'prepared' | 'actions';
+  ref?: Ref<GitStageHandle>;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
@@ -103,91 +112,111 @@ export function GitStageChanges({
   );
   const selected = selection ?? unstaged.map((c) => c.path);
   const busy = action.isPending;
+  useImperativeHandle(ref, () => ({
+    review: (path) => {
+      if (writable && !busy && unstaged.some((change) => change.path === path))
+        action.mutate({ operation: 'review', paths: [path] });
+    },
+    unstage: (path) => {
+      if (writable && !busy && staged.some((change) => change.path === path))
+        action.mutate({ operation: 'unstage', paths: [path] });
+    },
+  }));
   return (
     <div className="space-y-4 text-xs">
-      {!snapshot.changes.length && <p>{t('gitClean')}</p>}
+      {view === 'prepared' && !staged.length && (
+        <p>{t('gitNoPreparedFiles')}</p>
+      )}
+      {view === 'all' && !snapshot.changes.length && <p>{t('gitClean')}</p>}
       {[
         [t('gitUnprepared'), unstaged, false],
         [t('gitPrepared'), staged, true],
-      ].map(([title, items, prepared]) => {
-        const changes = items as GitSnapshot['changes'];
-        return (
-          <section key={String(title)} className="space-y-2">
-            <h4 className="font-medium">
-              {String(title)} ({changes.length})
-            </h4>
-            {changes.map((change) => (
-              <div
-                key={change.path}
-                className="flex min-w-0 items-center gap-1"
-              >
-                {!prepared && writable && (
-                  <input
-                    type="checkbox"
-                    aria-label={t('gitSelectFile', { path: change.path })}
-                    checked={selected.includes(change.path)}
-                    disabled={busy}
-                    onChange={(event) =>
-                      setSelection(
-                        event.target.checked
-                          ? [...selected, change.path]
-                          : selected.filter((p) => p !== change.path),
-                      )
-                    }
-                  />
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-auto min-w-0 flex-1 justify-start gap-2 py-2 text-xs"
-                  title={change.path}
-                  onClick={() => onDiff(change.path)}
+      ]
+        .filter(
+          ([, , prepared]) =>
+            view === 'all' || (view === 'prepared' && prepared),
+        )
+        .map(([title, items, prepared]) => {
+          const changes = items as GitSnapshot['changes'];
+          return (
+            <section key={String(title)} className="space-y-2">
+              <h4 className="font-medium">
+                {String(title)} ({changes.length})
+              </h4>
+              {changes.map((change) => (
+                <div
+                  key={change.path}
+                  className="flex min-w-0 items-center gap-1"
                 >
-                  <code className="shrink-0 whitespace-pre text-primary">
-                    {change.status}
-                  </code>
-                  <span className="truncate">{change.path}</span>
-                </Button>
-                {writable && (
+                  {!prepared && writable && (
+                    <input
+                      type="checkbox"
+                      aria-label={t('gitSelectFile', { path: change.path })}
+                      checked={selected.includes(change.path)}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setSelection(
+                          event.target.checked
+                            ? [...selected, change.path]
+                            : selected.filter((p) => p !== change.path),
+                        )
+                      }
+                    />
+                  )}
                   <Button
                     size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      action.mutate({
-                        operation: prepared ? 'unstage' : 'review',
-                        paths: [change.path],
-                      })
-                    }
+                    variant="ghost"
+                    className="h-auto min-w-0 flex-1 justify-start gap-2 py-2 text-xs"
+                    title={change.path}
+                    onClick={() => onDiff(change.path)}
                   >
-                    {t(prepared ? 'gitUnstage' : 'gitStage')}
+                    <code className="shrink-0 whitespace-pre text-primary">
+                      {change.status}
+                    </code>
+                    <span className="truncate">{change.path}</span>
                   </Button>
-                )}
-              </div>
-            ))}
-            {!prepared && changes.length > 0 && writable && (
-              <Button
-                size="sm"
-                disabled={
-                  busy ||
-                  !selected.some((p) => changes.some((c) => c.path === p))
-                }
-                onClick={() =>
-                  action.mutate({
-                    operation: 'review',
-                    paths: selected.filter((p) =>
-                      changes.some((c) => c.path === p),
-                    ),
-                  })
-                }
-              >
-                {t('gitStageSelected')}
-              </Button>
-            )}
-          </section>
-        );
-      })}
-      <p className="text-muted-foreground">{t('gitStageHelp')}</p>
+                  {writable && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        action.mutate({
+                          operation: prepared ? 'unstage' : 'review',
+                          paths: [change.path],
+                        })
+                      }
+                    >
+                      {t(prepared ? 'gitUnstage' : 'gitStage')}
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {!prepared && changes.length > 0 && writable && (
+                <Button
+                  size="sm"
+                  disabled={
+                    busy ||
+                    !selected.some((p) => changes.some((c) => c.path === p))
+                  }
+                  onClick={() =>
+                    action.mutate({
+                      operation: 'review',
+                      paths: selected.filter((p) =>
+                        changes.some((c) => c.path === p),
+                      ),
+                    })
+                  }
+                >
+                  {t('gitStageSelected')}
+                </Button>
+              )}
+            </section>
+          );
+        })}
+      {view !== 'actions' && (
+        <p className="text-muted-foreground">{t('gitStageHelp')}</p>
+      )}
       {error && (
         <p role="alert" className="text-destructive">
           {error}

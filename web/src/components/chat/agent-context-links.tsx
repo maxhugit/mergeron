@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ClipboardList, Package } from 'lucide-react';
+import { ClipboardList, Package, FolderOpen } from 'lucide-react';
 import { projectsApi, type ProjectSummary } from '@/lib/projects-api';
 import type { DeliverablesBoard } from '@/lib/deliverables-api';
 
@@ -21,11 +21,13 @@ export function AgentContextLinks({
   project,
   loading,
   failed,
+  onOpenDirectory,
 }: {
   threadId: string;
   project?: ProjectSummary;
   loading: boolean;
   failed: boolean;
+  onOpenDirectory?: (path: string) => void;
 }) {
   const { t } = useTranslation();
   const resource = project?.resources.find(
@@ -91,16 +93,31 @@ export function AgentContextLinks({
       >
         <span className="text-muted-foreground">{t('agentLinkedTo')}</span>
         {deliverables.map((item) => (
-          <button
-            type="button"
+          <span
             key={item.id}
-            className={`${badge} border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300`}
-            title={item.title}
-            onClick={() => setOpenedDeliverable(item.id)}
+            className="inline-flex min-w-0 max-w-full items-center gap-1"
           >
-            <Package className="size-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{item.title}</span>
-          </button>
+            <button
+              type="button"
+              className={`${badge} border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300`}
+              title={item.title}
+              onClick={() => setOpenedDeliverable(item.id)}
+            >
+              <Package className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{item.title}</span>
+            </button>
+            {item.directory && onOpenDirectory && (
+              <button
+                type="button"
+                className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                title={t('openDeliverableFolder')}
+                aria-label={`${t('openDeliverableFolder')} · ${item.title}`}
+                onClick={() => onOpenDirectory(item.directory)}
+              >
+                <FolderOpen className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </span>
         ))}
         {tasks.map((task) => (
           <button

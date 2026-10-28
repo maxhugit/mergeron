@@ -18,6 +18,7 @@ import {
 import { showSnackbar } from '@/stores/snackbar-store';
 import { useFileWatch } from '@/hooks/use-file-watch';
 import { FileListingContextMenu } from './file-context-menu';
+import type { FileExtraAction } from './file-context-menu';
 import { FileBrowserEntry } from './file-browser-entry';
 import { FileToolbar } from './file-toolbar';
 import { DeleteConfirmDialog, FilePathDialog } from './file-dialogs';
@@ -59,12 +60,21 @@ const CLOSED: DialogState = {
 };
 
 interface FileTreeProps {
+  gitFileState?: (
+    path: string,
+  ) => { unstaged: boolean; actions: FileExtraAction[] } | undefined;
+  workspaceRoot?: { path: string; name: string };
   onFileClick?: (filePath: string) => void;
   project?: ProjectSummary;
 }
 
 /** Owns flat navigation and delegates layout-independent edits and entry actions. */
-export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
+export function FileTree({
+  onFileClick,
+  project,
+  workspaceRoot,
+  gitFileState,
+}: FileTreeProps = {}) {
   const directoryAliases = useDeliverableDirectoryAliases(project);
   const browserStore = useFileBrowserStoreApi();
   const { t } = useTranslation();
@@ -188,6 +198,16 @@ export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
   return (
     <>
       <FileToolbar
+        workspaceRoot={
+          workspaceRoot ??
+          project?.workspaces
+            .filter(
+              (workspace) =>
+                rootDir === workspace.path ||
+                rootDir.startsWith(`${workspace.path.replace(/\/+$/, '')}/`),
+            )
+            .sort((a, b) => b.path.length - a.path.length)[0]
+        }
         directoryAliases={directoryAliases}
         onUpload={handleUpload}
         onNewFile={() => startBackgroundCreate('newFile')}
@@ -233,6 +253,7 @@ export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
           <ScrollArea className="h-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
               <FlatDirectory
+                gitFileState={gitFileState}
                 project={project}
                 systemDirectory={projectSystemDirectory(project)}
                 directoryAliases={directoryAliases}
@@ -370,6 +391,7 @@ export function FileTree({ onFileClick, project }: FileTreeProps = {}) {
 }
 
 interface FlatDirectoryProps {
+  gitFileState?: FileTreeProps['gitFileState'];
   project?: ProjectSummary;
   systemDirectory?: string;
   directoryAliases: Record<string, string>;
@@ -517,6 +539,11 @@ function FlatDirectory(props: FlatDirectoryProps) {
       {data?.map((entry) => {
         const row = (
           <FileBrowserEntry
+            gitState={
+              entry.type === 'file'
+                ? props.gitFileState?.(entry.path)
+                : undefined
+            }
             key={entry.path}
             icon={entry.type === 'directory' ? 'directory' : 'file'}
             name={entry.name}

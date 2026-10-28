@@ -36,7 +36,7 @@ import type { ServerNotification } from '../codex/codex-schema';
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
 import { InternalMcpService } from './internal-mcp.service';
 import { InternalMcpController } from './internal-mcp.controller';
-import { internalMcpCatalog } from './internal-mcp-catalog';
+import { internalMcpCatalog, INTERNAL_MCP_TOOLS } from './internal-mcp-catalog';
 import { catalogFixture } from '../codex/catalog/catalog.testing';
 import { CodexProcessManager as NativeCodexProcessManager } from '../codex/codex-process-manager.service';
 import type { v2 } from '../codex/codex-schema';
@@ -52,6 +52,9 @@ describe('native internal MCP over HTTP', () => {
   let localBrowser: LocalBrowserService;
   let notify: (note: ServerNotification) => void;
   const clients: Client[] = [];
+  const setThreadName = vi
+    .fn<(id: string, name: string) => Promise<void>>()
+    .mockResolvedValue(undefined);
   const asPerson = <T>(id: string, operation: () => T) =>
     accessContext.run(
       { identities, identity: identities.resolvePerson(id) },
@@ -59,6 +62,7 @@ describe('native internal MCP over HTTP', () => {
     );
 
   beforeEach(async () => {
+    setThreadName.mockClear();
     database = createTestDatabase();
     root = await fs.realpath(
       await fs.mkdtemp(path.join(tmpdir(), 'internal-mcp-')),
@@ -204,7 +208,8 @@ describe('native internal MCP over HTTP', () => {
       database.db,
     );
     tools = new ProjectAgentToolsService(database.db, deliverables, {
-      get: () => domain,
+      get: (token: string) =>
+        token === 'INTERNAL_MCP_THREAD_RENAMER' ? { setThreadName } : domain,
     } as unknown as ModuleRef);
     localBrowser = new LocalBrowserService();
     service = new InternalMcpService(
@@ -350,12 +355,74 @@ describe('native internal MCP over HTTP', () => {
     ).toBe(true);
   });
 
+  it('renames only its own agent even in filesystem read-only mode, with audit and idempotency', async () => {
+    const { client } = await connect();
+    activate('admin', false);
+    const args = {
+      requestId: 'rename-1',
+      title: 'Qualité PLM',
+      userRequest: 'Please rename this agent.',
+    };
+    const result = await client.callTool({
+      name: 'rename_agent',
+      arguments: args,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      threadId: 'agent',
+      name: 'Qualité PLM',
+      status: 'renamed',
+    });
+    await client.callTool({ name: 'rename_agent', arguments: args });
+    expect(setThreadName).toHaveBeenCalledExactlyOnceWith(
+      'agent',
+      'Qualité PLM',
+    );
+    const audit = database.db.select().from(projectActivity).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: 'agent_renamed',
+      entityId: 'agent',
+    });
+    const forged = await client.callTool({
+      name: 'rename_agent',
+      arguments: { ...args, threadId: 'other' },
+    });
+    expect(forged.isError).toBe(true);
+    const conflict = await client.callTool({
+      name: 'rename_agent',
+      arguments: { ...args, title: 'Different' },
+    });
+    expect(conflict.isError).toBe(true);
+    expect(setThreadName).toHaveBeenCalledTimes(1);
+  });
+
+  it('never renames without an active authorized turn or after revocation', async () => {
+    const { client } = await connect();
+    const args = {
+      requestId: 'rename-2',
+      title: 'Name',
+      userRequest: 'Rename please.',
+    };
+    expect(
+      (await client.callTool({ name: 'rename_agent', arguments: args }))
+        .isError,
+    ).toBe(true);
+    activate();
+    service.revoke('agent');
+    expect(
+      (await client.callTool({ name: 'rename_agent', arguments: args }))
+        .isError,
+    ).toBe(true);
+    expect(setThreadName).not.toHaveBeenCalled();
+  });
+
   it('negotiates MCP and exposes exactly the schemas displayed by administration', async () => {
     const { client } = await connect();
     expect(client.getServerVersion()?.name).toBe('mergeron_internal');
     const { tools: advertised } = await client.listTools();
     const catalog = internalMcpCatalog();
-    expect(advertised).toHaveLength(9);
+    expect(advertised).toHaveLength(INTERNAL_MCP_TOOLS.length);
     for (const method of catalog.tools) {
       const native = advertised.find((tool) => tool.name === method.name)!;
       expect(native.inputSchema).toEqual(method.inputSchema);
@@ -589,10 +656,12 @@ describe('native internal MCP over HTTP', () => {
     const controller = new InternalMcpController();
     expect(() => controller.catalog()).toThrow();
     expect(() => asPerson('reader', () => controller.catalog())).toThrow();
-    expect(asPerson('admin', () => controller.catalog()).tools).toHaveLength(9);
+    expect(asPerson('admin', () => controller.catalog()).tools).toHaveLength(
+      INTERNAL_MCP_TOOLS.length,
+    );
   });
 
-  it('is discovered as nine native tools by the pinned Codex app-server without inference', async () => {
+  it('is discovered as native tools by the pinned Codex app-server without inference', async () => {
     const fixture = catalogFixture();
     const manager = new NativeCodexProcessManager(fixture.storage, {
       getStringSetting: () => null,
@@ -625,7 +694,7 @@ describe('native internal MCP over HTTP', () => {
           inventory.data.some(
             (server) =>
               server.name === 'mergeron_internal' &&
-              Object.keys(server.tools).length === 9,
+              Object.keys(server.tools).length === INTERNAL_MCP_TOOLS.length,
           )
         )
           break;
@@ -634,7 +703,9 @@ describe('native internal MCP over HTTP', () => {
       const internal = inventory!.data.find(
         (server) => server.name === 'mergeron_internal',
       );
-      expect(Object.keys(internal?.tools ?? {})).toHaveLength(9);
+      expect(Object.keys(internal?.tools ?? {})).toHaveLength(
+        INTERNAL_MCP_TOOLS.length,
+      );
       expect(Object.keys(internal?.tools ?? {})).toContain(
         'create_deliverable',
       );

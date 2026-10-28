@@ -44,10 +44,14 @@ afterEach(() => {
   cleanup();
   client.clear();
 });
-function show(active = true) {
+function show(active = true, staged = false) {
   return render(
     <QueryClientProvider client={client}>
-      <WorkspaceGitDiff target={target} active={active} onFile={onFile} />
+      <WorkspaceGitDiff
+        target={{ ...target, staged }}
+        active={active}
+        onFile={onFile}
+      />
     </QueryClientProvider>,
   );
 }
@@ -72,6 +76,17 @@ it('loads a split comparison, supports refresh and opens a separate editable fil
 it('does not request hidden comparisons', () => {
   show(false);
   expect(api).not.toHaveBeenCalled();
+});
+it('loads only the staged version when opened from commit preparation', async () => {
+  api.mockResolvedValue({ diff: '+staged only', fingerprint: 'index' });
+  show(true, true);
+  expect(await screen.findByTestId('comparison')).toHaveTextContent(
+    '+staged only',
+  );
+  expect(api.mock.calls[0][0]).toBe(
+    '/p/git/copies/c/staged-diff?path=src%2Fa%20b.ts',
+  );
+  expect(screen.getByText('Après · modifications indexées')).toBeVisible();
 });
 it('labels the staged-only comparison before the first commit', async () => {
   api.mockResolvedValue({ diff: '+first', untracked: false, stagedOnly: true });

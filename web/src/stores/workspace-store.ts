@@ -27,6 +27,7 @@ export type WorkspaceTab =
   | { id: string; kind: 'terminal'; terminalId: string };
 
 export interface GitDiffTarget {
+  staged?: boolean;
   projectId: string;
   copyId: string;
   path: string;
@@ -255,7 +256,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   openGitDiff: (context, target) =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;
-      const id = `git-diff:${JSON.stringify([target.projectId, target.copyId, target.path])}`;
+      const id = `git-diff:${JSON.stringify([target.projectId, target.copyId, target.path, ...(target.staged ? ['staged'] : [])])}`;
       const tab = { ...target, id, kind: 'git-diff' as const };
       return {
         contexts: {
