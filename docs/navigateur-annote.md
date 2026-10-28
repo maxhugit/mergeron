@@ -105,6 +105,12 @@ supérieure et sa configuration existante, en ajoutant
 déploiement de l’hôte. Les installations sans ce réglage gardent leurs trois
 composants historiques ; le Manager ne crée jamais un navigateur manquant.
 
+Un ancien enregistrement d’adoption à trois composants reste accepté uniquement
+si ces trois composants sont strictement inchangés et que le quatrième est le
+navigateur canonique déjà marqué géré, sur ses deux réseaux attendus. Le fichier
+n’est pas réécrit à l’activation ; la première transaction réussie enregistre
+l’inventaire complet. Toute autre dérive reste bloquante.
+
 Préparer puis confirmer une transaction standard avec l’image navigateur
 immuable déjà vérifiée. L’application conserve sa propre image si elle n’est pas
 sélectionnée ; la transaction sauvegarde les données et raccorde son endpoint

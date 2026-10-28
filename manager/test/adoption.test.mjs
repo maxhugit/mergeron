@@ -142,6 +142,58 @@ test('still offers adoption for a legacy installation with a mix of managed and 
   assert.equal(evaluateAdoption(value).adoption.canAdopt, true);
 });
 
+test('optional managed browser extends only an unchanged adopted production stack', () => {
+  const original = inventory();
+  const record = legacyRecord(original);
+  const extension = {
+    ...original,
+    components: [
+      ...original.components,
+      {
+        id: 'browser',
+        containerId: 'browser-id',
+        containerName: 'mergeron-browser',
+        image: 'ghcr.io/maxhugit/mergeron-browser@sha256:' + 'a'.repeat(64),
+        imageRepositoryAllowed: true,
+        adoption: 'managed',
+        networks: ['mergeron-browser-control', 'mergeron-browser-egress'],
+        missingNetworks: [],
+        protectedMounts: [],
+      },
+    ],
+  };
+  const originalRecord = JSON.stringify(record);
+  assert.equal(evaluateAdoption(extension, record).adoption.state, 'adopted');
+  assert.equal(JSON.stringify(record), originalRecord);
+  for (const mutate of [
+    (v) => {
+      v.components[0].containerId = 'unexpected';
+    },
+    (v) => {
+      v.components[0].networks.push('other');
+    },
+    (v) => {
+      v.components[3].adoption = 'adoptable';
+    },
+    (v) => {
+      v.components[3].networks.push('other');
+    },
+    (v) => {
+      v.components[3].containerName = 'another-browser';
+    },
+    (v) => {
+      v.components[3].imageRepositoryAllowed = false;
+    },
+    (v) => {
+      v.components[3].missingNetworks.push('mergeron-browser-control');
+    },
+  ]) {
+    const invalid = structuredClone(extension);
+    mutate(invalid);
+    assert.equal(evaluateAdoption(invalid, record).adoption.state, 'drifted');
+  }
+});
+
 test('blocks adoption when a required network or protected mount is missing', () => {
   const value = inventory();
   value.components[1].missingNetworks = ['mergeron-proxy'];
