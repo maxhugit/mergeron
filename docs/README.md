@@ -20,6 +20,8 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 ## Guides d’utilisation
 
+- [Guide utilisateur intégré et maintenance](guide-utilisateur.md) : sommaire
+  par fonctionnalités, recherche, articles français/anglais et vérifications.
 - [Export et import des projets en ZIP](export-import-projets.md) : transfert
   production/development, contenu, sécurité et compatibilité entre versions.
 - [Migration vers Mergeron](migration-mergeron.md)

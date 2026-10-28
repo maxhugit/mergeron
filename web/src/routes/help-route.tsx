@@ -1,378 +1,518 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
-  Bot,
-  ClipboardCheck,
-  FolderCog,
-  LayoutDashboard,
-  ListChecks,
-  Settings,
-  TimerReset,
+  ChevronDown,
+  ChevronRight,
+  Link,
+  ListTree,
+  Search,
+  X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { translationKey } from '@/locales/translation-key';
 import { cn } from '@/lib/utils';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { withBasePath } from '@/base-path';
-
-const generalTopics = [
-  {
-    id: 'projects',
-    titleKey: 'guideProjectsTitle',
-    paragraphs: ['guideProjectsOverview', 'guideProjectsResources'],
-  },
-  {
-    id: 'documents',
-    titleKey: 'guideDocumentsTitle',
-    paragraphs: ['guideDocumentsPreview', 'guideDocumentsSafety'],
-  },
-  {
-    id: 'good-practices',
-    titleKey: 'guideGoodPracticesTitle',
-    paragraphs: ['guideGoodPracticesReview', 'guideGoodPracticesPersistence'],
-  },
-] as const;
-
-const guideTabs = [
-  {
-    id: 'general',
-    titleKey: 'generalInformation',
-    icon: LayoutDashboard,
-    topics: generalTopics,
-  },
-  {
-    id: 'conversations',
-    titleKey: 'guideConversationsTitle',
-    icon: Bot,
-    topics: [
-      {
-        id: 'conversations-module',
-        titleKey: 'guideConversationsTitle',
-        paragraphs: [
-          'guideConversationsTypes',
-          'guideConversationsControls',
-          'guideConversationsBranches',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'tasks',
-    titleKey: 'taskManagers',
-    icon: ListChecks,
-    topics: [
-      {
-        id: 'tasks-module',
-        titleKey: 'taskManagers',
-        paragraphs: [
-          'guideTasksStructure',
-          'guideTasksViews',
-          'guideTasksAgents',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'deliverables',
-    titleKey: 'guideDeliverablesTitle',
-    icon: ClipboardCheck,
-    topics: [
-      {
-        id: 'deliverables-module',
-        titleKey: 'guideDeliverablesTitle',
-        paragraphs: [
-          'guideDeliverablesStructure',
-          'guideDeliverablesDocuments',
-          'guideDeliverablesLifecycle',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'automations',
-    titleKey: 'automations',
-    icon: TimerReset,
-    topics: [
-      {
-        id: 'automations-module',
-        titleKey: 'automations',
-        paragraphs: ['guideAutomationsManager', 'guideAutomationsRuns'],
-      },
-    ],
-  },
-  {
-    id: 'project-administration',
-    titleKey: 'projectAdministration',
-    icon: FolderCog,
-    topics: [
-      {
-        id: 'project-administration-overview',
-        titleKey: 'projectAdministration',
-        paragraphs: ['guideProjectAdministrationOverview'],
-      },
-      {
-        id: 'people-and-access',
-        titleKey: 'guidePeopleAndAccessTitle',
-        paragraphs: [
-          'guidePeopleAndAccessScope',
-          'guidePeopleAndAccessOrganization',
-        ],
-      },
-      {
-        id: 'workspaces',
-        titleKey: 'guideWorkspacesTitle',
-        paragraphs: ['guideWorkspacesStructure', 'guideWorkspacesViews'],
-      },
-      {
-        id: 'knowledge',
-        titleKey: 'guideKnowledgeTitle',
-        paragraphs: ['guideKnowledgeDocuments', 'guideKnowledgeProposals'],
-      },
-      {
-        id: 'integrations',
-        titleKey: 'guideIntegrationsTitle',
-        paragraphs: [
-          'guideIntegrationsSelection',
-          'guideIntegrationsAuthentication',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'administration',
-    titleKey: 'guideAdministrationTitle',
-    icon: Settings,
-    topics: [
-      {
-        id: 'administration-module',
-        titleKey: 'guideAdministrationTitle',
-        paragraphs: [
-          'guideAdministrationAccount',
-          'guideAdministrationSettings',
-          'guideAdministrationOperations',
-        ],
-      },
-    ],
-  },
-] as const;
-
-type GuideTabId = (typeof guideTabs)[number]['id'];
+import {
+  articleFromHash,
+  guideArticles,
+  guideHash,
+  guideLanguage,
+  guideManuals,
+  searchGuide,
+} from '@/components/guide/guide-content';
 
 export function HelpRoute() {
-  const { t, i18n } = useTranslation();
-  const { t: guideT } = useTranslation('guide');
-  const [activeTab, setActiveTab] = useState<GuideTabId>('general');
-  const panelRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (panelRef.current) panelRef.current.scrollTop = 0;
-  }, [activeTab]);
-  const topicPrefix =
-    activeTab === 'project-administration'
-      ? 'projectAdministration'
-      : activeTab;
+  const { i18n } = useTranslation();
+  const { t } = useTranslation('guide');
+  const language = guideLanguage(i18n.language);
+  const chapters = guideManuals[language];
+  const articles = useMemo(() => guideArticles(chapters), [chapters]);
+  const [articleId, setArticleId] = useState(() =>
+    articleFromHash(chapters, window.location.hash),
+  );
+  const [query, setQuery] = useState('');
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [expanded, setExpanded] = useState(
+    () =>
+      new Set([
+        'start',
+        articles.find(
+          ({ article }) =>
+            article.id === articleFromHash(chapters, window.location.hash),
+        )?.chapter.id ?? 'start',
+      ]),
+  );
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>(
+    'idle',
+  );
+  const panel = useRef<HTMLElement>(null);
+  const navigation = useRef<HTMLElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const selectedIndex = Math.max(
+    0,
+    articles.findIndex(({ article }) => article.id === articleId),
+  );
+  const { chapter, article } = articles[selectedIndex];
+  const searching = query.trim().length > 0;
+  const results = useMemo(
+    () => searchGuide(chapters, query),
+    [chapters, query],
+  );
   const selectThread = useTimelineStore((state) => state.selectThread);
   useEffect(() => {
     selectThread(null);
   }, [selectThread]);
+  useEffect(() => {
+    const update = () => {
+      const id = articleFromHash(chapters, window.location.hash);
+      setArticleId(id);
+      setCopyStatus('idle');
+      const parent = guideArticles(chapters).find(
+        ({ article }) => article.id === id,
+      )?.chapter.id;
+      if (parent) setExpanded((previous) => new Set([...previous, parent]));
+    };
+    window.addEventListener('hashchange', update);
+    window.addEventListener('popstate', update);
+    return () => {
+      window.removeEventListener('hashchange', update);
+      window.removeEventListener('popstate', update);
+    };
+  }, [chapters]);
+  useEffect(() => {
+    if (panel.current) panel.current.scrollTop = 0;
+  }, [article.id, chapter.id]);
+  useEffect(() => {
+    const container = navigation.current;
+    const link = container?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!container || !link || !container.offsetHeight || !link.offsetHeight)
+      return;
+    const bounds = container.getBoundingClientRect();
+    const selected = link.getBoundingClientRect();
+    if (selected.bottom > bounds.bottom)
+      container.scrollTop += selected.bottom - bounds.bottom + 8;
+    else if (selected.top < bounds.top)
+      container.scrollTop -= bounds.top - selected.top + 8;
+  }, [article.id, searching, expanded, navigationOpen]);
+  const articleUrl = (id: string) =>
+    `${window.location.pathname}${window.location.search}${guideHash(id)}`;
+  const navigate = (id: string) => {
+    if (window.location.hash !== guideHash(id))
+      window.history.pushState(window.history.state, '', articleUrl(id));
+    setArticleId(id);
+    setCopyStatus('idle');
+    const parent = articles.find(({ article }) => article.id === id)?.chapter
+      .id;
+    if (parent) setExpanded((previous) => new Set([...previous, parent]));
+    setNavigationOpen(false);
+    panel.current?.focus({ preventScroll: true });
+  };
+  const articleLink = (id: string, label: string, className?: string) => (
+    <a
+      href={articleUrl(id)}
+      onClick={(event) => {
+        event.preventDefault();
+        navigate(id);
+      }}
+      className={className}
+    >
+      {label}
+    </a>
+  );
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <article className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="contents">
-          <div
-            role="tablist"
-            aria-label={t('guideSections')}
-            className="flex h-10 min-w-0 shrink-0 items-center overflow-x-auto border-b bg-background"
-            onKeyDown={(event) => {
-              if (
-                !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
-              )
-                return;
-              const tabs = [
-                ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                  '[role="tab"]',
-                ),
-              ];
-              const current = tabs.indexOf(
-                document.activeElement as HTMLButtonElement,
-              );
-              const index =
-                event.key === 'Home'
-                  ? 0
-                  : event.key === 'End'
-                    ? tabs.length - 1
-                    : (current +
-                        (event.key === 'ArrowRight' ? 1 : -1) +
-                        tabs.length) %
-                      tabs.length;
-              event.preventDefault();
-              tabs[index]?.focus();
-              tabs[index]?.click();
-            }}
-          >
-            {guideTabs.map(({ id, titleKey, icon: Icon }) => (
-              <button
-                key={id}
-                id={`guide-tab-${id}`}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === id}
-                aria-controls="guide-panel"
-                aria-label={t(translationKey(titleKey))}
-                title={t(translationKey(titleKey))}
-                tabIndex={activeTab === id ? 0 : -1}
-                onClick={() => setActiveTab(id)}
-                className={cn(
-                  'flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]',
-                  activeTab === id
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icon aria-hidden="true" className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  {t(translationKey(titleKey))}
-                </span>
-              </button>
-            ))}
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <header className="shrink-0 space-y-3 border-b p-4">
+        <div className="flex items-start gap-3">
+          <BookOpen
+            aria-hidden="true"
+            className="mt-1 h-6 w-6 shrink-0 text-primary"
+          />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold">{t('manualTitle')}</h1>
+            <p className="text-sm text-muted-foreground">
+              {t('manualIntroduction')}
+            </p>
           </div>
-
-          <div
-            id="guide-panel"
-            ref={panelRef}
-            role="tabpanel"
-            aria-labelledby={`guide-tab-${activeTab}`}
-            tabIndex={0}
-            className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
+          <button
+            type="button"
+            aria-expanded={navigationOpen}
+            aria-controls="guide-navigation"
+            onClick={() => setNavigationOpen((open) => !open)}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-2 text-sm md:hidden"
           >
-            <div className="mx-auto w-full max-w-5xl space-y-4 pb-8">
-              <header className="space-y-3 pb-2">
-                <BookOpen aria-hidden="true" className="h-7 w-7 text-primary" />
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {t('howThePlatformWorks')}
-                </h1>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t('platformGuideIntroduction')}
+            <ListTree aria-hidden="true" className="h-4 w-4" />
+            {t('manualContents')}
+          </button>
+        </div>
+        <div role="search" className="relative max-w-2xl">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-muted-foreground"
+          />
+          <input
+            ref={search}
+            type="search"
+            aria-label={t('manualSearch')}
+            placeholder={t('manualSearch')}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setNavigationOpen(true);
+            }}
+            className="h-10 w-full min-w-0 rounded-md border bg-background pr-10 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+          />
+          {query && (
+            <button
+              type="button"
+              aria-label={t('manualClear')}
+              onClick={() => {
+                setQuery('');
+                search.current?.focus();
+              }}
+              className="absolute top-1 right-1 rounded-md p-2 hover:bg-accent"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <p role="status" className="text-xs text-muted-foreground">
+          {searching
+            ? t('manualResults', { count: results.length })
+            : t('manualArticles', { count: articles.length })}
+        </p>
+      </header>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
+        <aside
+          ref={navigation}
+          id="guide-navigation"
+          className={cn(
+            'min-h-0 shrink-0 flex-col overflow-y-auto border-b bg-muted/20 p-3 md:flex md:max-h-none md:w-72 md:border-r md:border-b-0',
+            navigationOpen ? 'flex max-h-[45vh]' : 'hidden',
+          )}
+        >
+          <nav aria-label={searching ? t('manualSearch') : t('manualContents')}>
+            {searching ? (
+              results.length ? (
+                <ul className="space-y-2">
+                  {results.map(
+                    ({ article: result, chapter: parent, snippet }) => (
+                      <li key={result.id}>
+                        <a
+                          href={articleUrl(result.id)}
+                          aria-current={
+                            article.id === result.id ? 'page' : undefined
+                          }
+                          onClick={(event) => {
+                            event.preventDefault();
+                            navigate(result.id);
+                          }}
+                          className="block rounded-md border p-3 text-sm hover:bg-accent aria-[current=page]:border-primary"
+                        >
+                          <span className="text-xs text-muted-foreground">
+                            {parent.title}
+                          </span>
+                          <span className="mt-1 block font-medium">
+                            {result.title}
+                          </span>
+                          <span className="mt-1 block text-xs leading-relaxed break-words text-muted-foreground">
+                            {snippet}
+                          </span>
+                        </a>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              ) : (
+                <p className="p-2 text-sm text-muted-foreground">
+                  {t('manualNoResults')}
                 </p>
-              </header>
-              {activeTab === 'general' && (
-                <section
-                  aria-labelledby="getting-started"
-                  className="rounded-xl border bg-card p-4 sm:p-6"
+              )
+            ) : (
+              <ul className="space-y-1">
+                {chapters.map((group) => (
+                  <li key={group.id}>
+                    <button
+                      type="button"
+                      aria-expanded={expanded.has(group.id)}
+                      aria-controls={`guide-chapter-${group.id}`}
+                      onClick={() =>
+                        setExpanded((previous) => {
+                          const next = new Set(previous);
+                          if (next.has(group.id)) next.delete(group.id);
+                          else next.add(group.id);
+                          return next;
+                        })
+                      }
+                      className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      {expanded.has(group.id) ? (
+                        <ChevronDown
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0"
+                        />
+                      ) : (
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0"
+                        />
+                      )}
+                      <span className="min-w-0 flex-1">{group.title}</span>
+                      <span
+                        aria-hidden="true"
+                        className="text-xs text-muted-foreground"
+                      >
+                        {group.articles.length}
+                      </span>
+                    </button>
+                    <ul
+                      id={`guide-chapter-${group.id}`}
+                      hidden={!expanded.has(group.id)}
+                      className="ml-4 space-y-1 border-l pl-2"
+                    >
+                      {group.articles.map((item) => (
+                        <li key={item.id}>
+                          <a
+                            href={articleUrl(item.id)}
+                            aria-current={
+                              article.id === item.id ? 'page' : undefined
+                            }
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate(item.id);
+                            }}
+                            className="block rounded-md px-2 py-2 text-sm break-words hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-primary"
+                          >
+                            {item.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </nav>
+        </aside>
+        <article
+          ref={panel}
+          tabIndex={-1}
+          aria-labelledby="guide-article-title"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 focus-visible:outline-2 focus-visible:outline-ring sm:p-6"
+        >
+          <div className="mx-auto w-full max-w-4xl space-y-6 pb-8">
+            <nav
+              aria-label={t('manualBreadcrumb')}
+              className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+            >
+              <span>{t('manualContents')}</span>
+              <ChevronRight aria-hidden="true" className="h-3 w-3" />
+              <span>{chapter.title}</span>
+            </nav>
+            <header className="space-y-3 border-b pb-5">
+              <div className="flex items-start gap-3">
+                <h2
+                  id="guide-article-title"
+                  className="min-w-0 flex-1 text-2xl font-semibold tracking-tight"
                 >
-                  <h2 id="getting-started" className="text-lg font-semibold">
-                    {t('gettingStarted')}
-                  </h2>
-                  <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-                    <li>{t('guideGettingStartedCreate')}</li>
-                    <li>{t('guideGettingStartedOrganize')}</li>
-                    <li>{t('guideGettingStartedConfigure')}</li>
-                    <li>{t('guideGettingStartedWork')}</li>
-                    <li>{t('guideGettingStartedReview')}</li>
-                  </ol>
-                </section>
-              )}
-              <section className="rounded-xl border bg-card p-4 sm:p-6">
-                <h2 className="text-lg font-semibold">
-                  {guideT('walkthrough')}
+                  {article.title}
                 </h2>
-                <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm leading-relaxed">
-                  {[1, 2, 3].map((number) => (
-                    <li key={number}>
-                      {guideT(translationKey(`${topicPrefix}Step${number}`))}
+                <button
+                  type="button"
+                  title={t('manualCopyLink')}
+                  aria-label={t('manualCopyLink')}
+                  className="shrink-0 rounded-md border p-2 hover:bg-accent"
+                  onClick={() => {
+                    const url = new URL(window.location.href);
+                    url.hash = guideHash(article.id);
+                    void Promise.resolve()
+                      .then(() => navigator.clipboard.writeText(url.href))
+                      .then(() => setCopyStatus('success'))
+                      .catch(() => setCopyStatus('error'));
+                  }}
+                >
+                  <Link aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </div>
+              {copyStatus !== 'idle' && (
+                <p role="status" className="text-sm">
+                  {t(
+                    copyStatus === 'success'
+                      ? 'manualLinkCopied'
+                      : 'manualLinkFailed',
+                  )}
+                </p>
+              )}
+              <p className="leading-relaxed text-muted-foreground">
+                {article.summary}
+              </p>
+              <nav aria-label={t('manualOnThisPage')}>
+                <p className="mb-2 text-sm font-medium">
+                  {t('manualOnThisPage')}
+                </p>
+                <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                  {article.sections.map((section, index) => (
+                    <li key={section.title}>
+                      <button
+                        type="button"
+                        className="text-primary underline-offset-4 hover:underline"
+                        onClick={() =>
+                          document
+                            .getElementById(
+                              `guide-section-${article.id}-${index}`,
+                            )
+                            ?.scrollIntoView({ block: 'start' })
+                        }
+                      >
+                        {section.title}
+                      </button>
                     </li>
                   ))}
-                </ol>
-                <h3 className="mt-6 font-semibold">{guideT('buttons')}</h3>
-                <div className="mt-3 overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="border-b">
-                      <tr>
-                        <th scope="col" className="min-w-40 py-2 pr-4">
-                          {guideT('button')}
-                        </th>
-                        <th scope="col" className="py-2">
-                          {guideT('effect')}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[1, 2, 3].map((number) => (
-                        <tr key={number} className="border-b last:border-0">
-                          <th
-                            scope="row"
-                            className="py-3 pr-4 align-top font-medium"
-                          >
-                            {guideT(
-                              translationKey(`${topicPrefix}Button${number}`),
-                            )}
-                          </th>
-                          <td className="py-3 leading-relaxed text-muted-foreground">
-                            {guideT(
-                              translationKey(`${topicPrefix}Effect${number}`),
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-              {(activeTab === 'tasks' || activeTab === 'deliverables') && (
-                <section className="space-y-3 rounded-xl border bg-card p-4 sm:p-6">
-                  <h2 className="text-lg font-semibold">
-                    {guideT('screenshots')}
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {guideT('captureNotice')}
+                </ul>
+              </nav>
+            </header>
+            {article.sections.map((section, index) => (
+              <section
+                key={section.title}
+                id={`guide-section-${article.id}-${index}`}
+                aria-labelledby={`guide-heading-${article.id}-${index}`}
+                className="scroll-mt-4 space-y-3"
+              >
+                <h3
+                  id={`guide-heading-${article.id}-${index}`}
+                  className="text-lg font-semibold"
+                >
+                  {section.title}
+                </h3>
+                {section.paragraphs?.map((paragraph) => (
+                  <p key={paragraph} className="text-sm leading-7">
+                    {paragraph}
                   </p>
-                  <figure className="space-y-3">
-                    <img
-                      className="h-auto w-full rounded-lg border"
-                      loading="lazy"
-                      src={withBasePath(
-                        `/guide/${activeTab}-${i18n.language.startsWith('fr') ? 'fr' : 'en'}.png`,
-                      )}
-                      alt={guideT(
-                        activeTab === 'tasks'
-                          ? 'tasksCaption'
-                          : 'lifecycleCaption',
-                      )}
-                    />
-                    <figcaption className="text-sm leading-relaxed text-muted-foreground">
-                      {guideT(
-                        activeTab === 'tasks'
-                          ? 'tasksCaption'
-                          : 'lifecycleCaption',
-                      )}
-                    </figcaption>
-                  </figure>
-                </section>
-              )}
-              {guideTabs
-                .find((tab) => tab.id === activeTab)
-                ?.topics.map((topic) => (
-                  <section
-                    key={topic.id}
-                    aria-labelledby={topic.id}
-                    className="rounded-xl border bg-card p-4 sm:p-6"
-                  >
-                    <h2 id={topic.id} className="text-lg font-semibold">
-                      {t(translationKey(topic.titleKey))}
-                    </h2>
-                    {topic.paragraphs.map((paragraphKey) => (
-                      <p
-                        key={paragraphKey}
-                        className="mt-3 text-sm leading-relaxed text-muted-foreground"
-                      >
-                        {t(translationKey(paragraphKey))}
-                      </p>
-                    ))}
-                  </section>
                 ))}
-            </div>
+                {section.steps && (
+                  <ol className="list-decimal space-y-3 pl-6 text-sm leading-7">
+                    {section.steps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                )}
+                {section.actions && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b">
+                        <tr>
+                          <th scope="col" className="py-2 pr-4">
+                            {t('button')}
+                          </th>
+                          <th scope="col" className="py-2">
+                            {t('effect')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.actions.map((action) => (
+                          <tr key={action.label} className="border-b">
+                            <th
+                              scope="row"
+                              className="w-1/3 py-3 pr-4 align-top font-medium"
+                            >
+                              {action.label}
+                            </th>
+                            <td className="py-3 leading-7">{action.effect}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {section.warning && (
+                  <aside className="space-y-1 rounded-r-md border-l-2 border-primary bg-muted/40 p-4">
+                    <h4 className="text-sm font-semibold">
+                      {t('manualCaution')}
+                    </h4>
+                    <p className="text-sm leading-7">{section.warning}</p>
+                  </aside>
+                )}
+              </section>
+            ))}
+            {['tasks', 'deliverables'].includes(article.screenshot ?? '') && (
+              <figure className="space-y-3 rounded-lg border p-3">
+                <img
+                  loading="lazy"
+                  className="h-auto w-full rounded-md"
+                  src={withBasePath(
+                    `/guide/${article.screenshot}-${language}.png`,
+                  )}
+                  alt={t(
+                    article.screenshot === 'tasks'
+                      ? 'tasksCaption'
+                      : 'lifecycleCaption',
+                  )}
+                />
+                <figcaption className="text-xs leading-relaxed text-muted-foreground">
+                  {t('captureNotice')}
+                </figcaption>
+              </figure>
+            )}
+            {article.related && (
+              <nav
+                aria-label={t('manualRelated')}
+                className="space-y-2 border-t pt-4"
+              >
+                <h3 className="font-semibold">{t('manualRelated')}</h3>
+                <ul className="list-disc space-y-2 pl-5 text-sm">
+                  {article.related.map((id) => {
+                    const item = articles.find(
+                      ({ article: candidate }) => candidate.id === id,
+                    );
+                    return item ? (
+                      <li key={id}>
+                        {articleLink(
+                          id,
+                          item.article.title,
+                          'text-primary hover:underline',
+                        )}
+                      </li>
+                    ) : null;
+                  })}
+                </ul>
+              </nav>
+            )}
+            <nav
+              aria-label={t('manualContents')}
+              className="grid gap-3 border-t pt-4 text-sm sm:grid-cols-2"
+            >
+              <div>
+                {selectedIndex > 0 && (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {t('manualPrevious')}
+                    </p>
+                    {articleLink(
+                      articles[selectedIndex - 1].article.id,
+                      articles[selectedIndex - 1].article.title,
+                      'text-primary hover:underline',
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="sm:text-right">
+                {selectedIndex < articles.length - 1 && (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      {t('manualNext')}
+                    </p>
+                    {articleLink(
+                      articles[selectedIndex + 1].article.id,
+                      articles[selectedIndex + 1].article.title,
+                      'text-primary hover:underline',
+                    )}
+                  </>
+                )}
+              </div>
+            </nav>
           </div>
-        </div>
-      </article>
+        </article>
+      </div>
     </main>
   );
 }

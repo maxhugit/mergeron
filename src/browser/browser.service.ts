@@ -248,6 +248,12 @@ export class BrowserService implements OnModuleDestroy {
     body: Record<string, unknown>,
   ) {
     const current = this.sessions.get(key);
+    if (action === 'keepalive') {
+      if (current) current.touched = Date.now();
+      return { alive: Boolean(current) };
+    }
+    if (action === 'tabs' && body.restoreOnly === true && !current)
+      return { alive: false, tabs: [] };
     if (
       current?.live &&
       !['tabs', 'snapshot', 'dispose'].includes(action) &&
@@ -463,6 +469,7 @@ export class BrowserService implements OnModuleDestroy {
   }
   private async tabs(session: Session) {
     return {
+      alive: true,
       tabs: await Promise.all(
         [...session.tabs].map(async ([id, tab]) => ({
           id,

@@ -178,3 +178,117 @@ it('reports existing-branch refusal without retrying', async () => {
   );
   expect(api).toHaveBeenCalledOnce();
 });
+
+function prApi(existing = false) {
+  api.mockImplementation((_url: string, options?: RequestInit) =>
+    Promise.resolve(
+      options?.method === 'POST'
+        ? {
+            number: 42,
+            url: 'https://github.com/example/demo/pull/42',
+            existing,
+          }
+        : {
+            supported: true,
+            items: [
+              { name: 'main', revision: 'a'.repeat(40) },
+              { name: 'dev', revision: 'b'.repeat(40) },
+            ],
+          },
+    ),
+  );
+}
+async function openPr() {
+  await menu();
+  fireEvent.click(
+    screen.getByRole('menuitem', { name: 'Créer une pull request' }),
+  );
+  await screen.findByRole('option', { name: 'main' });
+}
+it('offers remote PR creation without a local copy or a push from the interface', async () => {
+  prApi();
+  fixture({ copy: undefined, snapshot: undefined });
+  await openPr();
+  expect(screen.getByRole('dialog')).toHaveTextContent('Aucune copie locale');
+  expect(screen.queryByRole('option', { name: 'dev' })).toBeNull();
+  expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+    false,
+  );
+  fireEvent.change(screen.getByLabelText('Branche cible'), {
+    target: { value: 'main' },
+  });
+  fireEvent.click(screen.getByLabelText('Créer en brouillon'));
+  const confirm = screen.getByRole('button', {
+    name: 'Créer une pull request',
+  });
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
+  await waitFor(() =>
+    expect(
+      api.mock.calls.filter(([, options]) => options?.method === 'POST'),
+    ).toHaveLength(1),
+  );
+  const [url, options] = api.mock.calls.find(
+    ([, options]) => options?.method === 'POST',
+  ) as [string, { body: string }];
+  expect(url).toBe('/p/git/connections/git/pull-requests');
+  const body = JSON.parse(options.body) as Record<string, unknown>;
+  expect(body).toEqual({
+    confirmation: 'CREATE_REMOTE_PULL_REQUEST',
+    branch: 'dev',
+    head: 'b'.repeat(40),
+    address: 'https://github.com/example/demo.git',
+    base: 'main',
+    title: 'dev',
+    description: '',
+    draft: true,
+  });
+  expect(
+    api.mock.calls.some(([path]) => String(path).includes('/copies/')),
+  ).toBe(false);
+  expect(
+    await screen.findByRole('link', { name: /#42 créée/ }),
+  ).toHaveAttribute('href', 'https://github.com/example/demo/pull/42');
+});
+it('links an existing PR and cancels without submitting', async () => {
+  prApi(true);
+  fixture();
+  await openPr();
+  fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+  expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+    false,
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await openPr();
+  fireEvent.change(screen.getByLabelText('Branche cible'), {
+    target: { value: 'main' },
+  });
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Créer une pull request' }),
+  );
+  expect(
+    await screen.findByRole('link', { name: /#42 déjà ouverte/ }),
+  ).toBeVisible();
+});
+it('blocks PR confirmation if the remote head changed while reviewing', async () => {
+  prApi();
+  const view = fixture();
+  await openPr();
+  fireEvent.change(screen.getByLabelText('Branche cible'), {
+    target: { value: 'main' },
+  });
+  view.rerender(view.element({ ...view.props, revision: 'e'.repeat(40) }));
+  expect(
+    screen.getByRole('button', { name: 'Créer une pull request' }),
+  ).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'La branche distante a changé',
+  );
+});
+it('keeps PR creation disabled for a read-only connection', async () => {
+  fixture({ canWrite: false });
+  await menu();
+  expect(
+    screen.getByRole('menuitem', { name: 'Créer une pull request' }),
+  ).toHaveAttribute('aria-disabled', 'true');
+});

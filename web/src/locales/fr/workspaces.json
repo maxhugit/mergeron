@@ -1,4 +1,6 @@
 {
+  "gitCreateRemotePrHelp": "Crée une pull request à partir de cette branche déjà publiée sur GitHub, quel que soit l’outil utilisé pour la publier. Aucune copie locale ni nouveau push ne sont nécessaires. Aucun merge ni déploiement n’est lancé.",
+  "gitRemotePrStale": "La branche distante a changé. Actualisez la liste et rouvrez cette fenêtre avant de créer la pull request.",
   "gitRetrieveDestination": "Copie locale : {{name}}",
   "gitRemoteBranchMenu": "Actions de la branche distante {{name}}",
   "gitRetrieveBranch": "Récupérer cette branche en local…",

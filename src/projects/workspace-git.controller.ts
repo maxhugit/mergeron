@@ -90,6 +90,18 @@ export class WorkspaceGitController {
     return this.actions.push(projectId, copyId, body);
   }
 
+  @Post([
+    'connections/:resourceId/pull-requests',
+    'resources/:resourceId/pull-requests',
+  ])
+  createRemotePullRequest(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.createRemotePullRequest(projectId, resourceId, body);
+  }
+
   @Post('copies/:copyId/pull-requests')
   createPullRequest(
     @Param('projectId') projectId: string,

@@ -183,8 +183,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   });
   const desktop = useBreakpoint() === 'desktop';
   const [mobileTree, setMobileTree] = useState(false);
-  const [browserDocked, setBrowserDocked] = useState(false);
-  const [lastBrowserId, setLastBrowserId] = useState('');
+  const browserDocked = workspace.browserDocked ?? false;
+  const lastBrowserId = workspace.lastBrowserId;
+  const setBrowserLayout = useWorkspaceStore((state) => state.setBrowserLayout);
   const browserTabs = session.isAdministrator
     ? workspace.tabs.filter((tab) => tab.kind === 'browser')
     : [];
@@ -326,7 +327,8 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           running={running}
           pending={pending}
           onSelect={(id) => {
-            if (browserTabs.some((tab) => tab.id === id)) setLastBrowserId(id);
+            if (browserTabs.some((tab) => tab.id === id))
+              setBrowserLayout(context, { lastBrowserId: id });
             select(context, id);
           }}
           onClose={requestClose}
@@ -346,12 +348,10 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
             session.isAdministrator
               ? () => {
                   useWorkspaceStore.getState().openBrowser(context);
-                  setLastBrowserId(
-                    useWorkspaceStore.getState().contexts[context].activeId,
-                  );
-                  setBrowserDocked(
-                    project?.browserSettings?.desktopSplit ?? true,
-                  );
+                  setBrowserLayout(context, {
+                    browserDocked:
+                      project?.browserSettings?.desktopSplit ?? true,
+                  });
                   setMobileTree(false);
                 }
               : undefined
@@ -413,6 +413,12 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                 <BrowserSidebar
                   threadId={threadId}
                   instanceId={tab.id}
+                  wasOpened={tab.opened ?? false}
+                  onSessionChange={(opened) =>
+                    useWorkspaceStore
+                      .getState()
+                      .setBrowserOpened(context, tab.id, opened)
+                  }
                   homeUrl={
                     project?.browserSettings?.homeUrl ??
                     'https://www.google.com'
@@ -422,7 +428,10 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                   docked={splitBrowser}
                   onToggleDocked={
                     desktop
-                      ? () => setBrowserDocked((value) => !value)
+                      ? () =>
+                          setBrowserLayout(context, {
+                            browserDocked: !browserDocked,
+                          })
                       : undefined
                   }
                   onClose={() => requestClose(tab)}

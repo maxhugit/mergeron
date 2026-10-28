@@ -1,0 +1,1565 @@
+[
+  {
+    "id": "start",
+    "title": "Découvrir et démarrer",
+    "articles": [
+      {
+        "id": "overview",
+        "title": "Comprendre la plateforme",
+        "summary": "Distinguer projet, conversation, agent, tâche et livrable avant de commencer.",
+        "keywords": ["accueil", "organisation", "différences", "guide"],
+        "sections": [
+          {
+            "title": "Les éléments de votre travail",
+            "paragraphs": [
+              "Un projet rassemble ses participants, ses emplacements de fichiers, ses connexions, ses connaissances et ses ressources. L’accueil permet de retrouver vos projets et les éléments qui demandent votre attention.",
+              "Une conversation simple sert à échanger avec un modèle sans exécuter d’outils. Un agent de travail utilise une conversation Codex et peut agir sur des fichiers et outils selon ses autorisations. Une tâche organise le travail ; un livrable rassemble les documents et leur validation."
+            ]
+          },
+          {
+            "title": "Choisir le bon point d’entrée",
+            "actions": [
+              {
+                "label": "+ à côté de Projets",
+                "effect": "Créer un projet ou importer une archive de projet."
+              },
+              {
+                "label": "+ du projet",
+                "effect": "Ajouter une conversation, un agent ou une ressource au projet concerné."
+              },
+              {
+                "label": "Nom du projet",
+                "effect": "Ouvrir ses informations et son administration. Les fonctions visibles dépendent de vos droits."
+              }
+            ],
+            "warning": "Une réponse IA, une tâche terminée et un document approuvé ne sont pas équivalents. La validation du résultat reste une décision humaine."
+          }
+        ],
+        "related": [
+          "first-project",
+          "simple-chat",
+          "agent-create",
+          "deliverable-lifecycle"
+        ]
+      },
+      {
+        "id": "first-project",
+        "title": "Créer son premier projet",
+        "summary": "Préparer un projet utilisable avant de confier du travail à un agent.",
+        "keywords": ["création", "démarrer", "nouveau", "configuration"],
+        "sections": [
+          {
+            "title": "Parcours de démarrage",
+            "steps": [
+              "Cliquez sur + à côté de Projets et donnez un nom explicite au projet.",
+              "Ouvrez le projet, complétez ses informations et ajoutez les participants autorisés.",
+              "Dans Emplacements et connexions, vérifiez l’espace de travail principal et ajoutez les dossiers ou connexions nécessaires.",
+              "Renseignez les connaissances utiles et sélectionnez les intégrations adaptées au projet.",
+              "Créez une conversation simple pour une question, un agent pour une action, ou un gestionnaire pour organiser tâches et livrables."
+            ]
+          },
+          {
+            "title": "Avant le premier envoi",
+            "paragraphs": [
+              "Pour un agent, vérifiez le dossier de travail actif, le modèle et les permissions. Décrivez le résultat attendu, les fichiers concernés et les vérifications à effectuer.",
+              "Un projet peut posséder plusieurs gestionnaires de tâches, mais un seul gestionnaire de livrables et un seul gestionnaire d’automatisations. Choisir à nouveau un gestionnaire unique existant ouvre celui-ci."
+            ],
+            "warning": "Les emplacements sont ceux du serveur. Un chemin présent sur votre ordinateur n’est pas automatiquement disponible pour l’agent."
+          }
+        ],
+        "related": ["project-people", "locations", "agent-composer"]
+      },
+      {
+        "id": "desktop",
+        "title": "Navigation, compte et application installée",
+        "summary": "Se repérer dans les panneaux, installer l’application et actualiser son interface.",
+        "keywords": [
+          "PWA",
+          "Edge",
+          "Windows",
+          "rafraîchir",
+          "sidebar",
+          "thème"
+        ],
+        "sections": [
+          {
+            "title": "Se déplacer dans l’application",
+            "paragraphs": [
+              "La barre latérale donne accès aux projets et à leurs ressources. Le bouton de réduction libère de la place sans supprimer les éléments. Les onglets d’un agent permettent de passer entre conversation et outils ouverts.",
+              "Le menu du compte contient les préférences personnelles et la déconnexion. L’administration serveur est distincte des paramètres d’un projet."
+            ]
+          },
+          {
+            "title": "Installer et actualiser",
+            "steps": [
+              "Après connexion, ouvrez Mon compte → Installer l’application, ou le menu Applications d’Edge si le navigateur le propose.",
+              "L’application installée conserve la barre de titre native pour déplacer la fenêtre et accéder à réduire, agrandir et fermer.",
+              "Après une mise à jour, utilisez l’icône d’actualisation entre Paramètres et Compte pour recharger l’application. Sauvegardez les brouillons importants auparavant."
+            ],
+            "warning": "L’installation dépend du navigateur et des règles de votre poste. Ce n’est pas un mode hors ligne pour les API, conversations et fichiers ; un rechargement n’installe pas une mise à jour du serveur."
+          }
+        ],
+        "related": ["server-update", "simple-messages"]
+      }
+    ]
+  },
+  {
+    "id": "projects",
+    "title": "Projets et organisation",
+    "articles": [
+      {
+        "id": "project-people",
+        "title": "Participants, chef de projet et groupes",
+        "summary": "Organiser les personnes sans confondre affectation métier et droit d’accès.",
+        "keywords": [
+          "droits",
+          "participants",
+          "responsable",
+          "groupes",
+          "chef"
+        ],
+        "sections": [
+          {
+            "title": "Accès et organisation",
+            "paragraphs": [
+              "Un utilisateur standard actif accède aux projets dont il est participant ; les administrateurs conservent un accès global. Les ressources et documents héritent du périmètre du projet et de leurs protections propres.",
+              "Le chef de projet est choisi parmi les participants actifs. Ce titre est informatif et ne donne pas de droits supplémentaires. Les groupes sont propres au projet, peuvent se recouper et servent à organiser les personnes : ils ne constituent pas des autorisations supplémentaires."
+            ]
+          },
+          {
+            "title": "Modifier les participants",
+            "steps": [
+              "Avec un compte administrateur, ouvrez les participants du projet.",
+              "Ajoutez les personnes actives, désignez éventuellement le chef et créez les groupes utiles.",
+              "Après un retrait, vérifiez les responsabilités des tâches et livrables : leurs anciennes affectations restent visibles à titre historique."
+            ],
+            "warning": "Retirer une personne la retire aussi des groupes concernés. Un lien vers un document ou une affectation ne contourne jamais les contrôles d’accès."
+          }
+        ],
+        "related": ["admin-people", "impersonation"]
+      },
+      {
+        "id": "locations",
+        "title": "Espaces de travail, dossiers et connexions",
+        "summary": "Distinguer fichiers de travail, espace système, dossiers associés et services distants.",
+        "keywords": [
+          "workspace",
+          "dossier",
+          "chemin",
+          "emplacement",
+          "système",
+          "SSH",
+          "FTP"
+        ],
+        "sections": [
+          {
+            "title": "Les types d’emplacements",
+            "paragraphs": [
+              "L’espace de travail principal permanent contient les documents, sources et livrables du projet. Les dossiers locaux associés conservent leurs chemins sur le serveur. Une connexion externe Git, SSH/SFTP ou FTP/FTPS décrit une destination distante ; ce n’est pas une copie locale.",
+              "L’espace système est séparé et réservé aux administrateurs, en consultation. Il conserve les historiques et données techniques internes. Il ne peut pas devenir le dossier d’un agent ni être modifié par l’explorateur générique."
+            ]
+          },
+          {
+            "title": "Choisir où travailler",
+            "steps": [
+              "Dans Emplacements et connexions, utilisez l’ajout d’un dossier local ou celui d’une connexion externe selon votre besoin.",
+              "Pour agir sur une ressource distante, préparez une copie locale lorsque cette opération est proposée.",
+              "Dans l’agent, sélectionnez explicitement le dossier de travail autorisé. Parcourir un dossier dans l’explorateur ne le rend pas actif."
+            ],
+            "warning": "Un alias est un nom d’affichage, pas un déplacement. Un emplacement absent, désactivé ou incohérent bloque le travail ; l’application ne doit pas choisir silencieusement un autre dossier."
+          }
+        ],
+        "related": ["file-explorer", "transfers", "agent-create", "git-local"]
+      },
+      {
+        "id": "project-archive",
+        "title": "Exporter et importer un projet",
+        "summary": "Transférer un projet en ZIP et comprendre ce qui est restauré ou désactivé.",
+        "keywords": [
+          "archive",
+          "ZIP",
+          "export",
+          "import",
+          "migration",
+          "copie"
+        ],
+        "sections": [
+          {
+            "title": "Exporter puis importer",
+            "steps": [
+              "En administrateur, ouvrez le menu du projet et choisissez Exporter tout le projet en ZIP ; relisez les avertissements puis confirmez.",
+              "Sur la destination, utilisez + dans Projets puis Importer un projet depuis un ZIP.",
+              "Envoyez l’archive et laissez l’analyse vérifier contenu, empreintes et compatibilité.",
+              "Sélectionnez fichiers et dossiers, agents et conversations, ou activité métier complète. Les catégories dépendantes sont incluses automatiquement.",
+              "Vérifiez le nom et confirmez : l’import crée un nouveau projet, sans fusionner ni remplacer un projet existant."
+            ]
+          },
+          {
+            "title": "Sécurité et limites",
+            "paragraphs": [
+              "Les connexions externes, automatisations et objectifs actifs sont neutralisés à l’import ; aucun agent ne démarre automatiquement. Les contacts importés ne deviennent pas automatiquement des comptes actifs ou administrateurs.",
+              "Les mots de passe et sessions de l’installation ne sont pas transportés, mais les textes et fichiers peuvent eux-mêmes contenir des secrets. Les serveurs distants ne sont pas parcourus automatiquement : exportez une copie locale pour emporter leurs fichiers."
+            ],
+            "warning": "Le ZIP n’est pas chiffré et ne remplace pas une sauvegarde complète du serveur. Importer deux fois la même archive crée deux projets indépendants."
+          }
+        ],
+        "related": ["locations", "backups", "project-people"]
+      }
+    ]
+  },
+  {
+    "id": "conversations",
+    "title": "Conversations simples",
+    "articles": [
+      {
+        "id": "simple-chat",
+        "title": "Créer une conversation simple",
+        "summary": "Échanger avec un modèle sans lancer un agent de travail ni des commandes serveur.",
+        "keywords": ["chat simple", "modèle", "discussion", "API", "OpenAI"],
+        "sections": [
+          {
+            "title": "À quoi sert une conversation simple ?",
+            "paragraphs": [
+              "Utilisez-la pour reformuler, traduire, expliquer ou préparer un texte. Elle utilise le fournisseur et le modèle du chat simple, configurés par l’administration, et non la session de travail du CLI Codex.",
+              "Une réponse n’exécute pas les outils d’un agent, ne crée pas une branche Git et ne valide pas un livrable. L’accès d’un agent aux fichiers de son dossier ne doit pas être supposé pour le chat simple."
+            ]
+          },
+          {
+            "title": "Démarrer un échange",
+            "steps": [
+              "Ajoutez une conversation simple depuis le + du projet puis ouvrez-la.",
+              "Saisissez une demande avec le contexte nécessaire et envoyez-la.",
+              "Complétez ou corrigez votre demande au fil de l’échange, puis relisez la réponse avant utilisation."
+            ],
+            "warning": "Une authentification Codex fonctionnelle ne suffit pas à configurer le chat simple : son accès API doit être configuré séparément. Ne collez pas de secrets dans le texte de la demande."
+          }
+        ],
+        "related": ["simple-messages", "response-copy", "admin-chat"]
+      },
+      {
+        "id": "simple-messages",
+        "title": "Rédiger, envoyer et lire les messages",
+        "summary": "Préparer une demande et distinguer génération, interruption et résultat conservé.",
+        "keywords": [
+          "message",
+          "brouillon",
+          "envoyer",
+          "arrêter",
+          "historique",
+          "scroll"
+        ],
+        "sections": [
+          {
+            "title": "Pendant l’échange",
+            "actions": [
+              {
+                "label": "Champ de message",
+                "effect": "Prépare un brouillon. Donnez un objectif concret, les contraintes, les sources et le format de sortie attendu."
+              },
+              {
+                "label": "Envoyer",
+                "effect": "Soumet le message et démarre la génération. Attendez le résultat ou utilisez l’arrêt lorsque cette commande est proposée."
+              },
+              {
+                "label": "Arrêter",
+                "effect": "Interrompt la génération en cours ; ce n’est pas un effacement des messages déjà enregistrés."
+              }
+            ]
+          },
+          {
+            "title": "Relire le résultat",
+            "paragraphs": [
+              "La conversation se parcourt verticalement. Les tableaux et blocs de code peuvent avoir leur propre zone de lecture : vérifiez leur contenu complet avant de le copier.",
+              "Une erreur réseau ou fournisseur ne signifie pas nécessairement que toute opération a été annulée. Consultez l’historique avant de renvoyer une demande afin d’éviter les doublons."
+            ],
+            "warning": "L’historique fournit du contexte au modèle, pas une garantie d’exactitude. Vérifiez les faits et les contenus destinés à être publiés."
+          }
+        ],
+        "related": ["simple-chat", "response-copy"]
+      },
+      {
+        "id": "response-copy",
+        "title": "Copier une réponse avec sa mise en forme",
+        "summary": "Récupérer une réponse dans un traitement de texte ou un autre éditeur.",
+        "keywords": [
+          "copier",
+          "presse-papiers",
+          "HTML",
+          "Word",
+          "tableau",
+          "style"
+        ],
+        "sections": [
+          {
+            "title": "Utiliser l’icône de copie",
+            "steps": [
+              "Attendez qu’une réponse non vide soit terminée.",
+              "Survolez la réponse ou atteignez ses commandes au clavier. L’icône Copier apparaît dans son coin supérieur droit ; sur un écran tactile elle reste accessible.",
+              "Cliquez sur l’icône puis collez dans votre logiciel de destination. L’infobulle indique Copier avec mise en forme."
+            ]
+          },
+          {
+            "title": "Ce qui est copié",
+            "paragraphs": [
+              "La copie propose du HTML et du texte brut. Les éditeurs compatibles peuvent garder titres, listes, tableaux, liens et blocs de code ; un champ texte utilise la version texte. Le rendu dépend du logiciel de destination.",
+              "Seul le corps de la réponse est copié, pas les commandes de l’interface ni un journal technique extérieur à celle-ci. La copie reste locale au navigateur et fonctionne aussi pour les réponses des agents."
+            ],
+            "warning": "Un refus du presse-papiers est signalé. Ne supposez pas une copie réussie si une erreur apparaît ; vérifiez également les informations sensibles avant de coller ailleurs."
+          }
+        ],
+        "related": ["simple-chat", "agent-history"]
+      }
+    ]
+  },
+  {
+    "id": "agents",
+    "title": "Agents de travail",
+    "articles": [
+      {
+        "id": "agent-create",
+        "title": "Créer et affecter un agent",
+        "summary": "Préparer une conversation de travail autonome ou liée à une tâche ou un livrable.",
+        "keywords": [
+          "Codex",
+          "nouvel agent",
+          "affectation",
+          "dossier actif",
+          "existant"
+        ],
+        "sections": [
+          {
+            "title": "Créer une session de travail",
+            "steps": [
+              "Créez un agent depuis le projet, une sous-tâche exécutable ou Confier à un agent sur un livrable.",
+              "Vérifiez son projet et son dossier de travail local. Une connexion distante seule n’est pas un dossier d’exécution.",
+              "Renseignez l’objectif, les limites, les fichiers attendus et les critères de réussite, puis envoyez un premier message."
+            ]
+          },
+          {
+            "title": "Liens et réutilisation",
+            "paragraphs": [
+              "Un agent peut travailler directement pour un livrable sans sous-tâche obligatoire. Si une tâche principale est liée au livrable, une sous-tâche peut être choisie explicitement : l’agent conserve alors les deux liens.",
+              "Lorsque le dialogue propose un agent existant, choisissez une session disponible du même projet et non déjà affectée à une autre tâche ou un autre livrable. Sa réutilisation ne signifie pas l’effacement de son historique."
+            ],
+            "warning": "Les commandes d’exécution peuvent être réservées aux administrateurs. L’accès à un projet ou la création d’une fiche ne garantit pas le droit de lancer des outils."
+          }
+        ],
+        "related": [
+          "agent-composer",
+          "task-execution",
+          "deliverable-agent",
+          "locations"
+        ]
+      },
+      {
+        "id": "agent-composer",
+        "title": "Modèle, raisonnement, permissions et capacités",
+        "summary": "Comprendre les réglages situés sous le champ de message de l’agent.",
+        "keywords": [
+          "effort",
+          "read-only",
+          "approbation",
+          "capacités",
+          "compact",
+          "modèle",
+          "plan"
+        ],
+        "sections": [
+          {
+            "title": "Choisir les réglages avant l’envoi",
+            "actions": [
+              {
+                "label": "Modèle et raisonnement",
+                "effect": "Choisir un modèle disponible et son effort de raisonnement. Un effort plus élevé n’est pas une autorisation supplémentaire et peut augmenter durée et consommation."
+              },
+              {
+                "label": "Permissions et approbations",
+                "effect": "Définir les possibilités d’exécution et les demandes de confirmation. La lecture seule d’un emplacement et les protections serveur continuent de s’appliquer."
+              },
+              {
+                "label": "Capacités",
+                "effect": "Consulter les options de la session, les intégrations disponibles et l’affichage des détails techniques."
+              }
+            ]
+          },
+          {
+            "title": "Mode compact et commandes rapides",
+            "paragraphs": [
+              "Quand le champ est étroit, certains réglages sont représentés seulement par des icônes. Leur survol ou leur nom accessible permet de retrouver leur fonction ; cela ne modifie pas leur valeur.",
+              "Saisir / au début du brouillon ouvre les commandes proposées par cette version : plan, objectif, revue, condensation ou retour. Relisez le dialogue de la commande avant de confirmer. Ces commandes ne remplacent pas les réglages du modèle ou des connecteurs."
+            ],
+            "warning": "Ne choisissez pas un accès complet simplement pour masquer une erreur de dossier. Corrigez d’abord l’emplacement ou les droits concernés."
+          }
+        ],
+        "related": ["agent-approvals", "agent-history", "integrations"]
+      },
+      {
+        "id": "agent-approvals",
+        "title": "Approbations, questions et arrêt du travail",
+        "summary": "Répondre aux demandes de l’agent sans confondre interruption et annulation.",
+        "keywords": [
+          "autorisation",
+          "confirmation",
+          "bloqué",
+          "question",
+          "arrêter",
+          "sécurité"
+        ],
+        "sections": [
+          {
+            "title": "Quand l’agent attend votre décision",
+            "steps": [
+              "Lisez l’action proposée, son dossier, les fichiers ou services visés et l’effet attendu.",
+              "Autorisez uniquement ce qui correspond à votre demande, ou refusez et précisez une autre approche.",
+              "Répondez aux questions de clarification dans l’interface prévue pour permettre la reprise du travail.",
+              "Utilisez Arrêter si le travail doit cesser, puis contrôlez les modifications et opérations déjà réalisées."
+            ]
+          },
+          {
+            "title": "Ce que les permissions ne font pas",
+            "paragraphs": [
+              "Une consigne écrite dans le chat n’est pas une barrière technique. Les restrictions du projet, des dossiers et des intégrations sont contrôlées indépendamment de ce que dit le modèle.",
+              "Les détails techniques peuvent être repliés, mais les erreurs connues et décisions en attente restent visibles. Une attente de confirmation n’est pas nécessairement une panne."
+            ],
+            "warning": "Arrêter un agent, retirer un accès ou quitter une session n’annule pas les effets déjà acceptés sur les fichiers ou services externes."
+          }
+        ],
+        "related": ["agent-composer", "agent-history", "impersonation"]
+      },
+      {
+        "id": "agent-history",
+        "title": "Historique, détails techniques et branches de conversation",
+        "summary": "Relire un travail, changer le niveau de détail et explorer une autre version de l’échange.",
+        "keywords": [
+          "branche de conversation",
+          "fork",
+          "éditer",
+          "technique",
+          "résumé",
+          "historique"
+        ],
+        "sections": [
+          {
+            "title": "Lire ce que l’agent a réellement fait",
+            "actions": [
+              {
+                "label": "Sans détails techniques",
+                "effect": "Regroupe l’activité technique derrière une ligne dépliable sans supprimer les réponses."
+              },
+              {
+                "label": "Détails repliés",
+                "effect": "Affiche une ligne par activité, consultable pour lire commandes, logs et changements."
+              },
+              {
+                "label": "Tout afficher",
+                "effect": "Développe l’activité technique. Ce choix est visuel et ne change ni le modèle ni ses permissions."
+              }
+            ]
+          },
+          {
+            "title": "Branches et conservation",
+            "paragraphs": [
+              "Les branches de conversation permettent de reprendre un échange depuis un point antérieur. Modifier un ancien message peut créer une autre version plutôt que réécrire l’historique d’origine ; utilisez le sélecteur pour vous repérer.",
+              "Une branche de conversation n’est pas une branche Git : les fichiers ne sont pas automatiquement copiés ni restaurés en changeant de version de l’échange. Conservez les documents utiles avant de supprimer ou valider une session de travail liée à une sous-tâche."
+            ],
+            "warning": "La suppression d’une conversation ou d’une branche doit être relue attentivement, notamment lorsqu’elle possède des dépendances. Il n’existe pas de fusion automatique des raisonnements de deux conversations."
+          }
+        ],
+        "related": ["response-copy", "git-branches", "task-execution"]
+      },
+      {
+        "id": "agent-goals",
+        "title": "Objectifs, mode Plan, revue et condensation",
+        "summary": "Utiliser les commandes rapides pour piloter un travail durable sans élargir les permissions.",
+        "keywords": [
+          "objectif",
+          "/goal",
+          "/plan",
+          "/review",
+          "/compact",
+          "pause",
+          "budget",
+          "consommation"
+        ],
+        "sections": [
+          {
+            "title": "Les commandes de travail",
+            "actions": [
+              {
+                "label": "/goal",
+                "effect": "Ouvre la saisie d’un objectif, limité à 4 000 caractères. Le confirmer crée un objectif suivi au-delà d’un seul tour, visible au-dessus du champ de message."
+              },
+              {
+                "label": "/plan",
+                "effect": "Bascule le mode de collaboration Plan. Ce réglage n’est pas le générateur de planning du gestionnaire de tâches."
+              },
+              {
+                "label": "/review",
+                "effect": "Ouvre une demande de revue à préciser et confirmer. Une revue n’est pas une approbation humaine de livrable."
+              },
+              {
+                "label": "/compact",
+                "effect": "Demande la condensation d’une conversation longue. Relisez le contexte important avant de poursuivre ; ce n’est pas une sauvegarde des fichiers."
+              }
+            ]
+          },
+          {
+            "title": "Suivre un objectif",
+            "steps": [
+              "Définissez un résultat vérifiable et les contraintes du travail.",
+              "Consultez la ligne d’objectif pour voir son état et utiliser les commandes de modification, pause, reprise ou retrait.",
+              "En cas de limite d’usage ou de budget, consultez l’état annoncé plutôt que supposer que le travail est terminé."
+            ],
+            "warning": "Mettre l’objectif en pause empêche les continuations futures, mais n’interrompt pas le tour déjà en cours. Utilisez aussi Arrêter si ce tour doit cesser. L’objectif ne dispense pas des approbations nécessaires."
+          }
+        ],
+        "related": ["agent-composer", "agent-approvals", "task-planning"]
+      },
+      {
+        "id": "voice-dictation",
+        "title": "Dicter une demande au microphone",
+        "summary": "Transcrire une consigne dans le brouillon puis la relire avant de l’envoyer.",
+        "keywords": ["microphone", "voix", "dictée", "audio", "transcription"],
+        "sections": [
+          {
+            "title": "Dicter dans les écrans compatibles",
+            "steps": [
+              "Cliquez sur l’icône de microphone d’une conversation simple, du champ d’un agent ou d’un formulaire qui la propose.",
+              "Autorisez le microphone dans votre navigateur uniquement si vous souhaitez enregistrer, puis dictez votre demande.",
+              "Cliquez sur Arrêter l’enregistrement ; l’enregistrement est aussi borné à deux minutes.",
+              "Attendez la transcription, corrigez les noms, chiffres et termes techniques dans le brouillon puis envoyez explicitement le texte."
+            ]
+          },
+          {
+            "title": "Prérequis et confidentialité",
+            "paragraphs": [
+              "La dictée nécessite un navigateur compatible avec l’enregistrement audio, une connexion sécurisée et un accès microphone autorisé. Un refus de permission ou une transcription en cours peut rendre la commande indisponible.",
+              "L’audio est transmis au service de transcription configuré par l’installation, via le circuit API du chat simple. Ce n’est pas une conversation vocale continue avec l’agent ni le son du navigateur distant."
+            ],
+            "warning": "Ne dictez pas de secrets ou d’informations sensibles sans tenir compte du service destinataire. Un texte transcrit peut comporter des erreurs : l’ajout au brouillon ne vaut pas validation de son contenu."
+          }
+        ],
+        "related": ["simple-messages", "agent-composer", "admin-chat"]
+      },
+      {
+        "id": "agent-knowledge",
+        "title": "Connaissances, mémoire et instructions du projet",
+        "summary": "Donner un contexte durable aux agents et valider les propositions de mémoire.",
+        "keywords": [
+          "mémoire",
+          "connaissances",
+          "AGENTS.md",
+          "instructions",
+          "MCP",
+          "contexte"
+        ],
+        "sections": [
+          {
+            "title": "Préparer le contexte partagé",
+            "paragraphs": [
+              "Utilisez les connaissances du projet pour les faits durables, le vocabulaire, les contraintes et les décisions validées. Indiquez les sources et distinguez les faits des hypothèses.",
+              "Le fichier AGENTS.md dans un dossier de travail contient les consignes destinées aux agents. Les documents complémentaires doivent être désignés et lus selon ces consignes ; les placer dans un dossier ne garantit pas leur lecture automatique."
+            ]
+          },
+          {
+            "title": "Accepter une proposition",
+            "steps": [
+              "Lisez le texte de connaissance proposé par l’agent.",
+              "Vérifiez qu’il est utile aux prochains travaux, sourcé et exempt de secret.",
+              "Acceptez explicitement la proposition pour l’intégrer aux connaissances approuvées, ou refusez-la et demandez une correction."
+            ],
+            "warning": "La mémoire ne remplace ni les autorisations ni la vérification des faits. Un chat simple ne doit pas être supposé lire automatiquement les mêmes fichiers qu’un agent de travail."
+          }
+        ],
+        "related": ["agent-create", "integrations", "locations"]
+      }
+    ]
+  },
+  {
+    "id": "tasks",
+    "title": "Gestion des tâches",
+    "articles": [
+      {
+        "id": "task-board",
+        "title": "Créer des tâches et utiliser le tableau",
+        "summary": "Organiser les cartes, les sous-tâches, les responsables et les statuts.",
+        "keywords": [
+          "tableau",
+          "priorité",
+          "labels",
+          "colonnes",
+          "avancement",
+          "responsable"
+        ],
+        "screenshot": "tasks",
+        "sections": [
+          {
+            "title": "Renseigner une tâche",
+            "steps": [
+              "Ouvrez un gestionnaire puis Nouvelle tâche. Saisissez titre, description, priorité, responsable, dates et critères de validation.",
+              "Choisissez un dossier autorisé du projet et enregistrez la fiche.",
+              "Ajoutez les sous-tâches nécessaires : elles héritent de la priorité et du dossier du parent et ne possèdent pas de sous-niveau supplémentaire.",
+              "Dans Tableau, recherchez les titres, descriptions ou labels, filtrez les priorités et déplacez les cartes entre colonnes."
+            ]
+          },
+          {
+            "title": "Statuts et avancement",
+            "paragraphs": [
+              "Les colonnes principales sont personnalisables, sauf Actions non assignées. Supprimer une colonne replace ses tâches dans cette colonne système.",
+              "Pour un parent avec enfants, l’estimation est la somme des estimations et l’avancement la moyenne non pondérée des pourcentages. Deux enfants à 100 % et 0 % donnent donc 50 %, même si leurs charges diffèrent."
+            ],
+            "warning": "Un parent ne peut pas être clôturé tant qu’un enfant n’est ni terminé ni annulé. La clôture des enfants ne déplace pas automatiquement le parent dans une colonne finale."
+          }
+        ],
+        "related": ["task-planning", "task-execution"]
+      },
+      {
+        "id": "task-planning",
+        "title": "Planning, dépendances et assistance IA",
+        "summary": "Planifier les dates et examiner les propositions sans lancer automatiquement le travail.",
+        "keywords": [
+          "Gantt",
+          "planning",
+          "conseils",
+          "IA",
+          "dépendances",
+          "découper",
+          "replanifier"
+        ],
+        "sections": [
+          {
+            "title": "Utiliser les vues",
+            "actions": [
+              {
+                "label": "Planning",
+                "effect": "Affiche les tâches datées dans un Gantt, avec échelles, dates et dépendances fin-vers-début."
+              },
+              {
+                "label": "Conseils",
+                "effect": "Analyse la situation et propose du travail selon le temps disponible. Les recommandations ne lancent pas les agents."
+              },
+              {
+                "label": "Journal",
+                "effect": "Montre les changements enregistrés, dont les valeurs avant/après lorsqu’elles sont disponibles."
+              }
+            ]
+          },
+          {
+            "title": "Planifier avec l’IA",
+            "steps": [
+              "Décrivez le résultat attendu pour générer un plan de tâches principales, ou sélectionnez une tâche à découper.",
+              "Relisez titres, charges, modes d’exécution et critères proposés avant application.",
+              "Pour une replanification, examinez les tâches retenues, dates et dépendances puis appliquez seulement les propositions utiles."
+            ],
+            "warning": "Ces fonctions utilisent le modèle et l’accès API du chat simple. Les dépendances restent entre tâches principales d’un même tableau, sans cycle ; ce n’est pas un ordonnanceur automatique. Une application partiellement échouée peut laisser des changements déjà enregistrés."
+          }
+        ],
+        "related": ["task-board", "admin-chat"]
+      },
+      {
+        "id": "task-execution",
+        "title": "Exécuter une sous-tâche et valider son résultat",
+        "summary": "Suivre un agent affecté et comprendre les effets de Valider et terminer.",
+        "keywords": [
+          "sous-tâche",
+          "exécuter",
+          "agent",
+          "à valider",
+          "validation",
+          "suppression"
+        ],
+        "sections": [
+          {
+            "title": "Lancer le travail",
+            "steps": [
+              "Enregistrez une sous-tâche en mode agent avec une description et des critères suffisants.",
+              "Utilisez l’action d’exécution autorisée : la conversation de travail est liée à la sous-tâche et s’ouvre pour suivre l’agent.",
+              "Répondez aux approbations et consultez les fichiers produits. Un agent actif, en attente et inactif ne représente pas le même état.",
+              "Quand la sous-tâche est à valider, vérifiez le résultat puis utilisez Valider et terminer si vous l’approuvez."
+            ]
+          },
+          {
+            "title": "Avant de valider ou supprimer",
+            "paragraphs": [
+              "Une session devenue inactive passe en revue ; cela ne garantit pas que le travail est juste. Les critères doivent être vérifiés par une personne.",
+              "La validation d’une sous-tâche avec agent peut supprimer sa conversation liée après contrôle et retirer son lien. La suppression d’une tâche concerne aussi ses enfants et leurs agents associés."
+            ],
+            "warning": "Conservez les éléments utiles et consultez la conversation avant de valider. Une conversation d’exécution n’est pas un historique permanent garanti."
+          }
+        ],
+        "related": ["agent-approvals", "deliverable-agent", "task-board"]
+      }
+    ]
+  },
+  {
+    "id": "deliverables",
+    "title": "Livrables et validation documentaire",
+    "articles": [
+      {
+        "id": "deliverable-overview",
+        "title": "Créer un livrable et organiser ses liens",
+        "summary": "Décrire le résultat attendu et relier la tâche principale qui pilote son suivi.",
+        "keywords": [
+          "fiche",
+          "critères",
+          "responsable",
+          "échéance",
+          "tâche principale",
+          "liens"
+        ],
+        "sections": [
+          {
+            "title": "Préparer une fiche",
+            "steps": [
+              "Ajoutez Gestion des livrables au projet si nécessaire puis créez une fiche.",
+              "Renseignez titre, description et critères de validation, puis enregistrez.",
+              "Dans Tâche principale ou Liens selon l’écran, sélectionnez une tâche principale du même projet ou utilisez la création proposée.",
+              "Vérifiez les informations héritées : responsable, échéance et avancement sont pilotés par la tâche principale."
+            ]
+          },
+          {
+            "title": "Se repérer dans la fiche",
+            "paragraphs": [
+              "Aperçu présente la synthèse ; Documents gère les fichiers et leurs versions ; Validation concerne les demandes et décisions ; Historique conserve les instantanés et transitions. Les liens donnent accès aux tâches et conversations associées.",
+              "Le cycle documentaire, le suivi de production et la validation sont des notions distinctes. Le bandeau de progression est un repère ; les actions se font par Changement de statut."
+            ],
+            "warning": "Créer un livrable ne crée pas automatiquement une tâche cachée ou un agent. Le projet ne possède qu’un gestionnaire de livrables."
+          }
+        ],
+        "related": [
+          "deliverable-versions",
+          "deliverable-lifecycle",
+          "deliverable-agent"
+        ]
+      },
+      {
+        "id": "deliverable-versions",
+        "title": "Ajouter, modifier et restaurer les documents",
+        "summary": "Comprendre le fichier courant, les versions indépendantes et la publication protégée.",
+        "keywords": [
+          "document",
+          "version",
+          "restaurer",
+          "publier",
+          "brouillon",
+          "OnlyOffice"
+        ],
+        "sections": [
+          {
+            "title": "Gérer les fichiers du livrable",
+            "steps": [
+              "Ouvrez Documents puis Ajouter un document ; sélectionnez les fichiers et ajoutez un commentaire si nécessaire.",
+              "Utilisez le menu ⋮ du document pour les actions proposées : aperçu, téléchargement, versions ou retrait.",
+              "Pour reprendre une ancienne version, ouvrez son historique et confirmez la restauration proposée.",
+              "Pour un document travaillé par un agent, contrôlez son brouillon puis utilisez l’enregistrement versionné prévu, plutôt qu’un écrasement du fichier publié."
+            ]
+          },
+          {
+            "title": "Ce qui reste dans l’historique",
+            "paragraphs": [
+              "Chaque document a un identifiant et un historique indépendants. Modifier un fichier ne renumérote pas les autres documents. Restaurer une ancienne version crée une nouvelle version ; l’historique n’est pas réécrit.",
+              "La suppression d’un document est logique et réversible via les actions prévues. Les documents publiés bénéficient de protections qui restent actives pour les agents, même avec des permissions étendues."
+            ],
+            "warning": "Un fichier de code ou un fichier temporaire n’est pas automatiquement un document publié. Un livrable finalisé doit être rouvert avant toute modification documentaire."
+          }
+        ],
+        "related": ["deliverable-lifecycle", "onlyoffice", "deliverable-agent"]
+      },
+      {
+        "id": "document-rename",
+        "title": "Renommer un document sans perdre ses versions",
+        "summary": "Changer le nom d’un document de livrable depuis sa liste ou les actions partagées de l’explorateur de l’agent.",
+        "keywords": [
+          "renommer",
+          "document",
+          "extension",
+          "ancien lien",
+          "historique",
+          "explorateur"
+        ],
+        "sections": [
+          {
+            "title": "Utiliser le renommage documentaire",
+            "steps": [
+              "Repérez le document du livrable et ouvrez son menu contextuel.",
+              "Choisissez Renommer : le dialogue présente le nom actuel du document.",
+              "Saisissez le nouveau nom en conservant la même extension, puis confirmez.",
+              "Vérifiez le nouveau nom dans Documents et l’explorateur. Les vues de fichiers ouvertes sont réconciliées avec le nouveau chemin."
+            ]
+          },
+          {
+            "title": "Identité et historique conservés",
+            "paragraphs": [
+              "Le renommage conserve l’identité documentaire, les versions historiques et les anciens liens. Il passe par la commande du document, et non par un contournement des protections du fichier publié.",
+              "Le serveur vérifie que le nom et la version n’ont pas changé depuis l’ouverture du dialogue. Si une autre personne a modifié le document entre-temps, actualisez la liste avant de recommencer. Dans certains cas, le fichier d’origine est conservé et un avertissement le signale."
+            ],
+            "warning": "Renommer ne convertit pas un format de fichier : gardez l’extension existante. Les restrictions du cycle de vie et les droits continuent de s’appliquer ; ne forcez pas un renommage système pour contourner un refus."
+          }
+        ],
+        "related": [
+          "deliverable-versions",
+          "file-explorer",
+          "deliverable-lifecycle"
+        ]
+      },
+      {
+        "id": "deliverable-lifecycle",
+        "title": "Finaliser, faire valider, rouvrir et archiver",
+        "summary": "Distinguer l’instantané finalisé de la décision humaine de validation.",
+        "keywords": [
+          "brouillon",
+          "constitution",
+          "finalisé",
+          "archivé",
+          "validation",
+          "obsolète",
+          "refus"
+        ],
+        "screenshot": "deliverables",
+        "sections": [
+          {
+            "title": "Cycle documentaire",
+            "actions": [
+              {
+                "label": "Changement de statut → Finaliser",
+                "effect": "Exige au moins un document courant et fige un instantané des documents, versions et empreintes. Finaliser ne vaut pas approbation."
+              },
+              {
+                "label": "Rouvrir",
+                "effect": "Permet de reprendre la modification documentaire. Une divergence par rapport à l’instantané approuvé rend cette validation obsolète."
+              },
+              {
+                "label": "Archiver / désarchiver",
+                "effect": "L’archivage rend le livrable consultable en lecture seule. Le désarchivage le remet d’abord dans l’état finalisé."
+              }
+            ]
+          },
+          {
+            "title": "Demander une décision",
+            "steps": [
+              "Activez explicitement la validation si elle est requise pour ce livrable.",
+              "Finalisez puis demandez la validation de l’instantané concerné.",
+              "Le validateur consulte les documents et approuve ou refuse explicitement la demande active.",
+              "En cas de reprise, consultez l’historique pour distinguer l’instantané courant de la dernière référence approuvée."
+            ],
+            "warning": "Une demande en attente doit être annulée avec un motif avant de désactiver la validation. Une nouvelle version ne doit pas être présentée comme déjà approuvée."
+          }
+        ],
+        "related": ["deliverable-overview", "deliverable-versions"]
+      },
+      {
+        "id": "deliverable-agent",
+        "title": "Confier un livrable à un agent",
+        "summary": "Choisir un nouvel agent ou une session disponible et vérifier ses documents produits.",
+        "keywords": [
+          "affecter",
+          "agent existant",
+          "nouvel agent",
+          "sous-tâche",
+          "publication"
+        ],
+        "sections": [
+          {
+            "title": "Choisir l’affectation",
+            "steps": [
+              "Dans la fiche, utilisez Confier à un agent.",
+              "Choisissez de créer un agent ou, si le dialogue le propose, d’affecter un agent existant disponible du même projet sans autre lien de tâche ou de livrable.",
+              "Gardez l’affectation directe au livrable, ou sélectionnez explicitement une sous-tâche disponible de sa tâche principale.",
+              "Ouvrez l’agent, précisez votre consigne et envoyez le message qui lance le travail."
+            ]
+          },
+          {
+            "title": "Contrôler la production",
+            "paragraphs": [
+              "Le brief, les critères et le dossier du livrable servent de contexte au travail lié. Le lien ne dispense pas de vérifier le dossier actif et les autorisations.",
+              "Examinez les documents préparés avant de les enregistrer comme versions conservées. Une réponse disant « terminé » ne remplace ni l’enregistrement versionné ni la demande de validation documentaire."
+            ],
+            "warning": "L’agent doit rester disponible pour une affectation existante. Lier au livrable et lier à une sous-tâche sont deux choix distincts, pas une affectation automatique aux deux."
+          }
+        ],
+        "related": ["agent-create", "deliverable-versions", "task-execution"]
+      }
+    ]
+  },
+  {
+    "id": "files",
+    "title": "Fichiers, documents et transferts",
+    "articles": [
+      {
+        "id": "file-explorer",
+        "title": "Parcourir et manipuler les fichiers",
+        "summary": "Explorer les emplacements sans changer implicitement le dossier de l’agent.",
+        "keywords": [
+          "explorateur",
+          "aperçu",
+          "PDF",
+          "image",
+          "archive",
+          "dossier",
+          "onglet"
+        ],
+        "sections": [
+          {
+            "title": "Ouvrir le bon emplacement",
+            "paragraphs": [
+              "Ouvrez l’explorateur dans le contexte du projet ou de l’agent, puis choisissez l’emplacement à consulter. Les menus contextuels regroupent les opérations disponibles sur un dossier, un fichier ou une connexion.",
+              "Les fichiers texte et images ont un aperçu adapté ; les PDF utilisent la visionneuse intégrée. Les formats bureautiques compatibles passent par OnlyOffice lorsqu’il est configuré. Les archives sont consultables dans les limites de sécurité de l’application."
+            ]
+          },
+          {
+            "title": "Agir sans se tromper de périmètre",
+            "steps": [
+              "Vérifiez le nom de l’emplacement et le chemin avant création, renommage, déplacement ou suppression.",
+              "Utilisez uniquement les actions proposées par le menu du fichier ou de l’emplacement : les modes lecture seule et système limitent les commandes.",
+              "Pour faire travailler l’agent dans ce dossier, changez explicitement son dossier actif ; une navigation dans l’explorateur ne suffit pas."
+            ],
+            "warning": "Les chemins sont côté serveur. Un téléchargement copie vers votre poste ; un fichier présent sur une connexion distante n’est pas automatiquement disponible localement."
+          }
+        ],
+        "related": ["locations", "onlyoffice", "transfers"]
+      },
+      {
+        "id": "onlyoffice",
+        "title": "Ouvrir et modifier un document bureautique",
+        "summary": "Utiliser OnlyOffice et comprendre le retour des modifications vers Mergeron.",
+        "keywords": [
+          "OnlyOffice",
+          "Word",
+          "Excel",
+          "PowerPoint",
+          "PDF",
+          "éditeur",
+          "enregistrement"
+        ],
+        "sections": [
+          {
+            "title": "Parcours documentaire",
+            "steps": [
+              "Ouvrez un document pris en charge depuis sa liste ou son explorateur. Une fenêtre documentaire séparée peut s’ouvrir ; sa barre latérale est réduite par défaut.",
+              "Vérifiez si l’éditeur est en lecture ou en modification, selon vos droits et l’état du document.",
+              "Effectuez les changements puis contrôlez leur enregistrement dans Mergeron et, pour un livrable, la nouvelle version créée.",
+              "Consultez les versions depuis le document pour retrouver les états conservés."
+            ]
+          },
+          {
+            "title": "En cas de refus ou d’indisponibilité",
+            "paragraphs": [
+              "OnlyOffice doit être configuré par l’administration et ses services doivent pouvoir communiquer avec Mergeron. Un problème de connexion ou de configuration ne se résout pas en changeant les droits d’un projet.",
+              "L’ouverture d’un document ne donne pas accès au reste de l’espace système. Le projet propriétaire, le mode documentaire et la validation du livrable restent pris en compte."
+            ],
+            "warning": "N’ignorez pas une erreur d’enregistrement et ne fermez pas la fenêtre en supposant que tout est sauvegardé. Un document finalisé ou archivé peut nécessiter une réouverture autorisée du livrable."
+          }
+        ],
+        "related": ["deliverable-versions", "file-explorer", "admin-operations"]
+      },
+      {
+        "id": "transfers",
+        "title": "Connexions distantes et copies locales",
+        "summary": "Préparer les accès Git, SSH/SFTP et FTP/FTPS et contrôler les transferts.",
+        "keywords": [
+          "SSH",
+          "SFTP",
+          "FTP",
+          "FTPS",
+          "transfert",
+          "copie locale",
+          "synchronisation"
+        ],
+        "sections": [
+          {
+            "title": "Connexion ou fichiers locaux ?",
+            "paragraphs": [
+              "Une connexion externe conserve ses paramètres et permet les vues et transferts compatibles avec son protocole. Son contenu reste distant tant qu’une opération explicite ne le copie pas dans un emplacement local du projet.",
+              "Les copies locales sont distinctes de leur source. Parcourir la connexion ou actualiser son affichage n’est pas un envoi de vos fichiers locaux vers le serveur distant."
+            ]
+          },
+          {
+            "title": "Préparer un transfert",
+            "steps": [
+              "Configurez la connexion dans le projet, avec le protocole et les identifiants nécessaires, puis vérifiez son activation.",
+              "Sélectionnez la source et la destination de la copie ou du transfert proposé.",
+              "Lisez l’aperçu, les règles de synchronisation et les conflits avant confirmation.",
+              "Consultez le résultat et l’historique du transfert avant de relancer une opération en échec."
+            ],
+            "warning": "Un changement d’emplacement actif ne transfère rien. Vérifiez le sens de copie et les éventuels remplacements : une opération externe déjà effectuée n’est pas annulée par la fermeture de la fenêtre."
+          }
+        ],
+        "related": ["locations", "git-remote", "project-archive"]
+      }
+    ]
+  },
+  {
+    "id": "git",
+    "title": "Git et pull requests",
+    "articles": [
+      {
+        "id": "git-local",
+        "title": "Lire les changements et créer un commit",
+        "summary": "Comprendre la copie locale, les différences et les fichiers préparés pour un commit.",
+        "keywords": ["Git", "diff", "commit", "index", "staged", "graphe"],
+        "sections": [
+          {
+            "title": "Lire le dépôt",
+            "paragraphs": [
+              "La vue Locale montre la copie de travail : branche courante, changements et références déjà connues. Le graphe relie les commits à leurs parents ; cliquer un commit permet d’en consulter les détails.",
+              "Une référence distante affichée dans l’historique local n’est pas nécessairement à jour sur GitHub. Actualiser la vue relit son état ; les opérations réseau restent distinctes."
+            ]
+          },
+          {
+            "title": "Enregistrer un changement",
+            "steps": [
+              "Vérifiez la copie sélectionnée et consultez les différences des fichiers modifiés.",
+              "Préparez les fichiers voulus dans l’index avec les actions proposées.",
+              "Utilisez Commit, relisez le périmètre et donnez un message décrivant le changement.",
+              "Après confirmation, vérifiez le nouveau commit dans l’historique. Publiez séparément si nécessaire."
+            ],
+            "warning": "Un commit ne sauvegarde pas les fichiers non inclus dans l’index et ne publie rien sur GitHub. Les actions peuvent être refusées si la copie est occupée par un agent, en lecture seule ou dans un état inconnu."
+          }
+        ],
+        "related": ["git-branches", "git-remote", "git-pr"]
+      },
+      {
+        "id": "git-branches",
+        "title": "Créer, changer, fusionner et supprimer une branche locale",
+        "summary": "Travailler sur une branche sans confondre Git et les versions d’une conversation.",
+        "keywords": [
+          "branche",
+          "fusion",
+          "merge",
+          "checkout",
+          "basculer",
+          "suppression"
+        ],
+        "sections": [
+          {
+            "title": "Créer une branche",
+            "steps": [
+              "Dans Branches, utilisez la création de branche.",
+              "Saisissez un nom valide et choisissez une référence de départ proposée.",
+              "Choisissez explicitement si vous souhaitez basculer dessus, puis confirmez.",
+              "Contrôlez la branche courante après l’opération. La publication reste un push séparé."
+            ]
+          },
+          {
+            "title": "Actions d’une branche locale",
+            "actions": [
+              {
+                "label": "Basculer",
+                "effect": "Change la branche de la copie locale. Un répertoire de travail propre peut être exigé pour protéger les changements en cours."
+              },
+              {
+                "label": "Fusionner",
+                "effect": "Intègre la branche choisie dans la branche courante selon les contrôles proposés. Ce n’est pas une pull request et cela ne publie rien."
+              },
+              {
+                "label": "Supprimer",
+                "effect": "La suppression protégée refuse notamment la branche active ou une branche dont les changements ne sont pas fusionnés."
+              }
+            ],
+            "warning": "Relisez toujours la branche source et la branche de destination. En cas de conflit ou de contrôle refusé, ne forcez pas une réinitialisation destructive pour continuer. Une branche Git ne restaure pas l’historique du chat."
+          }
+        ],
+        "related": ["git-local", "git-pr", "agent-history"]
+      },
+      {
+        "id": "git-remote",
+        "title": "Distant, récupération et publication",
+        "summary": "Distinguer les informations GitHub des opérations qui modifient la copie ou le dépôt distant.",
+        "keywords": [
+          "GitHub",
+          "push",
+          "fetch",
+          "pull",
+          "récupérer",
+          "distant",
+          "synchronisation"
+        ],
+        "sections": [
+          {
+            "title": "Lire le distant",
+            "paragraphs": [
+              "La vue Distant · GitHub permet de consulter fichiers, branches publiées et PR/checks. Elle ne remplace pas la copie locale utilisée par l’agent. Le menu Informations permet de retrouver les coordonnées de la connexion.",
+              "Les actions de récupération et de synchronisation sont explicites. Relisez le dialogue : récupérer des références, préparer une branche locale et intégrer des commits ne sont pas la même opération."
+            ]
+          },
+          {
+            "title": "Publier une branche",
+            "steps": [
+              "Vérifiez les commits locaux et la branche choisie.",
+              "Ouvrez l’action Push, contrôlez la destination distante et confirmez.",
+              "Attendez le résultat et consultez les diagnostics d’authentification, de réseau ou de refus distant en cas d’échec.",
+              "Une fois la publication confirmée, créez éventuellement une pull request séparée."
+            ],
+            "warning": "Une connexion GitHub consultable ne prouve pas que le compte peut écrire dans le dépôt. Un commit local non poussé reste absent du distant ; ne répétez pas aveuglément une opération dont le résultat est annoncé inconnu."
+          }
+        ],
+        "related": ["git-local", "git-branches", "git-pr"]
+      },
+      {
+        "id": "git-pr",
+        "title": "Créer et suivre une pull request",
+        "summary": "Proposer la fusion d’une branche publiée et consulter les contrôles GitHub.",
+        "keywords": [
+          "pull request",
+          "PR",
+          "revue",
+          "checks",
+          "fusion",
+          "GitHub",
+          "brouillon"
+        ],
+        "sections": [
+          {
+            "title": "Après le push",
+            "steps": [
+              "Publiez la branche et vérifiez que ses commits sont disponibles sur GitHub.",
+              "Utilisez Créer une pull request lorsque l’interface le propose.",
+              "Choisissez la branche de destination, un titre, une description et éventuellement le mode brouillon.",
+              "Relisez et confirmez explicitement la création. Si une PR existe déjà, ouvrez son lien au lieu d’en créer une autre.",
+              "Consultez les checks et les avis de revue avant toute décision de fusion."
+            ]
+          },
+          {
+            "title": "PR ou fusion locale ?",
+            "paragraphs": [
+              "Une PR organise une proposition sur GitHub : comparaison, discussion, revue et contrôles. Une fusion locale agit directement dans votre copie Git. Créer une PR ne fusionne ni ne déploie automatiquement son contenu.",
+              "La suppression automatique d’une branche après fusion dépend du réglage du dépôt GitHub. Elle ne supprime pas vos branches locales et ne nettoie pas rétroactivement toutes les anciennes branches."
+            ],
+            "warning": "Vérifiez source et destination, notamment avant de proposer des changements à main. Les droits GitHub et les règles du dépôt restent applicables."
+          }
+        ],
+        "related": ["git-remote", "git-branches", "server-update"]
+      }
+    ]
+  },
+  {
+    "id": "browser",
+    "title": "Navigateur isolé et annotations",
+    "articles": [
+      {
+        "id": "browser-live",
+        "title": "Naviguer dans une page en direct",
+        "summary": "Ouvrir des sites dans Chromium isolé sans utiliser les cookies de votre navigateur personnel.",
+        "keywords": [
+          "navigateur",
+          "URL",
+          "adresse",
+          "direct",
+          "contrôle",
+          "côte à côte",
+          "Authentik",
+          "DNS"
+        ],
+        "sections": [
+          {
+            "title": "Ouvrir une vue",
+            "steps": [
+              "Depuis un agent autorisé, cliquez sur Navigateur pour ouvrir une vue à côté de Conversation.",
+              "Saisissez une adresse HTTP(S) puis Ouvrir. La vue peut être affichée côte à côte avec la conversation sur ordinateur.",
+              "Interagissez avec la page par souris, molette et clavier. Si une autre vue contrôle la session, utilisez explicitement Prendre le contrôle.",
+              "Libérez le contrôle lorsque vous quittez la vue ; Effacer la session ferme les pages et détruit leurs cookies temporaires."
+            ]
+          },
+          {
+            "title": "Limites et confidentialité",
+            "paragraphs": [
+              "Le projet peut définir la page d’accueil, la disposition initiale et les fenêtres secondaires autorisées pour les nouvelles sessions. Ce navigateur n’utilise pas vos cookies personnels : les connexions doivent y être faites séparément.",
+              "Seules les destinations publiques HTTP sur 80 et HTTPS sur 443, en IPv4, sont autorisées. Une redirection vers un domaine résolu en adresse privée est également bloquée, même si l’URL commence par HTTPS. Les messages distinguent service non configuré, indisponibilité du runtime et erreur de navigation."
+            ],
+            "warning": "Le flux peut montrer vos saisies. Il n’est pas automatiquement ajouté au chat. Les dialogues natifs tels que certains QR codes passkey, le multimédia et les transferts de fichiers ne sont pas tous pris en charge. L’accès est réservé aux administrateurs autorisés."
+          }
+        ],
+        "related": ["browser-annotation", "infrastructure", "agent-approvals"]
+      },
+      {
+        "id": "browser-annotation",
+        "title": "Pointer une fonctionnalité et commenter une capture",
+        "summary": "Ajouter une preuve de page au brouillon de l’agent, sans envoyer automatiquement de consigne.",
+        "keywords": [
+          "annotation",
+          "capture",
+          "screenshot",
+          "pointer",
+          "commentaire",
+          "repère",
+          "sélecteur"
+        ],
+        "sections": [
+          {
+            "title": "Créer un commentaire de page",
+            "steps": [
+              "Ouvrez la page voulue puis choisissez Pointer un élément. Le flux direct s’interrompt pour préparer une capture distincte.",
+              "Sélectionnez l’élément visible et rédigez une consigne précise sur ce qui doit changer.",
+              "Vérifiez le repère, le texte et la capture, puis choisissez Ajouter au brouillon du chat.",
+              "Relisez le brouillon complet et envoyez-le vous-même pour lancer le travail."
+            ]
+          },
+          {
+            "title": "Ce qui accompagne la demande",
+            "paragraphs": [
+              "L’annotation joint la capture marquée, l’URL, la date et les métadonnées de l’élément : texte, sélecteur et position. Le contenu du site reste une preuve non fiable, distincte de votre demande.",
+              "Le pointage ne clique pas sur le bouton du site et ne lance pas un agent. Si la page a changé, actualisez la capture avant de recommencer ; un sélecteur n’est pas une garantie de stabilité de l’interface."
+            ],
+            "warning": "Les captures ne masquent plus systématiquement les champs saisis. Vérifiez qu’aucun secret ou renseignement personnel indésirable n’est visible avant d’ajouter puis d’envoyer la capture."
+          }
+        ],
+        "related": ["browser-live", "agent-create"]
+      }
+    ]
+  },
+  {
+    "id": "automations",
+    "title": "Automatisations",
+    "articles": [
+      {
+        "id": "automation-schedule",
+        "title": "Programmer et suivre une automatisation",
+        "summary": "Définir une consigne récurrente et contrôler les exécutions et leurs effets.",
+        "keywords": [
+          "automatisation",
+          "fréquence",
+          "planification",
+          "pause",
+          "récurrent",
+          "exécution"
+        ],
+        "sections": [
+          {
+            "title": "Préparer une récurrence",
+            "steps": [
+              "Ajoutez ou ouvrez le gestionnaire d’automatisations du projet, limité à un exemplaire.",
+              "Créez une automatisation avec une consigne explicite, son périmètre et sa fréquence.",
+              "Relisez le calendrier, les autorisations et le coût potentiel avant d’enregistrer et d’activer.",
+              "Consultez les exécutions pour distinguer déclenchement prévu, travail actif, résultat et erreur."
+            ]
+          },
+          {
+            "title": "Pause et reprise",
+            "actions": [
+              {
+                "label": "Mettre en pause",
+                "effect": "Empêche les prochains déclenchements sans effacer la configuration ni l’historique. Cela n’annule pas les effets déjà produits."
+              },
+              {
+                "label": "Activer",
+                "effect": "Autorise les prochaines exécutions selon le calendrier enregistré."
+              },
+              {
+                "label": "Historique des exécutions",
+                "effect": "Permet de relire les résultats et erreurs avant de décider une relance."
+              }
+            ],
+            "warning": "Une automatisation peut attendre une approbation comme un agent manuel. Une erreur ne garantit pas l’annulation des opérations précédentes. Les automatisations importées sont désactivées par sécurité."
+          }
+        ],
+        "related": ["agent-approvals", "project-archive"]
+      }
+    ]
+  },
+  {
+    "id": "administration",
+    "title": "Administration et exploitation",
+    "articles": [
+      {
+        "id": "admin-people",
+        "title": "Créer et gérer les personnes",
+        "summary": "Préparer les fiches, les rôles et l’association aux comptes de connexion.",
+        "keywords": [
+          "personnes",
+          "identifiant",
+          "référence",
+          "standard",
+          "administrateur",
+          "tri"
+        ],
+        "sections": [
+          {
+            "title": "Utiliser la liste",
+            "steps": [
+              "Ouvrez Administration → Personnes avec un compte administrateur.",
+              "Recherchez une personne et utilisez les en-têtes proposés pour trier les informations séparées par colonne.",
+              "Utilisez Nouvelle personne pour créer une fiche ; renseignez sa référence, ses coordonnées, son état et son profil.",
+              "Utilisez le menu contextuel en fin de ligne pour modifier la personne ou tester ses droits lorsque cette action est autorisée."
+            ]
+          },
+          {
+            "title": "Fiche et identité de connexion",
+            "paragraphs": [
+              "La référence manuelle permet d’identifier la personne de façon stable. Une fiche de contact ne constitue pas à elle seule une connexion SSO ou un mot de passe utilisable.",
+              "Un profil standard ne voit que les projets auxquels il participe ; un rôle administrateur possède un périmètre global. Désactiver une personne empêche de nouvelles affectations sans supprimer son historique métier."
+            ],
+            "warning": "Ne donnez pas un rôle administrateur pour résoudre une simple absence de participation à un projet. Vérifiez d’abord l’association du compte et les participants."
+          }
+        ],
+        "related": ["project-people", "impersonation"]
+      },
+      {
+        "id": "impersonation",
+        "title": "Tester les droits pendant 30 minutes",
+        "summary": "Prendre temporairement les droits d’une personne sans utiliser ses identifiants.",
+        "keywords": [
+          "tester en tant que",
+          "usurpation",
+          "30 minutes",
+          "droits",
+          "journal"
+        ],
+        "sections": [
+          {
+            "title": "Démarrer puis terminer un test",
+            "steps": [
+              "Avec votre compte administrateur personnel, ouvrez Personnes puis le menu de la personne active.",
+              "Choisissez Tester en tant que et lisez la confirmation : les modifications réalisées seront réelles.",
+              "Vérifiez le bandeau indiquant la personne simulée et l’administrateur réel.",
+              "Terminez avec Revenir à mon compte. La durée maximale est de 30 minutes ; après expiration, revenez explicitement à votre compte."
+            ]
+          },
+          {
+            "title": "Journal et limites",
+            "paragraphs": [
+              "Les autorisations appliquées sont celles de la personne choisie, pas celles de l’administrateur. Aucun mot de passe ni identité SSO de cette personne n’est utilisé. Les autres onglets et connexions sont réévalués.",
+              "Le Journal des tests de droits permet de consulter les derniers débuts, arrêts et tentatives d’action avec leur résultat et les deux identités concernées."
+            ],
+            "warning": "Ce n’est pas un bac à sable. Finir le test n’annule pas les modifications déjà acceptées ou les travaux en arrière-plan. L’expiration ne rétablit pas silencieusement les droits administrateur dans une ancienne vue."
+          }
+        ],
+        "related": ["admin-people", "project-people"]
+      },
+      {
+        "id": "server-update",
+        "title": "Version et mise à jour du serveur",
+        "summary": "Détecter une image, confirmer une mise à jour et suivre sa progression.",
+        "keywords": [
+          "serveur",
+          "version",
+          "mise à jour",
+          "Manager",
+          "edge",
+          "latest",
+          "DEV",
+          "rapide"
+        ],
+        "sections": [
+          {
+            "title": "Avant et pendant la mise à jour",
+            "steps": [
+              "Dans Serveur, consultez Version actuelle puis l’onglet Mise à jour pour l’état de disponibilité.",
+              "Actualiser la détection recherche une image sans l’installer. Vérifiez le canal et l’image cible ; les réglages avancés ne doivent être changés qu’en connaissance de cause.",
+              "Utilisez Mettre à jour, lisez le plan et confirmez l’opération proposée.",
+              "Suivez le suivi et les logs pendant l’arrêt temporaire, la sauvegarde, la recréation et les contrôles de santé.",
+              "Après réussite, rechargez l’interface et contrôlez vos fonctions importantes."
+            ]
+          },
+          {
+            "title": "Retour arrière et mode DEV",
+            "paragraphs": [
+              "Lorsque le Manager est configuré, une mise à jour vérifie les prérequis et conserve une sauvegarde. Une défaillance peut déclencher la restauration selon son suivi ; un état exigeant une récupération ne doit pas être ignoré.",
+              "Le mode rapide est réservé à une pile DEV dédiée. Il accélère certaines étapes sans supprimer la sauvegarde complète ni transformer une mise à jour de DEV en mise à jour de production."
+            ],
+            "warning": "Ne lancez pas deux opérations simultanées. Actualiser l’application, mettre à jour le CLI Codex et mettre à jour l’image serveur sont trois actions différentes."
+          }
+        ],
+        "related": ["backups", "infrastructure", "admin-codex", "desktop"]
+      },
+      {
+        "id": "backups",
+        "title": "Sauvegardes, rétention et restauration",
+        "summary": "Lire les copies de mise à jour et comprendre les conséquences d’une suppression.",
+        "keywords": [
+          "sauvegarde",
+          "rétention",
+          "taille",
+          "chemin",
+          "limite",
+          "restaurer",
+          "disque"
+        ],
+        "sections": [
+          {
+            "title": "Consulter les sauvegardes",
+            "paragraphs": [
+              "L’onglet Sauvegarde présente les copies de mises à jour dans un tableau avec date, identifiant, chemin serveur, espace occupé, état et actions. L’espace total permet de surveiller l’accumulation.",
+              "Le réglage du nombre maximal définit la rétention. Le nettoyage est appliqué après une mise à jour réussie en protégeant les éléments requis pour le retour arrière courant ; une copie n’est pas supprimée simplement pour faire de la place avant une migration risquée."
+            ]
+          },
+          {
+            "title": "Décider une restauration ou un retrait",
+            "steps": [
+              "Identifiez précisément la sauvegarde et l’opération dont elle provient.",
+              "Avant une restauration, vérifiez les changements plus récents et consultez le suivi du Manager.",
+              "Avant Supprimer la sauvegarde, assurez-vous qu’elle n’est plus nécessaire et confirmez uniquement la copie visée."
+            ],
+            "warning": "La suppression est définitive et retire le retour arrière reposant sur cette copie. Une sauvegarde de mise à jour et un export ZIP de projet n’ont pas le même périmètre. Préservez aussi les données externes qui ne sont pas couvertes par le Manager."
+          }
+        ],
+        "related": ["server-update", "project-archive", "admin-operations"]
+      },
+      {
+        "id": "infrastructure",
+        "title": "Infrastructure et Mergeron Manager",
+        "summary": "Lire la santé des conteneurs et connaître le périmètre réel de leur gestion.",
+        "keywords": [
+          "infrastructure",
+          "conteneur",
+          "Docker",
+          "Manager",
+          "Browser",
+          "DNS",
+          "réseau",
+          "redémarrer"
+        ],
+        "sections": [
+          {
+            "title": "Ce que montre l’écran",
+            "paragraphs": [
+              "Infrastructure présente les composants de la pile, leur état, leur image, les réseaux, le mode de gestion et des métadonnées de configuration. Les valeurs d’environnement sensibles ne sont pas affichées comme de simples réglages publics.",
+              "Les données persistantes protégées permettent de vérifier les montages attendus. Un état indisponible ou incohérent doit être diagnostiqué avant de lancer une modification d’infrastructure."
+            ]
+          },
+          {
+            "title": "Cas du navigateur géré en DEV",
+            "paragraphs": [
+              "Quand cette intégration est explicitement activée, Mergeron Browser apparaît parmi les composants et participe aux transactions globales du Manager. Son DNS public 1.1.1.1 est réappliqué lors des recréations et restaurations, sans changer le DNS de l’hôte.",
+              "La présence du navigateur dans l’inventaire ne signifie pas qu’un bouton individuel de redémarrage ou de mise à jour est disponible. La détection des images de Serveur concerne l’application ; la version du runtime navigateur doit rester compatible avec celle-ci."
+            ],
+            "warning": "Ne désactivez pas le sandbox et n’exposez pas le port de contrôle pour résoudre une erreur. Les réglages réservés à DEV ne doivent pas être appliqués implicitement à la production."
+          }
+        ],
+        "related": ["browser-live", "server-update", "backups"]
+      },
+      {
+        "id": "admin-codex",
+        "title": "Configurer Codex, ses modèles et son CLI",
+        "summary": "Distinguer authentification, configuration, catalogue et installation de l’exécutable.",
+        "keywords": [
+          "Codex CLI",
+          "catalogue",
+          "modèle",
+          "compte",
+          "instructions",
+          "enregistrer",
+          "redémarrer"
+        ],
+        "sections": [
+          {
+            "title": "Configurer sans mélanger les actions",
+            "steps": [
+              "Ouvrez l’administration Codex puis Compte pour l’authentification nécessaire aux fonctions concernées.",
+              "Dans les onglets de configuration, choisissez modèles, raisonnement, instructions et sécurité selon les besoins.",
+              "Utilisez la barre fixe Enregistrer pour l’onglet actif. Les autres brouillons d’onglets ne sont pas automatiquement appliqués.",
+              "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation."
+            ]
+          },
+          {
+            "title": "Installer ou mettre à jour le CLI",
+            "paragraphs": [
+              "L’onglet Codex CLI permet à un administrateur d’installer l’exécutable lorsque la gestion intégrée est disponible, de consulter la version, de rechercher une version stable et de l’installer après confirmation. Un retour à la sélection précédente peut être proposé.",
+              "Les modèles et efforts disponibles dépendent du Codex installé et de son catalogue. Mettre à jour le CLI ne garantit pas que l’interface prenne en charge immédiatement chaque nouveau protocole. Une installation externe peut limiter l’interface à la consultation."
+            ],
+            "warning": "Sauvegardez les données Codex avant une mise à jour : revenir à l’ancien exécutable ne restaure pas automatiquement les données éventuellement migrées."
+          }
+        ],
+        "related": ["agent-composer", "agent-knowledge", "server-update"]
+      },
+      {
+        "id": "admin-chat",
+        "title": "Configurer le chat simple et l’assistance IA",
+        "summary": "Comprendre les prérequis API distincts de la connexion Codex.",
+        "keywords": [
+          "clé API",
+          "chat simple",
+          "OpenAI",
+          "planification",
+          "modèle",
+          "fournisseur"
+        ],
+        "sections": [
+          {
+            "title": "Deux circuits différents",
+            "paragraphs": [
+              "Le chat simple et certaines fonctions de planification IA utilisent leur propre configuration de fournisseur, modèle et accès API. La connexion à un compte Codex ne les configure pas automatiquement.",
+              "L’administration Chat simple permet de préparer ces paramètres. Ne recopiez pas une clé dans un message, une capture ou un document partagé pour demander un dépannage."
+            ]
+          },
+          {
+            "title": "Vérifier une indisponibilité",
+            "steps": [
+              "Vérifiez la configuration du chat simple avec un administrateur et enregistrez les changements de formulaire.",
+              "Essayez une demande courte dans une conversation simple, puis vérifiez le résultat ou le message d’erreur.",
+              "Si les conseils ou plans IA échouent aussi, contrôlez ce circuit API avant de modifier le CLI Codex."
+            ],
+            "warning": "Des accès valides ne garantissent pas un quota disponible ou la disponibilité du modèle. Ne contournez pas un échec en donnant des autorisations d’exécution plus larges à un agent."
+          }
+        ],
+        "related": ["simple-chat", "task-planning", "admin-codex"]
+      },
+      {
+        "id": "integrations",
+        "title": "Applications, plugins et serveurs MCP",
+        "summary": "Sélectionner les capacités du projet et vérifier leur authentification séparément.",
+        "keywords": [
+          "MCP",
+          "connecteur",
+          "application",
+          "plugin",
+          "authentification",
+          "intégration"
+        ],
+        "sections": [
+          {
+            "title": "Préparer les intégrations",
+            "steps": [
+              "Consultez les applications, plugins et serveurs MCP configurés pour l’installation.",
+              "Dans la gestion des agents du projet, sélectionnez les intégrations utiles et enregistrez la sélection.",
+              "Réalisez la connexion ou l’authentification requise par le service via son parcours dédié.",
+              "Vérifiez les capacités réellement disponibles pour l’agent dans le projet avant de lui confier une action externe."
+            ]
+          },
+          {
+            "title": "Sélection, compte et droits",
+            "paragraphs": [
+              "Cocher une intégration ne crée pas un compte chez le fournisseur et ne donne pas automatiquement accès à ses données. Inversement, un compte connecté ne signifie pas que toutes ses capacités sont autorisées dans chaque projet.",
+              "Les instructions textuelles et le masquage d’un bouton ne constituent pas à eux seuls une isolation. Les restrictions du projet et les autorisations effectives du service doivent être cohérentes."
+            ],
+            "warning": "Une action peut transmettre des données ou modifier un système externe. Précisez le destinataire et le périmètre, et relisez les confirmations avant d’autoriser l’agent."
+          }
+        ],
+        "related": ["agent-composer", "agent-knowledge", "project-people"]
+      },
+      {
+        "id": "admin-operations",
+        "title": "Logs, diagnostic, terminal et sécurité",
+        "summary": "Diagnostiquer une erreur sans confondre les outils globaux avec les ressources d’un projet.",
+        "keywords": [
+          "logs",
+          "diagnostic",
+          "terminal",
+          "base de données",
+          "sécurité",
+          "rétention",
+          "OnlyOffice"
+        ],
+        "sections": [
+          {
+            "title": "Commencer par les outils de lecture",
+            "steps": [
+              "Notez la fonction concernée, l’heure et le message d’erreur sans copier de secret.",
+              "Consultez Logs et Diagnostic pour distinguer connexion, configuration, droits, stockage et exécution.",
+              "Vérifiez la santé des services dans Infrastructure et le suivi de mise à jour si l’erreur suit un déploiement.",
+              "N’utilisez les fichiers globaux ou le terminal serveur qu’après avoir identifié le chemin, le périmètre et le moyen de retour arrière."
+            ]
+          },
+          {
+            "title": "Paramètres d’exploitation",
+            "paragraphs": [
+              "Les sections Terminal, Fichiers, Base de données, Sécurité et OnlyOffice concernent l’installation. Elles ne remplacent pas les réglages des participants ou dossiers d’un projet.",
+              "La rétention des logs est configurée dans Logs. Après enregistrement, les archives trop anciennes ou trop nombreuses peuvent être supprimées automatiquement, sans supprimer le fichier actif."
+            ],
+            "warning": "Le terminal global agit sur le serveur, pas uniquement sur le projet affiché. Une suppression, un changement de base ou un réglage d’authentification peut toucher d’autres utilisateurs ; sauvegardez et vérifiez avant toute action."
+          }
+        ],
+        "related": ["infrastructure", "backups", "onlyoffice", "impersonation"]
+      }
+    ]
+  }
+]

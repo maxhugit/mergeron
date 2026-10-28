@@ -1,4 +1,5 @@
 {
+  "sessionExpired": "La session distante a expiré ou le service a redémarré. Ses pages et saisies ne peuvent pas être restaurées. L’onglet est conservé ; cliquez sur Ouvrir pour démarrer une nouvelle page.",
   "projectSettings": "Réglages du navigateur du projet",
   "homeUrl": "Page par défaut",
   "desktopSplitDefault": "Ouvrir côte à côte sur grand écran",

@@ -7,6 +7,30 @@ import type { WorkspaceGitService } from './workspace-git.service';
 import type { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import type { WorkspaceCopiesService } from './workspace-copies.service';
 
+it('routes remote PR creation by connection, independently of a local copy', async () => {
+  const createRemotePullRequest = vi.fn();
+  const controller = new WorkspaceGitController(
+    {} as WorkspaceGitService,
+    { createRemotePullRequest } as unknown as WorkspaceGitActionsService,
+    {} as WorkspaceCopiesService,
+  );
+  const body = { confirmation: 'CREATE_REMOTE_PULL_REQUEST', branch: 'dev' };
+  await controller.createRemotePullRequest('p', 'git', body);
+  expect(createRemotePullRequest).toHaveBeenCalledWith('p', 'git', body);
+  expect(
+    Reflect.getMetadata(
+      PATH_METADATA,
+      Object.getOwnPropertyDescriptor(
+        WorkspaceGitController.prototype,
+        'createRemotePullRequest',
+      )!.value as object,
+    ),
+  ).toEqual([
+    'connections/:resourceId/pull-requests',
+    'resources/:resourceId/pull-requests',
+  ]);
+});
+
 it('routes confirmed remote retrieval through the mutation service', async () => {
   const retrieveBranch = vi.fn().mockResolvedValue({ branch: 'dev' });
   const controller = new WorkspaceGitController(

@@ -8,6 +8,22 @@ la vue utilise toute la largeur. Ouvrir ou fermer l’explorateur ne masque pas
 le navigateur. Les commandes de disposition et d’effacement de session sont des
 icônes dans la barre d’adresse.
 
+Les vues ouvertes, la sélection et la disposition sont mémorisées par personne
+et conversation dans le stockage de session de l’onglet Mergeron. Ce stockage ne
+contient ni URL, ni image, ni saisie, ni cookie, ni jeton de contrôle. Revenir à une
+conversation reconnecte la même page distante, sans navigation ni rechargement :
+le formulaire, le défilement et la session du site restent dans Chromium.
+Un maintien authentifié des sessions existantes fonctionne depuis l’interface
+générale, même lorsqu’une autre conversation est affichée. Il ne crée aucune page
+et ne prend jamais le contrôle du navigateur. Fermer explicitement la vue ou
+effacer sa session garde son effet habituel.
+
+Ce n’est pas une sauvegarde sur disque de Chromium : si Mergeron est fermé ou
+suspendu assez longtemps, la session distante reste soumise au délai d’inactivité
+de quinze minutes. Un redémarrage du service peut aussi la perdre. Au retour, les
+onglets sont conservés avec un avertissement explicite ; aucune nouvelle page
+n’est ouverte automatiquement à leur place.
+
 L’onglet Navigateur du projet permet à un administrateur de choisir la page
 d’accueil (https://www.google.com par défaut), le côte-à-côte initial et
 l’autorisation des fenêtres secondaires. Ces réglages concernent les nouvelles
