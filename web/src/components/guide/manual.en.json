@@ -974,6 +974,8 @@
             "title": "Read the repository",
             "paragraphs": [
               "Local shows the working copy, current branch, changes and known references. The graph links commits to parents; select a commit to view details.",
+              "Below the repository name, Local shows the branch and revision of this agent’s copy, or No local copy. The explorer shows the workspace name and relative path; hover to see the complete technical path.",
+              "In Files, red names indicate unstaged changes, including new files. The trailing … menu combines file and Git actions: view differences, stage for commit or unstage. Deleted files are also listed so their deletion can be staged.",
               "Remote references in local history are not necessarily current on GitHub. Refresh rereads the view; network operations remain separate."
             ]
           },
@@ -981,7 +983,8 @@
             "title": "Record a change",
             "steps": [
               "Check the selected copy and review diffs of modified files.",
-              "Stage the intended files with available actions.",
+              "Stage the intended changes from the file menu and confirm the reviewed content.",
+              "Open Commit preparation: only staged files are listed and their diffs exclude unstaged edits. A staged file edited again stays red in Files; its staged version is retained until you stage it again.",
               "Use Commit, review its scope and enter a descriptive message.",
               "Confirm and find the commit in history. Publish separately if needed."
             ],

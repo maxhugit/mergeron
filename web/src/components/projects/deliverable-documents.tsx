@@ -45,6 +45,9 @@ import {
   emitFileChange,
 } from '@/lib/file-change-events';
 import { showSnackbar } from '@/stores/snackbar-store';
+import { WorkspaceEntryMenu } from '@/components/chat/workspace-entry-menu';
+import type { FileExtraAction } from '@/components/files/file-context-menu';
+import { useDeferredMenuAction } from '@/hooks/use-deferred-menu-action';
 
 type Props = {
   item: Deliverable;
@@ -54,6 +57,9 @@ type Props = {
   onError: () => void;
   contextDocument?: DeliverableDocument;
   onAttachToChat?: () => void;
+  extraActions?: FileExtraAction[];
+  dropdown?: boolean;
+  menuLabel?: string;
   children?: ReactNode;
 };
 
@@ -71,6 +77,9 @@ export function DeliverableDocuments({
   onError,
   contextDocument,
   onAttachToChat,
+  extraActions,
+  dropdown,
+  menuLabel,
   children,
 }: Props) {
   const { t } = useTranslation();
@@ -262,6 +271,9 @@ export function DeliverableDocuments({
               busy={busy}
               contextTrigger={contextDocument ? children : undefined}
               onAttachToChat={contextDocument ? onAttachToChat : undefined}
+              extraActions={extraActions}
+              dropdown={dropdown}
+              menuLabel={menuLabel}
               onView={() => setDetail({ document, tab: 'preview' })}
               onHistory={() => setDetail({ document, tab: 'versions' })}
               onRename={() => {
@@ -724,6 +736,9 @@ function DocumentRow({
   onDelete,
   contextTrigger,
   onAttachToChat,
+  extraActions = [],
+  dropdown,
+  menuLabel,
 }: {
   document: DeliverableDocument;
   busy: boolean;
@@ -736,12 +751,15 @@ function DocumentRow({
   onDelete: () => void;
   contextTrigger?: ReactNode;
   onAttachToChat?: () => void;
+  extraActions?: FileExtraAction[];
+  dropdown?: boolean;
+  menuLabel?: string;
 }) {
   const { t } = useTranslation();
   const latest = currentDocumentVersion(document);
   const menuRef = useRef<HTMLDetailsElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
-  const pendingAction = useRef<string | null>(null);
+  const deferred = useDeferredMenuAction();
   useEffect(() => {
     const closeOutside = (event: Event) => {
       const menu = menuRef.current;
@@ -797,6 +815,10 @@ function DocumentRow({
     { label: t('delete'), icon: Trash2, action: 'delete', disabled: busy },
   ];
   const runAction = (action: string) => {
+    if (action.startsWith('extra:'))
+      return extraActions
+        .find((item) => `extra:${item.label}` === action)
+        ?.onSelect();
     switch (action) {
       case 'attach':
         return onAttachToChat?.();
@@ -831,27 +853,55 @@ function DocumentRow({
     />
   );
   if (contextTrigger)
+    if (dropdown)
+      return (
+        <>
+          <WorkspaceEntryMenu
+            label={menuLabel ?? document.name}
+            onAction={(action) => deferred.select(() => runAction(action))}
+            items={[
+              ...actions.map(({ label, action, disabled }) => ({
+                label,
+                disabled,
+                destructive: action === 'delete',
+                action,
+              })),
+              ...extraActions.map((action) => ({
+                ...action,
+                onSelect: () => {
+                  deferred.select(action.onSelect);
+                },
+              })),
+            ]}
+            onCloseAutoFocus={deferred.afterClose}
+          />
+          {input}
+        </>
+      );
+  if (contextTrigger)
     return (
       <>
         <ContextMenu>
           <ContextMenuTrigger asChild>{contextTrigger}</ContextMenuTrigger>
-          <ContextMenuContent
-            onCloseAutoFocus={(event) => {
-              const action = pendingAction.current;
-              pendingAction.current = null;
-              if (action) {
-                event.preventDefault();
-                requestAnimationFrame(() => runAction(action));
-              }
-            }}
-          >
+          <ContextMenuContent onCloseAutoFocus={deferred.afterClose}>
+            {extraActions.map((action) => (
+              <ContextMenuItem
+                key={action.label}
+                disabled={action.disabled}
+                onSelect={() => {
+                  deferred.select(action.onSelect);
+                }}
+              >
+                {action.label}
+              </ContextMenuItem>
+            ))}
             {actions.map(({ label, icon: Icon, action, disabled }) => (
               <ContextMenuItem
                 key={label}
                 variant={action === 'delete' ? 'destructive' : 'default'}
                 disabled={disabled}
                 onSelect={() => {
-                  pendingAction.current = action;
+                  deferred.select(() => runAction(action));
                 }}
               >
                 <Icon className="h-4 w-4" />

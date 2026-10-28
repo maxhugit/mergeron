@@ -2,7 +2,8 @@
  * Right-click context menu for file tree entries.
  * Actions vary based on whether the target is a file or directory.
  */
-import { useRef } from 'react';
+import { useDeferredMenuAction } from '@/hooks/use-deferred-menu-action';
+import { WorkspaceEntryMenu } from '@/components/chat/workspace-entry-menu';
 import type { ComponentProps } from 'react';
 import { DeliverableDocuments } from '@/components/projects/deliverable-documents';
 import { showSnackbar } from '@/stores/snackbar-store';
@@ -41,6 +42,11 @@ export interface FileContextMenuActions {
   onUploadFolder?: () => void;
   onAttachToChat?: () => void;
 }
+export interface FileExtraAction {
+  label: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
 
 interface FileContextMenuProps {
   type: 'file' | 'directory';
@@ -49,6 +55,9 @@ interface FileContextMenuProps {
   onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
   documentActions?: DeliverableContextActions;
+  extraActions?: FileExtraAction[];
+  dropdown?: boolean;
+  label?: string;
 }
 
 export type DeliverableContextActions = Omit<
@@ -56,41 +65,15 @@ export type DeliverableContextActions = Omit<
   'children' | 'onError'
 >;
 
-/**
- * Defers a chosen action until the menu has finished closing.
- *
- * Radix returns focus to the trigger on close. An action that mounts an inline
- * input must therefore run after that restoration is suppressed, or the row
- * steals focus back from the editor it just opened.
- *
- * @returns `select` to record the chosen action, and the `onCloseAutoFocus`
- *          handler that suppresses focus restoration and runs it.
- */
-function useDeferredMenuAction(): {
-  select: (action: (() => void) | undefined) => void;
-  afterClose: (event: Event) => void;
-} {
-  const pendingAction = useRef<(() => void) | null>(null);
-  return {
-    select: (action) => {
-      pendingAction.current = action ?? null;
-    },
-    afterClose: (event) => {
-      const action = pendingAction.current;
-      pendingAction.current = null;
-      if (!action) return;
-      event.preventDefault();
-      requestAnimationFrame(action);
-    },
-  };
-}
-
 export function FileContextMenu({
   type,
   actions,
   onOpenChange,
   children,
   documentActions,
+  extraActions = [],
+  dropdown = false,
+  label,
 }: FileContextMenuProps) {
   const { t } = useTranslation();
   const { select, afterClose } = useDeferredMenuAction();
@@ -101,16 +84,63 @@ export function FileContextMenu({
       <DeliverableDocuments
         {...documentActions}
         onAttachToChat={actions.onAttachToChat}
+        extraActions={extraActions}
+        dropdown={dropdown}
+        menuLabel={label}
         onError={() => showSnackbar(t('unableToUpdateDocument'), 'error')}
       >
         {children}
       </DeliverableDocuments>
     );
 
+  if (dropdown) {
+    const items = [
+      [t('newFile'), isDir ? actions.onNewFile : undefined],
+      [t('newFolder'), isDir ? actions.onNewFolder : undefined],
+      [t('rename'), actions.onRename],
+      [t('copyTo'), actions.onCopy],
+      [t('moveTo'), actions.onMove],
+      [t('download'), !isDir ? actions.onDownload : undefined],
+      [t('uploadFilesHere'), isDir ? actions.onUploadFiles : undefined],
+      [t('uploadFolderHere'), isDir ? actions.onUploadFolder : undefined],
+      [t('attachToChat'), actions.onAttachToChat],
+      [t('refresh'), actions.onRefresh],
+      [t('delete'), actions.onDelete],
+    ] as const;
+    return (
+      <WorkspaceEntryMenu
+        label={label ?? t('actions')}
+        onCloseAutoFocus={afterClose}
+        items={[
+          ...items
+            .filter(([, action]) => action)
+            .map(([label, action]) => ({
+              label,
+              destructive: action === actions.onDelete,
+              onSelect: () => select(action),
+            })),
+          ...extraActions.map((action) => ({
+            ...action,
+            onSelect: () => select(action.onSelect),
+          })),
+        ]}
+      />
+    );
+  }
+
   return (
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-48" onCloseAutoFocus={afterClose}>
+        {extraActions.map((action) => (
+          <ContextMenuItem
+            key={action.label}
+            disabled={action.disabled}
+            onSelect={() => select(action.onSelect)}
+          >
+            {action.label}
+          </ContextMenuItem>
+        ))}
         {isDir && (actions.onNewFile || actions.onNewFolder) && (
           <>
             {actions.onNewFile && (

@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import { ChevronRight, File, Folder } from 'lucide-react';
 import { useDraggable, useDroppable } from '@dnd-kit/react';
 import { Feedback } from '@dnd-kit/dom';
+import { useTranslation } from 'react-i18next';
 import type { useFileOperations } from '@/hooks/use-file-operations';
 import type { InlineFileEdit as InlineEdit } from '@/hooks/use-inline-file-edit';
 import { cn } from '@/lib/utils';
@@ -10,6 +11,7 @@ import { InlineEntryEditor } from './inline-entry-editor';
 import {
   FileContextMenu,
   type DeliverableContextActions,
+  type FileExtraAction,
 } from './file-context-menu';
 type EntryType = 'file' | 'directory';
 
@@ -34,6 +36,7 @@ interface FileBrowserEntryProps {
   commitEdit: (value: string) => void;
   onNavigateCreate: (kind: 'newFile' | 'newFolder') => void;
   documentActions?: DeliverableContextActions;
+  gitState?: { unstaged: boolean; actions: FileExtraAction[] };
 }
 
 /** Keeps dnd-kit on the outer div and native upload/menu/keyboard interaction on the entry. */
@@ -53,7 +56,9 @@ export function FileBrowserEntry({
   commitEdit,
   onNavigateCreate,
   documentActions,
+  gitState,
 }: FileBrowserEntryProps) {
+  const { t } = useTranslation();
   const isDir = icon === 'directory';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +137,7 @@ export function FileBrowserEntry({
         type={icon}
         actions={actions}
         onOpenChange={setIsMenuOpen}
+        extraActions={gitState?.actions}
       >
         <div
           role="button"
@@ -164,7 +170,10 @@ export function FileBrowserEntry({
             />
           ) : (
             <span
-              className="min-w-0 truncate"
+              className={cn(
+                'min-w-0 truncate',
+                gitState?.unstaged && 'text-red-500 dark:text-red-400',
+              )}
               title={displayName ? entryPath : undefined}
             >
               {displayName ?? name}
@@ -175,6 +184,18 @@ export function FileBrowserEntry({
           )}
         </div>
       </FileContextMenu>
+      {!rowEditing && (
+        <FileContextMenu
+          type={icon}
+          actions={actions}
+          documentActions={documentActions}
+          extraActions={gitState?.actions}
+          dropdown
+          label={`${t('actions')} · ${displayName ?? name}`}
+        >
+          <span />
+        </FileContextMenu>
+      )}
       {isDir && (
         <>
           <input

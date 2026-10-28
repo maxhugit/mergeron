@@ -1961,6 +1961,15 @@ describe('confirmed actions', () => {
     const preview = await service.stagedDiff('p', copyId);
     expect(preview.diff).toContain('+staged');
     expect(preview.diff).not.toContain('+unstaged');
+    const filePreview = await service.stagedDiff('p', copyId, 'README.md');
+    expect(filePreview.diff).toContain('+staged');
+    expect(filePreview.diff).not.toContain('+unstaged');
+    await expect(
+      service.stagedDiff('p', copyId, '../README.md'),
+    ).rejects.toThrow('Invalid staged Git file');
+    await expect(service.stagedDiff('p', copyId, ':(glob)*')).rejects.toThrow(
+      'Invalid staged Git file',
+    );
     expect(preview.fingerprint).toBe(state.fingerprint);
     const result = await commit('p', copyId, {
       ...identity,

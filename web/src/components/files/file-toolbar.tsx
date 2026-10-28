@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useFileBrowserState as useFilesStore } from './file-browser-context';
 
 interface FileToolbarProps {
+  workspaceRoot?: { path: string; name: string };
   directoryAliases?: Record<string, string>;
   /** Called when user selects files or folder to upload into current root. */
   onUpload: (files: FileList, destinationPath: string) => void;
@@ -23,6 +24,7 @@ interface FileToolbarProps {
 }
 
 export function FileToolbar({
+  workspaceRoot,
   directoryAliases,
   onUpload,
   onNewFile,
@@ -37,9 +39,21 @@ export function FileToolbar({
 
   if (!rootDir) return null;
 
-  const dirName =
-    directoryAliases?.[rootDir.replace(/\/+$/, '')] ??
-    (rootDir.split('/').pop() || rootDir);
+  const workspacePath = workspaceRoot?.path.replace(/\/+$/, '') || '/';
+  const inWorkspace =
+    workspaceRoot?.name &&
+    (rootDir === workspacePath ||
+      rootDir.startsWith(workspacePath === '/' ? '/' : `${workspacePath}/`));
+  const dirName = inWorkspace
+    ? [
+        workspaceRoot.name,
+        ...rootDir
+          .slice(workspacePath === '/' ? 1 : workspacePath.length)
+          .split('/')
+          .filter(Boolean),
+      ].join(' › ')
+    : (directoryAliases?.[rootDir.replace(/\/+$/, '')] ??
+      (rootDir.split('/').pop() || rootDir));
 
   const refreshAll = () => {
     void queryClient.invalidateQueries({

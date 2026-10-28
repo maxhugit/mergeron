@@ -56,8 +56,34 @@ vi.mock('./workspace-entry-menu', () => ({
 }));
 vi.mock('@/generated/api', () => ({ filesAddRoot: addRoot }));
 vi.mock('@/components/files/file-tree', () => ({
-  FileTree: () => (
-    <div data-testid="git-files">{useFilesStore((state) => state.rootDir)}</div>
+  FileTree: ({
+    gitFileState,
+  }: {
+    gitFileState?: (
+      path: string,
+    ) =>
+      | {
+          unstaged: boolean;
+          actions: Array<{
+            label: string;
+            disabled?: boolean;
+            onSelect: () => void;
+          }>;
+        }
+      | undefined;
+  }) => (
+    <div data-testid="git-files">
+      {useFilesStore((state) => state.rootDir)}
+      {gitFileState?.('/copy/file.ts')?.actions.map((action) => (
+        <button
+          key={action.label}
+          disabled={action.disabled}
+          onClick={action.onSelect}
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
   ),
 }));
 const resource: GitInventory['resources'][number] = {
@@ -233,7 +259,7 @@ it.each([
   async (cwd, localPath, active) => {
     inventory.copies = [{ ...copy, localPath, ownerAgentIds: ['work-agent'] }];
     show(null, 'work-agent', cwd);
-    await screen.findByText('Copie locale disponible');
+    await screen.findByText('Local : main · aaaaaaa');
     expect(screen.queryByLabelText('Active pour cet agent') !== null).toBe(
       active,
     );
@@ -243,9 +269,7 @@ it.each([
 it('reserves a copy to its agent and disables creating a second copy for that agent', async () => {
   inventory.copies = [{ ...copy, ownerAgentIds: ['work-agent'] }];
   show('git', 'work-agent');
-  expect(
-    await screen.findByText('Copie locale disponible'),
-  ).toBeInTheDocument();
+  expect(await screen.findByText('Local : main · aaaaaaa')).toBeInTheDocument();
   expect(
     screen.getByRole('button', { name: 'Préparer une copie de travail' }),
   ).toBeDisabled();
@@ -258,6 +282,7 @@ it('does not expose another agent’s copy as this agent’s local copy', async 
   inventory.copies = [{ ...copy, ownerAgentIds: ['other-agent'] }];
   show('git', 'work-agent');
   await screen.findByRole('tab', { name: 'Local' });
+  expect(await screen.findByText('Aucune copie locale')).toBeInTheDocument();
   expect(
     screen.getByRole('button', { name: 'Parcourir les fichiers locaux' }),
   ).toBeDisabled();
@@ -371,11 +396,12 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
   await screen.findByTestId('git-files');
   await waitFor(() =>
     expect(
-      screen.getByRole('tab', { name: /Modifications/ }),
-    ).toHaveTextContent('(1)'),
+      screen.getByRole('tab', { name: /Préparation du commit/ }),
+    ).toHaveTextContent('(0)'),
   );
-  tab('Modifications (1)');
-  fireEvent.click(screen.getByRole('button', { name: /file.ts/ }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Voir les différences Git' }),
+  );
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(onGitDiff).toHaveBeenCalledWith({
     projectId: 'p',
@@ -414,7 +440,7 @@ it('shows failed inspection instead of a stale clean state', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Impossible d’inspecter cette copie',
   );
-  tab('Modifications');
+  tab('Préparation du commit');
   expect(
     screen.queryByText('Aucune modification locale.'),
   ).not.toBeInTheDocument();
@@ -478,9 +504,7 @@ it('keeps the branch pane compact without duplicating graph access or help text'
   expect(
     await screen.findByRole('button', { name: 'Créer une branche' }),
   ).toBeVisible();
-  const pane = within(
-    screen.getByRole('tabpanel', { name: 'Branches' }),
-  );
+  const pane = within(screen.getByRole('tabpanel', { name: 'Branches' }));
   expect(
     pane.queryByRole('button', {
       name: 'Afficher le graphe des branches et commits',
@@ -625,8 +649,8 @@ it('refreshes remote files at the latest revision while preserving the browsed d
 it('places publication only in Synchronization and keeps commits local', async () => {
   inventory.copies = [copy];
   show();
-  await screen.findByRole('tab', { name: 'Modifications (1)' });
-  tab('Modifications (1)');
+  await screen.findByRole('tab', { name: 'Préparation du commit (0)' });
+  tab('Préparation du commit (0)');
   await screen.findByRole('button', { name: 'Commit…' });
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
   tab('Synchronisation');

@@ -22,13 +22,27 @@ export function WorkspaceGitDiff({
       target.projectId,
       target.copyId,
       target.path,
+      target.staged ?? false,
     ],
-    queryFn: ({ signal }) =>
-      gitGet<GitDiff>(
+    queryFn: async ({ signal }) => {
+      if (target.staged) {
+        const result = await gitGet<{ diff: string }>(
+          target.projectId,
+          `copies/${encodeURIComponent(target.copyId)}/staged-diff?path=${encodeURIComponent(target.path)}`,
+          signal,
+        );
+        return {
+          path: target.path,
+          diff: result.diff,
+          untracked: false,
+        } as GitDiff;
+      }
+      return gitGet<GitDiff>(
         target.projectId,
         `copies/${encodeURIComponent(target.copyId)}/diff?path=${encodeURIComponent(target.path)}`,
         signal,
-      ),
+      );
+    },
     enabled: active,
     staleTime: 0,
     retry: false,
@@ -60,7 +74,11 @@ export function WorkspaceGitDiff({
           </Button>
         )}
         <p className="w-full text-xs text-muted-foreground">
-          {diff.data?.stagedOnly ? t('gitUnbornDiffHelp') : t('gitDiffHelp')}
+          {target.staged
+            ? t('gitPreparedDiffHelp')
+            : diff.data?.stagedOnly
+              ? t('gitUnbornDiffHelp')
+              : t('gitDiffHelp')}
         </p>
       </header>
       {diff.isPending ? (
@@ -84,7 +102,9 @@ export function WorkspaceGitDiff({
                 : t('gitDiffBefore')}
             </span>
             <span>
-              {diff.data.stagedOnly ? t('gitDiffStaged') : t('gitDiffAfter')}
+              {target.staged || diff.data.stagedOnly
+                ? t('gitDiffStaged')
+                : t('gitDiffAfter')}
             </span>
           </div>
           <GitDiffPanel

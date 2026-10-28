@@ -208,9 +208,21 @@ export class WorkspaceGitService {
     return { path: input, diff, untracked: false, stagedOnly: !head };
   }
 
-  async stagedDiff(projectId: string, copyId: string) {
+  async stagedDiff(projectId: string, copyId: string, input?: unknown) {
     const cwd = await this.directory(projectId, copyId);
     const state = await this.snapshot(projectId, copyId);
+    if (
+      input !== undefined &&
+      (typeof input !== 'string' ||
+        !input ||
+        input.length > 4096 ||
+        input.includes('\0') ||
+        !state.changes.some(
+          (change) =>
+            change.path === input && ![' ', '?'].includes(change.status[0]),
+        ))
+    )
+      throw new BadRequestException('Invalid staged Git file');
     const index = await readGitIndex(cwd);
     if (
       gitStateFingerprint(state.head, state.branch ?? '', index) !==
@@ -231,6 +243,7 @@ export class WorkspaceGitService {
           '--no-color',
           ...(state.head ? ['HEAD'] : []),
           '--',
+          ...(typeof input === 'string' ? [`:(literal)${input}`] : []),
         ],
         { GIT_INDEX_FILE: frozen },
       );

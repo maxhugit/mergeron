@@ -34,27 +34,25 @@ beforeEach(async () => {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  api
-    .mockReset()
-    .mockImplementation(async (url: string) =>
-      url.endsWith('stage-review')
-        ? {
-            reviewFingerprint: 'reviewed-content',
-            files: [
-              {
-                path: 'coucou.js',
-                text: "console.log('coucou');\ntutu\n",
-                binary: false,
-                deleted: false,
-                truncated: false,
-              },
-            ],
-          }
-        : {},
-    );
+  api.mockReset().mockImplementation(async (url: string) =>
+    url.endsWith('stage-review')
+      ? {
+          reviewFingerprint: 'reviewed-content',
+          files: [
+            {
+              path: 'coucou.js',
+              text: "console.log('coucou');\ntutu\n",
+              binary: false,
+              deleted: false,
+              truncated: false,
+            },
+          ],
+        }
+      : {},
+  );
 });
 afterEach(() => client.clear());
-function show(writable = true) {
+function show(writable = true, view: 'all' | 'prepared' = 'all') {
   return render(
     <QueryClientProvider client={client}>
       <GitStageChanges
@@ -63,6 +61,7 @@ function show(writable = true) {
         agentThreadId="agent"
         snapshot={snapshot}
         writable={writable}
+        view={view}
         onDiff={vi.fn()}
       />
     </QueryClientProvider>,
@@ -73,6 +72,47 @@ const bodies = () =>
     url,
     body: JSON.parse(options.body as string),
   }));
+
+it('lists only staged files in commit preparation', async () => {
+  show(true, 'prepared');
+  expect(screen.getByRole('button', { name: /ready.js/ })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /coucou.js/ })).toBeNull();
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retirer du commit' }));
+  await waitFor(() => expect(api).toHaveBeenCalled());
+  expect(bodies()[0]).toMatchObject({
+    body: {
+      paths: ['ready.js'],
+      agentThreadId: 'agent',
+      fingerprint: 'frozen-index',
+    },
+  });
+});
+
+it('keeps a partly staged file in preparation without offering to stage its newer edits there', () => {
+  render(
+    <QueryClientProvider client={client}>
+      <GitStageChanges
+        projectId="p"
+        copyId="copy"
+        snapshot={{
+          ...snapshot,
+          changes: [{ path: 'mixed.js', status: 'MM' }],
+        }}
+        writable
+        view="prepared"
+        onDiff={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole('button', { name: /mixed.js/ })).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Retirer du commit' }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Préparer pour le commit' }),
+  ).toBeNull();
+});
 
 it('reviews then prepares only the selected files with the agent and content fingerprint', async () => {
   show();

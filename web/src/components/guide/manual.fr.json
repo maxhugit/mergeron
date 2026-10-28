@@ -1002,6 +1002,8 @@
             "title": "Lire le dépôt",
             "paragraphs": [
               "La vue Locale montre la copie de travail : branche courante, changements et références déjà connues. Le graphe relie les commits à leurs parents ; cliquer un commit permet d’en consulter les détails.",
+              "Sous le nom du dépôt, Local indique la branche et la révision de la copie de cet agent, ou Aucune copie locale. L’explorateur affiche le nom de l’emplacement et le chemin relatif ; le chemin technique complet reste au survol.",
+              "Dans Fichiers, le rouge signale des modifications non préparées, y compris les nouveaux fichiers. Le bouton … en fin de ligne regroupe les actions de fichier et Git : voir les différences, préparer pour le commit ou retirer de la préparation. Les suppressions sont aussi affichées pour pouvoir être préparées.",
               "Une référence distante affichée dans l’historique local n’est pas nécessairement à jour sur GitHub. Actualiser la vue relit son état ; les opérations réseau restent distinctes."
             ]
           },
@@ -1009,7 +1011,8 @@
             "title": "Enregistrer un changement",
             "steps": [
               "Vérifiez la copie sélectionnée et consultez les différences des fichiers modifiés.",
-              "Préparez les fichiers voulus dans l’index avec les actions proposées.",
+              "Dans le menu du fichier, préparez les modifications voulues et confirmez le contenu présenté.",
+              "Ouvrez Préparation du commit : seuls les fichiers déjà préparés sont listés et leurs différences excluent les modifications non préparées. Un fichier préparé puis modifié à nouveau reste rouge dans Fichiers : sa version préparée est conservée jusqu’à une nouvelle préparation.",
               "Utilisez Commit, relisez le périmètre et donnez un message décrivant le changement.",
               "Après confirmation, vérifiez le nouveau commit dans l’historique. Publiez séparément si nécessaire."
             ],
