@@ -69,6 +69,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     ThreadResponseDetailService,
     KnowledgeProposalsObserverService,
     ThreadsService,
+    { provide: 'INTERNAL_MCP_THREAD_RENAMER', useExisting: ThreadsService },
     ThreadsBranchingService,
     ThreadsDeletePlannerService,
     ThreadsDeletionService,

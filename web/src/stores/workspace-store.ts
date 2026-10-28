@@ -13,7 +13,13 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
-  | { id: string; kind: 'browser'; number?: number; opened?: boolean }
+  | {
+      id: string;
+      kind: 'browser';
+      number?: number;
+      opened?: boolean;
+      mode?: 'local' | 'isolated';
+    }
   | ({ id: string; kind: 'git-remote-file' } & GitRemoteFileTarget)
   | ({ id: string; kind: 'git-graph' } & GitGraphTarget)
   | ({ id: string; kind: 'git-diff' } & GitDiffTarget)
@@ -67,7 +73,7 @@ interface WorkspaceState {
   contexts: Record<string, WorkspaceContext>;
   fileViews: Record<string, FileViewState>;
   openFile: (context: string, path: string, line?: number | null) => void;
-  openBrowser: (context: string) => void;
+  openBrowser: (context: string, mode?: 'local' | 'isolated') => void;
   setBrowserLayout: (
     context: string,
     layout: { browserDocked?: boolean; lastBrowserId?: string },
@@ -168,7 +174,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
       return { contexts };
     }),
-  openBrowser: (context) =>
+  openBrowser: (context, mode = 'isolated') =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;
       if (current.tabs.filter((tab) => tab.kind === 'browser').length >= 5)
@@ -191,7 +197,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           ...state.contexts,
           [context]: {
             ...current,
-            tabs: [...current.tabs, { id, kind: 'browser', number }],
+            tabs: [
+              ...current.tabs,
+              {
+                id,
+                kind: 'browser',
+                number,
+                ...(mode === 'local' ? { mode } : {}),
+              },
+            ],
             activeId: id,
             lastBrowserId: id,
           },

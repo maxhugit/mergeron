@@ -2,7 +2,7 @@ export const BROWSER_ANNOTATION_EVENT = 'mergeron:browser-annotation';
 export interface BrowserAnnotationRequest {
   threadId: string;
   text: string;
-  image: File;
+  image?: File;
   accepted?: boolean;
   complete: (error?: string) => void;
 }

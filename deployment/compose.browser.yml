@@ -7,6 +7,7 @@ services:
     networks:
       mergeron-browser-control: {}
   mergeron-browser:
+    image: ${MERGERON_BROWSER_IMAGE:-ghcr.io/maxhugit/mergeron-browser:edge}
     build: ./browser
     init: true
     restart: unless-stopped

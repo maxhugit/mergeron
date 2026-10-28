@@ -544,7 +544,7 @@
             "title": "Prérequis et confidentialité",
             "paragraphs": [
               "La dictée nécessite un navigateur compatible avec l’enregistrement audio, une connexion sécurisée et un accès microphone autorisé. Un refus de permission ou une transcription en cours peut rendre la commande indisponible.",
-              "L’audio est transmis au service de transcription configuré par l’installation, via le circuit API du chat simple. Ce n’est pas une conversation vocale continue avec l’agent ni le son du navigateur distant."
+              "Le moteur est choisi dans Codex → Chat et Audio : clé API ou Codex CLI — expérimental. Les moteurs du chat et de l’audio sont indépendants ; aucun repli automatique vers la clé API n’est effectué. La disponibilité vocale du CLI dépend du moteur et du compte. Le texte reste un brouillon à relire, pas une action de l’agent."
             ],
             "warning": "Ne dictez pas de secrets ou d’informations sensibles sans tenir compte du service destinataire. Un texte transcrit peut comporter des erreurs : l’ajout au brouillon ne vaut pas validation de son contenu."
           }

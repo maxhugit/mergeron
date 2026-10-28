@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+  <meta charset="utf-8" /><title>Connexion Mergeron</title
+  ><link rel="stylesheet" href="style.css" />
+  <main>
+    <h1>Connexion à Mergeron</h1>
+    <p>
+      L’extension ne reçoit aucun cookie ni jeton d’authentification. Gardez
+      l’onglet Mergeron ouvert pendant la collaboration.
+    </p>
+    <form id="settings">
+      <label
+        >Adresse de l’instance HTTPS<input
+          id="origin"
+          type="url"
+          required
+          placeholder="https://mergeron-dev.hugotlab.fr" /></label
+      ><button>Autoriser cette instance</button>
+    </form>
+    <p id="status" role="status"></p>
+    <p>
+      Après configuration, rechargez l’onglet Mergeron. Les autres sites ne sont
+      accessibles qu’après un partage explicite via l’icône de l’extension.
+    </p>
+    <button id="disconnect">Déconnecter et retirer l’autorisation</button>
+  </main>
+  <script type="module" src="options.js"></script>
+</html>

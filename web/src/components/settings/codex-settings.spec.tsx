@@ -42,7 +42,10 @@ it('puts Account first, disables other tabs without a connection and responds to
   expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
   expect(tabs[1]).toHaveTextContent('Codex CLI');
   expect(tabs[1]).toBeEnabled();
-  for (const tab of tabs.slice(2)) expect(tab).toBeDisabled();
+  for (const tab of tabs.slice(2)) {
+    if (tab.textContent === 'Chat and Audio') expect(tab).toBeEnabled();
+    else expect(tab).toBeDisabled();
+  }
   expect(
     screen.queryByRole('heading', { name: 'Model catalog' }),
   ).not.toBeInTheDocument();
@@ -65,8 +68,10 @@ it('puts Account first, disables other tabs without a connection and responds to
     'aria-selected',
     'true',
   );
-  for (const tab of screen.getAllByRole('tab').slice(2))
-    expect(tab).toBeDisabled();
+  for (const tab of screen.getAllByRole('tab').slice(2)) {
+    if (tab.textContent === 'Chat and Audio') expect(tab).toBeEnabled();
+    else expect(tab).toBeDisabled();
+  }
 });
 it('can open CLI management even before an account is connected', async () => {
   const disconnected = { account: null, requiresOpenaiAuth: true };

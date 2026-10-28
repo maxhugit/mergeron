@@ -58,6 +58,15 @@ export class SimpleChatController {
     return this.simpleChatService.setBackend(body.backend);
   }
 
+  @Put('audio-settings')
+  @ApiOperation({
+    summary:
+      'Choose API or experimental native CLI dictation independently of chat',
+  })
+  saveAudioSettings(@Body() body: { audioBackend?: unknown }) {
+    return this.simpleChatService.setAudioBackend(body.audioBackend);
+  }
+
   @Get('models')
   @ApiOperation({ summary: 'List available OpenAI chat models' })
   models() {

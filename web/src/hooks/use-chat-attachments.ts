@@ -271,7 +271,13 @@ export function useChatAttachments({
       )
         return;
       request.accepted = true;
-      void uploadFile(request.image)
+      const image = request.image;
+      if (!image) {
+        setValue((previous) => previous + request.text);
+        request.complete();
+        return;
+      }
+      void uploadFile(image)
         .then((result) => {
           if (!current || !result) {
             request.complete('Conversation changed or upload failed');
@@ -282,9 +288,9 @@ export function useChatAttachments({
             {
               type: 'localImage',
               id: nextAttachmentId(),
-              name: request.image.name,
+              name: image.name,
               path: result.path,
-              previewUrl: URL.createObjectURL(request.image),
+              previewUrl: URL.createObjectURL(image),
             },
           ]);
           setValue((previous) => previous + request.text);

@@ -4,6 +4,7 @@ import { chmod, chown, mkdir, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DockerClient } from './docker-client.mjs';
+import { ImageUpdates } from './image-updates.mjs';
 import { TransactionalUpdater } from './updater.mjs';
 import {
   confirmAdoption,
@@ -45,6 +46,15 @@ const docker = new DockerClient(
   process.env.MERGERON_DOCKER_SOCKET ?? '/var/run/docker.sock',
 );
 const installConfiguration = readInstallConfiguration(manifest);
+const imageUpdates = new ImageUpdates({
+  docker,
+  manifest,
+  configuration: installConfiguration,
+  inventory: async () => {
+    await refresh();
+    return snapshot;
+  },
+});
 const updater = new TransactionalUpdater({
   manifest,
   docker,
@@ -239,12 +249,30 @@ const server = http.createServer(async (request, response) => {
       capabilities: {
         backupManagement: true,
         backupRetention: true,
+        imageUpdates: true,
         devFastUpdate:
           manifest.environment === 'development' &&
           manifest.stack !== 'mergeron',
       },
     });
     return;
+  }
+  if (
+    ['/v1/images/updates', '/v1/images/updates?refresh=true'].includes(
+      request.url,
+    )
+  ) {
+    if (request.method !== 'GET')
+      return json(response, 405, { error: 'methodNotAllowed' });
+    try {
+      return json(
+        response,
+        200,
+        await imageUpdates.status(request.url.endsWith('?refresh=true')),
+      );
+    } catch {
+      return json(response, 503, { error: 'managerImageDiscoveryUnavailable' });
+    }
   }
   if (
     [

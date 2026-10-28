@@ -51,7 +51,11 @@ export function useWorkspaceClose(context: string) {
     }
   };
   const requestClose = (tab: WorkspaceTab) => {
-    if (tab.kind === 'browser' && context.startsWith('thread:')) {
+    if (
+      tab.kind === 'browser' &&
+      tab.mode !== 'local' &&
+      context.startsWith('thread:')
+    ) {
       void browserApi(`/${encodeURIComponent(context.slice(7))}/dispose`, {
         instanceId: tab.id,
       })

@@ -36,10 +36,11 @@ import type { ServerNotification } from '../codex/codex-schema';
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
 import { InternalMcpService } from './internal-mcp.service';
 import { InternalMcpController } from './internal-mcp.controller';
-import { internalMcpCatalog } from './internal-mcp-catalog';
+import { internalMcpCatalog, INTERNAL_MCP_TOOLS } from './internal-mcp-catalog';
 import { catalogFixture } from '../codex/catalog/catalog.testing';
 import { CodexProcessManager as NativeCodexProcessManager } from '../codex/codex-process-manager.service';
 import type { v2 } from '../codex/codex-schema';
+import { LocalBrowserService } from '../browser/local-browser.service';
 
 describe('native internal MCP over HTTP', () => {
   let database: TestDatabase;
@@ -48,8 +49,12 @@ describe('native internal MCP over HTTP', () => {
   let identities: IdentityService;
   let deliverables: DeliverablesService;
   let tools: ProjectAgentToolsService;
+  let localBrowser: LocalBrowserService;
   let notify: (note: ServerNotification) => void;
   const clients: Client[] = [];
+  const setThreadName = vi
+    .fn<(id: string, name: string) => Promise<void>>()
+    .mockResolvedValue(undefined);
   const asPerson = <T>(id: string, operation: () => T) =>
     accessContext.run(
       { identities, identity: identities.resolvePerson(id) },
@@ -57,6 +62,7 @@ describe('native internal MCP over HTTP', () => {
     );
 
   beforeEach(async () => {
+    setThreadName.mockClear();
     database = createTestDatabase();
     root = await fs.realpath(
       await fs.mkdtemp(path.join(tmpdir(), 'internal-mcp-')),
@@ -202,8 +208,10 @@ describe('native internal MCP over HTTP', () => {
       database.db,
     );
     tools = new ProjectAgentToolsService(database.db, deliverables, {
-      get: () => domain,
+      get: (token: string) =>
+        token === 'INTERNAL_MCP_THREAD_RENAMER' ? { setThreadName } : domain,
     } as unknown as ModuleRef);
+    localBrowser = new LocalBrowserService();
     service = new InternalMcpService(
       tools,
       {
@@ -216,6 +224,7 @@ describe('native internal MCP over HTTP', () => {
         addLifecycleListener: vi.fn(),
       } as unknown as CodexProcessManager,
       new CatalogAdmissionService(),
+      localBrowser,
     );
   });
   afterEach(async () => {
@@ -253,12 +262,167 @@ describe('native internal MCP over HTTP', () => {
     userRequest: 'User requested this task.',
   };
 
+  it('binds local browser commands to the administrator, agent and active writable turn', async () => {
+    const { client } = await connect();
+    activate();
+    const sessionId = localBrowser.open('admin', 'agent').id;
+    const shared = {
+      state: 'shared',
+      epoch: 'page',
+      url: 'https://example.org/',
+    };
+    localBrowser.poll('admin', 'agent', sessionId, shared);
+    const read = await client.callTool({
+      name: 'local_browser_read',
+      arguments: { operation: 'observe', sessionId },
+    });
+    expect(read.isError).not.toBe(true);
+    const observation = localBrowser.poll('admin', 'agent', sessionId, shared)
+      .dispatch[0];
+    localBrowser.poll('admin', 'agent', sessionId, {
+      ...shared,
+      results: [
+        {
+          id: observation.id,
+          executionId: observation.executionId,
+          result: {
+            snapshotId: 'snapshot',
+            elements: [{ id: 'element', tag: 'button', text: 'Save' }],
+          },
+        },
+      ],
+    });
+    expect(
+      (
+        await client.callTool({
+          name: 'local_browser_read',
+          arguments: { operation: 'status' },
+        })
+      ).structuredContent,
+    ).toMatchObject({ sessions: [{ id: sessionId }] });
+    const pending = await client.callTool({
+      name: 'local_browser_action',
+      arguments: {
+        sessionId,
+        action: 'click',
+        snapshotId: 'snapshot',
+        elementId: 'element',
+      },
+    });
+    expect(pending.structuredContent).toMatchObject({ status: 'approval' });
+    service.revoke('agent');
+    expect(() =>
+      localBrowser.decide(
+        'admin',
+        'agent',
+        sessionId,
+        String(pending.structuredContent?.commandId),
+        true,
+      ),
+    ).toThrow('NO_ACTIVE_TURN');
+    activate('admin', false);
+    expect(
+      (
+        await client.callTool({
+          name: 'local_browser_action',
+          arguments: {
+            sessionId,
+            action: 'scroll',
+            snapshotId: 'snapshot',
+            y: 10,
+          },
+        })
+      ).isError,
+    ).toBe(true);
+    activate('reader', true);
+    expect(
+      (
+        await client.callTool({
+          name: 'local_browser_read',
+          arguments: { operation: 'status' },
+        })
+      ).isError,
+    ).toBe(true);
+    activate();
+    const other = localBrowser.open('admin', 'other-agent').id;
+    expect(
+      (
+        await client.callTool({
+          name: 'local_browser_read',
+          arguments: { operation: 'observe', sessionId: other },
+        })
+      ).isError,
+    ).toBe(true);
+  });
+
+  it('renames only its own agent even in filesystem read-only mode, with audit and idempotency', async () => {
+    const { client } = await connect();
+    activate('admin', false);
+    const args = {
+      requestId: 'rename-1',
+      title: 'Qualité PLM',
+      userRequest: 'Please rename this agent.',
+    };
+    const result = await client.callTool({
+      name: 'rename_agent',
+      arguments: args,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      threadId: 'agent',
+      name: 'Qualité PLM',
+      status: 'renamed',
+    });
+    await client.callTool({ name: 'rename_agent', arguments: args });
+    expect(setThreadName).toHaveBeenCalledExactlyOnceWith(
+      'agent',
+      'Qualité PLM',
+    );
+    const audit = database.db.select().from(projectActivity).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: 'agent_renamed',
+      entityId: 'agent',
+    });
+    const forged = await client.callTool({
+      name: 'rename_agent',
+      arguments: { ...args, threadId: 'other' },
+    });
+    expect(forged.isError).toBe(true);
+    const conflict = await client.callTool({
+      name: 'rename_agent',
+      arguments: { ...args, title: 'Different' },
+    });
+    expect(conflict.isError).toBe(true);
+    expect(setThreadName).toHaveBeenCalledTimes(1);
+  });
+
+  it('never renames without an active authorized turn or after revocation', async () => {
+    const { client } = await connect();
+    const args = {
+      requestId: 'rename-2',
+      title: 'Name',
+      userRequest: 'Rename please.',
+    };
+    expect(
+      (await client.callTool({ name: 'rename_agent', arguments: args }))
+        .isError,
+    ).toBe(true);
+    activate();
+    service.revoke('agent');
+    expect(
+      (await client.callTool({ name: 'rename_agent', arguments: args }))
+        .isError,
+    ).toBe(true);
+    expect(setThreadName).not.toHaveBeenCalled();
+  });
+
   it('negotiates MCP and exposes exactly the schemas displayed by administration', async () => {
     const { client } = await connect();
     expect(client.getServerVersion()?.name).toBe('mergeron_internal');
     const { tools: advertised } = await client.listTools();
     const catalog = internalMcpCatalog();
-    expect(advertised).toHaveLength(7);
+    expect(advertised).toHaveLength(INTERNAL_MCP_TOOLS.length);
     for (const method of catalog.tools) {
       const native = advertised.find((tool) => tool.name === method.name)!;
       expect(native.inputSchema).toEqual(method.inputSchema);
@@ -492,10 +656,12 @@ describe('native internal MCP over HTTP', () => {
     const controller = new InternalMcpController();
     expect(() => controller.catalog()).toThrow();
     expect(() => asPerson('reader', () => controller.catalog())).toThrow();
-    expect(asPerson('admin', () => controller.catalog()).tools).toHaveLength(7);
+    expect(asPerson('admin', () => controller.catalog()).tools).toHaveLength(
+      INTERNAL_MCP_TOOLS.length,
+    );
   });
 
-  it('is discovered as seven native tools by the pinned Codex app-server without inference', async () => {
+  it('is discovered as native tools by the pinned Codex app-server without inference', async () => {
     const fixture = catalogFixture();
     const manager = new NativeCodexProcessManager(fixture.storage, {
       getStringSetting: () => null,
@@ -528,7 +694,7 @@ describe('native internal MCP over HTTP', () => {
           inventory.data.some(
             (server) =>
               server.name === 'mergeron_internal' &&
-              Object.keys(server.tools).length === 7,
+              Object.keys(server.tools).length === INTERNAL_MCP_TOOLS.length,
           )
         )
           break;
@@ -537,7 +703,9 @@ describe('native internal MCP over HTTP', () => {
       const internal = inventory!.data.find(
         (server) => server.name === 'mergeron_internal',
       );
-      expect(Object.keys(internal?.tools ?? {})).toHaveLength(7);
+      expect(Object.keys(internal?.tools ?? {})).toHaveLength(
+        INTERNAL_MCP_TOOLS.length,
+      );
       expect(Object.keys(internal?.tools ?? {})).toContain(
         'create_deliverable',
       );

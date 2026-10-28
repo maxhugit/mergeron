@@ -56,11 +56,6 @@ const SecuritySettings = lazy(() =>
     default: module.SecuritySettings,
   })),
 );
-const SimpleChatSettings = lazy(() =>
-  import('./simple-chat-settings').then((module) => ({
-    default: module.SimpleChatSettings,
-  })),
-);
 const PluginsTab = lazy(() =>
   import('@/components/integrations/plugins-tab').then((module) => ({
     default: module.PluginsTab,
@@ -136,13 +131,19 @@ export function SettingsPage() {
           {section === 'people' && <PeopleManager showHeading={false} />}
           {(section === 'codex' ||
             section === 'account' ||
-            section === 'codexCli') && (
+            section === 'codexCli' ||
+            section === 'simpleChat') && (
             <CodexSettings
               key={section}
-              initialTab={section === 'codexCli' ? 'cli' : 'account'}
+              initialTab={
+                section === 'codexCli'
+                  ? 'cli'
+                  : section === 'simpleChat'
+                    ? 'chatAudio'
+                    : 'account'
+              }
             />
           )}
-          {section === 'simpleChat' && <SimpleChatSettings />}
           {section === 'terminal' && <TerminalSettings />}
           {section === 'files' && <FilesSettings />}
           {section === 'database' && <DatabaseSettings />}

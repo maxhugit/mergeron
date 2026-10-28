@@ -184,4 +184,10 @@ export class DockerClient {
   inspectImage(reference) {
     return this.request(`/images/${encodeURIComponent(reference)}/json`);
   }
+
+  inspectDistribution(reference) {
+    return this.request(`/distribution/${encodeURIComponent(reference)}/json`, {
+      timeout: 20_000,
+    });
+  }
 }

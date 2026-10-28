@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="fr">
+  <meta charset="utf-8" /><title>Mergeron local</title
+  ><link rel="stylesheet" href="style.css" />
+  <main>
+    <h1>Mergeron — navigateur local</h1>
+    <p id="instance"></p>
+    <p>
+      Seul l’onglet choisi est partagé. Connectez-vous vous-même avec votre
+      passkey ; mettez le partage en pause pendant l’authentification.
+    </p>
+    <div id="connections"></div>
+    <label>Agent destinataire<select id="session"></select></label
+    ><button id="share">Partager / reprendre cet onglet</button
+    ><button id="point">Pointer un élément</button
+    ><button id="pause">Suspendre tous les partages</button
+    ><button id="options">Configurer l’instance</button>
+    <p id="status" role="status"></p>
+  </main>
+  <script type="module" src="popup.js"></script>
+</html>

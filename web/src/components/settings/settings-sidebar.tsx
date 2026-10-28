@@ -150,7 +150,10 @@ export function SettingsSidebar() {
             {t('administration')}
           </h2>
           {SETTINGS_SECTIONS.filter(
-            (entry) => entry !== 'account' && entry !== 'codexCli',
+            (entry) =>
+              entry !== 'account' &&
+              entry !== 'codexCli' &&
+              entry !== 'simpleChat',
           ).map((entry) => {
             const Icon = sectionIcons[entry];
             return (
@@ -159,14 +162,16 @@ export function SettingsSidebar() {
                 aria-current={
                   pathname === '/settings' &&
                   (section === entry ||
-                    (entry === 'codex' && section === 'codexCli'))
+                    (entry === 'codex' &&
+                      (section === 'codexCli' || section === 'simpleChat')))
                     ? 'page'
                     : undefined
                 }
                 className={itemClass(
                   pathname === '/settings' &&
                     (section === entry ||
-                      (entry === 'codex' && section === 'codexCli')),
+                      (entry === 'codex' &&
+                        (section === 'codexCli' || section === 'simpleChat'))),
                 )}
                 onClick={() => {
                   close(false);

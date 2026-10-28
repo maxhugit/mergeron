@@ -3,9 +3,12 @@
 ## Fonctionnement
 
 À chaque échange, un agent de travail reçoit le nom et l’identifiant de son
-projet, le dossier actif, les gestionnaires disponibles, les nombres de tâches
-et livrables accessibles, les 25 premiers de chaque catégorie et les éléments
-liés à sa conversation. Le rattachement explicite détermine le projet, jamais
+projet, le dossier actif et uniquement les identifiants/titres des éléments liés
+à sa conversation (10 maximum de chaque type). Les listes, compteurs, descriptions
+et critères sont consultés via MCP à la demande. Le contexte technique reste
+invisible dans le chat, y compris pour les anciens échanges, sans supprimer le
+message ou les pièces jointes de l’utilisateur.
+Le rattachement explicite détermine le projet, jamais
 le chemin Git. Les conversations existantes en bénéficient au prochain échange.
 
 Un véritable serveur MCP natif, `mergeron_internal`, remplace la CLI Python.
@@ -28,7 +31,7 @@ l’agent reste responsable de l’interprétation de la demande.
 L’entrée **MCP interne** des réglages globaux ouvre
 `/settings?section=internalMcp`. Réservée aux administrateurs, elle présente :
 
-- recherche parmi les sept méthodes ;
+- recherche parmi les huit méthodes ;
 - paramètres, types, champs obligatoires et contraintes ;
 - schémas JSON complets des entrées et des résultats ;
 - exemples d’appels, protocole, limites, erreurs et instructions de sécurité.
@@ -43,6 +46,18 @@ La confidentialité est respectée dans les listes, compteurs, détails et conte
 Les gestionnaires internes d’exécution sont exclus. La création requiert les
 droits administrateur nécessaires à l’exécution d’un agent et un mode modifiable.
 En lecture seule, seuls les outils de consultation fonctionnent.
+
+Exception : `rename_agent` renomme uniquement la conversation appelante, même en
+lecture seule du système de fichiers. Paramètres : `title` (1–200 caractères,
+sans caractères de contrôle), `requestId` stable et `userRequest` explicite.
+Il exige les droits administrateur et une autorisation de tour active. Aucun
+identifiant de cible n’est accepté. Le service habituel conserve la protection
+contre la suppression et émet la notification native de changement de nom.
+L’action `agent_renamed` journalise la personne et l’administrateur réel en cas
+de simulation. Une relance identique renvoie le résultat sans nouveau changement.
+Le résultat est `{ threadId, name, status: "renamed" }`. Ni fichiers, ni droits,
+ni rattachement ne changent. Comme pour les créations, une issue incertaine ne
+doit pas être rejouée sous un nouvel identifiant sans vérifier le nom actuel.
 
 Créer un livrable crée sa fiche et son dossier, **pas une version de document**.
 Les documents conservés passent toujours par « Enregistrer une nouvelle version »

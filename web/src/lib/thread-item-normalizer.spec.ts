@@ -67,7 +67,9 @@ const knownItems: Array<[string, Record<string, unknown>]> = [
       id: 'search-1',
       query: 'protocol docs',
       action: { type: 'search', query: 'protocol docs', queries: null },
-      results: [{ title: 'Docs', url: 'https://example.test', snippet: 'Result' }],
+      results: [
+        { title: 'Docs', url: 'https://example.test', snippet: 'Result' },
+      ],
     },
   ],
   ['imageView', { type: 'imageView', id: 'view-1', path: '/tmp/image.png' }],
@@ -89,18 +91,34 @@ const knownItems: Array<[string, Record<string, unknown>]> = [
 
 describe('normalizeThreadItem', () => {
   it('retains MCP failure state so display preferences cannot hide errors', () => {
-    expect(normalizeThreadItem({ type: 'mcpToolCall', id: 'failed', status: 'failed', error: { message: 'Denied' } }, true)).toMatchObject({ kind: 'render', item: { failed: true, content: 'Denied' } });
+    expect(
+      normalizeThreadItem(
+        {
+          type: 'mcpToolCall',
+          id: 'failed',
+          status: 'failed',
+          error: { message: 'Denied' },
+        },
+        true,
+      ),
+    ).toMatchObject({
+      kind: 'render',
+      item: { failed: true, content: 'Denied' },
+    });
   });
-  it.each(knownItems)('normalizes %s identically for live and history paths', (type, raw) => {
-    const started = normalizeThreadItem(raw, false);
-    const persisted = normalizeThreadItem(raw, true);
+  it.each(knownItems)(
+    'normalizes %s identically for live and history paths',
+    (type, raw) => {
+      const started = normalizeThreadItem(raw, false);
+      const persisted = normalizeThreadItem(raw, true);
 
-    expect(started.kind).toBe('render');
-    expect(persisted.kind).toBe('render');
-    if (started.kind !== 'render' || persisted.kind !== 'render') return;
-    expect(started.item.type).toBe(type);
-    expect(persisted.item).toEqual({ ...started.item, completed: true });
-  });
+      expect(started.kind).toBe('render');
+      expect(persisted.kind).toBe('render');
+      if (started.kind !== 'render' || persisted.kind !== 'render') return;
+      expect(started.item.type).toBe(type);
+      expect(persisted.item).toEqual({ ...started.item, completed: true });
+    },
+  );
 
   it('turns a future item into a visible fallback without retaining its payload', () => {
     const normalized = normalizeThreadItem(
@@ -121,7 +139,9 @@ describe('normalizeThreadItem', () => {
         completed: false,
       },
     });
-    expect(JSON.stringify(normalized)).not.toContain('must never reach the page');
+    expect(JSON.stringify(normalized)).not.toContain(
+      'must never reach the page',
+    );
   });
 
   it('preserves structured async questions while discarding malformed entries', () => {
@@ -174,7 +194,9 @@ describe('normalizeThreadItem', () => {
       type: 'functionCallOutput',
       outputParts: [{ type: 'encrypted' }],
     });
-    expect(JSON.stringify(normalized)).not.toContain('ciphertext must stay opaque');
+    expect(JSON.stringify(normalized)).not.toContain(
+      'ciphertext must stay opaque',
+    );
   });
 
   // Measured on 0.153.2 (`codex_probe/probes/file-approval-context.ts`): one
@@ -187,7 +209,11 @@ describe('normalizeThreadItem', () => {
         id: 'exec-1',
         status: 'inProgress',
         changes: [
-          { path: '/w/alpha.txt', kind: { type: 'update', move_path: null }, diff: '--- a\n+++ b\n+ALPHA' },
+          {
+            path: '/w/alpha.txt',
+            kind: { type: 'update', move_path: null },
+            diff: '--- a\n+++ b\n+ALPHA',
+          },
           { path: '/w/beta.txt', kind: { type: 'add' }, diff: '+BETA' },
         ],
       },
@@ -276,5 +302,36 @@ describe('normalizeThreadItem', () => {
         images: ['https://example.com/image.png'],
       },
     });
+  });
+  it('hides current and historical project snapshots while preserving user text and attachments', () => {
+    const context =
+      '<mergeron_project_context>\nCurrent server-provided project snapshot; supersedes earlier snapshots.\n{"tasks":["secret"]}\n</mergeron_project_context>';
+    for (const completed of [false, true]) {
+      expect(
+        normalizeThreadItem(
+          {
+            type: 'userMessage',
+            content: [
+              { type: 'text', text: context },
+              { type: 'text', text: 'Rename this agent' },
+              { type: 'image', url: 'https://example.com/a.png' },
+            ],
+          },
+          completed,
+        ),
+      ).toMatchObject({
+        kind: 'userMessage',
+        message: {
+          text: 'Rename this agent',
+          images: ['https://example.com/a.png'],
+        },
+      });
+      expect(
+        normalizeThreadItem(
+          { type: 'userMessage', content: [{ type: 'text', text: context }] },
+          completed,
+        ),
+      ).toEqual({ kind: 'invalid' });
+    }
   });
 });
