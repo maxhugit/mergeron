@@ -380,16 +380,18 @@ it('does not offer a default update when automatic detection reports no new imag
 
 it('previews the selected companion and applies only its reviewed image after confirmation', async () => {
   const target = `nginx@sha256:${'b'.repeat(64)}`;
-  const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
-    Promise.resolve(
+  const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    void input;
+    void init;
+    return Promise.resolve(
       json({
         applicable: true,
         fingerprint: 'ingress-reviewed',
         blockers: [],
         images: { ingress: target },
       }),
-    ),
-  );
+    );
+  });
   vi.stubGlobal('fetch', fetch);
   fixture.render(<ManagerUpdateControls status={status} />);
   const user = userEvent.setup();
