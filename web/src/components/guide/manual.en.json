@@ -1,0 +1,1530 @@
+[
+  {
+    "id": "start",
+    "title": "Discover and get started",
+    "articles": [
+      {
+        "id": "overview",
+        "title": "Understand the platform",
+        "summary": "Distinguish projects, conversations, agents, tasks and deliverables.",
+        "keywords": ["home", "organization", "differences", "guide"],
+        "sections": [
+          {
+            "title": "The building blocks",
+            "paragraphs": [
+              "A project groups its participants, file locations, connections, knowledge and resources. Home helps you find projects and items requiring attention.",
+              "A simple conversation exchanges messages with a model without executing tools. A work agent uses a Codex conversation and may act on files and tools according to its permissions. A task organizes work; a deliverable groups documents and their approval."
+            ]
+          },
+          {
+            "title": "Choose an entry point",
+            "actions": [
+              {
+                "label": "+ beside Projects",
+                "effect": "Create a project or import a project archive."
+              },
+              {
+                "label": "Project +",
+                "effect": "Add a conversation, agent or resource to the selected project."
+              },
+              {
+                "label": "Project name",
+                "effect": "Open its information and administration. Available features depend on your rights."
+              }
+            ],
+            "warning": "An AI answer, a completed task and an approved document are not equivalent. A person must review the result."
+          }
+        ],
+        "related": [
+          "first-project",
+          "simple-chat",
+          "agent-create",
+          "deliverable-lifecycle"
+        ]
+      },
+      {
+        "id": "first-project",
+        "title": "Create your first project",
+        "summary": "Prepare a usable project before assigning work to an agent.",
+        "keywords": ["create", "start", "new", "setup"],
+        "sections": [
+          {
+            "title": "Getting started",
+            "steps": [
+              "Click + beside Projects and enter a clear name.",
+              "Open the project, complete its information and add authorized participants.",
+              "In Locations and connections, check the main workspace and add required folders or connections.",
+              "Provide useful shared knowledge and select appropriate project integrations.",
+              "Create a simple conversation for a question, an agent for an action, or a manager to organize tasks and deliverables."
+            ]
+          },
+          {
+            "title": "Before sending the first message",
+            "paragraphs": [
+              "For an agent, check the active working folder, model and permissions. Explain the expected outcome, relevant files and required checks.",
+              "A project may have multiple task managers, but only one deliverable manager and one automation manager. Selecting an existing unique manager opens it."
+            ],
+            "warning": "Paths belong to the server. A folder on your computer is not automatically accessible to an agent."
+          }
+        ],
+        "related": ["project-people", "locations", "agent-composer"]
+      },
+      {
+        "id": "desktop",
+        "title": "Navigation, account and installed application",
+        "summary": "Use panels, install the application and refresh its interface.",
+        "keywords": ["PWA", "Edge", "Windows", "refresh", "sidebar", "theme"],
+        "sections": [
+          {
+            "title": "Find your way around",
+            "paragraphs": [
+              "The sidebar lists projects and their resources. Collapsing it frees space without deleting anything. Agent tabs switch between the conversation and open tools.",
+              "The account menu contains personal preferences and sign-out. Server administration is separate from project settings."
+            ]
+          },
+          {
+            "title": "Install and refresh",
+            "steps": [
+              "After signing in, open My account → Install application, or use Edge’s Applications menu when offered.",
+              "The installed application keeps the native title bar for moving the window and minimizing, maximizing or closing it.",
+              "After an update, use the refresh icon between Settings and Account. Save important drafts first."
+            ],
+            "warning": "Installation depends on your browser and device policies. It does not provide offline access to APIs, conversations or files. Refreshing the interface does not install a server update."
+          }
+        ],
+        "related": ["server-update", "simple-messages"]
+      }
+    ]
+  },
+  {
+    "id": "projects",
+    "title": "Projects and organization",
+    "articles": [
+      {
+        "id": "project-people",
+        "title": "Participants, project lead and groups",
+        "summary": "Organize people without confusing business assignments with access rights.",
+        "keywords": ["rights", "participants", "owner", "groups", "lead"],
+        "sections": [
+          {
+            "title": "Access and organization",
+            "paragraphs": [
+              "An active standard user accesses projects where they are a participant; administrators retain global access. Resources and documents inherit project scope and their own protections.",
+              "A project lead is chosen from active participants. This is an organizational designation, not an additional security role. Groups belong to a project and may overlap; they do not grant extra permissions."
+            ]
+          },
+          {
+            "title": "Change participants",
+            "steps": [
+              "With an administrator account, open the project’s participants.",
+              "Add active people, optionally choose a lead and create useful groups.",
+              "After removing someone, check task and deliverable ownership: historical assignments remain visible."
+            ],
+            "warning": "Removing a participant also removes their membership in project groups. Links and assignments never bypass access checks."
+          }
+        ],
+        "related": ["admin-people", "impersonation"]
+      },
+      {
+        "id": "locations",
+        "title": "Workspaces, folders and connections",
+        "summary": "Distinguish working files, system space, associated folders and remote services.",
+        "keywords": [
+          "workspace",
+          "folder",
+          "path",
+          "location",
+          "system",
+          "SSH",
+          "FTP"
+        ],
+        "sections": [
+          {
+            "title": "Types of locations",
+            "paragraphs": [
+              "The permanent main workspace contains project documents, sources and deliverables. Associated local folders keep their server paths. A Git, SSH/SFTP or FTP/FTPS connection describes a remote destination; it is not a local copy.",
+              "System space is separate and available to administrators for consultation. It contains history and internal technical data. It cannot become an agent’s working folder or be edited through the generic file explorer."
+            ]
+          },
+          {
+            "title": "Choose where to work",
+            "steps": [
+              "In Locations and connections, add either a local folder or a remote connection.",
+              "Prepare a local copy when offered if an agent needs to work on remote files.",
+              "Explicitly select an authorized working folder in the agent. Browsing a folder does not make it active."
+            ],
+            "warning": "An alias is a display name, not a relocation. A missing, disabled or inconsistent location blocks work rather than silently selecting another folder."
+          }
+        ],
+        "related": ["file-explorer", "transfers", "agent-create", "git-local"]
+      },
+      {
+        "id": "project-archive",
+        "title": "Export and import a project",
+        "summary": "Transfer a project ZIP and understand what is restored or disabled.",
+        "keywords": ["archive", "ZIP", "export", "import", "migration", "copy"],
+        "sections": [
+          {
+            "title": "Export and import",
+            "steps": [
+              "As an administrator, open the project menu, choose Export entire project as ZIP, review warnings and confirm.",
+              "At the destination, use + in Projects and choose Import project from ZIP.",
+              "Upload the archive and let analysis verify content, checksums and compatibility.",
+              "Select files and folders, agents and conversations, or complete business activity. Required dependencies are included automatically.",
+              "Check the name and confirm. Import creates a new project without merging or replacing an existing one."
+            ]
+          },
+          {
+            "title": "Safety and limitations",
+            "paragraphs": [
+              "Remote connections, automations and active goals are neutralized on import; no agent starts automatically. Imported contacts do not automatically become active or administrator accounts.",
+              "Installation passwords and sessions are not transferred, but files and text may contain secrets. Remote servers are not crawled automatically: export a local copy to include their files."
+            ],
+            "warning": "The ZIP is not encrypted and does not replace a full server backup. Importing the same archive twice creates two independent projects."
+          }
+        ],
+        "related": ["locations", "backups", "project-people"]
+      }
+    ]
+  },
+  {
+    "id": "conversations",
+    "title": "Simple conversations",
+    "articles": [
+      {
+        "id": "simple-chat",
+        "title": "Create a simple conversation",
+        "summary": "Exchange messages with a model without starting a work agent or server commands.",
+        "keywords": ["simple chat", "model", "discussion", "API", "OpenAI"],
+        "sections": [
+          {
+            "title": "What is a simple conversation for?",
+            "paragraphs": [
+              "Use it to rewrite, translate, explain or prepare text. It uses the simple-chat provider and model configured by administration, not a Codex CLI work session.",
+              "An answer does not run an agent’s tools, create a Git branch or approve a deliverable. Do not assume simple chat has an agent’s access to working-folder files."
+            ]
+          },
+          {
+            "title": "Start an exchange",
+            "steps": [
+              "Add a simple conversation from the project + menu and open it.",
+              "Enter a request with the required context and send it.",
+              "Refine your request as needed and review the answer before using it."
+            ],
+            "warning": "Working Codex authentication is not sufficient to configure simple chat. Its API access must be configured separately. Do not paste secrets into requests."
+          }
+        ],
+        "related": ["simple-messages", "response-copy", "admin-chat"]
+      },
+      {
+        "id": "simple-messages",
+        "title": "Write, send and read messages",
+        "summary": "Prepare a request and distinguish generation, interruption and saved results.",
+        "keywords": ["message", "draft", "send", "stop", "history", "scroll"],
+        "sections": [
+          {
+            "title": "During an exchange",
+            "actions": [
+              {
+                "label": "Message field",
+                "effect": "Prepare a draft with an explicit objective, constraints, sources and expected output format."
+              },
+              {
+                "label": "Send",
+                "effect": "Submit the message and start generation. Wait for the result or use Stop when available."
+              },
+              {
+                "label": "Stop",
+                "effect": "Interrupt current generation; this does not delete messages already saved."
+              }
+            ]
+          },
+          {
+            "title": "Review the result",
+            "paragraphs": [
+              "The conversation scrolls vertically. Tables and code blocks may have their own reading area; review all content before copying it.",
+              "A network or provider failure does not always mean an operation was cancelled. Check history before submitting again to avoid duplicates."
+            ],
+            "warning": "History gives the model context, not a guarantee of accuracy. Check facts and any content you intend to publish."
+          }
+        ],
+        "related": ["simple-chat", "response-copy"]
+      },
+      {
+        "id": "response-copy",
+        "title": "Copy an answer with formatting",
+        "summary": "Reuse a response in a word processor or another editor.",
+        "keywords": ["copy", "clipboard", "HTML", "Word", "table", "style"],
+        "sections": [
+          {
+            "title": "Use the copy icon",
+            "steps": [
+              "Wait for a non-empty response to finish.",
+              "Hover over it or reach its controls with the keyboard. The copy icon appears at the upper-right corner; it remains accessible on touch screens.",
+              "Click the icon and paste into your destination application. Its tooltip says Copy with formatting."
+            ]
+          },
+          {
+            "title": "What is copied?",
+            "paragraphs": [
+              "Copy supplies HTML and plain text. Compatible editors may preserve headings, lists, tables, links and code blocks; a text field uses plain text. Exact rendering depends on the destination.",
+              "Only the response body is included, not interface controls or separate technical logs. Copy stays local to the browser and also works on agent responses."
+            ],
+            "warning": "Clipboard failures are reported. Do not assume success after an error, and check sensitive information before pasting elsewhere."
+          }
+        ],
+        "related": ["simple-chat", "agent-history"]
+      }
+    ]
+  },
+  {
+    "id": "agents",
+    "title": "Work agents",
+    "articles": [
+      {
+        "id": "agent-create",
+        "title": "Create and assign an agent",
+        "summary": "Prepare an independent work conversation or link it to a task or deliverable.",
+        "keywords": [
+          "Codex",
+          "new agent",
+          "assignment",
+          "active folder",
+          "existing"
+        ],
+        "sections": [
+          {
+            "title": "Create a work session",
+            "steps": [
+              "Create an agent from the project, an executable subtask or Assign to an agent on a deliverable.",
+              "Check its project and local working folder. A remote connection alone is not an execution folder.",
+              "Describe the objective, limits, expected files and success criteria, then send the first message."
+            ]
+          },
+          {
+            "title": "Links and reuse",
+            "paragraphs": [
+              "An agent can work directly for a deliverable without a mandatory subtask. If the deliverable has a main task, explicitly selecting a subtask retains both links.",
+              "When the dialog offers an existing agent, choose an available session in the same project that is not already assigned to another task or deliverable. Reusing it does not mean erasing its history."
+            ],
+            "warning": "Execution actions may be restricted to administrators. Project access or creating a record does not automatically grant permission to run tools."
+          }
+        ],
+        "related": [
+          "agent-composer",
+          "task-execution",
+          "deliverable-agent",
+          "locations"
+        ]
+      },
+      {
+        "id": "agent-composer",
+        "title": "Model, reasoning, permissions and capabilities",
+        "summary": "Understand the settings below an agent’s message field.",
+        "keywords": [
+          "effort",
+          "read-only",
+          "approval",
+          "capabilities",
+          "compact",
+          "model",
+          "plan"
+        ],
+        "sections": [
+          {
+            "title": "Choose settings before sending",
+            "actions": [
+              {
+                "label": "Model and reasoning",
+                "effect": "Choose an available model and reasoning effort. Higher effort does not grant permissions and may increase duration and usage."
+              },
+              {
+                "label": "Permissions and approvals",
+                "effect": "Set execution permissions and confirmation policy. Location read-only restrictions and server protections still apply."
+              },
+              {
+                "label": "Capabilities",
+                "effect": "Review session options, available integrations and technical-detail display."
+              }
+            ]
+          },
+          {
+            "title": "Compact mode and quick commands",
+            "paragraphs": [
+              "In a narrow composer, some settings appear as icons only. Hover or use their accessible names to identify them; their values do not change.",
+              "Typing / at the start of a draft opens commands offered by this version: planning, goals, review, compaction or feedback. Review each dialog before confirming. These commands do not replace model or connector settings."
+            ],
+            "warning": "Do not select full access just to hide a folder error. Fix the location or relevant permissions first."
+          }
+        ],
+        "related": ["agent-approvals", "agent-history", "integrations"]
+      },
+      {
+        "id": "agent-approvals",
+        "title": "Approvals, questions and stopping work",
+        "summary": "Respond to agent requests without confusing interruption with undo.",
+        "keywords": [
+          "authorization",
+          "confirmation",
+          "blocked",
+          "question",
+          "stop",
+          "security"
+        ],
+        "sections": [
+          {
+            "title": "When the agent needs a decision",
+            "steps": [
+              "Read the proposed action, folder, affected files or services and expected impact.",
+              "Approve only what matches your request, or refuse and describe another approach.",
+              "Answer clarification questions in the provided interface so work can resume.",
+              "Use Stop if work must end, then inspect changes and actions already completed."
+            ]
+          },
+          {
+            "title": "What permissions do not do",
+            "paragraphs": [
+              "A written instruction is not a technical security boundary. Project, folder and integration restrictions are checked independently of what the model says.",
+              "Technical details may be collapsed, but known errors and pending decisions stay visible. Waiting for confirmation is not necessarily a failure."
+            ],
+            "warning": "Stopping an agent, revoking access or leaving a session does not undo actions already accepted on files or external services."
+          }
+        ],
+        "related": ["agent-composer", "agent-history", "impersonation"]
+      },
+      {
+        "id": "agent-history",
+        "title": "History, technical details and conversation branches",
+        "summary": "Review work, change detail level and explore another version of an exchange.",
+        "keywords": [
+          "conversation branch",
+          "fork",
+          "edit",
+          "technical",
+          "summary",
+          "history"
+        ],
+        "sections": [
+          {
+            "title": "Review what the agent actually did",
+            "actions": [
+              {
+                "label": "No technical details",
+                "effect": "Group technical activity behind an expandable line without removing responses."
+              },
+              {
+                "label": "Collapsed details",
+                "effect": "Show a line per activity that can be opened to inspect commands, logs and changes."
+              },
+              {
+                "label": "Show everything",
+                "effect": "Expand technical activity. This is a display preference, not a model or permission change."
+              }
+            ]
+          },
+          {
+            "title": "Branches and preservation",
+            "paragraphs": [
+              "Conversation branches resume an exchange from an earlier point. Editing an earlier message can create another version instead of rewriting the original history; use the version selector to stay oriented.",
+              "A conversation branch is not a Git branch: files are not automatically copied or restored when switching conversation versions. Preserve useful documents before deleting or validating a subtask’s work session."
+            ],
+            "warning": "Review conversation or branch deletion carefully, especially when dependencies exist. There is no automatic merging of two conversations’ reasoning."
+          }
+        ],
+        "related": ["response-copy", "git-branches", "task-execution"]
+      },
+      {
+        "id": "agent-goals",
+        "title": "Goals, Plan mode, review and compaction",
+        "summary": "Use quick commands to guide lasting work without expanding permissions.",
+        "keywords": [
+          "goal",
+          "/goal",
+          "/plan",
+          "/review",
+          "/compact",
+          "pause",
+          "budget",
+          "usage"
+        ],
+        "sections": [
+          {
+            "title": "Work commands",
+            "actions": [
+              {
+                "label": "/goal",
+                "effect": "Open an objective dialog with a 4,000-character limit. Confirmation creates a goal spanning multiple turns, shown above the message field."
+              },
+              {
+                "label": "/plan",
+                "effect": "Toggle Plan collaboration mode. This is not the task manager’s AI schedule generator."
+              },
+              {
+                "label": "/review",
+                "effect": "Open a review request to specify and confirm. A review is not human deliverable approval."
+              },
+              {
+                "label": "/compact",
+                "effect": "Request compaction of a long conversation. Check important context before continuing; this does not back up files."
+              }
+            ]
+          },
+          {
+            "title": "Follow a goal",
+            "steps": [
+              "Define a verifiable result and work constraints.",
+              "Inspect the goal row for state and actions to edit, pause, resume or clear it.",
+              "If usage or budget is limited, read the reported state rather than assuming completion."
+            ],
+            "warning": "Pausing a goal prevents future continuations, but does not interrupt a turn already running. Also use Stop when that turn must end. Goals do not waive required approvals."
+          }
+        ],
+        "related": ["agent-composer", "agent-approvals", "task-planning"]
+      },
+      {
+        "id": "voice-dictation",
+        "title": "Dictate a request with the microphone",
+        "summary": "Transcribe instructions into a draft and review them before sending.",
+        "keywords": [
+          "microphone",
+          "voice",
+          "dictation",
+          "audio",
+          "transcription"
+        ],
+        "sections": [
+          {
+            "title": "Dictate in supported screens",
+            "steps": [
+              "Click the microphone icon in simple chat, an agent composer or another form offering it.",
+              "Allow microphone access only if you intend to record, then dictate your request.",
+              "Click Stop recording; recording is also limited to two minutes.",
+              "Wait for transcription, correct names, numbers and technical terms in the draft, then explicitly send the text."
+            ]
+          },
+          {
+            "title": "Requirements and privacy",
+            "paragraphs": [
+              "Dictation requires compatible audio recording, a secure connection and allowed microphone access. Denied permission or an active transcription can make the control unavailable.",
+              "Audio is sent to the installation’s transcription service through the simple-chat API path. It is not a continuous voice call with the agent or audio from the remote browser."
+            ],
+            "warning": "Do not dictate secrets or sensitive information without considering the receiving service. Transcription can be wrong: adding text to a draft does not validate its accuracy."
+          }
+        ],
+        "related": ["simple-messages", "agent-composer", "admin-chat"]
+      },
+      {
+        "id": "agent-knowledge",
+        "title": "Project knowledge, memory and instructions",
+        "summary": "Provide lasting agent context and review memory proposals.",
+        "keywords": [
+          "memory",
+          "knowledge",
+          "AGENTS.md",
+          "instructions",
+          "MCP",
+          "context"
+        ],
+        "sections": [
+          {
+            "title": "Prepare shared context",
+            "paragraphs": [
+              "Use project knowledge for lasting facts, vocabulary, constraints and validated decisions. Include sources and distinguish facts from assumptions.",
+              "AGENTS.md in a working folder contains agent instructions. Supplementary documents must be referenced and read according to those instructions; placing them in a folder does not guarantee automatic loading."
+            ]
+          },
+          {
+            "title": "Accept a proposal",
+            "steps": [
+              "Read the knowledge text proposed by the agent.",
+              "Check that it is useful for future work, supported and free of secrets.",
+              "Explicitly accept it into approved knowledge, or reject it and request a correction."
+            ],
+            "warning": "Memory does not replace permissions or fact-checking. Do not assume simple chat automatically reads the same files as a work agent."
+          }
+        ],
+        "related": ["agent-create", "integrations", "locations"]
+      }
+    ]
+  },
+  {
+    "id": "tasks",
+    "title": "Task management",
+    "articles": [
+      {
+        "id": "task-board",
+        "title": "Create tasks and use the board",
+        "summary": "Organize cards, subtasks, owners and statuses.",
+        "keywords": [
+          "board",
+          "priority",
+          "labels",
+          "columns",
+          "progress",
+          "owner"
+        ],
+        "screenshot": "tasks",
+        "sections": [
+          {
+            "title": "Describe a task",
+            "steps": [
+              "Open a task manager and choose New task. Enter title, description, priority, owner, dates and acceptance criteria.",
+              "Choose an authorized project folder and save the record.",
+              "Add subtasks as needed. They inherit the parent priority and folder and have no further child level.",
+              "In Board, search titles, descriptions or labels, filter priorities and move cards between columns."
+            ]
+          },
+          {
+            "title": "Statuses and progress",
+            "paragraphs": [
+              "Main-task columns are customizable except Unassigned actions. Deleting a column moves its tasks to that system column.",
+              "For a parent with children, effort is the sum of estimates and progress is the unweighted average of percentages. Children at 100% and 0% yield 50%, even with different estimates."
+            ],
+            "warning": "A parent cannot close while a child is neither completed nor cancelled. Closing all children does not automatically move the parent to a final column."
+          }
+        ],
+        "related": ["task-planning", "task-execution"]
+      },
+      {
+        "id": "task-planning",
+        "title": "Planning, dependencies and AI assistance",
+        "summary": "Plan dates and review proposals without automatically executing work.",
+        "keywords": [
+          "Gantt",
+          "planning",
+          "advice",
+          "AI",
+          "dependencies",
+          "breakdown",
+          "replan"
+        ],
+        "sections": [
+          {
+            "title": "Use the views",
+            "actions": [
+              {
+                "label": "Planning",
+                "effect": "Show dated tasks in a Gantt with time scales, dates and finish-to-start dependencies."
+              },
+              {
+                "label": "Advice",
+                "effect": "Analyze the situation and suggest work for available time. Recommendations do not start agents."
+              },
+              {
+                "label": "Journal",
+                "effect": "Show recorded changes and before/after values when available."
+              }
+            ]
+          },
+          {
+            "title": "Plan with AI",
+            "steps": [
+              "Describe an outcome to generate main-task proposals, or select a task to break down.",
+              "Review titles, estimates, execution modes and criteria before applying.",
+              "For replanning, inspect selected tasks, dates and dependencies and apply only useful proposals."
+            ],
+            "warning": "These functions use simple-chat API access and its model. Dependencies are between main tasks within one board and cannot form cycles; this is not an automatic scheduler. Partially failed application may leave earlier changes saved."
+          }
+        ],
+        "related": ["task-board", "admin-chat"]
+      },
+      {
+        "id": "task-execution",
+        "title": "Execute a subtask and validate its result",
+        "summary": "Follow an assigned agent and understand Validate and complete.",
+        "keywords": [
+          "subtask",
+          "execute",
+          "agent",
+          "review",
+          "validation",
+          "deletion"
+        ],
+        "sections": [
+          {
+            "title": "Start work",
+            "steps": [
+              "Save an agent-mode subtask with sufficient description and criteria.",
+              "Use the authorized execution action. A work conversation is linked to the subtask and opened for monitoring.",
+              "Respond to approvals and inspect files. Active, waiting and inactive agent states mean different things.",
+              "When ready for review, check the result and use Validate and complete if you approve it."
+            ]
+          },
+          {
+            "title": "Before validation or deletion",
+            "paragraphs": [
+              "An inactive session moves to review; inactivity does not prove correctness. A person must check the criteria.",
+              "Validating a subtask with an agent may delete its linked conversation after checks and remove the link. Deleting a task also affects its children and associated agents."
+            ],
+            "warning": "Preserve useful results and inspect the conversation before validation. An execution conversation is not guaranteed permanent history."
+          }
+        ],
+        "related": ["agent-approvals", "deliverable-agent", "task-board"]
+      }
+    ]
+  },
+  {
+    "id": "deliverables",
+    "title": "Deliverables and document approval",
+    "articles": [
+      {
+        "id": "deliverable-overview",
+        "title": "Create a deliverable and organize links",
+        "summary": "Describe the expected result and link the main task controlling its tracking.",
+        "keywords": [
+          "record",
+          "criteria",
+          "owner",
+          "deadline",
+          "main task",
+          "links"
+        ],
+        "sections": [
+          {
+            "title": "Prepare a record",
+            "steps": [
+              "Add the deliverable manager if needed and create a deliverable.",
+              "Enter a title, description and acceptance criteria, then save.",
+              "In Main task or Links, depending on the screen, select a main task in the same project or use the offered creation action.",
+              "Check inherited owner, deadline and progress: the main task controls these values."
+            ]
+          },
+          {
+            "title": "Navigate the record",
+            "paragraphs": [
+              "Overview gives the summary; Documents manages files and versions; Validation contains requests and decisions; History preserves snapshots and transitions. Links open related tasks and conversations.",
+              "Document lifecycle, production tracking and approval are separate. The progress banner is a visual reference; use Change status to act."
+            ],
+            "warning": "Creating a deliverable does not automatically create a hidden task or agent. A project has only one deliverable manager."
+          }
+        ],
+        "related": [
+          "deliverable-versions",
+          "deliverable-lifecycle",
+          "deliverable-agent"
+        ]
+      },
+      {
+        "id": "deliverable-versions",
+        "title": "Add, edit and restore documents",
+        "summary": "Understand current files, independent versions and protected publication.",
+        "keywords": [
+          "document",
+          "version",
+          "restore",
+          "publish",
+          "draft",
+          "OnlyOffice"
+        ],
+        "sections": [
+          {
+            "title": "Manage deliverable files",
+            "steps": [
+              "Open Documents and Add document; select files and optionally add a comment.",
+              "Use the document ⋮ menu for offered actions: preview, download, versions or removal.",
+              "To recover an older version, open history and confirm the proposed restoration.",
+              "For agent-produced documents, inspect the draft and use the versioned-save workflow instead of overwriting a published file."
+            ]
+          },
+          {
+            "title": "What history retains",
+            "paragraphs": [
+              "Each document has an independent identity and version history. Editing one does not renumber others. Restoring an older version creates a new version rather than rewriting history.",
+              "Document deletion is logical and reversible through provided actions. Published documents retain protections for agents even with extended execution permissions."
+            ],
+            "warning": "Code and temporary files are not automatically published documents. Reopen a finalized deliverable before document changes."
+          }
+        ],
+        "related": ["deliverable-lifecycle", "onlyoffice", "deliverable-agent"]
+      },
+      {
+        "id": "document-rename",
+        "title": "Rename a document without losing versions",
+        "summary": "Change a deliverable document’s name from its list or shared document actions in the agent explorer.",
+        "keywords": [
+          "rename",
+          "document",
+          "extension",
+          "old link",
+          "history",
+          "explorer"
+        ],
+        "sections": [
+          {
+            "title": "Use document-aware renaming",
+            "steps": [
+              "Locate the deliverable document and open its context menu.",
+              "Choose Rename to open a dialog prefilled with its current name.",
+              "Enter the new name while keeping the same extension, then confirm.",
+              "Check Documents and the explorer. Open file views are reconciled with the new path."
+            ]
+          },
+          {
+            "title": "Identity and history are retained",
+            "paragraphs": [
+              "Renaming preserves document identity, historical versions and old links. It uses the document operation rather than bypassing protections on the published file.",
+              "The server checks that name and version have not changed since the dialog opened. If someone modified the document meanwhile, refresh before retrying. In some cases the original file is retained and a warning explains this."
+            ],
+            "warning": "Renaming does not convert a file format: keep its existing extension. Lifecycle restrictions and permissions still apply; do not force a filesystem rename to bypass a refusal."
+          }
+        ],
+        "related": [
+          "deliverable-versions",
+          "file-explorer",
+          "deliverable-lifecycle"
+        ]
+      },
+      {
+        "id": "deliverable-lifecycle",
+        "title": "Finalize, approve, reopen and archive",
+        "summary": "Distinguish a finalized snapshot from an explicit human approval.",
+        "keywords": [
+          "draft",
+          "constitution",
+          "finalized",
+          "archived",
+          "approval",
+          "outdated",
+          "refusal"
+        ],
+        "screenshot": "deliverables",
+        "sections": [
+          {
+            "title": "Document lifecycle",
+            "actions": [
+              {
+                "label": "Change status → Finalize",
+                "effect": "Require at least one current document and freeze document identities, versions and checksums. Finalization is not approval."
+              },
+              {
+                "label": "Reopen",
+                "effect": "Allow document editing again. Divergence from the approved snapshot makes that approval outdated."
+              },
+              {
+                "label": "Archive / unarchive",
+                "effect": "Archive makes the deliverable read-only. Unarchive first returns it to finalized state."
+              }
+            ]
+          },
+          {
+            "title": "Request a decision",
+            "steps": [
+              "Explicitly enable approval if required for this deliverable.",
+              "Finalize and request approval of the relevant snapshot.",
+              "The reviewer checks documents and explicitly approves or rejects the active request.",
+              "When resuming work, distinguish the current snapshot from the last approved reference in history."
+            ],
+            "warning": "Cancel a pending request with a reason before disabling approval. Do not present a new document version as already approved."
+          }
+        ],
+        "related": ["deliverable-overview", "deliverable-versions"]
+      },
+      {
+        "id": "deliverable-agent",
+        "title": "Assign a deliverable to an agent",
+        "summary": "Choose a new or available agent and inspect its produced documents.",
+        "keywords": [
+          "assign",
+          "existing agent",
+          "new agent",
+          "subtask",
+          "publication"
+        ],
+        "sections": [
+          {
+            "title": "Choose an assignment",
+            "steps": [
+              "Use Assign to an agent in the deliverable record.",
+              "Choose a new agent or an available existing agent offered by the dialog, in the same project and without another task or deliverable assignment.",
+              "Keep a direct deliverable assignment or explicitly select an available subtask of its main task.",
+              "Open the agent, clarify the request and send the message starting work."
+            ]
+          },
+          {
+            "title": "Check production",
+            "paragraphs": [
+              "The linked deliverable brief, criteria and folder provide context. The link does not remove the need to check the active folder and permissions.",
+              "Inspect prepared documents before saving retained versions. A response saying “done” does not replace versioned saving or a document-approval request."
+            ],
+            "warning": "Reusing a session requires an eligible available agent. Linking a deliverable and linking a subtask are separate choices, not an automatic assignment to both."
+          }
+        ],
+        "related": ["agent-create", "deliverable-versions", "task-execution"]
+      }
+    ]
+  },
+  {
+    "id": "files",
+    "title": "Files, documents and transfers",
+    "articles": [
+      {
+        "id": "file-explorer",
+        "title": "Browse and manage files",
+        "summary": "Explore locations without implicitly changing the agent’s working folder.",
+        "keywords": [
+          "explorer",
+          "preview",
+          "PDF",
+          "image",
+          "archive",
+          "folder",
+          "tab"
+        ],
+        "sections": [
+          {
+            "title": "Open the right location",
+            "paragraphs": [
+              "Open the explorer in the project or agent context and select a location. Context menus group available operations for folders, files and connections.",
+              "Text and images have suitable previews; PDFs use the integrated viewer. Supported office formats use OnlyOffice when configured. Archives can be browsed within application security limits."
+            ]
+          },
+          {
+            "title": "Check scope before acting",
+            "steps": [
+              "Check the location name and path before creating, renaming, moving or deleting.",
+              "Use offered actions; read-only and system locations restrict commands.",
+              "Explicitly change the agent’s active folder if it should work there. Explorer navigation alone does not change it."
+            ],
+            "warning": "Paths are server-side. Download copies to your device; a file on a remote connection is not automatically available locally."
+          }
+        ],
+        "related": ["locations", "onlyoffice", "transfers"]
+      },
+      {
+        "id": "onlyoffice",
+        "title": "Open and edit an office document",
+        "summary": "Use OnlyOffice and understand how edits return to Mergeron.",
+        "keywords": [
+          "OnlyOffice",
+          "Word",
+          "Excel",
+          "PowerPoint",
+          "PDF",
+          "editor",
+          "save"
+        ],
+        "sections": [
+          {
+            "title": "Document workflow",
+            "steps": [
+              "Open a supported document from its list or explorer. A separate document window may open with the sidebar collapsed by default.",
+              "Check whether the editor is read-only or editable according to rights and document state.",
+              "Make changes and verify their saving in Mergeron and, for a deliverable, the resulting version.",
+              "Use document history to review retained versions."
+            ]
+          },
+          {
+            "title": "If unavailable or refused",
+            "paragraphs": [
+              "OnlyOffice must be configured by administration and able to communicate with Mergeron. Changing project permissions is not a solution to a service configuration or connection error.",
+              "Opening a document does not grant access to the rest of system space. Project ownership, document mode and deliverable approval continue to apply."
+            ],
+            "warning": "Do not ignore a save error or close the window assuming everything is saved. A finalized or archived document may require authorized reopening of its deliverable."
+          }
+        ],
+        "related": ["deliverable-versions", "file-explorer", "admin-operations"]
+      },
+      {
+        "id": "transfers",
+        "title": "Remote connections and local copies",
+        "summary": "Prepare Git, SSH/SFTP and FTP/FTPS access and review transfers.",
+        "keywords": [
+          "SSH",
+          "SFTP",
+          "FTP",
+          "FTPS",
+          "transfer",
+          "local copy",
+          "synchronization"
+        ],
+        "sections": [
+          {
+            "title": "Connection or local files?",
+            "paragraphs": [
+              "A remote connection stores settings and offers protocol-specific views and transfers. Files remain remote until an explicit operation copies them into a project’s local location.",
+              "Local copies are distinct from their source. Browsing or refreshing a connection is not an upload of your local files."
+            ]
+          },
+          {
+            "title": "Prepare a transfer",
+            "steps": [
+              "Configure and enable the project connection using the required protocol and credentials.",
+              "Choose the proposed copy or transfer source and destination.",
+              "Review the preview, synchronization rules and conflicts before confirmation.",
+              "Read the transfer result and history before repeating a failed operation."
+            ],
+            "warning": "Changing the active location does not transfer anything. Check direction and possible replacements: closing a dialog does not undo a completed remote operation."
+          }
+        ],
+        "related": ["locations", "git-remote", "project-archive"]
+      }
+    ]
+  },
+  {
+    "id": "git",
+    "title": "Git and pull requests",
+    "articles": [
+      {
+        "id": "git-local",
+        "title": "Read changes and create a commit",
+        "summary": "Understand the local copy, diffs and files staged for a commit.",
+        "keywords": ["Git", "diff", "commit", "index", "staged", "graph"],
+        "sections": [
+          {
+            "title": "Read the repository",
+            "paragraphs": [
+              "Local shows the working copy, current branch, changes and known references. The graph links commits to parents; select a commit to view details.",
+              "Remote references in local history are not necessarily current on GitHub. Refresh rereads the view; network operations remain separate."
+            ]
+          },
+          {
+            "title": "Record a change",
+            "steps": [
+              "Check the selected copy and review diffs of modified files.",
+              "Stage the intended files with available actions.",
+              "Use Commit, review its scope and enter a descriptive message.",
+              "Confirm and find the commit in history. Publish separately if needed."
+            ],
+            "warning": "A commit does not save unstaged files or publish to GitHub. Actions can be refused for a copy owned by a running agent, read-only access or unknown state."
+          }
+        ],
+        "related": ["git-branches", "git-remote", "git-pr"]
+      },
+      {
+        "id": "git-branches",
+        "title": "Create, switch, merge and delete local branches",
+        "summary": "Work on Git branches without confusing them with conversation versions.",
+        "keywords": ["branch", "merge", "checkout", "switch", "delete"],
+        "sections": [
+          {
+            "title": "Create a branch",
+            "steps": [
+              "Use branch creation in Branches.",
+              "Enter a valid name and choose an offered starting reference.",
+              "Explicitly choose whether to switch to it and confirm.",
+              "Check the resulting current branch. Publishing remains a separate push."
+            ]
+          },
+          {
+            "title": "Local branch actions",
+            "actions": [
+              {
+                "label": "Switch",
+                "effect": "Change the local copy’s branch. A clean worktree may be required to protect pending changes."
+              },
+              {
+                "label": "Merge",
+                "effect": "Integrate the selected branch into the current one under the offered safeguards. This is not a pull request and does not publish."
+              },
+              {
+                "label": "Delete",
+                "effect": "Protected deletion refuses the active branch or a branch whose changes are not merged."
+              }
+            ],
+            "warning": "Check source and destination. Do not force a destructive reset to bypass conflicts or refused checks. A Git branch does not restore chat history."
+          }
+        ],
+        "related": ["git-local", "git-pr", "agent-history"]
+      },
+      {
+        "id": "git-remote",
+        "title": "Remote views, retrieval and publication",
+        "summary": "Distinguish GitHub information from operations changing local or remote repositories.",
+        "keywords": [
+          "GitHub",
+          "push",
+          "fetch",
+          "pull",
+          "retrieve",
+          "remote",
+          "synchronize"
+        ],
+        "sections": [
+          {
+            "title": "Read the remote",
+            "paragraphs": [
+              "Remote · GitHub shows files, published branches and PR/checks. It is not the agent’s local working copy. Use Information in the context menu to inspect connection details.",
+              "Retrieval and synchronization are explicit actions. Read the dialog: fetching references, preparing a local branch and integrating commits are different operations."
+            ]
+          },
+          {
+            "title": "Publish a branch",
+            "steps": [
+              "Review local commits and the selected branch.",
+              "Open Push, verify the remote destination and confirm.",
+              "Wait for the result; inspect authentication, network or remote-rejection diagnostics on failure.",
+              "After confirmed publication, optionally create a separate pull request."
+            ],
+            "warning": "Being able to read GitHub does not prove write access. An unpushed commit is absent remotely; do not blindly retry an operation whose outcome is reported unknown."
+          }
+        ],
+        "related": ["git-local", "git-branches", "git-pr"]
+      },
+      {
+        "id": "git-pr",
+        "title": "Create and follow a pull request",
+        "summary": "Propose merging a published branch and inspect GitHub checks.",
+        "keywords": [
+          "pull request",
+          "PR",
+          "review",
+          "checks",
+          "merge",
+          "GitHub",
+          "draft"
+        ],
+        "sections": [
+          {
+            "title": "After push",
+            "steps": [
+              "Publish the branch and confirm its commits are available on GitHub.",
+              "Use Create pull request when offered.",
+              "Choose the target branch, title, description and optional draft status.",
+              "Review and explicitly confirm creation. If a PR exists already, open its link instead of creating another.",
+              "Read checks and review feedback before any merge decision."
+            ]
+          },
+          {
+            "title": "PR or local merge?",
+            "paragraphs": [
+              "A PR organizes a GitHub proposal: comparison, discussion, reviews and checks. Local merge acts directly in your copy. Creating a PR does not automatically merge or deploy it.",
+              "Automatic deletion after merge depends on repository settings. It does not delete local branches or retroactively clean every old remote branch."
+            ],
+            "warning": "Check source and target, especially when proposing changes to main. GitHub permissions and repository rules still apply."
+          }
+        ],
+        "related": ["git-remote", "git-branches", "server-update"]
+      }
+    ]
+  },
+  {
+    "id": "browser",
+    "title": "Isolated browser and annotations",
+    "articles": [
+      {
+        "id": "browser-live",
+        "title": "Navigate a live page",
+        "summary": "Open sites in isolated Chromium without using personal-browser cookies.",
+        "keywords": [
+          "browser",
+          "URL",
+          "address",
+          "live",
+          "control",
+          "side by side",
+          "Authentik",
+          "DNS"
+        ],
+        "sections": [
+          {
+            "title": "Open a view",
+            "steps": [
+              "From an authorized agent, click Browser to open a view beside Conversation.",
+              "Enter an HTTP(S) address and choose Open. Desktop can show the browser beside the conversation.",
+              "Use mouse, wheel and keyboard. If another view controls the session, explicitly Take control.",
+              "Release control when leaving. Clear session closes pages and destroys their temporary cookies."
+            ]
+          },
+          {
+            "title": "Limits and privacy",
+            "paragraphs": [
+              "Project settings can define homepage, initial layout and permitted secondary windows for new sessions. This browser does not share personal cookies: sign in separately inside it.",
+              "Only public IPv4 destinations on HTTP port 80 and HTTPS port 443 are allowed. A redirect resolving to a private address is blocked even with HTTPS. Error messages distinguish missing configuration, unavailable runtime and navigation failures."
+            ],
+            "warning": "The live stream can show typed information. It is not automatically added to chat. Native dialogs such as some passkey QR codes, multimedia and file transfers are not fully supported. Access requires an authorized administrator."
+          }
+        ],
+        "related": ["browser-annotation", "infrastructure", "agent-approvals"]
+      },
+      {
+        "id": "browser-annotation",
+        "title": "Point at a feature and annotate a capture",
+        "summary": "Add page evidence to an agent draft without automatically sending instructions.",
+        "keywords": [
+          "annotation",
+          "capture",
+          "screenshot",
+          "point",
+          "comment",
+          "marker",
+          "selector"
+        ],
+        "sections": [
+          {
+            "title": "Create a page comment",
+            "steps": [
+              "Open the page and choose Point at an element. Live viewing pauses to prepare a separate capture.",
+              "Select the visible element and write a precise change request.",
+              "Check the marker, text and screenshot, then choose Add to chat draft.",
+              "Review the whole draft and send it yourself to start work."
+            ]
+          },
+          {
+            "title": "What accompanies the request",
+            "paragraphs": [
+              "An annotation includes a marked image, URL, timestamp and element metadata such as text, selector and position. Site content remains untrusted evidence, separate from your request.",
+              "Pointing does not click a site button or start an agent. Refresh a changed page before retrying; a selector is not guaranteed stable."
+            ],
+            "warning": "Captures no longer systematically mask input fields. Check that no unwanted secret or personal information is visible before adding and sending the capture."
+          }
+        ],
+        "related": ["browser-live", "agent-create"]
+      }
+    ]
+  },
+  {
+    "id": "automations",
+    "title": "Automations",
+    "articles": [
+      {
+        "id": "automation-schedule",
+        "title": "Schedule and monitor an automation",
+        "summary": "Define recurring instructions and check executions and their effects.",
+        "keywords": [
+          "automation",
+          "frequency",
+          "schedule",
+          "pause",
+          "recurring",
+          "execution"
+        ],
+        "sections": [
+          {
+            "title": "Prepare recurring work",
+            "steps": [
+              "Add or open the project’s unique automation manager.",
+              "Create an automation with explicit instructions, scope and frequency.",
+              "Review schedule, permissions and potential cost before saving and activating.",
+              "Inspect executions to distinguish planned triggers, active work, results and errors."
+            ]
+          },
+          {
+            "title": "Pause and resume",
+            "actions": [
+              {
+                "label": "Pause",
+                "effect": "Prevent future triggers without deleting configuration or history. Already completed effects are not undone."
+              },
+              {
+                "label": "Activate",
+                "effect": "Allow subsequent executions according to the saved schedule."
+              },
+              {
+                "label": "Execution history",
+                "effect": "Review results and failures before deciding to rerun."
+              }
+            ],
+            "warning": "An automation may need approval like manual agent work. Failure does not guarantee earlier actions were undone. Imported automations are disabled for safety."
+          }
+        ],
+        "related": ["agent-approvals", "project-archive"]
+      }
+    ]
+  },
+  {
+    "id": "administration",
+    "title": "Administration and operations",
+    "articles": [
+      {
+        "id": "admin-people",
+        "title": "Create and manage people",
+        "summary": "Prepare records, roles and links to sign-in accounts.",
+        "keywords": [
+          "people",
+          "identifier",
+          "reference",
+          "standard",
+          "administrator",
+          "sort"
+        ],
+        "sections": [
+          {
+            "title": "Use the list",
+            "steps": [
+              "Open Administration → People as an administrator.",
+              "Search for a person and use available column headers to sort separate information fields.",
+              "Use New person and fill in reference, contact information, state and profile.",
+              "Use the row’s context menu to edit or test their rights when authorized."
+            ]
+          },
+          {
+            "title": "Record and sign-in identity",
+            "paragraphs": [
+              "The manual reference identifies a person consistently. A contact record alone is not an SSO login or usable password.",
+              "A standard profile sees participating projects; an administrator has global scope. Deactivation prevents new assignments without deleting business history."
+            ],
+            "warning": "Do not grant administrator rights to fix a missing project membership. Check account linking and project participants first."
+          }
+        ],
+        "related": ["project-people", "impersonation"]
+      },
+      {
+        "id": "impersonation",
+        "title": "Test permissions for 30 minutes",
+        "summary": "Temporarily apply another person’s permissions without using their credentials.",
+        "keywords": [
+          "test as",
+          "impersonation",
+          "30 minutes",
+          "rights",
+          "journal"
+        ],
+        "sections": [
+          {
+            "title": "Start and end a test",
+            "steps": [
+              "With your personal administrator account, open People and an active person’s menu.",
+              "Choose Test as and review the warning: modifications will be real.",
+              "Check the banner showing both simulated person and real administrator.",
+              "End with Return to my account. Tests last at most 30 minutes; explicitly return after expiration."
+            ]
+          },
+          {
+            "title": "Journal and limits",
+            "paragraphs": [
+              "Permissions are those of the selected person, not the administrator. Their password or SSO identity is not used. Other tabs and connections are reassessed.",
+              "The permission-test journal lists recent starts, stops and attempted actions with results and both identities."
+            ],
+            "warning": "This is not a sandbox. Ending a test does not undo accepted changes or background work. Expiration does not silently restore administrator permissions inside an old view."
+          }
+        ],
+        "related": ["admin-people", "project-people"]
+      },
+      {
+        "id": "server-update",
+        "title": "Server version and updates",
+        "summary": "Detect an image, confirm an update and monitor its progress.",
+        "keywords": [
+          "server",
+          "version",
+          "update",
+          "Manager",
+          "edge",
+          "latest",
+          "DEV",
+          "fast"
+        ],
+        "sections": [
+          {
+            "title": "Before and during an update",
+            "steps": [
+              "In Server, inspect Current version and the Update tab for availability.",
+              "Refresh detection searches for an image without installing it. Review channel and target image; change advanced settings only when you understand them.",
+              "Use Update, read the plan and confirm.",
+              "Follow progress and logs through downtime, backup, recreation and health checks.",
+              "After success, reload the interface and check important functions."
+            ]
+          },
+          {
+            "title": "Rollback and DEV mode",
+            "paragraphs": [
+              "When configured, Manager checks prerequisites and retains a backup. Failure can trigger recovery according to its tracking; do not ignore a recovery-required state.",
+              "Fast mode is limited to a dedicated DEV stack. It accelerates some stages without removing the complete backup or updating production."
+            ],
+            "warning": "Do not run concurrent operations. Refreshing the application, updating Codex CLI and updating the server image are different actions."
+          }
+        ],
+        "related": ["backups", "infrastructure", "admin-codex", "desktop"]
+      },
+      {
+        "id": "backups",
+        "title": "Backups, retention and restoration",
+        "summary": "Inspect update backups and understand deletion consequences.",
+        "keywords": [
+          "backup",
+          "retention",
+          "size",
+          "path",
+          "limit",
+          "restore",
+          "disk"
+        ],
+        "sections": [
+          {
+            "title": "Inspect backups",
+            "paragraphs": [
+              "Backup lists update copies with date, identifier, server path, disk usage, state and actions. Total usage helps monitor accumulation.",
+              "The maximum-count setting controls retention. Cleanup runs after a successful update while protecting items needed for current rollback; a copy is not simply deleted to make room before a risky migration."
+            ]
+          },
+          {
+            "title": "Choose restoration or removal",
+            "steps": [
+              "Identify the exact backup and the operation that created it.",
+              "Before restoration, check more recent changes and Manager tracking.",
+              "Before Delete backup, confirm it is no longer needed and target only the intended copy."
+            ],
+            "warning": "Deletion is permanent and removes rollback based on that copy. Update backups and project ZIP exports have different scopes. Protect external data not covered by Manager separately."
+          }
+        ],
+        "related": ["server-update", "project-archive", "admin-operations"]
+      },
+      {
+        "id": "infrastructure",
+        "title": "Infrastructure and Mergeron Manager",
+        "summary": "Read container health and understand the actual management scope.",
+        "keywords": [
+          "infrastructure",
+          "container",
+          "Docker",
+          "Manager",
+          "Browser",
+          "DNS",
+          "network",
+          "restart"
+        ],
+        "sections": [
+          {
+            "title": "What the screen shows",
+            "paragraphs": [
+              "Infrastructure lists stack components, state, image, networks, management and configuration metadata. Sensitive environment values are not displayed as public settings.",
+              "Protected persistent data shows expected mounts. Diagnose unavailable or inconsistent state before changing infrastructure."
+            ]
+          },
+          {
+            "title": "Managed browser in DEV",
+            "paragraphs": [
+              "When explicitly enabled, Mergeron Browser joins inventory and global Manager transactions. Its public DNS 1.1.1.1 is reapplied during recreation and rollback without changing host DNS.",
+              "Inventory presence does not mean individual Restart or Update buttons exist. Server image detection concerns the application; browser runtime versions must stay compatible."
+            ],
+            "warning": "Do not disable the sandbox or expose its control port to fix errors. DEV-specific settings must not be implicitly applied to production."
+          }
+        ],
+        "related": ["browser-live", "server-update", "backups"]
+      },
+      {
+        "id": "admin-codex",
+        "title": "Configure Codex, models and CLI",
+        "summary": "Distinguish authentication, configuration, catalog and executable installation.",
+        "keywords": [
+          "Codex CLI",
+          "catalog",
+          "model",
+          "account",
+          "instructions",
+          "save",
+          "restart"
+        ],
+        "sections": [
+          {
+            "title": "Keep actions distinct",
+            "steps": [
+              "Open Codex administration and Account for required authentication.",
+              "Choose models, reasoning, instructions and security in their configuration tabs.",
+              "Use the fixed Save bar for the active tab. Other tab drafts are not automatically applied.",
+              "For a custom catalog, distinguish saving its draft from applying it with restart, and check inactivity before confirming."
+            ]
+          },
+          {
+            "title": "Install or update the CLI",
+            "paragraphs": [
+              "Codex CLI lets administrators install the executable when integrated management is available, read its version, check stable releases and install after confirmation. Returning to a previous selection may be offered.",
+              "Models and efforts depend on the installed Codex and catalog. Updating the CLI does not guarantee immediate UI support for every new protocol. External installation can limit the UI to consultation."
+            ],
+            "warning": "Back up Codex data first: returning to an older executable does not automatically restore potentially migrated data."
+          }
+        ],
+        "related": ["agent-composer", "agent-knowledge", "server-update"]
+      },
+      {
+        "id": "admin-chat",
+        "title": "Configure simple chat and AI assistance",
+        "summary": "Understand API prerequisites distinct from Codex sign-in.",
+        "keywords": [
+          "API key",
+          "simple chat",
+          "OpenAI",
+          "planning",
+          "model",
+          "provider"
+        ],
+        "sections": [
+          {
+            "title": "Two different paths",
+            "paragraphs": [
+              "Simple chat and some AI planning features use their own provider, model and API-access configuration. Signing in to Codex does not configure these automatically.",
+              "Simple chat administration prepares those settings. Do not paste a key into a message, capture or shared document for troubleshooting."
+            ]
+          },
+          {
+            "title": "Check availability",
+            "steps": [
+              "Have an administrator verify simple-chat configuration and save changes.",
+              "Try a short request in a simple conversation and inspect the result or error.",
+              "If advice and AI planning also fail, check this API path before changing Codex CLI."
+            ],
+            "warning": "Valid credentials do not guarantee available quota or model availability. Do not bypass a failure by granting broader execution permissions to an agent."
+          }
+        ],
+        "related": ["simple-chat", "task-planning", "admin-codex"]
+      },
+      {
+        "id": "integrations",
+        "title": "Applications, plugins and MCP servers",
+        "summary": "Select project capabilities and verify authentication separately.",
+        "keywords": [
+          "MCP",
+          "connector",
+          "application",
+          "plugin",
+          "authentication",
+          "integration"
+        ],
+        "sections": [
+          {
+            "title": "Prepare integrations",
+            "steps": [
+              "Review applications, plugins and MCP servers configured for the installation.",
+              "Select useful integrations in project agent management and save the selection.",
+              "Complete the service’s separate connection or authentication flow.",
+              "Check actual agent capabilities in the project before assigning an external action."
+            ]
+          },
+          {
+            "title": "Selection, account and permissions",
+            "paragraphs": [
+              "Selecting an integration does not create a provider account or automatically grant data access. A connected account does not authorize every capability in every project.",
+              "Text instructions and hidden buttons alone do not establish isolation. Project restrictions and effective service permissions must agree."
+            ],
+            "warning": "An action can transmit data or change an external system. Specify destination and scope and review confirmations before authorizing an agent."
+          }
+        ],
+        "related": ["agent-composer", "agent-knowledge", "project-people"]
+      },
+      {
+        "id": "admin-operations",
+        "title": "Logs, diagnostics, terminal and security",
+        "summary": "Diagnose problems without confusing global tools with project resources.",
+        "keywords": [
+          "logs",
+          "diagnostics",
+          "terminal",
+          "database",
+          "security",
+          "retention",
+          "OnlyOffice"
+        ],
+        "sections": [
+          {
+            "title": "Start with read-only diagnostics",
+            "steps": [
+              "Note the affected function, time and error without copying secrets.",
+              "Use Logs and Diagnostics to distinguish connection, configuration, permissions, storage and execution failures.",
+              "Check Infrastructure health and update tracking if the issue follows deployment.",
+              "Use global files or the server terminal only after identifying path, scope and recovery options."
+            ]
+          },
+          {
+            "title": "Operational settings",
+            "paragraphs": [
+              "Terminal, Files, Database, Security and OnlyOffice concern the installation. They do not replace project participants or folder settings.",
+              "Log retention is configured in Logs. Saving policies can automatically delete archives exceeding age or count limits while protecting the active file."
+            ],
+            "warning": "The global terminal affects the server, not just the displayed project. Deletion, database changes and authentication settings can affect others; back up and verify before acting."
+          }
+        ],
+        "related": ["infrastructure", "backups", "onlyoffice", "impersonation"]
+      }
+    ]
+  }
+]
