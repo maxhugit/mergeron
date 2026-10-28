@@ -3,7 +3,6 @@ import { useCallback, useRef, useState } from 'react';
 import { ChevronRight, File, Folder } from 'lucide-react';
 import { useDraggable, useDroppable } from '@dnd-kit/react';
 import { Feedback } from '@dnd-kit/dom';
-import { useTranslation } from 'react-i18next';
 import type { useFileOperations } from '@/hooks/use-file-operations';
 import type { InlineFileEdit as InlineEdit } from '@/hooks/use-inline-file-edit';
 import { cn } from '@/lib/utils';
@@ -58,7 +57,6 @@ export function FileBrowserEntry({
   documentActions,
   gitState,
 }: FileBrowserEntryProps) {
-  const { t } = useTranslation();
   const isDir = icon === 'directory';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -138,6 +136,7 @@ export function FileBrowserEntry({
         actions={actions}
         onOpenChange={setIsMenuOpen}
         extraActions={gitState?.actions}
+        label={displayName ?? name}
       >
         <div
           role="button"
@@ -184,18 +183,6 @@ export function FileBrowserEntry({
           )}
         </div>
       </FileContextMenu>
-      {!rowEditing && (
-        <FileContextMenu
-          type={icon}
-          actions={actions}
-          documentActions={documentActions}
-          extraActions={gitState?.actions}
-          dropdown
-          label={`${t('actions')} · ${displayName ?? name}`}
-        >
-          <span />
-        </FileContextMenu>
-      )}
       {isDir && (
         <>
           <input

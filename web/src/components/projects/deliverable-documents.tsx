@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { FileActionsMenu } from '@/components/files/file-actions-menu';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -45,9 +47,7 @@ import {
   emitFileChange,
 } from '@/lib/file-change-events';
 import { showSnackbar } from '@/stores/snackbar-store';
-import { WorkspaceEntryMenu } from '@/components/chat/workspace-entry-menu';
 import type { FileExtraAction } from '@/components/files/file-context-menu';
-import { useDeferredMenuAction } from '@/hooks/use-deferred-menu-action';
 
 type Props = {
   item: Deliverable;
@@ -58,7 +58,6 @@ type Props = {
   contextDocument?: DeliverableDocument;
   onAttachToChat?: () => void;
   extraActions?: FileExtraAction[];
-  dropdown?: boolean;
   menuLabel?: string;
   children?: ReactNode;
 };
@@ -78,7 +77,6 @@ export function DeliverableDocuments({
   contextDocument,
   onAttachToChat,
   extraActions,
-  dropdown,
   menuLabel,
   children,
 }: Props) {
@@ -272,7 +270,6 @@ export function DeliverableDocuments({
               contextTrigger={contextDocument ? children : undefined}
               onAttachToChat={contextDocument ? onAttachToChat : undefined}
               extraActions={extraActions}
-              dropdown={dropdown}
               menuLabel={menuLabel}
               onView={() => setDetail({ document, tab: 'preview' })}
               onHistory={() => setDetail({ document, tab: 'versions' })}
@@ -737,7 +734,6 @@ function DocumentRow({
   contextTrigger,
   onAttachToChat,
   extraActions = [],
-  dropdown,
   menuLabel,
 }: {
   document: DeliverableDocument;
@@ -752,14 +748,12 @@ function DocumentRow({
   contextTrigger?: ReactNode;
   onAttachToChat?: () => void;
   extraActions?: FileExtraAction[];
-  dropdown?: boolean;
   menuLabel?: string;
 }) {
   const { t } = useTranslation();
   const latest = currentDocumentVersion(document);
   const menuRef = useRef<HTMLDetailsElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
-  const deferred = useDeferredMenuAction();
   useEffect(() => {
     const closeOutside = (event: Event) => {
       const menu = menuRef.current;
@@ -787,15 +781,6 @@ function DocumentRow({
     };
   }, []);
   const actions = [
-    ...(onAttachToChat
-      ? [
-          {
-            label: t('attachToChat'),
-            icon: MessageSquarePlus,
-            action: 'attach',
-          },
-        ]
-      : []),
     { label: t('preview'), icon: Eye, action: 'view' },
     { label: t('download'), icon: Download, action: 'download' },
     { label: t('history'), icon: History, action: 'history' },
@@ -812,6 +797,15 @@ function DocumentRow({
       action: 'snapshot',
       disabled: busy,
     },
+    ...(onAttachToChat
+      ? [
+          {
+            label: t('attachToChat'),
+            icon: MessageSquarePlus,
+            action: 'attach',
+          },
+        ]
+      : []),
     { label: t('delete'), icon: Trash2, action: 'delete', disabled: busy },
   ];
   const runAction = (action: string) => {
@@ -853,63 +847,34 @@ function DocumentRow({
     />
   );
   if (contextTrigger)
-    if (dropdown)
-      return (
-        <>
-          <WorkspaceEntryMenu
-            label={menuLabel ?? document.name}
-            onAction={(action) => deferred.select(() => runAction(action))}
-            items={[
-              ...actions.map(({ label, action, disabled }) => ({
-                label,
-                disabled,
-                destructive: action === 'delete',
-                action,
-              })),
-              ...extraActions.map((action) => ({
-                ...action,
-                onSelect: () => {
-                  deferred.select(action.onSelect);
-                },
-              })),
-            ]}
-            onCloseAutoFocus={deferred.afterClose}
-          />
-          {input}
-        </>
-      );
-  if (contextTrigger)
     return (
       <>
-        <ContextMenu>
-          <ContextMenuTrigger asChild>{contextTrigger}</ContextMenuTrigger>
-          <ContextMenuContent onCloseAutoFocus={deferred.afterClose}>
-            {extraActions.map((action) => (
-              <ContextMenuItem
-                key={action.label}
-                disabled={action.disabled}
-                onSelect={() => {
-                  deferred.select(action.onSelect);
-                }}
-              >
-                {action.label}
-              </ContextMenuItem>
-            ))}
-            {actions.map(({ label, icon: Icon, action, disabled }) => (
-              <ContextMenuItem
-                key={label}
-                variant={action === 'delete' ? 'destructive' : 'default'}
-                disabled={disabled}
-                onSelect={() => {
-                  deferred.select(() => runAction(action));
-                }}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </ContextMenuItem>
-            ))}
-          </ContextMenuContent>
-        </ContextMenu>
+        <FileActionsMenu
+          onAction={runAction}
+          buttonLabel={menuLabel}
+          actions={[
+            ...extraActions.map((action) => ({
+              id: `extra:${action.label}`,
+              label: action.label,
+              icon: FileText,
+              disabled: action.disabled,
+              onSelect: action.onSelect,
+              separated: true,
+            })),
+            ...actions.map(({ label, icon, action, disabled }) => ({
+              id: action,
+              label,
+              icon,
+              disabled,
+              destructive: action === 'delete',
+              separated:
+                Boolean(onAttachToChat) &&
+                (action === 'attach' || action === 'delete'),
+            })),
+          ]}
+        >
+          {contextTrigger}
+        </FileActionsMenu>
         {input}
       </>
     );
@@ -945,19 +910,24 @@ function DocumentRow({
         </summary>
         <div className="absolute right-0 z-20 mt-1 grid min-w-52 gap-1 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
           {actions.map(({ label, icon: Icon, action, disabled }) => (
-            <button
-              key={label}
-              type="button"
-              className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted ${action === 'delete' ? 'text-destructive' : ''}`}
-              disabled={disabled}
-              onClick={() => {
-                if (menuRef.current) menuRef.current.open = false;
-                runAction(action);
-              }}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
+            <Fragment key={action}>
+              {onAttachToChat &&
+                (action === 'attach' || action === 'delete') && (
+                  <div role="separator" className="-mx-1 my-1 h-px bg-border" />
+                )}
+              <button
+                type="button"
+                className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted ${action === 'delete' ? 'text-destructive' : ''}`}
+                disabled={disabled}
+                onClick={() => {
+                  if (menuRef.current) menuRef.current.open = false;
+                  runAction(action);
+                }}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            </Fragment>
           ))}
         </div>
       </details>

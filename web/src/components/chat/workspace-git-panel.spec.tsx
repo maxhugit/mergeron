@@ -59,9 +59,7 @@ vi.mock('@/components/files/file-tree', () => ({
   FileTree: ({
     gitFileState,
   }: {
-    gitFileState?: (
-      path: string,
-    ) =>
+    gitFileState?: (path: string) =>
       | {
           unstaged: boolean;
           actions: Array<{
@@ -418,7 +416,7 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
 it('never interprets absent checks or unknown mergeability as approval', async () => {
   show();
   await screen.findByRole('button', { name: 'Préparer une copie de travail' });
-  tab('Distant · GitHub');
+  tab('GitHub');
   fireEvent.click(await screen.findByRole('button', { name: '#12 Feature' }));
   expect(
     await screen.findByText('Détection des conflits en cours ou indisponible.'),
@@ -481,7 +479,7 @@ it('does not adopt a late root after switching away from Files, and loads on ret
   );
   show();
   await waitFor(() => expect(addRoot).toHaveBeenCalledTimes(1));
-  tab('Distant · GitHub');
+  tab('GitHub');
   await act(async () => finish());
   expect(useFilesStore.getState().rootDir).toBe('/original');
   tab('Local');
@@ -525,7 +523,7 @@ it('separates local history from live GitHub branches and never activates a copy
   expect(screen.queryByRole('tab', { name: 'PR / checks' })).toBeNull();
   tab('Commits');
   expect(await screen.findByText('Local change')).toBeVisible();
-  tab('Distant · GitHub');
+  tab('GitHub');
   expect(await screen.findByRole('tab', { name: 'PR / checks' })).toBeVisible();
   expect(screen.queryByText(/Données consultées sur GitHub/)).toBeNull();
   expect(screen.getByText('Local change')).not.toBeVisible();
@@ -546,7 +544,7 @@ it('separates local history from live GitHub branches and never activates a copy
 it('keeps remote GitHub data usable without a local copy and keeps synchronization explicit', async () => {
   show();
   await screen.findByRole('tab', { name: 'Local' });
-  tab('Distant · GitHub');
+  tab('GitHub');
   expect(await screen.findByText(/#12 Feature/)).toBeVisible();
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
   tab('Synchronisation');
@@ -594,7 +592,7 @@ it('has one shared refresh after the scope tabs and refreshes inactive data for 
   await waitFor(() => expect(remote).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(checks).toHaveBeenCalledTimes(2));
   expect(other).toHaveBeenCalledTimes(1);
-  for (const scope of ['Distant · GitHub', 'Synchronisation', 'Local']) {
+  for (const scope of ['GitHub', 'Synchronisation', 'Local']) {
     tab(scope);
     expect(
       screen.getAllByRole('button', { name: 'Actualiser le dépôt' }),
@@ -624,7 +622,7 @@ it('refreshes remote files at the latest revision while preserving the browsed d
   });
   show();
   await screen.findByRole('tab', { name: 'Local' });
-  tab('Distant · GitHub');
+  tab('GitHub');
   tab('Fichiers');
   fireEvent.click(await screen.findByRole('button', { name: 'docs' }));
   await waitFor(() =>
@@ -659,7 +657,7 @@ it('places publication only in Synchronization and keeps commits local', async (
     within(sync).getByRole('button', { name: '↑ Publier les commits…' }),
   ).toBeVisible();
   expect(within(sync).queryByRole('button', { name: 'Commit…' })).toBeNull();
-  tab('Distant · GitHub');
+  tab('GitHub');
   expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
 });

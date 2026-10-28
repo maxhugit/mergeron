@@ -3,10 +3,10 @@
  * Actions vary based on whether the target is a file or directory.
  */
 import { useDeferredMenuAction } from '@/hooks/use-deferred-menu-action';
-import { WorkspaceEntryMenu } from '@/components/chat/workspace-entry-menu';
 import type { ComponentProps } from 'react';
 import { DeliverableDocuments } from '@/components/projects/deliverable-documents';
 import { showSnackbar } from '@/stores/snackbar-store';
+import { FileActionsMenu, type FileMenuAction } from './file-actions-menu';
 import { useTranslation } from 'react-i18next';
 import {
   Copy,
@@ -14,6 +14,7 @@ import {
   FilePlus,
   FolderPlus,
   FolderUp,
+  GitBranch,
   MessageSquarePlus,
   Move,
   Pencil,
@@ -56,7 +57,6 @@ interface FileContextMenuProps {
   children: React.ReactNode;
   documentActions?: DeliverableContextActions;
   extraActions?: FileExtraAction[];
-  dropdown?: boolean;
   label?: string;
 }
 
@@ -72,7 +72,6 @@ export function FileContextMenu({
   children,
   documentActions,
   extraActions = [],
-  dropdown = false,
   label,
 }: FileContextMenuProps) {
   const { t } = useTranslation();
@@ -85,7 +84,6 @@ export function FileContextMenu({
         {...documentActions}
         onAttachToChat={actions.onAttachToChat}
         extraActions={extraActions}
-        dropdown={dropdown}
         menuLabel={label}
         onError={() => showSnackbar(t('unableToUpdateDocument'), 'error')}
       >
@@ -93,38 +91,50 @@ export function FileContextMenu({
       </DeliverableDocuments>
     );
 
-  if (dropdown) {
-    const items = [
-      [t('newFile'), isDir ? actions.onNewFile : undefined],
-      [t('newFolder'), isDir ? actions.onNewFolder : undefined],
-      [t('rename'), actions.onRename],
-      [t('copyTo'), actions.onCopy],
-      [t('moveTo'), actions.onMove],
-      [t('download'), !isDir ? actions.onDownload : undefined],
-      [t('uploadFilesHere'), isDir ? actions.onUploadFiles : undefined],
-      [t('uploadFolderHere'), isDir ? actions.onUploadFolder : undefined],
-      [t('attachToChat'), actions.onAttachToChat],
-      [t('refresh'), actions.onRefresh],
-      [t('delete'), actions.onDelete],
-    ] as const;
+  if (!isDir) {
+    const items: FileMenuAction[] = [];
+    const add = (
+      id: string,
+      label: string,
+      icon: FileMenuAction['icon'],
+      onSelect?: () => void,
+      separated = false,
+      destructive = false,
+    ) => {
+      if (onSelect)
+        items.push({ id, label, icon, onSelect, separated, destructive });
+    };
+    add('rename', t('rename'), Pencil, actions.onRename);
+    add('copy', t('copyTo'), Copy, actions.onCopy);
+    add('move', t('moveTo'), Move, actions.onMove);
+    add('download', t('download'), Download, actions.onDownload);
+    add('refresh', t('refresh'), RefreshCw, actions.onRefresh, true);
+    items.push(
+      ...extraActions.map((action, index) => ({
+        id: `git:${action.label}`,
+        label: action.label,
+        icon: GitBranch,
+        disabled: action.disabled,
+        onSelect: action.onSelect,
+        separated: index === 0,
+      })),
+    );
+    add(
+      'attach',
+      t('attachToChat'),
+      MessageSquarePlus,
+      actions.onAttachToChat,
+      true,
+    );
+    add('delete', t('delete'), Trash2, actions.onDelete, true, true);
     return (
-      <WorkspaceEntryMenu
-        label={label ?? t('actions')}
-        onCloseAutoFocus={afterClose}
-        items={[
-          ...items
-            .filter(([, action]) => action)
-            .map(([label, action]) => ({
-              label,
-              destructive: action === actions.onDelete,
-              onSelect: () => select(action),
-            })),
-          ...extraActions.map((action) => ({
-            ...action,
-            onSelect: () => select(action.onSelect),
-          })),
-        ]}
-      />
+      <FileActionsMenu
+        actions={items}
+        onOpenChange={onOpenChange}
+        buttonLabel={label}
+      >
+        {children}
+      </FileActionsMenu>
     );
   }
 
@@ -199,15 +209,6 @@ export function FileContextMenu({
             )}
           </>
         )}
-        {actions.onAttachToChat && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => select(actions.onAttachToChat)}>
-              <MessageSquarePlus className="h-3.5 w-3.5" />
-              {t('attachToChat')}
-            </ContextMenuItem>
-          </>
-        )}
         {actions.onRefresh && (
           <>
             <ContextMenuSeparator />
@@ -215,6 +216,16 @@ export function FileContextMenu({
               <RefreshCw className="h-3.5 w-3.5" />
               {t('refresh')}
             </ContextMenuItem>
+          </>
+        )}
+        {actions.onAttachToChat && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => select(actions.onAttachToChat)}>
+              <MessageSquarePlus className="h-3.5 w-3.5" />
+              {t('attachToChat')}
+            </ContextMenuItem>
+            {!actions.onDelete && <ContextMenuSeparator />}
           </>
         )}
         {actions.onDelete && (
