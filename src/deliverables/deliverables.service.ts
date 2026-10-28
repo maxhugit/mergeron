@@ -53,7 +53,11 @@ import {
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { documentProtectionEnabled as protectedDocuments } from '../document-publication/document-isolation';
 import { registeredDocumentPath } from './document-path-alias';
-import { migrateDeliverableDocumentRoots } from './document-root-migration';
+import {
+  migrateDeliverableDocumentRoots,
+  regularPath,
+  retireProjection,
+} from './document-root-migration';
 
 type Item = typeof items.$inferSelect;
 export type DeliverableLifecycleStatus =
@@ -1868,6 +1872,218 @@ export class DeliverablesService implements OnModuleInit {
     return null;
   }
 
+  async renameDocument(
+    projectId: string,
+    resourceId: string,
+    deliverableId: string,
+    documentId: string,
+    input: {
+      name?: unknown;
+      expectedName?: unknown;
+      expectedVersion?: unknown;
+    },
+  ) {
+    return this.serializeDocumentWrite(deliverableId, async () => {
+      const deliverable = this.get(projectId, resourceId, deliverableId);
+      this.requireDocumentMutable(deliverable);
+      const document = this.db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, documentId),
+            eq(documents.deliverableId, deliverableId),
+          ),
+        )
+        .get();
+      if (!document || document.deletedAt !== null)
+        throw new NotFoundException('Document not found');
+      if (
+        input.expectedVersion !== document.currentVersionNumber ||
+        input.expectedName !== document.name
+      )
+        throw new ConflictException(
+          'Document changed. Reload before renaming.',
+        );
+      const name = typeof input.name === 'string' ? input.name.trim() : '';
+      if (
+        !name ||
+        Buffer.byteLength(name) > 255 ||
+        /[\\/]/.test(name) ||
+        Array.from(name).some(
+          (character) =>
+            character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+        ) ||
+        ['.', '..'].includes(name) ||
+        name.endsWith('.')
+      )
+        throw new BadRequestException('Invalid document name');
+      if (
+        path.extname(name).toLowerCase() !==
+        path.extname(document.name).toLowerCase()
+      )
+        throw new BadRequestException('Keep the document file extension');
+      if (name === document.name)
+        return {
+          oldPath: document.sourcePath,
+          newPath: document.sourcePath,
+          previousFileRetained: false,
+        };
+      if (this.blockingOnlyOfficeSession(deliverableId))
+        throw new ConflictException(
+          'Close the document editor before renaming',
+        );
+      const source = await this.files.resolveSafePath(document.sourcePath);
+      this.identities.requireWorkspacePath(source);
+      this.files.assertProjectPathMutable(source);
+      const workspacePaths = this.db
+        .select()
+        .from(projectWorkspaces)
+        .where(eq(projectWorkspaces.projectId, projectId))
+        .all()
+        .map((workspace) => workspace.path);
+      const roots = await Promise.all(
+        workspacePaths.map((workspace) => fs.realpath(workspace)),
+      );
+      const registeredRoot = [...workspacePaths, ...roots].find((candidate) =>
+        document.sourcePath.startsWith(candidate + path.sep),
+      );
+      if (!registeredRoot)
+        throw new BadRequestException(
+          'Document must belong to a project workspace',
+        );
+      await regularPath(registeredRoot, document.sourcePath);
+      const root = roots.find((candidate) =>
+        source.startsWith(candidate + path.sep),
+      );
+      if (!root)
+        throw new BadRequestException(
+          'Document must belong to a project workspace',
+        );
+      const target = path.join(path.dirname(source), name);
+      this.files.assertProjectPathMutable(target);
+      if (
+        this.db
+          .select()
+          .from(documents)
+          .all()
+          .some(
+            (other) =>
+              other.id !== document.id &&
+              (other.sourcePath === target ||
+                other.previousSourcePaths.includes(target) ||
+                (other.deliverableId === deliverableId && other.name === name)),
+          )
+      )
+        throw new ConflictException('A document already reserves this name');
+      const before = await regularPath(root, source);
+      const digest = await this.hash(source);
+      let copied = false;
+      let committed = false;
+      try {
+        try {
+          await fs.copyFile(source, target, constants.COPYFILE_EXCL);
+          copied = true;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+            throw new ConflictException('A file already exists with this name');
+          throw error;
+        }
+        const after = await regularPath(root, source);
+        await regularPath(root, target);
+        if (
+          before.ino !== after.ino ||
+          before.size !== after.size ||
+          before.mtimeMs !== after.mtimeMs ||
+          (await this.hash(source)).sha256 !== digest.sha256 ||
+          (await this.hash(target)).sha256 !== digest.sha256
+        )
+          throw new ConflictException('Document changed during rename');
+        const actor = this.actor();
+        const now = Date.now();
+        this.db.transaction((tx) => {
+          const changed = tx
+            .update(documents)
+            .set({
+              name,
+              sourcePath: target,
+              previousSourcePaths: [
+                ...new Set([
+                  ...document.previousSourcePaths,
+                  document.sourcePath,
+                  source,
+                ]),
+              ].filter((former) => former !== target),
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(documents.id, documentId),
+                eq(documents.name, document.name),
+                eq(documents.sourcePath, document.sourcePath),
+                eq(
+                  documents.currentVersionNumber,
+                  document.currentVersionNumber,
+                ),
+              ),
+            )
+            .run();
+          if (changed.changes !== 1)
+            throw new ConflictException('Document changed during rename');
+          const updated = tx
+            .update(items)
+            .set({
+              updatedAt: now,
+              updatedByName: actor.name,
+              version: deliverable.version + 1,
+            })
+            .where(
+              and(
+                eq(items.id, deliverableId),
+                eq(items.version, deliverable.version),
+              ),
+            )
+            .run();
+          if (updated.changes !== 1)
+            throw new ConflictException('Deliverable changed during rename');
+          tx.insert(projectActivity)
+            .values({
+              id: randomUUID(),
+              projectId,
+              entityType: 'deliverable_history',
+              entityId: deliverableId,
+              action: 'deliverable_document_renamed',
+              label: name,
+              details: { documentId, before: document.name, after: name },
+              actorPersonId: actor.personId,
+              actorName: actor.name,
+              createdAt: now,
+            })
+            .run();
+        });
+        committed = true;
+        let previousFileRetained = false;
+        try {
+          await retireProjection(root, source, target, digest.sha256);
+        } catch {
+          previousFileRetained = true;
+        }
+        return {
+          oldPath: document.sourcePath,
+          newPath: target,
+          previousFileRetained,
+        };
+      } catch (error) {
+        // A failed commit never removes the original or an unrelated destination.
+        if (copied && !committed)
+          await retireProjection(root, target, source, digest.sha256).catch(
+            () => {},
+          );
+        throw error;
+      }
+    });
+  }
+
   setDocumentDeleted(
     projectId: string,
     resourceId: string,
@@ -2003,6 +2219,27 @@ export class DeliverablesService implements OnModuleInit {
     input: { expectedVersion?: unknown; comment?: unknown },
     actor: DeliverableDocumentActor,
   ) {
+    return this.serializeDocumentWrite(deliverableId, () =>
+      this.restoreDocumentVersionUnlocked(
+        projectId,
+        resourceId,
+        deliverableId,
+        documentId,
+        versionId,
+        input,
+        actor,
+      ),
+    );
+  }
+  private async restoreDocumentVersionUnlocked(
+    projectId: string,
+    resourceId: string,
+    deliverableId: string,
+    documentId: string,
+    versionId: string,
+    input: { expectedVersion?: unknown; comment?: unknown },
+    actor: DeliverableDocumentActor,
+  ) {
     const deliverable = this.get(projectId, resourceId, deliverableId);
     this.requireDocumentMutable(deliverable);
     const document = this.getDocument(deliverableId, documentId);
@@ -2020,7 +2257,7 @@ export class DeliverablesService implements OnModuleInit {
       versionId,
     );
     await fs.copyFile(historical.path, document.sourcePath);
-    const result = await this.addDocumentVersion(
+    const result = await this.addDocumentVersionUnlocked(
       projectId,
       resourceId,
       deliverableId,

@@ -275,6 +275,16 @@ export class DeliverablesController {
       documentId,
     );
   }
+  @Patch(':id/documents/:documentId') renameDocument(
+    @Param('projectId') p: string,
+    @Param('resourceId') r: string,
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @Body() body: Parameters<DeliverablesService['renameDocument']>[4],
+  ) {
+    return this.service.renameDocument(p, r, id, documentId, body);
+  }
+
   @Delete(':id/documents/:documentId') deleteDocument(
     @Param('projectId') p: string,
     @Param('resourceId') r: string,

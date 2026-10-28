@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { documentPathAlias } from './document-path-alias';
+import { migrateDeliverableDocumentRoots } from './document-root-migration';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -35,7 +37,9 @@ describe('project deliverables', () => {
     files: FilesService;
   beforeEach(async () => {
     database = createTestDatabase();
-    root = await fs.mkdtemp(path.join(os.tmpdir(), 'deliverables-'));
+    root = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), 'deliverables-')),
+    );
     await fs.mkdir(path.join(root, '.mergeron'));
     const now = Date.now();
     database.db
@@ -87,6 +91,303 @@ describe('project deliverables', () => {
       files,
       new IdentityService(database.db),
       new ActiveFoldersService(database.db),
+    );
+  });
+  it.each([false, true])(
+    'renames a document without losing versions, content or old links (protected=%s)',
+    async (protectedSource) => {
+      vi.stubEnv(
+        'MERGERON_PUBLISHED_DOCUMENT_PROTECTION',
+        protectedSource ? 'required' : '',
+      );
+      try {
+        const item = await service.create('p', 'r', { title: 'Rename' });
+        const source = path.join(root, 'livrables', item.id, 'report.docx');
+        await fs.writeFile(source, 'Version one');
+        await service.addDocumentVersion(
+          'p',
+          'r',
+          item.id,
+          { path: source },
+          { personId: null, name: 'Alice' },
+        );
+        const document = service.documents('p', 'r', item.id)[0];
+        const renamed = await service.renameDocument(
+          'p',
+          'r',
+          item.id,
+          document.id,
+          {
+            name: 'Renamed.docx',
+            expectedName: document.name,
+            expectedVersion: 1,
+          },
+        );
+        expect(renamed.previousFileRetained).toBe(false);
+        const current = service.documents('p', 'r', item.id)[0];
+        expect(current).toMatchObject({
+          id: document.id,
+          name: 'Renamed.docx',
+          currentVersionNumber: 1,
+          format: 'docx',
+        });
+        expect(current.versions).toEqual(document.versions);
+        expect(await fs.readFile(current.sourcePath, 'utf8')).toBe(
+          'Version one',
+        );
+        expect(documentPathAlias(database.db, document.sourcePath)).toBe(
+          current.sourcePath,
+        );
+        await expect(fs.stat(document.sourcePath)).rejects.toMatchObject({
+          code: 'ENOENT',
+        });
+        await fs.writeFile(current.sourcePath, 'Version two');
+        await service.addDocumentVersion(
+          'p',
+          'r',
+          item.id,
+          { path: current.sourcePath, expectedVersion: 1 },
+          { personId: null, name: 'Bob' },
+          current.id,
+        );
+        await service.restoreDocumentVersion(
+          'p',
+          'r',
+          item.id,
+          current.id,
+          document.versions[0].id,
+          { expectedVersion: 2 },
+          { personId: null, name: 'Alice' },
+        );
+        expect(await fs.readFile(current.sourcePath, 'utf8')).toBe(
+          'Version one',
+        );
+        expect(service.documents('p', 'r', item.id)[0].versions).toHaveLength(
+          3,
+        );
+        expect(
+          await fs.readFile(document.versions[0].snapshotPath, 'utf8'),
+        ).toBe('Version one');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+  it('rejects conflicting names, unsafe names, stale requests and active editors without changing the original', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename guards' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const input = {
+      name: 'new.docx',
+      expectedName: document.name,
+      expectedVersion: 1,
+    };
+    for (const name of [
+      '../bad.docx',
+      'x/y.docx',
+      'x\\y.docx',
+      '',
+      'changed.pdf',
+    ])
+      await expect(
+        service.renameDocument('p', 'r', item.id, document.id, {
+          ...input,
+          name,
+        }),
+      ).rejects.toThrow();
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, {
+        ...input,
+        expectedVersion: 2,
+      }),
+    ).rejects.toThrow('Reload');
+    await fs.writeFile(
+      path.join(path.dirname(document.sourcePath), 'new.docx'),
+      'Other file',
+    );
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, input),
+    ).rejects.toThrow('already exists');
+    service.updateOnlyOfficeSession(document.sourcePath, 'editing');
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, {
+        ...input,
+        name: 'free.docx',
+      }),
+    ).rejects.toThrow('Close the document editor');
+    expect(await fs.readFile(document.sourcePath, 'utf8')).toBe('Original');
+    expect(service.documents('p', 'r', item.id)[0].name).toBe('report.docx');
+  });
+  it('rejects a symlink substituted for the registered document', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename symlink' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const other = path.join(path.dirname(source), 'other.docx');
+    await fs.writeFile(other, 'Unrelated');
+    await fs.unlink(document.sourcePath);
+    await fs.symlink(other, document.sourcePath);
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, {
+        name: 'new.docx',
+        expectedName: document.name,
+        expectedVersion: 1,
+      }),
+    ).rejects.toThrow();
+    expect(await fs.readFile(other, 'utf8')).toBe('Unrelated');
+    expect(service.documents('p', 'r', item.id)[0].sourcePath).toBe(
+      document.sourcePath,
+    );
+    await expect(
+      fs.stat(path.join(path.dirname(source), 'new.docx')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('serializes concurrent renames and rejects the stale name', async () => {
+    const item = await service.create('p', 'r', {
+      title: 'Rename concurrency',
+    });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const results = await Promise.allSettled(
+      ['first.docx', 'second.docx'].map((name) =>
+        service.renameDocument('p', 'r', item.id, document.id, {
+          name,
+          expectedName: document.name,
+          expectedVersion: 1,
+        }),
+      ),
+    );
+    expect(results.map((result) => result.status)).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
+    const current = service.documents('p', 'r', item.id)[0];
+    expect(current.name).toBe('first.docx');
+    expect(await fs.readFile(current.sourcePath, 'utf8')).toBe('Original');
+    expect(current.versions).toEqual(document.versions);
+  });
+  it('keeps renamed paths reserved and safely finishes interrupted cleanup on restart', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename recovery' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const renamed = await service.renameDocument(
+      'p',
+      'r',
+      item.id,
+      document.id,
+      {
+        name: 'new.docx',
+        expectedName: document.name,
+        expectedVersion: 1,
+      },
+    );
+    await fs.copyFile(renamed.newPath, source);
+    const warn = vi.fn();
+    await migrateDeliverableDocumentRoots(database.db, warn);
+    expect(warn).not.toHaveBeenCalled();
+    await expect(fs.stat(source)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await fs.readFile(renamed.newPath, 'utf8')).toBe('Original');
+    expect(await fs.readFile(document.versions[0].snapshotPath, 'utf8')).toBe(
+      'Original',
+    );
+    const second = path.join(root, 'livrables', item.id, 'second.docx');
+    await fs.writeFile(second, 'Second');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: second },
+      { personId: null, name: 'Alice' },
+    );
+    const other = service
+      .documents('p', 'r', item.id)
+      .find((entry) => entry.id !== document.id)!;
+    await expect(
+      service.renameDocument('p', 'r', item.id, other.id, {
+        name: 'report.docx',
+        expectedName: other.name,
+        expectedVersion: 1,
+      }),
+    ).rejects.toThrow('reserves this name');
+    expect(documentPathAlias(database.db, source)).toBe(renamed.newPath);
+    const ready = service.get('p', 'r', item.id);
+    service.transitionLifecycle('p', 'r', item.id, {
+      target: 'finalized',
+      version: ready.version,
+    });
+    await expect(
+      service.renameDocument('p', 'r', item.id, other.id, {
+        name: 'finalized.docx',
+        expectedName: other.name,
+        expectedVersion: 1,
+      }),
+    ).rejects.toThrow('Reopen the deliverable');
+  });
+  it('preserves the original when the rename database commit fails', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename rollback' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const transaction = vi
+      .spyOn(database.db, 'transaction')
+      .mockImplementationOnce(() => {
+        throw new Error('commit failed');
+      });
+    try {
+      await expect(
+        service.renameDocument('p', 'r', item.id, document.id, {
+          name: 'new.docx',
+          expectedName: document.name,
+          expectedVersion: 1,
+        }),
+      ).rejects.toThrow('commit failed');
+    } finally {
+      transaction.mockRestore();
+    }
+    expect(await fs.readFile(document.sourcePath, 'utf8')).toBe('Original');
+    await expect(
+      fs.stat(path.join(path.dirname(document.sourcePath), 'new.docx')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(service.documents('p', 'r', item.id)[0].sourcePath).toBe(
+      document.sourcePath,
     );
   });
   it('records creator and last editor when saving a deliverable', async () => {

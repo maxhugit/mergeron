@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Download, Eye, FileText, History, Info, MoreVertical, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { Download, Eye, FileText, History, Info, MoreVertical, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -20,6 +20,8 @@ import type {
 } from '@/lib/deliverables-api';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
+import { beginFileMutation, finishFileMutation, emitFileChange } from '@/lib/file-change-events';
+import { showSnackbar } from '@/stores/snackbar-store';
 
 type Props = {
   item: Deliverable;
@@ -41,9 +43,12 @@ export function DeliverableDocuments({
   onError,
 }: Props) {
   const { t } = useTranslation();
+  const { t: documentText } = useTranslation('deliverables');
   const [comment, setComment] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [renaming, setRenaming] = useState<DeliverableDocument | null>(null);
+  const [newName, setNewName] = useState('');
   const [detail, setDetail] = useState<{
     document: DeliverableDocument;
     tab: 'versions' | 'preview' | 'information';
@@ -121,7 +126,21 @@ export function DeliverableDocuments({
     onError,
   });
 
-  const busy = disabled || request.isPending || addDocument.isPending || addVersion.isPending;
+  const rename = useMutation({
+    mutationFn: (document: DeliverableDocument) => projectsApi<{ oldPath: string; newPath: string; previousFileRetained: boolean }>(`${base}/${item.id}/documents/${document.id}`, {
+      method: 'PATCH', body: JSON.stringify({ name: newName, expectedName: document.name, expectedVersion: document.currentVersionNumber }),
+    }),
+    onMutate: beginFileMutation,
+    onSettled: finishFileMutation,
+    onSuccess: async (result) => {
+      emitFileChange({ source: 'local', kind: 'rename', oldPath: result.oldPath, newPath: result.newPath });
+      if (result.previousFileRetained) showSnackbar(documentText('documentRenamePreservedOriginal'), 'warning');
+      setRenaming(null);
+      await refresh();
+    },
+    onError,
+  });
+  const busy = disabled || request.isPending || addDocument.isPending || addVersion.isPending || rename.isPending;
   const mutationError = request.error || addDocument.error || addVersion.error;
 
   return (
@@ -155,9 +174,10 @@ export function DeliverableDocuments({
               busy={busy}
               onView={() => setDetail({ document, tab: 'preview' })}
               onHistory={() => setDetail({ document, tab: 'versions' })}
+              onRename={() => { rename.reset(); setNewName(document.name); setRenaming(document); }}
               onDownload={() => {
                 const version = currentDocumentVersion(document);
-                if (version) void downloadVersion(base, item.id, document, version, onError);
+                if (version) void downloadVersion(base, item.id, document, version, onError, document.name);
                 else onError();
               }}
               onFile={(file) => addVersion.mutate({ document, file })}
@@ -216,6 +236,25 @@ export function DeliverableDocuments({
         </p>
       )}
 
+      <Dialog open={renaming !== null} onOpenChange={(open) => { if (!open && !rename.isPending) setRenaming(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{documentText('renameDocument')}</DialogTitle>
+            <DialogDescription>{documentText('renameDocumentDescription')}</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (renaming && !busy) rename.mutate(renaming); }}>
+            <label className="grid gap-2 text-sm">
+              {t('documentName')}
+              <Input autoFocus required maxLength={255} value={newName} disabled={rename.isPending} onChange={(event) => setNewName(event.target.value)} />
+            </label>
+            {rename.isError && <p role="alert" className="text-sm text-destructive">{documentText('unableToRenameDocument')}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={rename.isPending} onClick={() => setRenaming(null)}>{t('cancel')}</Button>
+              <Button type="submit" disabled={busy || !newName.trim() || newName.trim() === renaming?.name}>{t('rename')}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -417,11 +456,12 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function DocumentRow({ document, busy, onView, onHistory, onDownload, onFile, onSnapshot, onDelete }: {
+function DocumentRow({ document, busy, onView, onHistory, onRename, onDownload, onFile, onSnapshot, onDelete }: {
   document: DeliverableDocument;
   busy: boolean;
   onView: () => void;
   onHistory: () => void;
+  onRename: () => void;
   onDownload: () => void;
   onFile: (file: File) => void;
   onSnapshot: () => void;
@@ -478,6 +518,7 @@ function DocumentRow({ document, busy, onView, onHistory, onDownload, onFile, on
           <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onView}><Eye className="h-4 w-4" /> {t('preview')}</button>
           <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onDownload}><Download className="h-4 w-4" /> {t('download')}</button>
           <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onHistory}><History className="h-4 w-4" /> {t('history')}</button>
+          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" disabled={busy} onClick={() => { if (menuRef.current) menuRef.current.open = false; onRename(); }}><Pencil className="h-4 w-4" /> {t('rename')}</button>
           <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted">
             <Upload className="h-4 w-4" /> {t('uploadNewVersion')}
             <input className="sr-only" type="file" disabled={busy} onChange={(event) => {
@@ -509,7 +550,7 @@ async function uploadFile(file: File, destinationPath: string, overwrite: boolea
   return result.files[0].path;
 }
 
-async function downloadVersion(base: string, deliverableId: string, document: DeliverableDocument, version: DeliverableDocumentVersion, onError: () => void) {
+async function downloadVersion(base: string, deliverableId: string, document: DeliverableDocument, version: DeliverableDocumentVersion, onError: () => void, fileName = version.fileName) {
   try {
     const authorization = getAuthorizationHeader();
     const response = await fetch(withBasePath(`/api/projects${base}/${deliverableId}/documents/${document.id}/versions/${version.id}/file`), {
@@ -519,7 +560,7 @@ async function downloadVersion(base: string, deliverableId: string, document: De
     const url = URL.createObjectURL(await response.blob());
     const anchor = window.document.createElement('a');
     anchor.href = url;
-    anchor.download = version.fileName;
+    anchor.download = fileName;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch {
