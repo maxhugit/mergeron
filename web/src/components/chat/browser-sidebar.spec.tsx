@@ -78,6 +78,29 @@ it('accepts an address in an empty session and creates a tab only when submitted
   ).toHaveLength(1);
 });
 
+it('starts live view only after an initial navigation has released the server lock', async () => {
+  let finish!: (value: typeof frame) => void;
+  const navigation = new Promise<typeof frame>((resolve) => {
+    finish = resolve;
+  });
+  const standard = api.getMockImplementation()!;
+  api.mockImplementation((path: string) =>
+    path.endsWith('/navigate') ? navigation : standard(path),
+  );
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  const address = screen.getByRole('textbox', { name: 'Page address' });
+  await waitFor(() => expect(address).toBeEnabled());
+  fireEvent.submit(address.closest('form')!);
+  await waitFor(() =>
+    expect(
+      api.mock.calls.some(([path]) => String(path).endsWith('/navigate')),
+    ).toBe(true),
+  );
+  expect(screen.queryByText('Live view')).toBeNull();
+  finish(frame);
+  expect(await screen.findByText('Live view')).toBeVisible();
+});
+
 it('selects a restored tab and navigates it without creating another', async () => {
   api.mockImplementation((path: string) =>
     Promise.resolve(
@@ -108,6 +131,20 @@ it('selects a restored tab and navigates it without creating another', async () 
   expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
     false,
   );
+});
+
+it('changes live tabs without a competing screenshot request', async () => {
+  api.mockResolvedValue({
+    tabs: [
+      { id: 'first', title: 'First', url: frame.url },
+      { id: 'second', title: 'Second', url: frame.url },
+    ],
+  });
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  const second = await screen.findByRole('tab', { name: 'Second' });
+  fireEvent.click(second);
+  expect(second).toHaveAttribute('aria-selected', 'true');
+  expect(api.mock.calls.map(([path]) => path)).toEqual(['/thread-a/tabs']);
 });
 
 it('keeps the address editable after browser initialization fails', async () => {

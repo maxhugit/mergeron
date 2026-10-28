@@ -81,6 +81,25 @@ test('draws live frames, sends mouse and keyboard in order and releases control 
     ),
   ).toBe(true);
   expect(control).toHaveBeenCalledWith('lease');
+  const oldSignal = signal;
+  view.rerender(
+    <div style={{ width: 800, height: 530, display: 'flex' }}>
+      <BrowserLiveViewport
+        threadId="thread"
+        tabId="second"
+        active
+        onControl={control}
+        onLocation={location}
+      />
+    </div>,
+  );
+  await expect.poll(() => live.mock.calls.length).toBe(2);
+  expect(oldSignal.aborted).toBe(true);
+  expect(live.mock.calls[1][1]).toMatchObject({
+    tabId: 'second',
+    previousControlId: 'lease',
+    takeControl: false,
+  });
   view.unmount();
   expect(signal.aborted).toBe(true);
   expect(control).toHaveBeenLastCalledWith(null);

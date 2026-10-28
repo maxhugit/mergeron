@@ -65,6 +65,15 @@ it('binds input to the current control lease, rejects concurrent claimants and r
     () => {},
   );
   const firstToken = firstEvents[0].controlId;
+  await expect(
+    service.stream(
+      'owner',
+      { tabId, previousControlId: 'wrong' },
+      new AbortController().signal,
+      () => Promise.resolve(),
+      () => {},
+    ),
+  ).rejects.toMatchObject({ response: { code: 'BROWSER_CONTROL_REQUIRED' } });
   const input = {
     tabId,
     url: 'https://example.com/',
@@ -90,7 +99,7 @@ it('binds input to the current control lease, rejects concurrent claimants and r
   const events: Record<string, unknown>[] = [];
   const next = service.stream(
     'owner',
-    { tabId, takeControl: true },
+    { tabId, previousControlId: firstToken },
     nextAbort.signal,
     (event) => {
       events.push(event);
