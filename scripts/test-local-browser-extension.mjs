@@ -163,10 +163,20 @@ try {
         expiresAt: Date.now() + 60_000,
       },
     });
+  await page.evaluate(() => {
+    const hidden = document.createElement('div');
+    hidden.style.opacity = '0';
+    hidden.innerHTML = '<span>PRIVATE_HIDDEN_TEXT</span>';
+    document.body.append(hidden);
+  });
   let observation = await execute('observe');
   assert.match(observation.text, /Safe test page/);
   assert.equal(
     JSON.stringify(observation).includes('PRIVATE_INPUT_VALUE'),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(observation).includes('PRIVATE_HIDDEN_TEXT'),
     false,
   );
   const field = observation.elements.find((entry) => entry.text === 'Name');

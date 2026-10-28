@@ -31,6 +31,10 @@
     return (
       rect.width > 0 &&
       rect.height > 0 &&
+      element.checkVisibility({
+        checkOpacity: true,
+        checkVisibilityCSS: true,
+      }) &&
       style.visibility !== 'hidden' &&
       style.display !== 'none'
     );
