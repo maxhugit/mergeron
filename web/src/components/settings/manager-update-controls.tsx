@@ -24,10 +24,8 @@ import {
 } from './manager-status-api';
 import { ManagerUpdateProgressDialog } from './manager-update-progress-dialog';
 import { ManagerBackups } from './manager-backups';
-import {
-  ManagerImageUpdates,
-  componentUpdatesKey,
-} from './manager-image-updates';
+import { ManagerImageUpdates } from './manager-image-updates';
+import { componentUpdatesKey } from './manager-image-updates-api';
 import { defaultManagerUpdateImage } from './manager-update-image';
 import {
   readManagerUpdateReceipt,

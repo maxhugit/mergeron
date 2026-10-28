@@ -20,7 +20,7 @@ import { ManagerBackups } from './manager-backups';
 import {
   componentUpdatesKey,
   requestComponentUpdates,
-} from './manager-image-updates';
+} from './manager-image-updates-api';
 import {
   managerStatusQueryKey,
   requestManagerStatus,
