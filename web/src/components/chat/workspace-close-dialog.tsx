@@ -49,6 +49,7 @@ export function useWorkspaceClose(context: string) {
   };
   const requestClose = (tab: WorkspaceTab) => {
     if (
+      tab.kind === 'browser' ||
       tab.kind === 'git-diff' ||
       tab.kind === 'git-graph' ||
       tab.kind === 'git-remote-file'

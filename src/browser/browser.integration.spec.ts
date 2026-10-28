@@ -12,7 +12,7 @@ it.skipIf(!process.env.MERGERON_BROWSER_TEST_EXECUTABLE)(
     const fixture = createServer((_req, res) => {
       res.setHeader('X-Frame-Options', 'DENY');
       res.end(
-        '<!doctype html><html><head><title>QA browser</title></head><body style="margin:0"><button style="width:200px;height:100px">Change this button</button><input type="password" value="never-capture-this"></body></html>',
+        '<!doctype html><html><head><title>QA browser</title></head><body style="margin:0"><button onclick="document.title=\'Clicked\'" style="width:200px;height:100px">Change this button</button><input type="password" value="never-capture-this"><div id="count"></div><script>setInterval(()=>document.querySelector("#count").textContent=Date.now(),100)</script></body></html>',
       );
     });
     await new Promise<void>((resolve) =>
@@ -54,6 +54,98 @@ it.skipIf(!process.env.MERGERON_BROWSER_TEST_EXECUTABLE)(
       await expect(
         service.run('other-owner', 'snapshot', { tabId }),
       ).rejects.toThrow('not found');
+      const abort = new AbortController();
+      const events: Record<string, unknown>[] = [];
+      const live = service.stream(
+        'qa-owner',
+        { tabId },
+        abort.signal,
+        (event) => {
+          events.push(event);
+          return Promise.resolve();
+        },
+        () => {},
+      );
+      try {
+        await expect
+          .poll(() => events.find((event) => event.type === 'ready'))
+          .toBeTruthy();
+        await expect
+          .poll(() => events.filter((event) => event.type === 'frame').length)
+          .toBeGreaterThan(2);
+        const controlId = events.find(
+          (event) => event.type === 'ready',
+        )!.controlId;
+        await expect(
+          service.stream(
+            'qa-owner',
+            { tabId },
+            new AbortController().signal,
+            async () => {},
+            () => {},
+          ),
+        ).rejects.toMatchObject({
+          response: { code: 'BROWSER_CONTROL_REQUIRED' },
+        });
+        await expect(
+          service.run('qa-owner', 'input', {
+            tabId,
+            controlId: 'wrong',
+            events: [{ type: 'text', text: 'x' }],
+          }),
+        ).rejects.toMatchObject({
+          response: { code: 'BROWSER_CONTROL_REQUIRED' },
+        });
+        const base = {
+          tabId,
+          controlId,
+          width: 1000,
+          height: 700,
+          url: `http://127.0.0.1:${address.port}/`,
+        };
+        await service.run('qa-owner', 'input', {
+          ...base,
+          events: [
+            {
+              type: 'pointer',
+              phase: 'down',
+              button: 'left',
+              clickCount: 1,
+              x: 80,
+              y: 50,
+            },
+            {
+              type: 'pointer',
+              phase: 'up',
+              button: 'left',
+              clickCount: 1,
+              x: 80,
+              y: 50,
+            },
+          ],
+        });
+        await expect
+          .poll(() => events.find((event) => event.title === 'Clicked'))
+          .toBeTruthy();
+        await service.run('qa-owner', 'input', {
+          ...base,
+          events: [{ type: 'resize', width: 800, height: 500 }],
+        });
+        await expect
+          .poll(() =>
+            events.find((event) => event.width === 800 && event.height === 500),
+          )
+          .toBeTruthy();
+        await expect(
+          service.run('qa-owner', 'input', {
+            ...base,
+            events: [{ type: 'text', text: 'stale' }],
+          }),
+        ).rejects.toMatchObject({ response: { code: 'BROWSER_STALE_VIEW' } });
+      } finally {
+        abort.abort();
+        await live;
+      }
     } finally {
       await service.onModuleDestroy();
       await server.close();

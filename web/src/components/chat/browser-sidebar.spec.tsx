@@ -6,6 +6,9 @@ const api = vi.hoisted(() => vi.fn());
 const insert = vi.hoisted(() => vi.fn());
 const screenshot = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/browser-api', () => ({ browserApi: api }));
+vi.mock('./browser-live-viewport', () => ({
+  BrowserLiveViewport: () => <div>Live view</div>,
+}));
 vi.mock('@/lib/browser-annotations', () => ({
   insertBrowserAnnotation: insert,
   markedScreenshot: screenshot,
@@ -126,6 +129,12 @@ it('opens tabs, navigates and adds evidence only to the keyed conversation draft
   fireEvent.click(screen.getByRole('button', { name: 'New tab' }));
   await screen.findByRole('tab');
   fireEvent.click(screen.getByRole('button', { name: /^Open$/ }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Point at an element' }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Point at an element' }));
   const image = await screen.findByRole('img');
   vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({
     x: 0,
@@ -138,7 +147,6 @@ it('opens tabs, navigates and adds evidence only to the keyed conversation draft
     height: 700,
     toJSON: () => ({}),
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Point at an element' }));
   fireEvent.click(image, { clientX: 20, clientY: 30 });
   const comment = await screen.findByRole('textbox', {
     name: 'Describe the requested change…',

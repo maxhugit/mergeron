@@ -1,4 +1,16 @@
 {
+  "connecting": "Connexion au flux…",
+  "liveControl": "En direct · Vous avez la main",
+  "released": "Contrôle libéré",
+  "releaseControl": "Libérer le contrôle",
+  "takeControl": "Prendre le contrôle",
+  "controlRequired": "Le navigateur est contrôlé par une autre vue. Cliquez sur Prendre le contrôle pour la remplacer.",
+  "staleView": "La page a changé. Reprenez le contrôle avant de continuer ; aucune saisie n’a été renvoyée automatiquement.",
+  "liveFailed": "Le flux a été interrompu. Reprenez le contrôle pour vous reconnecter ; les actions ne sont pas rejouées.",
+  "livePage": "Page distante en direct — cliquer pour interagir",
+  "liveKeyboard": "Saisie clavier dans la page distante",
+  "splitView": "Côte à côte",
+  "fullView": "Pleine largeur",
   "notConfigured": "Le navigateur isolé n’est pas configuré sur ce serveur. Un administrateur doit activer son service avant de pouvoir ouvrir une page.",
   "runtimeUnavailable": "Le service du navigateur isolé est inaccessible. Vérifiez qu’il est démarré et que sa connexion à Mergeron est configurée.",
   "timedOut": "Le navigateur n’a pas répondu à temps. Réessayez ou effacez sa session avant de rouvrir la page.",
@@ -37,6 +49,6 @@
   "added": "Annotation et capture ajoutées au brouillon. Vérifiez-les puis envoyez votre message.",
   "draftUnavailable": "Impossible d’ajouter au brouillon de cette conversation. Vérifiez qu’elle est accessible en écriture.",
   "unavailable": "Le navigateur n’est pas disponible. Vérifiez votre connexion, votre accès administrateur et la configuration du service du navigateur isolé.",
-  "privacy": "Session distante temporaire, distincte de votre navigateur. Les champs de saisie sont masqués sur les captures. Les pages et annotations ne sont transmises à l’agent qu’après l’envoi du message.",
+  "privacy": "Session distante temporaire, distincte de votre navigateur. Le flux en direct vous est réservé. Les champs sont masqués sur les captures d’annotation ; seule l’annotation ajoutée au brouillon puis envoyée est transmise à l’agent.",
   "frame": "Cadre intégré : le repère désigne le cadre, pas son contenu"
 }

@@ -10,6 +10,7 @@ const page = () => ({
   url: () => 'https://example.com/',
   title: vi.fn().mockResolvedValue('Example'),
   screenshot: vi.fn().mockResolvedValue(Buffer.from('jpeg')),
+  viewportSize: () => ({ width: 1000, height: 700 }),
   locator: vi.fn(),
   close: vi.fn().mockResolvedValue(undefined),
   goto: vi.fn().mockResolvedValue(undefined),
@@ -146,4 +147,29 @@ it('checks rights before any remote browser operation', () => {
   ).toThrow();
   expect(identities.requireThread).toHaveBeenCalledWith(identity, 'other');
   expect(run).not.toHaveBeenCalled();
+});
+
+it('checks administrator and thread rights before hijacking a live response', async () => {
+  const stream = vi.fn();
+  const identities = {
+    requireThread: vi.fn(),
+    requireAdministrator: vi.fn(() => {
+      throw new ForbiddenException();
+    }),
+  };
+  const controller = new BrowserController(
+    { stream } as never,
+    identities as never,
+  );
+  const reply = { hijack: vi.fn() };
+  await expect(
+    controller.live(
+      'thread',
+      { tabId: 'tab' },
+      { platformIdentity: { kind: 'person', personId: 'standard' } } as never,
+      reply as never,
+    ),
+  ).rejects.toThrow();
+  expect(stream).not.toHaveBeenCalled();
+  expect(reply.hijack).not.toHaveBeenCalled();
 });
