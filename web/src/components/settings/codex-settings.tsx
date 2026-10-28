@@ -31,6 +31,7 @@ import { loadAdminModels } from './admin-model-options';
 import { CatalogSettings } from './catalog/catalog-settings';
 import { AccountSettings } from './account/account-settings';
 import { CodexCliSettings } from './codex-cli-settings';
+import { SimpleChatSettings } from './simple-chat-settings';
 import { useAccountStore } from '@/stores/account-store';
 import {
   catalogStateQueryKey,
@@ -77,6 +78,7 @@ type CodexSettingsTab =
   | 'cli'
   | 'profile'
   | 'model'
+  | 'chatAudio'
   | 'instructions'
   | 'reasoning'
   | 'security'
@@ -87,6 +89,7 @@ const CODEX_SETTINGS_TABS = [
   { id: 'cli', label: 'Codex CLI', icon: PackageOpen },
   { id: 'profile', label: 'Profile', icon: UserCog },
   { id: 'model', label: 'Model', icon: Bot },
+  { id: 'chatAudio', label: 'chatAudioTitle', icon: Bot },
   { id: 'instructions', label: 'Instructions', icon: FileText },
   { id: 'reasoning', label: 'Reasoning', icon: Brain },
   { id: 'security', label: 'Security', icon: ShieldCheck },
@@ -145,7 +148,7 @@ const isSandboxModeValue = (value: unknown): value is SandboxModeValue =>
 
 export function CodexSettings({
   initialTab = 'account',
-}: { initialTab?: 'account' | 'cli' } = {}) {
+}: { initialTab?: 'account' | 'cli' | 'chatAudio' } = {}) {
   const { t, i18n } = useTranslation();
   const isNonEnglish = !i18n.language.startsWith('en');
   const queryClient = useQueryClient();
@@ -166,7 +169,9 @@ export function CodexSettings({
     !accountQuery.isError &&
     Boolean(authMode);
   const activeTab =
-    connected || requestedTab === 'cli' ? requestedTab : 'account';
+    connected || requestedTab === 'cli' || requestedTab === 'chatAudio'
+      ? requestedTab
+      : 'account';
 
   // ---- Queries ----
   const configQuery = useQuery({
@@ -408,7 +413,12 @@ export function CodexSettings({
   const activeFields = activeGroup
     ? (groupedFields.get(activeGroup) ?? [])
     : [];
-  const needsStructuredConfig = !['raw', 'account', 'cli'].includes(activeTab);
+  const needsStructuredConfig = ![
+    'raw',
+    'account',
+    'cli',
+    'chatAudio',
+  ].includes(activeTab);
   const activeKeys =
     activeTab === 'security'
       ? ['approval_policy', 'sandbox_mode', 'approvals_reviewer']
@@ -495,7 +505,12 @@ export function CodexSettings({
               key={id}
               type="button"
               role="tab"
-              disabled={id !== 'account' && id !== 'cli' && !connected}
+              disabled={
+                id !== 'account' &&
+                id !== 'cli' &&
+                id !== 'chatAudio' &&
+                !connected
+              }
               aria-selected={activeTab === id}
               aria-controls="codex-settings-panel"
               tabIndex={activeTab === id ? 0 : -1}
@@ -516,6 +531,11 @@ export function CodexSettings({
       </div>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
+        {activeTab === 'chatAudio' && (
+          <div id="codex-settings-panel" role="tabpanel">
+            <SimpleChatSettings />
+          </div>
+        )}
         {activeTab === 'cli' && (
           <div id="codex-settings-panel" role="tabpanel">
             <CodexCliSettings />

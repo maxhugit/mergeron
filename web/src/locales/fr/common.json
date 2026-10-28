@@ -1,4 +1,5 @@
 {
+  "chatAudioTitle": "Chat et Audio",
   "internalMcpTitle": "MCP interne",
   "internalMcpDescription": "Catalogue technique des outils Mergeron : méthodes, paramètres, résultats et règles d’accès.",
   "deliverableAgentOptionalSubtask": "L’agent peut travailler directement sur ce livrable, sans tâche obligatoire. Si vous choisissez une sous-tâche, il sera lié à la fois à cette sous-tâche et au livrable.",

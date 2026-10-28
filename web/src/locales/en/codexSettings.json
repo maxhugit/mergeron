@@ -1,4 +1,8 @@
 {
+  "dictationBackendLabel": "Dictation engine",
+  "dictationCliExperimental": "Codex CLI — experimental",
+  "dictationBackendIndependent": "Audio and chat engines are independent. Until an audio choice is saved, dictation follows the chat engine.",
+  "dictationCliWarning": "Experimental: uses the Codex voice session without an API key. Availability depends on CLI version and account. Errors never switch to the API-key engine.",
   "responseVerbosity": "Response verbosity",
   "reasoningEffortDescription": "Controls the effort spent solving the task. Higher effort may require more time and tokens; available levels depend on the model.",
   "reasoningSummaryDescription": "Controls the detail of the summary provided in the thinking blocks. This is not raw internal reasoning, and a more detailed summary does not increase reasoning effort.",

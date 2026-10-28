@@ -1,5 +1,55 @@
 # Administration Codex : listes, enregistrement et version du CLI
 
+## Chat et Audio
+
+Les réglages du chat simple sont regroupés dans **Codex → Chat et Audio**,
+entre les onglets Modèle et Instructions. L’ancienne URL
+`/settings?section=simpleChat` ouvre ce même onglet ; l’entrée séparée de la
+sidebar est retirée. Cet onglet reste accessible sans connexion Codex pour
+permettre la configuration du mode API.
+
+Deux choix indépendants sont enregistrés côté serveur :
+
+- moteur du chat : clé API OpenAI ou session Codex CLI ;
+- moteur de dictée : clé API OpenAI ou **Codex CLI — expérimental**.
+
+Sans réglage audio explicite, la dictée suit le moteur du chat. Après un choix
+audio enregistré, changer le moteur du chat ne le modifie plus. La clé API est
+commune aux fonctions qui choisissent explicitement ce moteur ; elle n’est jamais
+utilisée comme repli en cas d’échec du CLI.
+
+### Dictée CLI expérimentale
+
+Le navigateur convertit l’enregistrement en WAV PCM16 mono 24 kHz, limité à deux
+minutes. `CodexAudioService` utilise les RPC expérimentaux natifs
+`thread/realtime/start`, `thread/realtime/appendAudio` et `thread/realtime/stop`
+du moteur installé, via sa connexion existante. Aucun jeton n’est extrait ni
+transmis au navigateur. Il ne s’agit ni du CLI `openai`, ni de l’API de
+transcription appelée avec une clé.
+
+Le service exige une session Codex authentifiée avec ChatGPT. Le drapeau natif
+`features.realtime_conversation` est activé dans cette session temporaire
+uniquement ; aucune modification globale de `config.toml` n’est effectuée.
+
+La session est temporaire, en lecture seule, sans contexte projet et sans
+intégrations MCP/apps/plugins ou shell. Le service n’ouvre pas de tour d’agent ;
+une tentative de tour déclenche interruption et fermeture. Seuls les segments
+de transcription de rôle utilisateur de cette session sont retenus, jamais une
+réponse de l’assistant. Audio et événements vocaux sont masqués dans l’audit RPC.
+Les buffers restent en mémoire ; le service n’écrit pas de fichier audio.
+
+Une dictée CLI peut fonctionner à la fois par installation ; la session est fermée
+en fin de traitement ou en cas d’erreur, avec délai d’attente borné. Le résultat
+est placé dans le brouillon et n’est jamais envoyé automatiquement.
+
+**Limites expérimentales :** prise en charge dépendant de la version du CLI et
+de l’accès vocal du compte. Aucun succès n’est garanti sur chaque compte. Les
+fins de segments reposent sur la détection vocale native et une courte période
+de stabilisation ; relire la transcription, notamment pour un long enregistrement.
+En cas d’incompatibilité, coupure, silence ou expiration, une erreur explicite
+est retournée sans appel de secours à l’API. La validation réelle avec le compte
+de l’installation reste nécessaire avant de considérer ce chemin comme fiable.
+
 ## Affichage des détails techniques par agent
 
 Dans **Capacités → Détails techniques**, choisir :

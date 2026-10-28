@@ -31,6 +31,12 @@ vi.mock('./use-category-settings', () => ({
   }),
 }));
 afterEach(cleanup);
+it('keeps the old simple-chat URL pointing to Codex Chat and Audio', async () => {
+  route.section = 'simpleChat';
+  render(<SettingsPage />);
+  expect(await screen.findByText('Codex chatAudio tabs')).toBeVisible();
+  expect(settingsPageLabel('simpleChat')).toBe('Codex');
+});
 it('opens the internal MCP technical reference from its administration route', async () => {
   route.section = 'internalMcp';
   render(<SettingsPage />);
