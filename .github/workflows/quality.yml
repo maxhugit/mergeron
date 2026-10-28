@@ -330,6 +330,37 @@ jobs:
           load: true
           tags: mergeron-manager:quality-${{ github.sha }}
 
+      - name: Build the browser runtime image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./deployment/browser
+          push: false
+          load: true
+          tags: mergeron-browser:quality-${{ github.sha }}
+
+      - name: Verify browser runtime and absence of build package managers
+        run: |
+          docker run --rm --network none --entrypoint node "mergeron-browser:quality-${{ github.sha }}" --input-type=module -e '
+            import { chromium } from "playwright-core";
+            import { existsSync } from "node:fs";
+            if (!existsSync(chromium.executablePath())) throw new Error("Chromium missing");
+            for (const root of ["/usr/lib/node_modules/", "/usr/local/lib/node_modules/"]) {
+              for (const name of ["npm", "yarn"]) {
+                if (existsSync(root + name)) throw new Error("Build package manager retained");
+              }
+            }
+          '
+
+      - name: Require no HIGH or CRITICAL browser vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: mergeron-browser:quality-${{ github.sha }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+
       - name: Start Manager and verify its Unix socket health check
         env:
           IMAGE_REF: mergeron-manager:quality-${{ github.sha }}
