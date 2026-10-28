@@ -27,17 +27,17 @@ const manifest = scopeManifest(
 const images = { application: 'ghcr.io/maxhugit/mergeron:next' };
 
 class Docker {
-  constructor(root) {
+  constructor(root, scopedManifest = manifest) {
     this.values = new Map();
     this.calls = [];
     this.sequence = 0;
-    for (const component of manifest.components) {
+    for (const component of scopedManifest.components) {
       const repo = component.allowedImageRepositories[0];
       const config = {
         Image: `${repo}:previous`,
         Labels: {
           'io.mergeron.managed': 'true',
-          'io.mergeron.stack': manifest.stack,
+          'io.mergeron.stack': scopedManifest.stack,
           'io.mergeron.component': component.id,
         },
         Env: ['SECRET=never-display'],
@@ -146,7 +146,14 @@ class Docker {
   }
 }
 
-async function fixture(t) {
+async function fixture(t, environment = 'development') {
+  const scopedManifest = scopeManifest(
+    JSON.parse(
+      await readFile(new URL('../stack-manifest.json', import.meta.url)),
+    ),
+    environment === 'production' ? 'mergeron' : 'mergeron-dev',
+    environment,
+  );
   const root = await mkdtemp(join(tmpdir(), 'manager-update-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const name of ['home', 'workspace', 'logs', 'ssh', 'config'])
@@ -159,10 +166,10 @@ async function fixture(t) {
     await writeFile(join(root, name), 'secret', { mode: 0o600 });
   await writeFile(join(root, 'home', 'database'), 'original', { mode: 0o600 });
   await symlink('/does/not/exist', join(root, 'home', 'external-link'));
-  const docker = new Docker(root);
+  const docker = new Docker(root, scopedManifest);
   docker.root = root;
   const options = {
-    manifest,
+    manifest: scopedManifest,
     docker,
     configuration: { stateRoot: root, hostStatePath: root },
     adoptionPath: join(root, 'manager-state', 'adoption.json'),
@@ -286,9 +293,14 @@ for (const selected of ['ingress', 'egress']) {
   });
 }
 
-for (const local of [false, true])
-  test(`managed DEV browser participates in update and rollback with persistent public DNS (local image: ${local})`, async (t) => {
-    const { updater, docker } = await fixture(t);
+for (const [environment, local] of [
+  ['development', false],
+  ['development', true],
+  ['production', false],
+])
+  test(`managed ${environment} browser participates in update and rollback with persistent public DNS (local image: ${local})`, async (t) => {
+    const { updater, docker } = await fixture(t, environment);
+    const stack = updater.manifest.stack;
     const localId = 'sha256:' + 'c'.repeat(64);
     const localTag = 'mergeron-dev-browser:existing';
     if (local) {
@@ -304,24 +316,27 @@ for (const local of [false, true])
     const browser = {
       id: 'browser',
       displayName: 'Mergeron Browser',
-      canonicalName: 'mergeron-dev-browser',
-      stackName: 'mergeron-dev',
+      canonicalName: `${stack}-browser`,
+      stackName: stack,
       legacyNames: [],
       allowedImageRepositories: [
         'ghcr.io/maxhugit/mergeron-browser',
-        'mergeron-dev-browser',
+        ...(environment === 'development' ? ['mergeron-dev-browser'] : []),
       ],
-      requiredNetworks: [
-        'mergeron-dev-browser-control',
-        'mergeron-dev-browser-egress',
-      ],
+      requiredNetworks: [`${stack}-browser-control`, `${stack}-browser-egress`],
       protectedMounts: [],
       dns: ['1.1.1.1'],
     };
     updater.manifest = {
-      ...manifest,
-      components: [...manifest.components, browser],
+      ...updater.manifest,
+      environment,
+      components: [...updater.manifest.components, browser],
     };
+    docker.inspectNetwork = async (name) => ({
+      Name: name,
+      Driver: 'bridge',
+      Internal: name.endsWith('-browser-control'),
+    });
     docker.values.set(
       'original-browser',
       docker.inspect(
@@ -336,7 +351,7 @@ for (const local of [false, true])
           Labels: {
             'io.mergeron.managed': 'true',
             'io.mergeron.component': 'browser',
-            'io.mergeron.stack': 'mergeron-dev',
+            'io.mergeron.stack': stack,
           },
           Healthcheck: { Test: ['CMD', 'true'] },
           HostConfig: {
@@ -357,28 +372,81 @@ for (const local of [false, true])
         true,
       ),
     );
+    // Reject network drift and all existing sandbox regressions before any stop.
+    const originalBrowser = docker.values.get('original-browser');
+    for (const change of [
+      (c) => {
+        c.HostConfig.Privileged = true;
+      },
+      (c) => {
+        c.HostConfig.ReadonlyRootfs = false;
+      },
+      (c) => {
+        c.HostConfig.CapAdd = ['SYS_ADMIN'];
+      },
+      (c) => {
+        c.HostConfig.PortBindings = { '3000/tcp': [{ HostPort: '3000' }] };
+      },
+      (c) => {
+        c.Mounts = [{ Source: '/secret', Destination: '/secret' }];
+      },
+      (c) => {
+        c.Config.User = 'root';
+      },
+      (c) => {
+        c.HostConfig.SecurityOpt = ['seccomp=unconfined'];
+      },
+      (c) => {
+        c.NetworkSettings.Networks['other-egress'] = {};
+      },
+    ]) {
+      const invalid = structuredClone(originalBrowser);
+      change(invalid);
+      docker.values.set('original-browser', invalid);
+      assert.ok(
+        (await updater.plan(images)).blockers.includes(
+          'browser:updateIsolationRequired',
+        ),
+      );
+    }
+    docker.values.set('original-browser', originalBrowser);
+    const inspectNetwork = docker.inspectNetwork;
+    docker.inspectNetwork = async (name) => ({
+      ...(await inspectNetwork(name)),
+      Internal: false,
+    });
+    assert.ok(
+      (await updater.plan(images)).blockers.includes(
+        'browser:updateIsolationRequired',
+      ),
+    );
+    docker.inspectNetwork = async () => {
+      throw new Error('network unavailable');
+    };
+    assert.ok(
+      (await updater.plan(images)).blockers.includes(
+        'browser:updateIsolationRequired',
+      ),
+    );
+    docker.inspectNetwork = inspectNetwork;
     await begin(updater);
     assert.equal(updater.current.status, 'succeeded');
     const active = () =>
-      [...docker.values.values()].find(
-        (c) => c.Name === '/mergeron-dev-browser',
-      );
+      [...docker.values.values()].find((c) => c.Name === `/${stack}-browser`);
     assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
     assert.deepEqual(active().Config.Env, [
       'BROWSER_WS_PATH=' + 'x'.repeat(32),
     ]);
     const application = [...docker.values.values()].find(
-      (c) => c.Name === '/mergeron-dev-ui',
+      (c) => c.Name === `/${stack}-ui`,
     );
     assert.ok(
       application.Config.Env.includes(
-        'MERGERON_BROWSER_ENDPOINT=ws://mergeron-dev-browser:3000/' +
+        `MERGERON_BROWSER_ENDPOINT=ws://${stack}-browser:3000/` +
           'x'.repeat(32),
       ),
     );
-    assert.ok(
-      application.NetworkSettings.Networks['mergeron-dev-browser-control'],
-    );
+    assert.ok(application.NetworkSettings.Networks[`${stack}-browser-control`]);
     assert.ok(!JSON.stringify(updater.status()).includes('x'.repeat(32)));
     assert.ok(
       docker.calls.some(

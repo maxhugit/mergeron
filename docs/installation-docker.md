@@ -102,3 +102,13 @@ historique, choisir explicitement son modèle et vérifier ses prérequis.
 Exécuter [la recette de sécurité](installation-portable.md#recette-avant-exposition)
 avant l’ouverture publique. Les [adaptations facultatives](adapters/README.md)
 ajoutent seulement les paramètres propres à un panneau d’administration.
+
+## Navigateur optionnel géré
+
+Le [navigateur annoté](navigateur-annote.md#installation-optionnelle) ajoute un
+service isolé, sans port hôte ni montage des données applicatives. Depuis le
+Manager 0.5.1, `MERGERON_MANAGE_BROWSER=true` permet d’inclure explicitement ce
+service préexistant dans l’inventaire et les transactions, également en
+production. Sans cette option, la topologie existante reste inchangée.
+Le réseau de contrôle doit rester interne ; le Manager refuse toute transaction
+si le navigateur rejoint un réseau supplémentaire ou perd ses protections.

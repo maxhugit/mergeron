@@ -7,14 +7,25 @@ import { readInstallConfiguration } from '../src/installer.mjs';
 const manifest = JSON.parse(
   await readFile(new URL('../stack-manifest.json', import.meta.url)),
 );
-test('managed browser is explicit and DEV-only', () => {
+test('managed browser remains opt-in in production and development', () => {
   assert.equal(scopeManifest(manifest).components.length, 3);
-  assert.throws(
-    () =>
-      scopeManifest(manifest, 'mergeron', 'production', undefined, {
-        enabled: true,
-      }),
-    /development-only/,
+  const prod = scopeManifest(manifest, 'mergeron', 'production', undefined, {
+    enabled: true,
+  });
+  const prodBrowser = prod.components.find((c) => c.id === 'browser');
+  assert.equal(prodBrowser.canonicalName, 'mergeron-browser');
+  assert.equal(prodBrowser.existingOnly, true);
+  assert.deepEqual(prodBrowser.allowedImageRepositories, [
+    'ghcr.io/maxhugit/mergeron-browser',
+  ]);
+  assert.deepEqual(prodBrowser.requiredNetworks, [
+    'mergeron-browser-control',
+    'mergeron-browser-egress',
+  ]);
+  assert.equal(readInstallConfiguration(prod, {}).images.browser, undefined);
+  assert.match(
+    readInstallConfiguration(prod, {}).images.application,
+    /mergeron:latest$/,
   );
   assert.throws(
     () =>

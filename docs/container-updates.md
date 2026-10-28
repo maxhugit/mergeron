@@ -25,7 +25,8 @@ restent visibles.
 - Ingress : dépôt officiel `nginx`, tag configuré (par défaut stable).
 - Sortie : `ubuntu/squid`, tag configuré (par défaut latest).
 - Navigateur : `ghcr.io/maxhugit/mergeron-browser`, edge en dev, latest pour une
-  version publiée. Le navigateur géré demeure actuellement limité à la dev.
+  version publiée. La gestion en production est disponible à partir du Manager
+  0.5.1, par activation explicite ; voir le [déploiement du navigateur](navigateur-annote.md#gestion-par-le-manager).
 
 Pour NGINX, Squid et le navigateur, des liens vers les informations de l’éditeur
 sont fournis. Un changement d’empreinte peut être une reconstruction ou une
