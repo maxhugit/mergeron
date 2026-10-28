@@ -242,6 +242,19 @@ it('recognizes a deliverable document and replaces filesystem actions with its s
   expect(
     screen.queryByRole('menuitem', { name: 'Move to…' }),
   ).not.toBeInTheDocument();
+  const attached = vi.fn();
+  window.addEventListener('codex-webui:attach-file', attached);
+  try {
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Attach to chat' }));
+    await waitFor(() => expect(attached).toHaveBeenCalledOnce());
+    expect(attached.mock.calls[0][0].detail).toEqual({
+      name: document.name,
+      path: document.sourcePath,
+    });
+  } finally {
+    window.removeEventListener('codex-webui:attach-file', attached);
+  }
+  fireEvent.contextMenu(screen.getByText('report.docx'));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
   expect(
     await screen.findByRole('dialog', { name: 'Rename document' }),

@@ -14,6 +14,7 @@ import {
   History,
   Info,
   MoreVertical,
+  MessageSquarePlus,
   Pencil,
   Plus,
   RotateCcw,
@@ -52,6 +53,7 @@ type Props = {
   refresh: () => Promise<unknown>;
   onError: () => void;
   contextDocument?: DeliverableDocument;
+  onAttachToChat?: () => void;
   children?: ReactNode;
 };
 
@@ -68,6 +70,7 @@ export function DeliverableDocuments({
   refresh,
   onError,
   contextDocument,
+  onAttachToChat,
   children,
 }: Props) {
   const { t } = useTranslation();
@@ -258,6 +261,7 @@ export function DeliverableDocuments({
               document={document}
               busy={busy}
               contextTrigger={contextDocument ? children : undefined}
+              onAttachToChat={contextDocument ? onAttachToChat : undefined}
               onView={() => setDetail({ document, tab: 'preview' })}
               onHistory={() => setDetail({ document, tab: 'versions' })}
               onRename={() => {
@@ -719,6 +723,7 @@ function DocumentRow({
   onSnapshot,
   onDelete,
   contextTrigger,
+  onAttachToChat,
 }: {
   document: DeliverableDocument;
   busy: boolean;
@@ -730,6 +735,7 @@ function DocumentRow({
   onSnapshot: () => void;
   onDelete: () => void;
   contextTrigger?: ReactNode;
+  onAttachToChat?: () => void;
 }) {
   const { t } = useTranslation();
   const latest = currentDocumentVersion(document);
@@ -763,6 +769,15 @@ function DocumentRow({
     };
   }, []);
   const actions = [
+    ...(onAttachToChat
+      ? [
+          {
+            label: t('attachToChat'),
+            icon: MessageSquarePlus,
+            action: 'attach',
+          },
+        ]
+      : []),
     { label: t('preview'), icon: Eye, action: 'view' },
     { label: t('download'), icon: Download, action: 'download' },
     { label: t('history'), icon: History, action: 'history' },
@@ -783,6 +798,8 @@ function DocumentRow({
   ];
   const runAction = (action: string) => {
     switch (action) {
+      case 'attach':
+        return onAttachToChat?.();
       case 'view':
         return onView();
       case 'download':
