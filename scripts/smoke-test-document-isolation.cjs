@@ -20,6 +20,11 @@ try {
   const history = path.join(workspace, '.mergeron');
   fs.mkdirSync(retained);
   fs.mkdirSync(history);
+  const clone = path.join(workspace, 'sources', 'new-clone');
+  fs.mkdirSync(clone, { recursive: true });
+  const system = path.join(workspace, 'system');
+  fs.mkdirSync(system);
+  fs.writeFileSync(path.join(system, 'private-state'), 'private-canary');
   fs.writeFileSync(path.join(retained, 'report.docx'), 'V1');
   fs.writeFileSync(path.join(history, 'v1.docx'), 'V1');
   const databasePath = path.join(home, 'webui.sqlite');
@@ -32,6 +37,9 @@ try {
     const fs=require('fs'), assert=require('assert/strict');
     const root=process.argv[1], db=process.argv[2], ssh=process.argv[3];
     fs.writeFileSync(root+'/main.js','code-editable');
+    fs.writeFileSync(root+'/sources/new-clone/main.js','clone-editable');
+    assert.equal(fs.existsSync(root+'/system/private-state'),false);
+    assert.throws(()=>fs.writeFileSync(root+'/system/tampered','no'),e=>e.code==='EROFS'||e.code==='EACCES');
     assert.throws(()=>fs.writeFileSync(root+'/missing-project/tampered','no'),e=>e.code==='EROFS'||e.code==='EACCES');
     assert.equal(fs.readFileSync(root+'/livrables/report.docx','utf8'),'V1');
     for(const file of [root+'/livrables/report.docx',root+'/.mergeron/v1.docx']) {
@@ -56,8 +64,9 @@ try {
     {
       home,
       databasePath,
-      writableRoots: [workspace],
+      writableRoots: ['/workspaces', workspace, clone],
       publishedRoots: [retained, history],
+      privateRoots: [system],
       unavailableRoots: [path.join(workspace, 'missing-project')],
     },
     process.execPath,

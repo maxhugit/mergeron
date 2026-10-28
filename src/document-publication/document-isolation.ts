@@ -34,14 +34,11 @@ export function documentAgentEnvironment(
   );
 }
 
-export function documentIsolationArgs(
-  plan: DocumentIsolationPlan,
-  binary: string,
-  args: string[],
-): string[] {
+/** Bind only the outermost validated roots; nested binds expose the same tree. */
+export function documentWritableRoots(writableRoots: string[]): string[] {
   const roots = [
-    ...new Set(plan.writableRoots.map((root) => path.resolve(root))),
-  ];
+    ...new Set(writableRoots.map((root) => path.resolve(root))),
+  ].sort();
   if (
     roots.some((root) =>
       [
@@ -66,6 +63,20 @@ export function documentIsolationArgs(
     throw new Error(
       'Protected agents require a working copy under /workspaces',
     );
+  return roots.filter(
+    (root) =>
+      !roots.some(
+        (parent) => root !== parent && root.startsWith(parent + path.sep),
+      ),
+  );
+}
+
+export function documentIsolationArgs(
+  plan: DocumentIsolationPlan,
+  binary: string,
+  args: string[],
+): string[] {
+  const roots = documentWritableRoots(plan.writableRoots);
   const result = [
     '--unshare-user',
     '--unshare-pid',

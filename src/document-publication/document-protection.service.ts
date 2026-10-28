@@ -19,6 +19,7 @@ import {
 } from '../database/schema';
 import {
   documentIsolationArgs,
+  documentWritableRoots,
   documentProtectionEnabled,
   type DocumentIsolationPlan,
 } from './document-isolation';
@@ -350,7 +351,13 @@ export class DocumentProtectionService {
   }
 
   key(plan: DocumentIsolationPlan | null): string {
-    return createHash('sha256').update(JSON.stringify(plan)).digest('hex');
+    // A new clone below an existing writable mount changes no boundary.
+    // Hash the same roots used by bwrap: restarting Core for a redundant bind
+    // would discard threads that have not materialized their first turn yet.
+    const effective = plan
+      ? { ...plan, writableRoots: documentWritableRoots(plan.writableRoots) }
+      : null;
+    return createHash('sha256').update(JSON.stringify(effective)).digest('hex');
   }
 
   changed(plan: DocumentIsolationPlan | null): boolean {
