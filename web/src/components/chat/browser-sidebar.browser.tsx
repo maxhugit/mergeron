@@ -78,6 +78,23 @@ test.each([390, 1280])('browser panel fits a %s px viewport', async (width) => {
   const bounds = document.querySelector('aside')!.getBoundingClientRect();
   expect(bounds.width).toBeLessThanOrEqual(width);
   expect(bounds.right).toBeLessThanOrEqual(width + 1);
+  const address = document
+    .querySelector('input[type="url"]')!
+    .getBoundingClientRect();
+  const reload = document
+    .querySelector('button[aria-label="Recharger"]')!
+    .getBoundingClientRect();
+  const point = document
+    .querySelector('button[aria-label="Pointer un élément"]')!
+    .getBoundingClientRect();
+  expect(reload.left).toBeGreaterThanOrEqual(address.right);
+  expect(point.left).toBeGreaterThanOrEqual(reload.right);
+  expect(
+    Math.abs(reload.top + reload.height / 2 - address.top - address.height / 2),
+  ).toBeLessThan(1);
+  expect(
+    Math.abs(point.top + point.height / 2 - address.top - address.height / 2),
+  ).toBeLessThan(1);
   expect(document.querySelector('iframe[src]')).toBeNull();
 });
 test('renders the numbered annotation into a real PNG attachment', async () => {

@@ -81,6 +81,22 @@ test('draws live frames, sends mouse and keyboard in order and releases control 
     ),
   ).toBe(true);
   expect(control).toHaveBeenCalledWith('lease');
+  const inputCount = api.mock.calls.length;
+  view.rerender(
+    <div style={{ width: 800, height: 530, display: 'flex' }}>
+      <BrowserLiveViewport
+        threadId="thread"
+        tabId="tab"
+        active
+        interactive={false}
+        onControl={control}
+        onLocation={location}
+      />
+    </div>,
+  );
+  await page.getByLabelText('Live remote page — click to interact').click();
+  expect(api.mock.calls).toHaveLength(inputCount);
+  expect(live).toHaveBeenCalledTimes(1);
   const oldSignal = signal;
   view.rerender(
     <div style={{ width: 800, height: 530, display: 'flex' }}>

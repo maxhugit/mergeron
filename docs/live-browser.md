@@ -23,8 +23,10 @@ inchangées, y compris lors d’un test de droits.
 
 Le flux affiché à l’utilisateur peut contenir des saisies non masquées. Il n’est
 ni enregistré ni ajouté aux messages. « Pointer un élément » interrompt ce flux
-et demande une capture distincte dont les champs de saisie sont masqués.
-Seule cette capture masquée et commentée peut être ajoutée au brouillon, puis
+et demande une capture distincte, sans cache rose sur les champs. Cette capture
+peut donc contenir leur texte : il faut la vérifier avant de l’envoyer. Les champs
+de mot de passe gardent leur affichage natif du site. Seule la capture commentée
+peut être ajoutée au brouillon, puis
 envoyée manuellement à l’agent. Les mécanismes de contrôle des captures périmées
 et de traitement des pages comme contenu non fiable restent en place.
 

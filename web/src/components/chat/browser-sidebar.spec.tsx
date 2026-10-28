@@ -1,13 +1,34 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { useEffect } from 'react';
 import { BrowserSidebar } from './browser-sidebar';
 import i18n from '@/i18n';
 const api = vi.hoisted(() => vi.fn());
 const insert = vi.hoisted(() => vi.fn());
 const screenshot = vi.hoisted(() => vi.fn());
+const ready = vi.hoisted(() => ({
+  auto: true,
+  onControl: undefined as ((id: string | null) => void) | undefined,
+}));
 vi.mock('@/lib/browser-api', () => ({ browserApi: api }));
 vi.mock('./browser-live-viewport', () => ({
-  BrowserLiveViewport: () => <div>Live view</div>,
+  BrowserLiveViewport: ({
+    onControl,
+  }: {
+    onControl: (id: string | null) => void;
+  }) => {
+    useEffect(() => {
+      ready.onControl = onControl;
+      if (ready.auto) onControl('test-control');
+    }, [onControl]);
+    return <div>Live view</div>;
+  },
 }));
 vi.mock('@/lib/browser-annotations', () => ({
   insertBrowserAnnotation: insert,
@@ -22,6 +43,8 @@ const frame = {
   height: 700,
 };
 beforeEach(async () => {
+  ready.auto = true;
+  ready.onControl = undefined;
   await i18n.changeLanguage('en');
   insert.mockReset().mockResolvedValue(undefined);
   screenshot
@@ -126,11 +149,54 @@ it('selects a restored tab and navigates it without creating another', async () 
     expect(api).toHaveBeenCalledWith('/thread-a/navigate', {
       tabId: 'restored',
       url: 'https://example.org/next',
+      controlId: 'test-control',
     }),
   );
   expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
     false,
   );
+});
+
+it('keeps navigation disabled until the selected page has its control lease', async () => {
+  ready.auto = false;
+  api.mockImplementation((path: string) =>
+    Promise.resolve(
+      path.endsWith('/tabs')
+        ? { tabs: [{ id: 'restored', title: 'Existing', url: frame.url }] }
+        : frame,
+    ),
+  );
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  await screen.findByText('Live view');
+  const open = screen.getByRole('button', { name: /^Open$/ });
+  expect(open).toBeDisabled();
+  fireEvent.submit(
+    screen.getByRole('textbox', { name: 'Page address' }).closest('form')!,
+  );
+  expect(
+    api.mock.calls.some(([path]) => String(path).endsWith('/navigate')),
+  ).toBe(false);
+  act(() => ready.onControl?.('owned'));
+  expect(open).toBeEnabled();
+  fireEvent.click(open);
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      '/thread-a/navigate',
+      expect.objectContaining({ controlId: 'owned' }),
+    ),
+  );
+});
+
+it('keeps reload and point actions in the address form without submitting it', async () => {
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  const form = screen
+    .getByRole('textbox', { name: 'Page address' })
+    .closest('form');
+  for (const name of ['Reload', 'Point at an element']) {
+    const action = screen.getByRole('button', { name });
+    expect(action.closest('form')).toBe(form);
+    expect(action).toHaveAttribute('type', 'button');
+  }
 });
 
 it('changes live tabs without a competing screenshot request', async () => {

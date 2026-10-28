@@ -85,6 +85,7 @@ export function BrowserSidebar({
   const [pointing, setPointing] = useState(false);
   const [annotating, setAnnotating] = useState(false);
   const control = useRef<string | null>(null);
+  const [controlled, setControlled] = useState(false);
   const address = useRef<HTMLInputElement>(null);
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
@@ -93,8 +94,24 @@ export function BrowserSidebar({
   const locked = useRef(false);
   const alive = useRef(true);
   const root = `/${encodeURIComponent(threadId)}`;
+  const commandReady = !busy && (!active || controlled || annotating);
   async function command(action: string, body: Record<string, unknown> = {}) {
     if (locked.current) return;
+    if (
+      active &&
+      !annotating &&
+      !control.current &&
+      [
+        'navigate',
+        'back',
+        'forward',
+        'reload',
+        'new',
+        'remove',
+        'close',
+      ].includes(action)
+    )
+      return;
     locked.current = true;
     if (action !== 'select' && action !== 'tabs') setSelection(null);
     setBusy(true);
@@ -123,7 +140,10 @@ export function BrowserSidebar({
       if (!alive.current) return;
       // Do not mount the live viewer until the first navigation releases the
       // server operation lock. Restored/already-active pages keep their stream.
-      if (action === 'navigate') setActive(target);
+      if (action === 'navigate') {
+        if (target !== active) setControlled(false);
+        setActive(target);
+      }
       if (result.tabs) {
         setTabs(result.tabs);
         if (action === 'tabs' && !active && result.tabs.length) {
@@ -135,10 +155,12 @@ export function BrowserSidebar({
         }
       }
       if (result.id) {
+        setControlled(false);
         setActive(result.id);
         setFrame(null);
       }
       if (action === 'close') {
+        setControlled(false);
         setTabs([]);
         setActive('');
         setFrame(null);
@@ -232,7 +254,7 @@ export function BrowserSidebar({
         <Button
           variant="ghost"
           size="sm"
-          disabled={busy}
+          disabled={!commandReady}
           onClick={() => void command('close')}
         >
           {t('endSession')}
@@ -259,6 +281,7 @@ export function BrowserSidebar({
               className={`max-w-36 truncate rounded px-2 py-1 text-xs ${active === tab.id ? 'bg-accent' : ''}`}
               disabled={busy}
               onClick={() => {
+                if (tab.id !== active) setControlled(false);
                 setActive(tab.id);
                 setFrame(null);
                 setSelection(null);
@@ -272,7 +295,7 @@ export function BrowserSidebar({
             </button>
             <button
               aria-label={t('closeTab', { name: tab.title || t('newTab') })}
-              disabled={busy}
+              disabled={!commandReady}
               onClick={() => {
                 if (active === tab.id) {
                   setActive('');
@@ -289,7 +312,7 @@ export function BrowserSidebar({
         <Button
           variant="ghost"
           size="icon-sm"
-          disabled={busy || tabs.length >= 5}
+          disabled={!commandReady || tabs.length >= 5}
           aria-label={t('newTab')}
           onClick={() => void command('new')}
         >
@@ -297,7 +320,7 @@ export function BrowserSidebar({
         </Button>
       </div>
       <form
-        className="flex shrink-0 gap-1 border-b p-2"
+        className="flex shrink-0 items-center gap-1 border-b p-2"
         onSubmit={(event) => {
           event.preventDefault();
           setSelection(null);
@@ -308,7 +331,7 @@ export function BrowserSidebar({
           type="button"
           variant="ghost"
           size="icon-sm"
-          disabled={!active || busy}
+          disabled={!active || !commandReady}
           aria-label={t('back')}
           onClick={() => void command('back')}
         >
@@ -318,7 +341,7 @@ export function BrowserSidebar({
           type="button"
           variant="ghost"
           size="icon-sm"
-          disabled={!active || busy}
+          disabled={!active || !commandReady}
           aria-label={t('forward')}
           onClick={() => void command('forward')}
         >
@@ -334,15 +357,14 @@ export function BrowserSidebar({
           required
           disabled={busy}
         />
-        <Button type="submit" size="sm" disabled={busy}>
+        <Button type="submit" size="sm" disabled={!commandReady}>
           {t('go')}
         </Button>
-      </form>
-      <div className="flex shrink-0 items-center gap-2 p-2">
         <Button
+          type="button"
           variant="ghost"
           size="icon-sm"
-          disabled={!active || busy}
+          disabled={!active || !commandReady}
           aria-label={t('reload')}
           onClick={() => {
             setSelection(null);
@@ -352,10 +374,13 @@ export function BrowserSidebar({
           <RefreshCw className="h-4 w-4" />
         </Button>
         <Button
+          type="button"
           variant={pointing ? 'secondary' : 'outline'}
-          size="sm"
+          size="icon-sm"
+          aria-label={t('point')}
+          title={t('point')}
           aria-pressed={pointing}
-          disabled={!active || busy}
+          disabled={!active || !commandReady}
           onClick={() => {
             if (annotating) {
               setAnnotating(false);
@@ -370,13 +395,12 @@ export function BrowserSidebar({
             setAdded(false);
           }}
         >
-          <Crosshair className="mr-1 h-4 w-4" />
-          {t('point')}
+          <Crosshair className="h-4 w-4" />
         </Button>
         {busy && (
           <Loader2 aria-label={t('loading')} className="h-4 w-4 animate-spin" />
         )}
-      </div>
+      </form>
       {error && (
         <p role="alert" className="px-3 text-xs text-destructive">
           {error}
@@ -392,8 +416,10 @@ export function BrowserSidebar({
           threadId={threadId}
           tabId={active}
           active={visible}
+          interactive={!busy}
           onControl={(id) => {
             control.current = id;
+            setControlled(Boolean(id));
           }}
           onLocation={(nextUrl, title) => {
             setTabs((current) =>

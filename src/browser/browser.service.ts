@@ -464,7 +464,6 @@ export class BrowserService implements OnModuleDestroy {
       animations: 'disabled',
       quality: 65,
       timeout: 8000,
-      mask: [tab.page.locator('input,textarea,[contenteditable]')],
     });
     tab.frameId = randomUUID();
     tab.capturedUrl = tab.page.url();

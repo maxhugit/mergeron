@@ -16,6 +16,7 @@ export function BrowserLiveViewport(props: {
   threadId: string;
   tabId: string;
   active: boolean;
+  interactive?: boolean;
   onControl: (id: string | null) => void;
   onLocation: (url: string, title: string) => void;
 }) {
@@ -108,6 +109,7 @@ export function BrowserLiveViewport(props: {
       }
     }
     enqueue.current = (input) => {
+      if (callbacks.current.interactive === false) return;
       if (!frame || !controlId || abort.signal.aborted) return;
       const last = queue.at(-1);
       if (
@@ -314,7 +316,11 @@ export function BrowserLiveViewport(props: {
           height={700}
           aria-label={t('livePage')}
           className="max-h-full max-w-full touch-none"
-          style={{ width: 'auto', height: 'auto' }}
+          style={{
+            width: 'auto',
+            height: 'auto',
+            cursor: props.interactive === false ? 'wait' : 'default',
+          }}
           onPointerDown={(event) => pointer(event, 'down')}
           onPointerUp={(event) => pointer(event, 'up')}
           onPointerMove={(event) => pointer(event, 'move')}
@@ -333,6 +339,7 @@ export function BrowserLiveViewport(props: {
         />
         <textarea
           ref={keyboard}
+          disabled={props.interactive === false}
           aria-label={t('liveKeyboard')}
           autoComplete="off"
           autoCapitalize="off"
