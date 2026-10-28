@@ -1,5 +1,12 @@
 /** Conversation workspace: one permanent transcript with sibling file and terminal views. */
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  useRef,
+} from 'react';
 import { useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +14,10 @@ import { ChatHeader } from '@/components/chat/chat-header';
 import { ConversationFrame } from '@/components/chat/conversation-frame';
 import { WorkspaceControls } from '@/components/chat/workspace-controls';
 import { AgentContextLinks } from '@/components/chat/agent-context-links';
-import { WorkspaceTree } from '@/components/chat/workspace-tree';
+import {
+  WorkspaceTree,
+  type WorkspaceTreeHandle,
+} from '@/components/chat/workspace-tree';
 import { WorkspaceGitDiff } from '@/components/chat/workspace-git-diff';
 import { WorkspaceGitGraph } from '@/components/chat/workspace-git-graph';
 import { WorkspaceGitRemoteFile } from '@/components/chat/workspace-git-remote-file';
@@ -183,6 +193,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   });
   const desktop = useBreakpoint() === 'desktop';
   const [mobileTree, setMobileTree] = useState(false);
+  const explorerRef = useRef<WorkspaceTreeHandle>(null);
   const browserDocked = workspace.browserDocked ?? false;
   const lastBrowserId = workspace.lastBrowserId;
   const setBrowserLayout = useWorkspaceStore((state) => state.setBrowserLayout);
@@ -358,6 +369,12 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           }
         />
         <AgentContextLinks
+          onOpenDirectory={(path) => {
+            explorerRef.current?.openDirectory(path);
+            if (desktop)
+              useLayoutStore.getState().setWorkspaceTreeCollapsed(false);
+            else setMobileTree(true);
+          }}
           key={threadId}
           threadId={threadId}
           project={
@@ -501,6 +518,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
         </div>
       </div>
       <WorkspaceTree
+        ref={explorerRef}
         onGitRemoteFile={(target) =>
           useWorkspaceStore.getState().openGitRemoteFile(context, target)
         }

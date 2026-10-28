@@ -339,6 +339,7 @@
             "title": "Liens et réutilisation",
             "paragraphs": [
               "Un agent peut travailler directement pour un livrable sans sous-tâche obligatoire. Si une tâche principale est liée au livrable, une sous-tâche peut être choisie explicitement : l’agent conserve alors les deux liens.",
+              "Dans l’en-tête Lié à, le titre du livrable ouvre sa fiche. L’icône de dossier juste à côté ouvre l’explorateur droit directement dans son répertoire, sans changer le dossier d’exécution de l’agent.",
               "Lorsque le dialogue propose un agent existant, choisissez une session disponible du même projet et non déjà affectée à une autre tâche ou un autre livrable. Sa réutilisation ne signifie pas l’effacement de son historique."
             ],
             "warning": "Les commandes d’exécution peuvent être réservées aux administrateurs. L’accès à un projet ou la création d’une fiche ne garantit pas le droit de lancer des outils."

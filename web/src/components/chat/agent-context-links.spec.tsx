@@ -70,6 +70,29 @@ function show(props: Partial<Parameters<typeof AgentContextLinks>[0]> = {}) {
     </QueryClientProvider>,
   );
 }
+it('opens the linked deliverable directory without opening its modal', async () => {
+  const onOpenDirectory = vi.fn();
+  api.mockResolvedValue({
+    tasks: [],
+    deliverables: [
+      {
+        id: 'd',
+        title: 'Design report',
+        directory: '/work/livrables/design',
+        conversations: [{ type: 'agent', id: 'agent' }],
+      },
+    ],
+  });
+  show({ onOpenDirectory });
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Open deliverable folder in explorer · Design report',
+    }),
+  );
+  expect(onOpenDirectory).toHaveBeenCalledWith('/work/livrables/design');
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
 it('opens the exact deliverable and the assigned task in a modal without duplicate tasks', async () => {
   api.mockResolvedValue({
     tasks: [{ id: 'task', resourceId: 'tasks', title: 'Write report' }],

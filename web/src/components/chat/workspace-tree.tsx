@@ -1,5 +1,11 @@
 /** Right-hand explorer with a divider preview: dragging never reflows the transcript. */
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useImperativeHandle,
+  type Ref,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2, Folder, Star, LockKeyhole } from 'lucide-react';
 import { FileTree } from '@/components/files/file-tree';
@@ -21,6 +27,7 @@ import type {
 } from '@/stores/workspace-store';
 
 interface Props {
+  ref?: Ref<WorkspaceTreeHandle>;
   agentThreadId?: string;
   cwd: string | null;
   project?: ProjectSummary;
@@ -34,9 +41,13 @@ interface Props {
   onGitGraph?: (target: GitGraphTarget) => void;
   onGitRemoteFile?: (target: GitRemoteFileTarget) => void;
 }
+export interface WorkspaceTreeHandle {
+  openDirectory: (path: string) => void;
+}
 
 /** Adapts only explorer presentation; the conversation and tab content keep their tree positions. */
 export function WorkspaceTree({
+  ref,
   agentThreadId,
   cwd,
   project,
@@ -54,12 +65,23 @@ export function WorkspaceTree({
   const { t: tw } = useTranslation('workspaces');
   const session = usePlatformSession();
   const [systemOpen, setSystemOpen] = useState(false);
+  const revealedDirectory = useRef<{ path: string; cwd: string | null } | null>(
+    null,
+  );
   const currentRoot = useFilesStore((s) => s.rootDir);
   const [adoptedCwd, setAdoptedCwd] = useState<string | null>(null);
   const [gitResourceId, setGitResourceId] = useState<string | null>(null);
   const collapsed = useLayoutStore((s) => s.workspaceTreeCollapsed);
   const width = useLayoutStore((s) => s.workspaceTreeWidth);
   const setCollapsed = useLayoutStore((s) => s.setWorkspaceTreeCollapsed);
+  useImperativeHandle(ref, () => ({
+    openDirectory(path) {
+      revealedDirectory.current = { path, cwd };
+      setSystemOpen(false);
+      setGitResourceId(null);
+      useFilesStore.getState().setRootDir(path);
+    },
+  }));
   // This component shares the conversation's keyed lifetime. Adoption is
   // separate from navigation: browsing may move rootDir anywhere afterwards.
   useEffect(() => {
@@ -67,7 +89,13 @@ export function WorkspaceTree({
     let cancelled = false;
     const adopt = () => {
       if (cancelled) return;
-      useFilesStore.getState().setRootDir(cwd);
+      useFilesStore
+        .getState()
+        .setRootDir(
+          revealedDirectory.current?.cwd === cwd
+            ? revealedDirectory.current.path
+            : cwd,
+        );
       setAdoptedCwd(cwd);
     };
     void filesAddRoot({
