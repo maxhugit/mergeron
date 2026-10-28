@@ -25,6 +25,11 @@ permissions:
   contents: read
   packages: write
 
+env:
+  # Never let PRs overwrite the trusted main cache or another PR's cache.
+  # Tags/manual branches use the immutable SHA, not an untrusted branch name.
+  CACHE_SCOPE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref == 'refs/heads/main' && 'main' || github.sha }}
+
 jobs:
   checks:
     strategy:
@@ -80,6 +85,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_manager_deployment.py
           python3 -m unittest discover -s scripts -p test_update_dev_manager.py
           python3 -m unittest discover -s scripts -p test_configure_dev_browser.py
+          node --test scripts/ci-workflows.test.mjs
 
       - name: Validate translation catalogs
         if: matrix.part == 'frontend'
@@ -189,7 +195,7 @@ jobs:
         run: pnpm --dir web check:bundle
 
   quality:
-    needs: [checks, image]
+    needs: [checks, image, manager-image, browser-image]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -197,13 +203,20 @@ jobs:
         env:
           SOURCE_RESULT: ${{ needs.checks.result }}
           IMAGE_RESULT: ${{ needs.image.result }}
+          MANAGER_RESULT: ${{ needs.manager-image.result }}
+          BROWSER_RESULT: ${{ needs.browser-image.result }}
+          EXPECT_IMAGES: ${{ (github.event_name == 'pull_request' || inputs.validate_image == true) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         run: |
           test "$SOURCE_RESULT" = success
-          test "$IMAGE_RESULT" = success || test "$IMAGE_RESULT" = skipped
+          expected=skipped
+          if [ "$EXPECT_IMAGES" = true ]; then expected=success; fi
+          for result in "$IMAGE_RESULT" "$MANAGER_RESULT" "$BROWSER_RESULT"; do
+            test "$result" = "$expected" || exit 1
+          done
 
   image:
-    # Validate both published images before merge. The publication workflow
-    # repeats these checks on the immutable candidates before promotion.
+    # App, Manager and browser validate concurrently, without skipping any
+    # security checks for UI/docs-only PRs. BuildKit reuses unchanged components.
     if: >-
       (github.event_name == 'pull_request' || inputs.validate_image == true) &&
       (github.event_name != 'pull_request' ||
@@ -230,19 +243,21 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64
           push: false
           load: true
           tags: mergeron:quality-${{ github.sha }}
           cache-from: |
+            type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-${{ env.CACHE_SCOPE }}
+            type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-main
             type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache
-            type=gha
-          cache-to: type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache,mode=max,compression=zstd,compression-level=3,oci-mediatypes=true,image-manifest=true
+          cache-to: type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-${{ env.CACHE_SCOPE }},mode=max,compression=zstd,compression-level=3,oci-mediatypes=true,image-manifest=true
 
       - name: Test real SSH and Git transfers against an isolated server
         env:
           IMAGE_REF: mergeron:quality-${{ github.sha }}
         run: |
-          docker buildx build --file Dockerfile --target ssh-test-server --cache-from type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache --load --tag webui-ssh-fixture .
+          docker buildx build --platform linux/amd64 --file Dockerfile --target ssh-test-server --cache-from "type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-$CACHE_SCOPE" --cache-from type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-main --load --tag webui-ssh-fixture .
           scripts/smoke-test-ssh-image.sh "$IMAGE_REF" webui-ssh-fixture > ssh-client-evidence.json
 
       - name: Start the production image and wait for its health check
@@ -263,6 +278,9 @@ jobs:
           load: true
           push: false
           tags: mergeron:project-mcp-${{ github.sha }}
+          cache-from: |
+            type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-${{ env.CACHE_SCOPE }}
+            type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-main
 
       - name: Verify project MCP policy on an existing native conversation
         run: bash scripts/smoke-test-project-mcp.sh "mergeron:project-mcp-${{ github.sha }}"
@@ -323,52 +341,60 @@ jobs:
       - name: Validate both ingress authentication templates
         run: sh scripts/smoke-test-ingress.sh
 
+      - name: Upload image security report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-quality-report-${{ github.sha }}
+          path: |
+            trivy-quality-results.json
+            trivy-quality-results.raw.json
+            trivy-quality-results.headers.json
+            office-xml-evidence.json
+            security/libxml2-patches/manifest.json
+            ssh-client-evidence.json
+            system-component-evidence.json
+            image.openvex.json
+            security/system-components.openvex.json
+            security/system-components-assessment.json
+            linux-header-evidence.json
+            security/linux-libc-dev.openvex.json
+            security/linux-libc-dev-assessment.csv
+          if-no-files-found: warn
+          retention-days: 30
+
+  manager-image:
+    if: >-
+      (github.event_name == 'pull_request' || inputs.validate_image == true) &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build the minimal Manager image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ./Dockerfile.manager
+          platforms: linux/amd64
           push: false
           load: true
           tags: mergeron-manager:quality-${{ github.sha }}
-
-      - name: Build the browser runtime image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: ./deployment/browser
-          push: false
-          load: true
-          tags: mergeron-browser:quality-${{ github.sha }}
-
-      - name: Verify browser runtime and absence of build package managers
-        run: |
-          docker run --rm --network none --entrypoint node "mergeron-browser:quality-${{ github.sha }}" --input-type=module -e '
-            import { chromium } from "playwright-core";
-            import { existsSync } from "node:fs";
-            if (!existsSync(chromium.executablePath())) throw new Error("Chromium missing");
-            for (const root of ["/usr/lib/node_modules/", "/usr/local/lib/node_modules/"]) {
-              for (const name of ["npm", "yarn"]) {
-                if (existsSync(root + name)) throw new Error("Build package manager retained");
-              }
-            }
-            // Isolated CI smoke test, with no network or application credentials.
-            // Production server.mjs continues to enforce chromiumSandbox: true.
-            const browser = await chromium.launch({ headless: true });
-            const page = await browser.newPage();
-            await page.setContent("<h1>Browser runtime smoke test</h1>");
-            if (await page.locator("h1").innerText() !== "Browser runtime smoke test") throw new Error("Chromium failed");
-            await browser.close();
-          '
-
-      - name: Require no HIGH or CRITICAL browser vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.76.1
-          image-ref: mergeron-browser:quality-${{ github.sha }}
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: false
-          exit-code: '1'
+          cache-from: |
+            type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-${{ env.CACHE_SCOPE }}
+            type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-main
+          cache-to: type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-${{ env.CACHE_SCOPE }},mode=max,compression=zstd,compression-level=3,oci-mediatypes=true,image-manifest=true
 
       - name: Start Manager and verify its Unix socket health check
         env:
@@ -401,25 +427,66 @@ jobs:
           ignore-unfixed: false
           exit-code: '1'
 
-      - name: Upload image security report
+      - name: Upload Manager security report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: trivy-quality-report-${{ github.sha }}
-          path: |
-            trivy-quality-results.json
-            trivy-quality-results.raw.json
-            trivy-quality-results.headers.json
-            trivy-manager-results.json
-            office-xml-evidence.json
-            security/libxml2-patches/manifest.json
-            ssh-client-evidence.json
-            system-component-evidence.json
-            image.openvex.json
-            security/system-components.openvex.json
-            security/system-components-assessment.json
-            linux-header-evidence.json
-            security/linux-libc-dev.openvex.json
-            security/linux-libc-dev-assessment.csv
+          name: trivy-manager-report-${{ github.sha }}
+          path: trivy-manager-results.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  browser-image:
+    if: >-
+      (github.event_name == 'pull_request' || inputs.validate_image == true) &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the browser runtime image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./deployment/browser
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: mergeron-browser:quality-${{ github.sha }}
+          cache-from: |
+            type=registry,ref=ghcr.io/maxhugit/mergeron-browser:buildcache-browser-${{ env.CACHE_SCOPE }}
+            type=registry,ref=ghcr.io/maxhugit/mergeron-browser:buildcache-browser-main
+          cache-to: type=registry,ref=ghcr.io/maxhugit/mergeron-browser:buildcache-browser-${{ env.CACHE_SCOPE }},mode=max,compression=zstd,compression-level=3,oci-mediatypes=true,image-manifest=true
+
+      - name: Verify browser runtime and absence of build package managers
+        run: bash scripts/smoke-test-browser-image.sh "mergeron-browser:quality-${{ github.sha }}"
+
+      - name: Require no HIGH or CRITICAL browser vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: mergeron-browser:quality-${{ github.sha }}
+          format: json
+          output: trivy-browser-results.json
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+
+      - name: Upload browser security report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-browser-report-${{ github.sha }}
+          path: trivy-browser-results.json
           if-no-files-found: warn
           retention-days: 30
