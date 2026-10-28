@@ -201,6 +201,15 @@
               "Les mots de passe et sessions de l’installation ne sont pas transportés, mais les textes et fichiers peuvent eux-mêmes contenir des secrets. Les serveurs distants ne sont pas parcourus automatiquement : exportez une copie locale pour emporter leurs fichiers."
             ],
             "warning": "Le ZIP n’est pas chiffré et ne remplace pas une sauvegarde complète du serveur. Importer deux fois la même archive crée deux projets indépendants."
+          },
+          {
+            "title": "Supprimer un projet",
+            "steps": [
+              "Avant toute suppression définitive, exportez le projet ou sauvegardez-le si vous souhaitez conserver ses connaissances et son historique.",
+              "Dans le menu du projet, choisissez Supprimer et relisez l’avertissement : les agents, conversations et l’espace système seront supprimés, y compris les connaissances, instructions, décisions et versions historiques des documents et livrables.",
+              "Cochez uniquement les dossiers de travail à effacer physiquement, puis confirmez. Les dossiers non cochés conservent leurs fichiers actuels, mais pas les connaissances ni les versions historiques stockées dans l’espace système."
+            ],
+            "warning": "Conserver les fichiers de travail ne permet pas de restaurer le projet complet. La suppression de l’espace système est définitive ; aucun nettoyage rétroactif d’anciens projets supprimés n’est déclenché."
           }
         ],
         "related": ["locations", "backups", "project-people"]

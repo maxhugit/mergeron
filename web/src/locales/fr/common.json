@@ -474,7 +474,6 @@
   "uploadingFiles": "Envoi des fichiers",
   "uploadProgress": "Progression de l’envoi",
   "selectTheWorkspaceFoldersToDeletePermanently": "Sélectionnez les dossiers locaux à supprimer définitivement :",
-  "workAgentsAndSimpleConversationsInThisProjectWillBePermanentlyDeleted": "Les agents de travail et les conversations simples de ce projet seront définitivement supprimés.",
   "alsoDeleteAssociatedWorkspaceFoldersAndAllTheirFiles": "Supprimer également les dossiers locaux associés et tous leurs fichiers",
   "projects": "Projets",
   "default7505d64a": "par défaut",

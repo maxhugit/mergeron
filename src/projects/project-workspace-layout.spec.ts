@@ -20,9 +20,10 @@ import {
   projectDeliverableDocumentVersions,
   people,
   projectParticipants,
+  projectKnowledgeSnapshots,
 } from '../database/schema';
 import { ProjectWorkspaceLayout } from './project-workspace-layout';
-import { projectSystemPath } from './workspace-structure';
+import { projectSystemPath, projectDraftPath } from './workspace-structure';
 import { FilesService } from '../files/files.service';
 import type { SettingsService } from '../settings/settings.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
@@ -840,6 +841,32 @@ describe('permanent project workspaces', () => {
 
   it('preserves primary files when the project is deleted without a physical deletion selection', async () => {
     await layout.migrate();
+    const primaryPath = path.join(root, 'project-id');
+    const system = projectSystemPath(primaryPath);
+    const draft = projectDraftPath(primaryPath);
+    database.db
+      .insert(projectKnowledgeSnapshots)
+      .values({
+        id: 'knowledge-to-remove',
+        projectId: 'project-id',
+        revision: 'old-revision',
+        files: { 'CONNAISSANCES.md': 'project knowledge' },
+        createdAt: 1,
+      })
+      .run();
+    await fs.writeFile(
+      path.join(primaryPath, 'documents/keep.txt'),
+      'working document',
+    );
+    await fs.writeFile(
+      path.join(system, 'history/old.txt'),
+      'historical document',
+    );
+    await fs.mkdir(draft, { recursive: true });
+    await fs.writeFile(path.join(draft, 'scratch.txt'), 'private draft');
+    const unrelated = path.join(path.dirname(system), 'other-project');
+    await fs.mkdir(unrelated);
+    await fs.writeFile(path.join(unrelated, 'keep.txt'), 'other project');
     database.db.delete(projectAgentThreads).run();
     const service = new ProjectsService(
       files,
@@ -856,8 +883,17 @@ describe('permanent project workspaces', () => {
     expect(result.preservedWorkspaces).toContain(path.join(root, 'project-id'));
     expect(database.db.select().from(projects).all()).toHaveLength(0);
     expect(
-      await fs.stat(projectSystemPath(path.join(root, 'project-id'))),
-    ).toMatchObject({});
+      database.db.select().from(projectKnowledgeSnapshots).all(),
+    ).toHaveLength(0);
+    expect(result.deletedSystemWorkspaces).toEqual([system, draft]);
+    await expect(fs.stat(system)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(fs.stat(draft)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(
+      await fs.readFile(path.join(primaryPath, 'documents/keep.txt'), 'utf8'),
+    ).toBe('working document');
+    expect(await fs.readFile(path.join(unrelated, 'keep.txt'), 'utf8')).toBe(
+      'other project',
+    );
   });
 
   it('allows explicit primary deletion only after confirmed project removal', async () => {
@@ -896,9 +932,156 @@ describe('permanent project workspaces', () => {
       preservedWorkspaces: [legacy],
     });
     await expect(fs.stat(primary.path)).rejects.toThrow();
+    await expect(
+      fs.stat(projectSystemPath(primary.path)),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await fs.readFile(path.join(legacy, 'AGENTS.md'), 'utf8')).toBe(
       'Existing instructions',
     );
+  });
+
+  it('rejects cleanup when the system ownership marker names another project', async () => {
+    await layout.migrate();
+    const project = database.db.select().from(projects).get()!;
+    const system = projectSystemPath(project.workspacePath);
+    await fs.writeFile(
+      path.join(system, 'project.json'),
+      JSON.stringify({ projectId: 'another-project', layoutVersion: 3 }),
+    );
+    await expect(layout.prepareSystemRemoval(project)).rejects.toThrow(
+      'another project',
+    );
+    expect(database.db.select().from(projects).all()).toHaveLength(1);
+    expect(await fs.stat(system)).toMatchObject({});
+  });
+
+  it('removes embedded legacy system data while retaining its working directory', async () => {
+    const primary = await legacyPrimary();
+    database.db.delete(projectAgentThreads).run();
+    await fs.writeFile(
+      path.join(primary, 'documents/keep.txt'),
+      'business data',
+    );
+    const service = new ProjectsService(
+      files,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      database.db,
+    );
+    await service.remove('project-id', 'My project');
+    await expect(fs.stat(path.join(primary, '.webui'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(
+      await fs.readFile(path.join(primary, 'documents/keep.txt'), 'utf8'),
+    ).toBe('business data');
+  });
+
+  it('allows removal when the internal directory is already missing', async () => {
+    await layout.migrate();
+    database.db.delete(projectAgentThreads).run();
+    const project = database.db.select().from(projects).get()!;
+    await fs.rm(projectSystemPath(project.workspacePath), { recursive: true });
+    const service = new ProjectsService(
+      files,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      database.db,
+    );
+    expect(await service.remove(project.id, project.name)).toMatchObject({
+      ok: true,
+      deletedSystemWorkspaces: [],
+    });
+    expect(await fs.stat(project.workspacePath)).toMatchObject({});
+  });
+
+  it('rejects a symbolic-link system parent without touching its target', async () => {
+    await layout.migrate();
+    const project = database.db.select().from(projects).get()!;
+    const parent = path.dirname(projectSystemPath(project.workspacePath));
+    const physical = path.join(root, 'private-original');
+    await fs.rename(parent, physical);
+    await fs.symlink(physical, parent);
+    await expect(layout.prepareSystemRemoval(project)).rejects.toThrow(
+      'regular directory',
+    );
+    expect(
+      await fs.readFile(path.join(physical, 'project-id/project.json'), 'utf8'),
+    ).toContain('project-id');
+  });
+
+  it('restores quarantined internal data when project database deletion fails', async () => {
+    await layout.migrate();
+    database.db.delete(projectAgentThreads).run();
+    const project = database.db.select().from(projects).get()!;
+    const system = projectSystemPath(project.workspacePath);
+    await fs.writeFile(
+      path.join(system, 'history/retained.txt'),
+      'keep history',
+    );
+    const service = new ProjectsService(
+      files,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      database.db,
+    );
+    const transaction = vi
+      .spyOn(database.db, 'transaction')
+      .mockImplementationOnce(() => {
+        throw new Error('database failure');
+      });
+    await expect(service.remove(project.id, project.name)).rejects.toThrow(
+      'database failure',
+    );
+    transaction.mockRestore();
+    expect(database.db.select().from(projects).all()).toHaveLength(1);
+    expect(
+      await fs.readFile(path.join(system, 'history/retained.txt'), 'utf8'),
+    ).toBe('keep history');
+    expect(
+      (await fs.readdir(path.dirname(system))).some((name) =>
+        name.includes('.deleting-'),
+      ),
+    ).toBe(false);
+  });
+
+  it('unlinks internal symbolic links without deleting their external targets', async () => {
+    await layout.migrate();
+    database.db.delete(projectAgentThreads).run();
+    const project = database.db.select().from(projects).get()!;
+    const system = projectSystemPath(project.workspacePath);
+    await fs.writeFile(
+      path.join(legacy, 'outside.txt'),
+      'preserve external data',
+    );
+    await fs.symlink(legacy, path.join(system, 'history/external'));
+    const service = new ProjectsService(
+      files,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      database.db,
+    );
+    await service.remove(project.id, project.name);
+    expect(await fs.readFile(path.join(legacy, 'outside.txt'), 'utf8')).toBe(
+      'preserve external data',
+    );
+    await expect(fs.stat(system)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('protects primary roots, ancestors and system files while allowing ordinary content', async () => {
