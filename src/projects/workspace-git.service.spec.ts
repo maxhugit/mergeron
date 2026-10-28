@@ -696,6 +696,188 @@ it('parses porcelain without splitting whitespace or renames into phantom change
   ]);
 });
 
+describe('PR creation from published branches', () => {
+  const input = {
+    confirmation: 'CREATE_REMOTE_PULL_REQUEST',
+    branch: 'published/elsewhere',
+    head: 'c'.repeat(40),
+    address: 'https://github.com/example/demo.git',
+    base: 'main',
+    title: 'Remote proposal',
+    description: 'User text',
+    draft: true,
+  };
+  const prepare = () => {
+    resources.update('p', 'remote', {
+      accessMode: 'read_write',
+      address: input.address,
+      secret: { token: 'pr-token' },
+    });
+    const prepared = vi
+      .spyOn(service, 'pullRequestPreparation')
+      .mockResolvedValue({
+        head: input.head,
+        baseHead: 'd'.repeat(40),
+        existingNumber: null,
+      });
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ number: 42 }), { status: 201 }),
+      );
+    vi.stubGlobal('fetch', fetch);
+    return { prepared, fetch };
+  };
+  it.each([
+    'https://github.com/example/demo.git',
+    'git@github.com:example/demo.git',
+  ])(
+    'creates a PR using GitHub only with source %s and no copy or push receipt',
+    async (address) => {
+      const { prepared, fetch } = prepare();
+      resources.update('p', 'remote', { address });
+      const git = vi
+        .spyOn(service, 'git')
+        .mockRejectedValue(new Error('Must not run local Git'));
+      const snapshot = vi
+        .spyOn(service, 'snapshot')
+        .mockRejectedValue(new Error('No local copy'));
+      const copiesList = vi.spyOn(copies, 'list').mockImplementation(() => {
+        throw new Error('No local copy');
+      });
+      await expect(
+        actions.createRemotePullRequest('p', 'remote', { ...input, address }),
+      ).resolves.toMatchObject({
+        number: 42,
+        existing: false,
+        url: 'https://github.com/example/demo/pull/42',
+      });
+      expect(prepared).toHaveBeenCalledWith(
+        'p',
+        'remote',
+        input.branch,
+        'main',
+      );
+      expect(fetch).toHaveBeenCalledWith(
+        'https://api.github.com/repos/example/demo/pulls',
+        expect.objectContaining({
+          method: 'POST',
+          redirect: 'error',
+          body: JSON.stringify({
+            title: input.title,
+            body: input.description,
+            head: input.branch,
+            base: 'main',
+            draft: true,
+            maintainer_can_modify: false,
+          }),
+        }),
+      );
+      expect(git).not.toHaveBeenCalled();
+      expect(snapshot).not.toHaveBeenCalled();
+      expect(copiesList).not.toHaveBeenCalled();
+    },
+  );
+  it('links the existing matching PR without another POST', async () => {
+    const { prepared, fetch } = prepare();
+    prepared.mockResolvedValue({
+      head: input.head,
+      baseHead: 'd'.repeat(40),
+      existingNumber: 21,
+    });
+    await expect(
+      actions.createRemotePullRequest('p', 'remote', input),
+    ).resolves.toEqual({
+      number: 21,
+      existing: true,
+      url: 'https://github.com/example/demo/pull/21',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('refuses stale source revisions, missing branches and invalid confirmation before posting', async () => {
+    const { prepared, fetch } = prepare();
+    for (const override of [
+      { confirmation: 'CREATE_PULL_REQUEST' },
+      { head: 'HEAD' },
+      { branch: 'bad\nbranch' },
+      { base: input.branch },
+      { title: '' },
+    ])
+      await expect(
+        actions.createRemotePullRequest('p', 'remote', {
+          ...input,
+          ...override,
+        }),
+      ).rejects.toThrow();
+    expect(prepared).not.toHaveBeenCalled();
+    prepared.mockResolvedValueOnce({
+      head: 'f'.repeat(40),
+      baseHead: 'd'.repeat(40),
+      existingNumber: null,
+    });
+    await expect(
+      actions.createRemotePullRequest('p', 'remote', input),
+    ).rejects.toThrow('GIT_STALE');
+    prepared.mockRejectedValueOnce(new Error('Missing remote branch'));
+    await expect(
+      actions.createRemotePullRequest('p', 'remote', input),
+    ).rejects.toThrow('Missing remote branch');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('requires administrator, writable connection and credentials', async () => {
+    const { fetch } = prepare();
+    resources.update('p', 'remote', { accessMode: 'read_only' });
+    await expect(
+      actions.createRemotePullRequest('p', 'remote', input),
+    ).rejects.toThrow('GIT_READ_ONLY');
+    resources.update('p', 'remote', { accessMode: 'read_write', secret: null });
+    await expect(
+      actions.createRemotePullRequest('p', 'remote', input),
+    ).rejects.toThrow('GIT_GITHUB_TOKEN_REQUIRED');
+    database.sqlite
+      .prepare("UPDATE people SET role='standard' WHERE id=?")
+      .run(connectedPerson.personId);
+    await expect(
+      asPerson(() => actions.createRemotePullRequest('p', 'remote', input)),
+    ).rejects.toThrow('Administrator');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it.each(['address', 'credentials', 'read-only'] as const)(
+    'rechecks %s after remote preparation',
+    async (change) => {
+      const { prepared, fetch } = prepare();
+      prepared.mockImplementationOnce(async () => {
+        resources.update(
+          'p',
+          'remote',
+          change === 'address'
+            ? { address: 'https://github.com/other/repo.git' }
+            : change === 'credentials'
+              ? { secret: { token: 'rotated' } }
+              : { accessMode: 'read_only' },
+        );
+        return {
+          head: input.head,
+          baseHead: 'd'.repeat(40),
+          existingNumber: null,
+        };
+      });
+      await expect(
+        actions.createRemotePullRequest('p', 'remote', input),
+      ).rejects.toThrow(change === 'read-only' ? 'GIT_READ_ONLY' : 'GIT_STALE');
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+  it('does not automatically retry an uncertain GitHub write', async () => {
+    const { fetch } = prepare();
+    fetch.mockRejectedValue(new Error('connection ended'));
+    await expect(
+      actions.createRemotePullRequest('p', 'remote', input),
+    ).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+});
+
 describe('remote branch retrieval', () => {
   const writable = () =>
     resources.update('p', 'remote', {
