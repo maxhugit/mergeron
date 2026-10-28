@@ -221,7 +221,17 @@ describe('project workspaces', () => {
             resources: [],
             createdAt: 1,
             updatedAt: 1,
-            workspaces: [],
+            workspaces: [
+              {
+                id: 'main',
+                projectId: 'p',
+                name: 'Main',
+                path: '/workspaces/main',
+                primary: true,
+                createdAt: 1,
+                updatedAt: 1,
+              },
+            ],
           }}
           desktop
           mobileOpen={false}
@@ -232,8 +242,10 @@ describe('project workspaces', () => {
       );
       await screen.findByTestId('file-tree');
       const system = screen.queryByRole('button', { name: 'System space' });
+      expect(screen.getByText('Project').parentElement).toHaveClass('h-11');
       expect(Boolean(system)).toBe(administrator);
       if (system) {
+        expect(system.parentElement?.firstElementChild).toBe(system);
         fireEvent.click(system);
         expect(screen.getByTestId('system-tree')).toHaveTextContent(
           '/workspaces/.mergeron-system/main',

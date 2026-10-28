@@ -83,7 +83,7 @@ export function WorkspaceTree({
   }, [cwd]);
   const contents = (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-10 shrink-0 items-center border-b px-3 text-xs font-medium">
+      <div className="flex h-11 shrink-0 items-center border-b px-3 text-xs font-medium">
         <span className="flex-1">{project ? project.name : t('explorer')}</span>
         <button
           type="button"
@@ -95,6 +95,21 @@ export function WorkspaceTree({
       </div>
       {project && (
         <div className="shrink-0 space-y-1 border-b p-2">
+          {session.isAdministrator && project.systemWorkspacePath && (
+            <Button
+              size="sm"
+              variant={systemOpen ? 'secondary' : 'ghost'}
+              aria-pressed={systemOpen}
+              className="h-7 w-full justify-start text-xs"
+              onClick={() => {
+                setGitResourceId(null);
+                setSystemOpen(true);
+              }}
+            >
+              <LockKeyhole className="h-3.5 w-3.5" />
+              {tw('systemWorkspace')}
+            </Button>
+          )}
           {project.workspaces
             .filter((workspace) => !workspace.sourceResourceId)
             .map((workspace) => {
@@ -174,21 +189,6 @@ export function WorkspaceTree({
                 </div>
               );
             })}
-          {session.isAdministrator && project.systemWorkspacePath && (
-            <Button
-              size="sm"
-              variant={systemOpen ? 'secondary' : 'ghost'}
-              aria-pressed={systemOpen}
-              className="h-7 w-full justify-start text-xs"
-              onClick={() => {
-                setGitResourceId(null);
-                setSystemOpen(true);
-              }}
-            >
-              <LockKeyhole className="h-3.5 w-3.5" />
-              {tw('systemWorkspace')}
-            </Button>
-          )}
         </div>
       )}
       {/* Never compare the browsed root to cwd: entering folders and going up

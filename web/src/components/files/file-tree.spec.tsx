@@ -232,7 +232,11 @@ it('recognizes a deliverable document and replaces filesystem actions with its s
       />
     </QueryClientProvider>,
   );
-  fireEvent.contextMenu(await screen.findByText('report.docx'));
+  const file = await screen.findByText('report.docx');
+  fireEvent.click(file);
+  expect(useFilesStore.getState().selectedFile).toBe(document.sourcePath);
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  fireEvent.contextMenu(file);
   expect(
     await screen.findByRole('menuitem', { name: 'History' }),
   ).toBeInTheDocument();
@@ -243,6 +247,15 @@ it('recognizes a deliverable document and replaces filesystem actions with its s
     screen.queryByRole('menuitem', { name: 'Move to…' }),
   ).not.toBeInTheDocument();
   const attached = vi.fn();
+  const attachment = screen.getByRole('menuitem', { name: 'Attach to chat' });
+  expect(attachment.previousElementSibling).toHaveAttribute(
+    'role',
+    'separator',
+  );
+  expect(attachment.nextElementSibling).toHaveAttribute('role', 'separator');
+  expect(attachment.nextElementSibling?.nextElementSibling).toHaveTextContent(
+    'Delete',
+  );
   window.addEventListener('codex-webui:attach-file', attached);
   try {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Attach to chat' }));
@@ -254,7 +267,13 @@ it('recognizes a deliverable document and replaces filesystem actions with its s
   } finally {
     window.removeEventListener('codex-webui:attach-file', attached);
   }
-  fireEvent.contextMenu(screen.getByText('report.docx'));
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions' }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(
+    await screen.findByRole('menuitem', { name: 'Attach to chat' }),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
   expect(
     await screen.findByRole('dialog', { name: 'Rename document' }),
