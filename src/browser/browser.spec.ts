@@ -190,3 +190,23 @@ it('checks administrator and thread rights before hijacking a live response', as
   expect(stream).not.toHaveBeenCalled();
   expect(reply.hijack).not.toHaveBeenCalled();
 });
+it('scopes each browser instance to the same authenticated person and conversation', async () => {
+  const run = vi.fn().mockResolvedValue(undefined);
+  const controller = new BrowserController(
+    { run } as never,
+    { requireThread: vi.fn(), requireAdministrator: vi.fn() } as never,
+  );
+  const request = { platformIdentity: { personId: 'alice' } } as never;
+  await controller.run('thread', 'tabs', { instanceId: 'browser-1' }, request);
+  await controller.run('thread', 'tabs', { instanceId: 'browser-2' }, request);
+  for (const [index, instanceId] of ['browser-1', 'browser-2'].entries())
+    expect(run).toHaveBeenNthCalledWith(
+      index + 1,
+      JSON.stringify(['alice', '', 'thread', instanceId]),
+      'tabs',
+      { instanceId },
+    );
+  expect(() =>
+    controller.run('thread', 'new', { instanceId: '../other' }, request),
+  ).toThrow('Invalid browser instance');
+});

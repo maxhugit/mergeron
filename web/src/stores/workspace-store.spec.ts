@@ -7,6 +7,21 @@ beforeEach(() => {
   useWorkspaceStore.setState({ contexts: {}, fileViews: {} });
   useTerminalViewStore.setState({ retained: {}, target: null });
 });
+it('creates independent browser views beside conversation, capped at five per agent', () => {
+  const store = useWorkspaceStore.getState();
+  for (let index = 0; index < 6; index++) store.openBrowser('thread:a');
+  const current = useWorkspaceStore.getState().contexts['thread:a'];
+  expect(current.tabs).toHaveLength(5);
+  expect(new Set(current.tabs.map((tab) => tab.id)).size).toBe(5);
+  expect(
+    current.tabs.map((tab) => (tab.kind === 'browser' ? tab.number : null)),
+  ).toEqual([1, 2, 3, 4, 5]);
+  store.remove('thread:a', current.tabs[0].id);
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
+    4,
+  );
+  expect(useWorkspaceStore.getState().contexts['thread:b']).toBeUndefined();
+});
 
 it('isolates remote files by repository, path and immutable revision, without editable documents', () => {
   const store = useWorkspaceStore.getState();

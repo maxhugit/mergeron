@@ -155,7 +155,9 @@ export class PlatformAccessGuard implements CanActivate {
       (request.method !== 'GET' &&
         /^\/projects\/[^/]+\/participants(?:\/|$)/.test(url)) ||
       (request.method !== 'GET' &&
-        /^\/projects\/[^/]+\/(?:mcp-servers|apps|agent-settings)$/.test(url));
+        /^\/projects\/[^/]+\/(?:mcp-servers|apps|agent-settings|browser-settings)$/.test(
+          url,
+        ));
     const workspaceConnectionMutation =
       request.method !== 'GET' &&
       /^\/projects\/[^/]+\/workspace-resources(?:\/|$)/.test(url);

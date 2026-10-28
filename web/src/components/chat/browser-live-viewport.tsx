@@ -14,6 +14,7 @@ type Input = Record<string, unknown>;
 /** Live pixels belong only to this human viewer, never to the annotation draft. */
 export function BrowserLiveViewport(props: {
   threadId: string;
+  instanceId?: string;
   tabId: string;
   active: boolean;
   interactive?: boolean;
@@ -92,6 +93,7 @@ export function BrowserLiveViewport(props: {
             `${path}/input`,
             {
               tabId: props.tabId,
+              instanceId: props.instanceId,
               controlId,
               url: first.view.url,
               width: first.view.width,
@@ -195,6 +197,7 @@ export function BrowserLiveViewport(props: {
       path,
       {
         tabId: props.tabId,
+        instanceId: props.instanceId,
         takeControl,
         ...(previousLease.current
           ? { previousControlId: previousLease.current }
@@ -232,7 +235,15 @@ export function BrowserLiveViewport(props: {
       observer.disconnect();
       callbacks.current.onControl(null);
     };
-  }, [props.threadId, props.tabId, props.active, paused, visible, attempt]);
+  }, [
+    props.threadId,
+    props.instanceId,
+    props.tabId,
+    props.active,
+    paused,
+    visible,
+    attempt,
+  ]);
   const pointer = (
     event: React.PointerEvent<HTMLCanvasElement>,
     phase: 'move' | 'down' | 'up',

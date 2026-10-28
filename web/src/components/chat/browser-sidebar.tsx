@@ -4,8 +4,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Crosshair,
-  Globe,
-  Plus,
+  Columns2,
+  Maximize2,
+  Eraser,
   RefreshCw,
   X,
   Loader2,
@@ -45,6 +46,7 @@ interface Tab {
   id: string;
   title: string;
   url: string;
+  popup?: boolean;
 }
 const errorLabels: Record<string, string> = {
   BROWSER_NOT_CONFIGURED: 'notConfigured',
@@ -67,12 +69,18 @@ export function BrowserSidebar({
   visible = true,
   docked = false,
   onToggleDocked,
+  instanceId,
+  homeUrl = 'https://www.google.com',
+  allowPopups = true,
 }: {
   threadId: string;
   onClose: () => void;
   visible?: boolean;
   docked?: boolean;
   onToggleDocked?: () => void;
+  instanceId?: string;
+  homeUrl?: string;
+  allowPopups?: boolean;
 }) {
   const { t } = useTranslation('browser');
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -81,7 +89,7 @@ export function BrowserSidebar({
   const [selection, setSelection] = useState<
     (Selection & { image: string }) | null
   >(null);
-  const [url, setUrl] = useState('https://example.com');
+  const [url, setUrl] = useState(homeUrl);
   const [pointing, setPointing] = useState(false);
   const [annotating, setAnnotating] = useState(false);
   const control = useRef<string | null>(null);
@@ -93,6 +101,7 @@ export function BrowserSidebar({
   const [added, setAdded] = useState(false);
   const locked = useRef(false);
   const alive = useRef(true);
+  const initialized = useRef(false);
   const root = `/${encodeURIComponent(threadId)}`;
   const commandReady = !busy && (!active || controlled || annotating);
   async function command(action: string, body: Record<string, unknown> = {}) {
@@ -123,7 +132,7 @@ export function BrowserSidebar({
         if (!target) {
           const created = await browserApi<{ id: string; tabs: Tab[] }>(
             `${root}/new`,
-            {},
+            { instanceId, allowPopups },
           );
           if (!alive.current) return;
           target = created.id;
@@ -134,6 +143,8 @@ export function BrowserSidebar({
         Frame & { id?: string; tabs?: Tab[]; selection?: Selection }
       >(`${root}/${action}`, {
         tabId: target,
+        instanceId,
+        allowPopups,
         ...(control.current ? { controlId: control.current } : {}),
         ...body,
       });
@@ -149,9 +160,7 @@ export function BrowserSidebar({
         if (action === 'tabs' && !active && result.tabs.length) {
           const first = result.tabs[0];
           setActive(first.id);
-          setUrl(
-            first.url === 'about:blank' ? 'https://example.com' : first.url,
-          );
+          setUrl(first.url === 'about:blank' ? homeUrl : first.url);
         }
       }
       if (result.id) {
@@ -202,15 +211,71 @@ export function BrowserSidebar({
   }
   useEffect(() => {
     alive.current = true;
-    void Promise.resolve().then(() => {
-      if (alive.current) void command('tabs');
-    });
+    if (!initialized.current) {
+      initialized.current = true;
+      void browserApi<{ tabs: Tab[] }>(`${root}/tabs`, {
+        instanceId,
+        allowPopups,
+      })
+        .then((result) => {
+          if (!alive.current) return;
+          setTabs(result.tabs);
+          const restored = result.tabs.at(-1);
+          if (restored) {
+            setActive(restored.id);
+            setUrl(restored.url === 'about:blank' ? homeUrl : restored.url);
+          } else void command('navigate', { url: homeUrl });
+        })
+        .catch((reason: unknown) => {
+          if (alive.current)
+            setError(
+              t(
+                translationKey(
+                  reason instanceof Error &&
+                    Object.hasOwn(errorLabels, reason.message)
+                    ? errorLabels[reason.message]
+                    : 'unavailable',
+                ),
+              ),
+            );
+        });
+    }
     return () => {
       alive.current = false;
     };
     // The keyed sidebar belongs to one conversation; no request can retarget it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Secondary authentication windows replace the pixels in this view, not the
+  // conversation tabs. Returning/closing a popup restores its opener.
+  useEffect(() => {
+    if (!visible || !active || busy || annotating) return;
+    const abort = new AbortController();
+    const timer = setInterval(() => {
+      void browserApi<{ tabs: Tab[] }>(
+        `${root}/tabs`,
+        { instanceId },
+        abort.signal,
+      )
+        .then((result) => {
+          if (abort.signal.aborted) return;
+          setTabs(result.tabs);
+          const next =
+            result.tabs.filter((tab) => tab.popup).at(-1) ?? result.tabs[0];
+          if (next && next.id !== active) {
+            setControlled(false);
+            setActive(next.id);
+            setFrame(null);
+            setUrl(next.url === 'about:blank' ? homeUrl : next.url);
+          }
+        })
+        .catch(() => {});
+    }, 1000);
+    return () => {
+      abort.abort();
+      clearInterval(timer);
+    };
+  }, [active, visible, busy, annotating, root, instanceId, homeUrl]);
   async function addAnnotation() {
     if (!selection || !comment.trim()) return;
     setBusy(true);
@@ -243,82 +308,6 @@ export function BrowserSidebar({
       aria-label={t('title')}
       className="flex h-full min-h-0 min-w-0 flex-col bg-background"
     >
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
-        <Globe className="h-4 w-4" />
-        <h2 className="flex-1 text-sm">{t('title')}</h2>
-        {onToggleDocked && (
-          <Button variant="ghost" size="sm" onClick={onToggleDocked}>
-            {t(docked ? 'fullView' : 'splitView')}
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!commandReady}
-          onClick={() => void command('close')}
-        >
-          {t('endSession')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('close')}
-          onClick={onClose}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </header>
-      <div
-        className="flex shrink-0 gap-1 overflow-x-auto border-b p-1"
-        role="tablist"
-        aria-label={t('tabs')}
-      >
-        {tabs.map((tab) => (
-          <div key={tab.id} className="flex min-w-0 items-center">
-            <button
-              role="tab"
-              aria-selected={active === tab.id}
-              className={`max-w-36 truncate rounded px-2 py-1 text-xs ${active === tab.id ? 'bg-accent' : ''}`}
-              disabled={busy}
-              onClick={() => {
-                if (tab.id !== active) setControlled(false);
-                setActive(tab.id);
-                setFrame(null);
-                setSelection(null);
-                setAnnotating(false);
-                setUrl(
-                  tab.url === 'about:blank' ? 'https://example.com' : tab.url,
-                );
-              }}
-            >
-              {tab.title || t('newTab')}
-            </button>
-            <button
-              aria-label={t('closeTab', { name: tab.title || t('newTab') })}
-              disabled={!commandReady}
-              onClick={() => {
-                if (active === tab.id) {
-                  setActive('');
-                  setFrame(null);
-                  setSelection(null);
-                }
-                void command('remove', { tabId: tab.id });
-              }}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={!commandReady || tabs.length >= 5}
-          aria-label={t('newTab')}
-          onClick={() => void command('new')}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
       <form
         className="flex shrink-0 items-center gap-1 border-b p-2"
         onSubmit={(event) => {
@@ -400,7 +389,57 @@ export function BrowserSidebar({
         {busy && (
           <Loader2 aria-label={t('loading')} className="h-4 w-4 animate-spin" />
         )}
+        {onToggleDocked && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t(docked ? 'fullView' : 'splitView')}
+            title={t(docked ? 'fullView' : 'splitView')}
+            onClick={onToggleDocked}
+          >
+            {docked ? (
+              <Maximize2 className="h-4 w-4" />
+            ) : (
+              <Columns2 className="h-4 w-4" />
+            )}
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('endSession')}
+          title={t('endSession')}
+          disabled={!commandReady}
+          onClick={() => void command('close')}
+        >
+          <Eraser className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('close')}
+          title={t('close')}
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </form>
+      {tabs.find((tab) => tab.id === active)?.popup && (
+        <div className="flex items-center justify-between border-b px-2 text-xs">
+          <span>{t('popupActive')}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!commandReady}
+            onClick={() => void command('remove')}
+          >
+            {t('closePopup')}
+          </Button>
+        </div>
+      )}
       {error && (
         <p role="alert" className="px-3 text-xs text-destructive">
           {error}
@@ -414,6 +453,7 @@ export function BrowserSidebar({
       {!annotating && active ? (
         <BrowserLiveViewport
           threadId={threadId}
+          instanceId={instanceId}
           tabId={active}
           active={visible}
           interactive={!busy}

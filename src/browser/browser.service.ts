@@ -50,6 +50,7 @@ export function browserUrl(value: unknown): string {
 }
 type Tab = {
   page: Page;
+  popup?: boolean;
   frameId?: string;
   capturedUrl?: string;
   image?: string;
@@ -89,7 +90,7 @@ export class BrowserService implements OnModuleDestroy {
     session?.live?.abort.abort();
     await session?.browser.close().catch(() => {});
   }
-  private async session(key: string): Promise<Session> {
+  private async session(key: string, allowPopups = true): Promise<Session> {
     const existing = this.sessions.get(key);
     if (existing) return existing;
     const endpoint = this.config.get<string>('MERGERON_BROWSER_ENDPOINT');
@@ -123,10 +124,30 @@ export class BrowserService implements OnModuleDestroy {
         else await route.continue();
       });
       await context.routeWebSocket('**/*', (socket) => socket.close());
+      const session: Session = {
+        browser,
+        context,
+        tabs: new Map(),
+        busy: false,
+        touched: Date.now(),
+      };
       context.on('page', (page) => {
-        // Popups are not silently accepted as extra tabs or allowed to escape quotas.
+        // Authentication windows remain inside the isolated context and quota.
         page.on('popup', (popup) => {
-          void popup.close();
+          if (
+            !allowPopups ||
+            session.tabs.size >= 5 ||
+            this.sessions.get(key) !== session
+          ) {
+            void popup.close();
+            return;
+          }
+          const id = randomUUID();
+          session.tabs.set(id, { page: popup, popup: true });
+          popup.on('close', () => {
+            session.tabs.delete(id);
+            if (session.live?.tabId === id) session.live.abort.abort();
+          });
         });
         page.on('download', (download) => {
           void download.cancel();
@@ -135,13 +156,6 @@ export class BrowserService implements OnModuleDestroy {
           void dialog.dismiss();
         });
       });
-      const session = {
-        browser,
-        context,
-        tabs: new Map<string, Tab>(),
-        busy: false,
-        touched: Date.now(),
-      };
       this.sessions.set(key, session);
       return session;
     } catch {
@@ -236,17 +250,18 @@ export class BrowserService implements OnModuleDestroy {
     const current = this.sessions.get(key);
     if (
       current?.live &&
-      !['tabs', 'snapshot'].includes(action) &&
+      !['tabs', 'snapshot', 'dispose'].includes(action) &&
       body.controlId !== current.live.controlId
     )
       throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });
-    if (action === 'close') {
+    if (action === 'close' || action === 'dispose') {
       if (this.opening.has(key))
         throw new ConflictException('Browser is opening; retry closing');
       await this.close(key);
       return { closed: true };
     }
-    const session = await this.session(key);
+    const session = await this.session(key, body.allowPopups !== false);
+    if (action === 'tabs') return await this.tabs(session);
     if (session.busy)
       throw new ConflictException({
         code: 'BROWSER_BUSY',
@@ -255,7 +270,6 @@ export class BrowserService implements OnModuleDestroy {
     session.busy = true;
     session.touched = Date.now();
     try {
-      if (action === 'tabs') return await this.tabs(session);
       if (action === 'new') {
         if (session.tabs.size >= 5)
           throw new ConflictException({
@@ -454,6 +468,7 @@ export class BrowserService implements OnModuleDestroy {
           id,
           url: tab.page.url(),
           title: (await tab.page.title().catch(() => '')).slice(0, 200),
+          popup: tab.popup === true,
         })),
       ),
     };

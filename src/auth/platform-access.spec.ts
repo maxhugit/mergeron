@@ -257,6 +257,7 @@ it.each([
   '/projects/project-1/mcp-servers',
   '/projects/project-1/apps',
   '/projects/project-1/agent-settings',
+  '/projects/project-1/browser-settings',
   '/projects/project-1/workspace-resources',
   '/projects/project-1/workspace-resources/resource-1/test',
   '/projects/project-1/participants',

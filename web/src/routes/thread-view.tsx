@@ -184,17 +184,25 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   const desktop = useBreakpoint() === 'desktop';
   const [mobileTree, setMobileTree] = useState(false);
   const [browserDocked, setBrowserDocked] = useState(false);
-  const hasBrowser =
-    session.isAdministrator &&
-    workspace.tabs.some((tab) => tab.kind === 'browser');
+  const [lastBrowserId, setLastBrowserId] = useState('');
+  const browserTabs = session.isAdministrator
+    ? workspace.tabs.filter((tab) => tab.kind === 'browser')
+    : [];
+  const selectedBrowser = browserTabs.find(
+    (tab) => tab.id === workspace.activeId,
+  );
+  const displayedBrowser =
+    selectedBrowser ??
+    browserTabs.find((tab) => tab.id === lastBrowserId) ??
+    browserTabs.at(-1);
   const browserVisible =
-    hasBrowser &&
-    (workspace.activeId === 'browser' ||
+    Boolean(displayedBrowser) &&
+    (Boolean(selectedBrowser) ||
       (desktop && browserDocked && workspace.activeId === 'conversation'));
   const splitBrowser = browserVisible && desktop && browserDocked;
   const conversationVisible =
     workspace.activeId === 'conversation' ||
-    (splitBrowser && workspace.activeId === 'browser');
+    (splitBrowser && Boolean(selectedBrowser));
   const [creatingTerminal, setCreatingTerminal] = useState(false);
   const { requestClose, dialog } = useWorkspaceClose(context);
   const { mutate: openThread } = useOpenThread();
@@ -317,15 +325,15 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           workspace={workspace}
           running={running}
           pending={pending}
-          onSelect={(id) => select(context, id)}
+          onSelect={(id) => {
+            if (browserTabs.some((tab) => tab.id === id)) setLastBrowserId(id);
+            select(context, id);
+          }}
           onClose={requestClose}
           onNewTerminal={() => void newTerminal()}
           canCreateTerminal={session.isAdministrator}
           terminalCreationDisabled={creatingTerminal || !cwd}
           onExplorer={() => {
-            setBrowserDocked(false);
-            if (workspace.activeId === 'browser')
-              select(context, 'conversation');
             if (desktop)
               useLayoutStore
                 .getState()
@@ -338,8 +346,13 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
             session.isAdministrator
               ? () => {
                   useWorkspaceStore.getState().openBrowser(context);
+                  setLastBrowserId(
+                    useWorkspaceStore.getState().contexts[context].activeId,
+                  );
+                  setBrowserDocked(
+                    project?.browserSettings?.desktopSplit ?? true,
+                  );
                   setMobileTree(false);
-                  useLayoutStore.getState().setWorkspaceTreeCollapsed(true);
                 }
               : undefined
           }
@@ -375,14 +388,18 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
               onRetry={open}
             />
           </div>
-          {hasBrowser && (
+          {browserTabs.map((tab) => (
             <div
+              key={tab.id}
               role="tabpanel"
               aria-label={tb('title')}
               className="absolute inset-0 min-h-0 border-l"
-              inert={!browserVisible}
+              inert={!browserVisible || tab.id !== displayedBrowser?.id}
               style={{
-                visibility: browserVisible ? 'visible' : 'hidden',
+                visibility:
+                  browserVisible && tab.id === displayedBrowser?.id
+                    ? 'visible'
+                    : 'hidden',
                 left: splitBrowser ? '50%' : 0,
               }}
             >
@@ -394,22 +411,25 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                 }
               >
                 <BrowserSidebar
-                  key={threadId}
                   threadId={threadId}
-                  visible={browserVisible}
+                  instanceId={tab.id}
+                  homeUrl={
+                    project?.browserSettings?.homeUrl ??
+                    'https://www.google.com'
+                  }
+                  allowPopups={project?.browserSettings?.allowPopups ?? true}
+                  visible={browserVisible && tab.id === displayedBrowser?.id}
                   docked={splitBrowser}
                   onToggleDocked={
                     desktop
                       ? () => setBrowserDocked((value) => !value)
                       : undefined
                   }
-                  onClose={() =>
-                    useWorkspaceStore.getState().remove(context, 'browser')
-                  }
+                  onClose={() => requestClose(tab)}
                 />
               </Suspense>
             </div>
-          )}
+          ))}
           {workspace.tabs
             .filter((tab) => tab.kind !== 'browser')
             .map((tab) => {

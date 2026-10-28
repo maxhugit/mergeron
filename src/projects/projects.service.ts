@@ -298,6 +298,56 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     return this.connections ? this.connections.change(write) : write();
   }
 
+  configureBrowser(
+    projectId: string,
+    input: { homeUrl?: unknown; desktopSplit?: unknown; allowPopups?: unknown },
+    actor?: ProjectActivityActor,
+  ) {
+    const project = this.get(projectId);
+    let url: URL;
+    try {
+      if (typeof input.homeUrl !== 'string' || input.homeUrl.length > 4096)
+        throw new Error();
+      url = new URL(input.homeUrl);
+      if (
+        !['http:', 'https:'].includes(url.protocol) ||
+        url.username ||
+        url.password
+      )
+        throw new Error();
+    } catch {
+      throw new BadRequestException('Invalid browser home URL');
+    }
+    if (
+      typeof input.desktopSplit !== 'boolean' ||
+      typeof input.allowPopups !== 'boolean'
+    )
+      throw new BadRequestException('Invalid browser settings');
+    const browserSettings = {
+      homeUrl: url.href,
+      desktopSplit: input.desktopSplit,
+      allowPopups: input.allowPopups,
+    };
+    const updatedAt = Date.now();
+    this.db.transaction(() => {
+      this.db
+        .update(projects)
+        .set({ browserSettings, updatedAt })
+        .where(eq(projects.id, projectId))
+        .run();
+      this.recordActivity(
+        projectId,
+        'browser_configuration_updated',
+        'browser_configuration',
+        null,
+        'Navigateur',
+        { before: project.browserSettings, after: browserSettings },
+        actor,
+      );
+    });
+    return { ...project, browserSettings, updatedAt };
+  }
+
   configureAgent(
     projectId: string,
     input: { model?: unknown; reasoningEffort?: unknown },
@@ -1249,6 +1299,11 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       appIds: [],
       agentModel: null,
       agentReasoningEffort: null,
+      browserSettings: {
+        homeUrl: 'https://www.google.com',
+        desktopSplit: true,
+        allowPopups: true,
+      },
       sidebarOrder: [],
       createdAt: now,
       updatedAt: now,

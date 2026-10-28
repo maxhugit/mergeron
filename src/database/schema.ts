@@ -328,6 +328,14 @@ export const projects = sqliteTable(
       .default([]),
     agentModel: text('agent_model'),
     agentReasoningEffort: text('agent_reasoning_effort'),
+    browserSettings: text('browser_settings', { mode: 'json' })
+      .$type<{ homeUrl: string; desktopSplit: boolean; allowPopups: boolean }>()
+      .notNull()
+      .default({
+        homeUrl: 'https://www.google.com',
+        desktopSplit: true,
+        allowPopups: true,
+      }),
     sidebarOrder: text('sidebar_order', { mode: 'json' })
       .$type<string[]>()
       .notNull()

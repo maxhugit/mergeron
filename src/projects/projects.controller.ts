@@ -285,6 +285,17 @@ export class ProjectsController {
     };
   }
 
+  @Patch(':id/browser-settings')
+  configureBrowser(
+    @Param('id') id: string,
+    @Body() body: Parameters<ProjectsService['configureBrowser']>[1],
+    @Req() request: IdentityRequest,
+  ) {
+    return {
+      project: this.projects.configureBrowser(id, body, activityActor(request)),
+    };
+  }
+
   @Patch(':id/agent-settings')
   configureAgent(
     @Param('id') id: string,

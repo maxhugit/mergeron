@@ -20,6 +20,8 @@ import { useTerminalStore } from '@/stores/terminal-store';
 import { useTerminalViewStore } from '@/stores/terminal-view-store';
 import { useWorkspaceStore, type WorkspaceTab } from '@/stores/workspace-store';
 import { SaveAsDialog } from '@/components/files/save-as-dialog';
+import { browserApi } from '@/lib/browser-api';
+import { showSnackbar } from '@/stores/snackbar-store';
 
 /** Controls a single user-requested close; async completion always targets its originating context. */
 export function useWorkspaceClose(context: string) {
@@ -27,6 +29,7 @@ export function useWorkspaceClose(context: string) {
   const [busy, setBusy] = useState(false);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const { t } = useTranslation();
+  const { t: tb } = useTranslation('browser');
   const document = useDocumentStore((s) =>
     pending?.kind === 'file' ? s.documents[pending.documentId] : undefined,
   );
@@ -48,6 +51,14 @@ export function useWorkspaceClose(context: string) {
     }
   };
   const requestClose = (tab: WorkspaceTab) => {
+    if (tab.kind === 'browser' && context.startsWith('thread:')) {
+      void browserApi(`/${encodeURIComponent(context.slice(7))}/dispose`, {
+        instanceId: tab.id,
+      })
+        .then(() => remove(tab))
+        .catch(() => showSnackbar(tb('operationFailed'), 'error'));
+      return;
+    }
     if (
       tab.kind === 'browser' ||
       tab.kind === 'git-diff' ||

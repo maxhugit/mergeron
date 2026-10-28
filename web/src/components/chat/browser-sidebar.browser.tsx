@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
-import { page, userEvent } from 'vitest/browser';
+import { page } from 'vitest/browser';
 import { BrowserSidebar } from './browser-sidebar';
 import { markedScreenshot } from '@/lib/browser-annotations';
 import i18n, { i18nReady } from '@/i18n';
@@ -17,7 +17,7 @@ beforeEach(() => {
   api.mockReset().mockResolvedValue({ tabs: [] });
 });
 afterEach(cleanup);
-test('edits an address and opens it with Enter from an empty browser session', async () => {
+test('automatically opens the configured default page without internal tabs', async () => {
   await i18nReady;
   await i18n.changeLanguage('fr');
   await page.viewport(1214, 988);
@@ -44,11 +44,13 @@ test('edits an address and opens it with Enter from an empty browser session', a
           : { tabs: [] },
     ),
   );
-  render(<BrowserSidebar threadId="fixture" onClose={() => {}} />);
-  const address = page.getByRole('textbox', { name: 'Adresse de la page' });
-  await expect.element(address).toBeEnabled();
-  await address.fill('https://example.org/');
-  await userEvent.keyboard('{Enter}');
+  render(
+    <BrowserSidebar
+      threadId="fixture"
+      homeUrl="https://example.org/"
+      onClose={() => {}}
+    />,
+  );
   await expect
     .element(
       page.getByLabelText('Page distante en direct — cliquer pour interagir'),
@@ -57,6 +59,8 @@ test('edits an address and opens it with Enter from an empty browser session', a
   expect(api).toHaveBeenCalledWith('/fixture/navigate', {
     tabId: 'created',
     url: 'https://example.org/',
+    instanceId: undefined,
+    allowPopups: true,
   });
   expect(
     api.mock.calls.filter(([path]) => String(path).endsWith('/new')),
@@ -73,7 +77,7 @@ test.each([390, 1280])('browser panel fits a %s px viewport', async (width) => {
     </div>,
   );
   await expect
-    .element(page.getByRole('heading', { name: 'Navigateur' }))
+    .element(page.getByRole('complementary', { name: 'Navigateur' }))
     .toBeVisible();
   const bounds = document.querySelector('aside')!.getBoundingClientRect();
   expect(bounds.width).toBeLessThanOrEqual(width);

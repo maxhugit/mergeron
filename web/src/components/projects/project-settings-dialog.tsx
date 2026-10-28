@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ProjectLocationsIntro } from './project-locations-intro';
+import { ProjectBrowserSettings } from './project-browser-settings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bot,
@@ -38,7 +39,11 @@ import {
   projectMcpServersQueryOptions,
 } from '@/lib/project-integrations-queries';
 
-export type ProjectSettingsSection = 'agents' | 'workspaces' | 'participants';
+export type ProjectSettingsSection =
+  | 'agents'
+  | 'workspaces'
+  | 'participants'
+  | 'browser';
 
 export function ProjectSettingsPanel({
   project,
@@ -168,6 +173,9 @@ export function ProjectSettingsPanel({
   return (
     <>
       <div className="space-y-6 rounded-xl border bg-card p-5">
+        {section === 'browser' && (
+          <ProjectBrowserSettings key={project.id} project={project} />
+        )}
         {section === 'agents' && (
           <>
             <div className="flex items-start gap-3">

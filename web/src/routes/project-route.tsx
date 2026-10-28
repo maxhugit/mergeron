@@ -8,6 +8,7 @@ import {
   FolderCog,
   FolderKanban,
   FolderOpen,
+  Globe,
   History,
   LayoutDashboard,
   ListTodo,
@@ -36,6 +37,7 @@ type ProjectTab = 'general' | 'journal' | ProjectSettingsSection;
 export function ProjectRoute() {
   const { projectId } = useParams({ strict: false });
   const { t, i18n } = useTranslation();
+  const { t: tb } = useTranslation('browser');
   const session = usePlatformSession();
   const queryClient = useQueryClient();
   const projects = useQuery({
@@ -55,7 +57,7 @@ export function ProjectRoute() {
   const canSeePeople = session.isAdministrator || isActiveParticipant;
   const visibleTab: ProjectTab =
     (activeTab === 'participants' && !canSeePeople) ||
-    (!session.isAdministrator && activeTab === 'workspaces')
+    (!session.isAdministrator && ['workspaces', 'browser'].includes(activeTab))
       ? 'general'
       : activeTab;
   const activity = useQuery({
@@ -128,6 +130,14 @@ export function ProjectRoute() {
             label={t('agentManagement')}
             onClick={() => setActiveTab('agents')}
           />
+          {session.isAdministrator && (
+            <ProjectTabButton
+              active={visibleTab === 'browser'}
+              icon={Globe}
+              label={tb('title')}
+              onClick={() => setActiveTab('browser')}
+            />
+          )}
           {session.isAdministrator && (
             <ProjectTabButton
               active={visibleTab === 'workspaces'}

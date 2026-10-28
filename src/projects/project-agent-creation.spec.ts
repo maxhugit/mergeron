@@ -75,6 +75,37 @@ afterEach(async () => {
   database.sqlite.close();
   await rm(root, { recursive: true, force: true });
 });
+it('migrates existing projects to browser defaults and persists validated preferences', () => {
+  expect(database.db.select().from(projects).get()?.browserSettings).toEqual({
+    homeUrl: 'https://www.google.com',
+    desktopSplit: true,
+    allowPopups: true,
+  });
+  const settings = {
+    homeUrl: 'https://example.org/start',
+    desktopSplit: false,
+    allowPopups: false,
+  };
+  service.configureBrowser('p', settings);
+  expect(database.db.select().from(projects).get()?.browserSettings).toEqual(
+    settings,
+  );
+  for (const homeUrl of [
+    'javascript:alert(1)',
+    'file:///etc/passwd',
+    'https://user:secret@example.org',
+  ]) {
+    expect(() =>
+      service.configureBrowser('p', { ...settings, homeUrl }),
+    ).toThrow('Invalid browser home URL');
+  }
+  expect(() =>
+    service.configureBrowser('p', { ...settings, allowPopups: 'yes' }),
+  ).toThrow('Invalid browser settings');
+  expect(database.db.select().from(projects).get()?.browserSettings).toEqual(
+    settings,
+  );
+});
 it('creates and attaches a fresh agent before returning, without resuming its nonexistent rollout', async () => {
   const result = await service.createAgent('p', root);
   expect(result.thread.id).toBe('new-agent');

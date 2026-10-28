@@ -8,6 +8,7 @@ import {
   ServiceUnavailableException,
   ForbiddenException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { IdentityService } from '../auth/identity.service';
@@ -19,7 +20,17 @@ export class BrowserController {
     private readonly browser: BrowserService,
     private readonly identities: IdentityService,
   ) {}
-  private authorize(threadId: string, request: IdentityRequest) {
+  private authorize(
+    threadId: string,
+    request: IdentityRequest,
+    instanceId?: unknown,
+  ) {
+    if (
+      instanceId !== undefined &&
+      (typeof instanceId !== 'string' ||
+        !/^[a-zA-Z0-9-]{1,64}$/.test(instanceId))
+    )
+      throw new BadRequestException('Invalid browser instance');
     const identity = request.platformIdentity;
     if (!identity)
       throw new ServiceUnavailableException('Identity unavailable');
@@ -30,6 +41,7 @@ export class BrowserController {
       owner,
       identity.impersonation?.sessionId ?? '',
       threadId,
+      instanceId ?? '',
     ]);
   }
 
@@ -40,7 +52,7 @@ export class BrowserController {
     @Req() request: IdentityRequest,
     @Res() reply: FastifyReply,
   ) {
-    const key = this.authorize(threadId, request);
+    const key = this.authorize(threadId, request, body?.instanceId);
     const abort = new AbortController();
     const close = () => abort.abort();
     reply.raw.on('close', close);
@@ -83,7 +95,7 @@ export class BrowserController {
     };
     try {
       await this.browser.stream(key, body ?? {}, abort.signal, emit, () =>
-        this.authorize(threadId, request),
+        this.authorize(threadId, request, body?.instanceId),
       );
     } catch (error) {
       if (!started) throw error;
@@ -106,7 +118,7 @@ export class BrowserController {
     @Req() request: IdentityRequest,
   ) {
     return this.browser.run(
-      this.authorize(threadId, request),
+      this.authorize(threadId, request, body?.instanceId),
       action,
       body ?? {},
     );
