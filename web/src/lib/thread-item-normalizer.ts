@@ -146,6 +146,10 @@ function normalizeUserMessage(
         // This server-supplied context is separate from the user's editable message.
         const message = block.text
           .replace(
+            /^<mergeron_project_context>\n[\s\S]*?\n<\/mergeron_project_context>\n*/,
+            '',
+          )
+          .replace(
             /^<project_shared_knowledge>\nCurrent shared project context\.[\s\S]*?\n<\/project_shared_knowledge>\n*/,
             '',
           )
@@ -246,7 +250,9 @@ function normalizeWebAction(value: unknown): WebSearchAction | null {
         type: 'search',
         query: nullableString(action.query),
         queries: Array.isArray(action.queries)
-          ? action.queries.filter((entry): entry is string => typeof entry === 'string')
+          ? action.queries.filter(
+              (entry): entry is string => typeof entry === 'string',
+            )
           : [],
       };
     case 'openPage':
@@ -272,8 +278,7 @@ function normalizeWebResults(value: unknown): WebSearchResultPreview[] {
     const preview = {
       title: nullableString(result.title),
       url: nullableString(result.url),
-      snippet:
-        nullableString(result.snippet) ?? nullableString(result.text),
+      snippet: nullableString(result.snippet) ?? nullableString(result.text),
     };
     return preview.title || preview.url || preview.snippet ? [preview] : [];
   });
@@ -303,9 +308,12 @@ export function normalizeThreadItem(
   const terminal = readItemTerminality(item) ?? completed;
 
   if (item.type === 'userMessage') {
+    const message = normalizeUserMessage(item, itemId);
+    if (!message.text && message.images.length === 0)
+      return { kind: 'invalid' };
     return {
       kind: 'userMessage',
-      message: normalizeUserMessage(item, itemId),
+      message,
     };
   }
   if (item.type === 'plan') {
@@ -321,14 +329,22 @@ export function normalizeThreadItem(
   switch (item.type) {
     case 'reasoning': {
       const summary = Array.isArray(item.summary)
-        ? item.summary.filter((entry): entry is string => typeof entry === 'string')
+        ? item.summary.filter(
+            (entry): entry is string => typeof entry === 'string',
+          )
         : [];
       const content = Array.isArray(item.content)
-        ? item.content.filter((entry): entry is string => typeof entry === 'string')
+        ? item.content.filter(
+            (entry): entry is string => typeof entry === 'string',
+          )
         : [];
       return {
         kind: 'render',
-        item: { ...base, type: 'reasoning', content: [...summary, ...content].join('\n') },
+        item: {
+          ...base,
+          type: 'reasoning',
+          content: [...summary, ...content].join('\n'),
+        },
       };
     }
     case 'agentMessage': {
@@ -368,7 +384,10 @@ export function normalizeThreadItem(
           toolServer: stringValue(item.server),
           toolName: stringValue(item.tool),
           toolArgs: displayJson(item.arguments),
-          failed: Boolean(error) || result?.isError === true || item.status === 'failed',
+          failed:
+            Boolean(error) ||
+            result?.isError === true ||
+            item.status === 'failed',
         },
       };
     }
@@ -401,7 +420,10 @@ export function normalizeThreadItem(
       };
     }
     case 'contextCompaction':
-      return { kind: 'render', item: { ...base, type: 'contextCompaction', content: '' } };
+      return {
+        kind: 'render',
+        item: { ...base, type: 'contextCompaction', content: '' },
+      };
     case 'enteredReviewMode':
     case 'exitedReviewMode':
       return {
@@ -418,7 +440,12 @@ export function normalizeThreadItem(
             ? item.fragments.flatMap((value) => {
                 const fragment = asRecord(value);
                 return fragment
-                  ? [{ text: stringValue(fragment.text), hookRunId: stringValue(fragment.hookRunId) }]
+                  ? [
+                      {
+                        text: stringValue(fragment.text),
+                        hookRunId: stringValue(fragment.hookRunId),
+                      },
+                    ]
                   : [];
               })
             : [],
@@ -463,7 +490,9 @@ export function normalizeThreadItem(
           status: stringValue(item.status),
           senderThreadId: stringValue(item.senderThreadId),
           receiverThreadIds: Array.isArray(item.receiverThreadIds)
-            ? item.receiverThreadIds.filter((entry): entry is string => typeof entry === 'string')
+            ? item.receiverThreadIds.filter(
+                (entry): entry is string => typeof entry === 'string',
+              )
             : [],
           prompt: nullableString(item.prompt),
           model: nullableString(item.model),
@@ -472,7 +501,13 @@ export function normalizeThreadItem(
             ? Object.entries(states).flatMap(([threadId, value]) => {
                 const state = asRecord(value);
                 return state
-                  ? [{ threadId, status: stringValue(state.status), message: nullableString(state.message) }]
+                  ? [
+                      {
+                        threadId,
+                        status: stringValue(state.status),
+                        message: nullableString(state.message),
+                      },
+                    ]
                   : [];
               })
             : [],
@@ -513,11 +548,18 @@ export function normalizeThreadItem(
         },
       };
     case 'imageView':
-      return { kind: 'render', item: { ...base, type: 'imageView', path: stringValue(item.path) } };
+      return {
+        kind: 'render',
+        item: { ...base, type: 'imageView', path: stringValue(item.path) },
+      };
     case 'sleep':
       return {
         kind: 'render',
-        item: { ...base, type: 'sleep', durationMs: Math.max(0, nullableNumber(item.durationMs) ?? 0) },
+        item: {
+          ...base,
+          type: 'sleep',
+          durationMs: Math.max(0, nullableNumber(item.durationMs) ?? 0),
+        },
       };
     case 'imageGeneration': {
       const result = stringValue(item.result);
