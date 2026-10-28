@@ -1,5 +1,12 @@
 /** Builds per-project Codex app and MCP enablement overrides for new threads. */
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
+import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
+import { INTERNAL_MCP_NAME } from '../internal-mcp/internal-mcp-catalog';
 import { randomUUID } from 'node:crypto';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { eq } from 'drizzle-orm';
@@ -17,6 +24,7 @@ import {
 type JsonObject = { [key: string]: JsonValue };
 
 export interface ProjectExecutionPolicy {
+  internalMcpId?: string;
   executionCwd?: string;
   projectId: string;
   config: JsonObject;
@@ -35,6 +43,7 @@ export class ProjectConnectionPolicyService {
     private readonly codex: CodexService,
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     private readonly folders: ActiveFoldersService,
+    @Optional() private readonly internalMcp?: InternalMcpService,
   ) {}
 
   /** A conversation's project binding cannot be bypassed by a turn cwd. */
@@ -47,6 +56,7 @@ export class ProjectConnectionPolicyService {
     const policy = await this.policyForCwd(
       cwd ?? binding?.workspacePath,
       binding?.projectId,
+      threadId,
     );
     if (binding && policy?.projectId !== binding.projectId)
       throw new ConflictException(
@@ -66,6 +76,7 @@ export class ProjectConnectionPolicyService {
   async policyForCwd(
     cwd: string | null | undefined,
     expectedProjectId?: string,
+    threadId?: string,
   ): Promise<ProjectExecutionPolicy | null> {
     const location = this.folders.executionLocationForCwd(
       cwd,
@@ -160,7 +171,13 @@ export class ProjectConnectionPolicyService {
       pluginConfig[server.pluginId] = plugin;
     }
 
+    const internal = await this.internalMcp?.connection(
+      location.projectId,
+      threadId,
+    );
+    if (internal) directMcpConfig[INTERNAL_MCP_NAME] = internal.config;
     return {
+      ...(internal ? { internalMcpId: internal.id } : {}),
       executionCwd: cwd ?? undefined,
       ...location,
       model: project.agentModel,
@@ -208,6 +225,8 @@ export class ProjectConnectionPolicyService {
     cwd: string,
     threadId: string,
   ): void {
+    if (policy.internalMcpId)
+      this.internalMcp?.bind(policy.internalMcpId, threadId, policy.projectId);
     const identity = currentAccess()?.identity;
     this.db
       .insert(projectActivity)

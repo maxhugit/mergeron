@@ -45,6 +45,7 @@ const sectionIcons = {
   database: Database,
   security: ShieldCheck,
   integrations: Plug,
+  internalMcp: Network,
 } satisfies Record<(typeof SETTINGS_SECTIONS)[number], typeof ServerCog>;
 
 function ServerUpdateIndicator() {

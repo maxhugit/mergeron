@@ -12,7 +12,7 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import { constants, createReadStream, createWriteStream } from 'node:fs';
@@ -154,6 +154,38 @@ export class DeliverablesService implements OnModuleInit {
   ) {
     this.files.projectDocumentMutation = (request) =>
       this.explorerMutation(request);
+  }
+  /** Small permission-filtered catalog; no file paths or document histories. */
+  agentCatalog(projectId: string) {
+    requireProjectAccess(projectId);
+    return this.db
+      .select({ item: items, resource: projectResources })
+      .from(items)
+      .innerJoin(projectResources, eq(items.resourceId, projectResources.id))
+      .where(
+        and(
+          eq(projectResources.projectId, projectId),
+          eq(projectResources.type, 'deliverable_board'),
+        ),
+      )
+      .orderBy(asc(items.id))
+      .all()
+      .filter(
+        ({ item, resource }) =>
+          !resource.config.internal &&
+          this.canAccessDeliverable(projectId, item),
+      )
+      .map(({ item }) => ({
+        id: item.id,
+        resourceId: item.resourceId,
+        title: item.title,
+        description: item.description,
+        criteria: item.criteria,
+        status: item.lifecycleStatus,
+        primaryTaskId: item.primaryTaskId,
+        conversations: item.conversations,
+        version: item.version,
+      }));
   }
 
   /** Resolve ownership from authoritative records, never from a client supplied document id. */
@@ -1267,12 +1299,18 @@ export class DeliverablesService implements OnModuleInit {
     }
     return directory;
   }
-  async create(projectId: string, resourceId: string, input: DeliverableInput) {
+  async create(
+    projectId: string,
+    resourceId: string,
+    input: DeliverableInput,
+    beforeCommit?: () => void,
+  ) {
     this.resource(projectId, resourceId);
     const values = this.changes(projectId, input);
     const id = randomUUID(),
       now = Date.now();
     await this.directory(projectId, ['livrables', id]);
+    beforeCommit?.();
     const actor = this.actor();
     const created = this.db.transaction((tx) => {
       const created = tx

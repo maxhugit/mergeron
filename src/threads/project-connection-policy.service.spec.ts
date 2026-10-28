@@ -2,6 +2,7 @@ import type { CodexService } from '../codex/codex.service';
 import type { AppDatabase } from '../database/database.constants';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import type { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 function databaseReturning(...rows: unknown[]): AppDatabase {
   let index = 0;
   return {
@@ -14,7 +15,11 @@ function databaseReturning(...rows: unknown[]): AppDatabase {
   } as unknown as AppDatabase;
 }
 describe('ProjectConnectionPolicyService', () => {
-  function setup(appIds: string[] = [], mcpServerIds: string[] = []) {
+  function setup(
+    appIds: string[] = [],
+    mcpServerIds: string[] = [],
+    internalMcp?: InternalMcpService,
+  ) {
     const request = vi.fn((method: string) =>
       Promise.resolve(
         method === 'config/read'
@@ -66,6 +71,7 @@ describe('ProjectConnectionPolicyService', () => {
           sourceRevision: null,
         }),
       } as unknown as ActiveFoldersService,
+      internalMcp,
     );
     return { service, request };
   }
@@ -120,6 +126,36 @@ describe('ProjectConnectionPolicyService', () => {
     await expect(service.configForCwd('/workspaces/project')).rejects.toThrow(
       'unavailable',
     );
+  });
+  it('adds the native internal connection without enabling external integrations', async () => {
+    const connection = vi.fn().mockResolvedValue({
+      id: 'connection-1',
+      config: { url: 'http://127.0.0.1:1234/mcp', enabled: true },
+    });
+    const bind = vi.fn();
+    const { service } = setup([], [], {
+      connection,
+      bind,
+    } as unknown as InternalMcpService);
+    const policy = await service.policyForCwd(
+      '/workspaces/project',
+      'p',
+      'thread-1',
+    );
+    expect(connection).toHaveBeenCalledWith('p', 'thread-1');
+    expect(policy).toMatchObject({
+      internalMcpId: 'connection-1',
+      config: {
+        features: { apps: false },
+        mcp_servers: {
+          mergeron_internal: {
+            url: 'http://127.0.0.1:1234/mcp',
+            enabled: true,
+          },
+          fixture: { enabled: false },
+        },
+      },
+    });
   });
   it('does not alter projectless execution', async () => {
     const request = vi.fn();

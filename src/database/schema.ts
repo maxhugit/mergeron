@@ -11,6 +11,25 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+/** Durable idempotency receipts for project-scoped agent business tools. */
+export const projectAgentToolRequests = sqliteTable(
+  'project_agent_tool_requests',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id').notNull(),
+    requestId: text('request_id').notNull(),
+    digest: text('digest').notNull(),
+    personId: text('person_id'),
+    result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.threadId, table.requestId] }),
+  ],
+);
+
 /** Durable terminal intent survives disposal of its PTY and headless buffer. */
 export const terminalIdentities = sqliteTable('terminal_identities', {
   id: text('id').primaryKey(),

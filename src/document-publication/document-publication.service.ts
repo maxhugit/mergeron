@@ -112,6 +112,14 @@ export class DocumentPublicationService implements OnModuleDestroy {
     manager: CodexProcessManager,
   ) {
     manager.addListener('notification', (note: ServerNotification) => {
+      if (
+        note.method === 'thread/closed' ||
+        note.method === 'thread/deleted' ||
+        note.method === 'thread/archived'
+      ) {
+        this.revoke(note.params.threadId);
+        return;
+      }
       if (note.method !== 'turn/completed' && note.method !== 'turn/started')
         return;
       const scope = this.scopes.get(note.params.threadId);
@@ -137,6 +145,11 @@ export class DocumentPublicationService implements OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.stopAll();
+  }
+
+  revoke(threadId: string): void {
+    const scope = this.scopes.get(threadId);
+    if (scope) void this.finish(scope);
   }
 
   private stopAll(): void {
@@ -179,6 +192,16 @@ export class DocumentPublicationService implements OnModuleDestroy {
         abort: () => {},
       };
     let scope = this.scopes.get(threadId);
+    // Never reuse an execution lease across browser identities/security modes.
+    if (
+      scope &&
+      (scope.access?.identity.personId !== currentAccess()?.identity.personId ||
+        scope.access?.identity.impersonation?.sessionId !==
+          currentAccess()?.identity.impersonation?.sessionId)
+    ) {
+      await this.finish(scope);
+      scope = undefined;
+    }
     if (scope?.completedTurnId) {
       await this.finish(scope);
       scope = undefined;
@@ -240,11 +263,16 @@ export class DocumentPublicationService implements OnModuleDestroy {
       rule,
       `Write retained document drafts only in ${JSON.stringify(scope.directory)}. Finish the draft before requesting its version.`,
       'To save a new version, atomically write valid JSON in publication-request.json in that directory: {"requestId":"unique-id","resourceId":"from-catalog","deliverableId":"from-catalog","file":"relative-file-name","comment":"Version comment"}.',
-      'For an existing document, also provide documentId and expectedVersion from the catalog; retain its file name. If no target exists, ask the user to create or select a deliverable.',
+      'For an existing document, also provide documentId and expectedVersion from the catalog; retain its file name. If no target exists, ask the user to select one or explicitly request its creation using the project tools.',
       'Mergeron writes publication-result.json. Wait for a matching requestId and status="published" before claiming the version was saved. Process requests sequentially; a refusal preserves the draft. Never overwrite retained files or retry with a stale version.',
       'This execution lease accepts at most 20 requests for one hour, including automatic continuation. If no matching acknowledgement arrives within 60 seconds, report that saving is unconfirmed; do not claim success. A stop revokes the lease.',
       'No manager credentials are needed. Keep code and temporary files in their ordinary folders. Do not add the draft directory to source control.',
       `Catalog: ${JSON.stringify(catalog)}`,
+      ...(!boards.length
+        ? [
+            'This project has no deliverables manager: do not retain documents. Ask the user to add a manager; project tools cannot create a manager.',
+          ]
+        : []),
       '</document_publication>',
     ].join('\n');
     return {
@@ -467,18 +495,35 @@ export class DocumentPublicationService implements OnModuleDestroy {
   private async result(
     scope: PublicationScope,
     value: Record<string, unknown>,
+    prefix = 'publication',
   ): Promise<void> {
-    const temporary = path.join(
+    // Anchor writes to the checked directory descriptor. A full-access agent
+    // replacing the path with a symlink must never redirect a backend write
+    // into a retained-document directory between validation and acknowledgement.
+    const directory = await fs.open(
       scope.directory,
-      `.publication-result-${randomUUID()}`,
+      constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
     );
-    await fs.writeFile(temporary, JSON.stringify(value), {
-      flag: 'wx',
-      mode: 0o600,
-    });
-    await fs.rename(
-      temporary,
-      path.join(scope.directory, 'publication-result.json'),
-    );
+    try {
+      const stat = await directory.stat();
+      const anchored = `/proc/self/fd/${directory.fd}`;
+      if (
+        !stat.isDirectory() ||
+        stat.ino !== scope.directoryInode ||
+        (await fs.realpath(anchored)) !== scope.directory
+      )
+        throw new Error('Replaced result directory');
+      const temporary = path.join(
+        anchored,
+        `.${prefix}-result-${randomUUID()}`,
+      );
+      await fs.writeFile(temporary, JSON.stringify(value), {
+        flag: 'wx',
+        mode: 0o600,
+      });
+      await fs.rename(temporary, path.join(anchored, `${prefix}-result.json`));
+    } finally {
+      await directory.close();
+    }
   }
 }

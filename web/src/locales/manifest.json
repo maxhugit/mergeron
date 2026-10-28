@@ -11,6 +11,7 @@
     "guide",
     "authentication",
     "common",
+    "internalMcp",
     "codexSettings",
     "deliverables",
     "logs",

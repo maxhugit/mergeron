@@ -1,4 +1,6 @@
 {
+  "internalMcpTitle": "Internal MCP",
+  "internalMcpDescription": "Technical reference for Mergeron tools: methods, parameters, results and access rules.",
   "deliverableAgentOptionalSubtask": "The agent can work directly on this deliverable without a task. If you choose a subtask, the agent will be linked to both that subtask and the deliverable.",
   "deliverableAgentAssignment": "Agent assignment",
   "deliverableAgentDirect": "Directly to the deliverable (no subtask)",

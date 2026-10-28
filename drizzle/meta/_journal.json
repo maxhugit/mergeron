@@ -407,6 +407,13 @@
       "when": 1793174863592,
       "tag": "0057_project_browser_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1793190023943,
+      "tag": "0058_project_agent_tools",
+      "breakpoints": true
     }
   ]
 }

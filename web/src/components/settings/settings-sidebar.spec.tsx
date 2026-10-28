@@ -75,6 +75,15 @@ it('separates server settings from operations and closes the mobile drawer on se
   expect(useLayoutStore.getState().sidebarOpen).toBe(false);
 });
 
+it('offers the internal MCP catalog as a distinct administration entry', () => {
+  renderSidebar();
+  fireEvent.click(screen.getByRole('button', { name: 'Internal MCP' }));
+  expect(routing.navigate).toHaveBeenCalledWith({
+    to: '/settings',
+    search: { section: 'internalMcp' },
+  });
+});
+
 it('keeps global tools distinct from their configuration and supports returning to projects', () => {
   renderSidebar();
   fireEvent.click(screen.getByRole('button', { name: 'Files' }));

@@ -19,6 +19,9 @@ vi.mock('./codex-settings', () => ({
     <div>Codex {initialTab} tabs</div>
   ),
 }));
+vi.mock('./internal-mcp-settings', () => ({
+  InternalMcpSettings: () => <div>Native MCP technical reference</div>,
+}));
 vi.mock('./use-category-settings', () => ({
   useCategorySettings: () => ({
     settings: [],
@@ -28,6 +31,15 @@ vi.mock('./use-category-settings', () => ({
   }),
 }));
 afterEach(cleanup);
+it('opens the internal MCP technical reference from its administration route', async () => {
+  route.section = 'internalMcp';
+  render(<SettingsPage />);
+  expect(
+    await screen.findByText('Native MCP technical reference'),
+  ).toBeVisible();
+  expect(SETTINGS_SECTIONS).toContain('internalMcp');
+  expect(settingsPageLabel('internalMcp')).toBe('internalMcpTitle');
+});
 it('opens the new Codex account tab from the old account URL', async () => {
   route.section = 'account';
   render(<SettingsPage />);

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { InternalMcpModule } from '../internal-mcp/internal-mcp.module';
 import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
 import { GitMutationGateService } from './git-mutation-gate.service';
 import { ThreadResponseDetailService } from './thread-response-detail.service';
@@ -40,6 +41,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
 
 @Module({
   imports: [
+    InternalMcpModule,
     ActiveFoldersModule,
     DeliverablesModule,
     DocumentPublicationModule,

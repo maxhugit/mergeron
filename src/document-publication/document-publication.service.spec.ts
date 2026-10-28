@@ -52,6 +52,22 @@ vi.mock('node:fs/promises', async (original) => {
         match ? descriptors.get(Number(match[1]))! : args[0],
       );
     },
+    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+      const match =
+        typeof args[0] === 'string' &&
+        /^\/proc\/self\/fd\/(\d+)(\/.*)$/.exec(args[0]);
+      if (match) args[0] = descriptors.get(Number(match[1]))! + match[2];
+      return actual.writeFile(...args);
+    },
+    rename: async (...args: Parameters<typeof actual.rename>) => {
+      for (const index of [0, 1] as const) {
+        const match = /^\/proc\/self\/fd\/(\d+)(\/.*)$/.exec(
+          String(args[index]),
+        );
+        if (match) args[index] = descriptors.get(Number(match[1]))! + match[2];
+      }
+      return actual.rename(...args);
+    },
   };
 });
 
