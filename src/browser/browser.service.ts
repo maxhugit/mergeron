@@ -190,13 +190,17 @@ export class BrowserService implements OnModuleDestroy {
     if (session.busy) throw new ConflictException({ code: 'BROWSER_BUSY' });
     const previous = session.live;
     if (previous) {
-      if (body.takeControl !== true)
+      if (
+        body.takeControl !== true &&
+        body.previousControlId !== previous.controlId
+      )
         throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });
       previous.abort.abort();
       await previous.done.catch(() => {});
     }
     authorize();
     if (signal.aborted) return;
+    if (session.busy) throw new ConflictException({ code: 'BROWSER_BUSY' });
     // A concurrent claimant may have acquired the lease while cleanup awaited.
     if (session.live && session.live !== previous)
       throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });

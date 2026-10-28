@@ -112,7 +112,6 @@ export function BrowserSidebar({
           target = created.id;
           setTabs(created.tabs);
         }
-        setActive(target);
       }
       const result = await browserApi<
         Frame & { id?: string; tabs?: Tab[]; selection?: Selection }
@@ -122,6 +121,9 @@ export function BrowserSidebar({
         ...body,
       });
       if (!alive.current) return;
+      // Do not mount the live viewer until the first navigation releases the
+      // server operation lock. Restored/already-active pages keep their stream.
+      if (action === 'navigate') setActive(target);
       if (result.tabs) {
         setTabs(result.tabs);
         if (action === 'tabs' && !active && result.tabs.length) {
@@ -264,7 +266,6 @@ export function BrowserSidebar({
                 setUrl(
                   tab.url === 'about:blank' ? 'https://example.com' : tab.url,
                 );
-                void command('snapshot', { tabId: tab.id });
               }}
             >
               {tab.title || t('newTab')}

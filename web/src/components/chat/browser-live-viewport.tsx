@@ -34,6 +34,7 @@ export function BrowserLiveViewport(props: {
   const [state, setState] = useState('connecting');
   const [error, setError] = useState('');
   const takeover = useRef(false);
+  const previousLease = useRef<string | null>(null);
   useEffect(() => {
     const changed = () => setVisible(document.visibilityState !== 'hidden');
     document.addEventListener('visibilitychange', changed);
@@ -190,12 +191,19 @@ export function BrowserLiveViewport(props: {
     });
     void browserLive(
       path,
-      { tabId: props.tabId, takeControl },
+      {
+        tabId: props.tabId,
+        takeControl,
+        ...(previousLease.current
+          ? { previousControlId: previousLease.current }
+          : {}),
+      },
       abort.signal,
       (event) => {
         if (abort.signal.aborted) return;
         if (event.type === 'ready') {
           controlId = event.controlId;
+          previousLease.current = controlId;
           callbacks.current.onControl(controlId);
           setState('live');
           resize();
