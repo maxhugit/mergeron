@@ -1,4 +1,8 @@
 /** Code-owned runtime setting definitions and shared types. */
+import {
+  AGENT_INSTRUCTIONS_KEY,
+  DEFAULT_AGENT_INSTRUCTIONS,
+} from './agent-instructions';
 
 export const SETTING_TYPES = ['string', 'number', 'boolean', 'json'] as const;
 export const SETTING_CATEGORIES = [
@@ -92,6 +96,14 @@ export const DEFAULT_EXCLUDED_DIRS =
  * and UPDATE metadata/constraints/defaults if they change.
  */
 export const SETTINGS_DEFINITIONS = [
+  {
+    key: AGENT_INSTRUCTIONS_KEY,
+    type: 'string',
+    category: 'general',
+    description:
+      'Common instructions supplied to every agent at the start of each turn. Empty text disables them. Do not include secrets.',
+    defaultValue: DEFAULT_AGENT_INSTRUCTIONS,
+  },
   {
     key: 'general.logRetention',
     type: 'json',
