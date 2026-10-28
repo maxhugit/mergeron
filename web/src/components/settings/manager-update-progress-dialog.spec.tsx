@@ -245,3 +245,41 @@ it('waits for the start request and excludes the preceding operation from the jo
   expect(screen.queryByText('Mise à jour réussie')).not.toBeInTheDocument();
   expect(screen.getByRole('log')).toHaveTextContent('En attente du journal');
 });
+
+it('unlocks an incomplete historical monitor only after another operation is terminal and the Manager is idle', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        json(
+          response({
+            ...operation,
+            id: 'newer-operation',
+            status: 'succeeded',
+            phase: 'complete',
+          }),
+        ),
+      ),
+    ),
+  );
+  fixture.render(<ManagerUpdateProgressDialog {...props} />);
+  expect(
+    await screen.findByText('Ce suivi n’est plus l’opération courante'),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Fermer' })).toBeEnabled();
+  expect(screen.queryByText('Mise à jour réussie')).not.toBeInTheDocument();
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+});
+
+it('keeps an incomplete historical monitor locked while a newer operation is active', async () => {
+  const fetch = vi.fn(() =>
+    Promise.resolve(json(response({ ...operation, id: 'newer-operation' }))),
+  );
+  vi.stubGlobal('fetch', fetch);
+  fixture.render(<ManagerUpdateProgressDialog {...props} />);
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  expect(screen.getByRole('button', { name: 'Fermer' })).toBeDisabled();
+  expect(
+    screen.queryByText('Ce suivi n’est plus l’opération courante'),
+  ).not.toBeInTheDocument();
+});

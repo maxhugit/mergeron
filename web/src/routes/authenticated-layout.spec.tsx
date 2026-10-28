@@ -103,7 +103,7 @@ function updateReceipt() {
     },
   });
 }
-it('shows only the retained update monitor during restart, without authorizing cached identity or making protected requests', async () => {
+it('renders the retained update monitor synchronously during restart, without authorizing cached identity or making protected requests', () => {
   updateReceipt();
   sessionFailure(new AuthResourceError('Restarting', 503));
   const fetch = vi.spyOn(globalThis, 'fetch');
@@ -114,7 +114,7 @@ it('shows only the retained update monitor during restart, without authorizing c
     </QueryClientProvider>,
   );
   expect(
-    await screen.findByRole('dialog', { name: 'Update progress' }),
+    screen.getByRole('dialog', { name: 'Update progress' }),
   ).toBeInTheDocument();
   expect(screen.getByRole('log')).toHaveTextContent('Saving application data');
   expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();

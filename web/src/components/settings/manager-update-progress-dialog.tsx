@@ -82,7 +82,9 @@ export function ManagerUpdateProgressDialog({
         !monitoringPaused &&
         (!operation ||
           operation.id === excludedOperationId ||
-          (expectedId && operation.id !== expectedId) ||
+          (expectedId &&
+            operation.id !== expectedId &&
+            current.state.data?.update?.busy !== false) ||
           operation.status === 'running')
         ? 2_000
         : false;
@@ -91,6 +93,16 @@ export function ManagerUpdateProgressDialog({
     refetchOnWindowFocus: false,
   });
   const latest = monitoringPaused ? undefined : query.data?.update?.operation;
+  const superseded =
+    !pending &&
+    !monitoringPaused &&
+    !!expectedId &&
+    (!initialOperation || initialOperation.status === 'running') &&
+    !!latest &&
+    latest.id !== expectedId &&
+    latest.id !== excludedOperationId &&
+    latest.status !== 'running' &&
+    query.data?.update?.busy === false;
   const operation = pending
     ? null
     : latest &&
@@ -100,7 +112,10 @@ export function ManagerUpdateProgressDialog({
       : initialOperation;
   const phase = operation?.phase ?? 'preparing';
   const running =
-    pending || (!operation && !requestError) || operation?.status === 'running';
+    !superseded &&
+    (pending ||
+      (!operation && !requestError) ||
+      operation?.status === 'running');
   const locked = monitoringPaused || running;
   useEffect(() => {
     if (operation && !monitoringPaused)
@@ -110,8 +125,9 @@ export function ManagerUpdateProgressDialog({
   const completed = operation?.status === 'succeeded';
   const interrupted = operation?.status === 'recoveryRequired';
   const restored = operation?.status === 'rolledBack';
-  const title =
-    !operation && requestError
+  const title = superseded
+    ? 'managerUpdateSuperseded'
+    : !operation && requestError
       ? 'managerUpdateStartUnconfirmed'
       : completed
         ? 'managerUpdateSucceeded'
@@ -157,11 +173,14 @@ export function ManagerUpdateProgressDialog({
           <p>
             {t(
               translationKey(
-                updatePhaseLabels[phase] ?? 'managerUpdatePreparing',
+                superseded
+                  ? 'managerUpdateSupersededHelp'
+                  : (updatePhaseLabels[phase] ?? 'managerUpdatePreparing'),
               ),
             )}
           </p>
           <div
+            hidden={superseded}
             role="progressbar"
             aria-label={t('managerUpdateProgressTitle')}
             aria-valuetext={t(
@@ -183,7 +202,7 @@ export function ManagerUpdateProgressDialog({
               />
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p hidden={superseded} className="text-xs text-muted-foreground">
             {stage >= 0 && running && (
               <span className="mr-2 font-medium">
                 {t('managerUpdateStageCount', {

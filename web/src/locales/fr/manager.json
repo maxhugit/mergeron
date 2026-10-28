@@ -1,4 +1,6 @@
 {
+  "managerUpdateSuperseded": "Ce suivi n’est plus l’opération courante",
+  "managerUpdateSupersededHelp": "Une autre opération est terminée et le Manager est libre. Ce journal conservé est incomplet : fermez cette fenêtre puis ouvrez le dernier suivi pour consulter le résultat courant.",
   "componentUpdatesTitle": "Mises à jour des conteneurs",
   "componentUpdatesLoading": "Vérification des images publiées…",
   "componentUpdatesUnavailable": "Détection indisponible. Le Manager doit prendre en charge la détection des images.",
