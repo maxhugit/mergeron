@@ -474,7 +474,6 @@
   "uploadingFiles": "Uploading files",
   "uploadProgress": "Upload progress",
   "selectTheWorkspaceFoldersToDeletePermanently": "Select the local folders to delete permanently:",
-  "workAgentsAndSimpleConversationsInThisProjectWillBePermanentlyDeleted": "Work agents and simple conversations in this project will be permanently deleted.",
   "alsoDeleteAssociatedWorkspaceFoldersAndAllTheirFiles": "Also delete attached local folders and all their files",
   "projects": "Projects",
   "default7505d64a": "default",

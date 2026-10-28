@@ -3435,6 +3435,9 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     const project = this.get(id);
     if (confirmation !== project.name)
       throw new BadRequestException('Project confirmation does not match');
+    const systemLayout = new ProjectWorkspaceLayout(this.db);
+    // Reject unsafe ownership before removing any agents.
+    await systemLayout.prepareSystemRemoval(project);
     const attached = this.db
       .select()
       .from(projectWorkspaces)
@@ -3476,28 +3479,37 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       .from(projectResources)
       .where(eq(projectResources.projectId, id))
       .all();
-    this.db.transaction((tx) => {
-      // A task status is RESTRICTed while tasks still reference it. The
-      // explicit child-first order makes whole-project deletion deterministic.
-      for (const resource of resources) {
-        tx.delete(projectTasks)
-          .where(eq(projectTasks.resourceId, resource.id))
+    // Agent shutdown may have left new private drafts since the preflight.
+    const systemRemoval = await systemLayout.prepareSystemRemoval(project);
+    await systemRemoval.stage();
+    try {
+      this.db.transaction((tx) => {
+        // A task status is RESTRICTed while tasks still reference it. The
+        // explicit child-first order makes whole-project deletion deterministic.
+        for (const resource of resources) {
+          tx.delete(projectTasks)
+            .where(eq(projectTasks.resourceId, resource.id))
+            .run();
+          tx.delete(projectTaskStatuses)
+            .where(eq(projectTaskStatuses.resourceId, resource.id))
+            .run();
+        }
+        tx.delete(projectResources)
+          .where(eq(projectResources.projectId, id))
           .run();
-        tx.delete(projectTaskStatuses)
-          .where(eq(projectTaskStatuses.resourceId, resource.id))
+        // Databases created before project-aware simple chats were introduced
+        // can still have a NO ACTION foreign key here. Delete these threads
+        // explicitly so those installations do not block project deletion.
+        tx.delete(simpleChatThreads)
+          .where(eq(simpleChatThreads.projectId, id))
           .run();
-      }
-      tx.delete(projectResources)
-        .where(eq(projectResources.projectId, id))
-        .run();
-      // Databases created before project-aware simple chats were introduced
-      // can still have a NO ACTION foreign key here. Delete these threads
-      // explicitly so those installations do not block project deletion.
-      tx.delete(simpleChatThreads)
-        .where(eq(simpleChatThreads.projectId, id))
-        .run();
-      tx.delete(projects).where(eq(projects.id, id)).run();
-    });
+        tx.delete(projects).where(eq(projects.id, id)).run();
+      });
+    } catch (error) {
+      await systemRemoval.rollback();
+      throw error;
+    }
+    await systemRemoval.purge();
     for (const workspace of workspacesToDelete) {
       if (workspace.primary)
         await this.files.deleteManagedWorkspace(workspace.path);
@@ -3505,6 +3517,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     }
     return {
       ok: true,
+      deletedSystemWorkspaces: systemRemoval.paths,
       deletedWorkspaces: workspacesToDelete.map((workspace) => workspace.path),
       preservedWorkspaces: attached
         .filter((workspace) => !selectedWorkspaceIds.has(workspace.id))

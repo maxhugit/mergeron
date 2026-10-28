@@ -45,6 +45,120 @@ export class ProjectWorkspaceLayout {
     return path.join(this.root, id);
   }
 
+  /** Quarantine owned internal data before deleting its DB owner; restore on DB failure. */
+  async prepareSystemRemoval(project: {
+    id: string;
+    workspacePath: string;
+    workspaceLayoutVersion: number;
+  }) {
+    const entries: Array<{
+      original: string;
+      staged: string;
+      ino: number;
+      dev: number;
+      ownsMarker: boolean;
+    }> = [];
+    const moved: typeof entries = [];
+    const validateParent = async (target: string) => {
+      const stat = await fs.lstat(path.dirname(target));
+      if (!stat.isDirectory() || stat.isSymbolicLink())
+        throw new ConflictException(
+          'Project system parent must be a regular directory',
+        );
+    };
+    if (project.workspaceLayoutVersion >= 1) {
+      const root = path.resolve(project.workspacePath);
+      if (
+        !path.isAbsolute(project.workspacePath) ||
+        root === path.parse(root).root
+      )
+        throw new ConflictException('Invalid project system root');
+      const system = projectSystemPath(root, project.workspaceLayoutVersion);
+      const systems = [
+        system,
+        ...(project.workspaceLayoutVersion < 3
+          ? [path.join(root, LEGACY_PROJECT_SYSTEM_DIRECTORY)]
+          : []),
+      ];
+      for (const original of new Set([...systems, projectDraftPath(root)])) {
+        const stat = await this.statIfPresent(original);
+        if (!stat) continue;
+        await validateParent(original);
+        if (!stat.isDirectory() || stat.isSymbolicLink())
+          throw new ConflictException(
+            'Project system workspace must be a regular directory',
+          );
+        if (systems.includes(original))
+          await this.readMarker(original, project.id);
+        entries.push({
+          original,
+          staged: path.join(
+            path.dirname(original),
+            `.${path.basename(original)}.deleting-${randomUUID()}`,
+          ),
+          ino: stat.ino,
+          dev: stat.dev,
+          ownsMarker: systems.includes(original),
+        });
+      }
+    }
+    const requireSameDirectory = async (
+      target: string,
+      entry: (typeof entries)[number],
+    ) => {
+      await validateParent(target);
+      const stat = await fs.lstat(target);
+      if (
+        !stat.isDirectory() ||
+        stat.isSymbolicLink() ||
+        stat.ino !== entry.ino ||
+        stat.dev !== entry.dev
+      )
+        throw new ConflictException(
+          'Project system workspace changed during deletion',
+        );
+    };
+    const rollback = async () => {
+      for (const entry of [...moved].reverse()) {
+        await requireSameDirectory(entry.staged, entry);
+        if (await this.statIfPresent(entry.original))
+          throw new ConflictException(
+            'Cannot restore project system workspace over an existing path',
+          );
+        await fs.rename(entry.staged, entry.original);
+        moved.splice(moved.indexOf(entry), 1);
+      }
+    };
+    return {
+      paths: entries.map((entry) => entry.original),
+      stage: async () => {
+        try {
+          for (const entry of entries) {
+            await requireSameDirectory(entry.original, entry);
+            if (entry.ownsMarker)
+              await this.readMarker(entry.original, project.id);
+            if (await this.statIfPresent(entry.staged))
+              throw new ConflictException(
+                'Project cleanup destination already exists',
+              );
+            await fs.rename(entry.original, entry.staged);
+            moved.push(entry);
+          }
+        } catch (error) {
+          await rollback();
+          throw error;
+        }
+      },
+      rollback,
+      purge: async () => {
+        for (const entry of moved) {
+          await requireSameDirectory(entry.staged, entry);
+          await fs.rm(entry.staged, { recursive: true, force: false });
+        }
+      },
+    };
+  }
+
   private async ensureSystemParent(root: string) {
     const parent = path.join(
       path.dirname(root),
