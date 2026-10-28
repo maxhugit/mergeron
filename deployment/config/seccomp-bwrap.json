@@ -60,6 +60,13 @@
   ],
   "syscalls": [
     {
+      "comment": "Chromium enters its own user/PID namespace before chroot. Keep host capabilities dropped; the kernel still enforces namespace-local CAP_SYS_CHROOT.",
+      "names": [
+        "chroot"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
       "names": [
         "accept",
         "accept4",

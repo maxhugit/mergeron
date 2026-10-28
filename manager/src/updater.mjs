@@ -21,6 +21,7 @@ import {
 } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { collectInventory } from './inventory.mjs';
+import { agentVisualSandbox } from './agent-visual-sandbox.mjs';
 import {
   evaluateAdoption,
   readAdoptionRecord,
@@ -797,6 +798,7 @@ export class TransactionalUpdater {
     try {
       // Pull every requested image before stopping anything, then pin its immutable ID.
       const imageIds = {};
+      const targetImages = {};
       for (const [component, reference] of Object.entries(plan.images)) {
         let cached;
         if (plan.mode === 'dev-fast' && reference.includes('@sha256:')) {
@@ -808,10 +810,9 @@ export class TransactionalUpdater {
           }
         }
         if (!cached) await this.docker.pullImage(reference);
-        imageIds[component] = pinnedImage(
-          cached ?? (await this.docker.inspectImage(reference)),
-          reference,
-        );
+        targetImages[component] =
+          cached ?? (await this.docker.inspectImage(reference));
+        imageIds[component] = pinnedImage(targetImages[component], reference);
       }
       const rechecked = await this.plan(plan.images, plan.mode);
       if (rechecked.fingerprint !== plan.fingerprint)
@@ -843,6 +844,12 @@ export class TransactionalUpdater {
           imageIds[item.component] ?? previous,
           component,
         );
+        target.HostConfig = agentVisualSandbox(target.HostConfig, {
+          environment: this.manifest.environment,
+          component: component.id,
+          labels: (targetImages[item.component] ?? previousImage).Config
+            ?.Labels,
+        });
         if (component.id === 'application' && browserInspect) {
           const browserComponent = this.manifest.components.find(
             (c) => c.id === 'browser',
