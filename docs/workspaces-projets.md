@@ -98,6 +98,27 @@ La migration peut être relancée, notamment après une interruption entre le re
 
 Un principal déjà migré qui disparaît du disque n'est pas recréé automatiquement : la réconciliation le signale comme non résolu et ne promeut aucun secondaire. Restaurer le dossier depuis la sauvegarde avant de reprendre les opérations concernées.
 
+## Changement de dossier avant le premier message
+
+Une conversation chargée et détenue par Mergeron peut choisir une copie Git avant
+son premier message, sans fabriquer d'échange ni relancer `thread/resume` sur un
+historique qui n'existe pas encore. Le serveur exige le refus structuré précis de
+`thread/turns/list` indiquant un agent non matérialisé : une page vide persistée,
+une erreur de permissions ou un historique disparu ne sont pas assimilés à ce cas.
+
+Le dossier choisi est appliqué au premier vrai `turn/start`, avec les contrôles de
+projet, de chemin et de sandbox habituels. Le moteur n'est conservé sans redémarrage
+que si les transports MCP et les applications autorisées sont strictement identiques
+dans le même projet. Une configuration native modifiée bloque ce raccourci, sans
+détruire la conversation neuve. Les conversations déjà matérialisées conservent leur
+procédure de reprise et de renouvellement des connexions.
+
+L'association enregistre ensemble le dossier actif, le rattachement au projet et le
+chemin des échanges suivants. En cas d'échec, seule une réservation de copie créée
+par cette tentative est libérée ; une réservation existante, notamment celle créée
+pendant le clonage, reste conservée. Deux associations simultanées d'un même agent
+de travail sont refusées, y compris via ses branches de conversation.
+
 ## Suppression et exploitation
 
 ### Création d’un agent dans un projet

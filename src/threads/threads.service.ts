@@ -58,6 +58,7 @@ import {
   type ClientThreadReadResponse,
 } from '../turn-errors/turn-error-projection';
 import { ThreadWorkspaceOverridesService } from './thread-workspace-overrides.service';
+import { isUnmaterializedThread } from './thread-materialization';
 import { ThreadMetadataService } from './thread-metadata.service';
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { GitMutationGateService } from './git-mutation-gate.service';
@@ -188,13 +189,19 @@ export class ThreadsService {
 
   /** Changes the persisted cwd used by subsequent turns in a conversation. */
   async setThreadCwd(threadId: string, cwd: string): Promise<string[]> {
+    const memberIds = await this.prepareThreadCwd(threadId, cwd);
+    this.workspaceOverrides.setMany(memberIds, cwd);
+    return memberIds;
+  }
+
+  /** Validate native ownership/location before the caller atomically commits project references. */
+  async prepareThreadCwd(threadId: string, cwd: string): Promise<string[]> {
     requireExecutionAccess();
     const memberIds = this.branches.listKnownTreeThreadIds(threadId);
     for (const memberId of memberIds) {
       this.deletionRegistry.assertMutable(memberId);
       await this.resumeAtCwd(memberId, cwd);
     }
-    this.workspaceOverrides.setMany(memberIds, cwd);
     return memberIds;
   }
 
@@ -385,6 +392,12 @@ export class ThreadsService {
       );
     }
     this.projectConnections.assertExecutionLocation(projectPolicy, cwd);
+    if (await isUnmaterializedThread(this.codex, threadId)) {
+      // A first user turn will apply the authoritative cwd through turn/start.
+      // Resuming now would demand a rollout that Core has not created yet.
+      this.connections?.assertFreshLocationPolicy(threadId, projectPolicy);
+      return;
+    }
     const response = await this.codex.request<v2.ThreadResumeResponse>(
       'thread/resume',
       {

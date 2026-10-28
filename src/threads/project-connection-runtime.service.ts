@@ -6,6 +6,7 @@ import { CodexService } from '../codex/codex.service';
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
 import type { v2 } from '../codex/codex-schema';
+import { isUnmaterializedThread } from './thread-materialization';
 import {
   ProjectConnectionPolicyService,
   type ProjectExecutionPolicy,
@@ -13,7 +14,10 @@ import {
 
 @Injectable()
 export class ProjectConnectionRuntimeService {
-  private readonly applied = new Map<string, string>();
+  private readonly applied = new Map<
+    string,
+    { context: string; transport: string }
+  >();
   private changing = false;
   constructor(
     private readonly codex: CodexService,
@@ -27,7 +31,7 @@ export class ProjectConnectionRuntimeService {
     });
   }
 
-  private key(policy: ProjectExecutionPolicy | null) {
+  private key(policy: ProjectExecutionPolicy | null, transportOnly = false) {
     const stable = (value: unknown): unknown =>
       Array.isArray(value)
         ? value.map(stable)
@@ -45,12 +49,16 @@ export class ProjectConnectionRuntimeService {
             policy && {
               projectId: policy.projectId,
               config: policy.config,
-              locationId: policy.locationId,
-              workspaceId: policy.workspaceId,
-              executionCwd: policy.executionCwd,
-              readOnly: policy.readOnly,
-              sourceResourceId: policy.sourceResourceId,
-              sourceRevision: policy.sourceRevision,
+              ...(!transportOnly
+                ? {
+                    locationId: policy.locationId,
+                    workspaceId: policy.workspaceId,
+                    executionCwd: policy.executionCwd,
+                    readOnly: policy.readOnly,
+                    sourceResourceId: policy.sourceResourceId,
+                    sourceRevision: policy.sourceRevision,
+                  }
+                : {}),
             },
           ),
         ),
@@ -87,7 +95,22 @@ export class ProjectConnectionRuntimeService {
     generation = this.generation(),
   ) {
     if (generation === this.generation())
-      this.applied.set(threadId, this.key(policy));
+      this.applied.set(threadId, {
+        context: this.key(policy),
+        transport: this.key(policy, true),
+      });
+  }
+
+  /** No transport permission change may be hidden behind a fresh-thread cwd move. */
+  assertFreshLocationPolicy(
+    threadId: string,
+    policy: ProjectExecutionPolicy | null,
+  ) {
+    this.assertOpen();
+    if (this.applied.get(threadId)?.transport !== this.key(policy, true))
+      throw new ConflictException(
+        'Les intégrations de cet agent ont changé. Créez un agent dans le dossier voulu ; la conversation existante est conservée.',
+      );
   }
 
   async forResume(threadId: string) {
@@ -102,7 +125,7 @@ export class ProjectConnectionRuntimeService {
     if (
       policy &&
       metadata.thread.status.type !== 'notLoaded' &&
-      this.applied.get(threadId) !== this.key(policy)
+      this.applied.get(threadId)?.context !== this.key(policy)
     ) {
       await this.beforeTurn(threadId, cwd);
       throw new ConflictException(
@@ -118,10 +141,22 @@ export class ProjectConnectionRuntimeService {
     const policy = await this.policies.policyForThread(threadId, cwd);
     this.assertGeneration(generation);
     if (
-      this.applied.get(threadId) === this.key(policy) ||
+      this.applied.get(threadId)?.context === this.key(policy) ||
       (!policy && !this.applied.has(threadId))
     )
       return { policy, restarted: false, generation };
+    // A locally owned session with no first turn must not be destroyed by a
+    // restart merely to move its cwd. Native transports must be identical;
+    // turn/start still applies cwd/sandbox and revalidates the exact location.
+    if (
+      this.applied.get(threadId)?.transport === this.key(policy, true) &&
+      (await isUnmaterializedThread(this.codex, threadId))
+    ) {
+      this.assertGeneration(generation);
+      this.policies.assertExecutionLocation(policy, cwd);
+      this.record(threadId, policy, generation);
+      return { policy, restarted: false, generation };
+    }
     // A loaded Core session ignores MCP overrides on thread/resume. Never
     // continue that session with stale permissions, or silently interrupt work.
     this.changing = true;

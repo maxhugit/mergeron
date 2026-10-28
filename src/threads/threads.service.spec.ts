@@ -14,6 +14,7 @@ import { ThreadWorkspaceOverridesService } from './thread-workspace-overrides.se
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { CodexRpcError } from '../codex/codex-errors';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 
 /** Branch state as the local-only service reports it for an untracked thread. */
@@ -173,6 +174,83 @@ describe('ThreadsService', () => {
     expect(mockMetadata.publishStartedThread).toHaveBeenCalledWith(
       response.thread,
     );
+  });
+
+  it('moves an owned unmaterialized agent without resume and uses its selected cwd on the first real turn', async () => {
+    mockResumeRegistry.ensureOpened.mockResolvedValue({
+      mode: 'writable',
+      thread: { id: 't1' },
+    });
+    mockCodex.request.mockImplementation((method: string) => {
+      if (method === 'thread/turns/list')
+        return Promise.reject(
+          new CodexRpcError(
+            {
+              code: -32600,
+              message:
+                'thread t1 is not materialized yet; thread/turns/list is unavailable before first user message',
+            },
+            { method },
+          ),
+        );
+      return Promise.resolve({ turn: { id: 'first' } });
+    });
+    await expect(service.setThreadCwd('t1', '/copy')).resolves.toEqual(['t1']);
+    expect(mockWorkspaceOverrides.setMany).toHaveBeenCalledWith(
+      ['t1'],
+      '/copy',
+    );
+    expect(
+      mockCodex.request.mock.calls.some(
+        ([method]) => method === 'thread/resume',
+      ),
+    ).toBe(false);
+    mockWorkspaceOverrides.get.mockReturnValue('/copy');
+    await service.startTurn({
+      threadId: 't1',
+      cwd: '/old',
+      input: [{ type: 'text', text: 'Hello', text_elements: [] }],
+    });
+    expect(mockCodex.request).toHaveBeenCalledWith(
+      'turn/start',
+      expect.objectContaining({ threadId: 't1', cwd: '/copy' }),
+    );
+    expect(
+      mockCodex.request.mock.calls.filter(
+        ([method]) => method === 'turn/start',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('still resumes a persisted empty history and refuses unknown errors or foreign ownership without saving a cwd', async () => {
+    mockResumeRegistry.ensureOpened.mockResolvedValue({
+      mode: 'writable',
+      thread: { id: 't1' },
+    });
+    mockCodex.request.mockResolvedValue({
+      data: [],
+      nextCursor: null,
+      backwardsCursor: null,
+    });
+    await service.setThreadCwd('t1', '/copy');
+    expect(mockCodex.request).toHaveBeenCalledWith(
+      'thread/resume',
+      expect.objectContaining({ threadId: 't1', cwd: '/copy' }),
+    );
+    mockWorkspaceOverrides.setMany.mockClear();
+    mockCodex.request.mockRejectedValue(
+      new Error('no rollout found for thread id t1'),
+    );
+    await expect(service.setThreadCwd('t1', '/other')).rejects.toThrow(
+      'no rollout',
+    );
+    expect(mockWorkspaceOverrides.setMany).not.toHaveBeenCalled();
+    mockResumeRegistry.ensureOpened.mockResolvedValue({ mode: 'readOnly' });
+    mockCodex.request.mockClear();
+    await expect(service.setThreadCwd('t1', '/other')).rejects.toThrow(
+      'owned by another client',
+    );
+    expect(mockCodex.request).not.toHaveBeenCalled();
   });
 
   it('applies the owning project connection policy to a new thread', async () => {

@@ -6,6 +6,7 @@ import {
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
 import { CodexService } from '../codex/codex.service';
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
+import { CodexRpcError } from '../codex/codex-errors';
 
 describe('project MCP connection lifetime', () => {
   const policy: ProjectExecutionPolicy = {
@@ -37,7 +38,10 @@ describe('project MCP connection lifetime', () => {
         listener({ type: 'appServerReady' });
       }),
     };
-    const policies = { policyForThread: vi.fn().mockResolvedValue(policy) };
+    const policies = {
+      policyForThread: vi.fn().mockResolvedValue(policy),
+      assertExecutionLocation: vi.fn(),
+    };
     const codex = {
       request: vi.fn().mockResolvedValue({
         thread: { cwd: '/workspaces/p', status: { type: 'notLoaded' } },
@@ -76,6 +80,68 @@ describe('project MCP connection lifetime', () => {
       true,
     );
     expect(manager.restartControlled).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a first-turn session when only its location changes, with exact native transports unchanged', async () => {
+    const { service, manager, policies, codex } = setup();
+    service.record('t', policy);
+    const next = {
+      ...policy,
+      workspaceId: 'git-copy',
+      executionCwd: '/copy',
+      readOnly: true,
+      sourceRevision: 'abc',
+    };
+    policies.policyForThread.mockResolvedValue(next);
+    codex.request.mockRejectedValue(
+      new CodexRpcError(
+        {
+          code: -32600,
+          message:
+            'thread t is not materialized yet; thread/turns/list is unavailable before first user message',
+        },
+        { method: 'thread/turns/list' },
+      ),
+    );
+    expect(() => service.assertFreshLocationPolicy('t', next)).not.toThrow();
+    expect((await service.beforeTurn('t', '/copy')).restarted).toBe(false);
+    expect(manager.restartControlled).not.toHaveBeenCalled();
+    expect(policies.assertExecutionLocation).toHaveBeenCalledWith(
+      next,
+      '/copy',
+    );
+    expect((await service.beforeTurn('t', '/copy')).restarted).toBe(false);
+    expect(codex.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not label missing, unauthorized or uncertain histories as fresh', async () => {
+    const { service, manager, policies, codex } = setup();
+    service.record('t', policy);
+    policies.policyForThread.mockResolvedValue({
+      ...policy,
+      executionCwd: '/copy',
+    });
+    codex.request.mockRejectedValue(
+      new Error('no rollout found for thread id t'),
+    );
+    await expect(service.beforeTurn('t', '/copy')).rejects.toThrow(
+      'no rollout',
+    );
+    expect(manager.restartControlled).not.toHaveBeenCalled();
+  });
+
+  it('never approves unknown or changed native integration permissions as a fresh cwd-only change', () => {
+    const { service } = setup();
+    service.record('t', policy);
+    expect(() => service.assertFreshLocationPolicy('unknown', policy)).toThrow(
+      'intégrations',
+    );
+    expect(() =>
+      service.assertFreshLocationPolicy('t', {
+        ...policy,
+        config: { ...policy.config, mcp_servers: { extra: { enabled: true } } },
+      }),
+    ).toThrow('intégrations');
   });
 
   it.each([

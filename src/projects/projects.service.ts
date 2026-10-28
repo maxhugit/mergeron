@@ -37,6 +37,7 @@ import {
   projectAgentThreads,
   projectWorkspaces,
   projectWorkspaceCopies,
+  projectGitCopyOwners,
   projectWorkspaceResources,
   simpleChatThreads,
   people,
@@ -67,6 +68,7 @@ import {
   type ActiveFolderContext,
 } from '../active-folders/active-folders.service';
 import { summarizeProjects } from './project-dashboard';
+import { copyAgentIds, workAgentId } from './git-copy-ownership';
 import {
   PROJECT_REPLAN_SCHEMA,
   PROJECT_TASKS_SCHEMA,
@@ -131,6 +133,8 @@ export type ProjectActivityActor = {
 export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   private automationTimer?: NodeJS.Timeout;
   private readonly runningAutomationIds = new Set<string>();
+  private readonly agentAssociations = new Set<string>();
+
   constructor(
     private readonly files: FilesService,
     private readonly workspaces: WorkspacesManagementService,
@@ -1145,57 +1149,108 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   ) {
     requireExecutionAccess();
     requireThreadAccess(threadId);
-    const existing = this.db
-      .select()
-      .from(projectAgentThreads)
-      .where(eq(projectAgentThreads.threadId, threadId))
-      .get();
-    if (existing && existing.projectId !== projectId)
+    const agentId = workAgentId(this.db, threadId);
+    if (this.agentAssociations.has(agentId))
       throw new ConflictException(
-        'Conversations cannot be moved between projects',
+        'Une association est déjà en cours pour cet agent.',
       );
-    const folder =
-      typeof selection === 'string'
-        ? this.folders.validateAbsoluteSelection(projectId, selection)
-        : 'locationId' in selection
-          ? this.folders.validateLocationSelection(projectId, selection)
-          : this.folders.validateSelection(projectId, selection);
-    if (!folder.effectivePath)
-      throw new ConflictException('Active folder is unresolved');
-    const workspace = this.getWorkspace(projectId, folder.resourceId);
-    if (!workspace) throw new NotFoundException('Project resource not found');
-    this.folders.reserveAgentCopy(projectId, threadId, folder.effectivePath);
-    const threadIds = alreadyAtWorkspace
-      ? this.threads.rememberInitialThreadCwd(threadId, folder.effectivePath)
-      : await this.threads.setThreadCwd(threadId, folder.effectivePath);
-    const now = Date.now();
-    this.db.transaction((tx) => {
-      for (const id of threadIds)
-        tx.insert(projectAgentThreads)
-          .values({
-            threadId: id,
-            projectId,
-            workspacePath: workspace.path,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .onConflictDoUpdate({
-            target: projectAgentThreads.threadId,
-            set: { projectId, workspacePath: workspace.path, updatedAt: now },
-          })
-          .run();
-    });
-    for (const id of threadIds)
-      this.folders.set(projectId, 'agent', id, {
-        resourceId: folder.resourceId,
-        relativePath: folder.relativePath,
+    const previousReservation = this.db
+      .select()
+      .from(projectGitCopyOwners)
+      .where(eq(projectGitCopyOwners.agentThreadId, agentId))
+      .get();
+    this.agentAssociations.add(agentId);
+    let reservation: typeof projectGitCopyOwners.$inferSelect | undefined;
+    try {
+      const existing = this.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, threadId))
+        .get();
+      if (existing && existing.projectId !== projectId)
+        throw new ConflictException(
+          'Conversations cannot be moved between projects',
+        );
+      const folder =
+        typeof selection === 'string'
+          ? this.folders.validateAbsoluteSelection(projectId, selection)
+          : 'locationId' in selection
+            ? this.folders.validateLocationSelection(projectId, selection)
+            : this.folders.validateSelection(projectId, selection);
+      if (!folder.effectivePath)
+        throw new ConflictException('Active folder is unresolved');
+      const workspace = this.getWorkspace(projectId, folder.resourceId);
+      if (!workspace) throw new NotFoundException('Project resource not found');
+      this.folders.reserveAgentCopy(projectId, threadId, folder.effectivePath);
+      reservation = this.db
+        .select()
+        .from(projectGitCopyOwners)
+        .where(eq(projectGitCopyOwners.agentThreadId, agentId))
+        .get();
+      const preparedIds = alreadyAtWorkspace
+        ? null
+        : await this.threads.prepareThreadCwd(threadId, folder.effectivePath);
+      const now = Date.now();
+      const threadIds = this.db.transaction((tx) => {
+        const ids =
+          preparedIds ??
+          this.threads.rememberInitialThreadCwd(
+            threadId,
+            folder.effectivePath!,
+          );
+        if (preparedIds) this.overrides.setMany(ids, folder.effectivePath!);
+        for (const id of ids)
+          tx.insert(projectAgentThreads)
+            .values({
+              threadId: id,
+              projectId,
+              workspacePath: workspace.path,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: projectAgentThreads.threadId,
+              set: { projectId, workspacePath: workspace.path, updatedAt: now },
+            })
+            .run();
+        for (const id of ids)
+          this.folders.set(projectId, 'agent', id, {
+            resourceId: folder.resourceId,
+            relativePath: folder.relativePath,
+          });
+        return ids;
       });
-    return {
-      threadIds,
-      projectId,
-      workspacePath: folder.effectivePath,
-      activeFolder: this.folders.get('agent', threadId),
-    };
+      return {
+        threadIds,
+        projectId,
+        workspacePath: folder.effectivePath,
+        activeFolder: this.folders.get('agent', threadId),
+      };
+    } catch (error) {
+      // Release only a reservation created by this attempt, never a clone's
+      // pre-existing ownership or a copy that another context has activated.
+      if (
+        !previousReservation &&
+        reservation &&
+        !copyAgentIds(this.db, projectId, reservation.copyId, false).includes(
+          agentId,
+        )
+      ) {
+        this.db
+          .delete(projectGitCopyOwners)
+          .where(
+            and(
+              eq(projectGitCopyOwners.copyId, reservation.copyId),
+              eq(projectGitCopyOwners.agentThreadId, agentId),
+              eq(projectGitCopyOwners.createdAt, reservation.createdAt),
+            ),
+          )
+          .run();
+      }
+      throw error;
+    } finally {
+      this.agentAssociations.delete(agentId);
+    }
   }
 
   setDefaultWorkspace(projectId: string, workspaceId: string) {
