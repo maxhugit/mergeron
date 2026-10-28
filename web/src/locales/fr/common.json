@@ -487,6 +487,7 @@
   "noTasksYet": "Aucune tâche",
   "unableToLoadThisProjectResource": "Impossible de charger cette ressource du projet.",
   "moveTaskManager": "Déplacer le gestionnaire de tâches",
+  "moveProjectEntry": "Réorganiser {{name}} dans le projet",
   "renameTaskManager": "Renommer le gestionnaire de tâches",
   "deleteThisTaskManager": "Supprimer ce gestionnaire de tâches ?",
   "thisTaskBoardAndAllOfItsFutureTasksWillBePermanentlyDeleted": "Ce tableau et toutes ses futures tâches seront supprimés définitivement.",

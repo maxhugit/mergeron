@@ -487,6 +487,7 @@
   "noTasksYet": "No tasks yet",
   "unableToLoadThisProjectResource": "Unable to load this project resource.",
   "moveTaskManager": "Move task manager",
+  "moveProjectEntry": "Reorder {{name}} within the project",
   "renameTaskManager": "Rename task manager",
   "deleteThisTaskManager": "Delete this task manager?",
   "thisTaskBoardAndAllOfItsFutureTasksWillBePermanentlyDeleted": "This task board and all of its future tasks will be permanently deleted.",
