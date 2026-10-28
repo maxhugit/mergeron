@@ -456,11 +456,7 @@ describe('ThreadsService', () => {
           documentPublication: { prepare: ReturnType<typeof vi.fn> };
         }
       ).documentPublication;
-      expect(publication.prepare).toHaveBeenCalledWith(
-        't1',
-        undefined,
-        type !== 'readOnly',
-      );
+      expect(publication.prepare).toHaveBeenCalledWith('t1', undefined);
     },
   );
 

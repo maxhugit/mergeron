@@ -1,252 +1,197 @@
-# Contexte projet et outils des agents de travail
+# Contexte projet et MCP interne des agents de travail
 
-## Fonctionnement pour l’utilisateur
+## Fonctionnement
 
-Un agent de travail rattaché à un projet reçoit désormais, **à chaque nouvel
-échange**, une fiche de contexte préparée par Mergeron :
+À chaque échange, un agent de travail reçoit le nom et l’identifiant de son
+projet, le dossier actif, les gestionnaires disponibles, les nombres de tâches
+et livrables accessibles, les 25 premiers de chaque catégorie et les éléments
+liés à sa conversation. Le rattachement explicite détermine le projet, jamais
+le chemin Git. Les conversations existantes en bénéficient au prochain échange.
 
-- nom et identifiant du projet, indépendamment du dossier Git actif ;
-- dossier de travail effectif de la conversation ;
-- gestionnaires de tâches et de livrables disponibles ;
-- nombre de tâches et de livrables accessibles, avec les 25 premiers de chaque
-  catégorie (tri stable par gestionnaire/identifiant pour les tâches, identifiant
-  pour les livrables) ;
-- tâches et livrables déjà liés à cette conversation.
+Un véritable serveur MCP natif, `mergeron_internal`, remplace la CLI Python.
+Aucune commande terminal ni fichier de requête n’est nécessaire aux outils projet.
+Exemples : « Liste les tâches du projet », « Consulte le livrable Présentation »,
+« Crée une tâche Préparer la présentation » ou « Crée un livrable Présentation ».
 
-Les connaissances partagées, les objectifs du livrable lié et les consignes de
-versionnement restent transmis. Une conversation existante reçoit ces nouveautés
-au prochain échange : il n’est pas nécessaire de recréer l’agent.
+Une création produit un véritable élément métier et son lien. Une tâche est
+principale par défaut ; une sous-tâche exige un parent du même gestionnaire.
+Les sous-sous-tâches restent interdites. Aucun agent n’est affecté automatiquement,
+aucune exécution n’est lancée et aucun gestionnaire manquant n’est créé implicitement.
 
-### Consulter le projet
+La consigne exige une demande humaine explicite. Le champ `userRequest` est
+journalisé, mais n’est pas une preuve automatique de cette demande : aucune
+seconde confirmation humaine n’est ajoutée. Le serveur contrôle les permissions ;
+l’agent reste responsable de l’interprétation de la demande.
 
-Exemples de demandes : « Dans quel projet travailles-tu ? », « Liste les tâches
-du projet », « Quels livrables concernent la présentation client ? » ou
-« Consulte les critères du livrable Présentation ».
+### Documentation dans l’administration
 
-L’agent dispose d’outils de consultation à la demande pour compléter le résumé,
-rechercher par titre et parcourir les listes par pages de 50 éléments. Les
-lectures consultent les données courantes, et non une copie de la base exportée
-dans le dossier de travail. Les gestionnaires internes d’exécution sont exclus.
-Un livrable confidentiel inaccessible n’apparaît ni dans les listes, ni dans les
-compteurs, ni dans les détails, ni dans la fiche injectée.
+L’entrée **MCP interne** des réglages globaux ouvre
+`/settings?section=internalMcp`. Réservée aux administrateurs, elle présente :
 
-### Créer une tâche ou un livrable
+- recherche parmi les sept méthodes ;
+- paramètres, types, champs obligatoires et contraintes ;
+- schémas JSON complets des entrées et des résultats ;
+- exemples d’appels, protocole, limites, erreurs et instructions de sécurité.
 
-Exemples :
+Le catalogue provient de `GET /api/internal-mcp/catalog`, généré depuis les mêmes
+schémas Zod que ceux enregistrés dans le serveur MCP. Cette route ne permet pas
+d’exécuter les outils et ne divulgue ni jeton, ni URL d’exécution, ni donnée de projet.
 
-- « Crée une tâche Préparer la présentation client, avec ces critères… »
-- « Crée un livrable Présentation client dans Gestion des livrables. »
-- « Découpe cette tâche en une sous-tâche de relecture. »
+### Permissions et documents
 
-L’agent appelle les services métier de Mergeron. Il crée donc une vraie tâche ou
-un vrai livrable, visible dans le gestionnaire, et retourne un lien vers celui-ci.
-La tâche est principale par défaut. Une sous-tâche exige un parent appartenant au
-même gestionnaire ; les sous-sous-tâches restent interdites.
-
-La consigne donnée à l’agent est de créer **uniquement sur demande explicite de
-l’utilisateur**. Le champ de justification de l’outil est journalisé ; ce n’est
-pas une preuve automatique que la demande est explicite. Cette version n’ajoute
-pas de seconde fenêtre de confirmation humaine. La vérification sémantique de
-la demande repose sur l’agent ; l’autorisation technique, elle, est vérifiée par
-le serveur à chaque appel.
-
-La création n’affecte pas automatiquement un agent, ne change pas son dossier
-actif, ne démarre pas une exécution et n’effectue aucune validation. Si le
-gestionnaire nécessaire manque, l’agent doit demander à l’utilisateur de
-l’ajouter ; l’outil ne crée pas de gestionnaire implicitement.
-
-### Documents et versions
+La confidentialité est respectée dans les listes, compteurs, détails et contexte.
+Les gestionnaires internes d’exécution sont exclus. La création requiert les
+droits administrateur nécessaires à l’exécution d’un agent et un mode modifiable.
+En lecture seule, seuls les outils de consultation fonctionnent.
 
 Créer un livrable crée sa fiche et son dossier, **pas une version de document**.
-Les documents conservés continuent à passer par « Enregistrer une nouvelle
-version » : brouillon isolé, accusé de réception serveur, versionnement et
-contrôles existants. Les outils projet n’acceptent ni chemin arbitraire, ni
-contenu de document, ni action de validation. La protection des documents
-publiés, y compris en accès complet, n’est pas assouplie.
+Les documents conservés passent toujours par « Enregistrer une nouvelle version »
+et le circuit de brouillon isolé existant. Aucun outil projet n’accepte de contenu
+de fichier, chemin arbitraire, changement de statut, affectation ou validation.
+La protection des documents publiés reste applicable, y compris en accès complet.
 
-### Permissions et disponibilité
-
-Le projet est déduit du rattachement explicite de la conversation. L’agent ne
-peut pas choisir un autre projet dans les arguments d’un outil. Le serveur
-revérifie l’identité active, l’accès à la conversation et au projet, puis la
-confidentialité des livrables. La création requiert l’autorité administrateur
-déjà nécessaire pour exécuter les agents de travail ; aucun droit supplémentaire
-n’est accordé à un compte standard.
-
-Le canal d’outils utilise l’environnement isolé de publication existant :
-
-- la protection `MERGERON_PUBLISHED_DOCUMENT_PROTECTION` doit être opérationnelle
-  et le projet doit posséder un espace principal migré ;
-- Python 3 est nécessaire au petit client intégré (présent dans l’image Docker) ;
-- les consultations fonctionnent aussi en sandbox lecture seule : le client
-  n’écrit aucun fichier et n’utilise pas le réseau ;
-- les créations requièrent un mode d’exécution modifiable (workspace ou accès
-  complet). Elles sont refusées côté serveur en lecture seule. Mergeron ne
-  transforme jamais implicitement une sandbox lecture seule en workspace modifiable.
-
-Les outils sont internes à Mergeron, pas un connecteur MCP externe activé à
-l’insu du projet. Ils ne réactivent ni `codex_apps`, ni Home Assistant, ni les
-autres intégrations désactivées. Les conversations simples ne sont pas des
-agents de travail et ne reçoivent pas ce canal.
+Le MCP métier ne dépend ni du client Python ni de l’activation de la protection
+documentaire pour consulter/créer des entités. Il ne réactive aucune intégration
+externe désactivée : `codex_apps`, Home Assistant et les autres connecteurs restent
+soumis aux restrictions par projet. Les conversations simples, non rattachées
+comme agents de travail, ne reçoivent pas ce canal.
 
 ## Architecture technique
 
-### 1. Injection légère à chaque échange
+### Contexte et connexion native
 
-`ThreadsService.startTurn()` appelle `ProjectAgentToolsService.context()` avant
-`turn/start`. La fiche `<mergeron_project_context>` est ajoutée avant le message
-utilisateur, à côté du contexte de connaissances et de publication. Le message
-utilisateur original et le dossier choisi restent inchangés.
+`ThreadsService.startTurn()` injecte `ProjectAgentToolsService.context()` avant
+`turn/start`. Les données du projet sont marquées non fiables, pas interprétées
+comme des instructions.
 
-Le rattachement vient de `project_agent_threads`, jamais d’une déduction à partir
-du chemin courant. Les titres/descriptions et les résultats sont explicitement
-marqués comme données non fiables, pas comme instructions ou permissions.
+`ProjectConnectionPolicyService` ajoute `mcp_servers.mergeron_internal` à la
+configuration native Codex : `url`, `http_headers`, `enabled`,
+`startup_timeout_sec`, `tool_timeout_sec`. La connexion d’une nouvelle conversation
+est préparée avant `thread/start`, puis liée à l’identifiant retourné.
+La politique est réappliquée aux conversations existantes avant le prochain échange.
 
-`DeliverablesService.agentCatalog()` filtre les droits sans charger les historiques
-de documents. Les listes d’outils retournent seulement identifiants, titres,
-gestionnaires et statuts ; les outils de détail donnent description et critères.
+`InternalMcpService` utilise le SDK officiel `@modelcontextprotocol/sdk`,
+`McpServer` et `StreamableHTTPServerTransport`, en mode stateless avec réponses
+JSON. Il écoute sur `127.0.0.1`, sur un port attribué par le système, et accepte
+uniquement `POST /mcp`. Méthodes de protocole : `initialize`,
+`notifications/initialized`, `ping`, `tools/list`, `tools/call`.
+Ce n’est pas une route publique derrière le proxy Mergeron.
 
-### 2. Outils métier intégrés et transport
+### Authentification et durée d’autorisation
 
-Le protocole app-server utilisé ici ne fournit pas, dans ses paramètres exposés
-de démarrage/reprise, d’enregistrement d’outils dynamiques ; le gestionnaire RPC
-refuse actuellement `item/tool/call`. Cette implémentation réutilise donc le
-canal de publication déjà pris en charge, plutôt que de supposer l’existence
-d’une API native ou de donner un jeton REST/SQL à l’agent.
+Une capacité aléatoire propre à la conversation est fournie à Codex dans
+l’en-tête `Authorization`, jamais dans le prompt. L’audit RPC masque cet en-tête.
+La configuration native conserve le secret nécessaire à la connexion ; l’index
+de recherche du serveur utilise son empreinte SHA-256.
 
-`DocumentPublicationService.prepare()` prépare un répertoire de brouillon isolé
-pour une session bornée et y installe `mergeron-tools.py`. Le contexte explique
-à l’agent comment appeler ce client. Même sans gestionnaire de livrables, le
-canal peut être préparé pour consulter le projet et créer des tâches.
+La connexion est stable mais ne suffit pas à exécuter un outil : une autorisation
+de tour active est nécessaire. Elle dure au maximum une heure et 100 appels,
+et est liée à la personne authentifiée, au projet et à la conversation.
+Elle est suspendue à la fin du tour et révoquée lors d’un arrêt, échec,
+archivage, fermeture, suppression ou redémarrage du moteur. Un nouvel échange
+prépare ses permissions propres. Les continuations suivent les notifications
+de cycle de vie authentifiées.
 
-Le client est une CLI sans écriture, à trois étapes :
+Chaque appel revérifie l’identité actuelle, l’accès au projet/conversation et son
+rattachement. Les créations revérifient ces conditions avant commit, notamment
+après la préparation asynchrone d’un dossier. L’admission au catalogue protège
+les mutations pendant son remplacement. La simulation d’identité conserve
+l’administrateur réel dans l’audit.
 
-1. `python3 <client> --encode '<JSON>'` fournit les paramètres en base64url.
-2. Une commande terminal **séparée**, exactement sous la forme
-   `python3 "<chemin absolu du client>" --request BASE64`, valide les paramètres
-   et se termine avec `status: submitted`. Cela ne signifie pas « créé ».
-3. Une autre commande `python3 <client> --result REQUEST_ID` attend le résultat
-   serveur et le retourne sur sa sortie standard.
+Le serveur refuse les en-têtes `Origin`, un hôte/adresse non loopback, les jetons
+invalides et les corps de plus de 32 Kio. Les arguments sont strictement validés.
+Il s’agit d’une connexion locale authentifiée, non d’un service pour le navigateur.
 
-Le véritable point d’entrée n’est **pas un fichier écrit par l’agent**. Le serveur
-admet uniquement un événement app-server authentifié `item/completed`, portant
-la conversation et le tour en cours, une commande terminée avec code de sortie
-zéro et le chemin exact du client de cette session. Il décode les paramètres
-directement depuis cette commande, en mémoire. Les commandes indirectes,
-substitutions shell, préfixes `env`/`cd`, pipes et commandes composées sont
-refusés. Une notification dupliquée n’admet pas une seconde opération.
+### Contrat des outils
 
-Ainsi, écrire un faux `project-tool-request.json` ne fait rien ; appeler le
-client d’une autre conversation depuis son propre agent ne donne pas accès aux
-droits de cette autre conversation. Une commande refusée par les protections
-terminal, non terminée ou en échec n’autorise aucune opération métier.
+| Outil                | Arguments                                                                                                        | Résultat                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `get_project`        | Aucun                                                                                                            | Projet et gestionnaires accessibles                   |
+| `list_tasks`         | `resourceId`, `query`, `offset` facultatifs                                                                      | `items`, `total`, `nextOffset`                        |
+| `get_task`           | `id` obligatoire, `resourceId` facultatif                                                                        | Détail de tâche                                       |
+| `list_deliverables`  | `resourceId`, `query`, `offset` facultatifs                                                                      | `items`, `total`, `nextOffset`                        |
+| `get_deliverable`    | `id` obligatoire, `resourceId` facultatif                                                                        | Détail de livrable accessible                         |
+| `create_task`        | `requestId`, `resourceId`, `title`, `userRequest` requis ; `description`, `criteria`, `parentTaskId` facultatifs | `id`, `title`, `resourceId`, `url`, `status: created` |
+| `create_deliverable` | Mêmes champs, sans `parentTaskId`                                                                                | Même format de création                               |
 
-Le serveur valide le schéma et exécute l’opération dans le contexte d’accès de
-l’échange authentifié. Il vérifie l’inode du répertoire de session, limite les
-paramètres à 32 Kio et applique un quota. La réponse est écrite par renommage
-atomique dans `project-tool-REQUEST_ID-result.json`. Ces réponses temporaires
-sont distinctes des documents conservés et de leur versionnement. Le client ne
-contient aucun secret et n’écrit aucun fichier de requête ou de verrou.
+Pagination : 50 éléments. Recherche sur le titre, sans distinction de casse.
+Limites : titre 200 caractères, description/critères 10 000, justification 2 000,
+recherche 200, identifiants 100. `offset` est un entier positif ou nul.
+`requestId` accepte lettres, chiffres, tirets et underscores, de 1 à 100 caractères.
+Les arguments supplémentaires, notamment `projectId`, sont refusés.
 
-La session est limitée à une heure et à 100 commandes d’outils admises
-(quota séparé des 20 publications). Elle est révoquée en cas d’arrêt,
-d’échec d’exécution, de fermeture/archivage/suppression de conversation ou de
-redémarrage du processus. Un nouvel échange terminé renouvelle le canal ; un
-changement d’identité, de session de simulation ou de mode d’écriture le fait
-également. Le rattachement au projet et les permissions sont revérifiés avant
-chaque opération, ainsi qu’avant le commit d’une création de livrable après ses
-opérations asynchrones de préparation.
-
-### 3. Contrat des outils
-
-Tous les appels utilisent un `requestId` de 1 à 100 caractères alphanumériques,
-tirets ou underscores. Le client peut en générer un pour une lecture. Pour une
-création, l’agent doit choisir un identifiant stable et le conserver pour toute
-relance du même appel.
-
-| Outil                | Arguments métier                                                                             | Résultat                                    |
-| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `get_project`        | aucun                                                                                        | projet et gestionnaires accessibles         |
-| `list_tasks`         | `resourceId`, `query`, `offset` facultatifs                                                  | `items`, `total`, `nextOffset`              |
-| `get_task`           | `id`, `resourceId` facultatif                                                                | détail de la tâche                          |
-| `list_deliverables`  | `resourceId`, `query`, `offset` facultatifs                                                  | `items`, `total`, `nextOffset`              |
-| `get_deliverable`    | `id`, `resourceId` facultatif                                                                | détail du livrable accessible               |
-| `create_task`        | `resourceId`, `title`, `userRequest` ; `description`, `criteria`, `parentTaskId` facultatifs | identifiant, titre, lien, `status: created` |
-| `create_deliverable` | `resourceId`, `title`, `userRequest` ; `description`, `criteria` facultatifs                 | identifiant, titre, lien, `status: created` |
-
-Exemple de requête, envoyé par le client dont le chemin est fourni dans le
-contexte de l’agent :
+Exemple MCP :
 
 ```json
 {
-  "requestId": "presentation-client-01",
-  "tool": "create_deliverable",
-  "resourceId": "identifiant-du-gestionnaire",
-  "title": "Présentation client",
-  "description": "Présentation du programme PLM",
-  "criteria": "Inclure le planning et les risques",
-  "userRequest": "L’utilisateur a demandé de créer ce livrable"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "create_deliverable",
+    "arguments": {
+      "requestId": "presentation-client-01",
+      "resourceId": "identifiant-du-gestionnaire",
+      "title": "Présentation client",
+      "criteria": "Inclure le planning et les risques",
+      "userRequest": "L’utilisateur a demandé de créer ce livrable"
+    }
+  }
 }
 ```
 
-Les arguments `projectId`, chemins, identifiants de personnes, statuts et
-affectations arbitraires sont refusés. Les titres sont limités à 200 caractères,
-les descriptions/critères à 10 000, la justification à 2 000 et la recherche à 200. Les listes sont limitées à 50 éléments par page ; la recherche porte sur
-le titre, sans distinction de casse.
+Une réponse réussie contient `structuredContent` et sa représentation textuelle.
+Les erreurs métier retournent `isError: true` avec un code sûr, sans pile ni
+secret : `NO_ACTIVE_TURN`, `READ_ONLY`, `RATE_LIMIT` ou refus d’accès/création
+non confirmée. Les erreurs de protocole et de schéma sont gérées par le SDK.
+Les schémas exhaustifs et les exemples par méthode sont disponibles dans la page
+d’administration et dans `src/internal-mcp/internal-mcp-catalog.ts`.
 
-### 4. Services métier, audit et idempotence
+### Services métier, audit et idempotence
 
-`create_task` appelle `ProjectsService.createTask()` ; `create_deliverable`
-appelle `DeliverablesService.create()`. Les validations de parenté, statuts,
-champs, dossiers et événements existantes restent appliquées.
-
-Une entrée `agent_created` est ajoutée au journal avec l’identifiant de
-conversation, celui de la requête, la personne appelante, la justification et
-l’administrateur réel en cas de simulation. Les événements liés aux livrables
-utilisent le canal `deliverable_history`, filtré selon la confidentialité.
+`create_task` appelle `ProjectsService.createTask()` ; `create_deliverable` appelle
+`DeliverablesService.create()`. Les validations et événements existants restent
+en vigueur. Le journal `agent_created` conserve conversation, requête, personne,
+justification et administrateur réel en simulation. L’historique des livrables
+reste soumis à leur confidentialité.
 
 La migration `0058_project_agent_tools` ajoute `project_agent_tool_requests`.
-La clé primaire `(project_id, thread_id, request_id)` est réclamée **avant** la
-création. Elle conserve l’empreinte des paramètres, la personne et le résultat.
+La clé `(project_id, thread_id, request_id)` est réclamée avant création :
 
-- Même identifiant, mêmes paramètres et même personne : restitution du résultat,
-  sans nouvelle création (et recontrôle d’accès pour le livrable).
-- Même identifiant avec paramètres/personne différents : conflit.
-- Création dont le résultat n’a pas été enregistré après une panne : état
-  non confirmé, **pas de rejeu automatique**. Une vérification dans le
-  gestionnaire est nécessaire avant toute nouvelle création.
-- Le client expire après 60 secondes : il ne doit pas annoncer un succès ou
-  changer d’identifiant pour recommencer. Un résultat de création n’est acquis
-  que lorsque `status: ok` contient `result.status: created`.
+- mêmes paramètres et même personne : résultat précédent, sans doublon ;
+- paramètres ou personne différents : conflit ;
+- panne après création avant enregistrement du résultat : état non confirmé,
+  sans rejeu automatique. Vérifier le gestionnaire avant de recommencer.
 
-Ce mécanisme privilégie l’absence de doublon. Il ne promet pas une transaction
-unique entre SQLite et le système de fichiers : une panne après la création
-peut laisser un élément existant sans accusé de réception, et un refus après
-préparation peut laisser un dossier vide. Les brouillons ne sont pas supprimés.
+Conserver le même `requestId` lors d’une relance. Une coupure ou un délai dépassé
+ne prouve pas l’échec ; attendre la confirmation `status: created` avant d’annoncer
+le succès. SQLite et le système de fichiers ne forment pas une transaction unique :
+une panne peut laisser un élément sans accusé de réception ou un dossier vide
+après refus. Les brouillons ne sont pas supprimés.
 
-### 5. Tests et exploitation
-
-Les suites concernées sont :
+## Tests et exploitation
 
 ```sh
-pnpm exec vitest run \
-  src/project-knowledge/project-agent-tools.service.spec.ts \
-  src/project-knowledge/project-agent-tool-client.spec.ts \
-  src/document-publication/document-publication.service.spec.ts \
-  src/threads/threads.service.spec.ts \
-  src/deliverables/deliverables.service.spec.ts \
-  src/project-knowledge/project-knowledge.service.spec.ts
+pnpm exec vitest run src/internal-mcp src/project-knowledge \
+  src/document-publication src/threads/project-connection-policy.service.spec.ts \
+  src/threads/project-connection-runtime.service.spec.ts src/threads/threads.service.spec.ts
+cd web
+pnpm exec vitest run --project=unit src/components/settings/internal-mcp-settings.spec.tsx \
+  src/components/settings/settings-page.spec.tsx src/components/settings/settings-sidebar.spec.tsx
 ```
 
-Elles couvrent contexte rafraîchi, pagination, confidentialité, créations réelles,
-refus hors projet, champs dangereux, droits retirés, idempotence durable, panne
-après commit, révocation avant commit, admission liée à la conversation,
-refus des fichiers forgés et commandes composées, client Python sans écriture,
-lecture seule et maintien du versionnement des documents. Le démarrage réel du
-graphe de dépendances reste couvert par `src/app.module.spec.ts`.
+Les tests utilisent un vrai client SDK contre le serveur HTTP et couvrent les
+sept méthodes sur une base de test, l’égalité des schémas avec la documentation,
+les droits retirés, la lecture seule, la révocation, les restrictions réseau et
+l’idempotence. Un test démarre le moteur Codex épinglé et vérifie qu’il découvre
+les sept outils, sans appel d’inférence. Les tests métier couvrent aussi la panne
+après commit.
 
-Après déploiement : vérifier dans une conversation existante le nom du projet,
-la liste des tâches et des livrables ; demander explicitement une création de
-test, contrôler l’élément et son journal ; vérifier qu’un appel répété avec le
-même identifiant ne crée rien de plus. Effectuer ces essais dans un projet de
-test, avec un gestionnaire existant et le mode d’exécution approprié.
+Après déploiement, vérifier la page d’administration et une conversation existante
+d’un projet de test : contexte, consultation, création explicitement demandée,
+élément visible et audit. Vérifier le refus d’écriture en lecture seule et le
+maintien du versionnement documentaire. Ne pas effectuer ces essais automatiquement
+en production.
+
+Références : [configuration MCP native de Codex](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
+et [SDK TypeScript MCP](https://ts.sdk.modelcontextprotocol.io/server).

@@ -21,6 +21,11 @@ const GeneralSettings = lazy(() =>
     default: module.GeneralSettings,
   })),
 );
+const InternalMcpSettings = lazy(() =>
+  import('./internal-mcp-settings').then((module) => ({
+    default: module.InternalMcpSettings,
+  })),
+);
 const InfrastructureSettings = lazy(() =>
   import('./infrastructure-settings').then((module) => ({
     default: module.InfrastructureSettings,
@@ -125,6 +130,7 @@ export function SettingsPage() {
           }
         >
           {section === 'general' && <GeneralSettings />}
+          {section === 'internalMcp' && <InternalMcpSettings />}
           {section === 'infrastructure' && <InfrastructureSettings />}
           {section === 'onlyOffice' && <OnlyOfficeSettings />}
           {section === 'people' && <PeopleManager showHeading={false} />}

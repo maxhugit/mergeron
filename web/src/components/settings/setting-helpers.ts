@@ -70,6 +70,7 @@ export function sectionLabel(section: string): string {
 }
 
 export function settingsPageLabel(section: string): string {
+  if (section === 'internalMcp') return 'internalMcpTitle';
   if (section === 'general') return 'Server';
   if (section === 'infrastructure') return 'managerInfrastructure';
   if (section === 'files') return 'File settings';
@@ -80,6 +81,7 @@ export function settingsPageLabel(section: string): string {
 /** Short context displayed below the active administration title. */
 export function settingsPageDescription(section: string): string {
   const descriptions: Record<string, string> = {
+    internalMcp: 'internalMcpDescription',
     general:
       'Manage server runtime settings. Personal appearance and session logout are available from My account.',
     infrastructure: 'managerInfrastructureDescription',

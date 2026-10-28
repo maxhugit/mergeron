@@ -70,6 +70,16 @@ export class ProjectAgentToolsService {
     return { access, project, boards };
   }
 
+  assertProject(threadId: string, projectId: string) {
+    const binding = this.db
+      .select()
+      .from(projectAgentThreads)
+      .where(eq(projectAgentThreads.threadId, threadId))
+      .get();
+    if (!binding || binding.projectId !== projectId)
+      throw new ForbiddenException('Project changed');
+  }
+
   private tasks(scope: ReturnType<ProjectAgentToolsService['scope']>) {
     return scope.boards
       .filter((b) => b.type === 'task_board')

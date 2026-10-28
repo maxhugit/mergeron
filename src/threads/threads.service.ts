@@ -10,6 +10,7 @@ import {
 } from '../auth/access-context';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
+import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { CodexService } from '../codex/codex.service';
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
@@ -103,6 +104,7 @@ export class ThreadsService {
     private readonly settingsObserver?: ThreadSettingsObserverService,
     @Optional() private readonly connections?: ProjectConnectionRuntimeService,
     @Optional() private readonly projectTools?: ProjectAgentToolsService,
+    @Optional() private readonly internalMcp?: InternalMcpService,
   ) {}
 
   /**
@@ -502,9 +504,15 @@ export class ThreadsService {
     const publication = await this.documentPublication?.prepare(
       params.threadId,
       beforeTurn?.name,
-      executionSandbox?.type === 'workspaceWrite' ||
-        executionSandbox?.type === 'dangerFullAccess',
     );
+    const mcpLease = projectPolicy
+      ? this.internalMcp?.prepare(
+          params.threadId,
+          projectPolicy.projectId,
+          executionSandbox?.type === 'workspaceWrite' ||
+            executionSandbox?.type === 'dangerFullAccess',
+        )
+      : null;
     const effectiveParams: v2.TurnStartParams = {
       ...params,
       ...(projectPolicy?.readOnly
@@ -582,8 +590,10 @@ export class ThreadsService {
         ? this.gitMutations.startTurn(send)
         : send());
       publication?.bind(response.turn.id);
+      mcpLease?.bind(response.turn.id);
     } catch (error) {
       publication?.abort();
+      mcpLease?.abort();
       throw error;
     }
     this.branches.attachPendingVersionTurn(
@@ -713,6 +723,7 @@ export class ThreadsService {
     requireExecutionAccess();
     this.deletionRegistry.assertMutable(threadId);
     this.documentPublication?.revoke(threadId);
+    this.internalMcp?.revoke(threadId);
     await this.codex.request('turn/interrupt', { threadId, turnId });
   }
 

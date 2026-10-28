@@ -87,8 +87,9 @@ export function ProjectSettingsPanel({
     ...projectAppsQueryOptions(),
     enabled: section === 'agents',
   });
-  const mcpServerRows = (mcpServers.data?.data ??
-    []) as unknown as McpServerStatus[];
+  const mcpServerRows = (
+    (mcpServers.data?.data ?? []) as unknown as McpServerStatus[]
+  ).filter((server) => server.name !== 'mergeron_internal');
   const availableApps = availableProjectApps(apps.data ?? []);
 
   const refresh = async () => {

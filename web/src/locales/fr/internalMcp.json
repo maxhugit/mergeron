@@ -1,0 +1,22 @@
+{
+  "internalMcpOverview": "Serveur MCP natif de Mergeron pour consulter le projet et créer des tâches ou des livrables sur demande.",
+  "internalMcpSecurity": "Accessible uniquement localement, avec une connexion liée à la conversation et les droits de la personne. Les créations sont bloquées en lecture seule. Aucun secret de connexion n’est affiché ici.",
+  "internalMcpGenerated": "Cette documentation est générée depuis les schémas réellement enregistrés dans le serveur MCP. Cette page est une référence, pas une console d’exécution.",
+  "internalMcpSearch": "Rechercher une méthode",
+  "internalMcpCount_one": "{{count}} méthode",
+  "internalMcpCount_other": "{{count}} méthodes",
+  "internalMcpNoResults": "Aucune méthode ne correspond à cette recherche.",
+  "internalMcpRead": "Consultation",
+  "internalMcpParameters": "Paramètres",
+  "internalMcpNoParameters": "Aucun paramètre.",
+  "internalMcpParameter": "Nom",
+  "internalMcpConstraints": "Description et contraintes",
+  "internalMcpInputSchema": "Schéma des paramètres (JSON Schema)",
+  "internalMcpOutputSchema": "Schéma du résultat (JSON Schema)",
+  "internalMcpExample": "Exemple d’appel MCP",
+  "internalMcpProtocol": "Protocole et règles communes",
+  "internalMcpLimits": "Limites",
+  "internalMcpErrors": "Erreurs",
+  "internalMcpInstructions": "Instructions du serveur",
+  "internalMcpLoadFailed": "Impossible de charger le catalogue MCP interne. Vérifiez votre accès administrateur et la connexion au serveur."
+}

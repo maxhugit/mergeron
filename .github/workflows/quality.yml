@@ -135,7 +135,7 @@ jobs:
           src/projects/project-archives.spec.ts
           src/project-knowledge/project-knowledge.service.spec.ts
           src/project-knowledge/project-agent-tools.service.spec.ts
-          src/project-knowledge/project-agent-tool-client.spec.ts
+          src/internal-mcp
           src/project-knowledge/knowledge-proposals.service.spec.ts
           src/deliverables/deliverables.service.spec.ts
           src/deliverables/deliverables-agent.controller.spec.ts
