@@ -78,6 +78,32 @@ it('supports direct links and browser history events', () => {
     'Create a simple conversation',
   );
 });
+it('keeps article links and history on the help route with the application base URL', () => {
+  const base = document.createElement('base');
+  base.href = '/';
+  document.head.append(base);
+  try {
+    window.history.replaceState({ guide: true }, '', '/help?source=guide');
+    render(<HelpRoute />);
+    const link = within(document.getElementById('guide-navigation')!).getByRole(
+      'link',
+      {
+        name: 'Create your first project',
+      },
+    );
+    expect(link).toHaveAttribute(
+      'href',
+      '/help?source=guide#guide/first-project',
+    );
+    fireEvent.click(link);
+    expect(window.location.pathname).toBe('/help');
+    expect(window.location.search).toBe('?source=guide');
+    expect(window.location.hash).toBe('#guide/first-project');
+    expect(window.history.state).toEqual({ guide: true });
+  } finally {
+    base.remove();
+  }
+});
 it('falls back safely for unknown or malformed links', () => {
   window.history.replaceState(null, '', '/help#guide/%E0%A4%A');
   render(<HelpRoute />);
