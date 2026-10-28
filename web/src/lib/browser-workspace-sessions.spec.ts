@@ -119,3 +119,17 @@ it('validates metadata and never persists page contents, URLs or credentials', (
   expect(readBrowserWorkspaces('bad json')).toEqual({});
   expect(readBrowserWorkspaces('x'.repeat(64_001))).toEqual({});
 });
+it('preserves local mode without reviving it as an isolated session or sending container keepalives', async () => {
+  vi.useFakeTimers();
+  stop = installBrowserWorkspaceSessions('alice');
+  useWorkspaceStore.getState().openBrowser('thread:a', 'local');
+  useWorkspaceStore.getState().setBrowserOpened('thread:a', 'browser-1', true);
+  const saved = readBrowserWorkspaces(
+    JSON.stringify(
+      browserWorkspaceSnapshot(useWorkspaceStore.getState().contexts),
+    ),
+  );
+  expect(saved['thread:a'].tabs[0]).toMatchObject({ mode: 'local' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(api).not.toHaveBeenCalled();
+});

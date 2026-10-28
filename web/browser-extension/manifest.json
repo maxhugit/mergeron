@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Mergeron — navigateur local (préversion)",
+  "version": "0.1.0",
+  "description": "Partagez explicitement un onglet Chrome ou Edge avec un agent Mergeron. Aucun accès global aux sites.",
+  "minimum_chrome_version": "120",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*"],
+  "background": { "service_worker": "worker.js", "type": "module" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Mergeron — partager cet onglet"
+  },
+  "options_page": "options.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  }
+}

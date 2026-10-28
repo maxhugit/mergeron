@@ -53,7 +53,8 @@ export function WorkspaceControls({
   const terminals = useTerminalStore((s) => s.terminals);
   const [chooser, setChooser] = useState(false);
   const label = (tab: WorkspaceTab) => {
-    if (tab.kind === 'browser') return `${tb('title')} ${tab.number ?? 1}`;
+    if (tab.kind === 'browser')
+      return `${tb(tab.mode === 'local' ? 'localTitle' : 'title')} ${tab.number ?? 1}`;
     if (tab.kind === 'git-remote-file')
       return `${tab.path.split('/').pop()} · GitHub`;
     if (tab.kind === 'git-graph')

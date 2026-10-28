@@ -26,6 +26,7 @@ export function browserWorkspaceSnapshot(
             kind: 'browser' as const,
             number: tab.number,
             opened: tab.opened === true,
+            ...(tab.mode === 'local' ? { mode: 'local' as const } : {}),
           }));
         return [
           key,
@@ -75,6 +76,7 @@ export function readBrowserWorkspaces(
           id: tab.id,
           kind: 'browser',
           opened: tab.opened === true,
+          ...(tab.mode === 'local' ? { mode: 'local' as const } : {}),
           number:
             typeof tab.number === 'number' &&
             Number.isSafeInteger(tab.number) &&
@@ -141,7 +143,10 @@ export function installBrowserWorkspaceSessions(
           .filter(([context]) => context.startsWith('thread:'))
           .flatMap(([context, workspace]) =>
             workspace.tabs
-              .filter((tab) => tab.kind === 'browser' && tab.opened)
+              .filter(
+                (tab) =>
+                  tab.kind === 'browser' && tab.mode !== 'local' && tab.opened,
+              )
               .map((tab) =>
                 browserApi(
                   `/${encodeURIComponent(context.slice(7))}/keepalive`,
