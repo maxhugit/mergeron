@@ -24,6 +24,10 @@ import {
 } from './manager-status-api';
 import { ManagerUpdateProgressDialog } from './manager-update-progress-dialog';
 import { ManagerBackups } from './manager-backups';
+import {
+  ManagerImageUpdates,
+  componentUpdatesKey,
+} from './manager-image-updates';
 import { defaultManagerUpdateImage } from './manager-update-image';
 import {
   readManagerUpdateReceipt,
@@ -194,10 +198,19 @@ export function ManagerUpdateControls({
         </div>
       )}
       <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
+      <ManagerImageUpdates
+        disabled={!!busy || !status.available || blocked}
+        onUpdate={(images) => {
+          mutation.mutate({
+            action: 'plan',
+            input: { images, ...(fastMode ? { mode: 'dev-fast' } : {}) },
+          });
+        }}
+      />
       <p className="text-xs text-muted-foreground">
         {t('managerUpdateSafetyDescription')}
       </p>
-      {operation && (
+      {operation && operation.status !== 'succeeded' && (
         <div
           role="status"
           className="space-y-2 rounded-lg border border-border p-3 text-sm"
@@ -304,7 +317,9 @@ export function ManagerUpdateControls({
       {plan && (
         <div className="space-y-2 text-sm">
           <p className="break-all font-mono text-xs">
-            {plan.images.application}
+            {Object.entries(plan.images)
+              .map(([id, image]) => `${id}: ${image}`)
+              .join('\n')}
           </p>
           {!plan.applicable && (
             <p role="alert">
@@ -337,7 +352,9 @@ export function ManagerUpdateControls({
             <AlertDialogDescription>
               {confirm === 'apply' && plan && (
                 <span className="mb-2 block break-all font-mono text-xs">
-                  {plan.images.application}
+                  {Object.entries(plan.images)
+                    .map(([id, image]) => `${id}: ${image}`)
+                    .join('\n')}
                 </span>
               )}
               {t(
@@ -378,7 +395,10 @@ export function ManagerUpdateControls({
         open={progressOpen}
         onOpenChange={(open) => {
           setProgressOpen(open);
-          if (!open) saveManagerUpdateReceipt(null);
+          if (!open) {
+            saveManagerUpdateReceipt(null);
+            void client.invalidateQueries({ queryKey: componentUpdatesKey });
+          }
         }}
         operation={
           progressOperation ??

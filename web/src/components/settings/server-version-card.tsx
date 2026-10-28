@@ -18,6 +18,10 @@ import {
 import { ManagerUpdateControls } from './manager-update-controls';
 import { ManagerBackups } from './manager-backups';
 import {
+  componentUpdatesKey,
+  requestComponentUpdates,
+} from './manager-image-updates';
+import {
   managerStatusQueryKey,
   requestManagerStatus,
 } from './manager-status-api';
@@ -53,6 +57,14 @@ export function ServerVersionCard({
         serverReleaseQueryKey,
         await requestServerRelease(true),
       );
+      try {
+        client.setQueryData(
+          componentUpdatesKey,
+          await requestComponentUpdates(true),
+        );
+      } catch {
+        await client.invalidateQueries({ queryKey: componentUpdatesKey });
+      }
     } catch (cause) {
       setRefreshError(cause instanceof Error ? cause.message : String(cause));
     } finally {

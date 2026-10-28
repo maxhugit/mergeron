@@ -64,7 +64,7 @@ it('keeps the current-version notice exclusively in the update tab', async () =>
   );
   fixture.render(<GeneralSettings />);
   const notice = await screen.findByText(
-    'This Mergeron installation is up to date.',
+    'The Mergeron application is up to date.',
   );
   expect(notice).not.toBeVisible();
   fireEvent.click(screen.getByRole('tab', { name: 'Update' }));
@@ -186,7 +186,7 @@ it('refreshes only after the administrator requests it', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Refresh detection' }));
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   expect(fetchMock.mock.calls[1]?.[0]).toBe(
     '/api/settings/release/status?refresh=true',
   );
@@ -212,7 +212,7 @@ it('does not claim that Mergeron is current when discovery fails', async () => {
     await screen.findByText('Unable to check for Mergeron updates.'),
   ).toBeVisible();
   expect(
-    screen.queryByText('This Mergeron installation is up to date.'),
+    screen.queryByText('The Mergeron application is up to date.'),
   ).not.toBeInTheDocument();
 });
 

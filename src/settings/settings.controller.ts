@@ -53,6 +53,15 @@ export class SettingsController {
     return this.imageUpdates.status(refresh === 'true');
   }
 
+  @Get('manager/image-updates')
+  @ApiOperation({
+    summary:
+      'Discover registry updates for managed containers without pulling images',
+  })
+  managerImageUpdates(@Query('refresh') refresh?: string) {
+    return this.managerStatus.imageUpdates(refresh === 'true');
+  }
+
   /** Proxies the observe-only local stack inventory exposed by Mergeron Manager. */
   @Get('manager/status')
   @ApiOperation({ summary: 'Read Mergeron stack health and data safeguards' })

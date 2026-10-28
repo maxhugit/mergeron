@@ -18,6 +18,20 @@ vi.mock('./server-release-api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./server-release-api')>()),
   requestServerRelease: vi.fn(),
 }));
+vi.mock('./manager-image-updates', () => ({
+  ManagerImageUpdates: ({
+    onUpdate,
+  }: {
+    onUpdate: (images: Record<string, string>) => void;
+  }) => (
+    <button
+      onClick={() => onUpdate({ ingress: `nginx@sha256:${'b'.repeat(64)}` })}
+    >
+      Test ingress update
+    </button>
+  ),
+  componentUpdatesKey: ['administration', 'component-image-updates'],
+}));
 
 const release: ServerReleaseStatus = {
   installed: {
@@ -362,4 +376,62 @@ it('does not offer a default update when automatic detection reports no new imag
   fixture.render(<ManagerUpdateControls status={status} />);
   await screen.findByDisplayValue('ghcr.io/maxhugit/mergeron:latest');
   expect(screen.getByRole('button', { name: 'Mettre à jour' })).toBeDisabled();
+});
+
+it('previews the selected companion and applies only its reviewed image after confirmation', async () => {
+  const target = `nginx@sha256:${'b'.repeat(64)}`;
+  const fetch = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+    Promise.resolve(
+      json({
+        applicable: true,
+        fingerprint: 'ingress-reviewed',
+        blockers: [],
+        images: { ingress: target },
+      }),
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  fixture.render(<ManagerUpdateControls status={status} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Test ingress update' }));
+  const confirm = await screen.findByRole('alertdialog');
+  expect(confirm).toHaveTextContent(`ingress: ${target}`);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+    images: { ingress: target },
+  });
+  await user.click(
+    screen.getByRole('button', { name: 'Installer et redémarrer' }),
+  );
+  expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toMatchObject({
+    images: { ingress: target },
+    expectedFingerprint: 'ingress-reviewed',
+    confirmation: 'UPDATE_WITH_ROLLBACK',
+  });
+});
+
+it('keeps completed success out of the page while retaining access to its journal', async () => {
+  fixture.render(
+    <ManagerUpdateControls
+      status={{
+        ...status,
+        update: {
+          busy: false,
+          operation: {
+            id: 'done',
+            status: 'succeeded',
+            phase: 'complete',
+            events: [],
+            images: {},
+            previousImages: {},
+            backupRetained: true,
+          },
+        },
+      }}
+    />,
+  );
+  expect(screen.queryByText('Mise à jour réussie')).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Voir le suivi et les logs' }),
+  ).toBeEnabled();
 });

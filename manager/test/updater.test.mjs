@@ -184,6 +184,51 @@ async function begin(updater) {
   await updater.task;
 }
 
+for (const selected of ['ingress', 'egress']) {
+  test(`individual ${selected} update changes only its image and keeps a complete rollback`, async (t) => {
+    const { updater, docker } = await fixture(t);
+    const before = Object.fromEntries(
+      [...docker.values.values()].map((c) => [
+        c.Config.Labels['io.mergeron.component'],
+        docker.image(c.Config.Image),
+      ]),
+    );
+    const component = manifest.components.find((c) => c.id === selected);
+    const target = `${component.allowedImageRepositories[0]}:next`;
+    const selection = { [selected]: target };
+    const plan = await updater.plan(selection);
+    assert.deepEqual(plan.blockers, []);
+    await updater.begin({
+      images: selection,
+      confirmation: 'UPDATE_WITH_ROLLBACK',
+      expectedFingerprint: plan.fingerprint,
+    });
+    await updater.task;
+    assert.equal(updater.current.status, 'succeeded');
+    for (const component of manifest.components) {
+      const active = [...docker.values.values()].find(
+        (c) => c.Name === `/${component.canonicalName}`,
+      );
+      assert.equal(
+        active.Config.Image,
+        component.id === selected ? docker.image(target) : before[component.id],
+      );
+    }
+    assert.deepEqual(
+      docker.calls
+        .filter(([action]) => action === 'pull')
+        .map(([, ref]) => ref),
+      [target],
+    );
+    await updater.requestRollback({
+      operationId: updater.current.id,
+      confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+    });
+    await updater.task;
+    assert.equal(updater.current.status, 'rolledBack');
+  });
+}
+
 for (const local of [false, true])
   test(`managed DEV browser participates in update and rollback with persistent public DNS (local image: ${local})`, async (t) => {
     const { updater, docker } = await fixture(t);
