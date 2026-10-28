@@ -1,0 +1,14 @@
+# Component-specific context: unrelated frontend/docs changes cannot bloat it.
+**
+!Dockerfile.manager
+!manager/
+!manager/package.json
+!manager/stack-manifest.json
+!manager/src/
+!manager/src/**
+!deployment/
+!deployment/config/
+!deployment/config/seccomp-bwrap.json
+!deployment/config/nginx.conf.template
+!deployment/config/nginx.native.conf.template
+!deployment/config/squid.conf
