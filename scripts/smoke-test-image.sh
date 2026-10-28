@@ -53,6 +53,8 @@ docker run --rm --interactive --entrypoint python3 "${image_ref}" \
 # Run the built adapters with the exact Linux binary delivered to users.
 bash "${script_dir}/smoke-test-prepopulated-home.sh" "${image_ref}"
 
+bash "${script_dir}/smoke-test-visual-image.sh" "${image_ref}"
+
 docker run --rm --interactive "${image_ref}" node \
   - < "${script_dir}/smoke-test-archives.cjs"
 

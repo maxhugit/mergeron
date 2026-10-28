@@ -263,6 +263,13 @@ RUN --mount=type=cache,id=pnpm-root,target=/pnpm/store,sharing=locked \
 # build failure instead of publishing a broken image.
 RUN node -e "require('node-pty'); const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.close()"
 
+# Use the locked application dependency, not an independently versioned browser.
+# This immutable cache is outside the persistent home, so an old volume cannot
+# shadow a new browser revision after an update.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/mergeron-playwright
+RUN corepack pnpm exec playwright-core install --only-shell chromium \
+ && chmod -R a+rX /opt/mergeron-playwright
+
 # Test-only target, run on an internal Docker network without published ports.
 FROM runtime-base AS ssh-test-server
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -275,8 +282,22 @@ COPY --from=openssh-builder /build/openssh/debian/build-deb/sshd-auth /usr/lib/o
 COPY --from=openssh-builder /build/openssh/debian/build-deb/sshd-session /usr/lib/openssh/sshd-session
 CMD ["/bin/bash", "-euc", "git init --bare /tmp/remote.git && exec /usr/sbin/sshd -D -e -f /fixtures/sshd_config"]
 
+# Chromium dependencies belong only to the final runtime, not to Office/Node
+# builders. Keep their expensive caches valid when browser libraries change.
+FROM runtime-base AS visual-runtime-base
+# Debian 13 packages from Playwright's debian13-x64 registry. Install as root at
+# build time, never in the running agent container.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-color-emoji fonts-freefont-ttf \
+    libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
+    libcairo2 libcups2t64 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0t64 \
+    libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 \
+    libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2
+
 # ── Stage 6: Runtime ─────────────────────────────────────────────────
-FROM runtime-base AS runtime
+FROM visual-runtime-base AS runtime
 
 ARG MERGERON_VERSION=0.1.0
 ARG MERGERON_REVISION=unknown
@@ -284,6 +305,7 @@ ARG MERGERON_BUILD_DATE=unknown
 ARG MERGERON_RELEASE_CHANNEL=edge
 
 LABEL org.opencontainers.image.title="Mergeron" \
+      io.mergeron.agent-visual-testing="1" \
       org.opencontainers.image.description="Plateforme collaborative auto-hébergée de gestion de projets et d'agents" \
       org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
@@ -295,6 +317,7 @@ ENV MERGERON_VERSION="${MERGERON_VERSION}" \
     MERGERON_REVISION="${MERGERON_REVISION}" \
     MERGERON_BUILD_DATE="${MERGERON_BUILD_DATE}" \
     MERGERON_RELEASE_CHANNEL="${MERGERON_RELEASE_CHANNEL}"
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/mergeron-playwright
 
 # runtime-base sets HOME before installing system packages. Some installers may
 # leave build-only dotfiles there, which makes the entrypoint mistake a brand-new
@@ -322,6 +345,7 @@ RUN jq -n \
 COPY --from=toolchain-builder /opt/codex-home-seed.tar.zst /opt/codex-home-seed.tar.zst
 COPY --from=office-builder /opt/office-venv /opt/office-venv
 COPY --from=app-deps-builder /app/node_modules ./node_modules/
+COPY --from=app-deps-builder /opt/mergeron-playwright /opt/mergeron-playwright
 COPY package.json pnpm-lock.yaml* ./
 
 # Copy built assets and migrations
@@ -332,9 +356,11 @@ COPY scripts/project_archive.py ./scripts/project_archive.py
 COPY scripts/project_archive_native.py ./scripts/project_archive_native.py
 COPY scripts/provision-person.cjs ./scripts/provision-person.cjs
 COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
+COPY scripts/visual-check.mjs ./scripts/visual-check.mjs
+COPY scripts/mergeron-visual-check.sh /usr/local/bin/mergeron-visual-check
 COPY skills/office-files/ /opt/codex-skills/office-files/
 
-RUN chmod +x /usr/local/bin/codex-cli-dispatch
+RUN chmod +x /usr/local/bin/codex-cli-dispatch /usr/local/bin/mergeron-visual-check
 
 # ── Entrypoint ───────────────────────────────────────────────────────
 RUN cat > /usr/local/bin/entrypoint.sh <<'ENTRYPOINT_EOF'

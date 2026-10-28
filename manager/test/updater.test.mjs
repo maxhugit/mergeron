@@ -184,6 +184,63 @@ async function begin(updater) {
   await updater.task;
 }
 
+test('DEV visual image migrates only target seccomp and restores the exact old profile on rollback', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const oldProfile = JSON.parse(
+    await readFile(
+      new URL('../../deployment/config/seccomp-bwrap.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  oldProfile.syscalls = oldProfile.syscalls.filter(
+    (rule) => !(rule.names.includes('chroot') && !rule.includes),
+  );
+  const application = docker.values.get('original-application');
+  Object.assign(application.HostConfig, {
+    ReadonlyRootfs: true,
+    CapDrop: ['ALL'],
+    SecurityOpt: [
+      'no-new-privileges:true',
+      `seccomp=${JSON.stringify(oldProfile)}`,
+    ],
+  });
+  const originalHost = structuredClone(application.HostConfig);
+  const inspect = docker.inspectImage.bind(docker);
+  docker.inspectImage = async (ref) => ({
+    ...(await inspect(ref)),
+    Config: {
+      Labels: ref.includes('next')
+        ? { 'io.mergeron.agent-visual-testing': '1' }
+        : {},
+    },
+  });
+  await begin(updater);
+  assert.equal(updater.current.status, 'succeeded');
+  const item = updater.current.containers.find(
+    (item) => item.component === 'application',
+  );
+  assert.deepEqual(item.original.HostConfig, originalHost);
+  const target = docker.values.get(item.candidateId).HostConfig;
+  assert.deepEqual(
+    { ...target, SecurityOpt: originalHost.SecurityOpt },
+    originalHost,
+  );
+  assert.deepEqual(
+    JSON.parse(target.SecurityOpt[1].slice(8)).syscalls.at(-1).names,
+    ['chroot'],
+  );
+  await updater.requestRollback({
+    operationId: updater.current.id,
+    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'rolledBack');
+  const restored = [...docker.values.values()].find(
+    (item) => item.Name === '/mergeron-dev-ui',
+  );
+  assert.deepEqual(restored.HostConfig, originalHost);
+});
+
 for (const selected of ['ingress', 'egress']) {
   test(`individual ${selected} update changes only its image and keeps a complete rollback`, async (t) => {
     const { updater, docker } = await fixture(t);
