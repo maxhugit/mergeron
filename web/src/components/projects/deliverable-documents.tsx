@@ -47,6 +47,7 @@ import {
   emitFileChange,
 } from '@/lib/file-change-events';
 import { showSnackbar } from '@/stores/snackbar-store';
+import type { FileExtraAction } from '@/components/files/file-context-menu';
 
 type Props = {
   item: Deliverable;
@@ -56,6 +57,8 @@ type Props = {
   onError: () => void;
   contextDocument?: DeliverableDocument;
   onAttachToChat?: () => void;
+  extraActions?: FileExtraAction[];
+  menuLabel?: string;
   children?: ReactNode;
 };
 
@@ -73,6 +76,8 @@ export function DeliverableDocuments({
   onError,
   contextDocument,
   onAttachToChat,
+  extraActions,
+  menuLabel,
   children,
 }: Props) {
   const { t } = useTranslation();
@@ -264,6 +269,8 @@ export function DeliverableDocuments({
               busy={busy}
               contextTrigger={contextDocument ? children : undefined}
               onAttachToChat={contextDocument ? onAttachToChat : undefined}
+              extraActions={extraActions}
+              menuLabel={menuLabel}
               onView={() => setDetail({ document, tab: 'preview' })}
               onHistory={() => setDetail({ document, tab: 'versions' })}
               onRename={() => {
@@ -726,6 +733,8 @@ function DocumentRow({
   onDelete,
   contextTrigger,
   onAttachToChat,
+  extraActions = [],
+  menuLabel,
 }: {
   document: DeliverableDocument;
   busy: boolean;
@@ -738,6 +747,8 @@ function DocumentRow({
   onDelete: () => void;
   contextTrigger?: ReactNode;
   onAttachToChat?: () => void;
+  extraActions?: FileExtraAction[];
+  menuLabel?: string;
 }) {
   const { t } = useTranslation();
   const latest = currentDocumentVersion(document);
@@ -798,6 +809,10 @@ function DocumentRow({
     { label: t('delete'), icon: Trash2, action: 'delete', disabled: busy },
   ];
   const runAction = (action: string) => {
+    if (action.startsWith('extra:'))
+      return extraActions
+        .find((item) => `extra:${item.label}` === action)
+        ?.onSelect();
     switch (action) {
       case 'attach':
         return onAttachToChat?.();
@@ -836,16 +851,27 @@ function DocumentRow({
       <>
         <FileActionsMenu
           onAction={runAction}
-          actions={actions.map(({ label, icon, action, disabled }) => ({
-            id: action,
-            label,
-            icon,
-            disabled,
-            destructive: action === 'delete',
-            separated:
-              Boolean(onAttachToChat) &&
-              (action === 'attach' || action === 'delete'),
-          }))}
+          buttonLabel={menuLabel}
+          actions={[
+            ...extraActions.map((action) => ({
+              id: `extra:${action.label}`,
+              label: action.label,
+              icon: FileText,
+              disabled: action.disabled,
+              onSelect: action.onSelect,
+              separated: true,
+            })),
+            ...actions.map(({ label, icon, action, disabled }) => ({
+              id: action,
+              label,
+              icon,
+              disabled,
+              destructive: action === 'delete',
+              separated:
+                Boolean(onAttachToChat) &&
+                (action === 'attach' || action === 'delete'),
+            })),
+          ]}
         >
           {contextTrigger}
         </FileActionsMenu>

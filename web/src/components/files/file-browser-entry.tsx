@@ -10,6 +10,7 @@ import { InlineEntryEditor } from './inline-entry-editor';
 import {
   FileContextMenu,
   type DeliverableContextActions,
+  type FileExtraAction,
 } from './file-context-menu';
 type EntryType = 'file' | 'directory';
 
@@ -34,6 +35,7 @@ interface FileBrowserEntryProps {
   commitEdit: (value: string) => void;
   onNavigateCreate: (kind: 'newFile' | 'newFolder') => void;
   documentActions?: DeliverableContextActions;
+  gitState?: { unstaged: boolean; actions: FileExtraAction[] };
 }
 
 /** Keeps dnd-kit on the outer div and native upload/menu/keyboard interaction on the entry. */
@@ -53,6 +55,7 @@ export function FileBrowserEntry({
   commitEdit,
   onNavigateCreate,
   documentActions,
+  gitState,
 }: FileBrowserEntryProps) {
   const isDir = icon === 'directory';
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +135,8 @@ export function FileBrowserEntry({
         type={icon}
         actions={actions}
         onOpenChange={setIsMenuOpen}
+        extraActions={gitState?.actions}
+        label={displayName ?? name}
       >
         <div
           role="button"
@@ -164,7 +169,10 @@ export function FileBrowserEntry({
             />
           ) : (
             <span
-              className="min-w-0 truncate"
+              className={cn(
+                'min-w-0 truncate',
+                gitState?.unstaged && 'text-red-500 dark:text-red-400',
+              )}
               title={displayName ? entryPath : undefined}
             >
               {displayName ?? name}

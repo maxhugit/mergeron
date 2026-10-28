@@ -27,12 +27,14 @@ export function FileActionsMenu({
   showButton = true,
   onOpenChange,
   onAction,
+  buttonLabel,
 }: {
   actions: FileMenuAction[];
   children: ReactNode;
   showButton?: boolean;
   onOpenChange?: (open: boolean) => void;
   onAction?: (id: string) => void;
+  buttonLabel?: string;
 }) {
   const { t } = useTranslation();
   const pending = useRef<string | null>(null);
@@ -99,7 +101,11 @@ export function FileActionsMenu({
               <DropdownMenu.Trigger asChild>
                 <button
                   type="button"
-                  aria-label={t('actions')}
+                  aria-label={
+                    buttonLabel
+                      ? `${t('actions')} · ${buttonLabel}`
+                      : t('actions')
+                  }
                   className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={(event) => event.stopPropagation()}
                 >

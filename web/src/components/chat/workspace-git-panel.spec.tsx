@@ -56,8 +56,32 @@ vi.mock('./workspace-entry-menu', () => ({
 }));
 vi.mock('@/generated/api', () => ({ filesAddRoot: addRoot }));
 vi.mock('@/components/files/file-tree', () => ({
-  FileTree: () => (
-    <div data-testid="git-files">{useFilesStore((state) => state.rootDir)}</div>
+  FileTree: ({
+    gitFileState,
+  }: {
+    gitFileState?: (path: string) =>
+      | {
+          unstaged: boolean;
+          actions: Array<{
+            label: string;
+            disabled?: boolean;
+            onSelect: () => void;
+          }>;
+        }
+      | undefined;
+  }) => (
+    <div data-testid="git-files">
+      {useFilesStore((state) => state.rootDir)}
+      {gitFileState?.('/copy/file.ts')?.actions.map((action) => (
+        <button
+          key={action.label}
+          disabled={action.disabled}
+          onClick={action.onSelect}
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
   ),
 }));
 const resource: GitInventory['resources'][number] = {
@@ -233,7 +257,7 @@ it.each([
   async (cwd, localPath, active) => {
     inventory.copies = [{ ...copy, localPath, ownerAgentIds: ['work-agent'] }];
     show(null, 'work-agent', cwd);
-    await screen.findByText('Copie locale disponible');
+    await screen.findByText('Local : main · aaaaaaa');
     expect(screen.queryByLabelText('Active pour cet agent') !== null).toBe(
       active,
     );
@@ -243,9 +267,7 @@ it.each([
 it('reserves a copy to its agent and disables creating a second copy for that agent', async () => {
   inventory.copies = [{ ...copy, ownerAgentIds: ['work-agent'] }];
   show('git', 'work-agent');
-  expect(
-    await screen.findByText('Copie locale disponible'),
-  ).toBeInTheDocument();
+  expect(await screen.findByText('Local : main · aaaaaaa')).toBeInTheDocument();
   expect(
     screen.getByRole('button', { name: 'Préparer une copie de travail' }),
   ).toBeDisabled();
@@ -258,6 +280,7 @@ it('does not expose another agent’s copy as this agent’s local copy', async 
   inventory.copies = [{ ...copy, ownerAgentIds: ['other-agent'] }];
   show('git', 'work-agent');
   await screen.findByRole('tab', { name: 'Local' });
+  expect(await screen.findByText('Aucune copie locale')).toBeInTheDocument();
   expect(
     screen.getByRole('button', { name: 'Parcourir les fichiers locaux' }),
   ).toBeDisabled();
@@ -371,11 +394,12 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
   await screen.findByTestId('git-files');
   await waitFor(() =>
     expect(
-      screen.getByRole('tab', { name: /Modifications/ }),
-    ).toHaveTextContent('(1)'),
+      screen.getByRole('tab', { name: /Préparation du commit/ }),
+    ).toHaveTextContent('(0)'),
   );
-  tab('Modifications (1)');
-  fireEvent.click(screen.getByRole('button', { name: /file.ts/ }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Voir les différences Git' }),
+  );
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(onGitDiff).toHaveBeenCalledWith({
     projectId: 'p',
@@ -392,7 +416,7 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
 it('never interprets absent checks or unknown mergeability as approval', async () => {
   show();
   await screen.findByRole('button', { name: 'Préparer une copie de travail' });
-  tab('Distant · GitHub');
+  tab('GitHub');
   fireEvent.click(await screen.findByRole('button', { name: '#12 Feature' }));
   expect(
     await screen.findByText('Détection des conflits en cours ou indisponible.'),
@@ -414,7 +438,7 @@ it('shows failed inspection instead of a stale clean state', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Impossible d’inspecter cette copie',
   );
-  tab('Modifications');
+  tab('Préparation du commit');
   expect(
     screen.queryByText('Aucune modification locale.'),
   ).not.toBeInTheDocument();
@@ -455,7 +479,7 @@ it('does not adopt a late root after switching away from Files, and loads on ret
   );
   show();
   await waitFor(() => expect(addRoot).toHaveBeenCalledTimes(1));
-  tab('Distant · GitHub');
+  tab('GitHub');
   await act(async () => finish());
   expect(useFilesStore.getState().rootDir).toBe('/original');
   tab('Local');
@@ -478,9 +502,7 @@ it('keeps the branch pane compact without duplicating graph access or help text'
   expect(
     await screen.findByRole('button', { name: 'Créer une branche' }),
   ).toBeVisible();
-  const pane = within(
-    screen.getByRole('tabpanel', { name: 'Branches' }),
-  );
+  const pane = within(screen.getByRole('tabpanel', { name: 'Branches' }));
   expect(
     pane.queryByRole('button', {
       name: 'Afficher le graphe des branches et commits',
@@ -501,7 +523,7 @@ it('separates local history from live GitHub branches and never activates a copy
   expect(screen.queryByRole('tab', { name: 'PR / checks' })).toBeNull();
   tab('Commits');
   expect(await screen.findByText('Local change')).toBeVisible();
-  tab('Distant · GitHub');
+  tab('GitHub');
   expect(await screen.findByRole('tab', { name: 'PR / checks' })).toBeVisible();
   expect(screen.queryByText(/Données consultées sur GitHub/)).toBeNull();
   expect(screen.getByText('Local change')).not.toBeVisible();
@@ -522,7 +544,7 @@ it('separates local history from live GitHub branches and never activates a copy
 it('keeps remote GitHub data usable without a local copy and keeps synchronization explicit', async () => {
   show();
   await screen.findByRole('tab', { name: 'Local' });
-  tab('Distant · GitHub');
+  tab('GitHub');
   expect(await screen.findByText(/#12 Feature/)).toBeVisible();
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
   tab('Synchronisation');
@@ -570,7 +592,7 @@ it('has one shared refresh after the scope tabs and refreshes inactive data for 
   await waitFor(() => expect(remote).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(checks).toHaveBeenCalledTimes(2));
   expect(other).toHaveBeenCalledTimes(1);
-  for (const scope of ['Distant · GitHub', 'Synchronisation', 'Local']) {
+  for (const scope of ['GitHub', 'Synchronisation', 'Local']) {
     tab(scope);
     expect(
       screen.getAllByRole('button', { name: 'Actualiser le dépôt' }),
@@ -600,7 +622,7 @@ it('refreshes remote files at the latest revision while preserving the browsed d
   });
   show();
   await screen.findByRole('tab', { name: 'Local' });
-  tab('Distant · GitHub');
+  tab('GitHub');
   tab('Fichiers');
   fireEvent.click(await screen.findByRole('button', { name: 'docs' }));
   await waitFor(() =>
@@ -625,8 +647,8 @@ it('refreshes remote files at the latest revision while preserving the browsed d
 it('places publication only in Synchronization and keeps commits local', async () => {
   inventory.copies = [copy];
   show();
-  await screen.findByRole('tab', { name: 'Modifications (1)' });
-  tab('Modifications (1)');
+  await screen.findByRole('tab', { name: 'Préparation du commit (0)' });
+  tab('Préparation du commit (0)');
   await screen.findByRole('button', { name: 'Commit…' });
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
   tab('Synchronisation');
@@ -635,7 +657,7 @@ it('places publication only in Synchronization and keeps commits local', async (
     within(sync).getByRole('button', { name: '↑ Publier les commits…' }),
   ).toBeVisible();
   expect(within(sync).queryByRole('button', { name: 'Commit…' })).toBeNull();
-  tab('Distant · GitHub');
+  tab('GitHub');
   expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
 });

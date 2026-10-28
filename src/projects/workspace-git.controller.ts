@@ -187,8 +187,9 @@ export class WorkspaceGitController {
   stagedDiff(
     @Param('projectId') projectId: string,
     @Param('copyId') copyId: string,
+    @Query('path') path?: unknown,
   ) {
-    return this.git.stagedDiff(projectId, copyId);
+    return this.git.stagedDiff(projectId, copyId, path);
   }
 
   @Get([
