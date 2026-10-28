@@ -13,6 +13,8 @@ container_id="$(docker create --init --network none --read-only \
   --user 11002:11002 --cap-drop ALL --security-opt no-new-privileges \
   --security-opt "seccomp=${script_dir}/../deployment/config/seccomp-bwrap.json" \
   --security-opt systempaths=unconfined --shm-size 64m \
+  --env HTTPS_PROXY=http://127.0.0.1:9 --env HTTP_PROXY=http://127.0.0.1:9 \
+  --env NO_PROXY=127.0.0.1,localhost \
   --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
   --tmpfs /home/codex:rw,exec,nosuid,nodev,size=2g,uid=11002,gid=11002 \
   --volume /workspaces --volume /app/logs \

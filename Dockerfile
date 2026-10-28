@@ -111,17 +111,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     xz-utils \
     zstd
 
-# Chromium headless dependencies for Debian 13 (Playwright's debian13-x64
-# registry). Install as root at build time, never in the running agent container.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-    fonts-noto-color-emoji fonts-freefont-ttf \
-    libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
-    libcairo2 libcups2t64 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0t64 \
-    libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 \
-    libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2
-
 # Replace the actual Debian libxml2 package; retain the established SONAME and
 # exported-symbol contract. Development headers remain in the Office builder.
 COPY --from=libxml2-builder /out/ /tmp/libxml2-backport/
@@ -293,8 +282,22 @@ COPY --from=openssh-builder /build/openssh/debian/build-deb/sshd-auth /usr/lib/o
 COPY --from=openssh-builder /build/openssh/debian/build-deb/sshd-session /usr/lib/openssh/sshd-session
 CMD ["/bin/bash", "-euc", "git init --bare /tmp/remote.git && exec /usr/sbin/sshd -D -e -f /fixtures/sshd_config"]
 
+# Chromium dependencies belong only to the final runtime, not to Office/Node
+# builders. Keep their expensive caches valid when browser libraries change.
+FROM runtime-base AS visual-runtime-base
+# Debian 13 packages from Playwright's debian13-x64 registry. Install as root at
+# build time, never in the running agent container.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-color-emoji fonts-freefont-ttf \
+    libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
+    libcairo2 libcups2t64 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0t64 \
+    libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 \
+    libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2
+
 # ── Stage 6: Runtime ─────────────────────────────────────────────────
-FROM runtime-base AS runtime
+FROM visual-runtime-base AS runtime
 
 ARG MERGERON_VERSION=0.1.0
 ARG MERGERON_REVISION=unknown
