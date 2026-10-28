@@ -205,7 +205,7 @@
   "edgeChannel": "Continu (edge)",
   "openRelease": "Ouvrir la publication",
   "aMergeronUpdateIsAvailable": "Une version stable plus récente de Mergeron est disponible.",
-  "mergeronIsUpToDate": "Cette installation de Mergeron est à jour.",
+  "mergeronIsUpToDate": "L’application Mergeron est à jour.",
   "thisServerFollowsEdgeAndMayContainUnpublishedChanges": "Ce serveur suit edge et peut contenir des changements qui ne sont pas encore dans latest.",
   "installedVersionIsNewerThanLatestPublishedStableVersion": "La version installée est plus récente que la dernière version stable publiée.",
   "buildRevision": "Révision de construction",

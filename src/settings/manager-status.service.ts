@@ -28,8 +28,9 @@ export class ManagerStatusService {
           method,
           path,
           socketPath: this.socketPath(),
-          timeout:
-            path === '/v1/backups/delete'
+          timeout: path.startsWith('/v1/images/updates')
+            ? 30_000
+            : path === '/v1/backups/delete'
               ? 120_000
               : path === '/v1/backups'
                 ? 30_000
@@ -110,6 +111,12 @@ export class ManagerStatusService {
 
   async backups() {
     return this.requestManager('/v1/backups');
+  }
+
+  imageUpdates(refresh = false) {
+    return this.requestManager(
+      `/v1/images/updates${refresh ? '?refresh=true' : ''}`,
+    );
   }
 
   backupRetention() {
