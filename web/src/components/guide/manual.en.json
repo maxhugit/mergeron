@@ -351,7 +351,7 @@
           {
             "title": "Compact mode and quick commands",
             "paragraphs": [
-              "In a narrow composer, some settings appear as icons only. Hover or use their accessible names to identify them; their values do not change.",
+              "In a narrow composer, the model and reasoning effort remain visible. Permissions and capabilities use icons only; hover or use their accessible names to identify them without changing their values.",
               "Typing / at the start of a draft opens commands offered by this version: planning, goals, review, compaction or feedback. Review each dialog before confirming. These commands do not replace model or connector settings."
             ],
             "warning": "Do not select full access just to hide a folder error. Fix the location or relevant permissions first."

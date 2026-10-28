@@ -385,7 +385,7 @@
           {
             "title": "Mode compact et commandes rapides",
             "paragraphs": [
-              "Quand le champ est étroit, certains réglages sont représentés seulement par des icônes. Leur survol ou leur nom accessible permet de retrouver leur fonction ; cela ne modifie pas leur valeur.",
+              "Quand le champ est étroit, le modèle et l’effort restent visibles. Les permissions et capacités sont représentées par leurs icônes ; leur survol ou leur nom accessible permet de retrouver leur fonction, sans modifier leur valeur.",
               "Saisir / au début du brouillon ouvre les commandes proposées par cette version : plan, objectif, revue, condensation ou retour. Relisez le dialogue de la commande avant de confirmer. Ces commandes ne remplacent pas les réglages du modèle ou des connecteurs."
             ],
             "warning": "Ne choisissez pas un accès complet simplement pour masquer une erreur de dossier. Corrigez d’abord l’emplacement ou les droits concernés."
