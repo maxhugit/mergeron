@@ -24,6 +24,7 @@ import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
 import { GitStageChanges, type GitStageHandle } from './git-stage-changes';
 import { GitCopyReservation } from './git-copy-reservation';
+import { GitInspectionError } from './git-inspection-error';
 import { GitCreateBranch } from './git-create-branch';
 import { GitLocalBranchActions } from './git-local-branch-actions';
 import { GitRemoteBranchMenu } from './git-remote-branch-menu';
@@ -532,11 +533,7 @@ function RepositoryPanel({
                 {t('gitCloneFailed')}
               </p>
             )}
-            {snapshot.error && (
-              <p role="alert" className="text-destructive">
-                {t('gitInspectionError')}
-              </p>
-            )}
+            {snapshot.error && <GitInspectionError error={snapshot.error} />}
           </div>
           {resource.enabled && (
             <Tabs
@@ -1031,7 +1028,7 @@ function LocalCommits({
       {query.isPending ? (
         <p role="status">{t('gitLoading')}</p>
       ) : query.isError ? (
-        <p role="alert">{t('gitInspectionError')}</p>
+        <GitInspectionError error={query.error} />
       ) : (
         <>
           {query.data.items.length === 0 && <p>{t('gitNoCommit')}</p>}

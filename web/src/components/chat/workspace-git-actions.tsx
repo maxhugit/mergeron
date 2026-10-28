@@ -51,6 +51,8 @@ export function ActionError({ error }: { error: Error | null }) {
     GIT_REMOTE_REJECTED: t('gitPushRejected'),
     GIT_NETWORK_UNAVAILABLE: t('gitPushNetworkUnavailable'),
     GIT_TLS_ERROR: t('gitPushTlsError'),
+    GIT_OUTPUT_LIMIT_EXCEEDED: t('gitInspectionOutputLimit'),
+    GIT_COMMAND_TIMEOUT: t('gitInspectionTimeout'),
   };
   return error ? (
     <p role="alert" className="text-xs text-destructive">

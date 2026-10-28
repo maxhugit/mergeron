@@ -4,6 +4,9 @@
 /build
 /public
 
+# Agent/build tool caches (including caches inside nested workspaces).
+.build-cache/
+
 # Logs
 /logs
 *.log

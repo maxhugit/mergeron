@@ -87,7 +87,9 @@ export function InternalMcpSettings() {
           <summary className="cursor-pointer break-words p-4">
             <code className="font-semibold">{tool.name}</code>
             <span className="ml-3 inline-block rounded-full bg-muted px-2 py-0.5 text-xs">
-              {tool.readOnly ? mcpT('internalMcpRead') : t('create')}
+              {tool.readOnly
+                ? mcpT('internalMcpRead')
+                : mcpT('internalMcpWrite')}
             </span>
           </summary>
           <div className="min-w-0 space-y-4 border-t p-4">
@@ -103,7 +105,7 @@ export function InternalMcpSettings() {
               </p>
             ) : (
               <div className="max-w-full overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full min-w-[36rem] text-left text-sm">
                   <thead>
                     <tr>
                       <th className="p-2">{mcpT('internalMcpParameter')}</th>

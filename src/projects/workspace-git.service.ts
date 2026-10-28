@@ -406,13 +406,14 @@ export class WorkspaceGitService {
       ) => {
         if (failed) return;
         failed = true;
+        clearTimeout(timer);
         child.kill('SIGKILL');
         reject(new ConflictException(message));
       };
-      const timer = setTimeout(fail, timeoutMs);
+      const timer = setTimeout(() => fail('GIT_COMMAND_TIMEOUT'), timeoutMs);
       child.stdout!.on('data', (data: Buffer) => {
         size += data.length;
-        if (size > 1024 * 1024) fail();
+        if (size > 1024 * 1024) fail('GIT_OUTPUT_LIMIT_EXCEEDED');
         else output.push(data);
       });
       // Do not relay diagnostics: local config/paths may contain credentials.

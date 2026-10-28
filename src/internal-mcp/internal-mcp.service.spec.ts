@@ -41,6 +41,13 @@ import { catalogFixture } from '../codex/catalog/catalog.testing';
 import { CodexProcessManager as NativeCodexProcessManager } from '../codex/codex-process-manager.service';
 import type { v2 } from '../codex/codex-schema';
 import { LocalBrowserService } from '../browser/local-browser.service';
+import { ConfigService } from '@nestjs/config';
+import { ProjectConnectionToolsService } from '../projects/project-connection-tools.service';
+import { ProjectLocationsService } from '../projects/project-locations.service';
+import { WorkspaceResourcesService } from '../projects/workspace-resources.service';
+import type { WorkspaceCopiesService } from '../projects/workspace-copies.service';
+import type { WorkspaceGitService } from '../projects/workspace-git.service';
+import type { WorkspaceGitActionsService } from '../projects/workspace-git-actions.service';
 
 describe('native internal MCP over HTTP', () => {
   let database: TestDatabase;
@@ -50,6 +57,10 @@ describe('native internal MCP over HTTP', () => {
   let deliverables: DeliverablesService;
   let tools: ProjectAgentToolsService;
   let localBrowser: LocalBrowserService;
+  let gitConnectionId: string;
+  const gitHead = 'a'.repeat(40),
+    gitFingerprint = 'b'.repeat(64);
+  const pushConnection = vi.fn();
   let notify: (note: ServerNotification) => void;
   const clients: Client[] = [];
   const setThreadName = vi
@@ -63,6 +74,7 @@ describe('native internal MCP over HTTP', () => {
 
   beforeEach(async () => {
     setThreadName.mockClear();
+    pushConnection.mockReset();
     database = createTestDatabase();
     root = await fs.realpath(
       await fs.mkdtemp(path.join(tmpdir(), 'internal-mcp-')),
@@ -207,9 +219,66 @@ describe('native internal MCP over HTTP', () => {
       null as never,
       database.db,
     );
+    const resources = new WorkspaceResourcesService(
+      database.db,
+      new ConfigService({ WEBUI_CONNECTION_SECRET_KEY: 'unit-key' }),
+    );
+    gitConnectionId = asPerson('admin', () =>
+      resources.create('p', {
+        type: 'git',
+        name: 'Git project',
+        address: 'https://github.com/example/private.git',
+        accessMode: 'read_write',
+        secret: { token: 'never-return-this-token' },
+      }),
+    ).id;
+    const connections = new ProjectConnectionToolsService(
+      database.db,
+      new ProjectLocationsService(database.db),
+      {
+        list: () => [
+          {
+            id: 'own',
+            sourceResourceId: gitConnectionId,
+            ownerThreadIds: ['agent'],
+            branch: 'feature/test',
+            revision: gitHead,
+            state: 'ready',
+            localPath: root,
+            accessMode: 'read_write',
+          },
+        ],
+      } as unknown as WorkspaceCopiesService,
+      {
+        snapshot: () =>
+          Promise.resolve({
+            head: gitHead,
+            branch: 'feature/test',
+            fingerprint: gitFingerprint,
+          }),
+        remoteBranches: () =>
+          Promise.resolve({ items: [{ name: 'main', revision: gitHead }] }),
+      } as unknown as WorkspaceGitService,
+      { push: pushConnection } as unknown as WorkspaceGitActionsService,
+    );
+    pushConnection.mockImplementation(
+      (
+        _p: string,
+        _c: string,
+        _body: unknown,
+        publisher: { assertActive: () => void },
+      ) => {
+        publisher.assertActive();
+        return Promise.resolve({ sha: gitHead, branch: 'feature/test' });
+      },
+    );
     tools = new ProjectAgentToolsService(database.db, deliverables, {
       get: (token: string) =>
-        token === 'INTERNAL_MCP_THREAD_RENAMER' ? { setThreadName } : domain,
+        token === 'INTERNAL_MCP_THREAD_RENAMER'
+          ? { setThreadName }
+          : token === 'PROJECT_CONNECTION_AGENT_TOOLS'
+            ? connections
+            : domain,
     } as unknown as ModuleRef);
     localBrowser = new LocalBrowserService();
     service = new InternalMcpService(
@@ -261,6 +330,71 @@ describe('native internal MCP over HTTP', () => {
     title: 'Presentation',
     userRequest: 'User requested this task.',
   };
+
+  it('discovers and uses only configured project connections through native MCP, with active-turn write enforcement', async () => {
+    const { client } = await connect();
+    activate('admin', false);
+    const listed = await client.callTool({
+      name: 'list_project_connections',
+      arguments: {},
+    });
+    expect(listed.isError).not.toBe(true);
+    expect(listed.structuredContent).toMatchObject({
+      total: 1,
+      items: [
+        { id: gitConnectionId, protocol: 'git', copies: [{ id: 'own' }] },
+      ],
+    });
+    expect(JSON.stringify(listed)).not.toMatch(
+      /never-return-this-token|encryptedValue|authTag/,
+    );
+    const branches = await client.callTool({
+      name: 'read_project_git',
+      arguments: { connectionId: gitConnectionId, operation: 'branches' },
+    });
+    expect(branches.isError).not.toBe(true);
+    expect(branches.structuredContent).toMatchObject({
+      data: { items: [{ name: 'main' }] },
+    });
+    const args = {
+      connectionId: gitConnectionId,
+      copyId: 'own',
+      operation: 'push',
+      requestId: 'push-1',
+      userRequest: 'Please publish this branch.',
+      expectedHead: gitHead,
+      expectedBranch: 'feature/test',
+      fingerprint: gitFingerprint,
+    };
+    const blocked = await client.callTool({
+      name: 'publish_project_git',
+      arguments: args,
+    });
+    expect(blocked.isError).toBe(true);
+    expect(JSON.stringify(blocked)).toContain('READ_ONLY');
+    expect(pushConnection).not.toHaveBeenCalled();
+    activate();
+    const pushed = await client.callTool({
+      name: 'publish_project_git',
+      arguments: args,
+    });
+    expect(pushed.isError).not.toBe(true);
+    expect(pushed.structuredContent).toMatchObject({
+      operation: 'push',
+      data: { sha: gitHead },
+    });
+    await client.callTool({ name: 'publish_project_git', arguments: args });
+    expect(pushConnection).toHaveBeenCalledTimes(1);
+    service.revoke('agent');
+    expect(
+      (
+        await client.callTool({
+          name: 'list_project_connections',
+          arguments: {},
+        })
+      ).isError,
+    ).toBe(true);
+  });
 
   it('binds local browser commands to the administrator, agent and active writable turn', async () => {
     const { client } = await connect();

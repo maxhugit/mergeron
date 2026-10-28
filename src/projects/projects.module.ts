@@ -24,6 +24,7 @@ import { ProjectLocationsController } from './project-locations.controller';
 import { ProjectLocationsService } from './project-locations.service';
 import { ProjectConnectionsController } from './project-connections.controller';
 import { ProjectLocationTransfersController } from './project-location-transfers.controller';
+import { ProjectConnectionToolsService } from './project-connection-tools.service';
 
 @Module({
   imports: [
@@ -48,6 +49,11 @@ import { ProjectLocationTransfersController } from './project-location-transfers
     WorkspaceResourcesController,
   ],
   providers: [
+    ProjectConnectionToolsService,
+    {
+      provide: 'PROJECT_CONNECTION_AGENT_TOOLS',
+      useExisting: ProjectConnectionToolsService,
+    },
     { provide: 'PROJECT_AGENT_DOMAIN_SERVICE', useExisting: ProjectsService },
     ProjectLocationsService,
     WorkspaceGitActionsService,

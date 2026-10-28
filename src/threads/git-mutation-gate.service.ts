@@ -23,6 +23,28 @@ export class GitMutationGateService {
       this.writing = false;
     }
   }
+  /** Remote publication of an immutable commit only: never a local Git mutation.
+   * The bound caller is already executing this tool. Other agents (including
+   * children), uncertain execution and new turns still exclude publication.
+   */
+  async publishFromAgent<T>(
+    threadId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    if (!this.manager.getClient())
+      throw new ConflictException('GIT_AGENT_STATE_UNKNOWN');
+    const active = this.inventory.snapshot();
+    if (!active.includes(threadId))
+      throw new ConflictException('GIT_AGENT_STATE_UNKNOWN');
+    if (this.writing || this.starting || active.some((id) => id !== threadId))
+      throw new ConflictException('GIT_BUSY');
+    this.writing = true;
+    try {
+      return await operation();
+    } finally {
+      this.writing = false;
+    }
+  }
   async startTurn<T>(operation: () => Promise<T>): Promise<T> {
     if (this.writing) throw new ConflictException('GIT_BUSY');
     this.starting++;

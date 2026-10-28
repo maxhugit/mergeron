@@ -188,6 +188,8 @@
   "gitCopyHelp": "Creates an isolated clone. The current agent's workspace and files remain unchanged.",
   "gitConfirmCopy": "Create working copy",
   "gitInspectionError": "Unable to inspect this copy. Refresh or check its availability.",
+  "gitInspectionOutputLimit": "Git output exceeds the 1 MiB limit. Check untracked files and exclude technical caches (for example .build-cache/) in .gitignore, then refresh.",
+  "gitInspectionTimeout": "The Git command did not respond within the allowed time. Check disk availability or, for a remote operation, the network, then retry.",
   "gitBrowseError": "Unable to open the files in this copy.",
   "gitTabFiles": "Files",
   "gitTabChanges": "Commit preparation",

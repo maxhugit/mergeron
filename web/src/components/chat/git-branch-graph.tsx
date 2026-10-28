@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { gitGet, type GitGraph } from '@/lib/workspace-git-api';
+import { GitInspectionError } from './git-inspection-error';
 
 /** Stable lanes follow first parents; merge parents open additional lanes. */
 // eslint-disable-next-line react-refresh/only-export-components -- Pure layout is exported for deterministic graph regression tests.
@@ -92,7 +93,7 @@ export function GitBranchGraph({
       {query.isPending ? (
         <p role="status">{t('gitLoading')}</p>
       ) : query.isError ? (
-        <p role="alert">{t('gitInspectionError')}</p>
+        <GitInspectionError error={query.error} />
       ) : (
         <>
           {!rows.length && <p>{t('gitNoCommit')}</p>}

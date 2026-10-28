@@ -133,7 +133,7 @@ export class InternalMcpService implements OnModuleDestroy {
         http_headers: { Authorization: `Bearer ${cap.token}` },
         enabled: true,
         startup_timeout_sec: 10,
-        tool_timeout_sec: 60,
+        tool_timeout_sec: 180,
       },
     };
   }
@@ -307,7 +307,9 @@ export class InternalMcpService implements OnModuleDestroy {
             readOnlyHint: tool.readOnly,
             destructiveHint: tool.name === 'local_browser_action',
             idempotentHint: tool.name !== 'local_browser_action',
-            openWorldHint: tool.name.startsWith('local_browser_'),
+            openWorldHint:
+              tool.name.startsWith('local_browser_') ||
+              ['read_project_git', 'publish_project_git'].includes(tool.name),
           },
         },
         async (
@@ -328,9 +330,32 @@ export class InternalMcpService implements OnModuleDestroy {
           } catch (error) {
             const code =
               error instanceof Error &&
-              ['NO_ACTIVE_TURN', 'READ_ONLY', 'RATE_LIMIT'].includes(
-                error.message,
-              )
+              [
+                'NO_ACTIVE_TURN',
+                'READ_ONLY',
+                'RATE_LIMIT',
+                'PROJECT_CONNECTION_UNAVAILABLE',
+                'PROJECT_CONNECTION_UNSUPPORTED',
+                'PROJECT_CONNECTION_REQUEST_CONFLICT',
+                'GIT_OUTPUT_LIMIT_EXCEEDED',
+                'GIT_COMMAND_TIMEOUT',
+                'GIT_STALE',
+                'GIT_BUSY',
+                'GIT_AGENT_STATE_UNKNOWN',
+                'GIT_READ_ONLY',
+                'GIT_COPY_OWNED',
+                'GIT_AUTH_REQUIRED',
+                'GIT_HTTPS_REQUIRED',
+                'GIT_GITHUB_TOKEN_REQUIRED',
+                'GIT_PR_PUSH_REQUIRED',
+                'GIT_PR_SAME_BRANCH',
+                'GIT_PR_CREATE_FAILED',
+                'GIT_OUTCOME_UNKNOWN',
+                'GIT_WRITE_ACCESS_DENIED',
+                'GIT_REMOTE_REJECTED',
+                'GIT_NETWORK_UNAVAILABLE',
+                'GIT_TLS_ERROR',
+              ].includes(error.message)
                 ? error.message
                 : 'ACCESS_DENIED_OR_CREATION_UNCONFIRMED';
             return {
@@ -341,7 +366,7 @@ export class InternalMcpService implements OnModuleDestroy {
                   text: JSON.stringify({
                     code,
                     message:
-                      'Check project access, manager, arguments and existing items. For any creation retry, keep the SAME requestId and payload; never claim an unconfirmed creation succeeded.',
+                      'Check project access, configured connection, manager, arguments and observed state. For any mutation retry keep the SAME requestId and payload. An unknown publication outcome may already have succeeded: inspect remote state and never automatically retry with a new ID. Never claim unconfirmed success.',
                   }),
                 },
               ],
