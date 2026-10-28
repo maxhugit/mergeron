@@ -9,6 +9,7 @@ import {
   requireExecutionAccess,
 } from '../auth/access-context';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
+import { AgentInstructionsService } from '../settings/agent-instructions.service';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
@@ -106,6 +107,7 @@ export class ThreadsService {
     @Optional() private readonly connections?: ProjectConnectionRuntimeService,
     @Optional() private readonly projectTools?: ProjectAgentToolsService,
     @Optional() private readonly internalMcp?: InternalMcpService,
+    @Optional() private readonly agentInstructions?: AgentInstructionsService,
   ) {}
 
   /**
@@ -502,6 +504,7 @@ export class ThreadsService {
       effectiveCwd,
       params.threadId,
     );
+    const commonInstructions = this.agentInstructions?.context();
     const projectContext = this.projectTools?.context(
       params.threadId,
       effectiveCwd,
@@ -533,12 +536,20 @@ export class ThreadsService {
             },
           }
         : {}),
-      ...(sharedKnowledge || publication?.context || projectContext
+      ...(commonInstructions ||
+      sharedKnowledge ||
+      publication?.context ||
+      projectContext
         ? {
             input: [
               {
                 type: 'text' as const,
-                text: [projectContext, sharedKnowledge, publication?.context]
+                text: [
+                  commonInstructions,
+                  projectContext,
+                  sharedKnowledge,
+                  publication?.context,
+                ]
                   .filter(Boolean)
                   .join('\n\n'),
                 text_elements: [],

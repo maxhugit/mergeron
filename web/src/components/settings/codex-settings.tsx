@@ -32,6 +32,7 @@ import { CatalogSettings } from './catalog/catalog-settings';
 import { AccountSettings } from './account/account-settings';
 import { CodexCliSettings } from './codex-cli-settings';
 import { SimpleChatSettings } from './simple-chat-settings';
+import { AgentInstructionsSettings } from './agent-instructions-settings';
 import { useAccountStore } from '@/stores/account-store';
 import {
   catalogStateQueryKey,
@@ -169,7 +170,10 @@ export function CodexSettings({
     !accountQuery.isError &&
     Boolean(authMode);
   const activeTab =
-    connected || requestedTab === 'cli' || requestedTab === 'chatAudio'
+    connected ||
+    requestedTab === 'cli' ||
+    requestedTab === 'chatAudio' ||
+    requestedTab === 'instructions'
       ? requestedTab
       : 'account';
 
@@ -509,6 +513,7 @@ export function CodexSettings({
                 id !== 'account' &&
                 id !== 'cli' &&
                 id !== 'chatAudio' &&
+                id !== 'instructions' &&
                 !connected
               }
               aria-selected={activeTab === id}
@@ -531,6 +536,8 @@ export function CodexSettings({
       </div>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
+        {/* Kept mounted so changing tabs does not discard an unsaved draft. */}
+        <AgentInstructionsSettings active={activeTab === 'instructions'} />
         {activeTab === 'chatAudio' && (
           <div id="codex-settings-panel" role="tabpanel">
             <SimpleChatSettings />

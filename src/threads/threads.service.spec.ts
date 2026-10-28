@@ -583,6 +583,77 @@ describe('ThreadsService', () => {
     );
   });
 
+  it('supplies current common instructions to new, existing and forked agents without changing input or security policy', async () => {
+    const contexts = [
+      'Default visual policy',
+      'Administrator revision',
+      'Explicitly disabled policy',
+    ];
+    const context = vi.fn(() => contexts.shift()!);
+    Object.assign(service, { agentInstructions: { context } });
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+    const input = [
+      { type: 'text' as const, text: 'Build my interface', text_elements: [] },
+      { type: 'image' as const, url: 'https://example.invalid/mockup.png' },
+    ];
+    const sandboxPolicy = { type: 'readOnly' as const, networkAccess: false };
+    for (const [index, threadId] of ['new', 'existing', 'fork'].entries()) {
+      const expectedContext = [
+        'Default visual policy',
+        'Administrator revision',
+        'Explicitly disabled policy',
+      ][index];
+      await service.startTurn({ threadId, input, sandboxPolicy });
+      expect(mockCodex.request).toHaveBeenLastCalledWith(
+        'turn/start',
+        expect.objectContaining({
+          threadId,
+          sandboxPolicy,
+          input: [
+            {
+              type: 'text',
+              text: expectedContext,
+              text_elements: [],
+            },
+            ...input,
+          ],
+        }),
+      );
+      expect(mockBranches.attachPendingVersionTurn).toHaveBeenLastCalledWith(
+        threadId,
+        'turn1',
+        'Build my interface [image]',
+      );
+    }
+    expect(input).toHaveLength(2);
+  });
+
+  it('combines common, project and knowledge context without losing the user request', async () => {
+    Object.assign(service, {
+      agentInstructions: { context: () => 'Common instructions' },
+    });
+    mockKnowledge.contextForConversation.mockResolvedValue('Shared knowledge');
+    mockProjectTools.context.mockReturnValue('Project context');
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+    await service.startTurn({
+      threadId: 't1',
+      input: [{ type: 'text', text: 'My request', text_elements: [] }],
+    });
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        input: [
+          {
+            type: 'text',
+            text: 'Common instructions\n\nProject context\n\nShared knowledge',
+            text_elements: [],
+          },
+          { type: 'text', text: 'My request', text_elements: [] },
+        ],
+      }),
+    );
+  });
+
   it('refreshes project identity and catalog on every existing-conversation turn', async () => {
     mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
     mockProjectTools.context

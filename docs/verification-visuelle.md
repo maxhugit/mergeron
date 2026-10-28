@@ -7,6 +7,31 @@ Elle utilise le paquet de l’application, pas un `npx` susceptible de télécha
 une autre version. Aucun `apt install` ni téléchargement de navigateur n’est
 nécessaire au démarrage d’un agent.
 
+## Consigne commune et paramétrage
+
+Par défaut, Mergeron transmet automatiquement aux agents de travail une consigne
+de vérification du **vrai site**, en ordinateur et mobile, suivie de l’ouverture
+et de l’examen réel des deux captures. Le test autonome ne remplace pas ce
+contrôle. L’agent doit signaler les blocages, ne pas contourner les permissions
+et distinguer dans son compte rendu les assertions exécutées de l’examen visuel.
+
+Un administrateur peut consulter et modifier ce texte dans **Paramètres → Codex
+→ Instructions → Consignes communes aux agents**, même sans compte Codex
+connecté. Le bouton d’enregistrement de cette section est indépendant de celui
+des paramètres natifs Codex. La restauration du texte par défaut prépare un
+brouillon à enregistrer ; un texte vide désactive explicitement ces consignes.
+La limite est de 12 000 caractères. Ne pas y placer de secrets : le texte est
+transmis à tous les agents de travail de cette instance.
+
+Le réglage `general.agentInstructions` est conservé dans la base de paramètres
+persistante, sans changer les fichiers `AGENTS.md`, les consignes des projets ou
+les permissions. Il est relu à chaque nouvel échange, y compris pour les agents
+déjà créés ; un échange en cours n’est pas modifié et aucun redémarrage n’est
+nécessaire. Les conversations simples ne sont pas des agents de travail. Cette
+consigne n’est pas une garantie technique d’exécution : si l’outil, le serveur,
+les droits ou la consultation des images ne sont pas disponibles, l’agent doit
+le dire au lieu de prétendre avoir vérifié le rendu.
+
 ## Validation autonome
 
 Dans le conteneur de l’agent, avec son utilisateur habituel :
