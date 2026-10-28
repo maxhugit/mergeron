@@ -43,7 +43,8 @@ it('puts Account first, disables other tabs without a connection and responds to
   expect(tabs[1]).toHaveTextContent('Codex CLI');
   expect(tabs[1]).toBeEnabled();
   for (const tab of tabs.slice(2)) {
-    if (tab.textContent === 'Chat and Audio') expect(tab).toBeEnabled();
+    if (['Chat and Audio', 'Instructions'].includes(tab.textContent ?? ''))
+      expect(tab).toBeEnabled();
     else expect(tab).toBeDisabled();
   }
   expect(
@@ -69,7 +70,8 @@ it('puts Account first, disables other tabs without a connection and responds to
     'true',
   );
   for (const tab of screen.getAllByRole('tab').slice(2)) {
-    if (tab.textContent === 'Chat and Audio') expect(tab).toBeEnabled();
+    if (['Chat and Audio', 'Instructions'].includes(tab.textContent ?? ''))
+      expect(tab).toBeEnabled();
     else expect(tab).toBeDisabled();
   }
 });
@@ -89,6 +91,10 @@ it('can open CLI management even before an account is connected', async () => {
 });
 beforeEach(() => {
   fixture = catalogFixture();
+  fixture.server.overrides.set(
+    'GET /api/settings/general.agentInstructions',
+    () => json({ value: 'Common policy', defaultValue: 'Default policy' }),
+  );
   const account = {
     account: { type: 'apiKey' as const },
     requiresOpenaiAuth: true,
@@ -108,6 +114,29 @@ beforeEach(() => {
 afterEach(() => {
   fixture.dispose();
   useAccountStore.getState().setAccount(null);
+});
+
+it('keeps common instructions editable without a Codex account or config and preserves drafts across tabs', async () => {
+  const disconnected = {
+    ...useAccountStore.getState().account,
+    account: null,
+    requiresOpenaiAuth: true,
+  };
+  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), disconnected);
+  fixture.server.overrides.set('GET /api/account', () => json(disconnected));
+  useAccountStore.getState().setAccount(null);
+  fixture.render(<CodexSettings />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Instructions' }));
+  const editor = await screen.findByRole('textbox', {
+    name: 'Common instructions text',
+  });
+  fireEvent.change(editor, { target: { value: 'Unsaved policy' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Account' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Instructions' }));
+  expect(
+    screen.getByRole('textbox', { name: 'Common instructions text' }),
+  ).toHaveValue('Unsaved policy');
+  expect(fixture.server.writes).toHaveLength(0);
 });
 
 it('preserves unsaved TOML through loading, failure and success, then exposes the required restart', async () => {

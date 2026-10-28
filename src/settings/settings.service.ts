@@ -14,6 +14,10 @@ import { eq } from 'drizzle-orm';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { settings, type SettingRow } from '../database/schema';
 import {
+  AGENT_INSTRUCTIONS_KEY,
+  AGENT_INSTRUCTIONS_MAX_LENGTH,
+} from './agent-instructions';
+import {
   SETTINGS_DEFINITION_BY_KEY,
   SETTINGS_DEFINITIONS,
   SETTING_CATEGORIES,
@@ -336,6 +340,16 @@ export class SettingsService implements OnModuleInit {
         );
       }
       normalized = value;
+      if (
+        definition.key === AGENT_INSTRUCTIONS_KEY &&
+        value.length > AGENT_INSTRUCTIONS_MAX_LENGTH
+      ) {
+        throw BusinessException.badRequest(
+          ErrorCode.settings.outOfRange,
+          'Common agent instructions are too long',
+          { key: definition.key, min: 0, max: AGENT_INSTRUCTIONS_MAX_LENGTH },
+        );
+      }
     } else if (definition.type === 'number') {
       if (typeof value !== 'number' || !Number.isFinite(value)) {
         throw BusinessException.badRequest(

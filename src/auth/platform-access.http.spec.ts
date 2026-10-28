@@ -176,6 +176,11 @@ beforeEach(async () => {
       {
         provide: SettingsService,
         useValue: {
+          getSetting: (key: string) => ({
+            key,
+            value: 'test common instructions',
+          }),
+          updateSetting: (key: string, value: unknown) => ({ key, value }),
           listSettings: () => [
             { key: 'private-test-setting', value: 'not-for-standard-users' },
           ],
@@ -535,6 +540,22 @@ it('returns 403 on real settings routes for standard users and 200 for administr
       })
     ).statusCode,
   ).toBe(200);
+});
+
+it('restricts common instruction reads and writes to administrators', async () => {
+  for (const method of ['GET', 'PATCH'] as const) {
+    for (const role of ['standard', 'administrator']) {
+      const response = await app.inject({
+        method,
+        url: '/api/settings/general.agentInstructions',
+        headers: proxyHeaders(`${role}@example.com`),
+        ...(method === 'PATCH'
+          ? { payload: { value: 'New common text' } }
+          : {}),
+      });
+      expect(response.statusCode).toBe(role === 'administrator' ? 200 : 403);
+    }
+  }
 });
 
 it('persists appearance preferences on the connected person profile', async () => {
