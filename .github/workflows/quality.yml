@@ -349,6 +349,13 @@ jobs:
                 if (existsSync(root + name)) throw new Error("Build package manager retained");
               }
             }
+            // Isolated CI smoke test, with no network or application credentials.
+            // Production server.mjs continues to enforce chromiumSandbox: true.
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            await page.setContent("<h1>Browser runtime smoke test</h1>");
+            if (await page.locator("h1").innerText() !== "Browser runtime smoke test") throw new Error("Chromium failed");
+            await browser.close();
           '
 
       - name: Require no HIGH or CRITICAL browser vulnerabilities
