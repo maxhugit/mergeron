@@ -3,8 +3,8 @@ import { projectsApi, type ProjectSummary } from '@/lib/projects-api';
 import type { DeliverablesBoard } from '@/lib/deliverables-api';
 
 /** Display metadata only: keys always remain the authoritative server paths. */
-export function useDeliverableDirectoryAliases(project?: ProjectSummary) {
-  const boards = useQueries({
+export function useDeliverableBoards(project?: ProjectSummary) {
+  return useQueries({
     queries: (project?.resources ?? [])
       .filter((resource) => resource.type === 'deliverable_board')
       .map((resource) => ({
@@ -17,6 +17,10 @@ export function useDeliverableDirectoryAliases(project?: ProjectSummary) {
         retry: false,
       })),
   });
+}
+
+export function useDeliverableDirectoryAliases(project?: ProjectSummary) {
+  const boards = useDeliverableBoards(project);
   return Object.fromEntries(
     boards.flatMap((board) =>
       (board.data?.deliverables ?? [])

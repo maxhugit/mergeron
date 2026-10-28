@@ -1,4 +1,8 @@
 {
+  "renameDocument": "Rename document",
+  "renameDocumentDescription": "Versions and old links are retained. Keep the same file extension.",
+  "unableToRenameDocument": "Could not rename. Check the name and extension, close open editors and refresh if the document changed. Existing files are never overwritten.",
+  "documentRenamePreservedOriginal": "The document was renamed. The previous file was retained because its safe removal could not be verified.",
   "agentChoice": "Work agent",
   "useExistingAgent": "Assign an existing agent",
   "availableAgent": "Available project agent",

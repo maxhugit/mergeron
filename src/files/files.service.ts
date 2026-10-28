@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { currentAccess } from '../auth/access-context';
-import { projects } from '../database/schema';
+import { projects, projectDeliverableDocuments } from '../database/schema';
 import { documentPathAlias } from '../deliverables/document-path-alias';
 import { projectSystemAlias } from '../projects/project-system-paths';
 import {
@@ -108,6 +108,27 @@ interface ResolveTargetOptions {
   recursiveParent?: boolean;
 }
 
+export interface ProjectDocumentMutation {
+  operation:
+    | 'create'
+    | 'write'
+    | 'upload'
+    | 'rename'
+    | 'delete'
+    | 'move'
+    | 'copy'
+    | 'directory';
+  path: string;
+  destination?: string;
+  content?: string;
+  overwrite?: boolean;
+  expectedMtime?: number;
+  upload?: FileUploadInput;
+  documentId?: string;
+  expectedVersion?: number;
+  comment?: string;
+}
+
 interface ExistingAncestor {
   originalPath: string;
   resolvedPath: string;
@@ -115,6 +136,10 @@ interface ExistingAncestor {
 
 @Injectable()
 export class FilesService implements OnModuleDestroy {
+  /** Installed by the deliverable owner without a circular module dependency. */
+  projectDocumentMutation?: (
+    request: ProjectDocumentMutation,
+  ) => Promise<{ result: unknown } | null>;
   private readonly logger = new Logger(FilesService.name);
   /** Roots dynamically added via addWorkspaceRoot (e.g. thread cwd). */
   private readonly dynamicRoots = new Set<string>();
@@ -408,11 +433,20 @@ export class FilesService implements OnModuleDestroy {
 
     const entries = await fs.readdir(resolved, { withFileTypes: true });
     const result: FileEntry[] = [];
+    const removedDocuments = new Set(
+      this.db
+        ?.select()
+        .from(projectDeliverableDocuments)
+        .all()
+        .filter((document) => document.deletedAt !== null)
+        .map((document) => document.sourcePath) ?? [],
+    );
 
     for (const entry of entries) {
       if (this.excludedDirs.has(entry.name)) continue;
 
       const entryPath = path.join(resolved, entry.name);
+      if (removedDocuments.has(entryPath)) continue;
       const access = currentAccess();
       if (access && access.identity.role !== 'administrator') {
         try {
@@ -510,6 +544,13 @@ export class FilesService implements OnModuleDestroy {
     content = '',
     overwrite = false,
   ): Promise<FileCreateResult> {
+    const managed = await this.projectDocumentMutation?.({
+      operation: 'create',
+      path: filePath,
+      content,
+      overwrite,
+    });
+    if (managed) return managed.result as FileCreateResult;
     const targetPath = await this.resolveSafeTargetPath(filePath);
     const existing = await this.assertNoOverwrite(targetPath, overwrite);
     if (existing?.isDirectory()) {
@@ -546,6 +587,10 @@ export class FilesService implements OnModuleDestroy {
     recursive = false,
     overwrite = false,
   ): Promise<{ path: string }> {
+    await this.projectDocumentMutation?.({
+      operation: 'directory',
+      path: dirPath,
+    });
     const targetPath = await this.resolveSafeTargetPath(dirPath, {
       recursiveParent: recursive,
     });
@@ -584,6 +629,13 @@ export class FilesService implements OnModuleDestroy {
     content: string,
     expectedMtime?: number,
   ): Promise<{ mtime: number }> {
+    const managed = await this.projectDocumentMutation?.({
+      operation: 'write',
+      path: filePath,
+      content,
+      expectedMtime,
+    });
+    if (managed) return managed.result as { mtime: number };
     const resolved = await this.resolveSafePath(
       path.dirname(path.resolve(filePath)),
     );
@@ -641,6 +693,12 @@ export class FilesService implements OnModuleDestroy {
     newName: string,
     overwrite = false,
   ): Promise<FileRelocationResult> {
+    const managed = await this.projectDocumentMutation?.({
+      operation: 'rename',
+      path: sourcePath,
+      destination: newName,
+    });
+    if (managed) return managed.result as FileRelocationResult;
     this.validateEntryName(newName);
     const source = await this.resolveSafePath(sourcePath);
     this.assertNotWorkspaceRoot(source);
@@ -728,6 +786,11 @@ export class FilesService implements OnModuleDestroy {
     destinationPath: string,
     overwrite = false,
   ): Promise<FileRelocationResult> {
+    await this.projectDocumentMutation?.({
+      operation: 'copy',
+      path: sourcePath,
+      destination: destinationPath,
+    });
     const source = await this.resolveSafePath(sourcePath);
     const destination = await this.resolveSafeTargetPath(destinationPath);
     await this.assertNoOverwrite(destination, overwrite);
@@ -770,6 +833,11 @@ export class FilesService implements OnModuleDestroy {
     destinationPath: string,
     overwrite = false,
   ): Promise<FileRelocationResult> {
+    await this.projectDocumentMutation?.({
+      operation: 'move',
+      path: sourcePath,
+      destination: destinationPath,
+    });
     const source = await this.resolveSafePath(sourcePath);
     this.assertNotWorkspaceRoot(source);
     const destination = await this.resolveSafeTargetPath(destinationPath);
@@ -850,6 +918,11 @@ export class FilesService implements OnModuleDestroy {
    * @param recursive - Whether non-empty directories may be removed recursively
    */
   async deletePath(targetPath: string, recursive = false): Promise<void> {
+    const managed = await this.projectDocumentMutation?.({
+      operation: 'delete',
+      path: targetPath,
+    });
+    if (managed) return;
     const absoluteTarget = path.resolve(targetPath);
     try {
       const realTarget = await fs.realpath(absoluteTarget);
@@ -1138,6 +1211,13 @@ export class FilesService implements OnModuleDestroy {
       destinationRoot,
       upload.relativePath ?? upload.filename,
     );
+    const managed = await this.projectDocumentMutation?.({
+      operation: 'upload',
+      path: requestedTarget,
+      upload,
+      overwrite,
+    });
+    if (managed) return managed.result as UploadedFileResult;
     this.assertProjectPathMutable(requestedTarget);
     const parentDir = path.dirname(requestedTarget);
     // Check before mkdir as well: following a symlink while creating nested

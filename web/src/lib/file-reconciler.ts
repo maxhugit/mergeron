@@ -89,6 +89,12 @@ export function applyFileChange(
   queryClient: QueryClient,
   change: FileChange,
 ): void {
+  // Files inside deliverable directories are managed documents as well as files.
+  if (
+    queryClient.getQueryCache().findAll({ queryKey: ['project-deliverables'] })
+      .length
+  )
+    void queryClient.invalidateQueries({ queryKey: ['project-deliverables'] });
   const paths = new Set<string>();
   const deletedPaths = new Set<string>();
   for (const fact of filePathChanges(change)) {

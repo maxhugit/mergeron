@@ -1,4 +1,8 @@
 {
+  "renameDocument": "Renommer le document",
+  "renameDocumentDescription": "Les versions et les anciens liens sont conservés. Gardez la même extension de fichier.",
+  "unableToRenameDocument": "Renommage impossible. Vérifiez le nom et son extension, fermez les éditeurs ouverts et actualisez si le document a changé. Un fichier existant ne sera jamais remplacé.",
+  "documentRenamePreservedOriginal": "Le document est renommé. L’ancien fichier a été conservé par sécurité car son retrait n’a pas pu être vérifié.",
   "agentChoice": "Agent de travail",
   "useExistingAgent": "Affecter un agent existant",
   "availableAgent": "Agent disponible du projet",

@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { documentPathAlias } from './document-path-alias';
+import { Readable } from 'node:stream';
+import { migrateDeliverableDocumentRoots } from './document-root-migration';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -35,7 +38,9 @@ describe('project deliverables', () => {
     files: FilesService;
   beforeEach(async () => {
     database = createTestDatabase();
-    root = await fs.mkdtemp(path.join(os.tmpdir(), 'deliverables-'));
+    root = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), 'deliverables-')),
+    );
     await fs.mkdir(path.join(root, '.mergeron'));
     const now = Date.now();
     database.db
@@ -87,6 +92,442 @@ describe('project deliverables', () => {
       files,
       new IdentityService(database.db),
       new ActiveFoldersService(database.db),
+    );
+  });
+  it.each([false, true])(
+    'synchronizes explorer create, upload, save, rename and recoverable delete (protected=%s)',
+    async (protectedSource) => {
+      vi.stubEnv(
+        'MERGERON_PUBLISHED_DOCUMENT_PROTECTION',
+        protectedSource ? 'required' : '',
+      );
+      try {
+        const item = await service.create('p', 'r', { title: 'Explorer' });
+        const source = path.join(root, 'livrables', item.id, 'report.txt');
+        await files.createFile(source, 'First');
+        let document = service.documents('p', 'r', item.id)[0];
+        expect(document).toMatchObject({
+          name: 'report.txt',
+          currentVersionNumber: 1,
+          sourcePath: source,
+        });
+        await files.writeFile(source, 'Second');
+        document = service.documents('p', 'r', item.id)[0];
+        expect(document.currentVersionNumber).toBe(2);
+        const renamed = await files.renamePath(source, 'renamed.txt');
+        document = service.documents('p', 'r', item.id)[0];
+        expect(document.sourcePath).toBe(renamed.newPath);
+        expect(documentPathAlias(database.db, source)).toBe(renamed.newPath);
+        async function* uploads() {
+          await Promise.resolve();
+          yield { filename: 'renamed.txt', stream: Readable.from(['Third']) };
+        }
+        await service.uploadDocuments('p', 'r', item.id, uploads(), {
+          documentId: document.id,
+          expectedVersion: 2,
+          comment: 'Uploaded',
+        });
+        document = service.documents('p', 'r', item.id)[0];
+        expect(document.currentVersionNumber).toBe(3);
+        expect(document.versions[0].comment).toBe('Uploaded');
+        await files.deletePath(document.sourcePath);
+        expect(
+          service.documents('p', 'r', item.id)[0].deletedAt,
+        ).not.toBeNull();
+        expect(await files.readDirectory(path.dirname(source))).toEqual([]);
+        expect(
+          await fs.readFile(document.versions[2].snapshotPath, 'utf8'),
+        ).toBe('First');
+        service.setDocumentDeleted('p', 'r', item.id, document.id, 3, false);
+        expect(
+          (await files.readDirectory(path.dirname(source))).map(
+            (file) => file.name,
+          ),
+        ).toEqual(['renamed.txt']);
+        expect(await fs.readFile(document.sourcePath, 'utf8')).toBe('Third');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+  it('guards explorer mutations and uploads before touching retained files', async () => {
+    const item = await service.create('p', 'r', { title: 'Explorer guards' });
+    const directory = path.join(root, 'livrables', item.id);
+    const source = path.join(directory, 'report.txt');
+    await files.createFile(source, 'Original');
+    const document = service.documents('p', 'r', item.id)[0];
+    async function* uploads() {
+      await Promise.resolve();
+      yield { filename: 'report.txt', stream: Readable.from(['Replacement']) };
+    }
+    await expect(
+      service.uploadDocuments('p', 'r', item.id, uploads(), {
+        documentId: document.id,
+        expectedVersion: 5,
+      }),
+    ).rejects.toThrow('Reload');
+    await expect(files.deletePath(directory, true)).rejects.toThrow();
+    const importDirectory = path.join(root, 'incoming');
+    await fs.mkdir(importDirectory);
+    await expect(
+      files.copyPath(importDirectory, path.join(root, 'livrables'), true),
+    ).rejects.toThrow();
+    await expect(
+      files.movePath(source, path.join(root, 'moved.txt')),
+    ).rejects.toThrow();
+    await expect(
+      files.saveUploadedFiles(directory, uploads(), true),
+    ).resolves.toMatchObject({ files: [{ path: source }] });
+    service.updateOnlyOfficeSession(source, 'editing');
+    await expect(files.writeFile(source, 'Blocked')).rejects.toThrow('Close');
+    expect(() =>
+      service.setDocumentDeleted('p', 'r', item.id, document.id, 2, true),
+    ).toThrow('Close');
+    service.updateOnlyOfficeSession(source, 'saved');
+    const current = service.get('p', 'r', item.id);
+    service.transitionLifecycle('p', 'r', item.id, {
+      target: 'finalized',
+      version: current.version,
+    });
+    await expect(
+      files.createFile(path.join(directory, 'new.txt'), 'Blocked'),
+    ).rejects.toThrow('Reopen');
+    await expect(files.renamePath(source, 'new.txt')).rejects.toThrow('Reopen');
+    await expect(files.deletePath(source)).rejects.toThrow('Reopen');
+    await expect(
+      files.saveUploadedFiles(directory, uploads(), true),
+    ).rejects.toThrow('Reopen');
+    expect(await fs.readFile(source, 'utf8')).toBe('Replacement');
+    expect(service.documents('p', 'r', item.id)[0].currentVersionNumber).toBe(
+      2,
+    );
+  });
+  it.each([false, true])(
+    'renames a document without losing versions, content or old links (protected=%s)',
+    async (protectedSource) => {
+      vi.stubEnv(
+        'MERGERON_PUBLISHED_DOCUMENT_PROTECTION',
+        protectedSource ? 'required' : '',
+      );
+      try {
+        const item = await service.create('p', 'r', { title: 'Rename' });
+        const source = path.join(root, 'livrables', item.id, 'report.docx');
+        await fs.writeFile(source, 'Version one');
+        await service.addDocumentVersion(
+          'p',
+          'r',
+          item.id,
+          { path: source },
+          { personId: null, name: 'Alice' },
+        );
+        const document = service.documents('p', 'r', item.id)[0];
+        const renamed = await service.renameDocument(
+          'p',
+          'r',
+          item.id,
+          document.id,
+          {
+            name: 'Renamed.docx',
+            expectedName: document.name,
+            expectedVersion: 1,
+          },
+        );
+        expect(renamed.previousFileRetained).toBe(false);
+        const current = service.documents('p', 'r', item.id)[0];
+        expect(current).toMatchObject({
+          id: document.id,
+          name: 'Renamed.docx',
+          currentVersionNumber: 1,
+          format: 'docx',
+        });
+        expect(current.versions).toEqual(document.versions);
+        expect(await fs.readFile(current.sourcePath, 'utf8')).toBe(
+          'Version one',
+        );
+        expect(documentPathAlias(database.db, document.sourcePath)).toBe(
+          current.sourcePath,
+        );
+        await expect(fs.stat(document.sourcePath)).rejects.toMatchObject({
+          code: 'ENOENT',
+        });
+        await fs.writeFile(current.sourcePath, 'Version two');
+        await service.addDocumentVersion(
+          'p',
+          'r',
+          item.id,
+          { path: current.sourcePath, expectedVersion: 1 },
+          { personId: null, name: 'Bob' },
+          current.id,
+        );
+        await service.restoreDocumentVersion(
+          'p',
+          'r',
+          item.id,
+          current.id,
+          document.versions[0].id,
+          { expectedVersion: 2 },
+          { personId: null, name: 'Alice' },
+        );
+        expect(await fs.readFile(current.sourcePath, 'utf8')).toBe(
+          'Version one',
+        );
+        expect(service.documents('p', 'r', item.id)[0].versions).toHaveLength(
+          3,
+        );
+        expect(
+          await fs.readFile(document.versions[0].snapshotPath, 'utf8'),
+        ).toBe('Version one');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+  it('retains unregistered files before explorer removal and rolls back failed version writes', async () => {
+    const item = await service.create('p', 'r', { title: 'Explorer recovery' });
+    const source = path.join(root, 'livrables', item.id, 'legacy.txt');
+    await fs.writeFile(source, 'Legacy content');
+    await files.deletePath(source);
+    const removed = service.documents('p', 'r', item.id)[0];
+    expect(removed.deletedAt).not.toBeNull();
+    expect(await fs.readFile(removed.versions[0].snapshotPath, 'utf8')).toBe(
+      'Legacy content',
+    );
+    service.setDocumentDeleted('p', 'r', item.id, removed.id, 1, false);
+    const transaction = vi
+      .spyOn(database.db, 'transaction')
+      .mockImplementationOnce(() => {
+        throw new Error('commit failed');
+      });
+    try {
+      await expect(files.writeFile(source, 'Failed version')).rejects.toThrow(
+        'commit failed',
+      );
+    } finally {
+      transaction.mockRestore();
+    }
+    expect(await fs.readFile(source, 'utf8')).toBe('Legacy content');
+    expect(service.documents('p', 'r', item.id)[0].currentVersionNumber).toBe(
+      1,
+    );
+    expect(
+      await fs.readdir(path.join(root, 'livrables', '.version-staging')),
+    ).toEqual([]);
+  });
+  it('rejects conflicting names, unsafe names, stale requests and active editors without changing the original', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename guards' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const input = {
+      name: 'new.docx',
+      expectedName: document.name,
+      expectedVersion: 1,
+    };
+    for (const name of [
+      '../bad.docx',
+      'x/y.docx',
+      'x\\y.docx',
+      '',
+      'changed.pdf',
+    ])
+      await expect(
+        service.renameDocument('p', 'r', item.id, document.id, {
+          ...input,
+          name,
+        }),
+      ).rejects.toThrow();
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, {
+        ...input,
+        expectedVersion: 2,
+      }),
+    ).rejects.toThrow('Reload');
+    await fs.writeFile(
+      path.join(path.dirname(document.sourcePath), 'new.docx'),
+      'Other file',
+    );
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, input),
+    ).rejects.toThrow('already exists');
+    service.updateOnlyOfficeSession(document.sourcePath, 'editing');
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, {
+        ...input,
+        name: 'free.docx',
+      }),
+    ).rejects.toThrow('Close the document editor');
+    expect(await fs.readFile(document.sourcePath, 'utf8')).toBe('Original');
+    expect(service.documents('p', 'r', item.id)[0].name).toBe('report.docx');
+  });
+  it('rejects a symlink substituted for the registered document', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename symlink' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const other = path.join(path.dirname(source), 'other.docx');
+    await fs.writeFile(other, 'Unrelated');
+    await fs.unlink(document.sourcePath);
+    await fs.symlink(other, document.sourcePath);
+    await expect(
+      service.renameDocument('p', 'r', item.id, document.id, {
+        name: 'new.docx',
+        expectedName: document.name,
+        expectedVersion: 1,
+      }),
+    ).rejects.toThrow();
+    expect(await fs.readFile(other, 'utf8')).toBe('Unrelated');
+    expect(service.documents('p', 'r', item.id)[0].sourcePath).toBe(
+      document.sourcePath,
+    );
+    await expect(
+      fs.stat(path.join(path.dirname(source), 'new.docx')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('serializes concurrent renames and rejects the stale name', async () => {
+    const item = await service.create('p', 'r', {
+      title: 'Rename concurrency',
+    });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const results = await Promise.allSettled(
+      ['first.docx', 'second.docx'].map((name) =>
+        service.renameDocument('p', 'r', item.id, document.id, {
+          name,
+          expectedName: document.name,
+          expectedVersion: 1,
+        }),
+      ),
+    );
+    expect(results.map((result) => result.status)).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
+    const current = service.documents('p', 'r', item.id)[0];
+    expect(current.name).toBe('first.docx');
+    expect(await fs.readFile(current.sourcePath, 'utf8')).toBe('Original');
+    expect(current.versions).toEqual(document.versions);
+  });
+  it('keeps renamed paths reserved and safely finishes interrupted cleanup on restart', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename recovery' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const renamed = await service.renameDocument(
+      'p',
+      'r',
+      item.id,
+      document.id,
+      {
+        name: 'new.docx',
+        expectedName: document.name,
+        expectedVersion: 1,
+      },
+    );
+    await fs.copyFile(renamed.newPath, source);
+    const warn = vi.fn();
+    await migrateDeliverableDocumentRoots(database.db, warn);
+    expect(warn).not.toHaveBeenCalled();
+    await expect(fs.stat(source)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await fs.readFile(renamed.newPath, 'utf8')).toBe('Original');
+    expect(await fs.readFile(document.versions[0].snapshotPath, 'utf8')).toBe(
+      'Original',
+    );
+    const second = path.join(root, 'livrables', item.id, 'second.docx');
+    await fs.writeFile(second, 'Second');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: second },
+      { personId: null, name: 'Alice' },
+    );
+    const other = service
+      .documents('p', 'r', item.id)
+      .find((entry) => entry.id !== document.id)!;
+    await expect(
+      service.renameDocument('p', 'r', item.id, other.id, {
+        name: 'report.docx',
+        expectedName: other.name,
+        expectedVersion: 1,
+      }),
+    ).rejects.toThrow('reserves this name');
+    expect(documentPathAlias(database.db, source)).toBe(renamed.newPath);
+    const ready = service.get('p', 'r', item.id);
+    service.transitionLifecycle('p', 'r', item.id, {
+      target: 'finalized',
+      version: ready.version,
+    });
+    await expect(
+      service.renameDocument('p', 'r', item.id, other.id, {
+        name: 'finalized.docx',
+        expectedName: other.name,
+        expectedVersion: 1,
+      }),
+    ).rejects.toThrow('Reopen the deliverable');
+  });
+  it('preserves the original when the rename database commit fails', async () => {
+    const item = await service.create('p', 'r', { title: 'Rename rollback' });
+    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    await fs.writeFile(source, 'Original');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Alice' },
+    );
+    const document = service.documents('p', 'r', item.id)[0];
+    const transaction = vi
+      .spyOn(database.db, 'transaction')
+      .mockImplementationOnce(() => {
+        throw new Error('commit failed');
+      });
+    try {
+      await expect(
+        service.renameDocument('p', 'r', item.id, document.id, {
+          name: 'new.docx',
+          expectedName: document.name,
+          expectedVersion: 1,
+        }),
+      ).rejects.toThrow('commit failed');
+    } finally {
+      transaction.mockRestore();
+    }
+    expect(await fs.readFile(document.sourcePath, 'utf8')).toBe('Original');
+    await expect(
+      fs.stat(path.join(path.dirname(document.sourcePath), 'new.docx')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(service.documents('p', 'r', item.id)[0].sourcePath).toBe(
+      document.sourcePath,
     );
   });
   it('records creator and last editor when saving a deliverable', async () => {
