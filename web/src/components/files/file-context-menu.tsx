@@ -100,6 +100,7 @@ export function FileContextMenu({
     return (
       <DeliverableDocuments
         {...documentActions}
+        onAttachToChat={actions.onAttachToChat}
         onError={() => showSnackbar(t('unableToUpdateDocument'), 'error')}
       >
         {children}
