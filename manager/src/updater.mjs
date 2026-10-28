@@ -671,6 +671,32 @@ export class TransactionalUpdater {
           ))
       )
         blockers.push('browser:updateIsolationRequired');
+      if (component.id === 'browser') {
+        const required = this.manifest.components.find(
+          (item) => item.id === 'browser',
+        ).requiredNetworks;
+        try {
+          const networks = await Promise.all(
+            required.map((name) => this.docker.inspectNetwork(name)),
+          );
+          if (
+            JSON.stringify(
+              Object.keys(inspect.NetworkSettings?.Networks ?? {}).sort(),
+            ) !== JSON.stringify([...required].sort()) ||
+            networks.some(
+              (network, index) =>
+                network.Name !== required[index] ||
+                network.Driver !== 'bridge' ||
+                network.Internal !==
+                  required[index].endsWith('-browser-control'),
+            )
+          )
+            blockers.push('browser:updateIsolationRequired');
+        } catch {
+          // Missing/unverifiable networks must fail closed, not imply isolation.
+          blockers.push('browser:updateIsolationRequired');
+        }
+      }
       if (
         inspect.Name !==
         `/${this.manifest.components.find((c) => c.id === component.id).canonicalName}`

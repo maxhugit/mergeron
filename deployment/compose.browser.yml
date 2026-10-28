@@ -3,24 +3,42 @@
 services:
   mergeron-ui:
     environment:
-      MERGERON_BROWSER_ENDPOINT: ws://mergeron-browser:3000/${BROWSER_WS_PATH:?Set a random browser path}
+      MERGERON_BROWSER_ENDPOINT: ws://${MERGERON_STACK_PREFIX:-mergeron}-browser:3000/${BROWSER_WS_PATH:?Set a random browser path}
     networks:
       mergeron-browser-control: {}
   mergeron-browser:
-    image: ${MERGERON_BROWSER_IMAGE:-ghcr.io/maxhugit/mergeron-browser:edge}
+    image: ${MERGERON_BROWSER_IMAGE:-ghcr.io/maxhugit/mergeron-browser:latest}
+    container_name: ${MERGERON_STACK_PREFIX:-mergeron}-browser
+    labels:
+      io.mergeron.stack: ${MERGERON_STACK_PREFIX:-mergeron}
+      io.mergeron.component: browser
+      io.mergeron.managed: 'true'
     build: ./browser
     init: true
     restart: unless-stopped
     environment:
       BROWSER_WS_PATH: ${BROWSER_WS_PATH:?Set a random browser path}
     networks:
-      - mergeron-browser-control
-      - mergeron-browser-egress
+      mergeron-browser-control:
+        aliases: ['${MERGERON_STACK_PREFIX:-mergeron}-browser']
+      mergeron-browser-egress: {}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'const s=require("net").connect(3000,"127.0.0.1",()=>{s.end();process.exit(0)});s.on("error",()=>process.exit(1));setTimeout(()=>process.exit(1),3000)',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=512m,mode=1777
     shm_size: 256m
     cap_drop: [ALL]
+    dns: [1.1.1.1]
     security_opt:
       - no-new-privileges:true
       - seccomp=${DEPLOY_ROOT}/config/seccomp-bwrap.json
@@ -29,5 +47,7 @@ services:
     cpus: 1.5
 networks:
   mergeron-browser-control:
+    name: ${MERGERON_STACK_PREFIX:-mergeron}-browser-control
     internal: true
-  mergeron-browser-egress: {}
+  mergeron-browser-egress:
+    name: ${MERGERON_STACK_PREFIX:-mergeron}-browser-egress

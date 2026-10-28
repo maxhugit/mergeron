@@ -27,6 +27,15 @@ les permissions de l’hôte, et non par une simple consigne textuelle au modèl
 - sauvegarde des données persistantes ;
 - journaux avec rotation et sans secret.
 
+Le navigateur optionnel géré en production (Manager 0.5.1+) reste séparé de
+l’application : utilisateur `pwuser`, racine en lecture seule, sandbox Chromium,
+`CapDrop=ALL`, aucune capacité ajoutée, aucun volume ou port hôte. Le Manager
+vérifie avant une transaction ses seuls deux réseaux bridge, dont le contrôle
+interne, et refuse une topologie inconnue. L’image doit provenir du dépôt
+officiel ; le proxy public-only interdit toujours les destinations privées.
+Le chemin secret Playwright ne doit apparaître ni dans les diagnostics publics
+ni dans Git. Voir [le guide d’exploitation](docs/navigateur-annote.md).
+
 ## Contrôles de l’image publiée
 
 Les workflows de qualité et de publication analysent l’image finale avec Trivy,

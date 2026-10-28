@@ -76,18 +76,56 @@ fourni. Un hôte incompatible doit faire échouer le démarrage : ne pas ajouter
 2. Ajoutez `deployment/compose.browser.yml` au déploiement :
 
    ```sh
-   docker compose --env-file deployment/.env -f deployment/compose.yml -f deployment/compose.browser.yml up -d --build
+   docker compose --env-file deployment/.env -f deployment/compose.yml -f deployment/compose.browser.yml up -d --no-build
    ```
+
+   Définir `MERGERON_BROWSER_IMAGE` par une image stable épinglée par digest en
+   production, ou `edge` en DEV. L’overlay donne des noms de conteneur/réseaux
+   cohérents avec `MERGERON_STACK_PREFIX`, un healthcheck et les labels de gestion.
 
 3. L’overlay définit `MERGERON_BROWSER_ENDPOINT` uniquement dans l’application.
    Les deux côtés utilisent Playwright 1.64.1 ; leurs versions doivent correspondre.
    Sans endpoint, l’interface affiche une indisponibilité, sans lancer de navigateur
    dans l’application ni retomber sur un iframe.
 
-Ce service reste optionnel. En production, il conserve un cycle de déploiement
-séparé : la gestion décrite ci-dessous est activable uniquement en DEV.
+Ce service reste optionnel. Depuis la version 0.5.1 du Manager, sa gestion est
+activable explicitement en production comme en développement.
 
-## Gestion par le Manager en DEV
+## Gestion par le Manager
+
+Installer d’abord un navigateur sain avec les protections ci-dessus. En
+production, utiliser l’image stable officielle `ghcr.io/maxhugit/mergeron-browser`
+épinglée par digest, jamais une construction locale ou un tag `edge`. Les versions
+Playwright du navigateur et de l’application doivent correspondre.
+Le conteneur doit s’appeler `<préfixe>-browser` et porter les labels
+`io.mergeron.managed=true`, `io.mergeron.stack=<préfixe>` et
+`io.mergeron.component=browser`. Ses seuls réseaux sont
+`<préfixe>-browser-control` (bridge interne) et `<préfixe>-browser-egress`
+(bridge de sortie), sans raccordement à un réseau administratif ou public.
+
+Recréer ensuite **uniquement le Manager**, avec son image stable 0.5.1 ou
+supérieure et sa configuration existante, en ajoutant
+`MERGERON_MANAGE_BROWSER=true`. Conserver ce réglage dans la définition de
+déploiement de l’hôte. Les installations sans ce réglage gardent leurs trois
+composants historiques ; le Manager ne crée jamais un navigateur manquant.
+
+Un ancien enregistrement d’adoption à trois composants reste accepté uniquement
+si ces trois composants sont strictement inchangés et que le quatrième est le
+navigateur canonique déjà marqué géré, sur ses deux réseaux attendus. Le fichier
+n’est pas réécrit à l’activation ; la première transaction réussie enregistre
+l’inventaire complet. Toute autre dérive reste bloquante.
+
+Préparer puis confirmer une transaction standard avec l’image navigateur
+immuable déjà vérifiée. L’application conserve sa propre image si elle n’est pas
+sélectionnée ; la transaction sauvegarde les données et raccorde son endpoint
+au navigateur. Cette opération redémarre la stack et conserve le retour arrière.
+Vérifier ensuite **Infrastructure**, la carte Browser dans **Serveur → Mise à
+jour**, puis le chargement d’une page publique et le pointage d’un élément.
+En cas d’échec, conserver l’ancien Manager et la définition de déploiement pour
+restauration. Aucune migration de profil seccomp de l’application n’est activée
+implicitement en production.
+
+### Cas historique de la DEV
 
 Sur une pile dédiée `mergeron-dev`, après installation et vérification du
 navigateur isolé, exécuter `scripts/configure-dev-browser.py --confirm-configure`
@@ -101,7 +139,8 @@ Mettre ensuite à jour le Manager DEV avec
 `scripts/update-dev-manager.py REVISION --confirm-replace --manage-browser`.
 L’option persistante `MERGERON_MANAGE_BROWSER=true` ajoute le navigateur à
 l’inventaire et aux transactions. Sans elle, les trois composants historiques
-restent seuls gérés ; l’activation est refusée dans une pile de production.
+restent seuls gérés. Ce script de remplacement demeure limité à la DEV : ne pas
+le détourner pour remplacer le Manager de production.
 Le navigateur doit préexister : le Manager ne crée pas un runtime non configuré.
 
 Le Manager démarre le navigateur avant l’application et vérifie sa santé.
@@ -112,10 +151,9 @@ Chaque mise à jour et restauration conserve ses réseaux, son chemin de contrô
 secret, son sandbox et réapplique le DNS public. Une image locale préexistante
 est conservée par son identifiant immuable, sans téléchargement implicite.
 Le changement de version Playwright reste à coordonner avec l’application.
-La détection des nouvelles images publiée par les réglages Serveur concerne
-actuellement l’application Mergeron, pas le runtime du navigateur. Le Manager
-surveille sa santé, mais ne détecte ni n’installe automatiquement une nouvelle
-image navigateur ; une mise à jour explicite et compatible reste nécessaire.
+La détection des nouvelles images dans les réglages Serveur inclut le navigateur
+géré : canal `edge` en DEV et `latest` en production. Une mise à jour explicite,
+confirmée et compatible reste nécessaire ; rien n’est installé automatiquement.
 Ne jamais ajouter de capacité Linux, désactiver le sandbox ou exposer le port
 de contrôle pour obtenir un démarrage.
 

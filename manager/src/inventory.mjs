@@ -9,8 +9,6 @@ export function scopeManifest(
   proxyNetwork = 'mergeron-proxy',
   browser = {},
 ) {
-  if (browser.enabled && stackEnvironment !== 'development')
-    throw new Error('Managed browser is currently development-only');
   const browserDns = browser.dns ?? ['1.1.1.1'];
   if (
     browser.enabled &&
@@ -66,7 +64,9 @@ export function scopeManifest(
       legacyNames: [],
       allowedImageRepositories: [
         'ghcr.io/maxhugit/mergeron-browser',
-        `${stackPrefix}-browser`,
+        ...(stackEnvironment === 'development'
+          ? [`${stackPrefix}-browser`]
+          : []),
       ],
       requiredNetworks: [
         `${manifest.stack}-browser-control`,

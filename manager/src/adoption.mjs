@@ -65,6 +65,44 @@ function adoptionBlockers(inventory) {
   return [...new Set(blockers)].sort();
 }
 
+function recordMatches(inventory, record) {
+  return (
+    record.stack === inventory.stack &&
+    ((record.schemaVersion === 2 &&
+      record.environment === inventory.environment &&
+      record.fingerprint === hashSnapshot(canonicalSnapshot(inventory))) ||
+      (record.schemaVersion === 1 &&
+        record.environment === undefined &&
+        inventory.environment === 'production' &&
+        record.fingerprint === hashSnapshot(legacySnapshot(inventory))))
+  );
+}
+
+// Explicitly enabling the optional companion must not invalidate an otherwise
+// identical legacy installation. Never forgive changes to its three components.
+function isManagedBrowserExtension(inventory, record) {
+  const browser = inventory.components.find((c) => c.id === 'browser');
+  return (
+    record.components?.length === 3 &&
+    inventory.components.length === 4 &&
+    browser?.adoption === 'managed' &&
+    browser.imageRepositoryAllowed === true &&
+    browser.containerName === `${inventory.stack}-browser` &&
+    JSON.stringify([...browser.networks].sort()) ===
+      JSON.stringify([
+        `${inventory.stack}-browser-control`,
+        `${inventory.stack}-browser-egress`,
+      ]) &&
+    recordMatches(
+      {
+        ...inventory,
+        components: inventory.components.filter((c) => c.id !== 'browser'),
+      },
+      record,
+    )
+  );
+}
+
 export function evaluateAdoption(inventory, record = null) {
   const fingerprint = inventoryFingerprint(inventory);
   const blockers = adoptionBlockers(inventory);
@@ -82,19 +120,9 @@ export function evaluateAdoption(inventory, record = null) {
     inventory.components.every((component) => component.adoption === 'managed');
   let state = blockers.length === 0 ? 'eligible' : 'blocked';
   if (record) {
-    const currentRecordMatches =
-      record.schemaVersion === 2 &&
-      record.stack === inventory.stack &&
-      record.environment === inventory.environment &&
-      record.fingerprint === fingerprint;
-    const legacyProductionRecordMatches =
-      record.schemaVersion === 1 &&
-      record.environment === undefined &&
-      inventory.environment === 'production' &&
-      record.stack === inventory.stack &&
-      record.fingerprint === hashSnapshot(legacySnapshot(inventory));
     state =
-      currentRecordMatches || legacyProductionRecordMatches
+      recordMatches(inventory, record) ||
+      (blockers.length === 0 && isManagedBrowserExtension(inventory, record))
         ? 'adopted'
         : 'drifted';
     if (state === 'drifted') blockers.push('adoptionRecordDrift');
