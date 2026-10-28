@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { browserApi } from '@/lib/browser-api';
 import { translationKey } from '@/locales/translation-key';
+import { BrowserLiveViewport } from './browser-live-viewport';
 import {
   insertBrowserAnnotation,
   markedScreenshot,
@@ -57,13 +58,21 @@ const errorLabels: Record<string, string> = {
   BROWSER_OPERATION_FAILED: 'operationFailed',
   BROWSER_ACCESS_DENIED: 'accessDenied',
   BROWSER_NETWORK_ERROR: 'networkFailed',
+  BROWSER_CONTROL_REQUIRED: 'controlRequired',
+  BROWSER_STALE_VIEW: 'staleView',
 };
 export function BrowserSidebar({
   threadId,
   onClose,
+  visible = true,
+  docked = false,
+  onToggleDocked,
 }: {
   threadId: string;
   onClose: () => void;
+  visible?: boolean;
+  docked?: boolean;
+  onToggleDocked?: () => void;
 }) {
   const { t } = useTranslation('browser');
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -74,8 +83,10 @@ export function BrowserSidebar({
   >(null);
   const [url, setUrl] = useState('https://example.com');
   const [pointing, setPointing] = useState(false);
+  const [annotating, setAnnotating] = useState(false);
+  const control = useRef<string | null>(null);
+  const address = useRef<HTMLInputElement>(null);
   const [comment, setComment] = useState('');
-  const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(false);
@@ -105,7 +116,11 @@ export function BrowserSidebar({
       }
       const result = await browserApi<
         Frame & { id?: string; tabs?: Tab[]; selection?: Selection }
-      >(`${root}/${action}`, { tabId: target, ...body });
+      >(`${root}/${action}`, {
+        tabId: target,
+        ...(control.current ? { controlId: control.current } : {}),
+        ...body,
+      });
       if (!alive.current) return;
       if (result.tabs) {
         setTabs(result.tabs);
@@ -127,6 +142,7 @@ export function BrowserSidebar({
         setFrame(null);
         setSelection(null);
         setComment('');
+        setAnnotating(false);
       }
       if (result.image) {
         setFrame(result);
@@ -189,6 +205,8 @@ export function BrowserSidebar({
         setSelection(null);
         setComment('');
         setAdded(true);
+        setAnnotating(false);
+        setPointing(false);
       }
     } catch {
       if (alive.current) setError(t('draftUnavailable'));
@@ -199,11 +217,16 @@ export function BrowserSidebar({
   return (
     <aside
       aria-label={t('title')}
-      className="fixed inset-0 z-40 flex min-h-0 flex-col bg-background lg:relative lg:inset-auto lg:z-auto lg:w-[min(48vw,800px)] lg:min-w-[350px] lg:shrink-0 lg:border-l"
+      className="flex h-full min-h-0 min-w-0 flex-col bg-background"
     >
       <header className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
         <Globe className="h-4 w-4" />
         <h2 className="flex-1 text-sm">{t('title')}</h2>
+        {onToggleDocked && (
+          <Button variant="ghost" size="sm" onClick={onToggleDocked}>
+            {t(docked ? 'fullView' : 'splitView')}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -237,6 +260,7 @@ export function BrowserSidebar({
                 setActive(tab.id);
                 setFrame(null);
                 setSelection(null);
+                setAnnotating(false);
                 setUrl(
                   tab.url === 'about:blank' ? 'https://example.com' : tab.url,
                 );
@@ -300,6 +324,7 @@ export function BrowserSidebar({
           <ArrowRight className="h-4 w-4" />
         </Button>
         <input
+          ref={address}
           aria-label={t('address')}
           type="url"
           value={url}
@@ -329,9 +354,18 @@ export function BrowserSidebar({
           variant={pointing ? 'secondary' : 'outline'}
           size="sm"
           aria-pressed={pointing}
-          disabled={!frame || busy}
+          disabled={!active || busy}
           onClick={() => {
-            setPointing(!pointing);
+            if (annotating) {
+              setAnnotating(false);
+              setPointing(false);
+              setSelection(null);
+            } else {
+              setFrame(null);
+              setAnnotating(true);
+              setPointing(true);
+              void command('snapshot');
+            }
             setAdded(false);
           }}
         >
@@ -352,119 +386,101 @@ export function BrowserSidebar({
           {t('added')}
         </p>
       )}
-      <div className="min-h-0 flex-1 overflow-auto p-2">
-        {!frame ? (
-          <p className="p-3 text-sm text-muted-foreground">{t('intro')}</p>
-        ) : (
-          <div
-            className="relative"
-            style={{ aspectRatio: `${frame.width}/${frame.height}` }}
-          >
-            <img
-              src={frame.image}
-              alt={t('pageImage')}
-              draggable={false}
-              className={`w-full ${pointing ? 'cursor-crosshair' : 'cursor-default'}`}
-              onClick={(event) => {
-                if (busy) return;
-                const rect = event.currentTarget.getBoundingClientRect();
-                setSelection(null);
-                void command(pointing ? 'select' : 'click', {
-                  frameId: frame.frameId,
-                  x: ((event.clientX - rect.left) * frame.width) / rect.width,
-                  y: ((event.clientY - rect.top) * frame.height) / rect.height,
-                });
-              }}
-            />
-            {selection && (
-              <div
-                className="pointer-events-none absolute border-2 border-primary"
-                style={{
-                  left: `${(100 * selection.element.box.x) / frame.width}%`,
-                  top: `${(100 * selection.element.box.y) / frame.height}%`,
-                  width: `${(100 * selection.element.box.width) / frame.width}%`,
-                  height: `${(100 * selection.element.box.height) / frame.height}%`,
+      {!annotating && active ? (
+        <BrowserLiveViewport
+          threadId={threadId}
+          tabId={active}
+          active={visible}
+          onControl={(id) => {
+            control.current = id;
+          }}
+          onLocation={(nextUrl, title) => {
+            setTabs((current) =>
+              current.map((tab) =>
+                tab.id === active ? { ...tab, url: nextUrl, title } : tab,
+              ),
+            );
+            if (document.activeElement !== address.current)
+              setUrl(
+                nextUrl === 'about:blank' ? 'https://example.com' : nextUrl,
+              );
+          }}
+        />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto p-2">
+          {!frame ? (
+            <p className="p-3 text-sm text-muted-foreground">{t('intro')}</p>
+          ) : (
+            <div
+              className="relative"
+              style={{ aspectRatio: `${frame.width}/${frame.height}` }}
+            >
+              <img
+                src={frame.image}
+                alt={t('pageImage')}
+                draggable={false}
+                className={`w-full ${pointing ? 'cursor-crosshair' : 'cursor-default'}`}
+                onClick={(event) => {
+                  if (busy) return;
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setSelection(null);
+                  void command(pointing ? 'select' : 'click', {
+                    frameId: frame.frameId,
+                    x: ((event.clientX - rect.left) * frame.width) / rect.width,
+                    y:
+                      ((event.clientY - rect.top) * frame.height) / rect.height,
+                  });
                 }}
               />
-            )}
-          </div>
-        )}
-        {frame && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                setSelection(null);
-                void command('scroll', { delta: -550 });
-              }}
-            >
-              {t('up')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                setSelection(null);
-                void command('scroll', { delta: 550 });
-              }}
-            >
-              {t('down')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => void command('snapshot')}
-            >
-              {t('refresh')}
-            </Button>
-          </div>
-        )}
-        {frame && !selection && (
-          <form
-            className="mt-2 flex gap-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void command('text', { text });
-              setText('');
-            }}
-          >
-            <input
-              aria-label={t('text')}
-              type="password"
-              autoComplete="off"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              maxLength={2000}
-              className="min-w-0 flex-1 rounded border bg-background px-2 text-xs"
-            />
-            <Button size="sm" disabled={busy || !text}>
-              {t('type')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => void command('key', { key: 'Enter' })}
-            >
-              ↵
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => void command('key', { key: 'Backspace' })}
-            >
-              ⌫
-            </Button>
-          </form>
-        )}
-      </div>
+              {selection && (
+                <div
+                  className="pointer-events-none absolute border-2 border-primary"
+                  style={{
+                    left: `${(100 * selection.element.box.x) / frame.width}%`,
+                    top: `${(100 * selection.element.box.y) / frame.height}%`,
+                    width: `${(100 * selection.element.box.width) / frame.width}%`,
+                    height: `${(100 * selection.element.box.height) / frame.height}%`,
+                  }}
+                />
+              )}
+            </div>
+          )}
+          {frame && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setSelection(null);
+                  void command('scroll', { delta: -550 });
+                }}
+              >
+                {t('up')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setSelection(null);
+                  void command('scroll', { delta: 550 });
+                }}
+              >
+                {t('down')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => void command('snapshot')}
+              >
+                {t('refresh')}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       {selection && (
         <section className="shrink-0 space-y-2 border-t p-3">
           <p className="truncate text-xs" title={selection.element.selector}>
@@ -491,7 +507,11 @@ export function BrowserSidebar({
               size="sm"
               variant="ghost"
               disabled={busy}
-              onClick={() => setSelection(null)}
+              onClick={() => {
+                setSelection(null);
+                setAnnotating(false);
+                setPointing(false);
+              }}
             >
               {t('cancel')}
             </Button>

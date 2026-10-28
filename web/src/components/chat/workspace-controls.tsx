@@ -48,10 +48,12 @@ export function WorkspaceControls({
 }: Props) {
   const { t } = useTranslation();
   const { t: tw } = useTranslation('workspaces');
+  const { t: tb } = useTranslation('browser');
   const desktop = useBreakpoint() === 'desktop';
   const terminals = useTerminalStore((s) => s.terminals);
   const [chooser, setChooser] = useState(false);
   const label = (tab: WorkspaceTab) => {
+    if (tab.kind === 'browser') return tb('title');
     if (tab.kind === 'git-remote-file')
       return `${tab.path.split('/').pop()} · GitHub`;
     if (tab.kind === 'git-graph')
@@ -69,17 +71,19 @@ export function WorkspaceControls({
   };
   const selected = workspace.tabs.find((tab) => tab.id === workspace.activeId);
   const closeLabel = (tab: WorkspaceTab) =>
-    tab.kind === 'git-remote-file'
-      ? tw('gitCloseRemoteFile', { name: tab.path })
-      : tab.kind === 'git-graph'
-        ? tw('gitCloseGraph')
-        : tab.kind === 'git-diff'
-          ? tw('gitCloseDiff', { name: tab.path })
-          : t(
-              translationKey(
-                tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
-              ),
-            );
+    tab.kind === 'browser'
+      ? tb('close')
+      : tab.kind === 'git-remote-file'
+        ? tw('gitCloseRemoteFile', { name: tab.path })
+        : tab.kind === 'git-graph'
+          ? tw('gitCloseGraph')
+          : tab.kind === 'git-diff'
+            ? tw('gitCloseDiff', { name: tab.path })
+            : t(
+                translationKey(
+                  tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
+                ),
+              );
   const choose = (id: string) => {
     onSelect(id);
     setChooser(false);
@@ -191,7 +195,9 @@ export function WorkspaceControls({
                   }}
                   className="flex min-w-0 items-center gap-2 px-3 text-xs"
                 >
-                  {tab.kind === 'git-remote-file' ? (
+                  {tab.kind === 'browser' ? (
+                    <Globe className="h-3.5 w-3.5 shrink-0" />
+                  ) : tab.kind === 'git-remote-file' ? (
                     <Cloud className="h-3.5 w-3.5 shrink-0" />
                   ) : tab.kind === 'git-graph' ? (
                     <GitBranch className="h-3.5 w-3.5 shrink-0" />

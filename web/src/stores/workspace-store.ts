@@ -13,6 +13,7 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
+  | { id: 'browser'; kind: 'browser' }
   | ({ id: string; kind: 'git-remote-file' } & GitRemoteFileTarget)
   | ({ id: string; kind: 'git-graph' } & GitGraphTarget)
   | ({ id: string; kind: 'git-diff' } & GitDiffTarget)
@@ -63,6 +64,7 @@ interface WorkspaceState {
   contexts: Record<string, WorkspaceContext>;
   fileViews: Record<string, FileViewState>;
   openFile: (context: string, path: string, line?: number | null) => void;
+  openBrowser: (context: string) => void;
   openGitDiff: (context: string, target: GitDiffTarget) => void;
   openGitGraph: (context: string, target: GitGraphTarget) => void;
   openGitRemoteFile: (context: string, target: GitRemoteFileTarget) => void;
@@ -101,6 +103,22 @@ function clearActiveReveal(state: WorkspaceState, context: string) {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   contexts: {},
   fileViews: {},
+  openBrowser: (context) =>
+    set((state) => {
+      const current = state.contexts[context] ?? EMPTY_WORKSPACE;
+      return {
+        contexts: {
+          ...state.contexts,
+          [context]: {
+            tabs: current.tabs.some((tab) => tab.kind === 'browser')
+              ? current.tabs
+              : [...current.tabs, { id: 'browser', kind: 'browser' }],
+            activeId: 'browser',
+          },
+        },
+        fileViews: clearActiveReveal(state, context),
+      };
+    }),
   openGitRemoteFile: (context, target) =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;

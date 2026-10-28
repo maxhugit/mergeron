@@ -10,6 +10,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import {
+  applyBrowserInput,
+  browserInput,
+  streamBrowserPage,
+} from './browser-live';
+import {
   chromium,
   type Browser,
   type BrowserContext,
@@ -55,6 +60,12 @@ type Session = {
   tabs: Map<string, Tab>;
   busy: boolean;
   touched: number;
+  live?: {
+    tabId: string;
+    controlId: string;
+    abort: AbortController;
+    done: Promise<void>;
+  };
 };
 
 /** Only pixels and bounded element metadata cross from the isolated browser to Mergeron. */
@@ -75,6 +86,7 @@ export class BrowserService implements OnModuleDestroy {
   private async close(key: string) {
     const session = this.sessions.get(key);
     this.sessions.delete(key);
+    session?.live?.abort.abort();
     await session?.browser.close().catch(() => {});
   }
   private async session(key: string): Promise<Session> {
@@ -163,11 +175,67 @@ export class BrowserService implements OnModuleDestroy {
       if (timer) clearTimeout(timer);
     }
   }
+  async stream(
+    key: string,
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+    emit: (event: Record<string, unknown>) => Promise<void>,
+    authorize: () => void,
+  ) {
+    const session = this.sessions.get(key);
+    const tabId = typeof body.tabId === 'string' ? body.tabId : '';
+    const tab = session?.tabs.get(tabId);
+    if (!session || !tab)
+      throw new NotFoundException({ code: 'BROWSER_TAB_MISSING' });
+    if (session.busy) throw new ConflictException({ code: 'BROWSER_BUSY' });
+    const previous = session.live;
+    if (previous) {
+      if (body.takeControl !== true)
+        throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });
+      previous.abort.abort();
+      await previous.done.catch(() => {});
+    }
+    authorize();
+    if (signal.aborted) return;
+    // A concurrent claimant may have acquired the lease while cleanup awaited.
+    if (session.live && session.live !== previous)
+      throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });
+    if (this.sessions.get(key) !== session || tab.page.isClosed())
+      throw new NotFoundException({ code: 'BROWSER_TAB_MISSING' });
+    const abort = new AbortController();
+    const combined = AbortSignal.any([signal, abort.signal]);
+    const controlId = randomUUID();
+    const live = { tabId, controlId, abort, done: Promise.resolve() };
+    session.live = live;
+    live.done = streamBrowserPage(
+      session.context,
+      tab.page,
+      combined,
+      async (event) => {
+        session.touched = Date.now();
+        await emit(event);
+      },
+      authorize,
+      controlId,
+    );
+    try {
+      await live.done;
+    } finally {
+      if (session.live === live) session.live = undefined;
+    }
+  }
   private async operate(
     key: string,
     action: string,
     body: Record<string, unknown>,
   ) {
+    const current = this.sessions.get(key);
+    if (
+      current?.live &&
+      !['tabs', 'snapshot'].includes(action) &&
+      body.controlId !== current.live.controlId
+    )
+      throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });
     if (action === 'close') {
       if (this.opening.has(key))
         throw new ConflictException('Browser is opening; retry closing');
@@ -202,6 +270,37 @@ export class BrowserService implements OnModuleDestroy {
           message: 'Browser tab not found',
         });
       const page = tab.page;
+      if (action === 'input') {
+        if (
+          !session.live ||
+          session.live.tabId !== id ||
+          body.controlId !== session.live.controlId
+        )
+          throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });
+        const size = page.viewportSize();
+        if (
+          body.url !== page.url() ||
+          body.width !== size?.width ||
+          body.height !== size?.height
+        )
+          throw new ConflictException({ code: 'BROWSER_STALE_VIEW' });
+        if (
+          !Array.isArray(body.events) ||
+          !body.events.length ||
+          body.events.length > 32
+        )
+          throw new BadRequestException('Invalid input batch');
+        const events = body.events.map(browserInput);
+        const lease = session.live;
+        for (const event of events) {
+          if (session.live !== lease || lease.abort.signal.aborted)
+            throw new ConflictException({ code: 'BROWSER_CONTROL_REQUIRED' });
+          if (page.url() !== body.url)
+            throw new ConflictException({ code: 'BROWSER_STALE_VIEW' });
+          await applyBrowserInput(page, event);
+        }
+        return { applied: true };
+      }
       if (action === 'remove') {
         session.tabs.delete(id);
         await page.close();
@@ -232,9 +331,9 @@ export class BrowserService implements OnModuleDestroy {
           !Number.isFinite(x) ||
           !Number.isFinite(y) ||
           x < 0 ||
-          x >= VIEWPORT.width ||
+          x >= (page.viewportSize()?.width ?? VIEWPORT.width) ||
           y < 0 ||
-          y >= VIEWPORT.height
+          y >= (page.viewportSize()?.height ?? VIEWPORT.height)
         )
           throw new BadRequestException('Invalid point');
         if (action === 'select') {
@@ -371,7 +470,7 @@ export class BrowserService implements OnModuleDestroy {
       url: tab.page.url(),
       title: (await tab.page.title()).slice(0, 200),
       image: tab.image,
-      ...VIEWPORT,
+      ...(tab.page.viewportSize() ?? VIEWPORT),
     };
   }
 }

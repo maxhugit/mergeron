@@ -6,7 +6,13 @@ import { markedScreenshot } from '@/lib/browser-annotations';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 const api = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/browser-api', () => ({ browserApi: api }));
+vi.mock('@/lib/browser-api', () => ({
+  browserApi: api,
+  browserLive: (_path: string, _body: unknown, signal: AbortSignal) =>
+    new Promise<void>((resolve) =>
+      signal.addEventListener('abort', () => resolve(), { once: true }),
+    ),
+}));
 beforeEach(() => {
   api.mockReset().mockResolvedValue({ tabs: [] });
 });
@@ -44,7 +50,9 @@ test('edits an address and opens it with Enter from an empty browser session', a
   await address.fill('https://example.org/');
   await userEvent.keyboard('{Enter}');
   await expect
-    .element(page.getByRole('img', { name: 'Page web distante' }))
+    .element(
+      page.getByLabelText('Page distante en direct — cliquer pour interagir'),
+    )
     .toBeVisible();
   expect(api).toHaveBeenCalledWith('/fixture/navigate', {
     tabId: 'created',

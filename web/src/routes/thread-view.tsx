@@ -73,6 +73,7 @@ export function ThreadView() {
 /** Keeps every surface at a fixed tree position throughout a conversation's tab switches. */
 function ConversationWorkspace({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
+  const { t: tb } = useTranslation('browser');
   const session = usePlatformSession();
   const context = `thread:${threadId}`;
   useTerminalDiscovery(context);
@@ -182,7 +183,18 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   });
   const desktop = useBreakpoint() === 'desktop';
   const [mobileTree, setMobileTree] = useState(false);
-  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserDocked, setBrowserDocked] = useState(false);
+  const hasBrowser =
+    session.isAdministrator &&
+    workspace.tabs.some((tab) => tab.kind === 'browser');
+  const browserVisible =
+    hasBrowser &&
+    (workspace.activeId === 'browser' ||
+      (desktop && browserDocked && workspace.activeId === 'conversation'));
+  const splitBrowser = browserVisible && desktop && browserDocked;
+  const conversationVisible =
+    workspace.activeId === 'conversation' ||
+    (splitBrowser && workspace.activeId === 'browser');
   const [creatingTerminal, setCreatingTerminal] = useState(false);
   const { requestClose, dialog } = useWorkspaceClose(context);
   const { mutate: openThread } = useOpenThread();
@@ -311,7 +323,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           canCreateTerminal={session.isAdministrator}
           terminalCreationDisabled={creatingTerminal || !cwd}
           onExplorer={() => {
-            setBrowserOpen(false);
+            setBrowserDocked(false);
+            if (workspace.activeId === 'browser')
+              select(context, 'conversation');
             if (desktop)
               useLayoutStore
                 .getState()
@@ -323,8 +337,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           onBrowser={
             session.isAdministrator
               ? () => {
-                  select(context, 'conversation');
-                  setBrowserOpen((open) => !open);
+                  useWorkspaceStore.getState().openBrowser(context);
                   setMobileTree(false);
                   useLayoutStore.getState().setWorkspaceTreeCollapsed(true);
                 }
@@ -350,92 +363,114 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
             role="tabpanel"
             aria-label={t('conversation')}
             className="absolute inset-0"
-            inert={workspace.activeId !== 'conversation'}
+            inert={!conversationVisible}
             style={{
-              visibility:
-                workspace.activeId === 'conversation' ? 'visible' : 'hidden',
+              visibility: conversationVisible ? 'visible' : 'hidden',
+              right: splitBrowser ? '50%' : 0,
             }}
           >
             <ConversationFrame
               threadId={threadId}
-              active={workspace.activeId === 'conversation'}
+              active={conversationVisible}
               onRetry={open}
             />
           </div>
-          {workspace.tabs.map((tab) => {
-            const active = workspace.activeId === tab.id;
-            return (
-              <SurfaceActivityContext key={tab.id} value={active}>
-                <div
-                  role="tabpanel"
-                  aria-label={
-                    tab.kind === 'file' ||
-                    tab.kind === 'git-diff' ||
-                    tab.kind === 'git-remote-file'
-                      ? tab.path
-                      : tab.kind === 'git-graph'
-                        ? tab.name
-                        : t('terminal')
+          {hasBrowser && (
+            <div
+              role="tabpanel"
+              aria-label={tb('title')}
+              className="absolute inset-0 min-h-0 border-l"
+              inert={!browserVisible}
+              style={{
+                visibility: browserVisible ? 'visible' : 'hidden',
+                left: splitBrowser ? '50%' : 0,
+              }}
+            >
+              <Suspense
+                fallback={
+                  <div role="status" className="p-4">
+                    …
+                  </div>
+                }
+              >
+                <BrowserSidebar
+                  key={threadId}
+                  threadId={threadId}
+                  visible={browserVisible}
+                  docked={splitBrowser}
+                  onToggleDocked={
+                    desktop
+                      ? () => setBrowserDocked((value) => !value)
+                      : undefined
                   }
-                  className="absolute inset-0 flex min-h-0 flex-col"
-                  inert={!active}
-                  style={{ visibility: active ? 'visible' : 'hidden' }}
-                >
-                  {tab.kind === 'file' ? (
-                    active && (
-                      <FileViewer
-                        filePath={tab.path}
-                        documentId={tab.documentId}
-                        viewId={fileViewId(context, tab.id)}
-                        active={active}
-                      />
-                    )
-                  ) : tab.kind === 'git-remote-file' ? (
-                    <WorkspaceGitRemoteFile target={tab} active={active} />
-                  ) : tab.kind === 'git-graph' ? (
-                    <WorkspaceGitGraph target={tab} active={active} />
-                  ) : tab.kind === 'git-diff' ? (
-                    <WorkspaceGitDiff
-                      target={tab}
-                      active={active}
-                      onFile={(path) => openFile(context, path)}
-                    />
-                  ) : (
-                    <>
-                      <div className="min-h-0 flex-1">
-                        <TerminalSurface
-                          terminalId={tab.terminalId}
-                          contextKey={context}
+                  onClose={() =>
+                    useWorkspaceStore.getState().remove(context, 'browser')
+                  }
+                />
+              </Suspense>
+            </div>
+          )}
+          {workspace.tabs
+            .filter((tab) => tab.kind !== 'browser')
+            .map((tab) => {
+              const active = workspace.activeId === tab.id;
+              return (
+                <SurfaceActivityContext key={tab.id} value={active}>
+                  <div
+                    role="tabpanel"
+                    aria-label={
+                      tab.kind === 'file' ||
+                      tab.kind === 'git-diff' ||
+                      tab.kind === 'git-remote-file'
+                        ? tab.path
+                        : tab.kind === 'git-graph'
+                          ? tab.name
+                          : t('terminal')
+                    }
+                    className="absolute inset-0 flex min-h-0 flex-col"
+                    inert={!active}
+                    style={{ visibility: active ? 'visible' : 'hidden' }}
+                  >
+                    {tab.kind === 'file' ? (
+                      active && (
+                        <FileViewer
+                          filePath={tab.path}
+                          documentId={tab.documentId}
+                          viewId={fileViewId(context, tab.id)}
                           active={active}
                         />
-                      </div>
-                      <TerminalStatusBar
-                        contextKey={context}
-                        activeTerminalId={tab.terminalId}
+                      )
+                    ) : tab.kind === 'git-remote-file' ? (
+                      <WorkspaceGitRemoteFile target={tab} active={active} />
+                    ) : tab.kind === 'git-graph' ? (
+                      <WorkspaceGitGraph target={tab} active={active} />
+                    ) : tab.kind === 'git-diff' ? (
+                      <WorkspaceGitDiff
+                        target={tab}
+                        active={active}
+                        onFile={(path) => openFile(context, path)}
                       />
-                    </>
-                  )}
-                </div>
-              </SurfaceActivityContext>
-            );
-          })}
+                    ) : (
+                      <>
+                        <div className="min-h-0 flex-1">
+                          <TerminalSurface
+                            terminalId={tab.terminalId}
+                            contextKey={context}
+                            active={active}
+                          />
+                        </div>
+                        <TerminalStatusBar
+                          contextKey={context}
+                          activeTerminalId={tab.terminalId}
+                        />
+                      </>
+                    )}
+                  </div>
+                </SurfaceActivityContext>
+              );
+            })}
         </div>
       </div>
-      {browserOpen && (
-        <Suspense
-          fallback={
-            <div role="status" className="p-4">
-              …
-            </div>
-          }
-        >
-          <BrowserSidebar
-            key={threadId}
-            threadId={threadId}
-            onClose={() => setBrowserOpen(false)}
-          />
-        </Suspense>
-      )}
       <WorkspaceTree
         onGitRemoteFile={(target) =>
           useWorkspaceStore.getState().openGitRemoteFile(context, target)

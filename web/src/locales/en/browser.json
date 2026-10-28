@@ -1,4 +1,16 @@
 {
+  "connecting": "Connecting to live view…",
+  "liveControl": "Live · You have control",
+  "released": "Control released",
+  "releaseControl": "Release control",
+  "takeControl": "Take control",
+  "controlRequired": "Another view controls this browser. Choose Take control to replace it.",
+  "staleView": "The page changed. Take control again before continuing; no input was retried automatically.",
+  "liveFailed": "Live view was interrupted. Take control to reconnect; actions are not replayed.",
+  "livePage": "Live remote page — click to interact",
+  "liveKeyboard": "Keyboard input for the remote page",
+  "splitView": "Side by side",
+  "fullView": "Full width",
   "notConfigured": "The isolated browser is not configured on this server. An administrator must enable its service before pages can be opened.",
   "runtimeUnavailable": "The isolated browser service cannot be reached. Check that it is running and its connection to Mergeron is configured.",
   "timedOut": "The browser did not respond in time. Retry or clear its session before reopening the page.",
@@ -37,6 +49,6 @@
   "added": "Annotation and screenshot added to the draft. Review them, then send your message.",
   "draftUnavailable": "Could not add to this conversation’s draft. Check that it is writable.",
   "unavailable": "Browser unavailable. Check your connection, administrator access and isolated browser configuration.",
-  "privacy": "Temporary remote session, separate from your browser. Input fields are masked in screenshots. Pages and annotations reach the agent only after you send the message.",
+  "privacy": "Temporary remote session, separate from your browser. Live view is for you only. Input fields are masked in annotation screenshots; only annotations added to the draft and sent reach the agent.",
   "frame": "Embedded frame: the marker identifies the frame, not its contents"
 }
