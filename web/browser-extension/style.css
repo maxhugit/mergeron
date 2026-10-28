@@ -25,6 +25,23 @@ select {
   border-radius: 7px;
   margin: 5px 0;
 }
+textarea {
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: 7px;
+  border: 1px solid #8888;
+  resize: vertical;
+}
+#preview {
+  width: 100%;
+  border: 1px solid #8888;
+  border-radius: 8px;
+}
+#target {
+  overflow-wrap: anywhere;
+}
 button {
   cursor: pointer;
 }

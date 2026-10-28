@@ -16,7 +16,14 @@
     )
       return;
     if (
-      !['pair', 'state', 'execute', 'revoke'].includes(message.action) ||
+      ![
+        'pair',
+        'state',
+        'execute',
+        'revoke',
+        'annotation',
+        'annotationAck',
+      ].includes(message.action) ||
       JSON.stringify(message).length > 64000
     )
       return;

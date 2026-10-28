@@ -57,10 +57,10 @@ document.querySelector('#share').onclick = async () => {
       tabId: tab.id,
     });
     status.textContent =
-      'Cet onglet est partagé. Toute action de l’agent devra être confirmée dans Mergeron.';
+      'Cet onglet est partagé. Mergeron lui-même est limité aux annotations ; ailleurs, toute action de l’agent doit être confirmée.';
   } catch {
     status.textContent =
-      'Partage impossible. Ouvrez une page HTTPS hors de Mergeron, puis utilisez cette icône.';
+      'Partage impossible. Rechargez la page HTTPS et Mergeron après une mise à jour de l’extension, puis utilisez cette icône.';
   }
 };
 document.querySelector('#pause').onclick = async () => {
@@ -72,8 +72,11 @@ document.querySelector('#point').onclick = async () => {
   try {
     await call('point', { id: document.querySelector('#session').value });
     window.close();
-  } catch {
-    status.textContent = 'Reprenez d’abord le partage de cet onglet.';
+  } catch (error) {
+    status.textContent =
+      error.message === 'UPDATE_MERGERON_FOR_ANNOTATIONS'
+        ? 'Cette instance Mergeron doit être mise à jour pour recevoir les commentaires et images. Rechargez Mergeron après sa mise à jour, puis créez une nouvelle association.'
+        : 'Gardez l’onglet partagé au premier plan. Terminez ou annulez l’annotation en cours avant de recommencer.';
   }
 };
 render().catch(() => {

@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 const files = [
   'manifest.json',
   'browser-api.js',
+  'annotation.html',
+  'annotation.js',
+  'annotation-image.js',
   'worker.js',
   'protocol.js',
   'bridge.js',

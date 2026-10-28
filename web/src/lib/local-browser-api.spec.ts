@@ -71,3 +71,25 @@ it('ignores foreign origins and preserves definite page errors as command result
   );
   await expect(pending).resolves.toEqual({ error: 'STALE_PAGE_OBSERVE_AGAIN' });
 });
+it.each(['annotation', 'state'] as const)(
+  'allows a larger raster response only for the narrow annotation action (%s)',
+  async (action) => {
+    const post = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    const pending = extensionRequest(action, {
+      sessionId: 'session',
+      annotationId: 'annotation',
+    });
+    const id = post.mock.calls[0][0].id;
+    const result = { image: 'x'.repeat(70_000) };
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: location.origin,
+        source: window,
+        data: { channel: LOCAL_BROWSER_CHANNEL, kind: 'response', id, result },
+      }),
+    );
+    if (action === 'annotation') await expect(pending).resolves.toEqual(result);
+    else
+      await expect(pending).rejects.toThrow('EXTENSION_UNAVAILABLE_OR_DENIED');
+  },
+);

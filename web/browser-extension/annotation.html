@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Annotation — Mergeron</title>
+  <link rel="stylesheet" href="style.css" />
+  <main>
+    <h1>Annoter l’élément sélectionné</h1>
+    <p id="target"></p>
+    <img
+      id="preview"
+      alt="Capture de la page avec le cadre bleu et le repère 1"
+      hidden
+    />
+    <form id="annotation-form">
+      <label
+        >Votre commentaire<textarea
+          id="comment"
+          rows="5"
+          maxlength="2000"
+          required
+          placeholder="Décrivez la modification souhaitée…"
+        ></textarea>
+      </label>
+      <p>
+        Vérifiez l’image avant d’envoyer : elle peut contenir des informations
+        privées. Les champs et cadres intégrés sont masqués sur la capture, pas
+        sur la page.
+      </p>
+      <p>
+        Le texte et l’image seront ajoutés au brouillon de cet agent. Aucun
+        message n’est envoyé automatiquement à l’agent.
+      </p>
+      <button id="submit" type="submit" disabled>
+        Ajouter au brouillon Mergeron
+      </button>
+      <button id="cancel" type="button">Annuler</button>
+    </form>
+    <p id="status" role="status">Préparation de la capture…</p>
+  </main>
+  <script type="module" src="annotation.js"></script>
+</html>

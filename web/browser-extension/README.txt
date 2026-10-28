@@ -1,4 +1,4 @@
-MERGERON — NAVIGATEUR LOCAL — PREVERSION 0.2.0
+MERGERON — NAVIGATEUR LOCAL — PREVERSION 0.3.0
 
 Chrome / Edge sur ordinateur et Safari sur Mac (18.4 minimum).
 Ne remplace pas le navigateur isolé existant. Pas de version iPhone/iPad.
@@ -38,9 +38,22 @@ partagée avec l'agent. Toute action de l'agent exige une confirmation dans
 Mergeron ; son contenu reste non fiable et ne constitue jamais une autorisation.
 
 Ne partagez pas des pages contenant des informations que vous ne souhaitez pas
-transmettre à l'agent. Les valeurs des champs, cookies, clés passkey et captures
-d'écran ne sont pas transmis par cette préversion ; du texte sensible affiché
-ailleurs sur la page peut néanmoins faire partie de la lecture partagée.
+transmettre à l'agent. Cookies et clés passkey ne sont pas transmis. La lecture
+n'inclut pas les valeurs des champs ; du texte sensible ailleurs peut être lu.
+
+POINTER ET COMMENTER
+Dans l'onglet partagé, ouvrez l'icône puis Pointer un élément. Le survol montre
+un cadre bleu. Échap annule. Cliquez : un éditeur privé à l'extension s'ouvre
+avec une capture et son repère bleu. Saisissez votre commentaire et vérifiez
+l'image, puis choisissez Ajouter au brouillon Mergeron. Annuler n'envoie rien.
+Les champs et iframes sont masqués sur l'image, pas sur la page ; cela ne détecte
+pas tous les secrets (notamment les champs personnalisés). Vérifiez l'aperçu.
+Après validation, texte et image sont ajoutés au brouillon de cet agent : vous
+devez encore envoyer le message vous-même. Aucune transmission avant validation.
+Mergeron lui-même peut être annoté, mais aucune commande de l'agent n'y est permise.
+En cas d'erreur, aucun envoi automatique n'est rejoué. Vérifiez le brouillon.
+Le frontend Mergeron doit aussi être à jour (protocole d'annotation 3) : sinon
+le popup l'indique. Une mise à jour de l'extension seule ne suffit pas.
 
 Authentifiez-vous vous-même (passkey, téléphone, mot de passe). Suspendez le
 partage pendant cette opération. Les champs mot de passe/OTP sont bloqués ;
@@ -54,7 +67,8 @@ Les deux modes ne transfèrent ni session ni authentification entre eux.
 
 MISES A JOUR
 Remplacez les fichiers de cette préversion par le nouveau paquet, rechargez
-l'extension depuis la page des extensions, puis rechargez Mergeron et appairez
+l'extension depuis la page des extensions, puis rechargez Mergeron ET la page
+partagée, et appairez
 à nouveau. Pas de mise à jour automatique ni de publication en boutique initiale.
 Sur Safari, réinstallez le paquet temporaire. Après toute mise à jour, l'origine
 Mergeron autorisée est conservée, mais les associations/partages sont révoqués.

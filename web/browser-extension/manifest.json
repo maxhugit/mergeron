@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mergeron — navigateur local (préversion)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Partagez explicitement un onglet de votre navigateur avec un agent Mergeron. Aucun accès global aux sites.",
   "minimum_chrome_version": "120",
   "permissions": ["activeTab", "scripting", "storage"],

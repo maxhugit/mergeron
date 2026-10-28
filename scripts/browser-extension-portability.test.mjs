@@ -84,18 +84,24 @@ function fixture() {
     tabs: {
       get: async (id) => ({
         id,
+        active: true,
+        windowId: 1,
         url: 'https://page.fixture.test/document',
         title: 'Fixture',
       }),
       sendMessage: async (_id, message) => {
         messages.push(plain(message));
         return message.action === 'init'
-          ? { documentId: 'native-doc' }
-          : { authRequired: false };
+          ? { documentId: 'native-doc', protocolVersion: 3 }
+          : ['captureCheck', 'point'].includes(message.action)
+            ? { ok: true }
+            : { authRequired: false, pointing: true };
       },
+      captureVisibleTab: async () => 'data:image/jpeg;base64,/9j/AA==',
       onUpdated: event(),
       onRemoved: event(),
     },
+    windows: { create: async () => ({ id: 3, tabs: [{ id: 10 }] }) },
   };
   const context = vm.createContext({
     browser,
@@ -184,6 +190,158 @@ const pageSender = {
   tab: { id: 1 },
   url: 'https://mergeron.fixture.test/agent',
 };
+test('private captures are bound to the selected document and editor; only submit exposes a processed image to the paired Mergeron tab', async () => {
+  const f = fixture();
+  await f.call(
+    'configure',
+    { origin: 'https://mergeron.fixture.test' },
+    optionsSender,
+  );
+  const sessionId = crypto.randomUUID(),
+    draftId = crypto.randomUUID();
+  await f.call(
+    'pair',
+    { sessionId, threadId: 'agent', annotationProtocol: 3 },
+    pageSender,
+  );
+  await f.call('approvePair', { id: sessionId }, popupSender);
+  await f.call('share', { id: sessionId, tabId: 2 }, popupSender);
+  const payload = {
+    documentId: 'native-doc',
+    selection: {
+      id: draftId,
+      url: 'https://page.fixture.test/document',
+      text: 'Save',
+      tag: 'button',
+    },
+    geometry: {
+      width: 100,
+      height: 100,
+      box: { x: 0, y: 0, width: 10, height: 10 },
+      masks: [],
+    },
+  };
+  const sender = {
+    id: 'safari-test',
+    frameId: 0,
+    tab: { id: 2 },
+    url: 'https://page.fixture.test/document',
+  };
+  assert.ok((await f.call('captureAnnotation', payload, sender)).error); // not armed
+  await f.call('point', { id: sessionId }, popupSender);
+  assert.ok(
+    (
+      await f.call(
+        'captureAnnotation',
+        { ...payload, documentId: 'stale' },
+        sender,
+      )
+    ).error,
+  );
+  assert.deepEqual(plain(await f.call('captureAnnotation', payload, sender)), {
+    ok: true,
+  });
+  assert.equal(JSON.stringify(f.session()).includes('base64'), false);
+  assert.equal(
+    (await f.call('state', { sessionId }, pageSender)).annotation,
+    undefined,
+  );
+  assert.ok(
+    (
+      await f.call(
+        'annotation',
+        { sessionId, annotationId: draftId },
+        pageSender,
+      )
+    ).error,
+  );
+  const editor = {
+    id: 'safari-test',
+    tab: { id: 10 },
+    url: 'safari-web-extension://fixture/annotation.html#' + draftId,
+  };
+  assert.ok(
+    (
+      await f.call(
+        'annotationOpen',
+        { draftId },
+        { ...editor, tab: { id: 11 } },
+      )
+    ).error,
+  );
+  assert.equal(
+    (await f.call('annotationOpen', { draftId }, editor)).selection.text,
+    'Save',
+  );
+  assert.ok((await f.call('annotationOpen', { draftId }, editor)).error); // raw pixels consumed once
+  const submitted = {
+    draftId,
+    comment: 'Human comment',
+    image: 'data:image/jpeg;base64,/9j/AA==',
+  };
+  assert.deepEqual(plain(await f.call('annotationSubmit', submitted, editor)), {
+    ok: true,
+  });
+  assert.ok(
+    (
+      await f.call(
+        'annotation',
+        { sessionId, annotationId: draftId },
+        { ...pageSender, tab: { id: 99 } },
+      )
+    ).error,
+  );
+  assert.equal(
+    (
+      await f.call(
+        'annotation',
+        { sessionId, annotationId: draftId },
+        pageSender,
+      )
+    ).comment,
+    'Human comment',
+  );
+  await f.call(
+    'annotationAck',
+    { sessionId, annotationId: draftId },
+    pageSender,
+  );
+  assert.ok(
+    (
+      await f.call(
+        'annotation',
+        { sessionId, annotationId: draftId },
+        pageSender,
+      )
+    ).error,
+  );
+});
+
+test('old Mergeron clients and stale injected scripts produce an explicit upgrade requirement', async () => {
+  const f = fixture();
+  await f.call(
+    'configure',
+    { origin: 'https://mergeron.fixture.test' },
+    optionsSender,
+  );
+  const sessionId = crypto.randomUUID();
+  await f.call('pair', { sessionId, threadId: 'legacy' }, pageSender);
+  await f.call('approvePair', { id: sessionId }, popupSender);
+  await f.call('share', { id: sessionId, tabId: 2 }, popupSender);
+  assert.equal(
+    (await f.call('point', { id: sessionId }, popupSender)).error,
+    'UPDATE_MERGERON_FOR_ANNOTATIONS',
+  );
+  f.browser.tabs.sendMessage = async (_id, message) =>
+    message.action === 'init'
+      ? { documentId: 'legacy-document' }
+      : { ok: true };
+  assert.equal(
+    (await f.call('share', { id: sessionId, tabId: 2 }, popupSender)).error,
+    'RELOAD_TARGET_PAGE_AFTER_EXTENSION_UPDATE',
+  );
+  assert.equal(f.session().slots[sessionId].shared, false);
+});
 
 test('Safari sender URLs pair and share, then updates restore only the authorized bridge and revoke sharing', async () => {
   const f = fixture();
