@@ -91,6 +91,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
   const { t: tb } = useTranslation('browser');
   const [browserChoice, setBrowserChoice] = useState(false);
+  const [localBrowserOpen, setLocalBrowserOpen] = useState(false);
+  const [localBrowserEnabled, setLocalBrowserEnabled] = useState(false);
+  const [localBrowserStatus, setLocalBrowserStatus] = useState('disconnected');
   const session = usePlatformSession();
   const context = `thread:${threadId}`;
   useTerminalDiscovery(context);
@@ -99,6 +102,21 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   );
   const openFile = useWorkspaceStore((s) => s.openFile);
   const select = useWorkspaceStore((s) => s.select);
+  const showAnnotation = useCallback(() => {
+    select(context, 'conversation');
+    setLocalBrowserOpen(false);
+  }, [context, select]);
+  const openLocalBrowser = () => {
+    setLocalBrowserEnabled(true);
+    setLocalBrowserOpen(true);
+  };
+  useEffect(() => {
+    // Retire legacy local-browser panels, never convert them into container sessions.
+    const store = useWorkspaceStore.getState();
+    for (const tab of store.contexts[context]?.tabs ?? [])
+      if (tab.kind === 'browser' && tab.mode === 'local')
+        store.remove(context, tab.id);
+  }, [context]);
   const cwd = useTimelineStore((s) =>
     s.threadId === threadId ? s.threadCwd : s.threadsById[threadId]?.threadCwd,
   );
@@ -205,7 +223,9 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   const lastBrowserId = workspace.lastBrowserId;
   const setBrowserLayout = useWorkspaceStore((state) => state.setBrowserLayout);
   const browserTabs = session.isAdministrator
-    ? workspace.tabs.filter((tab) => tab.kind === 'browser')
+    ? workspace.tabs
+        .filter((tab) => tab.kind === 'browser')
+        .filter((tab) => tab.mode !== 'local')
     : [];
   const selectedBrowser = browserTabs.find(
     (tab) => tab.id === workspace.activeId,
@@ -365,6 +385,10 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
           onBrowser={
             session.isAdministrator ? () => setBrowserChoice(true) : undefined
           }
+          onLocalBrowser={
+            session.isAdministrator ? openLocalBrowser : undefined
+          }
+          localBrowserStatus={localBrowserStatus}
         />
         <AgentContextLinks
           onOpenDirectory={(path) => {
@@ -425,48 +449,32 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                   </div>
                 }
               >
-                {tab.mode === 'local' ? (
-                  <LocalBrowserSidebar
-                    threadId={threadId}
-                    docked={splitBrowser}
-                    onToggleDocked={
-                      desktop
-                        ? () =>
-                            setBrowserLayout(context, {
-                              browserDocked: !browserDocked,
-                            })
-                        : undefined
-                    }
-                    onClose={() => requestClose(tab)}
-                  />
-                ) : (
-                  <BrowserSidebar
-                    threadId={threadId}
-                    instanceId={tab.id}
-                    wasOpened={tab.opened ?? false}
-                    onSessionChange={(opened) =>
-                      useWorkspaceStore
-                        .getState()
-                        .setBrowserOpened(context, tab.id, opened)
-                    }
-                    homeUrl={
-                      project?.browserSettings?.homeUrl ??
-                      'https://www.google.com'
-                    }
-                    allowPopups={project?.browserSettings?.allowPopups ?? true}
-                    visible={browserVisible && tab.id === displayedBrowser?.id}
-                    docked={splitBrowser}
-                    onToggleDocked={
-                      desktop
-                        ? () =>
-                            setBrowserLayout(context, {
-                              browserDocked: !browserDocked,
-                            })
-                        : undefined
-                    }
-                    onClose={() => requestClose(tab)}
-                  />
-                )}
+                <BrowserSidebar
+                  threadId={threadId}
+                  instanceId={tab.id}
+                  wasOpened={tab.opened ?? false}
+                  onSessionChange={(opened) =>
+                    useWorkspaceStore
+                      .getState()
+                      .setBrowserOpened(context, tab.id, opened)
+                  }
+                  homeUrl={
+                    project?.browserSettings?.homeUrl ??
+                    'https://www.google.com'
+                  }
+                  allowPopups={project?.browserSettings?.allowPopups ?? true}
+                  visible={browserVisible && tab.id === displayedBrowser?.id}
+                  docked={splitBrowser}
+                  onToggleDocked={
+                    desktop
+                      ? () =>
+                          setBrowserLayout(context, {
+                            browserDocked: !browserDocked,
+                          })
+                      : undefined
+                  }
+                  onClose={() => requestClose(tab)}
+                />
               </Suspense>
             </div>
           ))}
@@ -555,15 +563,30 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
       <BrowserModeDialog
         open={browserChoice}
         onOpenChange={setBrowserChoice}
+        isolatedDisabled={browserTabs.length >= 5}
         onChoose={(mode) => {
-          useWorkspaceStore.getState().openBrowser(context, mode);
-          setBrowserLayout(context, {
-            browserDocked: project?.browserSettings?.desktopSplit ?? true,
-          });
+          if (mode === 'local') openLocalBrowser();
+          else {
+            useWorkspaceStore.getState().openBrowser(context);
+            setBrowserLayout(context, {
+              browserDocked: project?.browserSettings?.desktopSplit ?? true,
+            });
+          }
           setMobileTree(false);
           setBrowserChoice(false);
         }}
       />
+      {session.isAdministrator && localBrowserEnabled && (
+        <Suspense fallback={null}>
+          <LocalBrowserSidebar
+            threadId={threadId}
+            open={localBrowserOpen}
+            onOpenChange={setLocalBrowserOpen}
+            onAnnotationAdded={showAnnotation}
+            onStatusChange={setLocalBrowserStatus}
+          />
+        </Suspense>
+      )}
       {dialog}
     </div>
   );

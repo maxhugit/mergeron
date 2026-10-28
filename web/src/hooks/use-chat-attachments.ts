@@ -275,6 +275,9 @@ export function useChatAttachments({
       if (!image) {
         setValue((previous) => previous + request.text);
         request.complete();
+        requestAnimationFrame(() => {
+          if (current) textareaRef.current?.focus();
+        });
         return;
       }
       void uploadFile(image)
@@ -295,6 +298,9 @@ export function useChatAttachments({
           ]);
           setValue((previous) => previous + request.text);
           request.complete();
+          requestAnimationFrame(() => {
+            if (current) textareaRef.current?.focus();
+          });
         })
         .catch(() => request.complete('Upload failed'));
     };
@@ -303,7 +309,7 @@ export function useChatAttachments({
       current = false;
       window.removeEventListener(BROWSER_ANNOTATION_EVENT, handler);
     };
-  }, [threadId, readOnly, uploadFile, setValue]);
+  }, [threadId, readOnly, uploadFile, setValue, textareaRef]);
 
   /** Remove attachment. For file mentions, also remove @displayName from text. */
   const handleRemoveAttachment = useCallback(

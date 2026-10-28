@@ -8,18 +8,19 @@ sur l'instance Mergeron utilisée.
 
 ## Installation et essai
 
-1. Télécharger `mergeron-browser-extension.zip` dans le panneau du mode local et
+1. Télécharger `mergeron-browser-extension.zip` dans la fenêtre d'association et
    l'extraire dans un dossier durable. Le build web génère ce ZIP depuis
    `web/browser-extension/`, sans dépendance ni code distant.
 2. Dans `chrome://extensions` ou `edge://extensions`, activer le mode développeur
    puis **Charger l'extension non empaquetée** et sélectionner le dossier extrait.
 3. Ouvrir les options de l'extension, saisir uniquement l'origine HTTPS de Mergeron
    et accepter l'autorisation pour cette origine. Recharger Mergeron.
-4. Dans une conversation, ouvrir **Navigateur → Navigateur local · extension (test)** puis
+4. Dans une conversation, utiliser le bouton **Association de l’extension** (prise), ou **Navigateur → Navigateur local · extension (test)** puis
    demander l'association. Vérifier le code affiché dans Mergeron et dans l'extension,
    puis confirmer dans l'extension.
 5. Dans l'onglet HTTPS à partager, utiliser l'icône de l'extension, sélectionner
-   l'agent et partager explicitement cet onglet. Aucun onglet n'est choisi automatiquement.
+   l'agent et cliquer **Pointer** pour partager cet onglet et démarrer le pointeur en un geste.
+   **Partager / reprendre cet onglet** reste disponible pour la lecture par l'agent sans pointage.
 6. Demander à l'agent de lire la page avec `local_browser_read`, puis une action.
    Autoriser ou refuser cette action dans Mergeron. Le retour initial n'est qu'une
    mise en attente ; l'agent doit lire le résultat avec son `commandId`.
@@ -56,13 +57,16 @@ Références Apple : [installation de test](https://developer.apple.com/document
 
 - Préversion administrateur uniquement, sans impersonation ; ordinateur Chrome/Edge
   ou Safari Mac 18.4+. Pas de prise en charge iPhone/iPad.
-- La page native reste un onglet réel, pas une iframe dans Mergeron. Le panneau local
-  affiche le partage, les consentements et les annotations, pas un flux vidéo.
+- La page native reste un onglet réel, pas une iframe dans Mergeron. Aucun panneau
+  local permanent : le bouton ouvre une fenêtre d'association et de consentement.
 - L'onglet Mergeron doit rester ouvert/authentifié. Quitter la conversation ou fermer
-  le panneau révoque le partage ; le véritable onglet natif reste ouvert. Retourner
+  Mergeron révoque le partage ; fermer la fenêtre d'association ne l'interrompt pas.
+  Le véritable onglet natif reste ouvert. Retourner
   dans l'agent nécessite une nouvelle association, sans perte de la page native.
 - Une navigation ou un rechargement suspend le partage, même sur le même site.
-  L'utilisateur doit reprendre depuis l'extension. Les commandes ne traversent pas
+  Un clic explicite sur **Pointer** reprend le partage du nouvel onglet actif avec
+  une nouvelle époque et de nouveaux identifiants de document. Aucun suivi silencieux
+  des onglets, aucune ancienne commande rejouée. Les commandes ne traversent pas
   d'origine et ne ciblent pas d'iframe, page interne ou boutique d'extensions.
   L'instance Mergeron de contrôle peut être partagée en mode **annotation uniquement** :
   le worker et le script de page refusent toutes les commandes de l'agent, y compris
@@ -80,19 +84,26 @@ Références Apple : [installation de test](https://developer.apple.com/document
   ou une interaction manuelle dans cette première version.
 - Les mises à jour de l'extension sont manuelles ; aucun store ni autoupdate dans cette V1.
 
-## Pointeur, commentaire et capture (extension 0.3.0)
+## Pointeur et rédaction dans la conversation (extension 0.4.0)
 
-1. Dans l'onglet partagé au premier plan, ouvrir l'icône puis **Pointer un élément**.
+1. Dans l'onglet au premier plan, ouvrir l'icône puis **Pointer un élément**.
+   Ce geste reprend le partage pour l'agent choisi, y compris après navigation ou rechargement.
    Un cadre bleu suit le survol. **Échap** annule ; le pointeur expire après une minute.
 2. Cliquer l'élément : le clic du site est intercepté. L'extension capture la zone
-   visible et ouvre un éditeur qui lui appartient (fenêtre ou onglet selon le navigateur).
-   Le site annoté ne reçoit pas la saisie du commentaire.
-3. Vérifier l'aperçu avec cadre bleu et repère 1, puis saisir le commentaire.
-   Rien n'est transmis à Mergeron avant **Ajouter au brouillon Mergeron**. **Annuler**
-   détruit le brouillon local.
-4. Après validation explicite, le panneau ajoute le commentaire et le JPEG marqué au
-   brouillon de cet agent via le mécanisme d'upload existant. L'utilisateur vérifie
-   puis envoie lui-même son message ; aucune commande de chat n'est démarrée.
+   visible et ouvre un aperçu qui lui appartient (fenêtre ou onglet selon le navigateur).
+3. Vérifier l'aperçu avec cadre bleu et repère 1. Rien n'est transmis à Mergeron avant
+   **Ajouter au message dans Mergeron**. **Annuler** détruit la capture privée.
+   Aucun champ de commentaire séparé : on rédige uniquement dans la conversation.
+4. Après validation explicite, le relais ajoute le repère et le JPEG marqué à la
+   zone de saisie normale de cet agent via l'upload existant. Le texte déjà saisi est
+   conservé. La conversation est sélectionnée ; l'utilisateur complète puis envoie
+   lui-même son message. Aucun tour de chat n'est démarré automatiquement.
+
+La fenêtre d'association est indépendante du relais : la fermer ne révoque pas la
+connexion et n'occupe plus la moitié de l'interface. Une nouvelle demande d'action
+ouvre la fenêtre pour consentement explicite ; la fermer n'approuve rien. Les anciens
+onglets locaux persistés sont retirés sans convertir leur session en navigateur isolé.
+Les onglets et sessions isolés restent inchangés. Quitter l'agent révoque toujours la connexion.
 
 Le frontend Mergeron et l'extension doivent tous deux prendre en charge le protocole
 d'annotation 3. Sinon, le popup demande de mettre à jour Mergeron au lieu d'accepter
@@ -102,7 +113,7 @@ partagée**, puis refaire l'association ; les anciens scripts injectés sont ref
 La capture nécessite le geste utilisateur `activeTab`, aucun nouveau droit global.
 Le document, l'onglet actif, le défilement, les dimensions et la révision du DOM sont
 vérifiés autour de la capture ; un changement détecté annule l'opération. Les commandes
-de l'agent sont suspendues pendant le pointage et l'édition. Les champs et iframes sont
+de l'agent sont suspendues pendant le pointage et la prévisualisation. Les champs et iframes sont
 recouverts uniquement dans le JPEG, sans masquage rose sur la page au survol. Cela ne
 détecte pas tous les secrets affichés (par exemple un champ custom dans un shadow DOM) :
 vérifier impérativement l'image et ne pas annoter une page contenant des données privées.
@@ -112,7 +123,7 @@ par l'éditeur lié à cette capture et ne traversent jamais le bridge Mergeron.
 redémarrage du worker les perd volontairement. L'aperçu est redimensionné et borné à
 750 ko encodés ; seul ce JPEG traité est conservé en `storage.session` après validation.
 Une annotation est liée à la session et à l'onglet Mergeron qui l'a créée, puis effacée
-après accusé d'ajout au brouillon ou expiration (15 minutes). Une erreur d'ajout demande
+après accusé d'ajout à la zone de saisie ou expiration (15 minutes). Une erreur d'ajout demande
 une reprise manuelle. Si seul l'accusé échoue, la reprise ne renvoie pas l'image deux fois.
 
 ## Frontières de confiance
@@ -155,7 +166,11 @@ pas une isolation contre le serveur auquel l'utilisateur choisit de faire confia
   lecture seule, approbation, expiration, origine, unicité et absence de chevauchement.
 - Tests web : choix explicite, absence d'extension sans fallback, ajout de l'image
   uniquement après validation, absence de doublon après échec d'accusé, absence de
-  capture dans le relais des commandes et mode conservé sans keepalive/dispose isolé.
+  capture dans le relais des commandes et retrait des anciens panneaux locaux sans
+  keepalive/dispose isolé. La fermeture de la fenêtre d'association ne coupe pas le relais.
+- `local-browser-connection.browser.tsx` : vraie mise en page Chromium/WebKit à
+  1280 et 390 pixels, zone de saisie pleine largeur après fermeture de la fenêtre,
+  réception de la capture dans le texte existant, sans envoi de tour de chat.
 - `node --test scripts/browser-extension-portability.test.mjs` : paquets déterministes,
   contenu/permissions identiques hors manifeste, espace de noms `browser` sans `chrome`,
   restauration du bridge sans réautorisation et révocation des sessions après mise à jour.
