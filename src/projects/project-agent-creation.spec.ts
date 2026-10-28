@@ -17,6 +17,7 @@ import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { ProjectsService } from './projects.service';
 import { ProjectsController } from './projects.controller';
 import { DeliverablesService } from '../deliverables/deliverables.service';
+import type { FilesService } from '../files/files.service';
 let database: TestDatabase, root: string, service: ProjectsService;
 const threads = {
   startThread: vi.fn(),
@@ -147,7 +148,7 @@ it('creates and attaches a fresh agent before returning, without resuming its no
     .run();
   const deliverables = new DeliverablesService(
     database.db,
-    null as never,
+    {} as FilesService,
     null as never,
     new ActiveFoldersService(database.db),
   );
