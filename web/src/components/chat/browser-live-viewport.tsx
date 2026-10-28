@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 
 type Frame = Extract<BrowserLiveEvent, { type: 'frame' }>;
+type View = Pick<Frame, 'width' | 'height' | 'url'>;
 type Input = Record<string, unknown>;
 
 /** Live pixels belong only to this human viewer, never to the annotation draft. */
@@ -45,12 +46,12 @@ export function BrowserLiveViewport(props: {
     let frame: Frame | null = null;
     let drawing = false;
     let pending: Frame | null = null;
-    let queue: { input: Input; view: Frame }[] = [];
+    let queue: { input: Input; view: View }[] = [];
     let sending = false;
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     let renewal: ReturnType<typeof setTimeout> | undefined;
     const path = `/${encodeURIComponent(props.threadId)}`;
-    const sameView = (a: Frame, b: Frame) =>
+    const sameView = (a: View, b: View) =>
       a.width === b.width && a.height === b.height && a.url === b.url;
     const fail = (reason: unknown) => {
       if (abort.signal.aborted) return;
@@ -115,7 +116,11 @@ export function BrowserLiveViewport(props: {
         last.input.phase === 'move'
       )
         last.input = input;
-      else if (queue.length < 128) queue.push({ input, view: frame });
+      else if (queue.length < 128)
+        queue.push({
+          input,
+          view: { width: frame.width, height: frame.height, url: frame.url },
+        });
       else {
         fail(new Error('Input queue full'));
         return;
@@ -200,6 +205,8 @@ export function BrowserLiveViewport(props: {
     )
       .then(() => {
         if (abort.signal.aborted) return;
+        controlId = '';
+        queue = [];
         callbacks.current.onControl(null);
         setState('connecting');
         renewal = setTimeout(() => setAttempt((value) => value + 1), 500);
