@@ -94,9 +94,11 @@ export function HelpRoute() {
     else if (selected.top < bounds.top)
       container.scrollTop -= bounds.top - selected.top + 8;
   }, [article.id, searching, expanded, navigationOpen]);
+  const articleUrl = (id: string) =>
+    `${window.location.pathname}${window.location.search}${guideHash(id)}`;
   const navigate = (id: string) => {
     if (window.location.hash !== guideHash(id))
-      window.history.pushState(window.history.state, '', guideHash(id));
+      window.history.pushState(window.history.state, '', articleUrl(id));
     setArticleId(id);
     setCopyStatus('idle');
     const parent = articles.find(({ article }) => article.id === id)?.chapter
@@ -107,7 +109,7 @@ export function HelpRoute() {
   };
   const articleLink = (id: string, label: string, className?: string) => (
     <a
-      href={guideHash(id)}
+      href={articleUrl(id)}
       onClick={(event) => {
         event.preventDefault();
         navigate(id);
@@ -196,7 +198,7 @@ export function HelpRoute() {
                     ({ article: result, chapter: parent, snippet }) => (
                       <li key={result.id}>
                         <a
-                          href={guideHash(result.id)}
+                          href={articleUrl(result.id)}
                           aria-current={
                             article.id === result.id ? 'page' : undefined
                           }
@@ -270,7 +272,7 @@ export function HelpRoute() {
                       {group.articles.map((item) => (
                         <li key={item.id}>
                           <a
-                            href={guideHash(item.id)}
+                            href={articleUrl(item.id)}
                             aria-current={
                               article.id === item.id ? 'page' : undefined
                             }
