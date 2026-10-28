@@ -1,4 +1,6 @@
 {
+  "managerUpdateSuperseded": "This is no longer the current operation",
+  "managerUpdateSupersededHelp": "Another operation has finished and the Manager is idle. This retained journal is incomplete: close this window, then open the latest progress view to inspect the current result.",
   "componentUpdatesTitle": "Container updates",
   "componentUpdatesLoading": "Checking published images…",
   "componentUpdatesUnavailable": "Discovery unavailable. The Manager must support image discovery.",
