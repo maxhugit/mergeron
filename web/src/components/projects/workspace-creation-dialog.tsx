@@ -101,7 +101,7 @@ export function WorkspaceCreationDialog({
     },
   ];
   const field =
-    'h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground';
+    'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground';
   const external = source && source !== 'local' ? source : null;
   const canSubmit =
     source === 'local'
@@ -135,8 +135,8 @@ export function WorkspaceCreationDialog({
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
       {open && (
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] min-w-0 overflow-y-auto sm:max-w-2xl">
+          <DialogHeader className="min-w-0 pr-8">
             <DialogTitle>{t('addAWorkspace')}</DialogTitle>
           </DialogHeader>
 
@@ -158,13 +158,13 @@ export function WorkspaceCreationDialog({
                     )}
                     <button
                       type="button"
-                      className="flex items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-accent/40"
+                      className="flex min-w-0 items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-accent/40"
                       onClick={() => setSource(option.type)}
                     >
-                      <span className="rounded-md bg-primary/10 p-2 text-primary">
+                      <span className="shrink-0 rounded-md bg-primary/10 p-2 text-primary">
                         <Icon className="h-5 w-5" />
                       </span>
-                      <span>
+                      <span className="min-w-0">
                         <span className="block font-medium">
                           {option.label}
                         </span>
@@ -194,7 +194,7 @@ export function WorkspaceCreationDialog({
                 ← {t('chooseAnotherSource')}
               </Button>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-sm font-medium">
+                <label className="grid min-w-0 gap-1 text-sm font-medium">
                   {t('connectionName')}
                   <input
                     className={field}
@@ -204,7 +204,7 @@ export function WorkspaceCreationDialog({
                     }
                   />
                 </label>
-                <label className="grid gap-1 text-sm font-medium">
+                <label className="grid min-w-0 gap-1 text-sm font-medium">
                   {t('connectionType')}
                   <select
                     className={field}
@@ -220,7 +220,7 @@ export function WorkspaceCreationDialog({
                     ))}
                   </select>
                 </label>
-                <label className="grid gap-1 text-sm font-medium sm:col-span-2">
+                <label className="grid min-w-0 gap-1 text-sm font-medium sm:col-span-2">
                   {external === 'git'
                     ? t('repositoryUrl')
                     : t('connectionAddress')}
@@ -237,7 +237,7 @@ export function WorkspaceCreationDialog({
                     }
                   />
                 </label>
-                <label className="grid gap-1 text-sm font-medium">
+                <label className="grid min-w-0 gap-1 text-sm font-medium">
                   {t('allowedRoot')}
                   <input
                     className={field}
@@ -247,7 +247,7 @@ export function WorkspaceCreationDialog({
                     }
                   />
                 </label>
-                <label className="grid gap-1 text-sm font-medium">
+                <label className="grid min-w-0 gap-1 text-sm font-medium">
                   {t('accessMode')}
                   <select
                     className={field}
@@ -260,7 +260,7 @@ export function WorkspaceCreationDialog({
                     <option value="read_write">{t('readAndWrite')}</option>
                   </select>
                 </label>
-                <label className="grid gap-1 text-sm font-medium">
+                <label className="grid min-w-0 gap-1 text-sm font-medium">
                   {t('username')}
                   <input
                     className={field}
@@ -271,7 +271,7 @@ export function WorkspaceCreationDialog({
                     }
                   />
                 </label>
-                <label className="grid gap-1 text-sm font-medium">
+                <label className="grid min-w-0 gap-1 text-sm font-medium">
                   {external === 'git' ? t('accessToken') : t('passwordOrToken')}
                   <input
                     className={field}
@@ -284,10 +284,10 @@ export function WorkspaceCreationDialog({
                   />
                 </label>
                 {(external === 'ssh' || external === 'sftp') && (
-                  <label className="grid gap-1 text-sm font-medium sm:col-span-2">
+                  <label className="grid min-w-0 gap-1 text-sm font-medium sm:col-span-2">
                     {t('knownHosts')}
                     <textarea
-                      className="min-h-20 rounded-md border border-input bg-background p-3 font-mono text-xs"
+                      className="min-h-20 w-full min-w-0 resize-y rounded-md border border-input bg-background p-3 font-mono text-xs"
                       value={form.knownHosts}
                       onChange={(event) =>
                         setForm({ ...form, knownHosts: event.target.value })
@@ -319,12 +319,16 @@ export function WorkspaceCreationDialog({
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="sm:flex-wrap">
             <Button variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>
             {source && (
-              <Button disabled={pending || !canSubmit} onClick={submit}>
+              <Button
+                className="h-auto min-h-9 min-w-0 whitespace-normal text-center"
+                disabled={pending || !canSubmit}
+                onClick={submit}
+              >
                 {pending ? t('loading') : t('addAWorkspace')}
               </Button>
             )}
