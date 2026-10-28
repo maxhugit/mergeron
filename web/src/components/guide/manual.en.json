@@ -507,7 +507,7 @@
             "title": "Requirements and privacy",
             "paragraphs": [
               "Dictation requires compatible audio recording, a secure connection and allowed microphone access. Denied permission or an active transcription can make the control unavailable.",
-              "Audio is sent to the installation’s transcription service through the simple-chat API path. It is not a continuous voice call with the agent or audio from the remote browser."
+              "Choose the dictation engine in Codex → Chat and Audio: API key or Codex CLI — experimental. Chat and audio engines are independent; there is no automatic API-key fallback. CLI voice availability depends on runtime and account. Transcribed text stays in an editable draft, not an agent action."
             ],
             "warning": "Do not dictate secrets or sensitive information without considering the receiving service. Transcription can be wrong: adding text to a draft does not validate its accuracy."
           }

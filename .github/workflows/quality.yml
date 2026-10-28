@@ -142,6 +142,8 @@ jobs:
           src/project-knowledge/project-knowledge.service.spec.ts
           src/project-knowledge/project-agent-tools.service.spec.ts
           src/internal-mcp
+          src/simple-chat
+          src/codex/codex-jsonrpc-client.spec.ts
           src/project-knowledge/knowledge-proposals.service.spec.ts
           src/deliverables/deliverables.service.spec.ts
           src/deliverables/deliverables-agent.controller.spec.ts

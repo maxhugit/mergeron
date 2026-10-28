@@ -14,6 +14,7 @@ interface KeyStatus {
 interface BackendStatus {
   backend: 'openai' | 'codex';
   configured: boolean;
+  audioBackend?: 'openai' | 'codex';
 }
 
 function headers() {
@@ -26,12 +27,19 @@ function headers() {
 
 export function SimpleChatSettings() {
   const { t } = useTranslation();
+  const { t: audioT } = useTranslation('codexSettings');
   const [status, setStatus] = useState<KeyStatus>();
   const [backend, setBackend] = useState<'openai' | 'codex'>('openai');
   const [savedBackend, setSavedBackend] = useState<'openai' | 'codex'>(
     'openai',
   );
   const [apiKey, setApiKey] = useState('');
+  const [audioBackend, setAudioBackend] = useState<'openai' | 'codex'>(
+    'openai',
+  );
+  const [savedAudioBackend, setSavedAudioBackend] = useState<
+    'openai' | 'codex'
+  >('openai');
   const [savingBackend, setSavingBackend] = useState(false);
   const [savingApiKey, setSavingApiKey] = useState(false);
   const [backendMessage, setBackendMessage] = useState<string>();
@@ -57,6 +65,8 @@ export function SimpleChatSettings() {
         setStatus(key);
         setBackend(engine.backend);
         setSavedBackend(engine.backend);
+        setAudioBackend(engine.audioBackend ?? engine.backend);
+        setSavedAudioBackend(engine.audioBackend ?? engine.backend);
       })
       .catch(() => setBackendError(t('unableToReadTheSimpleChatSettings')));
   }, [t]);
@@ -123,8 +133,56 @@ export function SimpleChatSettings() {
     }
   };
 
+  const saveAudio = async () => {
+    if (audioBackend === savedAudioBackend) return;
+    setSavingBackend(true);
+    try {
+      const response = await fetch(
+        withBasePath('/api/simple-chat/audio-settings'),
+        {
+          method: 'PUT',
+          headers: headers(),
+          body: JSON.stringify({ audioBackend }),
+        },
+      );
+      if (!response.ok) throw new Error(t('unableToSave'));
+      setSavedAudioBackend(audioBackend);
+    } catch (error) {
+      setBackendError(
+        error instanceof Error ? error.message : t('unableToSave'),
+      );
+    } finally {
+      setSavingBackend(false);
+    }
+  };
+
   return (
     <section className="space-y-5">
+      <div className="rounded-xl border p-4 space-y-3">
+        <label htmlFor="dictation-backend" className="text-sm font-medium">
+          {audioT('dictationBackendLabel')}
+        </label>
+        <select
+          id="dictation-backend"
+          value={audioBackend}
+          disabled={savingBackend}
+          onChange={(event) =>
+            setAudioBackend(event.target.value as 'openai' | 'codex')
+          }
+          className="block h-10 w-full rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="openai">{t('openAiApi')}</option>
+          <option value="codex">{audioT('dictationCliExperimental')}</option>
+        </select>
+        <p className="text-xs text-muted-foreground">
+          {audioT('dictationBackendIndependent')}
+        </p>
+        {audioBackend === 'codex' && (
+          <p role="status" className="text-sm text-amber-600">
+            {audioT('dictationCliWarning')}
+          </p>
+        )}
+      </div>
       <div className="rounded-xl border p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -222,16 +280,22 @@ export function SimpleChatSettings() {
         )}
       </div>
       <SettingsSaveBar
-        dirty={backend !== savedBackend || !!apiKey.trim()}
+        dirty={
+          backend !== savedBackend ||
+          audioBackend !== savedAudioBackend ||
+          !!apiKey.trim()
+        }
         saving={savingBackend || savingApiKey}
         onSave={() =>
           void (async () => {
             await saveBackend(backend);
+            await saveAudio();
             await save();
           })()
         }
         onDiscard={() => {
           setBackend(savedBackend);
+          setAudioBackend(savedAudioBackend);
           setApiKey('');
         }}
       />

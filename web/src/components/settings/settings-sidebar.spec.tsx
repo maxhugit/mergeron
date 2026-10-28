@@ -57,6 +57,9 @@ it('separates server settings from operations and closes the mobile drawer on se
   ).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Administration' })).toBeTruthy();
   expect(
+    screen.queryByRole('button', { name: 'Simple Chat' }),
+  ).not.toBeInTheDocument();
+  expect(
     screen.getByRole('heading', { name: 'Operations tools' }),
   ).toBeTruthy();
   expect(

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { showSnackbar } from '@/stores/snackbar-store';
+import { dictationWave } from '@/lib/dictation-audio';
 
 const MAX_RECORDING_MS = 2 * 60 * 1_000;
 
@@ -12,12 +13,6 @@ type State = 'idle' | 'recording' | 'transcribing';
 function recordingMimeType(): string | undefined {
   const candidates = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
-}
-
-function extensionFor(type: string): string {
-  if (type.includes('mp4')) return 'm4a';
-  if (type.includes('ogg')) return 'ogg';
-  return 'webm';
 }
 
 export function VoiceDictationButton({
@@ -57,7 +52,8 @@ export function VoiceDictationButton({
     setState('transcribing');
     try {
       const form = new FormData();
-      form.append('file', blob, `dictation.${extensionFor(blob.type)}`);
+      const wave = await dictationWave(blob);
+      form.append('file', wave, 'dictation.wav');
       const authorization = getAuthorizationHeader();
       const response = await fetch(
         withBasePath('/api/simple-chat/transcriptions'),

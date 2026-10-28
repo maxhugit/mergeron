@@ -30,6 +30,7 @@ import {
   simpleChatThreads,
 } from '../database/schema';
 import { ThreadsService } from '../threads/threads.service';
+import { CodexAudioService } from './codex-audio.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 
 const DEFAULT_MODEL = 'gpt-5-mini';
@@ -105,6 +106,7 @@ export class SimpleChatService {
     @Optional() private readonly knowledge?: ProjectKnowledgeService,
     @Optional() private readonly proposals?: KnowledgeProposalsService,
     @Optional() private readonly deliverables?: DeliverablesService,
+    @Optional() private readonly audio?: CodexAudioService,
   ) {}
 
   getBackend(): 'openai' | 'codex' {
@@ -151,7 +153,46 @@ export class SimpleChatService {
       model: backend === 'codex' ? 'project' : this.defaultModel,
       webSearch: true,
       backend,
+      audioBackend: this.getAudioBackend(),
+      audioExperimental: this.getAudioBackend() === 'codex',
     };
+  }
+
+  getAudioBackend(): 'openai' | 'codex' {
+    const value = this.db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(eq(settings.key, 'simple-chat:audio-backend'))
+      .get()?.value;
+    return value === 'openai' || value === 'codex' ? value : this.getBackend();
+  }
+
+  setAudioBackend(value: unknown) {
+    requireExecutionAccess();
+    if (value !== 'openai' && value !== 'codex')
+      throw BusinessException.badRequest(
+        ErrorCode.simpleChat.audioInvalid,
+        'Invalid audio backend',
+      );
+    const now = Date.now();
+    this.db
+      .insert(settings)
+      .values({
+        key: 'simple-chat:audio-backend',
+        value,
+        type: 'string',
+        category: 'simple-chat',
+        description: 'Dictation backend; Codex CLI is experimental',
+        defaultValue: 'openai',
+        constraints: JSON.stringify({ enum: ['openai', 'codex'] }),
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: { value, updatedAt: now },
+      })
+      .run();
+    return this.getStatus();
   }
 
   getKeyStatus() {
@@ -570,6 +611,14 @@ export class SimpleChatService {
       );
     }
     const form = new FormData();
+    if (this.getAudioBackend() === 'codex') {
+      if (!this.audio)
+        throw BusinessException.badRequest(
+          ErrorCode.simpleChat.upstreamFailed,
+          'Experimental CLI dictation is unavailable; no API fallback.',
+        );
+      return this.audio.transcribe(input.bytes);
+    }
     form.append('model', TRANSCRIPTION_MODEL);
     form.append('language', 'fr');
     form.append(

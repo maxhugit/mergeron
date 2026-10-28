@@ -44,6 +44,30 @@ export function serializeCodexAuditEntry(
   dir: 'in' | 'out',
   msg: unknown,
 ): string {
+  if (
+    typeof msg === 'object' &&
+    msg !== null &&
+    'method' in msg &&
+    msg.method === 'thread/realtime/appendAudio'
+  ) {
+    const envelope = msg as { method: string; params?: { threadId?: string } };
+    // Audio is private, potentially large, and must never enter the RPC audit.
+    msg = {
+      method: envelope.method,
+      params: {
+        threadId: envelope.params?.threadId,
+        audio: '[REDACTED_AUDIO]',
+      },
+    };
+  } else if (
+    typeof msg === 'object' &&
+    msg !== null &&
+    'method' in msg &&
+    typeof msg.method === 'string' &&
+    msg.method.startsWith('thread/realtime/')
+  ) {
+    msg = { method: msg.method, params: '[REDACTED_VOICE_SESSION]' };
+  }
   return JSON.stringify(
     { ts: new Date().toISOString(), dir, msg },
     auditLogReplacer,
