@@ -13,6 +13,7 @@ import { WorkspaceGitGraph } from '@/components/chat/workspace-git-graph';
 import { WorkspaceGitRemoteFile } from '@/components/chat/workspace-git-remote-file';
 import { useWorkspaceClose } from '@/components/chat/workspace-close-dialog';
 import { FileViewer } from '@/components/files/file-viewer';
+import { BrowserModeDialog } from '@/components/chat/browser-mode-dialog';
 import { TerminalSurface } from '@/components/terminal/terminal-host';
 import { TerminalStatusBar } from '@/components/terminal/terminal-status-bar';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
@@ -56,6 +57,11 @@ const BrowserSidebar = lazy(() =>
     default: module.BrowserSidebar,
   })),
 );
+const LocalBrowserSidebar = lazy(() =>
+  import('@/components/chat/local-browser-sidebar').then((module) => ({
+    default: module.LocalBrowserSidebar,
+  })),
+);
 
 /** URL identity owns opening; tab identity controls only presentation and never subscription. */
 export function ThreadView() {
@@ -74,6 +80,7 @@ export function ThreadView() {
 function ConversationWorkspace({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
   const { t: tb } = useTranslation('browser');
+  const [browserChoice, setBrowserChoice] = useState(false);
   const session = usePlatformSession();
   const context = `thread:${threadId}`;
   useTerminalDiscovery(context);
@@ -345,16 +352,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
             else setMobileTree(true);
           }}
           onBrowser={
-            session.isAdministrator
-              ? () => {
-                  useWorkspaceStore.getState().openBrowser(context);
-                  setBrowserLayout(context, {
-                    browserDocked:
-                      project?.browserSettings?.desktopSplit ?? true,
-                  });
-                  setMobileTree(false);
-                }
-              : undefined
+            session.isAdministrator ? () => setBrowserChoice(true) : undefined
           }
         />
         <AgentContextLinks
@@ -410,32 +408,48 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                   </div>
                 }
               >
-                <BrowserSidebar
-                  threadId={threadId}
-                  instanceId={tab.id}
-                  wasOpened={tab.opened ?? false}
-                  onSessionChange={(opened) =>
-                    useWorkspaceStore
-                      .getState()
-                      .setBrowserOpened(context, tab.id, opened)
-                  }
-                  homeUrl={
-                    project?.browserSettings?.homeUrl ??
-                    'https://www.google.com'
-                  }
-                  allowPopups={project?.browserSettings?.allowPopups ?? true}
-                  visible={browserVisible && tab.id === displayedBrowser?.id}
-                  docked={splitBrowser}
-                  onToggleDocked={
-                    desktop
-                      ? () =>
-                          setBrowserLayout(context, {
-                            browserDocked: !browserDocked,
-                          })
-                      : undefined
-                  }
-                  onClose={() => requestClose(tab)}
-                />
+                {tab.mode === 'local' ? (
+                  <LocalBrowserSidebar
+                    threadId={threadId}
+                    docked={splitBrowser}
+                    onToggleDocked={
+                      desktop
+                        ? () =>
+                            setBrowserLayout(context, {
+                              browserDocked: !browserDocked,
+                            })
+                        : undefined
+                    }
+                    onClose={() => requestClose(tab)}
+                  />
+                ) : (
+                  <BrowserSidebar
+                    threadId={threadId}
+                    instanceId={tab.id}
+                    wasOpened={tab.opened ?? false}
+                    onSessionChange={(opened) =>
+                      useWorkspaceStore
+                        .getState()
+                        .setBrowserOpened(context, tab.id, opened)
+                    }
+                    homeUrl={
+                      project?.browserSettings?.homeUrl ??
+                      'https://www.google.com'
+                    }
+                    allowPopups={project?.browserSettings?.allowPopups ?? true}
+                    visible={browserVisible && tab.id === displayedBrowser?.id}
+                    docked={splitBrowser}
+                    onToggleDocked={
+                      desktop
+                        ? () =>
+                            setBrowserLayout(context, {
+                              browserDocked: !browserDocked,
+                            })
+                        : undefined
+                    }
+                    onClose={() => requestClose(tab)}
+                  />
+                )}
               </Suspense>
             </div>
           ))}
@@ -519,6 +533,18 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
         mobileOpen={mobileTree}
         onMobileClose={() => setMobileTree(false)}
         onFile={(path) => openFile(context, path)}
+      />
+      <BrowserModeDialog
+        open={browserChoice}
+        onOpenChange={setBrowserChoice}
+        onChoose={(mode) => {
+          useWorkspaceStore.getState().openBrowser(context, mode);
+          setBrowserLayout(context, {
+            browserDocked: project?.browserSettings?.desktopSplit ?? true,
+          });
+          setMobileTree(false);
+          setBrowserChoice(false);
+        }}
       />
       {dialog}
     </div>

@@ -55,6 +55,15 @@ it('preserves the draft and adds image plus annotation atomically, without start
   expect(fetchMock.mock.calls[0][0]).toContain('/api/chat/upload');
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
+it('accepts text-only native browser annotations without uploading or sending a turn', async () => {
+  const { result } = renderHook(() => useDraft('a', false));
+  await act(async () =>
+    insertBrowserAnnotation({ threadId: 'a', text: '\nNative annotation' }),
+  );
+  expect(result.current.value).toBe('Existing draft\nNative annotation');
+  expect(result.current.attachments).toHaveLength(0);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
 it.each([
   ['b', false],
   ['a', true],

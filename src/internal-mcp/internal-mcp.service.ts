@@ -2,6 +2,7 @@ import {
   Injectable,
   OnModuleDestroy,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import {
   createServer,
@@ -18,6 +19,7 @@ import type { ServerNotification } from '../codex/codex-schema';
 import { accessContext, currentAccess } from '../auth/access-context';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
+import { LocalBrowserService } from '../browser/local-browser.service';
 import {
   INTERNAL_MCP_INSTRUCTIONS,
   INTERNAL_MCP_NAME,
@@ -58,6 +60,7 @@ export class InternalMcpService implements OnModuleDestroy {
     private readonly tools: ProjectAgentToolsService,
     manager: CodexProcessManager,
     private readonly admission: CatalogAdmissionService,
+    @Optional() private readonly localBrowser?: LocalBrowserService,
   ) {
     manager.addLifecycleListener(() => {
       for (const cap of this.capabilities.values()) this.revoke(cap.threadId);
@@ -217,6 +220,10 @@ export class InternalMcpService implements OnModuleDestroy {
       lease.access.identities.requireActive(identity);
       lease.access.identities.requireThread(identity, cap.threadId);
       lease.access.identities.requireProject(identity, cap.projectId);
+      if (name.startsWith('local_browser_')) {
+        if (identity.impersonation) throw new Error('ACCESS_DENIED');
+        lease.access.identities.requireAdministrator(identity);
+      }
       this.tools.assertProject(cap.threadId, cap.projectId);
       if (!readOnly && !lease.writes) throw new Error('READ_ONLY');
     };
@@ -231,9 +238,48 @@ export class InternalMcpService implements OnModuleDestroy {
         );
         const release = this.admission.enter('Internal MCP tool');
         try {
-          return await accessContext.run({ ...lease!.access, identity }, () =>
-            this.tools.execute(cap.threadId!, { ...args, tool: name }, check),
-          );
+          return await accessContext.run({ ...lease!.access, identity }, () => {
+            if (name.startsWith('local_browser_')) {
+              if (!this.localBrowser || identity.impersonation)
+                throw new Error('ACCESS_DENIED');
+              lease!.access.identities.requireAdministrator(identity);
+              const owner =
+                identity.personId ?? identity.subject ?? identity.kind;
+              if (name === 'local_browser_read') {
+                if (args.operation === 'status')
+                  return this.localBrowser.status(owner, cap.threadId!);
+                if (args.operation === 'result')
+                  return this.localBrowser.result(
+                    owner,
+                    cap.threadId!,
+                    String(args.sessionId),
+                    String(args.commandId),
+                  );
+                return this.localBrowser.request(
+                  owner,
+                  cap.threadId!,
+                  String(args.sessionId),
+                  'observe',
+                  {},
+                  check,
+                );
+              }
+              const { sessionId, action, ...parameters } = args;
+              return this.localBrowser.request(
+                owner,
+                cap.threadId!,
+                String(sessionId),
+                action,
+                parameters,
+                check,
+              );
+            }
+            return this.tools.execute(
+              cap.threadId!,
+              { ...args, tool: name },
+              check,
+            );
+          });
         } finally {
           release();
         }
@@ -257,9 +303,9 @@ export class InternalMcpService implements OnModuleDestroy {
           outputSchema: tool.output,
           annotations: {
             readOnlyHint: tool.readOnly,
-            destructiveHint: false,
-            idempotentHint: true,
-            openWorldHint: false,
+            destructiveHint: tool.name === 'local_browser_action',
+            idempotentHint: tool.name !== 'local_browser_action',
+            openWorldHint: tool.name.startsWith('local_browser_'),
           },
         },
         async (
