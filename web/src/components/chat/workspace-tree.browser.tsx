@@ -5,7 +5,7 @@ import { commands, page } from 'vitest/browser';
 import { WorkspaceTree } from './workspace-tree';
 import { useLayoutStore } from '@/stores/layout-store';
 import '@/index.css';
-import '@/i18n';
+import i18n, { i18nReady } from '@/i18n';
 
 vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
 vi.mock('@/lib/platform-session', () => ({
@@ -45,6 +45,8 @@ const contentWidth = () =>
 const preview = () => rail().querySelector<HTMLElement>('.pointer-events-none');
 
 beforeEach(async () => {
+  await i18nReady;
+  await i18n.changeLanguage('en');
   await page.viewport(1280, 900);
   useLayoutStore.setState({
     workspaceTreeCollapsed: false,
@@ -52,6 +54,13 @@ beforeEach(async () => {
   });
 });
 afterEach(cleanup);
+
+test('uses the same 44px header height as the conversation', async () => {
+  render(<Fixture />);
+  await expect
+    .poll(() => rail().querySelector('.h-11')?.getBoundingClientRect().height)
+    .toBe(44);
+});
 
 test('previews without reflow and commits the same constrained width on release', async () => {
   render(<Fixture />);

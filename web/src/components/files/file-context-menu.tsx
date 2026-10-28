@@ -6,6 +6,7 @@ import { useRef } from 'react';
 import type { ComponentProps } from 'react';
 import { DeliverableDocuments } from '@/components/projects/deliverable-documents';
 import { showSnackbar } from '@/stores/snackbar-store';
+import { FileActionsMenu, type FileMenuAction } from './file-actions-menu';
 import { useTranslation } from 'react-i18next';
 import {
   Copy,
@@ -107,6 +108,39 @@ export function FileContextMenu({
       </DeliverableDocuments>
     );
 
+  if (!isDir) {
+    const items: FileMenuAction[] = [];
+    const add = (
+      id: string,
+      label: string,
+      icon: FileMenuAction['icon'],
+      onSelect?: () => void,
+      separated = false,
+      destructive = false,
+    ) => {
+      if (onSelect)
+        items.push({ id, label, icon, onSelect, separated, destructive });
+    };
+    add('rename', t('rename'), Pencil, actions.onRename);
+    add('copy', t('copyTo'), Copy, actions.onCopy);
+    add('move', t('moveTo'), Move, actions.onMove);
+    add('download', t('download'), Download, actions.onDownload);
+    add('refresh', t('refresh'), RefreshCw, actions.onRefresh, true);
+    add(
+      'attach',
+      t('attachToChat'),
+      MessageSquarePlus,
+      actions.onAttachToChat,
+      true,
+    );
+    add('delete', t('delete'), Trash2, actions.onDelete, true, true);
+    return (
+      <FileActionsMenu actions={items} onOpenChange={onOpenChange}>
+        {children}
+      </FileActionsMenu>
+    );
+  }
+
   return (
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
@@ -169,15 +203,6 @@ export function FileContextMenu({
             )}
           </>
         )}
-        {actions.onAttachToChat && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => select(actions.onAttachToChat)}>
-              <MessageSquarePlus className="h-3.5 w-3.5" />
-              {t('attachToChat')}
-            </ContextMenuItem>
-          </>
-        )}
         {actions.onRefresh && (
           <>
             <ContextMenuSeparator />
@@ -185,6 +210,16 @@ export function FileContextMenu({
               <RefreshCw className="h-3.5 w-3.5" />
               {t('refresh')}
             </ContextMenuItem>
+          </>
+        )}
+        {actions.onAttachToChat && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => select(actions.onAttachToChat)}>
+              <MessageSquarePlus className="h-3.5 w-3.5" />
+              {t('attachToChat')}
+            </ContextMenuItem>
+            {!actions.onDelete && <ContextMenuSeparator />}
           </>
         )}
         {actions.onDelete && (
