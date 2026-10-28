@@ -76,8 +76,12 @@ fourni. Un hôte incompatible doit faire échouer le démarrage : ne pas ajouter
 2. Ajoutez `deployment/compose.browser.yml` au déploiement :
 
    ```sh
-   docker compose --env-file deployment/.env -f deployment/compose.yml -f deployment/compose.browser.yml up -d --build
+   docker compose --env-file deployment/.env -f deployment/compose.yml -f deployment/compose.browser.yml up -d --no-build
    ```
+
+   Définir `MERGERON_BROWSER_IMAGE` par une image stable épinglée par digest en
+   production, ou `edge` en DEV. L’overlay donne des noms de conteneur/réseaux
+   cohérents avec `MERGERON_STACK_PREFIX`, un healthcheck et les labels de gestion.
 
 3. L’overlay définit `MERGERON_BROWSER_ENDPOINT` uniquement dans l’application.
    Les deux côtés utilisent Playwright 1.64.1 ; leurs versions doivent correspondre.
