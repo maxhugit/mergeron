@@ -474,7 +474,6 @@
   "uploadingFiles": "Envoi des fichiers",
   "uploadProgress": "Progression de l’envoi",
   "selectTheWorkspaceFoldersToDeletePermanently": "Sélectionnez les dossiers locaux à supprimer définitivement :",
-  "workAgentsAndSimpleConversationsInThisProjectWillBePermanentlyDeleted": "La suppression est définitive : les agents de travail, conversations simples et l’espace système du projet seront supprimés, avec toutes ses connaissances, instructions, décisions et versions historiques des documents et livrables. Ces données seront supprimées même si vous conservez les fichiers de travail. Seuls les dossiers locaux cochés ci-dessous seront également effacés du disque. Exportez le projet ou effectuez une sauvegarde avant de confirmer si vous souhaitez pouvoir le récupérer.",
   "alsoDeleteAssociatedWorkspaceFoldersAndAllTheirFiles": "Supprimer également les dossiers locaux associés et tous leurs fichiers",
   "projects": "Projets",
   "default7505d64a": "par défaut",

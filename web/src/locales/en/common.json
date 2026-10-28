@@ -474,7 +474,6 @@
   "uploadingFiles": "Uploading files",
   "uploadProgress": "Upload progress",
   "selectTheWorkspaceFoldersToDeletePermanently": "Select the local folders to delete permanently:",
-  "workAgentsAndSimpleConversationsInThisProjectWillBePermanentlyDeleted": "Deletion is permanent: work agents, simple conversations and the project’s system space will be deleted, including all shared knowledge, instructions, decisions and historical document and deliverable versions. This data is deleted even if you keep working files. Only the local folders checked below will also be erased from disk. Export the project or make a backup before confirming if you may need to recover it.",
   "alsoDeleteAssociatedWorkspaceFoldersAndAllTheirFiles": "Also delete attached local folders and all their files",
   "projects": "Projects",
   "default7505d64a": "default",

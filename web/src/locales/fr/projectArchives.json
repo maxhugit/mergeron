@@ -1,4 +1,5 @@
 {
+  "projectDeletionWarning": "Suppression définitive : agents, conversations et espace système, avec les connaissances, instructions, décisions et versions historiques des documents et livrables. Ces données disparaissent même si vous gardez les fichiers de travail ; seuls les dossiers cochés sont effacés du disque. Exportez ou sauvegardez le projet avant de confirmer.",
   "projectArchiveTitle": "Export du projet",
   "projectArchiveExport": "Exporter tout le projet en ZIP",
   "projectArchiveExporting": "Préparation du ZIP…",

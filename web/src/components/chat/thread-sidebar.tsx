@@ -145,7 +145,7 @@ export function ThreadSidebar() {
     select: (state) =>
       state.location.pathname.match(/\/projects\/([^/]+)/)?.[1],
   });
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'projectArchives']);
   const threadId = useTimelineStore((s) => s.threadId);
   const threadMode = useTimelineStore((s) => s.threadMode);
   const turnStartPending = useTimelineStore((s) => s.turnStartPending);
@@ -1411,9 +1411,7 @@ export function ThreadSidebar() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t('deleteThisProject')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t(
-                'workAgentsAndSimpleConversationsInThisProjectWillBePermanentlyDeleted',
-              )}
+              {t('projectDeletionWarning', { ns: 'projectArchives' })}
             </AlertDialogDescription>
             {deleteProject && (
               <div className="space-y-2 text-sm">

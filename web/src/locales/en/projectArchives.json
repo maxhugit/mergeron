@@ -1,4 +1,5 @@
 {
+  "projectDeletionWarning": "Permanent deletion: agents, conversations and system space, including knowledge, instructions, decisions and historical document and deliverable versions. This data is removed even if you keep working files; only checked folders are erased from disk. Export or back up the project before confirming.",
   "projectArchiveTitle": "Project export",
   "projectArchiveExport": "Export the entire project as ZIP",
   "projectArchiveExporting": "Preparing ZIP…",
