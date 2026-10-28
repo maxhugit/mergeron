@@ -181,6 +181,15 @@
               "Installation passwords and sessions are not transferred, but files and text may contain secrets. Remote servers are not crawled automatically: export a local copy to include their files."
             ],
             "warning": "The ZIP is not encrypted and does not replace a full server backup. Importing the same archive twice creates two independent projects."
+          },
+          {
+            "title": "Delete a project",
+            "steps": [
+              "Before permanent deletion, export or back up the project if you need to retain its knowledge and history.",
+              "Choose Delete in the project menu and read the warning: agents, conversations and system space will be removed, including knowledge, instructions, decisions and historical document and deliverable versions.",
+              "Check only the working folders to erase physically, then confirm. Unchecked folders retain their current files, but not knowledge or historical versions stored in system space."
+            ],
+            "warning": "Keeping working files does not restore the complete project. System-space deletion is permanent; this operation does not retroactively clean up previously deleted projects."
           }
         ],
         "related": ["locations", "backups", "project-people"]
