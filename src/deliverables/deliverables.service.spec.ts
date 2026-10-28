@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { documentPathAlias } from './document-path-alias';
+import { Readable } from 'node:stream';
 import { migrateDeliverableDocumentRoots } from './document-root-migration';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
@@ -94,6 +95,114 @@ describe('project deliverables', () => {
     );
   });
   it.each([false, true])(
+    'synchronizes explorer create, upload, save, rename and recoverable delete (protected=%s)',
+    async (protectedSource) => {
+      vi.stubEnv(
+        'MERGERON_PUBLISHED_DOCUMENT_PROTECTION',
+        protectedSource ? 'required' : '',
+      );
+      try {
+        const item = await service.create('p', 'r', { title: 'Explorer' });
+        const source = path.join(root, 'livrables', item.id, 'report.txt');
+        await files.createFile(source, 'First');
+        let document = service.documents('p', 'r', item.id)[0];
+        expect(document).toMatchObject({
+          name: 'report.txt',
+          currentVersionNumber: 1,
+          sourcePath: source,
+        });
+        await files.writeFile(source, 'Second');
+        document = service.documents('p', 'r', item.id)[0];
+        expect(document.currentVersionNumber).toBe(2);
+        const renamed = await files.renamePath(source, 'renamed.txt');
+        document = service.documents('p', 'r', item.id)[0];
+        expect(document.sourcePath).toBe(renamed.newPath);
+        expect(documentPathAlias(database.db, source)).toBe(renamed.newPath);
+        async function* uploads() {
+          await Promise.resolve();
+          yield { filename: 'renamed.txt', stream: Readable.from(['Third']) };
+        }
+        await service.uploadDocuments('p', 'r', item.id, uploads(), {
+          documentId: document.id,
+          expectedVersion: 2,
+          comment: 'Uploaded',
+        });
+        document = service.documents('p', 'r', item.id)[0];
+        expect(document.currentVersionNumber).toBe(3);
+        expect(document.versions[0].comment).toBe('Uploaded');
+        await files.deletePath(document.sourcePath);
+        expect(
+          service.documents('p', 'r', item.id)[0].deletedAt,
+        ).not.toBeNull();
+        expect(await files.readDirectory(path.dirname(source))).toEqual([]);
+        expect(
+          await fs.readFile(document.versions[2].snapshotPath, 'utf8'),
+        ).toBe('First');
+        service.setDocumentDeleted('p', 'r', item.id, document.id, 3, false);
+        expect(
+          (await files.readDirectory(path.dirname(source))).map(
+            (file) => file.name,
+          ),
+        ).toEqual(['renamed.txt']);
+        expect(await fs.readFile(document.sourcePath, 'utf8')).toBe('Third');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+  it('guards explorer mutations and uploads before touching retained files', async () => {
+    const item = await service.create('p', 'r', { title: 'Explorer guards' });
+    const directory = path.join(root, 'livrables', item.id);
+    const source = path.join(directory, 'report.txt');
+    await files.createFile(source, 'Original');
+    const document = service.documents('p', 'r', item.id)[0];
+    async function* uploads() {
+      await Promise.resolve();
+      yield { filename: 'report.txt', stream: Readable.from(['Replacement']) };
+    }
+    await expect(
+      service.uploadDocuments('p', 'r', item.id, uploads(), {
+        documentId: document.id,
+        expectedVersion: 5,
+      }),
+    ).rejects.toThrow('Reload');
+    await expect(files.deletePath(directory, true)).rejects.toThrow();
+    const importDirectory = path.join(root, 'incoming');
+    await fs.mkdir(importDirectory);
+    await expect(
+      files.copyPath(importDirectory, path.join(root, 'livrables'), true),
+    ).rejects.toThrow();
+    await expect(
+      files.movePath(source, path.join(root, 'moved.txt')),
+    ).rejects.toThrow();
+    await expect(
+      files.saveUploadedFiles(directory, uploads(), true),
+    ).resolves.toMatchObject({ files: [{ path: source }] });
+    service.updateOnlyOfficeSession(source, 'editing');
+    await expect(files.writeFile(source, 'Blocked')).rejects.toThrow('Close');
+    expect(() =>
+      service.setDocumentDeleted('p', 'r', item.id, document.id, 2, true),
+    ).toThrow('Close');
+    service.updateOnlyOfficeSession(source, 'saved');
+    const current = service.get('p', 'r', item.id);
+    service.transitionLifecycle('p', 'r', item.id, {
+      target: 'finalized',
+      version: current.version,
+    });
+    await expect(
+      files.createFile(path.join(directory, 'new.txt'), 'Blocked'),
+    ).rejects.toThrow('Reopen');
+    await expect(files.renamePath(source, 'new.txt')).rejects.toThrow('Reopen');
+    await expect(files.deletePath(source)).rejects.toThrow('Reopen');
+    await expect(
+      files.saveUploadedFiles(directory, uploads(), true),
+    ).rejects.toThrow('Reopen');
+    expect(await fs.readFile(source, 'utf8')).toBe('Replacement');
+    expect(service.documents('p', 'r', item.id)[0].currentVersionNumber).toBe(
+      2,
+    );
+  });
+  it.each([false, true])(
     'renames a document without losing versions, content or old links (protected=%s)',
     async (protectedSource) => {
       vi.stubEnv(
@@ -173,6 +282,37 @@ describe('project deliverables', () => {
       }
     },
   );
+  it('retains unregistered files before explorer removal and rolls back failed version writes', async () => {
+    const item = await service.create('p', 'r', { title: 'Explorer recovery' });
+    const source = path.join(root, 'livrables', item.id, 'legacy.txt');
+    await fs.writeFile(source, 'Legacy content');
+    await files.deletePath(source);
+    const removed = service.documents('p', 'r', item.id)[0];
+    expect(removed.deletedAt).not.toBeNull();
+    expect(await fs.readFile(removed.versions[0].snapshotPath, 'utf8')).toBe(
+      'Legacy content',
+    );
+    service.setDocumentDeleted('p', 'r', item.id, removed.id, 1, false);
+    const transaction = vi
+      .spyOn(database.db, 'transaction')
+      .mockImplementationOnce(() => {
+        throw new Error('commit failed');
+      });
+    try {
+      await expect(files.writeFile(source, 'Failed version')).rejects.toThrow(
+        'commit failed',
+      );
+    } finally {
+      transaction.mockRestore();
+    }
+    expect(await fs.readFile(source, 'utf8')).toBe('Legacy content');
+    expect(service.documents('p', 'r', item.id)[0].currentVersionNumber).toBe(
+      1,
+    );
+    expect(
+      await fs.readdir(path.join(root, 'livrables', '.version-staging')),
+    ).toEqual([]);
+  });
   it('rejects conflicting names, unsafe names, stale requests and active editors without changing the original', async () => {
     const item = await service.create('p', 'r', { title: 'Rename guards' });
     const source = path.join(root, 'livrables', item.id, 'report.docx');

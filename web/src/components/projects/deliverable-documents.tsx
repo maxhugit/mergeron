@@ -1,7 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Download, Eye, FileText, History, Info, MoreVertical, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
+import {
+  Download,
+  Eye,
+  FileText,
+  History,
+  Info,
+  MoreVertical,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -20,7 +38,11 @@ import type {
 } from '@/lib/deliverables-api';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
-import { beginFileMutation, finishFileMutation, emitFileChange } from '@/lib/file-change-events';
+import {
+  beginFileMutation,
+  finishFileMutation,
+  emitFileChange,
+} from '@/lib/file-change-events';
 import { showSnackbar } from '@/stores/snackbar-store';
 
 type Props = {
@@ -29,10 +51,14 @@ type Props = {
   disabled: boolean;
   refresh: () => Promise<unknown>;
   onError: () => void;
+  contextDocument?: DeliverableDocument;
+  children?: ReactNode;
 };
 
 function currentDocumentVersion(document?: DeliverableDocument | null) {
-  return document?.versions.find((version) => version.number === document.currentVersionNumber);
+  return document?.versions.find(
+    (version) => version.number === document.currentVersionNumber,
+  );
 }
 
 export function DeliverableDocuments({
@@ -41,6 +67,8 @@ export function DeliverableDocuments({
   disabled,
   refresh,
   onError,
+  contextDocument,
+  children,
 }: Props) {
   const { t } = useTranslation();
   const { t: documentText } = useTranslation('deliverables');
@@ -54,8 +82,13 @@ export function DeliverableDocuments({
     tab: 'versions' | 'preview' | 'information';
   } | null>(null);
   const active = useMemo(
-    () => item.documents.filter((document) => document.deletedAt === null),
-    [item.documents],
+    () =>
+      item.documents.filter(
+        (document) =>
+          document.deletedAt === null &&
+          (!contextDocument || document.id === contextDocument.id),
+      ),
+    [item.documents, contextDocument],
   );
   const archived = useMemo(
     () => item.documents.filter((document) => document.deletedAt !== null),
@@ -63,6 +96,8 @@ export function DeliverableDocuments({
   );
 
   const request = useMutation({
+    onMutate: beginFileMutation,
+    onSettled: finishFileMutation,
     mutationFn: ({
       suffix,
       method = 'POST',
@@ -77,6 +112,14 @@ export function DeliverableDocuments({
         body: JSON.stringify(body),
       }),
     onSuccess: async () => {
+      emitFileChange({
+        source: 'local',
+        kind: 'invalidate',
+        paths: [
+          item.directory,
+          ...item.documents.map((document) => document.sourcePath),
+        ],
+      });
       setComment('');
       await refresh();
     },
@@ -84,16 +127,21 @@ export function DeliverableDocuments({
   });
 
   const addDocument = useMutation({
+    onMutate: beginFileMutation,
+    onSettled: finishFileMutation,
     mutationFn: async (files: File[]) => {
       for (const file of files) {
-        const path = await uploadFile(file, item.directory, true);
-        await projectsApi(`${base}/${item.id}/documents`, {
-          method: 'POST',
-          body: JSON.stringify({ path, comment }),
+        await uploadDocument(file, `${base}/${item.id}/documents/upload`, {
+          comment,
         });
       }
     },
     onSuccess: async () => {
+      emitFileChange({
+        source: 'local',
+        kind: 'invalidate',
+        paths: [item.directory],
+      });
       setComment('');
       setPendingFiles([]);
       setAddOpen(false);
@@ -103,23 +151,28 @@ export function DeliverableDocuments({
   });
 
   const addVersion = useMutation({
-    mutationFn: async ({ document, file }: { document: DeliverableDocument; file: File }) => {
+    onMutate: beginFileMutation,
+    onSettled: finishFileMutation,
+    mutationFn: async ({
+      document,
+      file,
+    }: {
+      document: DeliverableDocument;
+      file: File;
+    }) => {
       if (file.name !== document.name) throw new Error('filename');
-      // Keep the retained source untouched until the version check succeeds.
-      const separator = document.sourcePath.lastIndexOf('/');
-      const destination = document.protectedSource ? item.directory :
-        separator > 0 ? document.sourcePath.slice(0, separator) : item.directory;
-      const path = await uploadFile(file, destination, true);
-      await projectsApi(`${base}/${item.id}/documents/${document.id}/versions`, {
-        method: 'POST',
-        body: JSON.stringify({
-          path,
-          comment,
-          expectedVersion: document.currentVersionNumber,
-        }),
+      await uploadDocument(file, `${base}/${item.id}/documents/upload`, {
+        documentId: document.id,
+        expectedVersion: String(document.currentVersionNumber),
+        comment,
       });
     },
     onSuccess: async () => {
+      emitFileChange({
+        source: 'local',
+        kind: 'invalidate',
+        paths: item.documents.map((document) => document.sourcePath),
+      });
       setComment('');
       await refresh();
     },
@@ -127,57 +180,102 @@ export function DeliverableDocuments({
   });
 
   const rename = useMutation({
-    mutationFn: (document: DeliverableDocument) => projectsApi<{ oldPath: string; newPath: string; previousFileRetained: boolean }>(`${base}/${item.id}/documents/${document.id}`, {
-      method: 'PATCH', body: JSON.stringify({ name: newName, expectedName: document.name, expectedVersion: document.currentVersionNumber }),
-    }),
+    mutationFn: (document: DeliverableDocument) =>
+      projectsApi<{
+        oldPath: string;
+        newPath: string;
+        previousFileRetained: boolean;
+      }>(`${base}/${item.id}/documents/${document.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: newName,
+          expectedName: document.name,
+          expectedVersion: document.currentVersionNumber,
+        }),
+      }),
     onMutate: beginFileMutation,
     onSettled: finishFileMutation,
     onSuccess: async (result) => {
-      emitFileChange({ source: 'local', kind: 'rename', oldPath: result.oldPath, newPath: result.newPath });
-      if (result.previousFileRetained) showSnackbar(documentText('documentRenamePreservedOriginal'), 'warning');
+      emitFileChange({
+        source: 'local',
+        kind: 'rename',
+        oldPath: result.oldPath,
+        newPath: result.newPath,
+      });
+      if (result.previousFileRetained)
+        showSnackbar(
+          documentText('documentRenamePreservedOriginal'),
+          'warning',
+        );
       setRenaming(null);
       await refresh();
     },
     onError,
   });
-  const busy = disabled || request.isPending || addDocument.isPending || addVersion.isPending || rename.isPending;
+  const busy =
+    disabled ||
+    request.isPending ||
+    addDocument.isPending ||
+    addVersion.isPending ||
+    rename.isPending;
   const mutationError = request.error || addDocument.error || addVersion.error;
 
   return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-semibold">{t('deliverableDocuments')}</h2>
-          <p className="text-sm text-muted-foreground">
-            {t('eachDocumentKeepsItsOwnVersionHistory')}
-          </p>
+    <section className={contextDocument ? 'contents' : 'space-y-3'}>
+      {!contextDocument && (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">{t('deliverableDocuments')}</h2>
+            <p className="text-sm text-muted-foreground">
+              {t('eachDocumentKeepsItsOwnVersionHistory')}
+            </p>
+          </div>
+          <Button disabled={busy} onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4" /> {t('addDocument')}
+          </Button>
         </div>
-        <Button disabled={busy} onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4" /> {t('addDocument')}
-        </Button>
-      </div>
-      {!active.length && (
+      )}
+      {!contextDocument && !active.length && (
         <p className="text-sm text-muted-foreground">{t('noDocumentYet')}</p>
       )}
       {!!active.length && (
-        <div className="overflow-visible rounded-lg border">
-          <div className="hidden grid-cols-[minmax(0,1fr)_7rem_minmax(12rem,0.7fr)_3rem] gap-3 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
-            <span>{t('documentName')}</span>
-            <span>{t('versions')}</span>
-            <span>{t('lastModified')}</span>
-            <span className="sr-only">{t('actions')}</span>
-          </div>
+        <div
+          className={
+            contextDocument ? 'contents' : 'overflow-visible rounded-lg border'
+          }
+        >
+          {!contextDocument && (
+            <div className="hidden grid-cols-[minmax(0,1fr)_7rem_minmax(12rem,0.7fr)_3rem] gap-3 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
+              <span>{t('documentName')}</span>
+              <span>{t('versions')}</span>
+              <span>{t('lastModified')}</span>
+              <span className="sr-only">{t('actions')}</span>
+            </div>
+          )}
           {active.map((document) => (
             <DocumentRow
               key={document.id}
               document={document}
               busy={busy}
+              contextTrigger={contextDocument ? children : undefined}
               onView={() => setDetail({ document, tab: 'preview' })}
               onHistory={() => setDetail({ document, tab: 'versions' })}
-              onRename={() => { rename.reset(); setNewName(document.name); setRenaming(document); }}
+              onRename={() => {
+                rename.reset();
+                setNewName(document.name);
+                setRenaming(document);
+              }}
               onDownload={() => {
                 const version = currentDocumentVersion(document);
-                if (version) void downloadVersion(base, item.id, document, version, onError, document.name);
+                if (version)
+                  void downloadVersion(
+                    base,
+                    item.id,
+                    document,
+                    version,
+                    onError,
+                    document.name,
+                  );
                 else onError();
               }}
               onFile={(file) => addVersion.mutate({ document, file })}
@@ -192,7 +290,11 @@ export function DeliverableDocuments({
                 })
               }
               onDelete={() => {
-                if (window.confirm(t('deleteDocumentConfirmation', { name: document.name })))
+                if (
+                  window.confirm(
+                    t('deleteDocumentConfirmation', { name: document.name }),
+                  )
+                )
                   request.mutate({
                     suffix: `/documents/${document.id}`,
                     method: 'DELETE',
@@ -203,23 +305,28 @@ export function DeliverableDocuments({
           ))}
         </div>
       )}
-      {!!archived.length && (
+      {!contextDocument && !!archived.length && (
         <details>
           <summary className="cursor-pointer text-sm font-medium">
             {t('deletedDocuments')} ({archived.length})
           </summary>
           <div className="mt-2 space-y-2">
             {archived.map((document) => (
-              <div key={document.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div
+                key={document.id}
+                className="flex items-center justify-between gap-3 rounded-lg border p-3"
+              >
                 <span className="min-w-0 truncate">{document.name}</span>
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => request.mutate({
-                    suffix: `/documents/${document.id}/restore`,
-                    body: { expectedVersion: document.currentVersionNumber },
-                  })}
+                  onClick={() =>
+                    request.mutate({
+                      suffix: `/documents/${document.id}/restore`,
+                      body: { expectedVersion: document.currentVersionNumber },
+                    })
+                  }
                 >
                   <RotateCcw className="h-4 w-4" /> {t('restore')}
                 </Button>
@@ -230,27 +337,66 @@ export function DeliverableDocuments({
       )}
       {mutationError && (
         <p role="alert" className="text-sm text-destructive">
-          {mutationError instanceof Error && mutationError.message === 'filename'
+          {mutationError instanceof Error &&
+          mutationError.message === 'filename'
             ? t('newVersionMustKeepTheSameFileName')
             : t('unableToUpdateDocument')}
         </p>
       )}
 
-      <Dialog open={renaming !== null} onOpenChange={(open) => { if (!open && !rename.isPending) setRenaming(null); }}>
+      <Dialog
+        open={renaming !== null}
+        onOpenChange={(open) => {
+          if (!open && !rename.isPending) setRenaming(null);
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{documentText('renameDocument')}</DialogTitle>
-            <DialogDescription>{documentText('renameDocumentDescription')}</DialogDescription>
+            <DialogDescription>
+              {documentText('renameDocumentDescription')}
+            </DialogDescription>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (renaming && !busy) rename.mutate(renaming); }}>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (renaming && !busy) rename.mutate(renaming);
+            }}
+          >
             <label className="grid gap-2 text-sm">
               {t('documentName')}
-              <Input autoFocus required maxLength={255} value={newName} disabled={rename.isPending} onChange={(event) => setNewName(event.target.value)} />
+              <Input
+                autoFocus
+                required
+                maxLength={255}
+                value={newName}
+                disabled={rename.isPending}
+                onChange={(event) => setNewName(event.target.value)}
+              />
             </label>
-            {rename.isError && <p role="alert" className="text-sm text-destructive">{documentText('unableToRenameDocument')}</p>}
+            {rename.isError && (
+              <p role="alert" className="text-sm text-destructive">
+                {documentText('unableToRenameDocument')}
+              </p>
+            )}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" disabled={rename.isPending} onClick={() => setRenaming(null)}>{t('cancel')}</Button>
-              <Button type="submit" disabled={busy || !newName.trim() || newName.trim() === renaming?.name}>{t('rename')}</Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={rename.isPending}
+                onClick={() => setRenaming(null)}
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  busy || !newName.trim() || newName.trim() === renaming?.name
+                }
+              >
+                {t('rename')}
+              </Button>
             </div>
           </form>
         </DialogContent>
@@ -272,7 +418,10 @@ export function DeliverableDocuments({
               }
             />
           </label>
-          <label className="grid gap-1 text-sm" htmlFor={`document-comment-${item.id}`}>
+          <label
+            className="grid gap-1 text-sm"
+            htmlFor={`document-comment-${item.id}`}
+          >
             {t('versionComment')}
             <Input
               id={`document-comment-${item.id}`}
@@ -284,7 +433,11 @@ export function DeliverableDocuments({
             />
           </label>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" disabled={busy} onClick={() => setAddOpen(false)}>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => setAddOpen(false)}
+            >
               {t('cancel')}
             </Button>
             <Button
@@ -327,13 +480,24 @@ function DocumentDetailDialog({
   onError,
   onRestore,
 }: {
-  detail: { document: DeliverableDocument; tab: 'versions' | 'preview' | 'information' } | null;
-  setDetail: (detail: { document: DeliverableDocument; tab: 'versions' | 'preview' | 'information' } | null) => void;
+  detail: {
+    document: DeliverableDocument;
+    tab: 'versions' | 'preview' | 'information';
+  } | null;
+  setDetail: (
+    detail: {
+      document: DeliverableDocument;
+      tab: 'versions' | 'preview' | 'information';
+    } | null,
+  ) => void;
   deliverableId: string;
   base: string;
   busy: boolean;
   onError: () => void;
-  onRestore: (document: DeliverableDocument, version: DeliverableDocumentVersion) => void;
+  onRestore: (
+    document: DeliverableDocument,
+    version: DeliverableDocumentVersion,
+  ) => void;
 }) {
   const { t } = useTranslation();
   const document = detail?.document;
@@ -363,7 +527,11 @@ function DocumentDetailDialog({
             </div>
           </div>
         </DialogHeader>
-        <div role="tablist" aria-label={t('documentDetailSections')} className="flex shrink-0 gap-1 overflow-x-auto border-b px-3 sm:px-6">
+        <div
+          role="tablist"
+          aria-label={t('documentDetailSections')}
+          className="flex shrink-0 gap-1 overflow-x-auto border-b px-3 sm:px-6"
+        >
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -382,7 +550,10 @@ function DocumentDetailDialog({
           ))}
         </div>
         {document && detail?.tab === 'versions' && (
-          <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div
+            role="tabpanel"
+            className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
+          >
             <div className="overflow-hidden rounded-lg border">
               <div className="hidden grid-cols-[5rem_10rem_minmax(0,1fr)_8rem] gap-3 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
                 <span>{t('version')}</span>
@@ -390,48 +561,117 @@ function DocumentDetailDialog({
                 <span>{t('authorAndComment')}</span>
                 <span className="sr-only">{t('actions')}</span>
               </div>
-              {document.versions.slice().reverse().map((version) => (
-                <article key={version.id} className="grid gap-2 border-t px-3 py-3 first:border-t-0 sm:grid-cols-[5rem_10rem_minmax(0,1fr)_8rem] sm:items-center sm:gap-3">
-                  <strong>V{version.number}</strong>
-                  <time className="text-sm text-muted-foreground">{new Date(version.createdAt).toLocaleDateString()}</time>
-                  <div className="min-w-0 text-sm">
-                    <div>{version.authorName}</div>
-                    <div className="truncate text-muted-foreground">{version.comment || t('noComment')}</div>
-                  </div>
-                  <div className="flex justify-end gap-1">
-                    <Button size="icon" variant="ghost" aria-label={t('downloadVersion', { version: version.number })} onClick={() => void downloadVersion(base, deliverableId, document, version, onError)}>
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    {version.number !== document.currentVersionNumber && document.deletedAt === null && (
-                      <Button size="icon" variant="ghost" aria-label={t('restoreVersion', { version: version.number })} disabled={busy} onClick={() => onRestore(document, version)}>
-                        <RotateCcw className="h-4 w-4" />
+              {document.versions
+                .slice()
+                .reverse()
+                .map((version) => (
+                  <article
+                    key={version.id}
+                    className="grid gap-2 border-t px-3 py-3 first:border-t-0 sm:grid-cols-[5rem_10rem_minmax(0,1fr)_8rem] sm:items-center sm:gap-3"
+                  >
+                    <strong>V{version.number}</strong>
+                    <time className="text-sm text-muted-foreground">
+                      {new Date(version.createdAt).toLocaleDateString()}
+                    </time>
+                    <div className="min-w-0 text-sm">
+                      <div>{version.authorName}</div>
+                      <div className="truncate text-muted-foreground">
+                        {version.comment || t('noComment')}
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t('downloadVersion', {
+                          version: version.number,
+                        })}
+                        onClick={() =>
+                          void downloadVersion(
+                            base,
+                            deliverableId,
+                            document,
+                            version,
+                            onError,
+                          )
+                        }
+                      >
+                        <Download className="h-4 w-4" />
                       </Button>
-                    )}
-                  </div>
-                </article>
-              ))}
+                      {version.number !== document.currentVersionNumber &&
+                        document.deletedAt === null && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={t('restoreVersion', {
+                              version: version.number,
+                            })}
+                            disabled={busy}
+                            onClick={() => onRestore(document, version)}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        )}
+                    </div>
+                  </article>
+                ))}
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">{t('restoringCreatesANewVersion')}</p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {t('restoringCreatesANewVersion')}
+            </p>
           </div>
         )}
         {document && detail?.tab === 'preview' && (
           <div role="tabpanel" className="min-h-0 flex-1 overflow-hidden">
-            <FileViewer filePath={document.sourcePath} viewId={`deliverable:${document.id}`} readOnly />
+            <FileViewer
+              filePath={document.sourcePath}
+              viewId={`deliverable:${document.id}`}
+              readOnly
+            />
           </div>
         )}
         {document && detail?.tab === 'information' && (
-          <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div
+            role="tabpanel"
+            className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
+          >
             <dl className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
               <DocumentFact label={t('documentName')} value={document.name} />
-              <DocumentFact label={t('format')} value={document.format.toUpperCase() || '—'} />
-              <DocumentFact label={t('currentVersion')} value={`V${document.currentVersionNumber}`} />
-              <DocumentFact label={t('fileSize')} value={latest ? formatBytes(latest.size) : '—'} />
-              <DocumentFact label={t('created')} value={new Date(document.createdAt).toLocaleString()} />
-              <DocumentFact label={t('lastModified')} value={new Date(document.updatedAt).toLocaleString()} />
-              <DocumentFact label={t('author')} value={latest?.authorName ?? '—'} />
-              <DocumentFact label={t('checksum')} value={latest?.sha256 ?? '—'} mono />
+              <DocumentFact
+                label={t('format')}
+                value={document.format.toUpperCase() || '—'}
+              />
+              <DocumentFact
+                label={t('currentVersion')}
+                value={`V${document.currentVersionNumber}`}
+              />
+              <DocumentFact
+                label={t('fileSize')}
+                value={latest ? formatBytes(latest.size) : '—'}
+              />
+              <DocumentFact
+                label={t('created')}
+                value={new Date(document.createdAt).toLocaleString()}
+              />
+              <DocumentFact
+                label={t('lastModified')}
+                value={new Date(document.updatedAt).toLocaleString()}
+              />
+              <DocumentFact
+                label={t('author')}
+                value={latest?.authorName ?? '—'}
+              />
+              <DocumentFact
+                label={t('checksum')}
+                value={latest?.sha256 ?? '—'}
+                mono
+              />
               <div className="sm:col-span-2">
-                <DocumentFact label={t('location')} value={document.sourcePath} mono />
+                <DocumentFact
+                  label={t('location')}
+                  value={document.sourcePath}
+                  mono
+                />
               </div>
             </dl>
           </div>
@@ -441,11 +681,23 @@ function DocumentDetailDialog({
   );
 }
 
-function DocumentFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function DocumentFact({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="min-w-0">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className={`mt-1 break-words text-sm ${mono ? 'font-mono text-xs' : ''}`}>{value}</dd>
+      <dd
+        className={`mt-1 break-words text-sm ${mono ? 'font-mono text-xs' : ''}`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -456,7 +708,18 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function DocumentRow({ document, busy, onView, onHistory, onRename, onDownload, onFile, onSnapshot, onDelete }: {
+function DocumentRow({
+  document,
+  busy,
+  onView,
+  onHistory,
+  onRename,
+  onDownload,
+  onFile,
+  onSnapshot,
+  onDelete,
+  contextTrigger,
+}: {
   document: DeliverableDocument;
   busy: boolean;
   onView: () => void;
@@ -466,14 +729,22 @@ function DocumentRow({ document, busy, onView, onHistory, onRename, onDownload, 
   onFile: (file: File) => void;
   onSnapshot: () => void;
   onDelete: () => void;
+  contextTrigger?: ReactNode;
 }) {
   const { t } = useTranslation();
   const latest = currentDocumentVersion(document);
   const menuRef = useRef<HTMLDetailsElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const pendingAction = useRef<string | null>(null);
   useEffect(() => {
     const closeOutside = (event: Event) => {
       const menu = menuRef.current;
-      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+      if (
+        menu?.open &&
+        event.target instanceof Node &&
+        !menu.contains(event.target)
+      )
+        menu.open = false;
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       const menu = menuRef.current;
@@ -491,10 +762,96 @@ function DocumentRow({ document, busy, onView, onHistory, onRename, onDownload, 
       window.document.removeEventListener('keydown', closeOnEscape);
     };
   }, []);
+  const actions = [
+    { label: t('preview'), icon: Eye, action: 'view' },
+    { label: t('download'), icon: Download, action: 'download' },
+    { label: t('history'), icon: History, action: 'history' },
+    { label: t('rename'), icon: Pencil, action: 'rename', disabled: busy },
+    {
+      label: t('uploadNewVersion'),
+      icon: Upload,
+      action: 'upload',
+      disabled: busy,
+    },
+    {
+      label: t('createVersionFromCurrentFile'),
+      icon: History,
+      action: 'snapshot',
+      disabled: busy,
+    },
+    { label: t('delete'), icon: Trash2, action: 'delete', disabled: busy },
+  ];
+  const runAction = (action: string) => {
+    switch (action) {
+      case 'view':
+        return onView();
+      case 'download':
+        return onDownload();
+      case 'history':
+        return onHistory();
+      case 'rename':
+        return onRename();
+      case 'upload':
+        return uploadRef.current?.click();
+      case 'snapshot':
+        return onSnapshot();
+      case 'delete':
+        return onDelete();
+    }
+  };
+  const input = (
+    <input
+      ref={uploadRef}
+      aria-label={t('uploadNewVersion')}
+      className="sr-only"
+      type="file"
+      disabled={busy}
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        if (file) onFile(file);
+        event.target.value = '';
+      }}
+    />
+  );
+  if (contextTrigger)
+    return (
+      <>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>{contextTrigger}</ContextMenuTrigger>
+          <ContextMenuContent
+            onCloseAutoFocus={(event) => {
+              const action = pendingAction.current;
+              pendingAction.current = null;
+              if (action) {
+                event.preventDefault();
+                requestAnimationFrame(() => runAction(action));
+              }
+            }}
+          >
+            {actions.map(({ label, icon: Icon, action, disabled }) => (
+              <ContextMenuItem
+                key={label}
+                variant={action === 'delete' ? 'destructive' : 'default'}
+                disabled={disabled}
+                onSelect={() => {
+                  pendingAction.current = action;
+                }}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </ContextMenuItem>
+            ))}
+          </ContextMenuContent>
+        </ContextMenu>
+        {input}
+      </>
+    );
   return (
     <article className="grid gap-2 border-t px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(12rem,0.7fr)_3rem] sm:items-center sm:gap-3">
       <a
-        href={withBasePath(`/document?path=${encodeURIComponent(document.sourcePath)}`)}
+        href={withBasePath(
+          `/document?path=${encodeURIComponent(document.sourcePath)}`,
+        )}
         target="_blank"
         rel="noopener noreferrer"
         className="flex min-w-0 items-center gap-2 text-left hover:underline"
@@ -508,54 +865,77 @@ function DocumentRow({ document, busy, onView, onHistory, onRename, onDownload, 
       </span>
       <span className="text-sm text-muted-foreground">
         <span className="sm:hidden">{t('lastModified')}: </span>
-        {latest ? `${new Date(latest.createdAt).toLocaleDateString()} · ${latest.authorName}` : '—'}
+        {latest
+          ? `${new Date(latest.createdAt).toLocaleDateString()} · ${latest.authorName}`
+          : '—'}
       </span>
       <details ref={menuRef} className="relative justify-self-end">
-        <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md hover:bg-muted" aria-label={t('actions')}>
+        <summary
+          className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md hover:bg-muted"
+          aria-label={t('actions')}
+        >
           <MoreVertical className="h-4 w-4" />
         </summary>
         <div className="absolute right-0 z-20 mt-1 grid min-w-52 gap-1 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
-          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onView}><Eye className="h-4 w-4" /> {t('preview')}</button>
-          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onDownload}><Download className="h-4 w-4" /> {t('download')}</button>
-          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" onClick={onHistory}><History className="h-4 w-4" /> {t('history')}</button>
-          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted" disabled={busy} onClick={() => { if (menuRef.current) menuRef.current.open = false; onRename(); }}><Pencil className="h-4 w-4" /> {t('rename')}</button>
-          <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted">
-            <Upload className="h-4 w-4" /> {t('uploadNewVersion')}
-            <input className="sr-only" type="file" disabled={busy} onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) onFile(file);
-              event.target.value = '';
-            }} />
-          </label>
-          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted" disabled={busy} onClick={onSnapshot}><History className="h-4 w-4" /> {t('createVersionFromCurrentFile')}</button>
-          <button type="button" className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-destructive hover:bg-muted" disabled={busy} onClick={onDelete}><Trash2 className="h-4 w-4" /> {t('delete')}</button>
+          {actions.map(({ label, icon: Icon, action, disabled }) => (
+            <button
+              key={label}
+              type="button"
+              className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted ${action === 'delete' ? 'text-destructive' : ''}`}
+              disabled={disabled}
+              onClick={() => {
+                if (menuRef.current) menuRef.current.open = false;
+                runAction(action);
+              }}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
         </div>
       </details>
+      {input}
     </article>
   );
 }
 
-async function uploadFile(file: File, destinationPath: string, overwrite: boolean): Promise<string> {
+async function uploadDocument(
+  file: File,
+  endpoint: string,
+  input: Record<string, string>,
+): Promise<void> {
   const form = new FormData();
   form.append('files', file, file.name);
   const authorization = getAuthorizationHeader();
-  const response = await fetch(withBasePath(`/api/files/upload?destinationPath=${encodeURIComponent(destinationPath)}&overwrite=${overwrite}`), {
-    method: 'POST',
-    headers: authorization ? { Authorization: authorization } : {},
-    body: form,
-  });
+  const response = await fetch(
+    withBasePath(`/api/projects${endpoint}?${new URLSearchParams(input)}`),
+    {
+      method: 'POST',
+      headers: authorization ? { Authorization: authorization } : {},
+      body: form,
+    },
+  );
   if (!response.ok) throw new Error('upload');
-  const result = (await response.json()) as { files: Array<{ path: string }> };
-  if (!result.files[0]?.path) throw new Error('upload');
-  return result.files[0].path;
 }
 
-async function downloadVersion(base: string, deliverableId: string, document: DeliverableDocument, version: DeliverableDocumentVersion, onError: () => void, fileName = version.fileName) {
+async function downloadVersion(
+  base: string,
+  deliverableId: string,
+  document: DeliverableDocument,
+  version: DeliverableDocumentVersion,
+  onError: () => void,
+  fileName = version.fileName,
+) {
   try {
     const authorization = getAuthorizationHeader();
-    const response = await fetch(withBasePath(`/api/projects${base}/${deliverableId}/documents/${document.id}/versions/${version.id}/file`), {
-      headers: authorization ? { Authorization: authorization } : {},
-    });
+    const response = await fetch(
+      withBasePath(
+        `/api/projects${base}/${deliverableId}/documents/${document.id}/versions/${version.id}/file`,
+      ),
+      {
+        headers: authorization ? { Authorization: authorization } : {},
+      },
+    );
     if (!response.ok) throw new Error('download');
     const url = URL.createObjectURL(await response.blob());
     const anchor = window.document.createElement('a');

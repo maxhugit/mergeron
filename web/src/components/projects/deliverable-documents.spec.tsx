@@ -33,7 +33,7 @@ beforeEach(() => {
   });
 });
 
-function setup(disabled = false) {
+function setup(disabled = false, context = false) {
   const refresh = vi.fn().mockResolvedValue(undefined);
   const onError = vi.fn();
   const item = {
@@ -66,10 +66,13 @@ function setup(disabled = false) {
         disabled={disabled}
         refresh={refresh}
         onError={onError}
-      />
+        contextDocument={context ? item.documents[0] : undefined}
+      >
+        {context ? <button>Explorer file</button> : undefined}
+      </DeliverableDocuments>
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByLabelText('Actions'));
+  if (!context) fireEvent.click(screen.getByLabelText('Actions'));
   return { refresh, onError };
 }
 
@@ -138,4 +141,56 @@ it('keeps the dialog and original selection on failure', async () => {
 it('disables renaming for read-only or finalized deliverables', () => {
   setup(true);
   expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled();
+});
+
+it('offers the shared document actions in the explorer context menu', async () => {
+  setup(false, true);
+  fireEvent.contextMenu(screen.getByRole('button', { name: 'Explorer file' }));
+  for (const label of [
+    'Preview',
+    'Download',
+    'History',
+    'Rename',
+    'Save a new version',
+    'Delete',
+  ])
+    expect(
+      await screen.findByRole('menuitem', { name: label }),
+    ).toBeInTheDocument();
+  expect(
+    screen.queryByRole('menuitem', { name: 'Move to…' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+  expect(
+    await screen.findByRole('dialog', { name: 'Rename document' }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Document name' })).toHaveValue(
+    'report.docx',
+  );
+});
+
+it('uploads a new version through the scoped staging endpoint instead of overwriting the source first', async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+  vi.stubGlobal('fetch', fetchMock);
+  try {
+    const { refresh } = setup();
+    fireEvent.change(screen.getByLabelText('Save a new version'), {
+      target: { files: [new File(['new content'], 'report.docx')] },
+    });
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '/api/projects/p/resources/r/deliverables/deliverable/documents/upload?documentId=document&expectedVersion=2',
+      ),
+      expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+    );
+    expect(mocks.api).not.toHaveBeenCalled();
+    expect(mocks.emit).toHaveBeenCalledWith({
+      source: 'local',
+      kind: 'invalidate',
+      paths: ['/project/report.docx'],
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

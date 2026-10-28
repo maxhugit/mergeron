@@ -15,7 +15,7 @@ import {
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
-import { constants, createReadStream } from 'node:fs';
+import { constants, createReadStream, createWriteStream } from 'node:fs';
 import * as path from 'node:path';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
@@ -44,7 +44,12 @@ import {
   type DeliverableFile,
   type DeliverableSnapshotDocument,
 } from '../database/schema';
-import { FilesService } from '../files/files.service';
+import {
+  FilesService,
+  type ProjectDocumentMutation,
+  type FileUploadInput,
+} from '../files/files.service';
+import { pipeline } from 'node:stream/promises';
 import { IdentityService } from '../auth/identity.service';
 import {
   PROJECT_SYSTEM_DIRECTORY,
@@ -146,7 +151,308 @@ export class DeliverablesService implements OnModuleInit {
     private readonly files: FilesService,
     private readonly identities: IdentityService,
     private readonly activeFolders: ActiveFoldersService,
-  ) {}
+  ) {
+    this.files.projectDocumentMutation = (request) =>
+      this.explorerMutation(request);
+  }
+
+  /** Resolve ownership from authoritative records, never from a client supplied document id. */
+  private async explorerMutation(
+    request: ProjectDocumentMutation,
+  ): Promise<{ result: unknown } | null> {
+    const canonical = async (value: string): Promise<string> => {
+      const absolute = path.resolve(value);
+      try {
+        return await fs.realpath(absolute);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        return path.join(
+          await canonical(path.dirname(absolute)),
+          path.basename(absolute),
+        );
+      }
+    };
+    const requested = await canonical(request.path);
+    const destination =
+      request.destination && request.operation !== 'rename'
+        ? await canonical(request.destination)
+        : null;
+    const within = (parent: string, child: string) =>
+      child === parent || child.startsWith(parent + path.sep);
+    const rows = this.db
+      .select({ item: items, project: projects, resource: projectResources })
+      .from(items)
+      .innerJoin(projectResources, eq(items.resourceId, projectResources.id))
+      .innerJoin(projects, eq(projectResources.projectId, projects.id))
+      .all();
+    for (const row of rows) {
+      const root = await canonical(row.project.workspacePath);
+      const directory = path.join(root, 'livrables', row.item.id);
+      const registered = this.db
+        .select()
+        .from(documents)
+        .where(eq(documents.deliverableId, row.item.id))
+        .all();
+      const document = registered.find(
+        (entry) =>
+          entry.sourcePath === requested ||
+          entry.sourcePath === path.resolve(request.path) ||
+          entry.previousSourcePaths.includes(path.resolve(request.path)),
+      );
+      const containsDocument = registered.some((entry) =>
+        within(requested, entry.sourcePath),
+      );
+      const affectsDirectory =
+        within(directory, requested) ||
+        within(requested, directory) ||
+        within(directory, path.resolve(request.path));
+      if (
+        !document &&
+        !containsDocument &&
+        !affectsDirectory &&
+        !(
+          destination &&
+          (within(directory, destination) ||
+            within(destination, directory) ||
+            registered.some((entry) => within(destination, entry.sourcePath)) ||
+            within(directory, path.resolve(request.destination!)))
+        )
+      )
+        continue;
+      this.get(row.project.id, row.resource.id, row.item.id);
+      this.identities.requireWorkspacePath(requested);
+      this.files.assertProjectPathMutable(requested);
+      this.requireDocumentMutable(row.item);
+      if (this.blockingOnlyOfficeSession(row.item.id))
+        throw new ConflictException(
+          'Close the document editor before changing its files',
+        );
+      if (
+        request.operation === 'move' ||
+        request.operation === 'copy' ||
+        request.operation === 'directory' ||
+        (!document && path.dirname(requested) !== directory)
+      )
+        throw new ConflictException(
+          'Use the deliverable document actions; its directory structure cannot be moved or replaced',
+        );
+      if (request.operation === 'rename') {
+        if (!document) {
+          await regularPath(root, path.resolve(request.path));
+          await this.addDocumentVersion(
+            row.project.id,
+            row.resource.id,
+            row.item.id,
+            { path: requested },
+            this.actor(),
+          );
+          return this.explorerMutation(request);
+        }
+        if (document.deletedAt !== null)
+          throw new ConflictException(
+            'Register the document before renaming it',
+          );
+        return {
+          result: await this.renameDocument(
+            row.project.id,
+            row.resource.id,
+            row.item.id,
+            document.id,
+            {
+              name: request.destination,
+              expectedName: document.name,
+              expectedVersion: document.currentVersionNumber,
+            },
+          ),
+        };
+      }
+      return this.serializeDocumentWrite(row.item.id, async () => {
+        const current = this.get(row.project.id, row.resource.id, row.item.id);
+        this.requireDocumentMutable(current);
+        if (this.blockingOnlyOfficeSession(row.item.id))
+          throw new ConflictException(
+            'Close the document editor before changing its files',
+          );
+        const fresh = document
+          ? this.getDocument(row.item.id, document.id)
+          : undefined;
+        if (
+          request.documentId &&
+          (fresh?.id !== request.documentId ||
+            fresh.currentVersionNumber !== request.expectedVersion)
+        )
+          throw new ConflictException(
+            'Document changed. Reload before saving.',
+          );
+        if (
+          fresh &&
+          (fresh.deletedAt !== null || fresh.sourcePath !== requested)
+        )
+          throw new ConflictException(
+            'Document changed. Reload before saving.',
+          );
+        if (request.operation === 'delete') {
+          if (!fresh) {
+            await regularPath(root, path.resolve(request.path));
+            const added = await this.addDocumentVersionUnlocked(
+              row.project.id,
+              row.resource.id,
+              row.item.id,
+              { path: requested },
+              this.actor(),
+            );
+            return {
+              result: this.setDocumentDeleted(
+                row.project.id,
+                row.resource.id,
+                row.item.id,
+                added.document.id,
+                added.document.currentVersionNumber,
+                true,
+              ),
+            };
+          }
+          // Same recoverable removal as the deliverable list: retained source and snapshots stay intact.
+          return {
+            result: this.setDocumentDeleted(
+              row.project.id,
+              row.resource.id,
+              row.item.id,
+              fresh.id,
+              fresh.currentVersionNumber,
+              true,
+            ),
+          };
+        }
+        if (request.operation === 'create' && fresh)
+          throw new ConflictException(
+            'Choose Upload new version for an existing document',
+          );
+        if (fresh && request.operation === 'upload' && !request.overwrite)
+          throw new ConflictException(
+            'A document already uses this name; choose Upload new version',
+          );
+        if (request.expectedMtime !== undefined) {
+          const stat = await fs.stat(requested);
+          if (Math.abs(stat.mtimeMs - request.expectedMtime) > 1000)
+            throw new ConflictException(
+              'File was modified since last read. Refresh and retry.',
+            );
+        }
+        // Validate every original parent before projecting into the deliverable.
+        const relative = path.relative(
+          root,
+          path.dirname(path.resolve(request.path)),
+        );
+        if (relative.startsWith('..') || path.isAbsolute(relative))
+          throw new ConflictException('Document escaped its project');
+        let parent = root;
+        for (const part of ['', ...relative.split(path.sep)]) {
+          if (part) parent = path.join(parent, part);
+          const stat = await fs.lstat(parent);
+          if (!stat.isDirectory() || stat.isSymbolicLink())
+            throw new ConflictException('Symbolic links are not supported');
+        }
+        if (fresh) await regularPath(root, fresh.sourcePath);
+        const stage = await fs.mkdtemp(
+          path.join(
+            await this.directory(row.project.id, [
+              'livrables',
+              '.version-staging',
+            ]),
+            'explorer-',
+          ),
+        );
+        const staged = path.join(stage, path.basename(requested));
+        try {
+          if (request.upload)
+            await pipeline(
+              request.upload.stream,
+              createWriteStream(staged, {
+                flags: 'wx',
+              }),
+            );
+          else
+            await fs.writeFile(staged, request.content ?? '', { flag: 'wx' });
+          if (
+            fresh &&
+            (await this.hash(staged)).sha256 ===
+              (await this.hash(fresh.sourcePath)).sha256
+          )
+            return {
+              result: {
+                path: fresh.sourcePath,
+                size: (await fs.stat(staged)).size,
+                mtime: (await fs.stat(fresh.sourcePath)).mtimeMs,
+              },
+            };
+          await this.addDocumentVersionUnlocked(
+            row.project.id,
+            row.resource.id,
+            row.item.id,
+            {
+              path: staged,
+              expectedVersion: fresh?.currentVersionNumber,
+              comment: request.comment,
+            },
+            this.actor(),
+            fresh?.id,
+            false,
+            true,
+          );
+          const stat = await fs.stat(requested);
+          return {
+            result: { path: requested, size: stat.size, mtime: stat.mtimeMs },
+          };
+        } finally {
+          await fs.rm(stage, { recursive: true, force: true });
+        }
+      });
+    }
+    return null;
+  }
+
+  async uploadDocuments(
+    projectId: string,
+    resourceId: string,
+    deliverableId: string,
+    uploads: AsyncIterable<FileUploadInput>,
+    input: { documentId?: string; expectedVersion?: number; comment?: string },
+  ) {
+    this.get(projectId, resourceId, deliverableId);
+    const files: Array<{ path: string; size: number }> = [];
+    for await (const upload of uploads) {
+      this.files.validateEntryName(upload.filename);
+      const document = input.documentId
+        ? this.getDocument(deliverableId, input.documentId)
+        : undefined;
+      if (
+        document &&
+        (document.name !== upload.filename ||
+          document.currentVersionNumber !== input.expectedVersion)
+      )
+        throw new ConflictException('Document changed. Reload before saving.');
+      const directory = await this.directory(projectId, [
+        'livrables',
+        deliverableId,
+      ]);
+      const result = await this.explorerMutation({
+        operation: 'upload',
+        path: document?.sourcePath ?? path.join(directory, upload.filename),
+        upload,
+        overwrite: Boolean(document),
+        documentId: input.documentId,
+        expectedVersion: input.expectedVersion,
+        comment: input.comment,
+      });
+      if (!result)
+        throw new BadRequestException('Document is outside its deliverable');
+      files.push(result.result as { path: string; size: number });
+    }
+    if (!files.length)
+      throw new BadRequestException('At least one file is required');
+    return { files };
+  }
   contextForConversation(
     threadId: string,
     type: 'agent' | 'simple' = 'agent',
@@ -1475,6 +1781,7 @@ export class DeliverablesService implements OnModuleInit {
     actor: DeliverableDocumentActor,
     documentId?: string,
     trustedOnlyOffice = false,
+    stagedUpload = false,
   ) {
     const deliverable = this.get(projectId, resourceId, deliverableId);
     this.requireDocumentMutable(deliverable);
@@ -1531,7 +1838,11 @@ export class DeliverablesService implements OnModuleInit {
         throw new ConflictException(
           'This document already belongs to the deliverable',
         );
-    } else if (sourcePath !== document.sourcePath && !protectedDocuments()) {
+    } else if (
+      sourcePath !== document.sourcePath &&
+      !protectedDocuments() &&
+      !stagedUpload
+    ) {
       throw new BadRequestException(
         'A document version must use the document source path',
       );
@@ -1558,7 +1869,7 @@ export class DeliverablesService implements OnModuleInit {
     let newProjectionPath: string | undefined;
     let folder: string | undefined;
     try {
-      if (protectedDocuments()) {
+      if (protectedDocuments() || stagedUpload) {
         if (document && fileName !== document.name)
           throw new BadRequestException(
             'A document version must keep its document name',
@@ -2094,6 +2405,10 @@ export class DeliverablesService implements OnModuleInit {
   ) {
     const deliverable = this.get(projectId, resourceId, deliverableId);
     this.requireDocumentMutable(deliverable);
+    if (deleted && this.blockingOnlyOfficeSession(deliverableId))
+      throw new ConflictException(
+        'Close the document editor before removing it',
+      );
     if (!Number.isSafeInteger(expectedVersion))
       throw new BadRequestException('Invalid document version');
     const document = this.db

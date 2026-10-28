@@ -10,9 +10,11 @@ import {
   Post,
   Req,
   Res,
+  Query,
 } from '@nestjs/common';
 import { createReadStream } from 'node:fs';
 import type { FastifyReply } from 'fastify';
+import type { FileUploadInput } from '../files/files.service';
 import type { IdentityRequest } from '../auth/platform-access.guard';
 import { IdentityService } from '../auth/identity.service';
 import { ThreadsService } from '../threads/threads.service';
@@ -34,6 +36,34 @@ export class DeliverablesController {
     private readonly metadata: ThreadMetadataService,
     private readonly mutations: GitMutationGateService,
   ) {}
+  @Post(':id/documents/upload')
+  uploadDocuments(
+    @Param('projectId') p: string,
+    @Param('resourceId') r: string,
+    @Param('id') id: string,
+    @Query('documentId') documentId: string | undefined,
+    @Query('expectedVersion') expectedVersion: string | undefined,
+    @Query('comment') comment: string | undefined,
+    @Req()
+    request: {
+      files: () => AsyncIterable<{
+        filename: string;
+        file: FileUploadInput['stream'];
+      }>;
+    },
+  ) {
+    async function* uploads(): AsyncIterable<FileUploadInput> {
+      for await (const file of request.files())
+        yield { filename: file.filename, stream: file.file };
+    }
+    return this.service.uploadDocuments(p, r, id, uploads(), {
+      documentId,
+      expectedVersion:
+        expectedVersion === undefined ? undefined : Number(expectedVersion),
+      comment,
+    });
+  }
+
   @Get(':id/available-agents')
   async availableAgents(
     @Param('projectId') p: string,

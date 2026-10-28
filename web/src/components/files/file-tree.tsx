@@ -1,7 +1,7 @@
 /** Flat Explorer-style browser with drag/drop, context menus, and inline edits. */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Folder, Loader2, UploadCloud } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { DragDropProvider } from '@dnd-kit/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,7 +23,10 @@ import { FileToolbar } from './file-toolbar';
 import { DeleteConfirmDialog, FilePathDialog } from './file-dialogs';
 import { DirectorySelectionTree } from './directory-selection-tree';
 import { InlineEntryEditor } from './inline-entry-editor';
-import { useDeliverableDirectoryAliases } from '@/hooks/use-deliverable-directory-aliases';
+import {
+  useDeliverableDirectoryAliases,
+  useDeliverableBoards,
+} from '@/hooks/use-deliverable-directory-aliases';
 import { projectsApi, type ProjectSummary } from '@/lib/projects-api';
 import {
   projectDirectorySelection,
@@ -394,6 +397,33 @@ interface FlatDirectoryProps {
 /** Gates navigation-created rows on a successful directory read and leases the visible scope. */
 function FlatDirectory(props: FlatDirectoryProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const boards = useDeliverableBoards(props.project);
+  const documentContexts = boards.flatMap((board, index) =>
+    (board.data?.deliverables ?? []).flatMap((item) => {
+      const resource = props.project?.resources?.filter(
+        (resource) => resource.type === 'deliverable_board',
+      )[index];
+      return resource
+        ? (item.documents ?? [])
+            .filter((document) => document.deletedAt === null)
+            .map((document) => ({
+              item,
+              contextDocument: document,
+              base: `/${props.project!.id}/resources/${resource.id}/deliverables`,
+              disabled: !['draft', 'in_constitution'].includes(
+                item.lifecycleStatus,
+              ),
+              refresh: async () => {
+                await queryClient.invalidateQueries({
+                  queryKey: ['project-deliverables'],
+                });
+                await props.ops.refresh(props.dirPath, 'directory');
+              },
+            }))
+        : [];
+    }),
+  );
   const globalOptions = filesReadTreeOptions({
     query: { root: props.dirPath },
   });
@@ -490,6 +520,9 @@ function FlatDirectory(props: FlatDirectoryProps) {
             key={entry.path}
             icon={entry.type === 'directory' ? 'directory' : 'file'}
             name={entry.name}
+            documentActions={documentContexts.find(
+              (context) => context.contextDocument.sourcePath === entry.path,
+            )}
             displayName={
               entry.type === 'directory'
                 ? props.directoryAliases[entry.path.replace(/\/+$/, '')]
