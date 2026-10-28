@@ -48,6 +48,7 @@ import { ProjectLocationTransfersController } from './project-location-transfers
     WorkspaceResourcesController,
   ],
   providers: [
+    { provide: 'PROJECT_AGENT_DOMAIN_SERVICE', useExisting: ProjectsService },
     ProjectLocationsService,
     WorkspaceGitActionsService,
     WorkspaceGitService,

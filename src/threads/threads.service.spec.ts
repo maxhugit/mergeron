@@ -14,6 +14,7 @@ import { ThreadWorkspaceOverridesService } from './thread-workspace-overrides.se
 import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 
 /** Branch state as the local-only service reports it for an untracked thread. */
 function localBranchState(threadId: string) {
@@ -82,12 +83,14 @@ describe('ThreadsService', () => {
   };
   const mockKnowledge = { contextForConversation: vi.fn() };
   const mockActiveFolders = { resolveAgent: vi.fn() };
+  const mockProjectTools = { context: vi.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         { provide: ActiveFoldersService, useValue: mockActiveFolders },
         { provide: ProjectKnowledgeService, useValue: mockKnowledge },
+        { provide: ProjectAgentToolsService, useValue: mockProjectTools },
         ThreadsService,
         { provide: CodexService, useValue: mockCodex },
         { provide: ThreadResumeRegistryService, useValue: mockResumeRegistry },
@@ -118,6 +121,8 @@ describe('ThreadsService', () => {
     service = module.get(ThreadsService);
     mockCodex.request.mockReset();
     mockKnowledge.contextForConversation.mockReset();
+    mockProjectTools.context.mockReset();
+    mockProjectTools.context.mockReturnValue(null);
     mockActiveFolders.resolveAgent.mockReset();
     mockKnowledge.contextForConversation.mockResolvedValue(null);
     Object.values(mockResumeRegistry).forEach((mock) => mock.mockReset());
@@ -446,6 +451,16 @@ describe('ThreadsService', () => {
           ? { ...sandbox, writableRoots: ['/code', '/draft/scope'] }
           : undefined,
       );
+      const publication = (
+        service as unknown as {
+          documentPublication: { prepare: ReturnType<typeof vi.fn> };
+        }
+      ).documentPublication;
+      expect(publication.prepare).toHaveBeenCalledWith(
+        't1',
+        undefined,
+        type !== 'readOnly',
+      );
     },
   );
 
@@ -492,6 +507,44 @@ describe('ThreadsService', () => {
       'turn1',
       'Continue',
     );
+  });
+
+  it('refreshes project identity and catalog on every existing-conversation turn', async () => {
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+    mockProjectTools.context
+      .mockReturnValueOnce('Project: Tests 2; tasks: A')
+      .mockReturnValueOnce('Project: Renamed; tasks: A, B');
+    const input = [
+      { type: 'text' as const, text: 'List my tasks', text_elements: [] },
+    ];
+    await service.startTurn({
+      threadId: 'existing-agent',
+      cwd: '/code',
+      input,
+    });
+    await service.startTurn({
+      threadId: 'existing-agent',
+      cwd: '/code',
+      input,
+    });
+    expect(mockProjectTools.context).toHaveBeenCalledWith(
+      'existing-agent',
+      '/code',
+    );
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        input: [
+          {
+            type: 'text',
+            text: 'Project: Renamed; tasks: A, B',
+            text_elements: [],
+          },
+          ...input,
+        ],
+      }),
+    );
+    expect(input).toHaveLength(1);
   });
 
   it('keeps a readonly location readonly even when full access is requested', async () => {

@@ -29,6 +29,8 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 - [Workspaces des projets](workspaces-projets.md)
 - [Administration Codex](administration-codex.md)
 - [Gestionnaire de tâches](gestionnaire-de-taches.md)
+- [Contexte projet et outils des agents](contexte-et-outils-agents.md) :
+  fonctionnement utilisateur, permissions, créations et architecture technique.
 
 ## Développement et sécurité
 
@@ -40,4 +42,5 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 `upstream/` conserve des références officielles figées dans leur langue d’origine.
 Ces documents ne sont pas nécessaires à l’installation.
+
 - [Navigateur annoté](navigateur-annote.md)

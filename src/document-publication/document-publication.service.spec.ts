@@ -33,6 +33,11 @@ import {
   projectSystemPath,
 } from '../projects/workspace-structure';
 import type { CodexProcessManager } from '../codex/codex-process-manager.service';
+import type { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import type { ServerNotification } from '../codex/codex-schema';
 
 // macOS has no /proc. Preserve the same opened-handle path check in local tests;
 // the Linux mount/descriptor boundary is additionally exercised on the dev host.
@@ -52,6 +57,22 @@ vi.mock('node:fs/promises', async (original) => {
         match ? descriptors.get(Number(match[1]))! : args[0],
       );
     },
+    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+      const match =
+        typeof args[0] === 'string' &&
+        /^\/proc\/self\/fd\/(\d+)(\/.*)$/.exec(args[0]);
+      if (match) args[0] = descriptors.get(Number(match[1]))! + match[2];
+      return actual.writeFile(...args);
+    },
+    rename: async (...args: Parameters<typeof actual.rename>) => {
+      for (const index of [0, 1] as const) {
+        const match = /^\/proc\/self\/fd\/(\d+)(\/.*)$/.exec(
+          String(args[index]),
+        );
+        if (match) args[index] = descriptors.get(Number(match[1]))! + match[2];
+      }
+      return actual.rename(...args);
+    },
   };
 });
 
@@ -62,6 +83,7 @@ describe('agent saves retained documents as new versions', () => {
   let publication: DocumentPublicationService;
   let files: FilesService;
   let item: Awaited<ReturnType<DeliverablesService['create']>>;
+  let notifyTool: (note: ServerNotification) => void;
 
   beforeEach(async () => {
     vi.stubEnv('MERGERON_PUBLISHED_DOCUMENT_PROTECTION', 'required');
@@ -139,7 +161,12 @@ describe('agent saves retained documents as new versions', () => {
       deliverables,
       protection,
       {
-        addListener: vi.fn(),
+        addListener: (
+          _event: string,
+          listener: (note: ServerNotification) => void,
+        ) => {
+          notifyTool = listener;
+        },
         addLifecycleListener: vi.fn(),
       } as unknown as CodexProcessManager,
     );
@@ -154,6 +181,306 @@ describe('agent saves retained documents as new versions', () => {
     await fs.rm(root, { recursive: true, force: true });
     vi.unstubAllEnvs();
     descriptors.clear();
+  });
+
+  function projectToolBridge() {
+    publication.onModuleDestroy();
+    const execute = vi
+      .fn()
+      .mockResolvedValue({ id: 'task-1', status: 'created' });
+    publication = new DocumentPublicationService(
+      database.db,
+      deliverables,
+      new DocumentProtectionService(database.db, {
+        databasePath: ':memory:',
+      } as DatabaseService),
+      {
+        addListener: (
+          _event: string,
+          listener: (note: ServerNotification) => void,
+        ) => {
+          notifyTool = listener;
+        },
+        addLifecycleListener: vi.fn(),
+      } as unknown as CodexProcessManager,
+      { execute } as unknown as ProjectAgentToolsService,
+    );
+    const identities = new IdentityService(database.db);
+    const access = {
+      identities,
+      identity: {
+        kind: 'service' as const,
+        personId: null,
+        name: 'Service',
+        role: 'administrator' as const,
+        active: true,
+      },
+    };
+    return {
+      execute,
+      prepare: async (writable = true) => {
+        const prepared = await accessContext.run(access, () =>
+          publication.prepare('agent', 'Writer', writable),
+        );
+        prepared?.bind('tool-turn');
+        return prepared;
+      },
+    };
+  }
+
+  function toolNotification(
+    value: Record<string, unknown>,
+    commandId = randomUUID(),
+  ) {
+    const scope = publication['scopes'].get('agent')!;
+    return {
+      method: 'item/completed',
+      params: {
+        threadId: 'agent',
+        turnId: 'tool-turn',
+        item: {
+          type: 'commandExecution',
+          id: commandId,
+          command: `python3 "${path.join(scope.directory, 'mergeron-tools.py')}" --request ${Buffer.from(JSON.stringify(value)).toString('base64url')}`,
+          exitCode: 0,
+          status: 'completed',
+        },
+      },
+    } as unknown as ServerNotification;
+  }
+
+  async function toolRequest(
+    value: Record<string, unknown>,
+    commandId?: string,
+  ) {
+    const scope = publication['scopes'].get('agent')!;
+    notifyTool(toolNotification(value, commandId));
+    await publication.scan(scope);
+    return JSON.parse(
+      await fs.readFile(
+        path.join(
+          scope.directory,
+          `project-tool-${String(value.requestId)}-result.json`,
+        ),
+        'utf8',
+      ),
+    ) as {
+      requestId: string | null;
+      status: string;
+      result?: Record<string, unknown>;
+    };
+  }
+
+  it('dispatches only completed commands from the authenticated conversation and deduplicates wire events', async () => {
+    const bridge = projectToolBridge();
+    const prepared = await bridge.prepare();
+    expect(prepared?.context).toContain('mergeron-tools.py');
+    const request = {
+      requestId: 'create-1',
+      tool: 'create_task',
+      resourceId: 'tasks',
+      title: 'Presentation',
+      userRequest: 'Create a task',
+    };
+    expect(await toolRequest(request, 'command-1')).toMatchObject({
+      requestId: 'create-1',
+      status: 'ok',
+      result: { id: 'task-1' },
+    });
+    expect(bridge.execute).toHaveBeenCalledTimes(1);
+    expect(await toolRequest(request, 'command-1')).toMatchObject({
+      status: 'ok',
+    });
+    expect(bridge.execute).toHaveBeenCalledTimes(1);
+    await toolRequest({ ...request, requestId: 'read-1', tool: 'get_project' });
+    await toolRequest(request);
+    // A new command with the same request id goes through durable domain idempotency.
+    expect(bridge.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it('provides an executable Python client that waits for the server acknowledgement', async () => {
+    const bridge = projectToolBridge();
+    await bridge.prepare();
+    const scope = publication['scopes'].get('agent')!;
+    const helper = path.join(scope.directory, 'mergeron-tools.py');
+    const input = { requestId: 'client-1', tool: 'get_project' };
+    const before = await fs.readdir(scope.directory);
+    const encoded = await promisify(execFile)('python3', [
+      helper,
+      '--encode',
+      JSON.stringify(input),
+    ]);
+    const submitted = await promisify(execFile)('python3', [
+      helper,
+      '--request',
+      encoded.stdout.trim(),
+    ]);
+    expect(JSON.parse(submitted.stdout)).toMatchObject({ status: 'submitted' });
+    expect(await fs.readdir(scope.directory)).toEqual(before);
+    await toolRequest(input);
+    const { stdout } = await promisify(execFile)(
+      'python3',
+      [helper, '--result', 'client-1'],
+      { timeout: 10000 },
+    );
+    expect(JSON.parse(stdout)).toMatchObject({
+      requestId: 'client-1',
+      status: 'ok',
+      result: { id: 'task-1' },
+    });
+    expect(bridge.execute).toHaveBeenCalledOnce();
+  }, 15000);
+
+  it('refuses creates in read-only mode without elevating the sandbox', async () => {
+    const bridge = projectToolBridge();
+    await bridge.prepare(false);
+    expect(
+      await toolRequest({ requestId: 'create-1', tool: 'create_task' }),
+    ).toMatchObject({ status: 'failed' });
+    expect(bridge.execute).not.toHaveBeenCalled();
+    expect(
+      await toolRequest({ requestId: 'read-1', tool: 'get_project' }),
+    ).toMatchObject({ status: 'ok' });
+  });
+
+  it('supports a project with no deliverables manager without creating one', async () => {
+    const bridge = projectToolBridge();
+    database.db
+      .delete(projectResources)
+      .where(eq(projectResources.id, 'r'))
+      .run();
+    const prepared = await bridge.prepare();
+    expect(prepared?.context).toContain('no deliverables manager');
+    expect(prepared?.context).toContain('mergeron-tools.py');
+    expect(
+      await toolRequest({ requestId: 'read-1', tool: 'get_project' }),
+    ).toMatchObject({ status: 'ok' });
+    expect(database.db.select().from(projectResources).all()).toHaveLength(0);
+  });
+
+  it('revokes tools on stop and refuses a changed project binding', async () => {
+    const bridge = projectToolBridge();
+    await bridge.prepare();
+    database.db.delete(projectAgentThreads).run();
+    expect(
+      await toolRequest({ requestId: 'read-1', tool: 'get_project' }),
+    ).toMatchObject({ status: 'failed' });
+    expect(bridge.execute).not.toHaveBeenCalled();
+    const scope = publication['scopes'].get('agent')!;
+    publication.revoke('agent');
+    await publication.scan(scope);
+    expect(bridge.execute).not.toHaveBeenCalled();
+  });
+
+  it('ignores forged file requests and expires security-mode leases', async () => {
+    const bridge = projectToolBridge();
+    await bridge.prepare();
+    const scope = publication['scopes'].get('agent')!;
+    const outside = path.join(root, 'outside-tool.json');
+    await fs.writeFile(
+      outside,
+      JSON.stringify({ requestId: 'read-1', tool: 'get_project' }),
+    );
+    await fs.symlink(
+      outside,
+      path.join(scope.directory, 'project-tool-request.json'),
+    );
+    await publication.scan(scope);
+    expect(bridge.execute).not.toHaveBeenCalled();
+    await bridge.prepare(false);
+    expect(publication['scopes'].get('agent')?.directory).not.toBe(
+      scope.directory,
+    );
+    expect(scope.revoked).toBe(true);
+  });
+
+  it('does not admit failed, declined, unfinished, wrong-turn or wrong-conversation commands', async () => {
+    const bridge = projectToolBridge();
+    await bridge.prepare();
+    const scope = publication['scopes'].get('agent')!;
+    for (const status of ['failed', 'declined', 'inProgress'] as const) {
+      const note = toolNotification({
+        requestId: 'read-1',
+        tool: 'get_project',
+      });
+      if (
+        note.method !== 'item/completed' ||
+        note.params.item.type !== 'commandExecution'
+      )
+        throw new Error('Unexpected fixture');
+      note.params.item.status = status;
+      notifyTool(note);
+    }
+    const failed = toolNotification({
+      requestId: 'read-1',
+      tool: 'get_project',
+    });
+    if (
+      failed.method !== 'item/completed' ||
+      failed.params.item.type !== 'commandExecution'
+    )
+      throw new Error('Unexpected fixture');
+    failed.params.item.exitCode = 1;
+    notifyTool(failed);
+    const oldTurn = toolNotification({
+      requestId: 'read-1',
+      tool: 'get_project',
+    });
+    if (oldTurn.method !== 'item/completed')
+      throw new Error('Unexpected fixture');
+    oldTurn.params.turnId = 'old-turn';
+    notifyTool(oldTurn);
+    const other = toolNotification({
+      requestId: 'read-1',
+      tool: 'get_project',
+    });
+    if (other.method !== 'item/completed')
+      throw new Error('Unexpected fixture');
+    other.params.threadId = 'another-agent';
+    notifyTool(other);
+    await publication.scan(scope);
+    expect(bridge.execute).not.toHaveBeenCalled();
+    expect(scope.toolQueue).toHaveLength(0);
+  });
+
+  it('rejects a helper invocation from another active conversation even when the path is known', async () => {
+    const bridge = projectToolBridge();
+    await bridge.prepare();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'another-agent',
+        projectId: 'p',
+        workspacePath: root,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    const identities = new IdentityService(database.db);
+    const second = await accessContext.run(
+      {
+        identities,
+        identity: {
+          kind: 'service',
+          personId: null,
+          name: 'Service',
+          role: 'administrator',
+          active: true,
+        },
+      },
+      () => publication.prepare('another-agent', 'Other', true),
+    );
+    second?.bind('tool-turn');
+    const note = toolNotification({
+      requestId: 'cross-agent',
+      tool: 'get_project',
+    });
+    if (note.method !== 'item/completed') throw new Error('Unexpected fixture');
+    note.params.threadId = 'another-agent';
+    notifyTool(note);
+    await publication.scan(publication['scopes'].get('agent')!);
+    await publication.scan(publication['scopes'].get('another-agent')!);
+    expect(bridge.execute).not.toHaveBeenCalled();
   });
 
   async function request(

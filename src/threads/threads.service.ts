@@ -9,6 +9,7 @@ import {
   requireExecutionAccess,
 } from '../auth/access-context';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
+import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { CodexService } from '../codex/codex.service';
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
@@ -101,6 +102,7 @@ export class ThreadsService {
     @Optional()
     private readonly settingsObserver?: ThreadSettingsObserverService,
     @Optional() private readonly connections?: ProjectConnectionRuntimeService,
+    @Optional() private readonly projectTools?: ProjectAgentToolsService,
   ) {}
 
   /**
@@ -488,9 +490,20 @@ export class ThreadsService {
     const deliverableContext = this.deliverables?.contextForConversation(
       params.threadId,
     );
+    const projectContext = this.projectTools?.context(
+      params.threadId,
+      effectiveCwd,
+    );
+    const executionSandbox = projectPolicy?.readOnly
+      ? { type: 'readOnly' }
+      : (params.sandboxPolicy ??
+        this.settingsObserver?.readSecurityPolicy(params.threadId)
+          .sandboxPolicy);
     const publication = await this.documentPublication?.prepare(
       params.threadId,
       beforeTurn?.name,
+      executionSandbox?.type === 'workspaceWrite' ||
+        executionSandbox?.type === 'dangerFullAccess',
     );
     const effectiveParams: v2.TurnStartParams = {
       ...params,
@@ -502,12 +515,16 @@ export class ThreadsService {
             },
           }
         : {}),
-      ...(sharedKnowledge || deliverableContext || publication?.context
+      ...(sharedKnowledge ||
+      deliverableContext ||
+      publication?.context ||
+      projectContext
         ? {
             input: [
               {
                 type: 'text' as const,
                 text: [
+                  projectContext,
                   sharedKnowledge,
                   deliverableContext,
                   publication?.context,
@@ -695,6 +712,7 @@ export class ThreadsService {
   async interruptTurn(threadId: string, turnId: string): Promise<void> {
     requireExecutionAccess();
     this.deletionRegistry.assertMutable(threadId);
+    this.documentPublication?.revoke(threadId);
     await this.codex.request('turn/interrupt', { threadId, turnId });
   }
 
