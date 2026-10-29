@@ -14,26 +14,35 @@ model="fixture"
 name="fixture"
 base_url="http://127.0.0.1:1/v1"
 wire_api="responses"
+request_max_retries=0
+stream_max_retries=0
 [features]
 apps=false
 plugins=false
 `);
+// No host identity or proxy is needed: Docker disables every external network.
+const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  ['PATH', 'TMPDIR', 'XDG_CACHE_HOME', 'COREPACK_HOME', 'PNPM_HOME', 'npm_config_cache',
+    'npm_config_store_dir', 'pnpm_config_store_dir', 'npm_config_devdir', 'npm_config_nodedir'].includes(key)));
 const child = spawn(binary, ['app-server'], {
   cwd: root,
-  env: { ...process.env, CODEX_HOME: home, HOME: path.dirname(home), OPENAI_API_KEY: '', SSH_AUTH_SOCK: '' },
+  env: { ...fixtureEnv, CODEX_HOME: home, HOME: path.dirname(home) },
   stdio: ['pipe', 'pipe', 'pipe'],
 });
 let sequence = 0;
+let diagnostic = '';
+// Only this sterile, networkless fixture's startup error is retained. Never
+// reuse this diagnostic channel with a real user's home or environment.
+child.stderr.on('data', bytes => { diagnostic = (diagnostic + bytes.toString()).slice(-4000); });
 const pending = new Map();
 child.once('error', () => {
   for (const waiter of pending.values()) waiter.reject(new Error('Native profile process could not start'));
   pending.clear();
 });
 child.once('exit', (code, signal) => {
-  for (const waiter of pending.values()) waiter.reject(new Error(`Native profile process exited (${code ?? signal})`));
+  for (const waiter of pending.values()) waiter.reject(new Error(`Native profile process exited (${code ?? signal}): ${diagnostic.replace(/https?:\/\/\S+/g, '[redacted-url]')}`));
   pending.clear();
 });
-child.stderr.resume(); // Never print runtime logs or inherited configuration.
 readline.createInterface({ input: child.stdout }).on('line', line => {
   let response; try { response = JSON.parse(line); } catch { return; }
   const waiter = pending.get(response.id);
