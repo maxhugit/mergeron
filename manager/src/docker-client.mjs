@@ -60,8 +60,11 @@ export class DockerClient {
                 /* Keep non-JSON responses out of logs. */
               }
               reject(
-                new Error(
-                  `Docker API returned HTTP ${response.statusCode ?? 'unknown'}${message}`,
+                Object.assign(
+                  new Error(
+                    `Docker API returned HTTP ${response.statusCode ?? 'unknown'}${message}`,
+                  ),
+                  { statusCode: response.statusCode },
                 ),
               );
               return;
@@ -159,19 +162,28 @@ export class DockerClient {
     });
   }
 
-  stopContainer(id) {
-    return this.request(`/containers/${encodeURIComponent(id)}/stop?t=60`, {
-      method: 'POST',
-      timeout: 70_000,
-    });
+  stopContainer(id, graceSeconds = 60) {
+    if (
+      !Number.isInteger(graceSeconds) ||
+      graceSeconds < 1 ||
+      graceSeconds > 60
+    )
+      throw new Error('Invalid container stop grace period');
+    return this.request(
+      `/containers/${encodeURIComponent(id)}/stop?t=${graceSeconds}`,
+      {
+        method: 'POST',
+        timeout: (graceSeconds + 10) * 1000,
+      },
+    );
   }
 
-  waitContainer(id) {
+  waitContainer(id, timeout = 180_000) {
     return this.request(
       `/containers/${encodeURIComponent(id)}/wait?condition=not-running`,
       {
         method: 'POST',
-        timeout: 180_000,
+        timeout,
       },
     );
   }
@@ -193,6 +205,83 @@ export class DockerClient {
 
   inspectImage(reference) {
     return this.request(`/images/${encodeURIComponent(reference)}/json`);
+  }
+
+  putArchive(id, archive, destination = '/workspace') {
+    if (!['/workspace', '/control'].includes(destination))
+      throw new Error('Invalid archive destination');
+    if (!Buffer.isBuffer(archive) || archive.length > 64 * 1024 ** 2)
+      throw new Error('PREVIEW_SOURCE_LIMIT');
+    return new Promise((resolve, reject) => {
+      const req = this.requestFactory(
+        {
+          socketPath: this.socketPath,
+          path: `/containers/${encodeURIComponent(id)}/archive?path=${encodeURIComponent(destination)}&noOverwriteDirNonDir=true`,
+          method: 'PUT',
+          timeout: 120000,
+          headers: {
+            'Content-Type': 'application/x-tar',
+            'Content-Length': archive.length,
+          },
+        },
+        (res) => {
+          res.resume();
+          res.on('end', () =>
+            res.statusCode === 200
+              ? resolve(null)
+              : reject(new Error('PREVIEW_SOURCE_UPLOAD_FAILED')),
+          );
+        },
+      );
+      req.on('timeout', () =>
+        req.destroy(new Error('PREVIEW_SOURCE_UPLOAD_TIMEOUT')),
+      );
+      req.on('error', reject);
+      req.end(archive);
+    });
+  }
+  containerLogs(id) {
+    return new Promise((resolve, reject) => {
+      const req = this.requestFactory(
+        {
+          socketPath: this.socketPath,
+          path: `/containers/${encodeURIComponent(id)}/logs?stdout=true&stderr=true&tail=100`,
+          method: 'GET',
+          timeout: 10000,
+        },
+        (res) => {
+          const chunks = [];
+          let bytes = 0;
+          res.on('data', (chunk) => {
+            bytes += chunk.length;
+            if (bytes > 128 * 1024) req.destroy(new Error('PREVIEW_LOG_LIMIT'));
+            else chunks.push(chunk);
+          });
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              reject(new Error('PREVIEW_LOG_UNAVAILABLE'));
+              return;
+            }
+            const data = Buffer.concat(chunks);
+            let offset = 0,
+              text = '';
+            while (offset + 8 <= data.length) {
+              const length = data.readUInt32BE(offset + 4);
+              if (length > 128 * 1024 || offset + 8 + length > data.length)
+                break;
+              text += data
+                .subarray(offset + 8, offset + 8 + length)
+                .toString('utf8');
+              offset += 8 + length;
+            }
+            resolve(text);
+          });
+        },
+      );
+      req.on('timeout', () => req.destroy(new Error('PREVIEW_LOG_TIMEOUT')));
+      req.on('error', reject);
+      req.end();
+    });
   }
 
   inspectDistribution(reference) {

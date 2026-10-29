@@ -153,4 +153,28 @@ http {
             proxy_send_timeout 3600s;
         }
     }
+    # Separate origin and application port. No Mergeron identity or backend
+    # bearer credential is passed into a project preview. The gateway verifies
+    # its short-lived, project-bound session on every request and WS upgrade.
+    server {
+        listen 8080;
+        server_name *.${MERGERON_PREVIEW_DOMAIN};
+        client_max_body_size 10m;
+        set $preview_gateway http://mergeron-ui:8173;
+        location / {
+            proxy_pass $preview_gateway;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header Authorization "";
+            proxy_set_header X-Webui-Auth-Source "";
+            proxy_set_header X-Webui-Auth-Subject "";
+            proxy_set_header X-Webui-Auth-Email "";
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_buffering off;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+    }
 }

@@ -5,9 +5,10 @@ set -eu
 for template in deployment/config/nginx.conf.template deployment/config/nginx.native.conf.template; do
   docker run --rm -i --network none \
     -e MERGERON_BACKEND_TOKEN=syntax-test-only \
+    -e MERGERON_PREVIEW_DOMAIN=preview.example.test \
     --entrypoint sh nginx:stable -c \
     'set -eu
-     envsubst '\''${MERGERON_BACKEND_TOKEN}'\'' | sed '\''/^        listen 8080;$/a\
+     envsubst '\''${MERGERON_BACKEND_TOKEN} ${MERGERON_PREVIEW_DOMAIN}'\'' | sed '\''/^        listen 8080;$/a\
         location = /__redirect_probe { return 302 /__redirect_target; }
 '\'' > /tmp/nginx.conf
      nginx -t -c /tmp/nginx.conf

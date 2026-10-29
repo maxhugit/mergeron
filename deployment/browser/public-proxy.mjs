@@ -34,10 +34,16 @@ export async function resolvePublic(host, resolver = lookup) {
 }
 
 /** Every TCP connection uses the validated address, with no second DNS lookup. */
-export function publicProxy() {
+export function publicProxy({ allowedDomains } = {}) {
+  const allowed = (host) =>
+    !allowedDomains ||
+    allowedDomains.some(
+      (domain) => host === domain || host.endsWith('.' + domain),
+    );
   const proxy = http.createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url);
+      if (!allowed(url.hostname)) throw new Error('Destination blocked');
       if (
         url.protocol !== 'http:' ||
         (url.port && url.port !== '80') ||
@@ -78,6 +84,7 @@ export function publicProxy() {
   proxy.on('connect', (request, socket, head) => {
     void (async () => {
       const url = new URL('https://' + request.url);
+      if (!allowed(url.hostname)) throw new Error('Destination blocked');
       if (
         (url.port && url.port !== '443') ||
         url.username ||

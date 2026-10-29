@@ -172,6 +172,8 @@ jobs:
           src/auth/project-authorization.spec.ts
           src/auth/auth-config.service.spec.ts
           src/auth/local-auth.service.spec.ts
+          src/previews
+          src/auth/platform-cookie.spec.ts
           src/auth/impersonation.spec.ts
           src/auth/api-key.guard.spec.ts
           src/auth/platform-access.spec.ts
@@ -186,6 +188,22 @@ jobs:
       - name: Run frontend tests
         if: matrix.part == 'frontend'
         run: pnpm --dir web test
+
+      - name: Test preview controls in Chromium and WebKit
+        if: matrix.part == 'frontend'
+        run: |
+          pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
+          pnpm --dir web exec vitest run --project browser src/components/chat/agent-preview.browser.tsx
+
+      - name: Preserve preview interface screenshots
+        if: always() && matrix.part == 'frontend'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preview-ui-evidence-${{ github.sha }}
+          path: web/.vitest-screenshots/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Build backend
         if: matrix.part == 'backend'
@@ -457,6 +475,9 @@ jobs:
 
       - name: Name the loaded Manager image for existing isolated checks
         run: docker tag "ghcr.io/maxhugit/mergeron-manager:quality-${{ github.sha }}" "mergeron-manager:quality-${{ github.sha }}"
+
+      - name: Validate generic agent previews on the isolated runner
+        run: bash scripts/smoke-test-agent-previews.sh "mergeron-manager:quality-${{ github.sha }}"
 
       - name: Start Manager and verify its Unix socket health check
         env:

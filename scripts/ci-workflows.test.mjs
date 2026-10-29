@@ -311,6 +311,9 @@ test('browser identity does not invalidate dependencies and cleanup', () => {
       dockerfile.indexOf('COPY public-proxy.mjs server.mjs'),
   );
   assert.match(dockerfile, /apt-get purge --yes gstreamer1\.0-plugins-bad/);
+  assert.match(dockerfile, /apt-get update/);
+  assert.match(dockerfile, /apt-get install --yes --no-install-recommends --only-upgrade libbrotli1/);
+  assert.match(dockerfile, /dpkg --compare-versions.*libbrotli1.*ge '1\.1\.0-2ubuntu0\.1'/);
   assert.match(dockerfile, /USER pwuser/);
   const managerContext = read('Dockerfile.manager.dockerignore');
   assert.match(managerContext, /^\*\*$/m);

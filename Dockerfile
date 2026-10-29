@@ -17,6 +17,7 @@ COPY web/package.json web/pnpm-lock.yaml* web/pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-web,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY web/ ./
+COPY runtime/preview-profile.cjs runtime/preview-profile.d.cts /app/runtime/
 RUN pnpm build
 
 # ── Stage 2: Backend build ───────────────────────────────────────────
@@ -32,6 +33,7 @@ COPY package.json pnpm-lock.yaml* ./
 RUN --mount=type=cache,id=pnpm-root,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY src/ ./src/
+COPY runtime/preview-profile.cjs runtime/preview-profile.d.cts runtime/preview-snapshot.py runtime/preview-gateway.cjs runtime/preview-gateway.d.cts ./runtime/
 COPY runtime/managed-cli.cjs ./runtime/managed-cli.cjs
 COPY runtime/managed-cli.d.cts ./runtime/managed-cli.d.cts
 COPY tsconfig*.json nest-cli.json ./
@@ -361,6 +363,7 @@ COPY scripts/project_archive.py ./scripts/project_archive.py
 COPY scripts/project_archive_native.py ./scripts/project_archive_native.py
 COPY scripts/provision-person.cjs ./scripts/provision-person.cjs
 COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
+COPY runtime/preview-profile.cjs runtime/preview-snapshot.py runtime/preview-gateway.cjs /app/runtime/
 COPY runtime/managed-cli.cjs /app/runtime/managed-cli.cjs
 COPY scripts/resolve-managed-cli.cjs ./scripts/resolve-managed-cli.cjs
 COPY scripts/visual-check.mjs ./scripts/visual-check.mjs

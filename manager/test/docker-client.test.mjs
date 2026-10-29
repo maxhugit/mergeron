@@ -71,6 +71,32 @@ test('surfaces an image pull failure from the Docker event stream', async () => 
     /registry denied/,
   );
 });
+
+test('ephemeral previews can stop promptly without changing the application default grace period', async () => {
+  const fake = transport(() => ({ statusCode: 204 }));
+  const docker = new DockerClient('/docker.sock', fake.factory);
+  await docker.stopContainer('preview', 3);
+  await docker.stopContainer('application');
+  assert.deepEqual(
+    fake.requests.map((r) => [r.options.path, r.options.timeout]),
+    [
+      ['/containers/preview/stop?t=3', 13000],
+      ['/containers/application/stop?t=60', 70000],
+    ],
+  );
+  assert.throws(() => docker.stopContainer('preview', 0));
+});
+
+test('preview waits remain bounded without shortening the managed CLI installation wait', async () => {
+  const fake = transport(() => ({ body: '{"StatusCode":0}' }));
+  const docker = new DockerClient('/docker.sock', fake.factory);
+  await docker.waitContainer('preview', 45000);
+  await docker.waitContainer('managed-cli');
+  assert.deepEqual(
+    fake.requests.map((r) => r.options.timeout),
+    [45000, 180000],
+  );
+});
 test('includes Docker diagnostic messages instead of an opaque HTTP failure', async () => {
   const fake = transport(() => ({
     statusCode: 500,

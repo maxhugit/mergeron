@@ -106,6 +106,52 @@ describe('ApiKeyGuard', () => {
   });
 
   describe('bearer header', () => {
+    it('rejects preview-origin mutations through trusted SSO without weakening ordinary bearer clients', async () => {
+      vi.stubEnv('MERGERON_PREVIEWS_ENABLED', 'true');
+      vi.stubEnv('MERGERON_PUBLIC_URL', 'https://mergeron.example.test');
+      try {
+        for (const origin of [
+          'https://id.preview.example.test',
+          'http://mergeron.example.test',
+        ]) {
+          await expect(
+            guard.canActivate(
+              mockContext(
+                mockRequest('/api/threads', 'POST', {
+                  host: 'mergeron.example.test',
+                  origin,
+                  'x-webui-auth-source': 'authentik',
+                  authorization: 'Bearer valid-token',
+                }),
+              ),
+            ),
+          ).rejects.toThrow(BusinessException);
+        }
+        await expect(
+          guard.canActivate(
+            mockContext(
+              mockRequest('/api/threads', 'POST', {
+                host: 'mergeron.example.test',
+                origin: 'https://mergeron.example.test',
+                'x-webui-auth-source': 'authentik',
+                authorization: 'Bearer valid-token',
+              }),
+            ),
+          ),
+        ).resolves.toBe(true);
+        await expect(
+          guard.canActivate(
+            mockContext(
+              mockRequest('/api/threads', 'POST', {
+                authorization: 'Bearer valid-token',
+              }),
+            ),
+          ),
+        ).resolves.toBe(true);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
     it('authenticates valid bearer token', async () => {
       const req = mockRequest('/api/threads', 'GET', {
         authorization: 'Bearer valid-token',

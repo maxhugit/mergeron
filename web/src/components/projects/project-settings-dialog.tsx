@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react';
 import { ProjectLocationsIntro } from './project-locations-intro';
 import { ProjectBrowserSettings } from './project-browser-settings';
+import { lazy, Suspense } from 'react';
+const ProjectPreviewSettings = lazy(() =>
+  import('./project-preview-settings').then((m) => ({
+    default: m.ProjectPreviewSettings,
+  })),
+);
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bot,
@@ -43,7 +49,8 @@ export type ProjectSettingsSection =
   | 'agents'
   | 'workspaces'
   | 'participants'
-  | 'browser';
+  | 'browser'
+  | 'preview';
 
 export function ProjectSettingsPanel({
   project,
@@ -176,6 +183,11 @@ export function ProjectSettingsPanel({
       <div className="space-y-6 rounded-xl border bg-card p-5">
         {section === 'browser' && (
           <ProjectBrowserSettings key={project.id} project={project} />
+        )}
+        {section === 'preview' && (
+          <Suspense fallback={<p>{t('loading')}</p>}>
+            <ProjectPreviewSettings projectId={project.id} />
+          </Suspense>
         )}
         {section === 'agents' && (
           <>

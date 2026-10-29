@@ -7,6 +7,8 @@
 !manager/src/
 !manager/src/**
 !runtime/
+!deployment/browser/
+!deployment/browser/public-proxy.mjs
 !runtime/**
 !scripts/
 !scripts/build-codex-runtime.sh

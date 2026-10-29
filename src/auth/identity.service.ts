@@ -17,6 +17,7 @@ import { projectSystemAlias } from '../projects/project-system-paths';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { LocalAuthService } from './local-auth.service';
 import { identityEvents } from './identity-events';
+import { platformCookie } from './platform-cookie';
 import { currentAccess } from './access-context';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
@@ -127,9 +128,12 @@ export class IdentityService {
     const value = cookie
       .split(';')
       .map((part) => part.trim())
-      .find((part) => part.startsWith('mergeron_impersonation='));
+      .find((part) =>
+        part.startsWith(platformCookie('mergeron_impersonation') + '='),
+      );
     return value
-      ? value.slice('mergeron_impersonation='.length) || 'invalid'
+      ? value.slice((platformCookie('mergeron_impersonation') + '=').length) ||
+          'invalid'
       : null;
   }
 
@@ -200,7 +204,7 @@ export class IdentityService {
   }
 
   impersonationCookie(token: string, secure: boolean) {
-    return `mergeron_impersonation=${token}; Path=/; HttpOnly; SameSite=Strict${secure ? '; Secure' : ''}${token ? '' : '; Max-Age=0'}`;
+    return `${platformCookie('mergeron_impersonation')}=${token}; Path=/; HttpOnly; SameSite=Strict${secure || process.env.MERGERON_PREVIEWS_ENABLED === 'true' ? '; Secure' : ''}${token ? '' : '; Max-Age=0'}`;
   }
 
   listImpersonationAudit(identity: PlatformIdentity) {

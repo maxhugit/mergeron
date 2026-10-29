@@ -19,6 +19,7 @@ import { LocalAuthService, type LocalSession } from './local-auth.service';
 type OidcClient = typeof import('openid-client');
 type OidcConfiguration = import('openid-client').Configuration;
 
+import { platformCookie, platformCookiePath } from './platform-cookie';
 const FLOW_COOKIE = 'codex_webui_oidc_state';
 const FLOW_LIFETIME_MS = 10 * 60_000;
 
@@ -107,7 +108,10 @@ export class OidcAuthService {
   ): Promise<OidcCallback> {
     const oidc = this.enabledConfiguration();
     const state = this.queryString(query.state);
-    const cookieState = this.readCookie(cookieHeader, FLOW_COOKIE);
+    const cookieState = this.readCookie(
+      cookieHeader,
+      platformCookie(FLOW_COOKIE),
+    );
     if (!state || !cookieState || !this.equal(state, cookieState))
       throw new BadRequestException('Invalid or missing OIDC state');
     const stateHash = this.digest(state);
@@ -215,7 +219,7 @@ export class OidcAuthService {
   }
 
   private flowCookie(value: string, secure: boolean, maxAge: number): string {
-    return `${FLOW_COOKIE}=${value}; Path=/api/auth/oidc; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+    return `${platformCookie(FLOW_COOKIE)}=${value}; Path=${platformCookiePath('/api/auth/oidc')}; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure || process.env.MERGERON_PREVIEWS_ENABLED === 'true' ? '; Secure' : ''}`;
   }
 
   private safeReturnTo(value: unknown): string {
