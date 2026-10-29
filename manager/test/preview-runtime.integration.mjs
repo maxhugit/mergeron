@@ -251,7 +251,26 @@ try {
     'project A',
   );
   results.push('Node HTTP application from current source');
-  const verifiedReady = await manager.status(input.runId);
+  // The real Manager uses network_mode:none. Trap accidental TCP probes here,
+  // while its Docker Unix-socket client remains permitted.
+  const originalRequest = http.request;
+  let verifiedReady;
+  http.request = (options, ...args) => {
+    assert.ok(
+      options.socketPath,
+      'Manager readiness must not open a TCP socket',
+    );
+    return originalRequest(options, ...args);
+  };
+  try {
+    for (let n = 0; n < 30; n++) {
+      verifiedReady = await manager.status(input.runId);
+      if (verifiedReady.ready) break;
+      await sleep(200);
+    }
+  } finally {
+    http.request = originalRequest;
+  }
   assert.equal(verifiedReady.ready, true);
   assert.equal(verifiedReady.httpStatus, 200);
   assert.equal(

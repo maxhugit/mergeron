@@ -127,6 +127,8 @@ Le flux MCP est le suivant :
 4. L’agent consulte `status` jusqu’à `preview.ready: true` et une URL non nulle.
    Le Manager vérifie une réponse HTTP 2xx/3xx sur la page configurée, via le
    relais interne authentifié, sans suivre les redirections ni publier de port.
+   La sonde bornée s’exécute dans ce relais et son résultat récent est lu via
+   Docker : le Manager conserve son `network_mode: none`, sans accès réseau.
    Un processus en cours d’exécution n’est pas présenté comme un site prêt.
 
 Le clic humain sur cette URL dans la conversation vérifie qu’il s’agit de

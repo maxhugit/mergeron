@@ -2,8 +2,88 @@ import { test, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter } from 'node:events';
-import { probePreview } from '../src/preview-health.mjs';
+import { probePreview, relayReadiness } from '../src/preview-health.mjs';
+import { spawnSync } from 'node:child_process';
 afterEach(() => mock.restoreAll());
+test('only fresh, structured results from the owned relay healthcheck announce readiness', () => {
+  const now = Date.now();
+  const health = {
+    Status: 'healthy',
+    Log: [
+      {
+        End: new Date(now).toISOString(),
+        ExitCode: 0,
+        Output: JSON.stringify({ ready: true, httpStatus: 302 }),
+      },
+    ],
+  };
+  assert.deepEqual(relayReadiness(health, now), {
+    ready: true,
+    httpStatus: 302,
+  });
+  for (const value of [
+    undefined,
+    { Status: 'healthy' },
+    { ...health, Status: 'unhealthy' },
+    {
+      ...health,
+      Log: [{ ...health.Log[0], End: new Date(now - 10001).toISOString() }],
+    },
+    {
+      ...health,
+      Log: [{ ...health.Log[0], End: new Date(now + 2001).toISOString() }],
+    },
+    { ...health, Log: [{ ...health.Log[0], ExitCode: 1 }] },
+    {
+      ...health,
+      Log: [{ ...health.Log[0], Output: 'private unstructured diagnostic' }],
+    },
+    {
+      ...health,
+      Log: [
+        {
+          ...health.Log[0],
+          Output: JSON.stringify({ ready: true, httpStatus: 503 }),
+        },
+      ],
+    },
+    {
+      ...health,
+      Log: [
+        {
+          ...health.Log[0],
+          Output: JSON.stringify({
+            ready: true,
+            httpStatus: 200,
+            token: 'secret',
+          }),
+        },
+      ],
+    },
+  ])
+    assert.equal(relayReadiness(value, now).ready, false);
+});
+test('probe process rejects invalid control metadata without outputting diagnostics or capabilities', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['manager/src/preview-health-probe.mjs'],
+    {
+      env: {
+        MERGERON_PREVIEW_PUBLIC_HOST: 'invalid',
+        MERGERON_PREVIEW_TRANSPORT_TOKEN: 'secret-never-output',
+      },
+      encoding: 'utf8',
+      timeout: 3000,
+      maxBuffer: 1024,
+    },
+  );
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(JSON.parse(result.stdout), {
+    ready: false,
+    httpStatus: null,
+  });
+});
 const input = {
   runId: '22222222-2222-4222-8222-222222222222',
   domain: 'preview.example.org',
