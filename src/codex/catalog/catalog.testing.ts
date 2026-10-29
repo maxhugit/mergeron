@@ -31,6 +31,15 @@ export function catalogFixture() {
     home,
     paths,
     storage,
-    cleanup: () => rmSync(home, { recursive: true, force: true }),
+    // The app-server has exited, but an upstream plugin Git helper can still
+    // finish filesystem operations in this disposable home. Retry transient
+    // ENOTEMPTY/EBUSY races for at most 1.5s; persistent errors still fail tests.
+    cleanup: () =>
+      rmSync(home, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      }),
   };
 }
