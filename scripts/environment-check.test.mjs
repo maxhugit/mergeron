@@ -19,6 +19,7 @@ import {
   curlEnvironment,
   errorCode,
   localHeaders,
+  networkInterfacesProbe,
   optionsFrom,
   proxyAddress,
   projectPackageManager,
@@ -26,6 +27,64 @@ import {
   tcpProbe,
   writableProbe,
 } from './environment-check.mjs';
+
+test('interface probe invokes the real operation without returning names or addresses', () => {
+  let calls = 0;
+  assert.equal(
+    networkInterfacesProbe(() => {
+      calls++;
+      return {
+        privateInterface: [{ address: 'private-ip', mac: 'private-mac' }],
+      };
+    }),
+    undefined,
+  );
+  assert.equal(calls, 1);
+  assert.equal(networkInterfacesProbe(), undefined);
+});
+
+test('libuv interface refusal fails base preflight even when listen and Chromium succeed', async () =>
+  fixture(async (root) => {
+    const report = await run(optionsFrom(['--cwd', root, '--visual']), {
+      env: Object.fromEntries(cacheKeys.map((key) => [key, join(root, key)])),
+      command: async () => '1.2.3',
+      networkInterfacesProbe: () =>
+        networkInterfacesProbe(() => {
+          throw Object.assign(new Error('private raw libuv diagnostic'), {
+            code: 'ERR_SYSTEM_ERROR',
+            info: { errno: 1, syscall: 'uv_interface_addresses' },
+          });
+        }),
+      loopbackProbe: async () => {},
+      browserProbe: async () => {},
+    });
+    assert.equal(report.success, false);
+    assert.deepEqual(
+      report.checks
+        .filter((item) => item.status === 'failed')
+        .map(({ id, code }) => ({ id, code })),
+      [{ id: 'node.network-interfaces', code: 'NETWORK_INTERFACES_DENIED' }],
+    );
+    assert.equal(
+      report.checks.find((item) => item.id === 'visual.loopback').status,
+      'ok',
+    );
+    assert.equal(
+      report.checks.find((item) => item.id === 'visual.chromium').status,
+      'ok',
+    );
+    assert.doesNotMatch(JSON.stringify(report), /private raw/);
+  }));
+
+test('interface probe preserves unrelated stable error codes', () => {
+  assert.throws(
+    () =>
+      networkInterfacesProbe(() => {
+        throw Object.assign(new Error(), { code: 'ENOBUFS' });
+      }),
+    { code: 'ENOBUFS' },
+  );
+});
 
 test('project-selected manager accepts only pinned registry versions, never URLs or tags', async () =>
   fixture(async (root) => {

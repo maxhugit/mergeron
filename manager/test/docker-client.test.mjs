@@ -86,6 +86,17 @@ test('ephemeral previews can stop promptly without changing the application defa
   );
   assert.throws(() => docker.stopContainer('preview', 0));
 });
+
+test('preview waits remain bounded without shortening the managed CLI installation wait', async () => {
+  const fake = transport(() => ({ body: '{"StatusCode":0}' }));
+  const docker = new DockerClient('/docker.sock', fake.factory);
+  await docker.waitContainer('preview', 45000);
+  await docker.waitContainer('managed-cli');
+  assert.deepEqual(
+    fake.requests.map((r) => r.options.timeout),
+    [45000, 180000],
+  );
+});
 test('includes Docker diagnostic messages instead of an opaque HTTP failure', async () => {
   const fake = transport(() => ({
     statusCode: 500,

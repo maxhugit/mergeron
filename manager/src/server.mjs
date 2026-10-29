@@ -7,6 +7,7 @@ import { DockerClient } from './docker-client.mjs';
 import { ImageUpdates } from './image-updates.mjs';
 import { TransactionalUpdater } from './updater.mjs';
 import { PreviewManager } from './previews.mjs';
+import { ManagedCodexCli } from './codex-cli.mjs';
 import {
   confirmAdoption,
   evaluateAdoption,
@@ -51,6 +52,11 @@ const previews = new PreviewManager({
   docker,
   manifest,
   configuration: { ...installConfiguration, adoptionPath },
+});
+const codexCli = new ManagedCodexCli({
+  docker,
+  manifest,
+  configuration: installConfiguration,
 });
 const imageUpdates = new ImageUpdates({
   docker,
@@ -160,6 +166,7 @@ async function adopt(body) {
   if (
     !ready ||
     installing ||
+    codexCli.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -195,6 +202,7 @@ async function install(body, automatic = false) {
   if (
     !ready ||
     adopting ||
+    codexCli.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -250,6 +258,7 @@ const server = http.createServer(async (request, response) => {
         installing ||
         adopting ||
         updater.busy ||
+        codexCli.busy ||
         updater.current?.status === 'recoveryRequired'
       )
         throw new Error('PREVIEW_BUSY');
@@ -298,12 +307,50 @@ const server = http.createServer(async (request, response) => {
         backupManagement: true,
         backupRetention: true,
         imageUpdates: true,
+        managedCodexCli: true,
         devFastUpdate:
           manifest.environment === 'development' &&
           manifest.stack !== 'mergeron',
       },
     });
     return;
+  }
+  if (
+    request.url === '/v1/codex-cli' ||
+    request.url === '/v1/codex-cli/install'
+  ) {
+    try {
+      if (request.url === '/v1/codex-cli' && request.method === 'GET')
+        return json(response, 200, codexCli.status());
+      if (
+        request.url === '/v1/codex-cli/install' &&
+        request.method === 'POST'
+      ) {
+        if (
+          !ready ||
+          installing ||
+          adopting ||
+          updater.busy ||
+          previews.busy ||
+          updater.current?.status === 'recoveryRequired'
+        )
+          throw new Error('managerOperationInProgress');
+        return json(
+          response,
+          200,
+          await codexCli.install(await readJsonBody(request)),
+        );
+      }
+      return json(response, 405, { error: 'methodNotAllowed' });
+    } catch (error) {
+      return json(response, 409, {
+        error: /^(codexRuntime|managerOperation)[A-Za-z]+$/.test(
+          error.message ?? '',
+        )
+          ? error.message
+          : 'codexRuntimeUnavailable',
+      });
+    }
   }
   if (
     ['/v1/images/updates', '/v1/images/updates?refresh=true'].includes(
@@ -332,7 +379,14 @@ const server = http.createServer(async (request, response) => {
     request.method === 'POST'
   ) {
     try {
-      if (!ready || installing || adopting || updater.busy || previews.busy)
+      if (
+        !ready ||
+        installing ||
+        adopting ||
+        updater.busy ||
+        previews.busy ||
+        codexCli.busy
+      )
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
       if (request.url === '/v1/update/plan')
@@ -367,7 +421,11 @@ const server = http.createServer(async (request, response) => {
       if (
         !ready ||
         (request.method === 'POST' &&
-          (installing || adopting || updater.busy || previews.busy))
+          (installing ||
+            adopting ||
+            updater.busy ||
+            previews.busy ||
+            codexCli.busy))
       )
         throw new Error('managerOperationInProgress');
       json(
@@ -400,7 +458,14 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.url === '/v1/backups/delete' && request.method === 'POST') {
     try {
-      if (!ready || installing || adopting || updater.busy || previews.busy)
+      if (
+        !ready ||
+        installing ||
+        adopting ||
+        updater.busy ||
+        previews.busy ||
+        codexCli.busy
+      )
         throw new Error('managerOperationInProgress');
       json(
         response,

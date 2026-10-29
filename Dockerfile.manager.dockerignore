@@ -7,10 +7,15 @@
 !manager/src/
 !manager/src/**
 !runtime/
-!runtime/preview-profile.cjs
-!runtime/preview-archive.cjs
 !deployment/browser/
 !deployment/browser/public-proxy.mjs
+!runtime/**
+!scripts/
+!scripts/build-codex-runtime.sh
+!scripts/package-codex-runtime.cjs
+!security/
+!security/codex-netlink/
+!security/codex-netlink/**
 !deployment/
 !deployment/config/
 !deployment/config/seccomp-bwrap.json

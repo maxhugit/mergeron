@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
@@ -37,7 +38,10 @@ test('all independent image checks run concurrently, including UI/docs-only PRs'
 
 test('required gate rejects every missing, failed or cancelled security job', () => {
   const gate = job(quality, 'quality');
-  assert.match(gate, /needs: \[checks, image, manager-image, browser-image\]/);
+  assert.match(
+    gate,
+    /needs: \[checks, image, manager-image, browser-image, cli-runtime\]/,
+  );
   assert.match(gate, /if: always\(\)/);
   assert.match(gate, /EXPECT_IMAGES:.*github\.event_name == 'pull_request'/);
   const script = gate.split('        run: |\n')[1].replace(/^          /gm, '');
@@ -46,6 +50,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
     IMAGE_RESULT: 'success',
     MANAGER_RESULT: 'success',
     BROWSER_RESULT: 'success',
+    CLI_RESULT: 'success',
     EXPECT_IMAGES: 'true',
   };
   const run = (overrides) =>
@@ -58,6 +63,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
     'IMAGE_RESULT',
     'MANAGER_RESULT',
     'BROWSER_RESULT',
+    'CLI_RESULT',
   ]) {
     for (const result of ['failure', 'cancelled', 'skipped', '']) {
       assert.notEqual(
@@ -73,6 +79,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
       IMAGE_RESULT: 'skipped',
       MANAGER_RESULT: 'skipped',
       BROWSER_RESULT: 'skipped',
+      CLI_RESULT: 'skipped',
     }),
     0,
   );
@@ -176,9 +183,125 @@ test('browser preparation is parallel but moving tags remain gated by quality', 
   assert.match(publish, /cancel-in-progress: false/);
   assert.match(
     job(publish, 'promote'),
-    /needs: \[quality, build, manager-build\]/,
+    /needs: \[quality, build, manager-build, cli-runtime\]/,
   );
   assert.match(job(publish, 'promote'), /scripts\/promote-image-pair\.sh/);
+});
+
+test('CLI installation and actual sandbox validation gate both PRs and promotion by immutable image digests', () => {
+  const cli = job(quality, 'cli-runtime');
+  assert.match(cli, /needs: \[image, manager-image\]/);
+  assert.match(cli, /needs\.image\.outputs\.digest/);
+  assert.match(cli, /needs\.manager-image\.outputs\.digest/);
+  const publishCli = job(publish, 'cli-runtime');
+  assert.match(publishCli, /needs: \[build, manager-build\]/);
+  assert.match(publishCli, /needs\.build\.outputs\.digest/);
+  assert.match(publishCli, /needs\.manager-build\.outputs\.digest/);
+  for (const block of [cli, publishCli]) {
+    assert.match(block, /smoke-test-managed-cli\.sh/);
+    assert.doesNotMatch(block, /continue-on-error:/);
+  }
+});
+
+test('CLI fixture establishes ownership before chmod with CHOWN only', () => {
+  const smoke = read('scripts/smoke-test-managed-cli.sh');
+  const initializer = smoke.slice(
+    smoke.indexOf('docker run --rm'),
+    smoke.indexOf('docker run -d'),
+  );
+  assert.match(initializer, /--cap-drop ALL --cap-add CHOWN/);
+  assert.match(initializer, /--read-only/);
+  assert.match(initializer, /--network none/);
+  assert.match(initializer, /--security-opt no-new-privileges:true/);
+  assert.doesNotMatch(
+    initializer,
+    /--privileged|--cap-add (?:ALL|FOWNER|DAC_OVERRIDE)/,
+  );
+  const source = initializer.match(/-e '([^']+)'/)[1];
+  for (const runnerUid of [1001, 0]) {
+    const owners = new Map(
+      ['home', 'workspace', 'run', 'state'].map((p) => [
+        '/fixture/' + p,
+        [runnerUid, runnerUid],
+      ]),
+    );
+    const modes = new Map();
+    const fs = {
+      chownSync: (path, uid, gid) => {
+        assert.ok(owners.has(path));
+        owners.set(path, [uid, gid]);
+      },
+      chmodSync: (path, mode) => {
+        // Root with all capabilities dropped cannot chmod another UID's inode.
+        assert.equal(
+          owners.get(path)?.[0],
+          0,
+          `chmod without ownership: ${path}`,
+        );
+        modes.set(path, mode);
+      },
+    };
+    runInNewContext(source, {
+      require: (name) => {
+        assert.equal(name, 'node:fs');
+        return fs;
+      },
+    });
+    assert.deepEqual(owners.get('/fixture/home'), [11002, 11002]);
+    assert.deepEqual(owners.get('/fixture/workspace'), [11002, 11002]);
+    assert.deepEqual(owners.get('/fixture/run'), [0, 11002]);
+    assert.deepEqual(owners.get('/fixture/state'), [0, 0]);
+    assert.equal(modes.get('/fixture/run'), 0o750);
+    assert.equal(modes.get('/fixture/state'), 0o700);
+  }
+});
+
+test('trusted fixture exports only approved evidence readable by a different runner UID', () => {
+  const probe = read('scripts/smoke-test-document-isolation.cjs');
+  const start = probe.indexOf("  if (process.argv[3] === '--netlink-route'");
+  const end = probe.indexOf('\n} finally {', start);
+  assert.ok(start > 0 && end > start);
+  const exporter = probe.slice(start, end);
+  const result = spawnSync(process.execPath, ['-e', `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const assert = require('node:assert/strict');
+    const { runInNewContext } = require('node:vm');
+    const fixture = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'mergeron-evidence-test-'));
+    try {
+      process.umask(0o077);
+      const workspace = path.join(fixture, 'workspace');
+      const source = path.join(workspace, 'artifacts/native-backend-visual');
+      const output = path.join(fixture, 'output');
+      fs.mkdirSync(source, { recursive: true });
+      fs.mkdirSync(output);
+      const png = Buffer.from('89504e470d0a1a0a', 'hex');
+      fs.writeFileSync(path.join(source, 'desktop.png'), png);
+      fs.writeFileSync(path.join(source, 'mobile.png'), png);
+      fs.writeFileSync(path.join(source, 'report.json'), '{}');
+      fs.writeFileSync(path.join(source, 'private-state'), 'must-not-export');
+      const context = {
+        fs, path, assert, workspace, console: { log() {} },
+        process: { argv: ['', '', '', '--netlink-route'], env: { MERGERON_NETLINK_EVIDENCE: output } },
+      };
+      runInNewContext(${JSON.stringify(exporter)}, context);
+      assert.deepEqual(fs.readdirSync(output).sort(), ['desktop.png', 'mobile.png', 'report.json']);
+      for (const name of fs.readdirSync(output)) {
+        assert.equal(fs.statSync(path.join(output, name)).mode & 0o777, 0o644);
+        assert.deepEqual(fs.readFileSync(path.join(output, name)), fs.readFileSync(path.join(source, name)));
+      }
+      assert.equal(fs.statSync(path.join(source, 'private-state')).mode & 0o777, 0o600);
+      assert.equal(process.umask(), 0o077);
+      assert.throws(() => runInNewContext(${JSON.stringify(exporter)}, context), { code: 'EEXIST' });
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  `], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const smoke = read('scripts/smoke-test-document-isolation.sh');
+  assert.match(smoke, /test -z "\$\(find "\$MERGERON_NETLINK_EVIDENCE"/);
+  assert.match(smoke, /--cap-drop ALL/);
+  assert.doesNotMatch(smoke, /--privileged|--cap-add/);
 });
 
 test('browser identity does not invalidate dependencies and cleanup', () => {

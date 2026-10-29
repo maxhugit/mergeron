@@ -32,6 +32,17 @@ describe('CodexJsonRpcClient', () => {
     client.destroy();
   });
 
+  it('reports an early CLI stdin failure without an unhandled EPIPE', async () => {
+    const observed = vi.fn();
+    client.on('error', observed);
+    const pending = client.request('initialize');
+    const error = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+    expect(() => proc.stdin!.emit('error', error)).not.toThrow();
+    expect(observed).toHaveBeenCalledWith(error);
+    proc.emit('close', 127, null);
+    await expect(pending).rejects.toThrow('Process exited');
+  });
+
   it('should resolve request when response arrives', async () => {
     const promise = client.request<{ ok: boolean }>('test/method', { foo: 1 });
 

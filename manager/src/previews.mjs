@@ -420,7 +420,7 @@ export class PreviewManager {
       archives.jsonArchive(true, 'ready'),
       '/control',
     );
-    if ((await this.docker.waitContainer(id)).StatusCode !== 0)
+    if ((await this.docker.waitContainer(id, 45000)).StatusCode !== 0)
       fail('PREVIEW_SYNC_FAILED');
     await this.removeObject(
       r,

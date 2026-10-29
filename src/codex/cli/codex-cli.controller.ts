@@ -31,6 +31,22 @@ export class CodexCliController {
   status(@Query('refresh') refresh?: string) {
     return this.cli.status(refresh === 'true');
   }
+  @Post('managed')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Install the Manager-shipped validated CLI and activate it while idle',
+  })
+  managed(
+    @Body()
+    body: {
+      releaseId?: string;
+      manifestSha256?: string;
+      expectedSelection?: string | null;
+    },
+  ) {
+    return this.cli.installManaged(body ?? {});
+  }
   @Get('releases')
   @ApiOperation({
     summary: 'List official stable release notes between installed and latest',

@@ -79,7 +79,8 @@
             "title": "Find your way around",
             "paragraphs": [
               "The sidebar lists projects and their resources. Collapsing it frees space without deleting anything. Agent tabs switch between the conversation and open tools.",
-              "The account menu contains personal preferences and sign-out. Server administration is separate from project settings."
+              "The account menu contains personal preferences and sign-out. Server administration is separate from project settings.",
+              "The Platform guide provides a chapter tree and local article search without querying your project data. On mobile, Contents opens navigation. Related articles, Previous and Next keep you in the guide; Copy link shares a direct link to an article."
             ]
           },
           {
@@ -209,7 +210,7 @@
           {
             "title": "What is a simple conversation for?",
             "paragraphs": [
-              "Use it to rewrite, translate, explain or prepare text. It uses the simple-chat provider and model configured by administration, not a Codex CLI work session.",
+              "Use it to rewrite, translate, explain or draft text. Choose its engine in Codex → Chat and Audio: OpenAI API key or Codex CLI session. Even in CLI mode, this chat remains separate from a work agent and does not execute its tools.",
               "An answer does not run an agent’s tools, create a Git branch or approve a deliverable. Do not assume simple chat has an agent’s access to working-folder files."
             ]
           },
@@ -220,7 +221,7 @@
               "Enter a request with the required context and send it.",
               "Refine your request as needed and review the answer before using it."
             ],
-            "warning": "Working Codex authentication is not sufficient to configure simple chat. Its API access must be configured separately. Do not paste secrets into requests."
+            "warning": "Check the selected engine with your administrator: API mode requires a configured key and CLI mode an available Codex session. There is no automatic API fallback after a CLI error. Do not paste secrets into your request."
           }
         ],
         "related": ["simple-messages", "response-copy", "admin-chat"]
@@ -315,7 +316,8 @@
             "paragraphs": [
               "An agent can work directly for a deliverable without a mandatory subtask. If the deliverable has a main task, explicitly selecting a subtask retains both links.",
               "In the Linked to header, the deliverable title opens its details. The adjacent folder icon opens the right-hand explorer directly at its directory without changing the agent’s execution folder.",
-              "When the dialog offers an existing agent, choose an available session in the same project that is not already assigned to another task or deliverable. Reusing it does not mean erasing its history."
+              "When the dialog offers an existing agent, choose an available session in the same project that is not already assigned to another task or deliverable. Reusing it does not mean erasing its history.",
+              "A new agent can be associated with a Git copy before its first message. You do not need to create conversation history to prepare the association. The first message starts its conversation; changing locations still requires directory and permission checks."
             ],
             "warning": "Execution actions may be restricted to administrators. Project access or creating a record does not automatically grant permission to run tools."
           }
@@ -540,7 +542,8 @@
             "title": "Prepare shared context",
             "paragraphs": [
               "Use project knowledge for lasting facts, vocabulary, constraints and validated decisions. Include sources and distinguish facts from assumptions.",
-              "AGENTS.md in a working folder contains agent instructions. Supplementary documents must be referenced and read according to those instructions; placing them in a folder does not guarantee automatic loading."
+              "AGENTS.md in a working folder contains agent instructions. Supplementary documents must be referenced and read according to those instructions; placing them in a folder does not guarantee automatic loading.",
+              "At each new turn, a linked agent receives a brief context: project identity, active directory, and titles of linked tasks or deliverables. It requests details through project tools when needed. The explicit conversation association determines its project; a Git path alone does not."
             ]
           },
           {
@@ -562,7 +565,95 @@
             "warning": "Memory does not replace permissions or fact-checking. Do not assume simple chat automatically reads the same files as a work agent."
           }
         ],
-        "related": ["agent-create", "integrations", "locations"]
+        "related": [
+          "agent-create",
+          "integrations",
+          "locations",
+          "agent-project-tools",
+          "admin-agent-instructions"
+        ]
+      },
+      {
+        "id": "agent-project-tools",
+        "title": "Read project data and create items with an agent",
+        "summary": "Use built-in project tools to read tasks, deliverables and links belonging to the conversation.",
+        "keywords": [
+          "internal MCP",
+          "context",
+          "tasks",
+          "deliverables",
+          "rename",
+          "project tools"
+        ],
+        "sections": [
+          {
+            "title": "Request project information",
+            "steps": [
+              "In an agent linked to the project, ask for example “List the project tasks” or “Read the Presentation deliverable”.",
+              "Specify the board or title when several items match; the agent can search and request the details you are allowed to access.",
+              "To change this conversation’s title, explicitly ask “Rename this agent Presentation preparation”. Renaming targets only the calling agent, including when its files are read-only."
+            ]
+          },
+          {
+            "title": "Create on an explicit request",
+            "paragraphs": [
+              "“Create a task Prepare the presentation” or “Create a Presentation deliverable with these criteria” creates an actual item and its link. A subtask requires an explicit parent in the same board; missing managers, agents and executions are not created automatically.",
+              "Creation requires administrator execution rights and a writable mode. Read-only mode still permits consultation. After an uncertain response, ask the agent to check the manager before repeating the request to avoid duplicates."
+            ],
+            "warning": "Creating a deliverable item does not save a document or approve a result. Retained documents use Save a new version; project and integration restrictions still apply."
+          },
+          {
+            "title": "Administrator reference",
+            "paragraphs": [
+              "Settings → Internal MCP lists methods, parameters, examples and permission rules from the server catalogue. This reference is not an execution console and grants no additional rights.",
+              "These tools are available to linked work agents; simple conversations do not receive this project channel."
+            ]
+          }
+        ],
+        "related": [
+          "agent-knowledge",
+          "task-board",
+          "deliverable-overview",
+          "integrations"
+        ]
+      },
+      {
+        "id": "agent-visual-checks",
+        "title": "Have an agent visually check an interface",
+        "summary": "Get desktop and mobile screenshots of the real site and distinguish automated checks from visual inspection.",
+        "keywords": [
+          "visual verification",
+          "desktop",
+          "mobile",
+          "screenshot",
+          "Chromium",
+          "mergeron-visual-check",
+          "sandbox"
+        ],
+        "sections": [
+          {
+            "title": "Describe the site and expected result",
+            "steps": [
+              "Request the interface creation or change and specify the page, feature to check and expected result.",
+              "The agent prepares an authorized test server and runs mergeron-visual-check with the real URL and a selector for the feature. A standalone tool smoke test does not check your site.",
+              "Results go in artifacts/visual-check within the working directory: desktop.png, mobile.png and report.json. The agent must open and inspect both images, fix issues within the request’s scope and repeat the check after corrections."
+            ]
+          },
+          {
+            "title": "Read the verification report",
+            "paragraphs": [
+              "The report distinguishes automated checks (page available and expected element visible), screenshot inspection (readability, layout, overflow, overlaps and controls), and any limitations. A passing assertion or existing PNG files does not prove visual inspection.",
+              "Default common instructions request this check after interface changes. An administrator can edit them; their text grants neither permissions nor a technical guarantee of execution. A question alone does not authorize starting a service."
+            ],
+            "warning": "If the server, browser, permissions or image viewer are unavailable, the agent must identify what remains unverified. It must not bypass the sandbox, publish a port or automatically add potentially confidential screenshots to Git or a PR."
+          }
+        ],
+        "related": [
+          "admin-agent-instructions",
+          "browser-annotation",
+          "agent-approvals",
+          "git-pr"
+        ]
       }
     ]
   },
@@ -752,6 +843,14 @@
               "Document deletion is logical and reversible through provided actions. Published documents retain protections for agents even with extended execution permissions."
             ],
             "warning": "Code and temporary files are not automatically published documents. Reopen a finalized deliverable before document changes."
+          },
+          {
+            "title": "Attach a document to a conversation",
+            "steps": [
+              "In a deliverable document’s ⋮ menu, or its file menu in the explorer, choose Attach to chat when the action is available.",
+              "Check the conversation and attachment in its draft, complete your request and explicitly send the message.",
+              "Menus group document, file and Git actions according to context; attaching a document changes neither its version nor its approval."
+            ]
           }
         ],
         "related": ["deliverable-lifecycle", "onlyoffice", "deliverable-agent"]
@@ -894,7 +993,8 @@
             "title": "Open the right location",
             "paragraphs": [
               "Open the explorer in the project or agent context and select a location. Context menus group available operations for folders, files and connections.",
-              "Text and images have suitable previews; PDFs use the integrated viewer. Supported office formats use OnlyOffice when configured. Archives can be browsed within application security limits."
+              "Text and images have suitable previews; PDFs use the integrated viewer. Supported office formats use OnlyOffice when configured. Archives can be browsed within application security limits.",
+              "The … menu at the end of a row groups file actions and, in a Git copy, differences and staging. Attach to chat is also available for supported deliverable documents; check the attachment and send the message yourself."
             ]
           },
           {
@@ -1113,6 +1213,15 @@
               "Automatic deletion after merge depends on repository settings. It does not delete local branches or retroactively clean every old remote branch."
             ],
             "warning": "Check source and target, especially when proposing changes to main. GitHub permissions and repository rules still apply."
+          },
+          {
+            "title": "From an already published remote branch",
+            "steps": [
+              "In the GitHub connection’s Remote view, open the published branch’s … menu and choose Create pull request.",
+              "No local copy or new push is needed if the intended commits are already published. Check the displayed source and destination branches.",
+              "Enter the title, description and draft option, then confirm. If the branch changed after opening the dialog, refresh the preparation; an existing open PR is reused."
+            ],
+            "warning": "Creation requires an authorized GitHub connection. Opening a PR does not merge the branch or publish local changes that have not been pushed."
           }
         ],
         "related": ["git-remote", "git-branches", "server-update"]
@@ -1141,7 +1250,7 @@
           {
             "title": "Open a view",
             "steps": [
-              "From an authorized agent, click Browser to open a view beside Conversation.",
+              "In an authorized agent, click Browser and choose Isolated browser (current). The local extension mode is a separate explicit choice, with no automatic fallback when a service is unavailable.",
               "Enter an HTTP(S) address and choose Open. Desktop can show the browser beside the conversation.",
               "Use mouse, wheel and keyboard. If another view controls the session, explicitly Take control.",
               "Release control when leaving. Clear session closes pages and destroys their temporary cookies."
@@ -1154,9 +1263,66 @@
               "Only public IPv4 destinations on HTTP port 80 and HTTPS port 443 are allowed. A redirect resolving to a private address is blocked even with HTTPS. Error messages distinguish missing configuration, unavailable runtime and navigation failures."
             ],
             "warning": "The live stream can show typed information. It is not automatically added to chat. Native dialogs such as some passkey QR codes, multimedia and file transfers are not fully supported. Access requires an authorized administrator."
+          },
+          {
+            "title": "Return to your views and sessions",
+            "paragraphs": [
+              "Open views, selection and layout are remembered per person and conversation within the Mergeron tab. Returning to a conversation reconnects a page that is still alive without reloading: forms, scrolling and website login remain in the remote session.",
+              "Each view has its own isolated context. The project’s Browser settings define the default page, initial split layout and popups for new sessions. Mobile views always use the full width.",
+              "If Mergeron is closed or suspended for too long, fifteen minutes of inactivity or a service restart may discard the page. The tab remains visible with a warning; use Open to start a new page, without automatically restoring entered data."
+            ]
           }
         ],
-        "related": ["browser-annotation", "infrastructure", "agent-approvals"]
+        "related": [
+          "browser-local",
+          "browser-annotation",
+          "infrastructure",
+          "agent-approvals"
+        ]
+      },
+      {
+        "id": "browser-local",
+        "title": "Pair your local browser using the extension",
+        "summary": "Explicitly share a Chrome, Edge or Safari on Mac tab with an agent using the preview extension.",
+        "keywords": [
+          "extension",
+          "local",
+          "Chrome",
+          "Edge",
+          "Safari",
+          "Mac",
+          "pairing",
+          "passkey",
+          "consent"
+        ],
+        "sections": [
+          {
+            "title": "Install and pair on desktop",
+            "steps": [
+              "In the agent, open Extension pairing (plug icon), or Browser → Local browser · extension (test). This preview is restricted to administrators outside impersonation mode.",
+              "For Chrome or Edge, download and extract the ZIP. In chrome://extensions or edge://extensions, enable developer mode and load the unpacked extension from the extracted folder.",
+              "In extension options, allow only your Mergeron instance’s HTTPS origin, then reload Mergeron. Keep Mergeron and the shared page in the same browser and profile.",
+              "Request pairing with this agent, compare the code in Mergeron and the extension, and confirm in the extension. On the intended HTTPS page, choose the agent and click Point, or Share / resume this tab for reading only."
+            ]
+          },
+          {
+            "title": "Safari on Mac: temporary installation",
+            "paragraphs": [
+              "Download the Safari package in the same dialog. Safari 18.4 or later on Mac: Settings → Developer → Add Temporary Extension, then select the Safari ZIP or its folder. If necessary, enable web developer features in Settings → Advanced.",
+              "Approve the unsigned extension yourself, configure the Mergeron HTTPS origin and follow the same pairing process. Safari removes this installation when it quits or after 24 hours: reinstall and pair again. This package does not support iPhone or iPad."
+            ]
+          },
+          {
+            "title": "Control actions and sharing duration",
+            "paragraphs": [
+              "The agent can request visible page text and propose actions on observed elements. Every action requires your approval in Mergeron. Closing the consent dialog approves nothing; rejected, expired or uncertain commands are not replayed.",
+              "You can close the pairing dialog while staying in the conversation: sharing remains active. Leaving the agent or closing Mergeron revokes sharing without closing your native tab. Navigation or reloading pauses sharing; explicitly resume it in the extension.",
+              "For login or a passkey, pause sharing and authenticate yourself in the native browser before sharing again. The Mergeron control page supports annotation only: agent commands are not allowed there."
+            ],
+            "warning": "Reading may transmit private text displayed on the page. Known field values, cookies and passkeys are not exported; this does not detect every secret. Share a suitable page and inspect each screenshot before approving it. Extension updates are manual."
+          }
+        ],
+        "related": ["browser-live", "browser-annotation", "agent-approvals"]
       },
       {
         "id": "browser-annotation",
@@ -1173,7 +1339,7 @@
         ],
         "sections": [
           {
-            "title": "Create a page comment",
+            "title": "With the isolated browser",
             "steps": [
               "Open the page and choose Point at an element. Live viewing pauses to prepare a separate capture.",
               "Select the visible element and write a precise change request.",
@@ -1188,9 +1354,19 @@
               "Pointing does not click a site button or start an agent. Refresh a changed page before retrying; a selector is not guaranteed stable."
             ],
             "warning": "Captures no longer systematically mask input fields. Check that no unwanted secret or personal information is visible before adding and sending the capture."
+          },
+          {
+            "title": "With the local browser: write in the chat",
+            "steps": [
+              "After pairing, open the extension icon on the foreground HTTPS page and choose Point. Sharing explicitly resumes even after navigation; Escape cancels the pointer.",
+              "Click the element: the website click is intercepted. Review the visible-area preview with its blue frame and marker 1.",
+              "Choose Add to message in Mergeron. The marked screenshot goes into this agent’s regular composer and preserves existing text; Cancel does not transmit the screenshot.",
+              "Write your instruction directly in the conversation, then send the message yourself. There is no separate comment field in the extension."
+            ],
+            "warning": "Masking fields and iframes in the local screenshot does not detect every secret. Inspect the image. After updating, reload Mergeron and the shared page and pair again; if attachment is not confirmed, check the draft before manually retrying."
           }
         ],
-        "related": ["browser-live", "agent-create"]
+        "related": ["browser-live", "browser-local", "agent-create"]
       }
     ]
   },
@@ -1330,18 +1506,19 @@
           {
             "title": "Before and during an update",
             "steps": [
-              "In Server, inspect Current version and the Update tab for availability.",
-              "Refresh detection searches for an image without installing it. Review channel and target image; change advanced settings only when you understand them.",
-              "Use Update, read the plan and confirm.",
-              "Follow progress and logs through downtime, backup, recreation and health checks.",
-              "After success, reload the interface and check important functions."
+              "In Settings → Server → Update, read the application version and Container updates cards: application, NGINX ingress, Squid egress and the browser when managed.",
+              "Refresh detection checks images without installing or downloading them. Each card shows the installed image, channel and availability; an unknown state or error does not mean “up to date”.",
+              "Choose Update for the intended component, or Replace with published image when migration of a known local browser is offered. Review the component and exact image digest in the plan, then confirm.",
+              "Even when only the selected image is upgraded, the entire stack stops and is recreated for a consistent backup and rollback. The progress monitor is prepared before server downtime; keep it open during the operation.",
+              "After success, reload the interface and check important features. View progress and logs reopens the result; if an older monitor is marked superseded, open the latest operation."
             ]
           },
           {
             "title": "Rollback and DEV mode",
             "paragraphs": [
               "When configured, Manager checks prerequisites and retains a backup. Failure can trigger recovery according to its tracking; do not ignore a recovery-required state.",
-              "Fast mode is limited to a dedicated DEV stack. It accelerates some stages without removing the complete backup or updating production."
+              "Fast mode is limited to a dedicated DEV stack. It accelerates some stages without removing the complete backup or updating production.",
+              "Detection requires compatible Manager and application versions. Other component images remain unchanged; the managed browser is still DEV-only. The Manager itself is updated from the host. Component publisher links do not provide a guaranteed summary of differences between two digests."
             ],
             "warning": "Do not run concurrent operations. Refreshing the application, updating Codex CLI and updating the server image are different actions."
           }
@@ -1406,8 +1583,9 @@
           {
             "title": "Managed browser in DEV",
             "paragraphs": [
-              "When explicitly enabled, Mergeron Browser joins inventory and global Manager transactions. Its public DNS 1.1.1.1 is reapplied during recreation and rollback without changing host DNS.",
-              "Inventory presence does not mean individual Restart or Update buttons exist. Server image detection concerns the application; browser runtime versions must stay compatible."
+              "When explicitly enabled on a DEV stack, Mergeron Browser appears in the inventory and participates in Manager transactions. Its public 1.1.1.1 DNS is reapplied during recreation and rollback without changing the host DNS.",
+              "Server → Update can detect and individually update its published image, like NGINX and Squid, with confirmation and a transaction affecting the entire stack. The browser image must remain compatible with the application. A locally built browser without a published digest may require Replace with published image; an unknown state does not prove it is up to date.",
+              "Infrastructure displays state and configuration; update actions are in the Update tab. The Manager itself remains administered from the host."
             ],
             "warning": "Do not disable the sandbox or expose its control port to fix errors. DEV-specific settings must not be implicitly applied to production."
           }
@@ -1434,7 +1612,8 @@
               "Open Codex administration and Account for required authentication.",
               "Choose models, reasoning, instructions and security in their configuration tabs.",
               "Use the fixed Save bar for the active tab. Other tab drafts are not automatically applied.",
-              "For a custom catalog, distinguish saving its draft from applying it with restart, and check inactivity before confirming."
+              "For a custom catalog, distinguish saving its draft from applying it with restart, and check inactivity before confirming.",
+              "Chat and Audio groups the simple chat and dictation engines, including without a connected Codex account when preparing API mode. Instructions also contains Common agent instructions, with its own save button independent of native Codex settings."
             ]
           },
           {
@@ -1446,36 +1625,77 @@
             "warning": "Back up Codex data first: returning to an older executable does not automatically restore potentially migrated data."
           }
         ],
-        "related": ["agent-composer", "agent-knowledge", "server-update"]
+        "related": [
+          "agent-composer",
+          "agent-knowledge",
+          "server-update",
+          "admin-chat",
+          "admin-agent-instructions"
+        ]
       },
       {
-        "id": "admin-chat",
-        "title": "Configure simple chat and AI assistance",
-        "summary": "Understand API prerequisites distinct from Codex sign-in.",
+        "id": "admin-agent-instructions",
+        "title": "Edit common instructions for work agents",
+        "summary": "Manage instance instructions delivered to work agents at the start of every new turn.",
         "keywords": [
-          "API key",
-          "simple chat",
-          "OpenAI",
-          "planning",
-          "model",
-          "provider"
+          "common instructions",
+          "administrator",
+          "visual verification",
+          "restore",
+          "12000"
         ],
         "sections": [
           {
-            "title": "Two different paths",
-            "paragraphs": [
-              "Simple chat and some AI planning features use their own provider, model and API-access configuration. Signing in to Codex does not configure these automatically.",
-              "Simple chat administration prepares those settings. Do not paste a key into a message, capture or shared document for troubleshooting."
+            "title": "Edit and save the text",
+            "steps": [
+              "As an administrator, open Settings → Codex → Instructions → Common agent instructions. This section remains available without a connected Codex account.",
+              "Edit the text within the 12,000-character limit and choose Save common instructions. Saving is independent of the native Codex settings button.",
+              "An empty text disables these instructions. Restore default text only prepares a draft: save it to apply it, or cancel the draft."
             ]
           },
           {
-            "title": "Check availability",
-            "steps": [
-              "Have an administrator verify simple-chat configuration and save changes.",
-              "Try a short request in a simple conversation and inspect the result or error.",
-              "If advice and AI planning also fail, check this API path before changing Codex CLI."
+            "title": "Understand the scope",
+            "paragraphs": [
+              "The setting is persistent and read again at every new turn for new and existing work agents. No restart is required; an ongoing turn is unchanged. Simple conversations do not receive these instructions.",
+              "The default text requests desktop and mobile checks of modified interfaces, actual screenshot inspection and disclosure of limitations. You can adapt it to your instance’s practices."
             ],
-            "warning": "Valid credentials do not guarantee available quota or model availability. Do not bypass a failure by granting broader execution permissions to an agent."
+            "warning": "Do not put secrets in text delivered to all work agents. It changes neither AGENTS.md, project instructions nor permissions. A text instruction does not guarantee that a check runs or authorize bypassing protections."
+          }
+        ],
+        "related": ["admin-codex", "agent-knowledge", "agent-visual-checks"]
+      },
+      {
+        "id": "admin-chat",
+        "title": "Configure simple chat and dictation engines",
+        "summary": "Choose chat and audio engines separately in Codex → Chat and Audio.",
+        "keywords": [
+          "Chat and Audio",
+          "API key",
+          "simple chat",
+          "OpenAI",
+          "Codex CLI",
+          "dictation",
+          "experimental",
+          "planning"
+        ],
+        "sections": [
+          {
+            "title": "Choose and save the engines",
+            "steps": [
+              "Open Settings → Codex → Chat and Audio. The former Simple chat entry is grouped into this tab, also available without a Codex login to configure API mode.",
+              "For simple chat, choose the OpenAI API key or Codex CLI session and complete the available options. A Codex login does not automatically configure the API path.",
+              "For dictation, choose the API key or Codex CLI — experimental. Without an explicit audio setting, dictation follows the chat engine; after saving an audio choice, changing the chat engine leaves it unchanged.",
+              "Save, then try a short conversation and dictation separately. Transcription stays in the draft for you to review and explicitly send."
+            ]
+          },
+          {
+            "title": "Diagnose failures without an implicit engine switch",
+            "paragraphs": [
+              "Chat and audio are independent. The API key is shared by features that explicitly select that engine; it is never used as a fallback after a CLI error. Check the relevant engine before changing the account or settings.",
+              "CLI dictation requires a Codex session authenticated with ChatGPT and depends on the CLI version and the account’s voice access. Only one CLI dictation can run per installation. Incompatibility, interruption or timeout returns an explicit error without an API fallback.",
+              "Some planning assistance still uses its API path: check those prerequisites separately. A valid key guarantees neither quota nor model availability."
+            ],
+            "warning": "Never paste a key into a message or screenshot. CLI dictation is experimental and must be tried with the installation’s account; broader agent permissions do not fix transcription failures."
           }
         ],
         "related": ["simple-chat", "task-planning", "admin-codex"]

@@ -178,6 +178,16 @@ export class DockerClient {
     );
   }
 
+  waitContainer(id, timeout = 180_000) {
+    return this.request(
+      `/containers/${encodeURIComponent(id)}/wait?condition=not-running`,
+      {
+        method: 'POST',
+        timeout,
+      },
+    );
+  }
+
   renameContainer(id, name) {
     return this.request(
       `/containers/${encodeURIComponent(id)}/rename?name=${encodeURIComponent(name)}`,
@@ -195,16 +205,6 @@ export class DockerClient {
 
   inspectImage(reference) {
     return this.request(`/images/${encodeURIComponent(reference)}/json`);
-  }
-
-  waitContainer(id) {
-    return this.request(
-      `/containers/${encodeURIComponent(id)}/wait?condition=not-running`,
-      {
-        method: 'POST',
-        timeout: 45000,
-      },
-    );
   }
 
   putArchive(id, archive, destination = '/workspace') {

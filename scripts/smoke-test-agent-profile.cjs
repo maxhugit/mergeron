@@ -78,21 +78,49 @@ const watchdog = setTimeout(() => { child.kill('SIGKILL'); console.error('Native
       assert.throws(()=>fs.writeFileSync('.git/native-tamper','forbidden'));
       assert.throws(()=>fs.writeFileSync('livrables/report.docx','forbidden'));
       console.log('native-files-protected');
+      if (process.argv[1] === '--netlink-route') {
+        assert.equal(typeof require('node:os').networkInterfaces(),'object');
+        cp.execFileSync('python3',['/agent-netlink-probe.py'],{stdio:'inherit',timeout:5000});
+        console.log('native-network-interfaces-ok');
+      }
       const {loopbackProbe,browserProbe}=await import('/app/scripts/environment-check.mjs');
       await loopbackProbe();
       console.log('native-loopback-ok');
       await browserProbe(15000);
       console.log('native-browser-ok');
+      if (process.argv[1] === '--netlink-route') {
+        const artifacts=process.cwd()+'/artifacts';
+        try { cp.execFileSync('mergeron-visual-check',['--start','node /agent-backend-fixture.cjs /app '+artifacts,
+          '--url','http://127.0.0.1:4173/help','--selector','#guide-article-title',
+          '--timeout','20000','--cwd',process.cwd(),'--output',artifacts+'/native-backend-visual'],
+          {encoding:'utf8',timeout:25000}); } catch(error) {
+            const log=fs.readFileSync(artifacts+'/native-backend-visual/server.log','utf8');
+            console.error('Sterile fixture startup:',log.slice(0,1600));
+            console.error('Sterile fixture listen:',log.split('\\n').filter(line=>/listen|started|Error:|EACCES|EPERM/i.test(line)).slice(0,5).join('\\n').slice(0,1200));
+            throw error;
+          }
+        const report=JSON.parse(fs.readFileSync(artifacts+'/native-backend-visual/report.json'));
+        assert.equal(report.success,true); assert.equal(report.sandbox,true);
+        assert.equal(report.captures.length,2);
+        console.log('native-real-backend-visual-ok');
+      }
       const rejected=cp.spawnSync('curl',['--disable','--fail','--silent','--show-error','--head','--max-time','3','https://example.invalid'],{encoding:'utf8',timeout:5000});
       assert.notEqual(rejected.status,0);
       assert.match(rejected.stderr,/403|denied|blocked/i,'Managed proxy must reject the destination, not merely fail DNS');
       console.log('native-profile-ok');
     })().catch(error=>{console.error('Sandboxed fixture probe failed:',error.code||'',error.message);process.exitCode=1;});
   `;
-  const result = await rpc('command/exec', { command: [process.execPath, '-e', code], cwd: root, sandboxPolicy, timeoutMs: 30000, outputBytesCap: 4096 });
+  const result = await rpc('command/exec', { command: [process.execPath, '-e', code, ...(process.argv[5] === '--netlink-route' ? ['--', '--netlink-route'] : [])], cwd: root, sandboxPolicy, timeoutMs: 30000, outputBytesCap: 4096 });
   console.log('Native profile: command completed');
   if (result.exitCode !== 0) console.error(JSON.stringify({ exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }));
   assert.equal(result.exitCode, 0, 'Loopback, sandboxed Chromium and enforced destination denial must work in the actual command sandbox');
+  if (process.argv[5] === '--netlink-route') {
+    assert.match(result.stdout, /native-network-interfaces-ok/);
+    assert.match(result.stdout, /privileged link operations denied; capabilities zero/);
+    assert.match(result.stdout, /native-real-backend-visual-ok/);
+    console.log('PASS: real Nest/Fastify backend and real guide rendered by sandboxed Chromium at desktop/mobile sizes');
+    console.log('PASS: real os.networkInterfaces succeeds inside the Core command sandbox');
+  }
   assert.match(result.stdout, /native-profile-ok/);
   console.log('PASS: actual Core sandbox preserves Git/documents, supports loopback and sandboxed Chromium, and denies an unlisted host');
 })().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => {

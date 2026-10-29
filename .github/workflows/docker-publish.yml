@@ -350,7 +350,9 @@ jobs:
         run: node scripts/release-version.mjs "${GITHUB_REF_NAME}"
 
       - name: Test the observe-only manager
-        run: node --test manager/test/*.test.mjs
+        run: |
+          node --test manager/test/*.test.mjs
+          node --test runtime/*.test.cjs
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -431,8 +433,40 @@ jobs:
           done
           exit 1
 
+  cli-runtime:
+    needs: [build, manager-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify the immutable app and Manager CLI pair before promotion
+        env:
+          APP: ghcr.io/maxhugit/mergeron@${{ needs.build.outputs.digest }}
+          MANAGER: ghcr.io/maxhugit/mergeron-manager@${{ needs.manager-build.outputs.digest }}
+          MERGERON_NETLINK_EVIDENCE: ${{ runner.temp }}/managed-cli-evidence
+        run: |
+          docker pull "$APP"
+          docker pull "$MANAGER"
+          mkdir "$MERGERON_NETLINK_EVIDENCE"
+          chmod 777 "$MERGERON_NETLINK_EVIDENCE"
+          bash scripts/smoke-test-managed-cli.sh "$APP" "$MANAGER"
+      - name: Preserve isolated backend visual evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: published-managed-cli-evidence
+          path: ${{ runner.temp }}/managed-cli-evidence/
+          if-no-files-found: warn
+
   promote:
-    needs: [quality, build, manager-build]
+    needs: [quality, build, manager-build, cli-runtime]
     runs-on: ubuntu-latest
     permissions:
       contents: read
