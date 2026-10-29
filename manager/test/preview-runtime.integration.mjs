@@ -26,6 +26,16 @@ if (
 const docker = new DockerClient(),
   admin = stack + '-admin',
   self = process.env.HOSTNAME;
+// Fixture-only diagnostics: method/path, never environment values or tokens.
+const dockerRequest = docker.request.bind(docker);
+docker.request = async (endpoint, options) => {
+  console.log(
+    'Fixture Docker:',
+    options?.method ?? 'GET',
+    endpoint.split('?')[0],
+  );
+  return dockerRequest(endpoint, options);
+};
 const network = await docker.inspectNetwork(admin);
 assert.equal(network.Internal, true);
 assert.equal(
@@ -231,6 +241,7 @@ try {
         memoryMb: 256,
       },
     };
+  console.log('Fixture phase: start Node preview');
   await manager.start(input);
   const transport = await manager.transport(input.runId),
     host = transport.publicHost;
@@ -295,6 +306,7 @@ try {
   results.push(
     'Direct preview gateway with scoped session; no infrastructure cookies/identity forwarded',
   );
+  console.log('Fixture phase: WebSocket');
   await websocket('http://127.0.0.1:8173/hmr', headers);
   results.push('WebSocket upgrade through both gateway and private relay');
   const runtime = manager.records.get(input.runId).runtimeId,
@@ -302,6 +314,7 @@ try {
       'server.js': server,
       'index.html': '<h1>Updated without commit or restart</h1>',
     });
+  console.log('Fixture phase: hot sync');
   await manager.sync({
     runId: input.runId,
     snapshotId: next.snapshotId,
@@ -354,6 +367,7 @@ try {
         memoryMb: 128,
       },
     };
+  console.log('Fixture phase: independent Python preview');
   await manager.start(second);
   const other = await manager.transport(second.runId);
   await ready(

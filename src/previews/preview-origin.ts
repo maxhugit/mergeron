@@ -11,3 +11,13 @@ export function isPreviewHost(host: unknown, domain: string | undefined) {
     return true;
   }
 }
+
+/** A sibling preview must not call even public authentication endpoints. */
+export function isPreviewOrigin(origin: unknown, domain: string | undefined) {
+  if (typeof origin !== 'string') return false;
+  try {
+    return isPreviewHost(new URL(origin).host, domain);
+  } catch {
+    return false;
+  }
+}

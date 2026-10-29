@@ -15,7 +15,7 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { normalizeForwardedPrefix, renderIndexHtml } from './public-base-path';
 import { FILES_SETTING_KEYS } from './settings/settings.definitions';
 import { SettingsService } from './settings/settings.service';
-import { isPreviewHost } from './previews/preview-origin';
+import { isPreviewHost, isPreviewOrigin } from './previews/preview-origin';
 
 /** Keeps generated SDK operation names stable across controller renames. */
 function operationIdFactory(controllerKey: string, methodKey: string): string {
@@ -33,6 +33,18 @@ async function bootstrap() {
     .getHttpAdapter()
     .getInstance()
     .addHook('onRequest', async (request, reply) => {
+      if (
+        process.env.MERGERON_PREVIEWS_ENABLED === 'true' &&
+        isPreviewOrigin(
+          request.headers.origin,
+          process.env.MERGERON_PREVIEW_DOMAIN,
+        )
+      ) {
+        await reply
+          .code(403)
+          .send('Preview origins cannot access the Mergeron application.');
+        return;
+      }
       if (
         isPreviewHost(request.headers.host, process.env.MERGERON_PREVIEW_DOMAIN)
       )

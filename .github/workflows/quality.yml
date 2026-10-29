@@ -190,7 +190,7 @@ jobs:
       - name: Test preview controls in Chromium and WebKit
         if: matrix.part == 'frontend'
         run: |
-          pnpm --dir web exec playwright install --with-deps chromium webkit
+          pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
           pnpm --dir web exec vitest run --project browser src/components/chat/agent-preview.browser.tsx
 
       - name: Build backend

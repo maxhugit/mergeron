@@ -40,7 +40,7 @@ docker network create --internal --driver bridge \
   --opt com.docker.network.bridge.gateway_mode_ipv4=isolated \
   --opt com.docker.network.bridge.gateway_mode_ipv6=isolated \
   --label "io.mergeron.preview-test=$preview_stack" --label "io.mergeron.stack=$preview_stack" "$preview_stack-admin"
-docker run --rm --name "$preview_stack-controller" \
+timeout --kill-after=10s 180s docker run --rm --name "$preview_stack-controller" \
   --label "io.mergeron.preview-test=$preview_stack" --label "io.mergeron.stack=$preview_stack" --label io.mergeron.component=manager \
   --network "$preview_stack-admin" --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --memory 512m --cpus 1 --pids-limit 128 --tmpfs /tmp:rw,nosuid,nodev,size=32m \

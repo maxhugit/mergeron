@@ -17,6 +17,7 @@ COPY web/package.json web/pnpm-lock.yaml* web/pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-web,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY web/ ./
+COPY runtime/preview-profile.cjs runtime/preview-profile.d.cts /app/runtime/
 RUN pnpm build
 
 # ── Stage 2: Backend build ───────────────────────────────────────────
