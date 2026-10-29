@@ -10,9 +10,19 @@ import {
 } from './codex-process-manager.service';
 import { catalogFixture } from './catalog/catalog.testing';
 import type { SettingsService } from '../settings/settings.service';
+import type { DocumentProtectionService } from '../document-publication/document-protection.service';
+import { AGENT_ENVIRONMENT_LAUNCHER } from './agent-environment';
 
-const mocks = vi.hoisted(() => ({ spawn: vi.fn() }));
+const mocks = vi.hoisted(() => ({ spawn: vi.fn(), cacheLauncher: false }));
 vi.mock('node:child_process', () => ({ spawn: mocks.spawn }));
+vi.mock('./agent-environment', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./agent-environment')>();
+  return {
+    ...actual,
+    agentEnvironmentCommand: (binary: string, args: string[]) =>
+      actual.agentEnvironmentCommand(binary, args, mocks.cacheLauncher),
+  };
+});
 
 /**
  * Builds a child stub that dies immediately, the way a transient spawn fault
@@ -38,6 +48,7 @@ describe('CodexProcessManager unattended start failures', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    mocks.cacheLauncher = false;
     fixture = catalogFixture();
     manager = new CodexProcessManager(fixture.storage, {
       getStringSetting: vi.fn(() => null),
@@ -83,6 +94,47 @@ describe('CodexProcessManager unattended start failures', () => {
     vi.useRealTimers();
     fixture.cleanup();
     mocks.spawn.mockReset();
+    vi.unstubAllEnvs();
+  });
+
+  it('runs the image cache launcher inside isolation with the sanitized environment', async () => {
+    mocks.cacheLauncher = true;
+    vi.stubEnv('WEBUI_API_KEY', 'private-canary');
+    const plan = {
+      home: fixture.home,
+      databasePath: join(fixture.home, 'application.sqlite'),
+      writableRoots: ['/workspaces/p'],
+      publishedRoots: ['/workspaces/p/livrables'],
+    };
+    manager = new CodexProcessManager(
+      fixture.storage,
+      {
+        getStringSetting: vi.fn(() => null),
+      } as unknown as SettingsService,
+      {
+        plan: vi.fn().mockResolvedValue(plan),
+      } as unknown as DocumentProtectionService,
+    );
+    await manager.onModuleInit();
+    const [binary, args, options] = mocks.spawn.mock.calls[0] as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv },
+    ];
+    expect(binary).toBe('/usr/bin/bwrap');
+    expect(args.slice(-6)).toEqual([
+      '--',
+      AGENT_ENVIRONMENT_LAUNCHER,
+      fixture.storage.paths.binary,
+      'app-server',
+      '--listen',
+      'stdio://',
+    ]);
+    expect(args.indexOf('/tmp')).toBeLessThan(
+      args.indexOf(AGENT_ENVIRONMENT_LAUNCHER),
+    );
+    expect(options.env.WEBUI_API_KEY).toBeUndefined();
+    expect(options.env.CODEX_HOME).toBe(fixture.home);
   });
 
   it('keeps retrying a transient first-boot failure instead of staying down', async () => {

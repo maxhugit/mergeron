@@ -87,6 +87,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_configure_dev_browser.py
           node --test scripts/ci-workflows.test.mjs
           node --test scripts/visual-check.test.mjs
+          node --test scripts/environment-check.test.mjs
 
       - name: Validate translation catalogs
         if: matrix.part == 'frontend'

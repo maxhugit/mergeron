@@ -34,6 +34,11 @@ le dire au lieu de prétendre avoir vérifié le rendu.
 
 ## Validation autonome
 
+Avant d’installer les dépendances ou de démarrer le site, utiliser le
+[contrôle préalable de l’environnement](environnement-agents.md) depuis le
+terminal de la session : `mergeron-environment-check --visual`. Il distingue les
+problèmes de caches, de proxy et de permissions ; il ne valide pas le rendu du site.
+
 Dans le conteneur de l’agent, avec son utilisateur habituel :
 
 ```sh
