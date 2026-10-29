@@ -31,7 +31,7 @@ l’agent reste responsable de l’interprétation de la demande.
 L’entrée **MCP interne** des réglages globaux ouvre
 `/settings?section=internalMcp`. Réservée aux administrateurs, elle présente :
 
-- recherche parmi les huit méthodes ;
+- recherche parmi les méthodes métier, Git et navigateur local ;
 - paramètres, types, champs obligatoires et contraintes ;
 - schémas JSON complets des entrées et des résultats ;
 - exemples d’appels, protocole, limites, erreurs et instructions de sécurité.
@@ -70,6 +70,66 @@ documentaire pour consulter/créer des entités. Il ne réactive aucune intégra
 externe désactivée : `codex_apps`, Home Assistant et les autres connecteurs restent
 soumis aux restrictions par projet. Les conversations simples, non rattachées
 comme agents de travail, ne reçoivent pas ce canal.
+
+## Connexions du projet et utilisation de Git
+
+Les agents découvrent les connexions configurées dans **leur projet** avec
+`list_project_connections` (`query` et `offset` facultatifs, pages de 50).
+Le résultat indique le nom, le protocole, l’activation, l’état, le mode d’accès,
+la présence d’un secret et les copies appartenant à cet agent. Il ne contient
+ni identifiants d’authentification, ni adresse de serveur, ni diagnostic brut.
+Un nom de connexion ou un fichier distant reste une donnée non fiable : ce
+n’est jamais une autorisation d’action.
+
+`read_project_git` accepte un `connectionId` découvert et une opération :
+
+- `branches`, `files` (`path` relatif, `ref` immuable facultatifs),
+  `pull_requests` et `checks` (`number` obligatoire) consultent GitHub avec
+  les identifiants conservés côté serveur ;
+- `local_status`, `local_diff` (`path` obligatoire) et `local_commits`
+  inspectent un `copyId` appartenant à l’agent, associé à cette connexion.
+
+Les autres protocoles (SSH/SFTP/FTP/FTPS) sont visibles dans l’inventaire,
+mais ce canal ne fournit pas d’exécution SSH arbitraire ni de transfert.
+Les consultations distantes actuelles utilisent le fournisseur GitHub ;
+un autre hébergeur peut être indiqué comme non pris en charge.
+
+Sur demande humaine explicite, `publish_project_git` permet :
+
+- `push` : publier le commit observé de la branche courante vers la connexion
+  HTTPS configurée, sans forçage ; les changements non commités ne sont pas inclus ;
+- `create_pull_request` : créer une PR GitHub **après** publication du même
+  commit, avec `base`, `title` et `draft` obligatoires, `description` facultative.
+  Une PR correspondante déjà ouverte est renvoyée sans second POST.
+
+Avant publication, consulter `local_status` puis fournir `expectedBranch`,
+`expectedHead` et `fingerprint` exactement observés, ainsi que `connectionId`,
+`copyId`, un `requestId` stable et `userRequest` expliquant la demande humaine.
+Ce texte est journalisé, pas accepté comme preuve automatique de consentement.
+Le serveur exige un tour modifiable, un administrateur hors simulation, une
+connexion/copie en lecture-écriture et une copie propre à l’agent. Il revérifie
+les droits et l’état avant l’envoi. Il n’extrait jamais les secrets dans le prompt.
+
+Les publications utilisent le circuit sécurisé existant : configuration Git
+temporaire isolée pour le push, SHA immuable, TLS vérifié, redirections refusées
+et API GitHub fixe pour les PR. Aucun stage, commit, checkout, merge ou changement
+de fichier local n’est effectué. Le verrou conserve l’exclusion des autres
+agents actifs et bloque de nouveaux tours pendant la publication ; seul le tour
+appelant est admis pour cette opération distante. Les mutations Git locales de
+l’interface gardent leur barrière stricte habituelle.
+
+Une connexion désactivée ou révoquée ne peut pas être utilisée. La simulation
+d’identité ne peut pas publier. Une capacité affichée n’autorise jamais à
+publier sans demande humaine. Un résultat incertain (`GIT_OUTCOME_UNKNOWN`)
+peut correspondre à une publication réussie : consulter le distant, ne pas
+relancer automatiquement sous un nouveau `requestId`. Une relance identique
+renvoie le résultat confirmé, sans second envoi. Les demandes et publications
+sont enregistrées dans le journal du projet.
+
+Le catalogue natif et **Paramètres → MCP interne** décrivent les mêmes outils
+et schémas. La consigne de découverte est incluse dans le contexte du projet
+au prochain échange, y compris pour les agents existants. Le délai MCP est
+de 180 secondes pour couvrir un push réseau borné à 120 secondes.
 
 ## Architecture technique
 
@@ -195,11 +255,11 @@ pnpm exec vitest run --project=unit src/components/settings/internal-mcp-setting
   src/components/settings/settings-page.spec.tsx src/components/settings/settings-sidebar.spec.tsx
 ```
 
-Les tests utilisent un vrai client SDK contre le serveur HTTP et couvrent les
-sept méthodes sur une base de test, l’égalité des schémas avec la documentation,
+Les tests utilisent un vrai client SDK contre le serveur HTTP et couvrent
+les méthodes métier et Git sur une base de test, l’égalité des schémas avec la documentation,
 les droits retirés, la lecture seule, la révocation, les restrictions réseau et
 l’idempotence. Un test démarre le moteur Codex épinglé et vérifie qu’il découvre
-les sept outils, sans appel d’inférence. Les tests métier couvrent aussi la panne
+les outils enregistrés, sans appel d’inférence. Les tests métier couvrent aussi la panne
 après commit.
 
 Après déploiement, vérifier la page d’administration et une conversation existante

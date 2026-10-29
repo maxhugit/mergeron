@@ -36,6 +36,12 @@ import {
   gitStateFingerprint,
 } from './workspace-git.service';
 
+/** Server-only capability, never parsed from an HTTP request body. */
+export interface AgentGitPublisher {
+  threadId: string;
+  assertActive: () => void;
+}
+
 @Injectable()
 export class WorkspaceGitActionsService {
   constructor(
@@ -989,10 +995,31 @@ export class WorkspaceGitActionsService {
     });
   }
 
-  async push(projectId: string, copyId: string, body: Record<string, unknown>) {
+  private remotePublication<T>(
+    publisher: AgentGitPublisher | undefined,
+    body: Record<string, unknown>,
+    operation: () => Promise<T>,
+  ) {
+    if (!publisher) return this.gate.mutate(operation);
+    if (body.agentThreadId !== publisher.threadId)
+      throw new ForbiddenException('GIT_COPY_OWNED');
+    requireThreadAccess(publisher.threadId);
+    publisher.assertActive();
+    return this.gate.publishFromAgent(publisher.threadId, async () => {
+      publisher.assertActive();
+      return operation();
+    });
+  }
+
+  async push(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    publisher?: AgentGitPublisher,
+  ) {
     requireExecutionAccess();
     this.body(body);
-    return this.gate.mutate(async () => {
+    return this.remotePublication(publisher, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { source, cwd, state, branch } = await this.copyState(
         projectId,
@@ -1049,6 +1076,12 @@ export class WorkspaceGitActionsService {
         );
         if (current.source.resource.address !== body.address)
           throw new ConflictException('GIT_STALE');
+        if (
+          (current.source.secret?.token || current.source.secret?.password) !==
+          env.MERGERON_GIT_TOKEN
+        )
+          throw new ConflictException('GIT_STALE');
+        publisher?.assertActive();
         await this.git.git(
           folder,
           [
@@ -1086,11 +1119,12 @@ export class WorkspaceGitActionsService {
     projectId: string,
     copyId: string,
     body: Record<string, unknown>,
+    publisher?: AgentGitPublisher,
   ) {
     requireExecutionAccess();
     this.body(body);
     const pr = this.pullRequestInput(body, 'CREATE_PULL_REQUEST');
-    return this.gate.mutate(async () => {
+    return this.remotePublication(publisher, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { copy, source, cwd, state, branch } = await this.copyState(
         projectId,
@@ -1126,6 +1160,7 @@ export class WorkspaceGitActionsService {
       );
       if (prepared.head !== state.head)
         throw new ConflictException('GIT_PR_PUSH_REQUIRED');
+      publisher?.assertActive();
       if (prepared.existingNumber)
         return {
           number: prepared.existingNumber,
@@ -1140,6 +1175,7 @@ export class WorkspaceGitActionsService {
         this.git.github(projectId, copy.sourceResourceId)?.token !== repo.token
       )
         throw new ConflictException('GIT_STALE');
+      publisher?.assertActive();
       return this.postPullRequest(
         projectId,
         copyId,

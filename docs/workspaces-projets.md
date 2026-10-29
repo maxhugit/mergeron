@@ -18,6 +18,23 @@ Une référence dont la ressource a été détachée, dont le dossier a disparu 
 
 ## Organisation du principal
 
+### Caches techniques et erreurs d’inspection Git
+
+Le dépôt Mergeron exclut `.build-cache/` à toute profondeur dans `.gitignore`.
+Les caches restent sur disque ; les fichiers déjà suivis ne sont pas retirés
+de l’index. Pour une copie existante encore sur une ancienne révision, la même
+règle peut être ajoutée à `.git/info/exclude` sans modifier les fichiers suivis.
+
+Une inspection qui dépasse **1 Mio de sortie** indique désormais cette limite
+et conseille de vérifier les fichiers non suivis et les exclusions. Un délai
+dépassé affiche un message distinct. La limite n’est pas augmentée et aucun
+diagnostic Git brut, susceptible de contenir un secret, n’est exposé.
+
+Les agents peuvent [consulter les connexions de leur projet et publier avec Git
+via le MCP interne](contexte-et-outils-agents.md#connexions-du-projet-et-utilisation-de-git).
+
+### Structure
+
 | Chemin relatif                         | Usage                                                  |
 | -------------------------------------- | ------------------------------------------------------ |
 | `.mergeron/project.json`               | Marqueur de propriété et version de structure          |

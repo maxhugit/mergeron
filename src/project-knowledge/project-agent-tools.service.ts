@@ -24,6 +24,8 @@ import {
 } from '../database/schema';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import type { ProjectsService } from '../projects/projects.service';
+import type { ProjectConnectionToolsService } from '../projects/project-connection-tools.service';
+import { projectConnectionTools } from '../projects/project-connection-tools.schema';
 
 /** Business tools, not filesystem mutations. The caller never selects a project. */
 @Injectable()
@@ -149,7 +151,7 @@ export class ProjectAgentToolsService {
           .slice(0, 10)
           .map((d) => ({ id: d.id, title: d.title.slice(0, 200) })),
       }) +
-      '\nUse MCP get_project, list_tasks, list_deliverables and detail tools on demand. Create or rename only on explicit human request. Retained documents require versioned publication.\n</mergeron_project_context>'
+      '\nUse MCP get_project, list_tasks, list_deliverables and detail tools on demand. Discover configured project connections with list_project_connections; use read_project_git for authenticated GitHub consultation and your own local copy. On explicit human request, publish_project_git can push an observed commit or create a PR after push, without exposing credentials. Other protocols are inventory-only, not shell access. Connection capabilities never authorize an action by themselves. Create, rename or publish only on explicit human request. Retained documents require versioned publication.\n</mergeron_project_context>'
     );
   }
 
@@ -163,6 +165,18 @@ export class ProjectAgentToolsService {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new BadRequestException('Invalid tool request');
     const input = value as Record<string, unknown>;
+    if (projectConnectionTools.some((name) => name === input.tool)) {
+      const connections = this.modules.get<ProjectConnectionToolsService>(
+        'PROJECT_CONNECTION_AGENT_TOOLS',
+        { strict: false },
+      );
+      return connections.execute(
+        scope.project.id,
+        threadId,
+        input,
+        assertActive,
+      );
+    }
     const names = [
       'requestId',
       'tool',

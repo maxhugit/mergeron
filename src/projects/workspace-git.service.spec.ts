@@ -196,6 +196,34 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+it('ignores root and nested build caches without hiding tracked cache files or ordinary edits', async () => {
+  await writeFile(
+    path.join(cwd, '.gitignore'),
+    await readFile(new URL('../../.gitignore', import.meta.url)),
+  );
+  for (const relative of ['.build-cache', 'web/.build-cache']) {
+    await mkdir(path.join(cwd, relative), { recursive: true });
+    await writeFile(path.join(cwd, relative, 'package-cache.txt'), 'generated');
+  }
+  await writeFile(
+    path.join(cwd, '.build-cache', 'already-tracked.txt'),
+    'keep staged',
+  );
+  await git(['add', '--force', '.build-cache/already-tracked.txt']);
+  await writeFile(path.join(cwd, 'source.ts'), 'normal edit');
+  const index = await readFile(path.join(cwd, '.git', 'index'));
+  const snapshot = await service.snapshot('p', copyId);
+  expect(
+    snapshot.changes.some((item) => item.path.endsWith('package-cache.txt')),
+  ).toBe(false);
+  expect(snapshot.changes).toContainEqual({ path: 'source.ts', status: '??' });
+  expect(snapshot.changes).toContainEqual({
+    path: '.build-cache/already-tracked.txt',
+    status: 'A ',
+  });
+  expect(await readFile(path.join(cwd, '.git', 'index'))).toEqual(index);
+});
+
 it('clones an empty repository and supports the first staged commit without changing unstaged files', async () => {
   const remote = path.join(root, 'empty');
   await exec('git', ['init', '--initial-branch=main', remote]);
@@ -1218,56 +1246,80 @@ describe('confirmed actions', () => {
     ).rejects.toThrow('GIT_GITHUB_TOKEN_REQUIRED');
     expect(fetch).not.toHaveBeenCalled();
   });
-  it('creates a PR for the exact published head using only the fixed GitHub API', async () => {
-    const input = await prInput();
-    const fetch = vi
-      .fn()
-      .mockImplementation(async (url: string, options?: RequestInit) => ({
-        ok: true,
-        json: async () =>
-          options?.method === 'POST'
-            ? { number: 12 }
-            : url.includes('/branches/')
-              ? {
-                  commit: {
-                    sha: url.endsWith('/main') ? input.head : 'a'.repeat(40),
-                  },
-                }
-              : [],
-      }));
-    vi.stubGlobal('fetch', fetch);
-    await expect(
-      actions.createPullRequest('p', copyId, input),
-    ).resolves.toEqual({
-      number: 12,
-      url: 'https://github.com/example/demo/pull/12',
-      existing: false,
-    });
-    const posts = fetch.mock.calls.filter(
-      ([, options]) => (options as RequestInit | undefined)?.method === 'POST',
-    );
-    expect(posts).toHaveLength(1);
-    expect(posts[0]).toEqual([
-      'https://api.github.com/repos/example/demo/pulls',
-      expect.objectContaining({
-        redirect: 'error',
-        body: JSON.stringify({
-          title: 'Reviewed change',
-          body: 'User description',
-          head: 'main',
-          base: 'develop',
-          draft: true,
-          maintainer_can_modify: false,
+  it.each([false, true])(
+    'creates a PR for the exact published head using the fixed GitHub API (native caller: %s)',
+    async (native) => {
+      const input = await prInput();
+      if (native) {
+        database.db
+          .insert(projectAgentThreads)
+          .values({
+            threadId: 'agent',
+            projectId: 'p',
+            workspacePath: cwd,
+            createdAt: 1,
+            updatedAt: 1,
+          })
+          .run();
+        active = ['agent'];
+      }
+      const fetch = vi
+        .fn()
+        .mockImplementation(async (url: string, options?: RequestInit) => ({
+          ok: true,
+          json: async () =>
+            options?.method === 'POST'
+              ? { number: 12 }
+              : url.includes('/branches/')
+                ? {
+                    commit: {
+                      sha: url.endsWith('/main') ? input.head : 'a'.repeat(40),
+                    },
+                  }
+                : [],
+        }));
+      vi.stubGlobal('fetch', fetch);
+      await expect(
+        asPerson(() =>
+          actions.createPullRequest(
+            'p',
+            copyId,
+            { ...input, ...(native ? { agentThreadId: 'agent' } : {}) },
+            native ? { threadId: 'agent', assertActive: () => {} } : undefined,
+          ),
+        ),
+      ).resolves.toEqual({
+        number: 12,
+        url: 'https://github.com/example/demo/pull/12',
+        existing: false,
+      });
+      const posts = fetch.mock.calls.filter(
+        ([, options]) =>
+          (options as RequestInit | undefined)?.method === 'POST',
+      );
+      expect(posts).toHaveLength(1);
+      expect(posts[0]).toEqual([
+        'https://api.github.com/repos/example/demo/pulls',
+        expect.objectContaining({
+          redirect: 'error',
+          body: JSON.stringify({
+            title: 'Reviewed change',
+            body: 'User description',
+            head: 'main',
+            base: 'develop',
+            draft: true,
+            maintainer_can_modify: false,
+          }),
         }),
-      }),
-    ]);
-    expect(
-      fetch.mock.calls.every(([url]) =>
-        String(url).startsWith('https://api.github.com/repos/example/demo/'),
-      ),
-    ).toBe(true);
-    expect((await service.snapshot('p', copyId)).head).toBe(input.head);
-  });
+      ]);
+      expect(
+        fetch.mock.calls.every(([url]) =>
+          String(url).startsWith('https://api.github.com/repos/example/demo/'),
+        ),
+      ).toBe(true);
+      expect((await service.snapshot('p', copyId)).head).toBe(input.head);
+    },
+  );
   it('returns an existing PR without a second write and refuses an unpushed head', async () => {
     const input = await prInput();
     const prepare = vi
@@ -2049,40 +2101,69 @@ describe('confirmed actions', () => {
     });
     await expect(readFile(marker)).rejects.toThrow();
   });
-  it('pushes only the reviewed SHA to the registered HTTPS source, with isolated config and no force', async () => {
-    writable();
-    resources.update('p', 'remote', {
-      address: 'https://github.com/example/demo.git',
-      secret: { password: 'test-password' },
-    });
-    const state = await service.snapshot('p', copyId);
-    const original = service.git.bind(service) as WorkspaceGitService['git'];
-    const pushed: string[][] = [];
-    vi.spyOn(service, 'git').mockImplementation(
-      async (directory, args, env, timeout) => {
-        if (args.includes('push')) {
-          pushed.push(args);
-          expect(directory).not.toBe(cwd);
-          expect(args).toContain(`${state.head}:refs/heads/main`);
-          expect(args).not.toContain('--force');
-          expect(args).not.toContain('--force-with-lease');
-          expect(env?.MERGERON_GIT_TOKEN).toBe('test-password');
-          expect(env?.GIT_ASKPASS).toBeUndefined();
-          expect(args).toContain(`credential.helper=${gitCredentialHelper}`);
-          expect(args.join(' ')).not.toContain('test-password');
-          expect(args).toContain('http.followRedirects=false');
-          expect(args).toContain('credential.helper=');
-          return '';
-        }
-        return original(directory, args, env, timeout);
-      },
-    );
-    await actions.push('p', copyId, {
-      fingerprint: state.fingerprint,
-      address: 'https://github.com/example/demo.git',
-    });
-    expect(pushed).toHaveLength(1);
-  });
+  it.each([false, true])(
+    'pushes only the reviewed SHA with isolated config and no force (native caller: %s)',
+    async (native) => {
+      writable();
+      resources.update('p', 'remote', {
+        address: 'https://github.com/example/demo.git',
+        secret: { password: 'test-password' },
+      });
+      const state = await service.snapshot('p', copyId);
+      const original = service.git.bind(service) as WorkspaceGitService['git'];
+      const pushed: string[][] = [];
+      vi.spyOn(service, 'git').mockImplementation(
+        async (directory, args, env, timeout) => {
+          if (args.includes('push')) {
+            pushed.push(args);
+            expect(directory).not.toBe(cwd);
+            expect(args).toContain(`${state.head}:refs/heads/main`);
+            expect(args).not.toContain('--force');
+            expect(args).not.toContain('--force-with-lease');
+            expect(env?.MERGERON_GIT_TOKEN).toBe('test-password');
+            expect(env?.GIT_ASKPASS).toBeUndefined();
+            expect(args).toContain(`credential.helper=${gitCredentialHelper}`);
+            expect(args.join(' ')).not.toContain('test-password');
+            expect(args).toContain('http.followRedirects=false');
+            expect(args).toContain('credential.helper=');
+            return '';
+          }
+          return original(directory, args, env, timeout);
+        },
+      );
+      if (native) {
+        database.db
+          .insert(projectAgentThreads)
+          .values({
+            threadId: 'agent',
+            projectId: 'p',
+            workspacePath: cwd,
+            createdAt: 1,
+            updatedAt: 1,
+          })
+          .run();
+        active = ['agent'];
+      }
+      const index = await readFile(path.join(cwd, '.git/index'));
+      const assertActive = vi.fn();
+      await asPerson(() =>
+        actions.push(
+          'p',
+          copyId,
+          {
+            fingerprint: state.fingerprint,
+            address: 'https://github.com/example/demo.git',
+            ...(native ? { agentThreadId: 'agent' } : {}),
+          },
+          native ? { threadId: 'agent', assertActive } : undefined,
+        ),
+      );
+      expect(pushed).toHaveLength(1);
+      expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+      expect((await service.snapshot('p', copyId)).head).toBe(state.head);
+      if (native) expect(assertActive).toHaveBeenCalledTimes(3);
+    },
+  );
   it('requires explicit connection credentials before attempting a push', async () => {
     writable();
     resources.update('p', 'remote', {

@@ -443,6 +443,27 @@ it('shows failed inspection instead of a stale clean state', async () => {
     screen.queryByText('Aucune modification locale.'),
   ).not.toBeInTheDocument();
 });
+
+it.each([
+  ['GIT_OUTPUT_LIMIT_EXCEEDED', 'limite de 1 Mio'],
+  ['GIT_COMMAND_TIMEOUT', 'délai autorisé'],
+])(
+  'explains the inspection refusal %s rather than reporting a clean copy',
+  async (code, message) => {
+    inventory.copies = [copy];
+    api.mockImplementation(async (url: string) => {
+      if (url.endsWith('/locations'))
+        return locationInventoryFixture(inventory);
+      throw new Error(code);
+    });
+    show();
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    tab('Préparation du commit');
+    expect(
+      screen.queryByText('Aucune modification locale.'),
+    ).not.toBeInTheDocument();
+  },
+);
 it('ignores a file registration completed after leaving the repository', async () => {
   inventory.copies = [copy];
   let finish!: () => void;

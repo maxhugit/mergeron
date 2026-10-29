@@ -22,7 +22,7 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
       json: async () => ({
         server: {
           name: 'mergeron_internal',
-          version: '1.0.0',
+          version: '1.2.0',
           transport: 'Streamable HTTP',
         },
         instructions: 'Only explicit human requests authorize creation.',
@@ -30,6 +30,35 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
         limits: { turnCalls: 100 },
         errors: ['READ_ONLY'],
         tools: [
+          {
+            name: 'publish_project_git',
+            title: 'Publish with Git',
+            description: 'Push an observed commit on explicit request.',
+            descriptionFr: 'Publier un commit observé sur demande explicite.',
+            readOnly: false,
+            inputSchema: {
+              type: 'object',
+              properties: {
+                connectionId: { type: 'string', maxLength: 100 },
+                expectedBranch: { type: 'string', maxLength: 200 },
+                expectedHead: { type: 'string', pattern: '^[a-f0-9]{40,64}$' },
+              },
+              required: ['connectionId', 'expectedBranch', 'expectedHead'],
+              additionalProperties: false,
+            },
+            outputSchema: {
+              type: 'object',
+              properties: {
+                operation: { type: 'string' },
+                data: { type: 'object' },
+              },
+            },
+            example: {
+              connectionId: 'git-project',
+              expectedBranch: 'feature/example',
+              expectedHead: 'a'.repeat(40),
+            },
+          },
           {
             name: 'create_deliverable',
             title: 'Create deliverable',
@@ -69,11 +98,26 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
   const tool = await screen.findByText('create_deliverable');
   fireEvent.click(tool.closest('summary')!);
   await screen.findByText('Créer un livrable.');
+  fireEvent.click(screen.getByText('publish_project_git').closest('summary')!);
+  expect(screen.getAllByText('Modification')).toHaveLength(2);
+  document.documentElement.classList.add('dark');
   for (const width of [1000, 390]) {
     await page.viewport(width, 800);
-    expect(screen.getByRole('table')).toBeVisible();
+    expect(screen.getAllByRole('table')).toHaveLength(2);
+    for (const table of screen.getAllByRole('table'))
+      expect(table).toBeVisible();
     expect(screen.getByText('requestId')).toBeVisible();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    if (width === 390) {
+      const wrapper = screen.getAllByRole('table')[0].parentElement!;
+      expect(wrapper.scrollWidth).toBeGreaterThan(wrapper.clientWidth);
+      wrapper.scrollLeft = wrapper.scrollWidth;
+      expect(wrapper.scrollLeft).toBeGreaterThan(0);
+      wrapper.scrollLeft = 0;
+    }
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/project-git-mcp-${width}.png`,
+    });
   }
   client.clear();
 });

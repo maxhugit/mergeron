@@ -188,6 +188,8 @@
   "gitCopyHelp": "Crée une copie isolée. Le dossier actif de l’agent et ses fichiers restent inchangés.",
   "gitConfirmCopy": "Créer la copie",
   "gitInspectionError": "Impossible d’inspecter cette copie. Actualisez ou vérifiez sa disponibilité.",
+  "gitInspectionOutputLimit": "La sortie Git dépasse la limite de 1 Mio. Vérifiez notamment les fichiers non suivis et excluez les caches techniques (par exemple .build-cache/) dans .gitignore, puis actualisez.",
+  "gitInspectionTimeout": "La commande Git n’a pas répondu dans le délai autorisé. Vérifiez la disponibilité du disque ou, pour une opération distante, du réseau, puis réessayez.",
   "gitBrowseError": "Impossible d’ouvrir les fichiers de cette copie.",
   "gitTabFiles": "Fichiers",
   "gitTabChanges": "Préparation du commit",
