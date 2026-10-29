@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { PreviewManager, previewCatalog } from '../src/previews.mjs';
+import http from 'node:http';
 import archives from '../../runtime/preview-archive.cjs';
 
 const roots = [];
@@ -22,6 +23,7 @@ class Docker {
     this.created = [];
     this.calls = [];
     this.version = '28.2.2';
+    this.httpStatus = 200;
   }
   async inspectContainer(id) {
     if (id === 'stack-ui')
@@ -76,7 +78,24 @@ class Docker {
     return { Id: id };
   }
   async startContainer(id) {
-    this.containers.get(id).State.Running = true;
+    const container = this.containers.get(id);
+    container.State.Running = true;
+    if (container.Config.Labels['io.mergeron.component'] === 'preview-relay') {
+      container.State.Health = this.health();
+    }
+  }
+  health() {
+    const ready = this.httpStatus >= 200 && this.httpStatus < 400;
+    return {
+      Status: ready ? 'healthy' : 'unhealthy',
+      Log: [
+        {
+          End: new Date().toISOString(),
+          ExitCode: ready ? 0 : 1,
+          Output: JSON.stringify({ ready, httpStatus: this.httpStatus }),
+        },
+      ],
+    };
   }
   async stopContainer(id) {
     this.containers.get(id).State.Running = false;
@@ -187,7 +206,6 @@ async function fixture() {
     configuration,
     env,
     self: 'self',
-    probe: async () => ({ ready: true, httpStatus: 200 }),
   });
   await manager.ready;
   const exportSource = (snapshotId = randomUUID()) => {
@@ -381,7 +399,6 @@ test('recovers running jobs across Manager restart and refuses changed ownership
     configuration: f.configuration,
     env: f.env,
     self: 'self',
-    probe: async () => ({ ready: true, httpStatus: 200 }),
   });
   await restarted.ready;
   assert.equal((await restarted.status(f.input.runId)).state, 'running');
@@ -395,15 +412,45 @@ test('recovers running jobs across Manager restart and refuses changed ownership
 });
 test('does not announce a URL until the application answers HTTP, not only Docker running', async () => {
   const f = await fixture();
-  f.manager.probe = async () => ({ ready: false, httpStatus: 503 });
+  f.docker.httpStatus = 503;
   const starting = await f.manager.start(f.input);
   assert.equal(starting.state, 'running');
   assert.equal(starting.ready, false);
   assert.equal(starting.url, null);
-  f.manager.probe = async () => ({ ready: true, httpStatus: 200 });
+  f.docker.httpStatus = 200;
+  const relay = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-relay',
+  );
+  relay.State.Health = f.docker.health();
   const ready = await f.manager.status(f.input.runId);
   assert.equal(ready.ready, true);
   assert.equal(ready.url, `https://${f.input.runId}.preview.example.org/`);
+  await f.manager.stop(f.input.runId);
+});
+test('readiness never opens a network socket in the Manager and runs the fixed probe in its owned relay', async (t) => {
+  const f = await fixture();
+  const request = t.mock.method(http, 'request', () => {
+    throw Error('networkless Manager must not connect');
+  });
+  const result = await f.manager.start(f.input);
+  assert.equal(result.ready, true);
+  assert.equal(request.mock.callCount(), 0);
+  const relay = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-relay',
+  );
+  assert.deepEqual(relay.Config.Healthcheck.Test, [
+    'CMD',
+    '/nodejs/bin/node',
+    '/opt/mergeron-manager/src/preview-health-probe.mjs',
+  ]);
+  assert.equal(relay.Config.Healthcheck.Timeout, 2_000_000_000);
+  assert.ok(relay.Config.Env.includes('MERGERON_PREVIEW_HEALTH_PATH=/'));
+  relay.Config.Labels['io.mergeron.stack'] = 'another-stack';
+  await assert.rejects(
+    () => f.manager.status(f.input.runId),
+    /PREVIEW_OBJECT_CHANGED/,
+  );
+  relay.Config.Labels['io.mergeron.stack'] = 'stack';
   await f.manager.stop(f.input.runId);
 });
 test('archive parser rejects traversal, links and corrupt checksums', async () => {

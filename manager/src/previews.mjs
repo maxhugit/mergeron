@@ -4,7 +4,7 @@ import path from 'node:path';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import contract from '../../runtime/preview-profile.cjs';
 import archives from '../../runtime/preview-archive.cjs';
-import { probePreview } from './preview-health.mjs';
+import { relayReadiness } from './preview-health.mjs';
 
 const label = 'io.mergeron.preview';
 const digest = /^.+@sha256:[a-f0-9]{64}$/;
@@ -62,9 +62,8 @@ export class PreviewManager {
     configuration,
     env = process.env,
     self = process.env.HOSTNAME,
-    probe = probePreview,
   }) {
-    Object.assign(this, { docker, manifest, configuration, env, self, probe });
+    Object.assign(this, { docker, manifest, configuration, env, self });
     this.catalog = previewCatalog(env);
     this.domain = env.MERGERON_PREVIEW_DOMAIN ?? '';
     if (
@@ -733,7 +732,19 @@ export class PreviewManager {
             `MERGERON_PREVIEW_TARGET=http://app:${profile.port}`,
             `MERGERON_PREVIEW_TRANSPORT_TOKEN=${token}`,
             `MERGERON_PREVIEW_PUBLIC_HOST=${r.publicHost}`,
+            `MERGERON_PREVIEW_HEALTH_PATH=${r.path}`,
           ],
+          Healthcheck: {
+            Test: [
+              'CMD',
+              '/nodejs/bin/node',
+              '/opt/mergeron-manager/src/preview-health-probe.mjs',
+            ],
+            Interval: 2_000_000_000,
+            Timeout: 2_000_000_000,
+            StartPeriod: 3_000_000_000,
+            Retries: 1,
+          },
         },
         [admin, internal],
       );
@@ -808,12 +819,15 @@ export class PreviewManager {
     }
     const health =
       r.state === 'running' && checkHttp
-        ? await this.probe({
-            runId: r.runId,
-            domain: this.domain,
-            path: r.path,
-            token: r.transportToken,
-          })
+        ? relayReadiness(
+            (
+              await this.owned(
+                r.objects.find((c) => c.component === 'preview-relay')?.id,
+                r,
+                'preview-relay',
+              )
+            ).State?.Health,
+          )
         : { ready: false, httpStatus: null };
     return {
       runId: r.runId,
