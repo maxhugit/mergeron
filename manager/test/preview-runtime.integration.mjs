@@ -251,6 +251,14 @@ try {
     'project A',
   );
   results.push('Node HTTP application from current source');
+  const verifiedReady = await manager.status(input.runId);
+  assert.equal(verifiedReady.ready, true);
+  assert.equal(verifiedReady.httpStatus, 200);
+  assert.equal(
+    verifiedReady.url,
+    'https://' + input.runId + '.preview.example.test/',
+  );
+  results.push('HTTP readiness verified by Manager before advertising the URL');
   const grant = {
     previewId: input.previewId,
     runId: input.runId,

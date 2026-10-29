@@ -187,6 +187,7 @@ async function fixture() {
     configuration,
     env,
     self: 'self',
+    probe: async () => ({ ready: true, httpStatus: 200 }),
   });
   await manager.ready;
   const exportSource = (snapshotId = randomUUID()) => {
@@ -380,6 +381,7 @@ test('recovers running jobs across Manager restart and refuses changed ownership
     configuration: f.configuration,
     env: f.env,
     self: 'self',
+    probe: async () => ({ ready: true, httpStatus: 200 }),
   });
   await restarted.ready;
   assert.equal((await restarted.status(f.input.runId)).state, 'running');
@@ -390,6 +392,19 @@ test('recovers running jobs across Manager restart and refuses changed ownership
     /PREVIEW_OBJECT_CHANGED/,
   );
   assert.ok(f.docker.containers.size > 0);
+});
+test('does not announce a URL until the application answers HTTP, not only Docker running', async () => {
+  const f = await fixture();
+  f.manager.probe = async () => ({ ready: false, httpStatus: 503 });
+  const starting = await f.manager.start(f.input);
+  assert.equal(starting.state, 'running');
+  assert.equal(starting.ready, false);
+  assert.equal(starting.url, null);
+  f.manager.probe = async () => ({ ready: true, httpStatus: 200 });
+  const ready = await f.manager.status(f.input.runId);
+  assert.equal(ready.ready, true);
+  assert.equal(ready.url, `https://${f.input.runId}.preview.example.org/`);
+  await f.manager.stop(f.input.runId);
 });
 test('archive parser rejects traversal, links and corrupt checksums', async () => {
   const f = await fixture();

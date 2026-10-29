@@ -704,6 +704,17 @@ describe('native internal MCP over HTTP', () => {
         .isError,
     ).toBe(true);
     expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+    const previewPreparation = await client.callTool({
+      name: 'project_preview_prepare',
+      arguments: {
+        requestId: 'recipe-readonly',
+        policyRevision: 'observed',
+        expectedRevision: null,
+        recipe: { runtime: 'node', start: 'npm run dev', port: 3000 },
+      },
+    });
+    expect(previewPreparation.isError).toBe(true);
+    expect(JSON.stringify(previewPreparation)).toContain('READ_ONLY');
   });
 
   it('refuses project/path spoofing, invalid parameters and unsupported tools', async () => {

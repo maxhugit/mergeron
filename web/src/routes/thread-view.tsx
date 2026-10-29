@@ -62,6 +62,7 @@ import { showSnackbar } from '@/stores/snackbar-store';
 import { useThreadSecurityPolicy } from '@/hooks/use-thread-security-policy';
 import { invalidateThreadListSoon } from '@/lib/query-invalidation';
 import { usePlatformSession } from '@/lib/platform-session';
+import { PreviewLinkContext } from '@/lib/preview-link-context';
 const BrowserSidebar = lazy(() =>
   import('@/components/chat/browser-sidebar').then((module) => ({
     default: module.BrowserSidebar,
@@ -442,11 +443,19 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
               right: splitBrowser ? '50%' : 0,
             }}
           >
-            <ConversationFrame
-              threadId={threadId}
-              active={conversationVisible}
-              onRetry={open}
-            />
+            <PreviewLinkContext.Provider
+              value={
+                previewProject
+                  ? { projectId: previewProject.id, threadId }
+                  : null
+              }
+            >
+              <ConversationFrame
+                threadId={threadId}
+                active={conversationVisible}
+                onRetry={open}
+              />
+            </PreviewLinkContext.Provider>
           </div>
           {browserTabs.map((tab) => (
             <div

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import contract from '../../runtime/preview-profile.cjs';
 import archives from '../../runtime/preview-archive.cjs';
+import { probePreview } from './preview-health.mjs';
 
 const label = 'io.mergeron.preview';
 const digest = /^.+@sha256:[a-f0-9]{64}$/;
@@ -61,8 +62,9 @@ export class PreviewManager {
     configuration,
     env = process.env,
     self = process.env.HOSTNAME,
+    probe = probePreview,
   }) {
-    Object.assign(this, { docker, manifest, configuration, env, self });
+    Object.assign(this, { docker, manifest, configuration, env, self, probe });
     this.catalog = previewCatalog(env);
     this.domain = env.MERGERON_PREVIEW_DOMAIN ?? '';
     if (
@@ -790,7 +792,7 @@ export class PreviewManager {
     }
     return this.status(r.runId);
   }
-  async status(runId) {
+  async status(runId, checkHttp = true) {
     await this.ready;
     const r = this.records.get(runId);
     if (!r) fail('PREVIEW_NOT_FOUND');
@@ -804,6 +806,15 @@ export class PreviewManager {
         this.save(r);
       }
     }
+    const health =
+      r.state === 'running' && checkHttp
+        ? await this.probe({
+            runId: r.runId,
+            domain: this.domain,
+            path: r.path,
+            token: r.transportToken,
+          })
+        : { ready: false, httpStatus: null };
     return {
       runId: r.runId,
       previewId: r.previewId,
@@ -817,11 +828,16 @@ export class PreviewManager {
       lastSyncedAt: r.lastSyncedAt ?? null,
       updateMode: r.updateMode,
       requiresRestart: r.requiresRestart ?? false,
-      url: r.publicHost ? 'https://' + r.publicHost + r.path : null,
+      ready: health.ready === true,
+      httpStatus: health.httpStatus,
+      url:
+        health.ready && r.publicHost
+          ? 'https://' + r.publicHost + r.path
+          : null,
     };
   }
   async transport(runId) {
-    const status = await this.status(runId),
+    const status = await this.status(runId, false),
       r = this.records.get(runId);
     if (status.state !== 'running') fail('PREVIEW_NOT_RUNNING');
     await this.owned(

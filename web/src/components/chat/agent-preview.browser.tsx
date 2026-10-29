@@ -11,6 +11,7 @@ const data = vi.hoisted(() => ({
   administrator: true,
   calls: [] as string[],
   state: 'running',
+  ready: true,
   environment: { TEST_KEY: '[stored]' },
 }));
 vi.mock('@/lib/platform-session', () => ({
@@ -24,6 +25,8 @@ vi.mock('@/lib/projects-api', () => ({
         revision: 'revision',
         profile: {
           enabled: true,
+          agentManaged: false,
+          agentRuntimes: ['node'],
           runtime: 'node',
           directory: '.',
           install: 'npm ci',
@@ -53,6 +56,7 @@ vi.mock('@/lib/projects-api', () => ({
     return {
       preview: {
         state: data.state,
+        ready: data.ready,
         url: 'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
         sourcePath: '/workspaces/project/sources/.external/agent-working-copy',
         error: null,
@@ -71,11 +75,65 @@ beforeEach(async () => {
   data.administrator = true;
   data.calls = [];
   data.state = 'running';
+  data.ready = true;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   document.documentElement.classList.add('dark');
 });
+test('a running process is not presented as an openable HTTP preview', async () => {
+  data.ready = false;
+  render(
+    <QueryClientProvider client={client}>
+      <AgentPreviewDialog
+        projectId="project"
+        threadId="agent"
+        open
+        onOpenChange={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  await expect
+    .element(
+      page.getByText('Processus démarré — attente d’une réponse HTTP valide'),
+    )
+    .toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Ouvrir l’aperçu' })).toBeNull();
+});
+for (const width of [1440, 390])
+  test(`standing agent-preview authorization fits ${width}px and keeps caps human-controlled`, async () => {
+    await page.viewport(width, 900);
+    render(
+      <QueryClientProvider client={client}>
+        <main className="p-4">
+          <ProjectPreviewSettings projectId="project" />
+        </main>
+      </QueryClientProvider>,
+    );
+    await expect
+      .element(
+        page.getByRole('checkbox', {
+          name: 'Laisser les agents préparer et gérer leur environnement de test',
+        }),
+      )
+      .toBeVisible();
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Laisser les agents préparer et gérer leur environnement de test',
+      }),
+    );
+    expect(
+      screen.queryByLabelText('Commande de démarrage (écoute sur 0.0.0.0)'),
+    ).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Node SDK' })).toBeChecked();
+    expect(
+      screen.getByLabelText('Mémoire maximale de l’application (Mio)'),
+    ).toHaveValue(1024);
+    expect(document.body.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/preview-delegation-${width}.png`,
+    });
+  });
 afterEach(() => {
   cleanup();
   client.clear();

@@ -25,6 +25,7 @@ import {
   projectAgentThreads,
   projectPreviewProfiles,
   agentPreviews,
+  agentPreviewRecipes,
 } from '../database/schema';
 import {
   currentAccess,
@@ -109,6 +110,12 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       row.state !== 'running'
     )
       throw new ForbiddenException('PREVIEW_ACCESS_DENIED');
+    const effective = this.effectiveProfile(grant.projectId, row.agentId);
+    if (
+      !effective.profile.enabled ||
+      effective.revision !== row.profileRevision
+    )
+      throw new ForbiddenException('PREVIEW_CONFIGURATION_CHANGED');
     const result = await this.manager.request('transport', {
       runId: row.runId,
     });
@@ -132,11 +139,19 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   async open(projectId: string, threadId: string) {
     const scope = this.scope(projectId, threadId),
       identity = currentAccess()!.identity;
-    const row = this.row(scope.agentId),
-      recipe = this.stored(projectId);
-    if (!this.gateway || !row || !recipe)
+    const row = this.row(scope.agentId);
+    const effective = this.effectiveProfile(projectId, scope.agentId);
+    if (
+      !this.gateway ||
+      !row ||
+      !effective.profile.enabled ||
+      effective.revision !== row.profileRevision
+    )
       throw new ConflictException('PREVIEW_NOT_CONFIGURED');
-    const profile = this.decrypt(recipe.encryptedProfile, projectId);
+    const observed = await this.status(projectId, threadId);
+    if (observed.preview?.ready !== true)
+      throw new ConflictException('PREVIEW_NOT_READY');
+    this.scope(projectId, threadId);
     return this.gateway.mint(
       {
         projectId,
@@ -145,7 +160,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         runId: row.runId,
         identity,
       },
-      profile.path,
+      effective.profile.path,
     );
   }
   private snapshotDirectory(projectId: string, snapshotId: string) {
@@ -208,7 +223,12 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       this.synchronizing = false;
     }
   }
-  async synchronize(projectId: string, threadId: string, manual = true) {
+  async synchronize(
+    projectId: string,
+    threadId: string,
+    manual = true,
+    assertActive: () => void = () => {},
+  ) {
     const scope = this.scope(projectId, threadId);
     requireExecutionAccess();
     if (this.locks.has(scope.agentId) || this.locks.size >= 2)
@@ -216,18 +236,26 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     this.locks.add(scope.agentId);
     let snapshotId: string | undefined;
     try {
-      const row = this.row(scope.agentId),
-        recipe = this.stored(projectId);
-      if (!row || row.state !== 'running' || !recipe)
+      const row = this.row(scope.agentId);
+      if (row && row.projectId !== projectId)
+        throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+      if (!row || row.state !== 'running')
         throw new ConflictException('PREVIEW_NOT_RUNNING');
+      const recipe = this.effectiveProfile(projectId, scope.agentId);
       if (recipe.revision !== row.profileRevision)
         throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
-      const profile = this.decrypt(recipe.encryptedProfile, projectId);
+      const profile = recipe.profile;
       if (!profile.enabled || (!manual && profile.updateMode === 'manual'))
         return;
       const check = () => {
         this.scope(projectId, threadId);
         requireExecutionAccess();
+        assertActive();
+        if (
+          this.effectiveProfile(projectId, scope.agentId).revision !==
+          recipe.revision
+        )
+          throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
         const active =
           this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
         if (active !== row.sourcePath)
@@ -313,6 +341,9 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     return createHash('sha256').update(source).digest();
   }
   private decrypt(value: string, projectId: string): PreviewProfile {
+    return contract.profile(this.decryptValue(value, projectId));
+  }
+  private decryptValue(value: string, binding: string): unknown {
     const parsed = JSON.parse(value) as {
       iv: string;
       data: string;
@@ -323,16 +354,181 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       this.key(),
       Buffer.from(parsed.iv, 'base64'),
     );
-    cipher.setAAD(Buffer.from('mergeron-preview-profile-v1:' + projectId));
+    cipher.setAAD(Buffer.from('mergeron-preview-profile-v1:' + binding));
     cipher.setAuthTag(Buffer.from(parsed.tag, 'base64'));
-    return contract.profile(
-      JSON.parse(
-        Buffer.concat([
-          cipher.update(Buffer.from(parsed.data, 'base64')),
-          cipher.final(),
-        ]).toString('utf8'),
-      ),
+    return JSON.parse(
+      Buffer.concat([
+        cipher.update(Buffer.from(parsed.data, 'base64')),
+        cipher.final(),
+      ]).toString('utf8'),
     );
+  }
+  private encryptValue(value: unknown, binding: string) {
+    const iv = randomBytes(12),
+      cipher = createCipheriv('aes-256-gcm', this.key(), iv);
+    cipher.setAAD(Buffer.from('mergeron-preview-profile-v1:' + binding));
+    const data = Buffer.concat([
+      cipher.update(JSON.stringify(value), 'utf8'),
+      cipher.final(),
+    ]);
+    return JSON.stringify({
+      iv: iv.toString('base64'),
+      tag: cipher.getAuthTag().toString('base64'),
+      data: data.toString('base64'),
+    });
+  }
+  private agentRecipe(projectId: string, agentId: string) {
+    const row = this.db
+      .select()
+      .from(agentPreviewRecipes)
+      .where(eq(agentPreviewRecipes.agentId, agentId))
+      .get();
+    return row?.projectId === projectId ? row : undefined;
+  }
+  private recipeBinding(projectId: string, agentId: string) {
+    return JSON.stringify(['agent', projectId, agentId]);
+  }
+  private effectiveProfile(projectId: string, agentId: string) {
+    const policy = this.stored(projectId);
+    if (!policy) throw new ConflictException('PREVIEW_CONFIGURATION_REQUIRED');
+    const approved = this.decrypt(policy.encryptedProfile, projectId);
+    if (!approved.agentManaged)
+      return { profile: approved, revision: policy.revision };
+    const recipe = this.agentRecipe(projectId, agentId);
+    if (!recipe) throw new ConflictException('PREVIEW_PREPARATION_REQUIRED');
+    if (recipe.policyRevision !== policy.revision)
+      throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+    return {
+      profile: contract.agentProfile(
+        approved,
+        this.decryptValue(
+          recipe.encryptedRecipe,
+          this.recipeBinding(projectId, agentId),
+        ),
+      ),
+      revision: policy.revision + ':' + recipe.revision,
+    };
+  }
+  /** Persistent project delegation, not an agent-selected execution capability. */
+  async prepare(
+    projectId: string,
+    threadId: string,
+    input: Record<string, unknown>,
+    assertActive: () => void,
+  ) {
+    const scope = this.scope(projectId, threadId);
+    requireExecutionAccess();
+    assertActive();
+    const identity = currentAccess()!.identity;
+    if (
+      identity.kind !== 'person' ||
+      !identity.personId ||
+      identity.impersonation
+    )
+      throw new ForbiddenException('PREVIEW_PERSONAL_SESSION_REQUIRED');
+    if (
+      typeof input.requestId !== 'string' ||
+      !contract.ID.test(input.requestId)
+    )
+      throw new BadRequestException('PREVIEW_REQUEST_ID_REQUIRED');
+    const policy = this.stored(projectId);
+    if (!policy) throw new ConflictException('PREVIEW_CONFIGURATION_REQUIRED');
+    const approved = this.decrypt(policy.encryptedProfile, projectId);
+    let recipe: ReturnType<typeof contract.agentRecipe>;
+    try {
+      recipe = contract.agentRecipe(input.recipe);
+      contract.agentProfile(approved, recipe);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === 'PREVIEW_AGENT_NOT_AUTHORIZED'
+      )
+        throw new ForbiddenException(error.message);
+      throw new BadRequestException(
+        error instanceof Error &&
+          error.message === 'PREVIEW_RUNTIME_NOT_ALLOWED'
+          ? error.message
+          : 'PREVIEW_INVALID_CONFIGURATION',
+      );
+    }
+    if (input.policyRevision !== policy.revision)
+      throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+    if (this.locks.has(scope.agentId))
+      throw new ConflictException('PREVIEW_BUSY');
+    this.locks.add(scope.agentId);
+    try {
+      const fingerprint = contract.fingerprint(recipe);
+      const before = this.agentRecipe(projectId, scope.agentId);
+      if (
+        before?.requestId === input.requestId &&
+        (before.fingerprint !== fingerprint ||
+          before.policyRevision !== policy.revision)
+      )
+        throw new ConflictException('PREVIEW_REQUEST_CONFLICT');
+      if (
+        before?.fingerprint === fingerprint &&
+        before.policyRevision === policy.revision
+      )
+        return {
+          state: 'prepared',
+          recipeRevision: before.revision,
+          reused: true,
+        };
+      if (input.expectedRevision !== (before?.revision ?? null))
+        throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+      const instance = this.row(scope.agentId);
+      if (instance && instance.projectId !== projectId)
+        throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+      if (
+        instance &&
+        instance.projectId === projectId &&
+        instance.state !== 'stopped'
+      )
+        throw new ConflictException('PREVIEW_STOP_BEFORE_PREPARE');
+      const capabilities = await this.manager.request('capabilities', {}, 1500);
+      assertActive();
+      if (this.scope(projectId, threadId).agentId !== scope.agentId)
+        throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+      requireExecutionAccess();
+      if (this.stored(projectId)?.revision !== policy.revision)
+        throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+      const runtimes = Array.isArray(capabilities.runtimes)
+        ? capabilities.runtimes.map((v: { id?: unknown }) => v?.id)
+        : [];
+      if (
+        capabilities.enabled !== true ||
+        capabilities.domain !==
+          this.config.get<string>('MERGERON_PREVIEW_DOMAIN')
+      )
+        throw new ConflictException('PREVIEW_NOT_CONFIGURED');
+      if (
+        [recipe.runtime, ...recipe.services.map((s) => s.runtime)].some(
+          (id) => !runtimes.includes(id),
+        )
+      )
+        throw new BadRequestException('PREVIEW_RUNTIME_NOT_ALLOWED');
+      const row = {
+        agentId: scope.agentId,
+        projectId,
+        encryptedRecipe: this.encryptValue(
+          recipe,
+          this.recipeBinding(projectId, scope.agentId),
+        ),
+        revision: randomUUID(),
+        policyRevision: policy.revision,
+        requestId: input.requestId,
+        fingerprint,
+        updatedAt: Date.now(),
+      };
+      this.db
+        .insert(agentPreviewRecipes)
+        .values(row)
+        .onConflictDoUpdate({ target: agentPreviewRecipes.agentId, set: row })
+        .run();
+      return { state: 'prepared', recipeRevision: row.revision, reused: false };
+    } finally {
+      this.locks.delete(scope.agentId);
+    }
   }
   private stored(projectId: string) {
     return this.db
@@ -399,18 +595,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
             throw new BadRequestException('PREVIEW_SECRET_MISSING');
           s.env[k] = old[k];
         }
-    const iv = randomBytes(12),
-      cipher = createCipheriv('aes-256-gcm', this.key(), iv);
-    cipher.setAAD(Buffer.from('mergeron-preview-profile-v1:' + projectId));
-    const data = Buffer.concat([
-      cipher.update(JSON.stringify(profile), 'utf8'),
-      cipher.final(),
-    ]);
-    const encryptedProfile = JSON.stringify({
-      iv: iv.toString('base64'),
-      tag: cipher.getAuthTag().toString('base64'),
-      data: data.toString('base64'),
-    });
+    const encryptedProfile = this.encryptValue(profile, projectId);
     const revision = randomUUID(),
       updatedAt = Date.now();
     this.db
@@ -430,7 +615,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       .where(eq(agentPreviews.agentId, agentId))
       .get();
   }
-  async status(projectId: string, threadId: string) {
+  async status(projectId: string, threadId: string, deadlineMs?: number) {
     const scope = this.scope(projectId, threadId),
       row = this.row(scope.agentId);
     if (!row || row.projectId !== projectId) return { preview: null };
@@ -439,7 +624,11 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       error: row.error,
     };
     try {
-      observed = await this.manager.request('status', { runId: row.runId });
+      observed = await this.manager.request(
+        'status',
+        { runId: row.runId },
+        deadlineMs,
+      );
       if (
         observed.runId !== row.runId ||
         observed.projectId !== projectId ||
@@ -469,11 +658,240 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         expiresAt: observed.expiresAt ?? null,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
-        url: observed.url ?? null,
+        url: observed.ready === true ? (observed.url ?? null) : null,
         lastSyncedAt: observed.lastSyncedAt ?? null,
         updateMode: observed.updateMode ?? null,
         requiresRestart: observed.requiresRestart ?? false,
+        ready: observed.ready === true,
+        httpStatus:
+          typeof observed.httpStatus === 'number' ? observed.httpStatus : null,
       },
+    };
+  }
+  /** Read-only discovery; no recipe, environment values, credentials or grant. */
+  async discovery(projectId: string, threadId: string) {
+    this.scope(projectId, threadId);
+    const [capabilities, status] = await Promise.all([
+      this.manager.request('capabilities', {}, 1500).catch(() => null),
+      this.status(projectId, threadId, 1500),
+    ]);
+    // Recheck the caller and binding after awaiting the Manager. No snapshot
+    // from another project or a revoked conversation may enter the next turn.
+    const scope = this.scope(projectId, threadId);
+    const reasons: string[] = [];
+    const domain = this.config.get<string>('MERGERON_PREVIEW_DOMAIN');
+    const platformEnabled =
+      this.config.get<string>('MERGERON_PREVIEWS_ENABLED') === 'true';
+    if (!platformEnabled) reasons.push('server_disabled');
+    if (!domain) reasons.push('preview_domain_missing');
+    if (platformEnabled && !this.gateway?.server.listening)
+      reasons.push('viewer_not_ready');
+    if (!capabilities) reasons.push('manager_unavailable');
+    else {
+      if (capabilities.enabled !== true) reasons.push('manager_not_configured');
+      if (domain && capabilities.domain !== domain)
+        reasons.push('preview_domain_mismatch');
+    }
+    const runtimes = new Set(
+      (Array.isArray(capabilities?.runtimes) ? capabilities.runtimes : [])
+        .map((value: unknown) =>
+          value && typeof value === 'object'
+            ? (value as { id?: unknown }).id
+            : undefined,
+        )
+        .filter(
+          (id): id is string =>
+            typeof id === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(id),
+        ),
+    );
+    const recipe = this.stored(projectId);
+    let profile: PreviewProfile | null = null;
+    if (!recipe) reasons.push('project_profile_missing');
+    else {
+      try {
+        profile = this.decrypt(recipe.encryptedProfile, projectId);
+      } catch {
+        reasons.push('project_profile_unreadable');
+      }
+    }
+    if (profile) {
+      if (!profile.enabled) reasons.push('project_disabled');
+      if (!profile.agentManaged && !profile.start.trim())
+        reasons.push('start_command_missing');
+      if (
+        profile.agentManaged &&
+        !profile.agentRuntimes.some((id) => runtimes.has(id))
+      )
+        reasons.push('agent_runtimes_missing');
+      if (
+        !profile.agentManaged &&
+        capabilities &&
+        !runtimes.has(profile.runtime)
+      )
+        reasons.push('runtime_not_allowed');
+      if (
+        capabilities &&
+        !profile.agentManaged &&
+        profile.services.some((service) => !runtimes.has(service.runtime))
+      )
+        reasons.push('service_runtime_not_allowed');
+    }
+    const source =
+      this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
+    if (!source) reasons.push('working_directory_missing');
+    else if (
+      path
+        .resolve(source)
+        .split(path.sep)
+        .some((p) => p.startsWith('.mergeron'))
+    )
+      reasons.push('working_directory_protected');
+    else {
+      try {
+        const access = currentAccess()!;
+        access.identities.requireWorkspacePath(source, false, access.identity);
+      } catch {
+        reasons.push('working_directory_access_denied');
+      }
+    }
+    // Keep only the public instance summary. In particular, an arbitrary URL
+    // or an authorization token must never be injected as an agent instruction.
+    const row = this.row(scope.agentId);
+    const prepared = this.agentRecipe(projectId, scope.agentId);
+    let effective: ReturnType<
+      ProjectPreviewsService['effectiveProfile']
+    > | null = null;
+    if (
+      profile &&
+      (!profile.agentManaged || prepared?.policyRevision === recipe?.revision)
+    ) {
+      try {
+        effective = this.effectiveProfile(projectId, scope.agentId);
+      } catch {
+        reasons.push('agent_recipe_unreadable');
+      }
+    }
+    const instanceCurrent =
+      effective?.profile.enabled === true &&
+      effective.revision === row?.profileRevision;
+    let url: string | null = null;
+    const previewUrl = status.preview?.url;
+    if (
+      domain &&
+      row &&
+      status.preview?.state === 'running' &&
+      status.preview.ready &&
+      instanceCurrent &&
+      typeof previewUrl === 'string'
+    ) {
+      try {
+        const candidate = new URL(previewUrl);
+        if (
+          candidate.protocol === 'https:' &&
+          candidate.hostname === `${row.runId}.${domain}` &&
+          !candidate.username &&
+          !candidate.password &&
+          !candidate.port &&
+          !candidate.search &&
+          !candidate.hash
+        )
+          url = candidate.origin + candidate.pathname;
+      } catch {
+        /* No usable public URL; never manufacture an access grant. */
+      }
+    }
+    const identity = currentAccess()!.identities.current(
+      currentAccess()!.identity,
+    );
+    const safeError = status.preview?.error;
+    const previewState =
+      typeof status.preview?.state === 'string'
+        ? status.preview.state
+        : 'unknown';
+    return {
+      state: reasons.length
+        ? capabilities
+          ? 'not_configured'
+          : 'unavailable'
+        : 'available',
+      checkedAt: new Date().toISOString(),
+      available: reasons.length === 0,
+      platformEnabled,
+      projectConfigured: profile !== null,
+      projectEnabled: profile?.enabled ?? false,
+      runtime:
+        effective?.profile.runtime ??
+        (profile?.agentManaged ? null : profile?.runtime) ??
+        null,
+      updateMode:
+        effective?.profile.updateMode ??
+        (profile?.agentManaged ? null : profile?.updateMode) ??
+        null,
+      preparation: {
+        projectAuthorized: profile?.enabled === true && profile.agentManaged,
+        policyRevision: recipe?.revision ?? null,
+        recipeRevision: prepared?.revision ?? null,
+        required:
+          profile?.agentManaged === true &&
+          prepared?.policyRevision !== recipe?.revision,
+        allowedRuntimes: profile?.agentManaged
+          ? profile.agentRuntimes.filter((id) => runtimes.has(id))
+          : [],
+        limits: profile
+          ? {
+              memoryMb: profile.memoryMb,
+              cpus: profile.cpus,
+              lifetimeMinutes: profile.lifetimeMinutes,
+              maxServices: 3,
+            }
+          : null,
+      },
+      missingConfiguration: reasons,
+      management: {
+        identityAllowed:
+          identity.kind === 'person' &&
+          !identity.impersonation &&
+          identity.role === 'administrator',
+        requiresExplicitHumanRequest: !(
+          profile?.enabled === true && profile.agentManaged
+        ),
+        requiresWritableTurn: true,
+      },
+      preview: status.preview
+        ? {
+            state: [
+              'preparing',
+              'starting',
+              'running',
+              'stopped',
+              'failed',
+              'unknown',
+            ].includes(previewState)
+              ? previewState
+              : 'unknown',
+            url,
+            ready: status.preview.ready === true && instanceCurrent,
+            httpStatus: status.preview.httpStatus,
+            expiresAt:
+              typeof status.preview.expiresAt === 'number' &&
+              Number.isFinite(status.preview.expiresAt)
+                ? status.preview.expiresAt
+                : null,
+            lastSyncedAt:
+              typeof status.preview.lastSyncedAt === 'number' &&
+              Number.isFinite(status.preview.lastSyncedAt)
+                ? status.preview.lastSyncedAt
+                : null,
+            requiresRestart: status.preview.requiresRestart === true,
+            error:
+              safeError == null
+                ? null
+                : typeof safeError === 'string' &&
+                    /^PREVIEW_[A-Z_]{1,80}$/.test(safeError)
+                  ? safeError
+                  : 'PREVIEW_STATUS_UNAVAILABLE',
+          }
+        : null,
     };
   }
   async start(
@@ -501,13 +919,23 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('PREVIEW_BUSY');
     this.locks.add(scope.agentId);
     try {
-      const recipe = this.stored(projectId);
-      if (!recipe)
-        throw new ConflictException('PREVIEW_CONFIGURATION_REQUIRED');
-      const profile = this.decrypt(recipe.encryptedProfile, projectId);
+      const recipe = this.effectiveProfile(projectId, scope.agentId);
+      const profile = recipe.profile;
       if (!profile.enabled || !profile.start.trim())
         throw new ConflictException('PREVIEW_DISABLED');
+      const check = () => {
+        if (this.scope(projectId, threadId).agentId !== scope.agentId)
+          throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+        requireExecutionAccess();
+        assertActive();
+        if (
+          this.effectiveProfile(projectId, scope.agentId).revision !==
+          recipe.revision
+        )
+          throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+      };
       const capabilities = await this.manager.request('capabilities');
+      check();
       if (
         !capabilities.enabled ||
         capabilities.domain !==
@@ -515,19 +943,29 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       )
         throw new ConflictException('PREVIEW_NOT_CONFIGURED');
       const existing = this.row(scope.agentId);
-      if (existing?.requestId === requestId)
+      if (existing && existing.projectId !== projectId)
+        throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+      if (existing?.requestId === requestId) {
+        if (existing.profileRevision !== recipe.revision)
+          throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
         return this.status(projectId, threadId);
+      }
       if (existing && !refresh) {
         const status = await this.manager.request('status', {
           runId: existing.runId,
         });
-        if (['running', 'starting'].includes(String(status.state)))
+        check();
+        if (['running', 'starting'].includes(String(status.state))) {
+          if (existing.profileRevision !== recipe.revision)
+            throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
           return this.status(projectId, threadId);
+        }
         if (status.state !== 'stopped')
           throw new ConflictException('PREVIEW_RECREATE_REQUIRED');
       }
       if (existing && refresh)
         await this.manager.request('stop', { runId: existing.runId });
+      check();
       const source =
         this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
       if (
@@ -576,30 +1014,31 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         .onConflictDoUpdate({ target: agentPreviews.agentId, set: row })
         .run();
       try {
-        const sourceFingerprint = await previewSourceFingerprint(source, () => {
-          this.scope(projectId, threadId);
-          assertActive();
-        });
+        const checkSource = () => {
+          check();
+          if (
+            (this.folders.resolveAgent(threadId) ??
+              this.scope(projectId, threadId).agent!.workspacePath) !== source
+          )
+            throw new ConflictException('PREVIEW_SOURCE_CHANGED');
+          this.identities.requireWorkspacePath(source, false, identity);
+        };
+        const sourceFingerprint = await previewSourceFingerprint(
+          source,
+          checkSource,
+        );
         const snapshot = await previewSnapshot(
           source,
           path.join(target, 'source.tar'),
-          () => {
-            this.scope(projectId, threadId);
-            assertActive();
-          },
+          checkSource,
         );
-        assertActive();
+        checkSource();
         if (
           sourceFingerprint !==
-          (await previewSourceFingerprint(source, () => {
-            this.scope(projectId, threadId);
-            assertActive();
-          }))
+          (await previewSourceFingerprint(source, checkSource))
         )
           throw new ConflictException('PREVIEW_SOURCE_CHANGED');
-        const latest = this.stored(projectId);
-        if (latest?.revision !== recipe.revision)
-          throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+        checkSource();
         this.db
           .update(agentPreviews)
           .set({ sourceSha: snapshot.sha256 })
@@ -652,6 +1091,8 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     try {
       const row = this.row(scope.agentId);
       if (!row) return { preview: null };
+      if (row.projectId !== projectId)
+        throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
       await this.manager.request('stop', { runId: row.runId });
       return this.status(projectId, threadId);
     } finally {
@@ -662,6 +1103,8 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     const scope = this.scope(projectId, threadId);
     const row = this.row(scope.agentId);
     if (!row) throw new NotFoundException('PREVIEW_NOT_FOUND');
+    if (row.projectId !== projectId)
+      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
     return this.manager.request('logs', { runId: row.runId });
   }
   async tool(
@@ -672,25 +1115,36 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   ) {
     this.scope(projectId, threadId);
     assertActive();
-    if (
-      Object.keys(input).some(
-        (k) => !['tool', 'operation', 'requestId'].includes(k),
-      )
-    )
+    const allowed =
+      input.tool === 'project_preview_prepare'
+        ? ['tool', 'requestId', 'recipe', 'policyRevision', 'expectedRevision']
+        : ['tool', 'operation', 'requestId'];
+    if (Object.keys(input).some((k) => !allowed.includes(k)))
       throw new BadRequestException('PREVIEW_INVALID_REQUEST');
-    if (input.operation === 'status') return this.status(projectId, threadId);
+    if (input.tool === 'project_preview_prepare')
+      return this.prepare(projectId, threadId, input, assertActive);
+    if (input.operation === 'status')
+      return this.discovery(projectId, threadId);
     if (input.operation === 'logs') return this.logs(projectId, threadId);
-    if (input.operation === 'sync')
-      return this.synchronize(projectId, threadId);
-    if (input.operation === 'start' || input.operation === 'refresh')
-      return this.start(
+    if (input.operation === 'sync') {
+      await this.synchronize(projectId, threadId, true, assertActive);
+      return this.discovery(projectId, threadId);
+    }
+    if (input.operation === 'start' || input.operation === 'refresh') {
+      await this.start(
         projectId,
         threadId,
         input.requestId,
         input.operation === 'refresh',
         assertActive,
       );
-    if (input.operation === 'stop') return this.stop(projectId, threadId);
+      assertActive();
+      return this.discovery(projectId, threadId);
+    }
+    if (input.operation === 'stop') {
+      await this.stop(projectId, threadId);
+      return this.discovery(projectId, threadId);
+    }
     throw new BadRequestException('PREVIEW_INVALID_REQUEST');
   }
 }

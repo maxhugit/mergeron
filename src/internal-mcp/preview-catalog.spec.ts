@@ -27,7 +27,39 @@ it('advertises preview output schemas exactly as administration displays them', 
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(2);
+    expect(tools).toHaveLength(3);
+    expect(internalMcpCatalog().instructions).toContain(
+      'null instance never prove readiness',
+    );
+    expect(
+      INTERNAL_MCP_TOOLS.find((tool) => tool.name === 'project_preview_read')
+        ?.description,
+    ).toContain('missing configuration');
+    const preparation = INTERNAL_MCP_TOOLS.find(
+      (tool) => tool.name === 'project_preview_prepare',
+    )!;
+    expect(preparation.readOnly).toBe(false);
+    expect(
+      preparation.input.safeParse({
+        requestId: 'r',
+        policyRevision: 'v',
+        expectedRevision: null,
+        recipe: { runtime: 'node', start: 'npm run dev', port: 3000 },
+      }).success,
+    ).toBe(true);
+    expect(
+      preparation.input.safeParse({
+        requestId: 'r',
+        policyRevision: 'v',
+        expectedRevision: null,
+        recipe: {
+          runtime: 'node',
+          start: 'npm run dev',
+          port: 3000,
+          memoryMb: 4096,
+        },
+      }).success,
+    ).toBe(false);
     for (const tool of tools) {
       const documented = internalMcpCatalog().tools.find(
         (t) => t.name === tool.name,

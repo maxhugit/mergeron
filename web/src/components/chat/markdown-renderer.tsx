@@ -23,6 +23,7 @@ import { MemoryProposalMessage } from './memory-proposal-message';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { CopyResponse } from './copy-response';
 import { parseFileReference, type FileReference } from '@/lib/file-references';
+import { PreviewLink } from './preview-link';
 import {
   remarkFileReferences,
   FILE_REFERENCE_PATH_ATTR,
@@ -336,14 +337,14 @@ const components = (
       return <span>{children}</span>;
     }
     return (
-      <a
+      <PreviewLink
         href={href}
         target="_blank"
         rel="noopener noreferrer"
         className="text-blue-400 underline decoration-blue-400/30 hover:decoration-blue-400"
       >
         {children}
-      </a>
+      </PreviewLink>
     );
   },
   table: ({ children }) => (

@@ -381,6 +381,20 @@ export const projectPreviewProfiles = sqliteTable('project_preview_profiles', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+/** Agent-owned recipes never replace the administrator's project policy. */
+export const agentPreviewRecipes = sqliteTable('agent_preview_recipes', {
+  agentId: text('agent_id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  encryptedRecipe: text('encrypted_recipe').notNull(),
+  revision: text('revision').notNull(),
+  policyRevision: text('policy_revision').notNull(),
+  requestId: text('request_id').notNull(),
+  fingerprint: text('fingerprint').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 /** One preview slot per work-agent family. No credentials or transport URLs. */
 export const agentPreviews = sqliteTable('agent_previews', {
   agentId: text('agent_id').primaryKey(),

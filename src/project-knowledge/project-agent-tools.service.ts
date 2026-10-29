@@ -123,7 +123,7 @@ export class ProjectAgentToolsService {
       }));
   }
 
-  context(threadId: string, cwd?: string | null): string | null {
+  async context(threadId: string, cwd?: string | null): Promise<string | null> {
     if (
       !this.db
         .select()
@@ -132,7 +132,26 @@ export class ProjectAgentToolsService {
         .get()
     )
       return null;
-    const scope = this.scope(threadId);
+    let scope = this.scope(threadId);
+    let previewEnvironment: unknown;
+    try {
+      previewEnvironment = await this.modules
+        .get<ProjectPreviewsService>('PROJECT_PREVIEW_AGENT_TOOLS', {
+          strict: false,
+        })
+        .discovery(scope.project.id, threadId);
+    } catch {
+      previewEnvironment = {
+        state: 'unavailable',
+        available: false,
+        missingConfiguration: ['preview_discovery_unavailable'],
+        preview: null,
+      };
+    }
+    const refreshedScope = this.scope(threadId);
+    if (refreshedScope.project.id !== scope.project.id)
+      throw new ForbiddenException('Project changed');
+    scope = refreshedScope;
     const tasks = this.tasks(scope),
       deliverables = this.items(scope, threadId);
     return (
@@ -143,6 +162,7 @@ export class ProjectAgentToolsService {
           name: scope.project.name.slice(0, 200),
         },
         activeDirectory: cwd ?? null,
+        previewEnvironment,
         linkedTasks: tasks
           .filter((t) => t.linkedThreadId === threadId)
           .slice(0, 10)
@@ -152,7 +172,7 @@ export class ProjectAgentToolsService {
           .slice(0, 10)
           .map((d) => ({ id: d.id, title: d.title.slice(0, 200) })),
       }) +
-      '\nUse MCP get_project, list_tasks, list_deliverables and detail tools on demand. Discover configured project connections with list_project_connections; use read_project_git for authenticated GitHub consultation and your own local copy. On explicit human request, publish_project_git can push an observed commit or create a PR after push, without exposing credentials. Other protocols are inventory-only, not shell access. Connection capabilities never authorize an action by themselves. Create, rename or publish only on explicit human request. Retained documents require versioned publication.\n</mergeron_project_context>'
+      '\nUse MCP get_project, list_tasks, list_deliverables and detail tools on demand. previewEnvironment is a configuration snapshot, not authorization by itself or a guarantee that a launch succeeds. Recheck project_preview_read with operation=status. A null preview means no instance, not that the service is available. If preparation.projectAuthorized is true, the administrator granted standing preview authorization within the assigned project task. Inspect the project, ask the human about missing requirements, prepare an agent-owned recipe with project_preview_prepare using observed revisions and allowed runtimes, then use project_preview_manage start/sync/refresh/stop. Otherwise require an explicit human request for the approved manual recipe. A writable administrator turn remains required. Never enable the project yourself, raise its limits, copy production data or secrets, or bypass a refusal with terminal Docker commands. Announce readiness and share the returned public URL only when preview.ready is true. Mergeron authorizes browser access on opening that URL; it is not an access grant. Discover configured project connections with list_project_connections; use read_project_git for authenticated GitHub consultation and your own local copy. On explicit human request, publish_project_git can push an observed commit or create a PR after push, without exposing credentials. Other protocols are inventory-only, not shell access. Connection capabilities never authorize an action by themselves. Create, rename or publish only on explicit human request. Retained documents require versioned publication.\n</mergeron_project_context>'
     );
   }
 
@@ -167,6 +187,7 @@ export class ProjectAgentToolsService {
       throw new BadRequestException('Invalid tool request');
     const input = value as Record<string, unknown>;
     if (
+      input.tool === 'project_preview_prepare' ||
       input.tool === 'project_preview_read' ||
       input.tool === 'project_preview_manage'
     ) {

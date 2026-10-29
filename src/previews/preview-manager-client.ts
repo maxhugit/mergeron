@@ -8,6 +8,7 @@ export class PreviewManagerClient {
   request(
     operation: string,
     input: Record<string, unknown> = {},
+    deadlineMs?: number,
   ): Promise<Record<string, unknown>> {
     return new Promise((resolve, reject) => {
       const body = JSON.stringify(input);
@@ -59,6 +60,16 @@ export class PreviewManagerClient {
         req.destroy(new Error('PREVIEW_MANAGER_TIMEOUT')),
       );
       req.on('error', reject);
+      // Discovery runs before every agent turn: a stalled Unix connection must
+      // not hold an unrelated conversation for the normal operation timeout.
+      if (deadlineMs !== undefined) {
+        const deadline = setTimeout(
+          () => req.destroy(new Error('PREVIEW_MANAGER_TIMEOUT')),
+          deadlineMs,
+        );
+        deadline.unref();
+        req.once('close', () => clearTimeout(deadline));
+      }
       req.end(body);
     });
   }

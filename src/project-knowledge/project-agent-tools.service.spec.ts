@@ -232,9 +232,9 @@ describe('project context and business tools', () => {
 
   it('refreshes context for an existing conversation and uses its binding, never cwd', async () => {
     await asPerson('admin', () => tools.execute('agent', create()));
-    const context = asPerson('admin', () =>
+    const context = await asPerson('admin', () =>
       tools.context('agent', '/unrelated/git'),
-    )!;
+    );
     expect(context).toContain('Tests 2');
     expect(context).not.toContain('Presentation');
     expect(context).toContain('/unrelated/git');
@@ -245,10 +245,10 @@ describe('project context and business tools', () => {
       .set({ name: 'Renamed' })
       .where(eq(projects.id, 'p'))
       .run();
-    expect(asPerson('admin', () => tools.context('agent'))).toContain(
+    expect(await asPerson('admin', () => tools.context('agent'))).toContain(
       'Renamed',
     );
-    expect(tools.context('unbound')).toBeNull();
+    expect(await tools.context('unbound')).toBeNull();
   });
 
   it('paginates and searches live tasks without returning full descriptions', async () => {
@@ -283,7 +283,7 @@ describe('project context and business tools', () => {
           })) as { items: unknown[] }
         ).items,
       ).toHaveLength(1);
-      const context = tools.context('agent')!;
+      const context = (await tools.context('agent'))!;
       const snapshot = JSON.parse(context.split('\n')[2]) as {
         tasks?: unknown;
       };
@@ -306,7 +306,7 @@ describe('project context and business tools', () => {
       }),
     );
     await asPerson('reader', async () => {
-      expect(tools.context('agent')).not.toContain('Secret roadmap');
+      expect(await tools.context('agent')).not.toContain('Secret roadmap');
       const list = (await tools.execute('agent', {
         tool: 'list_deliverables',
       })) as { total: number };
