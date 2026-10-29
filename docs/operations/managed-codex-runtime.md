@@ -86,6 +86,10 @@ Avant autorisation de mise en production :
    helper sans réseau établit leur propriétaire avant de restreindre les modes
    (`run` : root/groupe applicatif, 0750 ; `state` : root/root, 0700). Seule
    `CAP_CHOWN` est nécessaire à cette préparation, jamais `CAP_FOWNER`.
+   L'exporteur externe rend uniquement les trois preuves synthétiques autorisées
+   (`desktop.png`, `mobile.png`, `report.json`) lisibles par le runner (0644),
+   dont l'UID diffère de celui du conteneur. Le dossier de sortie doit être vide ;
+   aucun fichier n'est écrasé et aucun mode de donnée privée n'est modifié.
 3. Examiner les captures ordinateur/mobile et conserver les rapports et les
    digests des **mêmes** images ; validation Dev avant promotion.
 4. Après autorisation explicite seulement : sauvegarde de l’état persistant,

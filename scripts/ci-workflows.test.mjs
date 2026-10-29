@@ -256,6 +256,54 @@ test('CLI fixture establishes ownership before chmod with CHOWN only', () => {
   }
 });
 
+test('trusted fixture exports only approved evidence readable by a different runner UID', () => {
+  const probe = read('scripts/smoke-test-document-isolation.cjs');
+  const start = probe.indexOf("  if (process.argv[3] === '--netlink-route'");
+  const end = probe.indexOf('\n} finally {', start);
+  assert.ok(start > 0 && end > start);
+  const exporter = probe.slice(start, end);
+  const result = spawnSync(process.execPath, ['-e', `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const assert = require('node:assert/strict');
+    const { runInNewContext } = require('node:vm');
+    const fixture = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'mergeron-evidence-test-'));
+    try {
+      process.umask(0o077);
+      const workspace = path.join(fixture, 'workspace');
+      const source = path.join(workspace, 'artifacts/native-backend-visual');
+      const output = path.join(fixture, 'output');
+      fs.mkdirSync(source, { recursive: true });
+      fs.mkdirSync(output);
+      const png = Buffer.from('89504e470d0a1a0a', 'hex');
+      fs.writeFileSync(path.join(source, 'desktop.png'), png);
+      fs.writeFileSync(path.join(source, 'mobile.png'), png);
+      fs.writeFileSync(path.join(source, 'report.json'), '{}');
+      fs.writeFileSync(path.join(source, 'private-state'), 'must-not-export');
+      const context = {
+        fs, path, assert, workspace, console: { log() {} },
+        process: { argv: ['', '', '', '--netlink-route'], env: { MERGERON_NETLINK_EVIDENCE: output } },
+      };
+      runInNewContext(${JSON.stringify(exporter)}, context);
+      assert.deepEqual(fs.readdirSync(output).sort(), ['desktop.png', 'mobile.png', 'report.json']);
+      for (const name of fs.readdirSync(output)) {
+        assert.equal(fs.statSync(path.join(output, name)).mode & 0o777, 0o644);
+        assert.deepEqual(fs.readFileSync(path.join(output, name)), fs.readFileSync(path.join(source, name)));
+      }
+      assert.equal(fs.statSync(path.join(source, 'private-state')).mode & 0o777, 0o600);
+      assert.equal(process.umask(), 0o077);
+      assert.throws(() => runInNewContext(${JSON.stringify(exporter)}, context), { code: 'EEXIST' });
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  `], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const smoke = read('scripts/smoke-test-document-isolation.sh');
+  assert.match(smoke, /test -z "\$\(find "\$MERGERON_NETLINK_EVIDENCE"/);
+  assert.match(smoke, /--cap-drop ALL/);
+  assert.doesNotMatch(smoke, /--privileged|--cap-add/);
+});
+
 test('browser identity does not invalidate dependencies and cleanup', () => {
   const dockerfile = read('deployment/browser/Dockerfile');
   assert.ok(

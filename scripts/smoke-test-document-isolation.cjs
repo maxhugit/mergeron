@@ -123,7 +123,12 @@ try {
       const bytes = fs.readFileSync(file);
       assert(bytes.length < 15 * 1024 * 1024);
       if (name.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-      fs.writeFileSync(path.join(process.env.MERGERON_NETLINK_EVIDENCE, name), bytes, { flag: 'wx', mode: 0o600 });
+      const destination = path.join(process.env.MERGERON_NETLINK_EVIDENCE, name);
+      fs.writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 });
+      // Only these synthetic fixture outputs are public CI artifacts. The
+      // uploader uses the host runner UID, not the container's application UID.
+      // Explicit chmod also handles a restrictive umask without changing it.
+      fs.chmodSync(destination, 0o644);
     }
     console.log('PASS: desktop/mobile evidence exported by the trusted outer fixture');
   }
