@@ -161,6 +161,29 @@ de 180 secondes pour couvrir un push réseau borné à 120 secondes.
 
 ## Profil de test et précontrôle de l’environnement
 
+Les caches, le précontrôle et les outils MCP sont communs à **tous les agents de
+travail de tous les projets**, sans exception codée pour un identifiant d’agent.
+Dans Paramètres → Sécurité, « Profil de test des nouveaux agents de projet » est
+un réglage global, activé par défaut. Lors de la création d’un nouvel agent sur
+un emplacement modifiable, il propose workspace-write et le réseau filtré si le
+moteur confirme les contraintes administrées. Un emplacement en lecture seule,
+un choix explicite de permissions ou un profil nommé restent prioritaires.
+Les limites de dossiers temporaires et autres réglages workspace-write hérités
+sont conservés. La désactivation globale ne réécrit pas les conversations déjà
+créées ; aucun agent existant n’est silencieusement promu et aucune ancienne
+copie du projet n’est écrasée pour mettre son packageManager à jour.
+
+Le panneau Git de droite lit l’état réel de la copie attribuée à l’agent : fichiers
+modifiés, nouveaux ou supprimés, préparés **et** non préparés. Il ne prétend pas
+attribuer à un auteur une écriture qui n’a pas encore été commitée : les écritures
+manuelles dans la même copie apparaissent aussi. « Modifications » ouvre le bon
+diff pour chaque groupe (fichier de travail ou index). Le compteur porte sur les
+fichiers distincts, y compris ceux partiellement préparés. Une veille de la copie
+indépendante de l’onglet Fichiers, les notifications de l’agent et le retour de la
+connexion actualisent les données locales, regroupées par petites fenêtres ; le
+rafraîchissement périodique reste un secours. Rien n’est préparé, commité, fetché
+ou publié automatiquement. Chaque agent continue de voir sa propre copie.
+
 Dans les permissions de la conversation, « Tests du projet » permet un choix
 explicite du réseau pour le prochain message, **uniquement en workspace-write**.
 Il conserve les racines d’écriture et la politique d’approbation observées.

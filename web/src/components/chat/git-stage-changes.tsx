@@ -43,7 +43,7 @@ export function GitStageChanges({
   snapshot: GitSnapshot;
   agentThreadId?: string;
   writable: boolean;
-  onDiff: (path: string) => void;
+  onDiff: (path: string, staged: boolean) => void;
   view?: 'all' | 'prepared' | 'actions';
   ref?: Ref<GitStageHandle>;
 }) {
@@ -168,7 +168,7 @@ export function GitStageChanges({
                     variant="ghost"
                     className="h-auto min-w-0 flex-1 justify-start gap-2 py-2 text-xs"
                     title={change.path}
-                    onClick={() => onDiff(change.path)}
+                    onClick={() => onDiff(change.path, Boolean(prepared))}
                   >
                     <code className="shrink-0 whitespace-pre text-primary">
                       {change.status}

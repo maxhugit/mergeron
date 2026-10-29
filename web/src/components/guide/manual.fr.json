@@ -1031,7 +1031,7 @@
             "steps": [
               "Vérifiez la copie sélectionnée et consultez les différences des fichiers modifiés.",
               "Dans le menu du fichier, préparez les modifications voulues et confirmez le contenu présenté.",
-              "Ouvrez Préparation du commit : seuls les fichiers déjà préparés sont listés et leurs différences excluent les modifications non préparées. Un fichier préparé puis modifié à nouveau reste rouge dans Fichiers : sa version préparée est conservée jusqu’à une nouvelle préparation.",
+              "Ouvrez Modifications : les fichiers nouveaux, modifiés et supprimés sont regroupés entre changements non préparés et préparés pour le commit. Le compteur inclut tous les fichiers concernés. Chaque groupe ouvre la différence correspondante : fichier de travail ou index préparé. La liste s’actualise après les écritures et les actions de l’agent, sans préparer ni publier automatiquement les fichiers.",
               "Utilisez Commit, relisez le périmètre et donnez un message décrivant le changement.",
               "Après confirmation, vérifiez le nouveau commit dans l’historique. Publiez séparément si nécessaire."
             ],

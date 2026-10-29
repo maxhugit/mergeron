@@ -1003,7 +1003,7 @@
             "steps": [
               "Check the selected copy and review diffs of modified files.",
               "Stage the intended changes from the file menu and confirm the reviewed content.",
-              "Open Commit preparation: only staged files are listed and their diffs exclude unstaged edits. A staged file edited again stays red in Files; its staged version is retained until you stage it again.",
+              "Open Changes: new, modified and deleted files are grouped into unstaged changes and staged changes for the commit. The counter includes every affected file. Each group opens its own diff: working file or staged index. The list refreshes after writes and agent actions, without automatically staging or publishing files.",
               "Use Commit, review its scope and enter a descriptive message.",
               "Confirm and find the commit in history. Publish separately if needed."
             ],

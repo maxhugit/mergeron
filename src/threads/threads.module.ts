@@ -11,6 +11,7 @@ import { KnowledgeProposalsObserverService } from './knowledge-proposals-observe
 import { ProjectKnowledgeModule } from '../project-knowledge/project-knowledge.module';
 import { ThreadSecurityPolicyController } from './thread-security-policy.controller';
 import { AgentTestProfileController } from './agent-test-profile.controller';
+import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
 import { AuthModule } from '../auth/auth.module';
 import { ChatModule } from '../chat/chat.module';
 import { CodexModule } from '../codex/codex.module';
@@ -70,6 +71,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
   providers: [
     ProjectConnectionRuntimeService,
     GitMutationGateService,
+    ProjectAgentDefaultsService,
     ThreadResponseDetailService,
     KnowledgeProposalsObserverService,
     ThreadsService,

@@ -152,6 +152,7 @@ jobs:
           src/threads/git-mutation-gate.service.spec.ts
           src/threads/agent-test-profile.spec.ts
           src/threads/agent-test-profile.controller.spec.ts
+          src/threads/project-agent-defaults.service.spec.ts
           src/projects/workspace-git.controller.spec.ts
           src/projects/workspace-transfers.service.spec.ts
           src/active-folders

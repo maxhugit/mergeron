@@ -58,6 +58,7 @@ export const FILES_SETTING_KEYS = {
 
 export const SECURITY_SETTING_KEYS = {
   workspaceRoots: 'security.workspaceRoots',
+  projectAgentTestProfile: 'security.projectAgentTestProfile',
 } as const;
 
 export const GENERAL_SETTING_KEYS = {
@@ -96,6 +97,13 @@ export const DEFAULT_EXCLUDED_DIRS =
  * and UPDATE metadata/constraints/defaults if they change.
  */
 export const SETTINGS_DEFINITIONS = [
+  {
+    key: SECURITY_SETTING_KEYS.projectAgentTestProfile,
+    type: 'boolean',
+    category: 'security',
+    description: 'projectAgentTestProfileDescription',
+    defaultValue: true,
+  },
   {
     key: AGENT_INSTRUCTIONS_KEY,
     type: 'string',

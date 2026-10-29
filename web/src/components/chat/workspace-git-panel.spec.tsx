@@ -16,6 +16,22 @@ import type { GitInventory, GitSnapshot } from '@/lib/workspace-git-api';
 
 const api = vi.hoisted(() => vi.fn());
 const addRoot = vi.hoisted(() => vi.fn());
+const live = vi.hoisted(() => ({
+  listeners: new Map<string, Set<(value: unknown) => void>>(),
+  acquire: vi.fn(() => vi.fn()),
+}));
+vi.mock('@/lib/file-watch-leases', () => ({ acquireFileWatch: live.acquire }));
+vi.mock('@/socket', () => ({
+  getSocket: () => ({
+    on: (name: string, fn: (value: unknown) => void) => {
+      const handlers = live.listeners.get(name) ?? new Set();
+      handlers.add(fn);
+      live.listeners.set(name, handlers);
+    },
+    off: (name: string, fn: (value: unknown) => void) =>
+      live.listeners.get(name)?.delete(fn),
+  }),
+}));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({
     data: {
@@ -147,6 +163,8 @@ const onFile = vi.fn();
 const onGitDiff = vi.fn();
 const onSelect = vi.fn();
 beforeEach(async () => {
+  live.listeners.clear();
+  live.acquire.mockClear();
   await i18n.changeLanguage('fr');
   inventory = { resources: [resource], copies: [] };
   client = new QueryClient({
@@ -394,8 +412,8 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
   await screen.findByTestId('git-files');
   await waitFor(() =>
     expect(
-      screen.getByRole('tab', { name: /Préparation du commit/ }),
-    ).toHaveTextContent('(0)'),
+      screen.getByRole('tab', { name: /Modifications/ }),
+    ).toHaveTextContent('(1)'),
   );
   fireEvent.click(
     screen.getByRole('button', { name: 'Voir les différences Git' }),
@@ -409,6 +427,78 @@ it('opens a change comparison and an explicit file, without exposing mutating ac
     status: ' M',
   });
   expect(onFile).not.toHaveBeenCalled();
+  expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+    false,
+  );
+});
+
+it('shows tracked, untracked and staged agent changes with the correct comparison source', async () => {
+  inventory.copies = [copy];
+  const implementation = api.getMockImplementation()!;
+  api.mockImplementation(async (url: string, options?: RequestInit) =>
+    url.endsWith('/copies/copy')
+      ? {
+          ...snapshot,
+          changes: [
+            { path: 'file.ts', status: ' M' },
+            { path: 'new.ts', status: '??' },
+            { path: 'ready.ts', status: 'M ' },
+            { path: 'mixed.ts', status: 'MM' },
+          ],
+        }
+      : implementation(url, options),
+  );
+  show();
+  await screen.findByRole('tab', { name: 'Modifications (4)' });
+  expect(screen.getByText(/4 fichiers modifiés/)).toBeVisible();
+  tab('Modifications (4)');
+  expect(await screen.findByRole('button', { name: /new.ts/ })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /file.ts/ }));
+  expect(onGitDiff).toHaveBeenLastCalledWith(
+    expect.objectContaining({ path: 'file.ts', staged: false }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: /ready.ts/ }));
+  expect(onGitDiff).toHaveBeenLastCalledWith(
+    expect.objectContaining({ path: 'ready.ts', staged: true }),
+  );
+  const mixed = screen.getAllByRole('button', { name: /mixed.ts/ });
+  expect(mixed).toHaveLength(2);
+  fireEvent.click(mixed[0]);
+  expect(onGitDiff).toHaveBeenLastCalledWith(
+    expect.objectContaining({ path: 'mixed.ts', staged: false }),
+  );
+  fireEvent.click(mixed[1]);
+  expect(onGitDiff).toHaveBeenLastCalledWith(
+    expect.objectContaining({ path: 'mixed.ts', staged: true }),
+  );
+  expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+    false,
+  );
+});
+
+it('refreshes the Changes tab after an agent write without manual refresh or staging', async () => {
+  inventory.copies = [copy];
+  const implementation = api.getMockImplementation()!;
+  let changes = snapshot.changes;
+  api.mockImplementation(async (url: string, options?: RequestInit) =>
+    url.endsWith('/copies/copy')
+      ? { ...snapshot, changes }
+      : implementation(url, options),
+  );
+  show();
+  await screen.findByRole('tab', { name: 'Modifications (1)' });
+  tab('Modifications (1)');
+  changes = [...changes, { path: 'agent-created.ts', status: '??' }];
+  act(() => {
+    for (const fn of live.listeners.get('fs.changed') ?? [])
+      fn({ watchPath: '/copy', changedPaths: ['/copy/agent-created.ts'] });
+  });
+  expect(
+    await screen.findByRole('tab', { name: 'Modifications (2)' }),
+  ).toBeVisible();
+  expect(
+    await screen.findByRole('button', { name: /agent-created.ts/ }),
+  ).toBeVisible();
   expect(api.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
     false,
   );
@@ -438,7 +528,7 @@ it('shows failed inspection instead of a stale clean state', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Impossible d’inspecter cette copie',
   );
-  tab('Préparation du commit');
+  tab('Modifications');
   expect(
     screen.queryByText('Aucune modification locale.'),
   ).not.toBeInTheDocument();
@@ -458,7 +548,7 @@ it.each([
     });
     show();
     expect(await screen.findByRole('alert')).toHaveTextContent(message);
-    tab('Préparation du commit');
+    tab('Modifications');
     expect(
       screen.queryByText('Aucune modification locale.'),
     ).not.toBeInTheDocument();
@@ -668,8 +758,8 @@ it('refreshes remote files at the latest revision while preserving the browsed d
 it('places publication only in Synchronization and keeps commits local', async () => {
   inventory.copies = [copy];
   show();
-  await screen.findByRole('tab', { name: 'Préparation du commit (0)' });
-  tab('Préparation du commit (0)');
+  await screen.findByRole('tab', { name: 'Modifications (1)' });
+  tab('Modifications (1)');
   await screen.findByRole('button', { name: 'Commit…' });
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
   tab('Synchronisation');

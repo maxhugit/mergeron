@@ -122,6 +122,7 @@ export function settingLabel(key: string): string {
     'files.uploadMaxBytes': 'Maximum upload size',
     'files.excludedDirs': 'Excluded files and directories',
     'security.workspaceRoots': 'Allowed workspace roots',
+    'security.projectAgentTestProfile': 'projectAgentTestProfileLabel',
   };
   if (labels[key]) return labels[key];
   const label = key.split('.').at(-1) ?? key;
