@@ -7,6 +7,7 @@ const {
   documentIsolationArgs,
   documentAgentEnvironment,
 } = require('/app/dist/document-publication/document-isolation.js');
+const { agentEnvironmentCommand } = require('/app/dist/codex/agent-environment.js');
 
 const workspace = fs.mkdtempSync('/workspaces/.document-isolation-probe-');
 const temporary = fs.mkdtempSync('/tmp/document-isolation-probe-');
@@ -58,8 +59,24 @@ try {
     assert.equal(fs.existsSync('/run/secrets/backend_token'),false);
     assert.equal(fs.existsSync('/run/mergeron-manager/manager.sock'),false);
     assert.deepEqual(fs.readdirSync('/appdata'),[]);
+    const cacheKeys=['XDG_CACHE_HOME','COREPACK_HOME','npm_config_cache','npm_config_store_dir','pnpm_config_store_dir','npm_config_devdir','PNPM_HOME'];
+    for(const key of cacheKeys) {
+      assert.ok(process.env[key].startsWith('/tmp/mergeron-agent-cache.'));
+      fs.writeFileSync(process.env[key]+'/probe','writable');
+    }
+    const cp=require('child_process');
+    const env={...process.env,COREPACK_ENABLE_NETWORK:'0',COREPACK_ENABLE_PROJECT_SPEC:'0',HTTPS_PROXY:'',https_proxy:'',HTTP_PROXY:'',http_proxy:''};
+    const pnpm=cp.execFileSync('pnpm',['--version'],{env,encoding:'utf8',timeout:15000}).trim();
+    assert.match(pnpm,/^\\d+\\.\\d+\\.\\d+$/);
+    const store=cp.execFileSync('pnpm',['store','path','--silent'],{env,encoding:'utf8',timeout:15000}).trim();
+    assert.ok(store.startsWith(process.env.npm_config_store_dir+'/'),store);
+    const preflight=JSON.parse(cp.execFileSync('mergeron-environment-check',['--cwd',root,'--visual','--json'],{env,encoding:'utf8',timeout:45000}));
+    assert.equal(preflight.success,true,JSON.stringify(preflight));
+    assert.equal(preflight.checks.find(c=>c.id==='node.headers').status,'ok');
     console.log('PASS: code writable; versions immutable; rename/hardlink refused; private state hidden');
+    console.log('PASS: private caches writable; pnpm available offline; loopback and sandboxed Chromium ready inside bwrap');
   `;
+  const command = agentEnvironmentCommand(process.execPath, ['-e', probe, workspace, databasePath, ssh]);
   const args = documentIsolationArgs(
     {
       home,
@@ -69,8 +86,8 @@ try {
       privateRoots: [system],
       unavailableRoots: [path.join(workspace, 'missing-project')],
     },
-    process.execPath,
-    ['-e', probe, workspace, databasePath, ssh],
+    command.binary,
+    command.args,
   );
   const result = cp.spawnSync('/usr/bin/bwrap', args, {
     encoding: 'utf8',

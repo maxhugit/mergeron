@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Canonical hardened image for supported Linux Docker hosts.
 
-ARG PNPM_VERSION=10.18.3
+ARG PNPM_VERSION=10.34.9
 ARG GH_VERSION=2.103.0
 ARG GH_LINUX_AMD64_SHA256=fdd768eb70f6409f80fcfa9f3a1c0adf0fc98d827ab3ce0bed2ac22762c5d786
 ARG PILLOW_VERSION=13.0.0
@@ -242,6 +242,7 @@ RUN --mount=type=cache,id=npm-toolchain,target=/home/codex/.npm,sharing=locked \
 
 # Enable the pinned pnpm release for production dependency installation
 ARG PNPM_VERSION
+ENV COREPACK_HOME=/opt/mergeron-corepack
 RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 
 # Caches are installation by-products, not part of the user toolchain.
@@ -343,6 +344,7 @@ RUN jq -n \
 # The toolchain exists only once in the final image and is restored into a
 # mounted /home/codex on first start.
 COPY --from=toolchain-builder /opt/codex-home-seed.tar.zst /opt/codex-home-seed.tar.zst
+COPY --from=toolchain-builder /opt/mergeron-corepack /opt/mergeron-corepack
 COPY --from=office-builder /opt/office-venv /opt/office-venv
 COPY --from=app-deps-builder /app/node_modules ./node_modules/
 COPY --from=app-deps-builder /opt/mergeron-playwright /opt/mergeron-playwright
@@ -358,9 +360,14 @@ COPY scripts/provision-person.cjs ./scripts/provision-person.cjs
 COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
 COPY scripts/visual-check.mjs ./scripts/visual-check.mjs
 COPY scripts/mergeron-visual-check.sh /usr/local/bin/mergeron-visual-check
+COPY scripts/environment-check.mjs ./scripts/environment-check.mjs
+COPY scripts/mergeron-environment-check.sh /usr/local/bin/mergeron-environment-check
+COPY scripts/mergeron-agent-environment.sh /usr/local/bin/mergeron-agent-environment
 COPY skills/office-files/ /opt/codex-skills/office-files/
 
-RUN chmod +x /usr/local/bin/codex-cli-dispatch /usr/local/bin/mergeron-visual-check
+RUN chmod -R a+rX /opt/mergeron-corepack \
+ && chmod +x /usr/local/bin/codex-cli-dispatch /usr/local/bin/mergeron-visual-check \
+      /usr/local/bin/mergeron-environment-check /usr/local/bin/mergeron-agent-environment
 
 # ── Entrypoint ───────────────────────────────────────────────────────
 RUN cat > /usr/local/bin/entrypoint.sh <<'ENTRYPOINT_EOF'

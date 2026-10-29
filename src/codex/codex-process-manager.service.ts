@@ -18,6 +18,7 @@ import type { ServerRequestHandler } from './server-request-owner';
 import { SettingsService } from '../settings/settings.service';
 import { GENERAL_SETTING_KEYS } from '../settings/settings.definitions';
 import { DocumentProtectionService } from '../document-publication/document-protection.service';
+import { agentEnvironmentCommand } from './agent-environment';
 import {
   documentAgentEnvironment,
   documentIsolationArgs,
@@ -299,14 +300,17 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
     const isolation = (await this.documentProtection?.plan()) ?? null;
     const binary = this.storage.paths.binary;
     const args = ['app-server', '--listen', 'stdio://', ...oauthArgs];
+    const command = agentEnvironmentCommand(binary, args);
     const environment = {
       ...process.env,
       PATH: this.storage.paths.childPath ?? process.env.PATH,
       CODEX_HOME: this.storage.paths.home,
     };
     const child = spawn(
-      isolation ? '/usr/bin/bwrap' : binary,
-      isolation ? documentIsolationArgs(isolation, binary, args) : args,
+      isolation ? '/usr/bin/bwrap' : command.binary,
+      isolation
+        ? documentIsolationArgs(isolation, command.binary, command.args)
+        : command.args,
       {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: isolation ? documentAgentEnvironment(environment) : environment,

@@ -14,6 +14,9 @@ describe('Common agent instructions', () => {
     try {
       const service = new SettingsService(db, new ConfigService());
       const context = new AgentInstructionsService(service).context();
+      expect(context).toContain('mergeron-environment-check --cwd');
+      expect(context).toContain('ajoutez --visual');
+      expect(context).toContain('ne télécharge rien');
       expect(context).toContain('mergeron-visual-check --help');
       expect(context).toContain('desktop.png, mobile.png');
       expect(context).toContain('Ouvrez réellement les captures');

@@ -46,7 +46,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
-          version: 10.18.3
+          version: 10.34.9
           run_install: false
 
       - name: Set up Node.js
@@ -87,6 +87,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_configure_dev_browser.py
           node --test scripts/ci-workflows.test.mjs
           node --test scripts/visual-check.test.mjs
+          node --test scripts/environment-check.test.mjs
 
       - name: Validate translation catalogs
         if: matrix.part == 'frontend'

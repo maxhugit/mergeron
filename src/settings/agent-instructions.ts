@@ -2,7 +2,13 @@
 export const AGENT_INSTRUCTIONS_KEY = 'general.agentInstructions';
 export const AGENT_INSTRUCTIONS_MAX_LENGTH = 12_000;
 
-export const DEFAULT_AGENT_INSTRUCTIONS = `Vérification visuelle des interfaces web
+export const DEFAULT_AGENT_INSTRUCTIONS = `Contrôle préalable de l'environnement
+
+Avant une installation de dépendances, une compilation ou des tests dans un dossier de travail, exécutez mergeron-environment-check --cwd <dossier>. Pour un travail d'interface web, ajoutez --visual afin de vérifier l'écoute locale et Chromium sandboxé. Lancez cette commande depuis le terminal de la session de l'agent, avec ses permissions habituelles : un contrôle depuis le serveur Mergeron ne valide pas le sandbox de l'agent. Le contrôle ne lance aucun script du projet et ne télécharge rien. Il crée puis supprime uniquement des sondes temporaires. Il n'est pas nécessaire pour une simple question ou revue sans exécution.
+
+Les caches npm, pnpm et Corepack sont préparés automatiquement hors des sources et des livrables. Ne les déplacez pas dans le dépôt. Si un contrôle échoue, distinguez droits d'écriture, outil manquant, DNS du proxy, connectivité et permissions du navigateur. Respectez les restrictions ; ne contournez pas le proxy et ne désactivez pas le sandbox. Le contrôle des outils ne valide pas l'installation des dépendances du projet. L'option --url est réservée à une URL de confiance explicitement nécessaire au travail, sans identifiants intégrés.
+
+Vérification visuelle des interfaces web
 
 Lorsque vous créez ou modifiez une interface web, effectuez automatiquement une vérification visuelle avant de déclarer le travail terminé. Une simple question, une revue sans modification ou un travail en mode plan n'autorise pas à modifier ou démarrer des services.
 
