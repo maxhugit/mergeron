@@ -16,6 +16,7 @@ import { createServer } from 'node:net';
 import {
   cacheKeys,
   command,
+  curlEnvironment,
   errorCode,
   localHeaders,
   optionsFrom,
@@ -94,6 +95,23 @@ test('proxy parsing drops credentials and supports lowercase and IPv6', () => {
   assert.equal(proxyAddress({}), null);
   assert.throws(() => proxyAddress({ HTTPS_PROXY: 'socks5://proxy' }));
   assert.equal(errorCode({ code: 'secret-token' }), 'UNAVAILABLE');
+});
+
+test('uppercase HTTP_PROXY is honored by curl without overriding explicit lowercase settings', () => {
+  const env = {
+    HTTP_PROXY: 'http://user:secret@proxy:3128',
+    NO_PROXY: 'localhost',
+  };
+  assert.deepEqual(curlEnvironment(env), {
+    ...env,
+    http_proxy: env.HTTP_PROXY,
+    no_proxy: 'localhost',
+  });
+  assert.equal(env.http_proxy, undefined);
+  assert.equal(
+    curlEnvironment({ ...env, http_proxy: 'http://explicit:3128' }).http_proxy,
+    'http://explicit:3128',
+  );
 });
 
 test('successful base preflight uses offline commands outside the project, without URL or browser access', async () =>
@@ -208,7 +226,11 @@ test('proxy TCP and HTTP denials are not reported as success, TLS and proxy sett
         },
         command: async (tool, args, options) => {
           if (tool !== 'curl') return '1.2.3';
-          assert.equal(options.env, env);
+          assert.deepEqual(options.env, {
+            ...env,
+            https_proxy: env.HTTPS_PROXY,
+            no_proxy: env.NO_PROXY,
+          });
           assert.equal(args[0], '--disable'); // no user .curlrc disabling TLS
           assert.ok(
             !args.includes('--insecure') && !args.includes('--noproxy'),

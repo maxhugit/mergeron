@@ -140,6 +140,16 @@ export function proxyAddress(env) {
   };
 }
 
+/** curl ignores uppercase HTTP_PROXY; do not accidentally bypass that proxy. */
+export function curlEnvironment(env) {
+  const result = { ...env };
+  for (const key of ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY']) {
+    if (result[key.toLowerCase()] === undefined && result[key] !== undefined)
+      result[key.toLowerCase()] = result[key];
+  }
+  return result;
+}
+
 function bounded(promise, timeout) {
   let timer;
   return Promise.race([
@@ -335,7 +345,11 @@ export async function run(options, deps = {}) {
               '--url',
               options.url,
             ],
-            { env, cwd: options.cwd, timeout: options.timeout + 1_000 },
+            {
+              env: curlEnvironment(env),
+              cwd: options.cwd,
+              timeout: options.timeout + 1_000,
+            },
           );
         } catch (error) {
           // Stable curl exit codes distinguish transport failures without stderr.
