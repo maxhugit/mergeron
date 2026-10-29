@@ -23,7 +23,7 @@ plugins=false
 `);
 // No host identity or proxy is needed: Docker disables every external network.
 const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-  ['PATH', 'TMPDIR', 'XDG_CACHE_HOME', 'COREPACK_HOME', 'PNPM_HOME', 'npm_config_cache',
+  ['PATH', 'TMPDIR', 'PLAYWRIGHT_BROWSERS_PATH', 'XDG_CACHE_HOME', 'COREPACK_HOME', 'PNPM_HOME', 'npm_config_cache',
     'npm_config_store_dir', 'pnpm_config_store_dir', 'npm_config_devdir', 'npm_config_nodedir'].includes(key)));
 const child = spawn(binary, ['app-server'], {
   cwd: root,
