@@ -17,7 +17,7 @@ const nativeHome = process.argv[2] ? fs.mkdtempSync('/home/codex/.native-profile
 try {
   const home = path.join(nativeHome || path.join(temporary, 'home'), '.codex');
   fs.mkdirSync(home, { recursive: true });
-  const ssh = path.join(temporary, 'home', '.ssh');
+  const ssh = path.join(path.dirname(home), '.ssh');
   fs.mkdirSync(ssh);
   fs.writeFileSync(path.join(ssh, 'operator-key'), 'private-canary');
   const retained = path.join(workspace, 'livrables');
