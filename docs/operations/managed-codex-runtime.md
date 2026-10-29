@@ -82,6 +82,10 @@ Avant autorisation de mise en production :
    blocage des mises à jour/rollbacks non approuvés, corruption d’une ressource,
    absence de fallback et persistance après redémarrage. Le CLI réellement
    installé est ensuite testé dans Core avec Node, backend réel et Chromium.
+   Les dossiers de cette fixture sont créés par l’utilisateur du runner : un
+   helper sans réseau établit leur propriétaire avant de restreindre les modes
+   (`run` : root/groupe applicatif, 0750 ; `state` : root/root, 0700). Seule
+   `CAP_CHOWN` est nécessaire à cette préparation, jamais `CAP_FOWNER`.
 3. Examiner les captures ordinateur/mobile et conserver les rapports et les
    digests des **mêmes** images ; validation Dev avant promotion.
 4. Après autorisation explicite seulement : sauvegarde de l’état persistant,

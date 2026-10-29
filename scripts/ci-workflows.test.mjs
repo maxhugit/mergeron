@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
@@ -199,6 +200,59 @@ test('CLI installation and actual sandbox validation gate both PRs and promotion
   for (const block of [cli, publishCli]) {
     assert.match(block, /smoke-test-managed-cli\.sh/);
     assert.doesNotMatch(block, /continue-on-error:/);
+  }
+});
+
+test('CLI fixture establishes ownership before chmod with CHOWN only', () => {
+  const smoke = read('scripts/smoke-test-managed-cli.sh');
+  const initializer = smoke.slice(
+    smoke.indexOf('docker run --rm'),
+    smoke.indexOf('docker run -d'),
+  );
+  assert.match(initializer, /--cap-drop ALL --cap-add CHOWN/);
+  assert.match(initializer, /--read-only/);
+  assert.match(initializer, /--network none/);
+  assert.match(initializer, /--security-opt no-new-privileges:true/);
+  assert.doesNotMatch(
+    initializer,
+    /--privileged|--cap-add (?:ALL|FOWNER|DAC_OVERRIDE)/,
+  );
+  const source = initializer.match(/-e '([^']+)'/)[1];
+  for (const runnerUid of [1001, 0]) {
+    const owners = new Map(
+      ['home', 'workspace', 'run', 'state'].map((p) => [
+        '/fixture/' + p,
+        [runnerUid, runnerUid],
+      ]),
+    );
+    const modes = new Map();
+    const fs = {
+      chownSync: (path, uid, gid) => {
+        assert.ok(owners.has(path));
+        owners.set(path, [uid, gid]);
+      },
+      chmodSync: (path, mode) => {
+        // Root with all capabilities dropped cannot chmod another UID's inode.
+        assert.equal(
+          owners.get(path)?.[0],
+          0,
+          `chmod without ownership: ${path}`,
+        );
+        modes.set(path, mode);
+      },
+    };
+    runInNewContext(source, {
+      require: (name) => {
+        assert.equal(name, 'node:fs');
+        return fs;
+      },
+    });
+    assert.deepEqual(owners.get('/fixture/home'), [11002, 11002]);
+    assert.deepEqual(owners.get('/fixture/workspace'), [11002, 11002]);
+    assert.deepEqual(owners.get('/fixture/run'), [0, 11002]);
+    assert.deepEqual(owners.get('/fixture/state'), [0, 0]);
+    assert.equal(modes.get('/fixture/run'), 0o750);
+    assert.equal(modes.get('/fixture/state'), 0o700);
   }
 });
 

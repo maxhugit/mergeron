@@ -1,13 +1,4 @@
 {
-  "managedCliIdentity": "Active custom CLI",
-  "managedCliVerified": "Integrity verified",
-  "managedCliInvalid": "Invalid integrity — activation blocked",
-  "managedCliLegacyCustom": "Manual patch — migration recommended",
-  "managedCliOfficialBlocked": "Official updates and unvalidated rollbacks are blocked to preserve sandbox protections and the compatibility fix.",
-  "managedCliManagerUnavailable": "The Manager does not provide a validated CLI. Update the compatible Manager first; no official CLI will be installed as a fallback.",
-  "managedCliAvailable": "Validated release provided by the Manager",
-  "installManagedCli": "Install the Manager-validated CLI",
-  "managedCliConfirm": "Install {{release}} from the Manager bundle, verify its integrity, then restart Codex only when agents are idle. The previous selection will be restored if activation fails.",
   "chatAudioTitle": "Chat and Audio",
   "internalMcpTitle": "Internal MCP",
   "internalMcpDescription": "Technical reference for Mergeron tools: methods, parameters, results and access rules.",

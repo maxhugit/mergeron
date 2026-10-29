@@ -158,6 +158,45 @@ it('does not offer an official fallback when Manager is unavailable', async () =
     screen.queryByRole('button', { name: 'Install the Manager-validated CLI' }),
   ).not.toBeInTheDocument();
 });
+
+it('loads managed CLI copy from Codex settings in French without growing the shared catalog', async () => {
+  const releaseId = '0.164.0-mergeron.1';
+  fetchMock.mockResolvedValue(
+    json({
+      ...available,
+      officialUpdateBlocked: true,
+      managedRelease: { id: releaseId, manifestSha256: 'a'.repeat(64) },
+    }),
+  );
+  await i18n.changeLanguage('fr');
+  try {
+    expect(
+      i18n.getResource('fr', 'common', 'installManagedCli'),
+    ).toBeUndefined();
+    const user = userEvent.setup();
+    fixture.render(<CodexCliSettings />);
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Installer le CLI validé du Manager',
+      }),
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Installer le CLI validé du Manager',
+      }),
+    ).toBeVisible();
+    expect(
+      await screen.findByText(
+        new RegExp(`Installer ${releaseId} depuis le paquet du Manager`),
+      ),
+    ).toBeVisible();
+    expect(
+      fetchMock.mock.calls.some(([, options]) => options?.method === 'POST'),
+    ).toBe(false);
+  } finally {
+    await i18n.changeLanguage('en');
+  }
+});
 afterEach(() => {
   fixture.dispose();
   vi.unstubAllGlobals();

@@ -40,7 +40,7 @@ interface CliReleaseHistory {
 const releaseQueryKey = [...cliStatusQueryKey, 'releases'] as const;
 
 export function CodexCliSettings() {
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useTranslation(['common', 'codexSettings']);
   const client = useQueryClient();
   const [confirmation, setConfirmation] = useState<
     'install' | 'update' | 'rollback' | 'managed' | null
@@ -131,7 +131,7 @@ export function CodexCliSettings() {
           )}
           {data?.protection && data.protection !== 'unprotected' && (
             <>
-              <dt>{t('managedCliIdentity')}</dt>
+              <dt>{t('managedCliIdentity', { ns: 'codexSettings' })}</dt>
               <dd className="break-all">
                 {data.selectedVersion} ·{' '}
                 {t(
@@ -140,6 +140,7 @@ export function CodexCliSettings() {
                     : data.protection === 'invalid'
                       ? 'managedCliInvalid'
                       : 'managedCliLegacyCustom',
+                  { ns: 'codexSettings' },
                 )}
               </dd>
             </>
@@ -147,16 +148,18 @@ export function CodexCliSettings() {
         </dl>
         {data?.officialUpdateBlocked && (
           <p role="status" className="text-sm">
-            {t('managedCliOfficialBlocked')}
+            {t('managedCliOfficialBlocked', { ns: 'codexSettings' })}
           </p>
         )}
         {data?.managerError && data.officialUpdateBlocked && (
-          <p role="alert">{t('managedCliManagerUnavailable')}</p>
+          <p role="alert">
+            {t('managedCliManagerUnavailable', { ns: 'codexSettings' })}
+          </p>
         )}
         {data?.managedRelease && (
           <section className="space-y-2 text-sm">
             <p>
-              {t('managedCliAvailable')}:{' '}
+              {t('managedCliAvailable', { ns: 'codexSettings' })}:{' '}
               <span className="font-mono">{data.managedRelease.id}</span>
             </p>
             <p className="break-all text-xs text-muted-foreground">
@@ -170,7 +173,7 @@ export function CodexCliSettings() {
               }
               onClick={() => setConfirmation('managed')}
             >
-              {t('installManagedCli')}
+              {t('installManagedCli', { ns: 'codexSettings' })}
             </Button>
           </section>
         )}
@@ -369,6 +372,7 @@ export function CodexCliSettings() {
                     : confirmation === 'install'
                       ? 'installCodexCli'
                       : 'updateCodexCli',
+                { ns: confirmation === 'managed' ? 'codexSettings' : 'common' },
               )}
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -378,7 +382,10 @@ export function CodexCliSettings() {
                   : 'thisRestartsTheManagedCodexAppServerTheOperationIsRefusedWhileWorkIsActiveConve1489cd27',
               )}{' '}
               {confirmation === 'managed'
-                ? t('managedCliConfirm', { release: data?.managedRelease?.id })
+                ? t('managedCliConfirm', {
+                    ns: 'codexSettings',
+                    release: data?.managedRelease?.id,
+                  })
                 : confirmation !== 'rollback' && data?.latestVersion}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -29,9 +29,12 @@ if docker info --format '{{json .SecurityOptions}}' | grep -q apparmor; then
 fi
 mkdir -p "$fixture/home" "$fixture/run" "$fixture/state" "$fixture/workspace"
 chmod 755 "$fixture"
-docker run --rm --network none --user 0 --cap-drop ALL --cap-add CHOWN \
+# Bind directories are created by the CI runner, not by container root. Take
+# ownership before chmod; CAP_CHOWN suffices, CAP_FOWNER must not be added.
+docker run --rm --read-only --network none --user 0 --cap-drop ALL --cap-add CHOWN \
+  --security-opt no-new-privileges:true \
   --mount "type=bind,src=$fixture,dst=/fixture" --entrypoint /nodejs/bin/node \
-  "$manager_image" -e 'const f=require("node:fs");for(const p of ["home","workspace"]){f.chownSync("/fixture/"+p,11002,11002)}f.chownSync("/fixture/run",0,11002);f.chmodSync("/fixture/run",0o750);f.chmodSync("/fixture/state",0o700)'
+  "$manager_image" -e 'const f=require("node:fs");for(const p of ["home","workspace"]){f.chownSync("/fixture/"+p,11002,11002)}f.chownSync("/fixture/run",0,11002);f.chmodSync("/fixture/run",0o750);f.chownSync("/fixture/state",0,0);f.chmodSync("/fixture/state",0o700)'
 docker run -d --name "$manager" --read-only --network none --cap-drop ALL \
   --cap-add CHOWN --cap-add DAC_READ_SEARCH --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,nosuid,nodev,size=8m \
