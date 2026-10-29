@@ -1,10 +1,37 @@
 # syntax=docker/dockerfile:1.7
 
+# Native build and BPF regressions are cached independently of Manager code.
+FROM rust:1.99.1-trixie@sha256:09027f873d45b8ecd1dc86f1fa13b7a62b875c961f017a0e331267b350430137 AS codex-runtime-builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git clang cmake pkg-config libssl-dev libcap-dev protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+ENV CARGO_BUILD_JOBS=4 CARGO_PROFILE_RELEASE_LTO=false \
+    CARGO_PROFILE_RELEASE_DEBUG=0 CARGO_PROFILE_RELEASE_STRIP=symbols \
+    STABLE_GIT_COMMIT=6aaac694803004a63c6f393d153c96d22521a6b9
+COPY security/codex-netlink/ /reviewed/
+COPY scripts/build-codex-runtime.sh /build-runtime.sh
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/codex/codex-rs/target \
+    bash /build-runtime.sh
+
+FROM node:22-bookworm-slim AS codex-runtime-files
+RUN npm install --prefix /assets @openai/codex@0.164.0 --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org
+RUN mkdir -p /bundle/node_modules/@openai \
+    && cp -a /assets/node_modules/@openai/codex-linux-x64 /bundle/node_modules/@openai/
+COPY --from=codex-runtime-builder --chmod=555 /out/codex /bundle/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
+COPY --from=codex-runtime-builder /out/route-query.patch /reviewed.patch
+COPY runtime/managed-cli.cjs /runtime/managed-cli.cjs
+COPY scripts/package-codex-runtime.cjs /scripts/package-codex-runtime.cjs
+RUN node /scripts/package-codex-runtime.cjs /bundle /reviewed.patch
+
 FROM node:22-bookworm-slim AS manager-files
 
 WORKDIR /opt/mergeron-manager
 COPY manager/package.json manager/stack-manifest.json ./
 COPY manager/src ./src
+COPY runtime/managed-cli.cjs /opt/runtime/managed-cli.cjs
+COPY --from=codex-runtime-files /bundle/ ./codex-runtime/
 COPY deployment/config/seccomp-bwrap.json /opt/mergeron-manager/seccomp-bwrap.json
 COPY deployment/config/nginx.conf.template deployment/config/nginx.native.conf.template deployment/config/squid.conf /opt/mergeron-manager/default-config/
 
@@ -21,6 +48,7 @@ ARG MERGERON_BUILD_DATE=unknown
 ARG MERGERON_RELEASE_CHANNEL=edge
 
 LABEL org.opencontainers.image.title="Mergeron Manager" \
+      io.mergeron.codex-runtime="0.164.0-mergeron.1" \
       org.opencontainers.image.description="Gestionnaire local de la pile Mergeron" \
       org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
@@ -41,6 +69,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /opt/mergeron-manager
 COPY --from=manager-files --chown=0:0 /opt/mergeron-manager ./
+COPY --from=manager-files --chown=0:0 /opt/runtime /opt/runtime
 COPY --from=manager-files --chown=0:0 /runtime/ /
 
 VOLUME ["/run/mergeron-manager", "/var/lib/mergeron-manager"]

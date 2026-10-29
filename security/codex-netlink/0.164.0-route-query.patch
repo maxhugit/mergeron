@@ -1,0 +1,74 @@
+diff --git a/codex-rs/linux-sandbox/src/seccomp.rs b/codex-rs/linux-sandbox/src/seccomp.rs
+index 67cc7242..7e1b080c 100644
+--- a/codex-rs/linux-sandbox/src/seccomp.rs
++++ b/codex-rs/linux-sandbox/src/seccomp.rs
+@@ -235,8 +235,12 @@ fn install_network_seccomp_filter_on_current_thread(
+         NetworkSeccompMode::ProxyRouted => {
+             // In proxy-routed mode we allow IP sockets in the isolated
+             // namespace (used to reach the local TCP bridge). Standalone Unix
+-            // sockets require an explicit managed-policy grant; all other
+-            // socket families remain denied.
++            // sockets require an explicit managed-policy grant. Permit the raw
++            // NETLINK_ROUTE query used by getifaddrs/libuv in this isolated
++            // network namespace. The inner launcher verifies zero effective
++            // and permitted capabilities before installing this filter; kernel
++            // CAP_NET_ADMIN checks continue to reject routing/link mutations.
++            // No other Netlink protocol or socket type is granted.
+             let mut denied_socket_conditions = vec![
+                 SeccompCondition::new(
+                     0,
+@@ -250,6 +254,12 @@ fn install_network_seccomp_filter_on_current_thread(
+                     SeccompCmpOp::Ne,
+                     libc::AF_INET6 as u64,
+                 )?,
++                SeccompCondition::new(
++                    0,
++                    SeccompCmpArgLen::Dword,
++                    SeccompCmpOp::Ne,
++                    libc::AF_NETLINK as u64,
++                )?,
+             ];
+             if managed_network.is_some_and(|context| context.dangerously_allow_all_unix_sockets) {
+                 denied_socket_conditions.push(SeccompCondition::new(
+@@ -260,13 +270,40 @@ fn install_network_seccomp_filter_on_current_thread(
+                 )?);
+             }
+             let deny_non_ip_socket = SeccompRule::new(denied_socket_conditions)?;
++            let netlink_family = SeccompCondition::new(
++                0,
++                SeccompCmpArgLen::Dword,
++                SeccompCmpOp::Eq,
++                libc::AF_NETLINK as u64,
++            )?;
++            let deny_other_netlink_protocols = SeccompRule::new(vec![
++                netlink_family.clone(),
++                SeccompCondition::new(
++                    2,
++                    SeccompCmpArgLen::Dword,
++                    SeccompCmpOp::Ne,
++                    libc::NETLINK_ROUTE as u64,
++                )?,
++            ])?;
++            let mut denied_netlink_types = vec![netlink_family];
++            for flags in [0, libc::SOCK_CLOEXEC, libc::SOCK_NONBLOCK,
++                          libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK] {
++                denied_netlink_types.push(SeccompCondition::new(
++                    1,
++                    SeccompCmpArgLen::Dword,
++                    SeccompCmpOp::Ne,
++                    (libc::SOCK_RAW | flags) as u64,
++                )?);
++            }
++            let deny_other_netlink_types = SeccompRule::new(denied_netlink_types)?;
+             let deny_non_unix_socketpair = SeccompRule::new(vec![SeccompCondition::new(
+                 0,
+                 SeccompCmpArgLen::Dword,
+                 SeccompCmpOp::Ne,
+                 libc::AF_UNIX as u64,
+             )?])?;
+-            rules.insert(libc::SYS_socket, vec![deny_non_ip_socket]);
++            rules.insert(libc::SYS_socket, vec![deny_non_ip_socket,
++                deny_other_netlink_protocols, deny_other_netlink_types]);
+             rules.insert(libc::SYS_socketpair, vec![deny_non_unix_socketpair]);
+         }
+         NetworkSeccompMode::VmSocketRestricted => {

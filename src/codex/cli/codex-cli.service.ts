@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { execFile } from 'node:child_process';
@@ -23,6 +24,7 @@ import { CatalogAdmissionService } from '../catalog/catalog-admission.service';
 import { CatalogActivityService } from '../catalog/catalog-activity.service';
 import { CodexProcessManager } from '../codex-process-manager.service';
 import { writeAtomic } from '../catalog/catalog-files';
+import { ManagerStatusService } from '../../settings/manager-status.service';
 import {
   cliBinary,
   cliRoot,
@@ -30,6 +32,9 @@ import {
   CLI_VERSION,
   isNewerVersion,
   type CliSelection,
+  hasCustomCli,
+  approveCli,
+  verifyCliRelease,
 } from './managed-cli';
 
 const execute = promisify(execFile);
@@ -109,7 +114,45 @@ export class CodexCliService {
     private readonly admission: CatalogAdmissionService,
     private readonly activity: CatalogActivityService,
     private readonly manager: CodexProcessManager,
+    @Optional() private readonly hostManager?: ManagerStatusService,
   ) {}
+
+  protected requiresValidatedRuntime(): boolean {
+    return (
+      existsSync('/usr/local/bin/mergeron-agent-environment') ||
+      hasCustomCli(this.paths.home)
+    );
+  }
+
+  private assertOfficialAllowed(): void {
+    if (this.requiresValidatedRuntime())
+      throw new ConflictException('codexOfficialUpdateBlocked');
+  }
+
+  private safeRollback(selection: CliSelection): boolean {
+    if (!selection.protection)
+      return (
+        !this.requiresValidatedRuntime() &&
+        (selection.previous !== null || this.hasLegacyCli())
+      );
+    const hash =
+      selection.previous && selection.protection.approved[selection.previous];
+    if (!hash || !selection.previous) return false;
+    try {
+      const target = verifyCliRelease(
+        dirname(cliBinary(this.paths.home, selection.previous)),
+        hash,
+      );
+      return (
+        target.id === selection.previous &&
+        selection.protection.capabilities.every((c) =>
+          target.capabilities.includes(c),
+        )
+      );
+    } catch {
+      return false;
+    }
+  }
 
   protected canManageCli(): boolean {
     return (
@@ -302,6 +345,7 @@ export class CodexCliService {
     }
   }
   async status(force = false) {
+    const updateBlocked = this.requiresValidatedRuntime();
     let installedVersion: string | null = null,
       latestVersion: string | null = null,
       installedError: string | null = null,
@@ -311,10 +355,12 @@ export class CodexCliService {
     } catch {
       installedError = 'Unable to read the installed CLI version';
     }
-    try {
-      latestVersion = await this.latest(force);
-    } catch {
-      checkError = 'Unable to check npm for updates';
+    if (!updateBlocked) {
+      try {
+        latestVersion = await this.latest(force);
+      } catch {
+        checkError = 'Unable to check npm for updates';
+      }
     }
     const selection = cliSelection(this.paths.home);
     const externalBinary = Boolean(this.config.get<string>('CODEX_BIN'));
@@ -326,6 +372,30 @@ export class CodexCliService {
           ? 'legacy'
           : 'missing';
     if (installationState === 'missing') installedError = null;
+    let managedRelease: {
+      id: string;
+      upstreamVersion: string;
+      manifestSha256: string;
+      upstreamCommit: string;
+      patchSha256: string;
+    } | null = null;
+    let managerError: string | null = null;
+    if (this.hostManager) {
+      try {
+        const release = await this.hostManager.codexCli();
+        if (
+          typeof release.id !== 'string' ||
+          !/^\d+\.\d+\.\d+-mergeron\.[1-9]\d{0,5}$/.test(release.id) ||
+          !/^[a-f0-9]{64}$/.test(String(release.manifestSha256))
+        )
+          throw new Error('Invalid runtime identity');
+        managedRelease = release as unknown as NonNullable<
+          typeof managedRelease
+        >;
+      } catch {
+        managerError = 'codexRuntimeManagerUnavailable';
+      }
+    }
     return {
       installedVersion,
       latestVersion,
@@ -343,14 +413,90 @@ export class CodexCliService {
       canRollback:
         !externalBinary &&
         selection.version !== null &&
-        (selection.previous !== null || this.hasLegacyCli()),
+        this.safeRollback(selection),
       selectedVersion: selection.version,
       installationState,
+      officialUpdateBlocked: updateBlocked,
+      protection: selection.protection
+        ? installedVersion
+          ? 'verified'
+          : 'invalid'
+        : hasCustomCli(this.paths.home)
+          ? 'legacy-custom'
+          : 'unprotected',
+      managedRelease,
+      managerError,
     };
+  }
+
+  /** Manager stages a verified immutable release; admission/activation stay here. */
+  async installManaged(input: {
+    releaseId?: unknown;
+    manifestSha256?: unknown;
+    expectedSelection?: unknown;
+  }) {
+    if (!this.canManageCli() || !this.hostManager)
+      throw new ConflictException('codexRuntimeManagerUnavailable');
+    if (
+      typeof input.releaseId !== 'string' ||
+      !/^\d+\.\d+\.\d+-mergeron\.[1-9]\d{0,5}$/.test(input.releaseId) ||
+      typeof input.manifestSha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(input.manifestSha256)
+    )
+      throw new BadRequestException('Invalid managed CLI identity');
+    if (this.busy)
+      throw new ConflictException('A CLI update is already in progress');
+    const before = cliSelection(this.paths.home);
+    if (input.expectedSelection !== before.version)
+      throw new ConflictException(
+        'CLI version changed; refresh before continuing',
+      );
+    const release = this.admission.begin();
+    this.busy = true;
+    let switched = false;
+    try {
+      await this.requireIdle(true);
+      const staged = await this.hostManager.installCodexCli(
+        input.releaseId,
+        input.manifestSha256,
+      );
+      if (
+        staged.id !== input.releaseId ||
+        staged.manifestSha256 !== input.manifestSha256 ||
+        staged.installed !== true
+      )
+        throw new Error('codexRuntimePlanChanged');
+      const next = approveCli(this.paths.home, {
+        id: input.releaseId,
+        manifestSha256: input.manifestSha256,
+      });
+      await this.requireIdle(true);
+      if (
+        JSON.stringify(cliSelection(this.paths.home)) !== JSON.stringify(before)
+      )
+        throw new ConflictException(
+          'CLI version changed; refresh before continuing',
+        );
+      this.manager.suspendRetries();
+      this.select(next);
+      switched = true;
+      await this.manager.restartControlled(release);
+      return { success: true, releaseId: next.version };
+    } catch (error) {
+      if (switched) {
+        this.select(before);
+        await this.manager.restartControlled(release);
+      }
+      throw error;
+    } finally {
+      this.busy = false;
+      release();
+    }
   }
 
   /** First installation is allowed while the managed app-server is unavailable. */
   async installFirst(expectedTarget: unknown) {
+    this.assertOfficialAllowed();
     if (typeof expectedTarget !== 'string' || !CLI_VERSION.test(expectedTarget))
       throw new BadRequestException('Invalid expected CLI version');
     if (!this.canManageCli())
@@ -465,9 +611,12 @@ export class CodexCliService {
     rollback = false,
     expectedTarget?: unknown,
   ) {
+    if (!rollback) this.assertOfficialAllowed();
     if (
       typeof expectedVersion !== 'string' ||
-      !CLI_VERSION.test(expectedVersion)
+      !(rollback
+        ? /^\d+\.\d+\.\d+(?:-mergeron\.[1-9]\d{0,5})?$/.test(expectedVersion)
+        : CLI_VERSION.test(expectedVersion))
     )
       throw new BadRequestException('Invalid expected CLI version');
     if (!this.canManageCli())
@@ -477,6 +626,8 @@ export class CodexCliService {
     if (this.busy)
       throw new ConflictException('A CLI update is already in progress');
     const before = cliSelection(this.paths.home);
+    if (rollback && !this.safeRollback(before))
+      throw new ConflictException('codexUnsafeRollbackBlocked');
     const release = this.admission.begin();
     this.busy = true;
     let switched = false;
@@ -500,11 +651,11 @@ export class CodexCliService {
         );
       if (!rollback && (!target || !isNewerVersion(target, expectedVersion)))
         throw new ConflictException('No newer stable CLI version is available');
-      if (target) await this.install(target);
+      if (target && !before.protection) await this.install(target);
       await this.requireIdle(rollback);
       await mkdir(cliRoot(this.paths.home), { recursive: true, mode: 0o700 });
       this.manager.suspendRetries();
-      this.select({ version: target, previous: before.version });
+      this.select({ ...before, version: target, previous: before.version });
       switched = true;
       await this.manager.restartControlled(release);
       return { success: true };

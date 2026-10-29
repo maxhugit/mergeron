@@ -166,6 +166,16 @@ export class DockerClient {
     });
   }
 
+  waitContainer(id) {
+    return this.request(
+      `/containers/${encodeURIComponent(id)}/wait?condition=not-running`,
+      {
+        method: 'POST',
+        timeout: 180_000,
+      },
+    );
+  }
+
   renameContainer(id, name) {
     return this.request(
       `/containers/${encodeURIComponent(id)}/rename?name=${encodeURIComponent(name)}`,

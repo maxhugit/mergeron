@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { cliBinary, cliSelection } from '../cli/managed-cli';
+import { cliBinary, cliSelection, selectedCli } from '../cli/managed-cli';
 
 @Injectable()
 export class CatalogPathsService {
@@ -27,9 +27,11 @@ export class CatalogPathsService {
   /** Prefer the project's pinned installation unless CODEX_BIN explicitly overrides it. */
   get binary(): string {
     const override = this.config.get<string>('CODEX_BIN');
+    if (override && cliSelection(this.home).protection)
+      throw new Error('Protected CLI cannot be overridden');
     if (override) return override.includes('/') ? resolve(override) : override;
-    const selected = cliSelection(this.home).version;
-    if (selected) return cliBinary(this.home, selected);
+    const selected = selectedCli(this.home);
+    if (selected) return selected;
     const local = resolve('node_modules/.bin/codex');
     return existsSync(local) ? local : 'codex';
   }

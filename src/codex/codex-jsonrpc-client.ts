@@ -272,6 +272,9 @@ export class CodexJsonRpcClient extends EventEmitter<CodexJsonRpcClientEvents> {
 
   private setupStdio(): void {
     const { stdout, stderr } = this.process;
+    // A missing/rejected CLI can exit before the initialize write is flushed.
+    // Report that transport failure without crashing the HTTP repair/install UI.
+    this.process.stdin?.on('error', (error) => this.emit('error', error));
 
     if (!stdout || !stderr) {
       throw new Error('Process stdio not available');

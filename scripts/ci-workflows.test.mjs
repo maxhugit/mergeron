@@ -37,7 +37,10 @@ test('all independent image checks run concurrently, including UI/docs-only PRs'
 
 test('required gate rejects every missing, failed or cancelled security job', () => {
   const gate = job(quality, 'quality');
-  assert.match(gate, /needs: \[checks, image, manager-image, browser-image\]/);
+  assert.match(
+    gate,
+    /needs: \[checks, image, manager-image, browser-image, cli-runtime\]/,
+  );
   assert.match(gate, /if: always\(\)/);
   assert.match(gate, /EXPECT_IMAGES:.*github\.event_name == 'pull_request'/);
   const script = gate.split('        run: |\n')[1].replace(/^          /gm, '');
@@ -46,6 +49,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
     IMAGE_RESULT: 'success',
     MANAGER_RESULT: 'success',
     BROWSER_RESULT: 'success',
+    CLI_RESULT: 'success',
     EXPECT_IMAGES: 'true',
   };
   const run = (overrides) =>
@@ -58,6 +62,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
     'IMAGE_RESULT',
     'MANAGER_RESULT',
     'BROWSER_RESULT',
+    'CLI_RESULT',
   ]) {
     for (const result of ['failure', 'cancelled', 'skipped', '']) {
       assert.notEqual(
@@ -73,6 +78,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
       IMAGE_RESULT: 'skipped',
       MANAGER_RESULT: 'skipped',
       BROWSER_RESULT: 'skipped',
+      CLI_RESULT: 'skipped',
     }),
     0,
   );
@@ -176,9 +182,24 @@ test('browser preparation is parallel but moving tags remain gated by quality', 
   assert.match(publish, /cancel-in-progress: false/);
   assert.match(
     job(publish, 'promote'),
-    /needs: \[quality, build, manager-build\]/,
+    /needs: \[quality, build, manager-build, cli-runtime\]/,
   );
   assert.match(job(publish, 'promote'), /scripts\/promote-image-pair\.sh/);
+});
+
+test('CLI installation and actual sandbox validation gate both PRs and promotion by immutable image digests', () => {
+  const cli = job(quality, 'cli-runtime');
+  assert.match(cli, /needs: \[image, manager-image\]/);
+  assert.match(cli, /needs\.image\.outputs\.digest/);
+  assert.match(cli, /needs\.manager-image\.outputs\.digest/);
+  const publishCli = job(publish, 'cli-runtime');
+  assert.match(publishCli, /needs: \[build, manager-build\]/);
+  assert.match(publishCli, /needs\.build\.outputs\.digest/);
+  assert.match(publishCli, /needs\.manager-build\.outputs\.digest/);
+  for (const block of [cli, publishCli]) {
+    assert.match(block, /smoke-test-managed-cli\.sh/);
+    assert.doesNotMatch(block, /continue-on-error:/);
+  }
 });
 
 test('browser identity does not invalidate dependencies and cleanup', () => {

@@ -43,7 +43,7 @@ export function CodexCliSettings() {
   const { t, i18n } = useTranslation();
   const client = useQueryClient();
   const [confirmation, setConfirmation] = useState<
-    'install' | 'update' | 'rollback' | null
+    'install' | 'update' | 'rollback' | 'managed' | null
   >(null);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
@@ -67,16 +67,25 @@ export function CodexCliSettings() {
       installedVersion,
       latestVersion,
     }: {
-      action: 'install' | 'update' | 'rollback';
+      action: 'install' | 'update' | 'rollback' | 'managed';
       installedVersion: string | null;
       latestVersion: string | null;
     }) =>
-      requestCli(`/${action}`, {
-        ...(action === 'install'
-          ? { targetVersion: latestVersion }
-          : { expectedVersion: installedVersion }),
-        ...(action === 'update' ? { targetVersion: latestVersion } : {}),
-      }),
+      requestCli(
+        `/${action}`,
+        action === 'managed'
+          ? {
+              releaseId: status.data?.managedRelease?.id,
+              manifestSha256: status.data?.managedRelease?.manifestSha256,
+              expectedSelection: status.data?.selectedVersion ?? null,
+            }
+          : {
+              ...(action === 'install'
+                ? { targetVersion: latestVersion }
+                : { expectedVersion: installedVersion }),
+              ...(action === 'update' ? { targetVersion: latestVersion } : {}),
+            },
+      ),
     onSettled: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: cliStatusQueryKey }),
@@ -114,9 +123,57 @@ export function CodexCliSettings() {
               ? t('notInstalled')
               : (data?.installedVersion ?? t('unknown'))}
           </dd>
-          <dt>{t('latestStableVersion')}</dt>
-          <dd>{data?.latestVersion ?? t('unknown')}</dd>
+          {!data?.officialUpdateBlocked && (
+            <>
+              <dt>{t('latestStableVersion')}</dt>
+              <dd>{data?.latestVersion ?? t('unknown')}</dd>
+            </>
+          )}
+          {data?.protection && data.protection !== 'unprotected' && (
+            <>
+              <dt>{t('managedCliIdentity')}</dt>
+              <dd className="break-all">
+                {data.selectedVersion} ·{' '}
+                {t(
+                  data.protection === 'verified'
+                    ? 'managedCliVerified'
+                    : data.protection === 'invalid'
+                      ? 'managedCliInvalid'
+                      : 'managedCliLegacyCustom',
+                )}
+              </dd>
+            </>
+          )}
         </dl>
+        {data?.officialUpdateBlocked && (
+          <p role="status" className="text-sm">
+            {t('managedCliOfficialBlocked')}
+          </p>
+        )}
+        {data?.managerError && data.officialUpdateBlocked && (
+          <p role="alert">{t('managedCliManagerUnavailable')}</p>
+        )}
+        {data?.managedRelease && (
+          <section className="space-y-2 text-sm">
+            <p>
+              {t('managedCliAvailable')}:{' '}
+              <span className="font-mono">{data.managedRelease.id}</span>
+            </p>
+            <p className="break-all text-xs text-muted-foreground">
+              SHA-256: {data.managedRelease.manifestSha256}
+            </p>
+            <Button
+              disabled={
+                busy ||
+                !data.canManage ||
+                data.selectedVersion === data.managedRelease.id
+              }
+              onClick={() => setConfirmation('managed')}
+            >
+              {t('installManagedCli')}
+            </Button>
+          </section>
+        )}
         {data?.checkedAt && (
           <p className="text-xs text-muted-foreground">
             {t('lastChecked')}:{' '}
@@ -178,6 +235,7 @@ export function CodexCliSettings() {
             disabled={
               busy ||
               !data?.canManage ||
+              data.officialUpdateBlocked ||
               !data.latestVersion ||
               (data.installationState !== 'missing' && !data.updateAvailable)
             }
@@ -304,11 +362,13 @@ export function CodexCliSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {t(
-                confirmation === 'rollback'
-                  ? 'restorePreviousCli'
-                  : confirmation === 'install'
-                    ? 'installCodexCli'
-                    : 'updateCodexCli',
+                confirmation === 'managed'
+                  ? 'installManagedCli'
+                  : confirmation === 'rollback'
+                    ? 'restorePreviousCli'
+                    : confirmation === 'install'
+                      ? 'installCodexCli'
+                      : 'updateCodexCli',
               )}
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -317,7 +377,9 @@ export function CodexCliSettings() {
                   ? 'thisInstallsTheLatestStableCodexCliInPersistentStorageAndStartsTheManagedAppSer62e3737f'
                   : 'thisRestartsTheManagedCodexAppServerTheOperationIsRefusedWhileWorkIsActiveConve1489cd27',
               )}{' '}
-              {confirmation !== 'rollback' && data?.latestVersion}
+              {confirmation === 'managed'
+                ? t('managedCliConfirm', { release: data?.managedRelease?.id })
+                : confirmation !== 'rollback' && data?.latestVersion}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -330,9 +392,11 @@ export function CodexCliSettings() {
                     : data?.installedVersion;
                 if (
                   confirmation &&
-                  (confirmation === 'install'
-                    ? Boolean(data?.latestVersion)
-                    : Boolean(expected))
+                  (confirmation === 'managed'
+                    ? Boolean(data?.managedRelease)
+                    : confirmation === 'install'
+                      ? Boolean(data?.latestVersion)
+                      : Boolean(expected))
                 )
                   mutation.mutate({
                     action: confirmation,

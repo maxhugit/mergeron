@@ -1,0 +1,63 @@
+diff --git a/codex-rs/linux-sandbox/src/seccomp_tests.rs b/codex-rs/linux-sandbox/src/seccomp_tests.rs
+index 8fde061f..37a0dcdc 100644
+--- a/codex-rs/linux-sandbox/src/seccomp_tests.rs
++++ b/codex-rs/linux-sandbox/src/seccomp_tests.rs
+@@ -75,3 +75,58 @@ fn full_network_without_managed_proxy_skips_network_seccomp_mode() {
+         None
+     );
+ }
++
++// Run the actual compiled BPF in a separate process: never restrict the test
++// runner thread or rely only on inspecting source strings.
++#[test]
++fn mergeron_route_query_filter_is_narrow() {
++    for mode in ["proxy", "restricted"] {
++        let result = std::process::Command::new(std::env::current_exe().expect("test executable"))
++            .args(["--ignored", "--exact", "seccomp::tests::mergeron_filter_probe"])
++            .env("MERGERON_FILTER_PROBE", mode)
++            .output()
++            .expect("start filter probe");
++        assert!(result.status.success(), "{mode}: {} {}",
++            String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
++    }
++}
++
++#[test]
++#[ignore = "subprocess probe only"]
++fn mergeron_filter_probe() {
++    let proxy = std::env::var("MERGERON_FILTER_PROBE").expect("probe mode") == "proxy";
++    super::set_no_new_privs().expect("no_new_privs");
++    super::install_network_seccomp_filter_on_current_thread(
++        if proxy { NetworkSeccompMode::ProxyRouted } else { NetworkSeccompMode::Restricted },
++        None,
++    ).expect("install seccomp");
++    let socket = |family, kind, protocol, allowed| {
++        // SAFETY: no pointers, and close only descriptors returned by socket.
++        let fd = unsafe { libc::socket(family, kind, protocol) };
++        if allowed {
++            assert!(fd >= 0, "socket({family},{kind},{protocol}): {}", std::io::Error::last_os_error());
++            unsafe { libc::close(fd) };
++        } else {
++            assert_eq!(fd, -1, "unexpected socket grant: {family}/{kind}/{protocol}");
++            assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::EPERM));
++        }
++    };
++    for flags in [0, libc::SOCK_CLOEXEC, libc::SOCK_NONBLOCK,
++                  libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK] {
++        socket(libc::AF_NETLINK, libc::SOCK_RAW | flags, libc::NETLINK_ROUTE, proxy);
++    }
++    for protocol in [libc::NETLINK_USERSOCK, libc::NETLINK_SOCK_DIAG, libc::NETLINK_GENERIC] {
++        socket(libc::AF_NETLINK, libc::SOCK_RAW, protocol, false);
++    }
++    socket(libc::AF_NETLINK, libc::SOCK_STREAM, libc::NETLINK_ROUTE, false);
++    socket(libc::AF_NETLINK, libc::SOCK_DGRAM, libc::NETLINK_ROUTE, false);
++    socket(libc::AF_PACKET, libc::SOCK_RAW, 0, false);
++    socket(libc::AF_VSOCK, libc::SOCK_STREAM, 0, false);
++    socket(libc::AF_UNIX, libc::SOCK_STREAM, 0, !proxy);
++    socket(libc::AF_INET, libc::SOCK_STREAM, 0, proxy);
++    socket(libc::AF_INET6, libc::SOCK_STREAM, 0, proxy);
++    assert_eq!(unsafe { libc::syscall(libc::SYS_ptrace, 0, 0, 0, 0) }, -1);
++    assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::EPERM));
++    assert_eq!(unsafe { libc::syscall(libc::SYS_io_uring_setup, 1, 0) }, -1);
++    assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::EPERM));
++}

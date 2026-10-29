@@ -77,12 +77,12 @@ try {
     assert.equal(preflight.success,true,JSON.stringify(preflight));
     assert.equal(preflight.checks.find(c=>c.id==='node.headers').status,'ok');
     if(process.argv[4]) {
-      cp.execFileSync(process.execPath,['/agent-test-profile.cjs',process.argv[4],root,process.env.CODEX_HOME],{env:process.env,stdio:'inherit',timeout:65000,killSignal:'SIGKILL'});
+      cp.execFileSync(process.execPath,['/agent-test-profile.cjs',process.argv[4],root,process.env.CODEX_HOME,...(process.argv[5]==='--netlink-route'?['--netlink-route']:[])],{env:process.env,stdio:'inherit',timeout:65000,killSignal:'SIGKILL'});
     }
     console.log('PASS: code writable; versions immutable; rename/hardlink refused; private state hidden');
     console.log('PASS: private caches writable; pnpm available offline; loopback and sandboxed Chromium ready inside bwrap');
   `;
-  const command = agentEnvironmentCommand(process.execPath, ['-e', probe, workspace, databasePath, ssh, ...(process.argv[2] ? [process.argv[2]] : [])]);
+  const command = agentEnvironmentCommand(process.execPath, ['-e', probe, workspace, databasePath, ssh, ...(process.argv[2] ? [process.argv[2]] : []), ...(process.argv[3]==='--netlink-route'?['--netlink-route']:[])]);
   const args = documentIsolationArgs(
     {
       home,
@@ -115,6 +115,18 @@ try {
     'V1',
   );
   assert.equal(fs.readFileSync(path.join(history, 'v1.docx'), 'utf8'), 'V1');
+  if (process.argv[3] === '--netlink-route' && process.env.MERGERON_NETLINK_EVIDENCE) {
+    const source = path.join(workspace, 'artifacts/native-backend-visual');
+    for (const name of ['desktop.png', 'mobile.png', 'report.json']) {
+      const file = path.join(source, name);
+      assert(fs.lstatSync(file).isFile());
+      const bytes = fs.readFileSync(file);
+      assert(bytes.length < 15 * 1024 * 1024);
+      if (name.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+      fs.writeFileSync(path.join(process.env.MERGERON_NETLINK_EVIDENCE, name), bytes, { flag: 'wx', mode: 0o600 });
+    }
+    console.log('PASS: desktop/mobile evidence exported by the trusted outer fixture');
+  }
 } finally {
   fs.rmSync(workspace, { recursive: true });
   fs.rmSync(temporary, { recursive: true });
