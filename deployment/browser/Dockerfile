@@ -1,8 +1,13 @@
 FROM mcr.microsoft.com/playwright:v1.64.1-noble
 WORKDIR /opt/browser
+# Ubuntu USN-8956-1 / CVE-2026-111497: refresh Brotli even when the
+# pinned Playwright base still contains the original Noble library.
 RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund playwright-core@1.64.1 \
+ && apt-get update \
+ && apt-get install --yes --no-install-recommends --only-upgrade libbrotli1 \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libbrotli1)" ge '1.1.0-2ubuntu0.1' \
  && apt-get purge --yes gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-0 \
- && rm -rf /usr/lib/node_modules/npm /usr/lib/node_modules/yarn \
+ && rm -rf /var/lib/apt/lists/* /usr/lib/node_modules/npm /usr/lib/node_modules/yarn \
            /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/yarn \
  && rm -f /usr/bin/npm /usr/bin/npx /usr/bin/yarn /usr/bin/yarnpkg \
           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg
