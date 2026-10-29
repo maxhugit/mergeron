@@ -129,7 +129,7 @@ test('successful base preflight uses offline commands outside the project, witho
         assert.equal(options.env.COREPACK_ENABLE_NETWORK, '0');
         assert.equal(options.env.COREPACK_ENABLE_PROJECT_SPEC, '0');
         assert.equal(options.env.COREPACK_ENABLE_AUTO_PIN, '0');
-        return '10.18.3';
+        return '10.34.9';
       },
       lookup: () => assert.fail('No DNS requested'),
       browserProbe: () => assert.fail('No browser requested'),
@@ -315,7 +315,7 @@ test('the immutable pnpm seed is copied into the writable cache, never modified 
   fixture(async (root) => {
     const seed = join(root, 'seed');
     await mkdir(seed);
-    await writeFile(join(seed, 'lastKnownGood.json'), '{"pnpm":"10.18.3"}');
+    await writeFile(join(seed, 'lastKnownGood.json'), '{"pnpm":"10.34.9"}');
     const script = (
       await readFile('scripts/mergeron-agent-environment.sh', 'utf8')
     ).replaceAll('/opt/mergeron-corepack', seed);
@@ -336,16 +336,24 @@ test('the immutable pnpm seed is copied into the writable cache, never modified 
     );
     assert.equal(result.status, 0, result.stderr);
     const copy = join(result.stdout.trim(), 'lastKnownGood.json');
-    assert.equal(await readFile(copy, 'utf8'), '{"pnpm":"10.18.3"}');
+    assert.equal(await readFile(copy, 'utf8'), '{"pnpm":"10.34.9"}');
     await writeFile(copy, 'changed');
     assert.equal(
       await readFile(join(seed, 'lastKnownGood.json'), 'utf8'),
-      '{"pnpm":"10.18.3"}',
+      '{"pnpm":"10.34.9"}',
     );
   }));
 
 test('image and CI ship the launcher, retained package-manager seed and executable preflight', async () => {
   const dockerfile = await readFile('Dockerfile', 'utf8');
+  const { packageManager } = JSON.parse(await readFile('package.json', 'utf8'));
+  const pinned = packageManager.split('@')[1];
+  assert.equal(dockerfile.match(/^ARG PNPM_VERSION=(.*)$/m)[1], pinned);
+  assert.ok(
+    (await readFile('.github/workflows/quality.yml', 'utf8')).includes(
+      `version: ${pinned}`,
+    ),
+  );
   assert.match(dockerfile, /ENV COREPACK_HOME=\/opt\/mergeron-corepack/);
   assert.match(
     dockerfile,

@@ -28,7 +28,8 @@ Ils ne sont ni dans les sources, ni dans les documents ou livrables, ni dans le
 stockage de versions. Un manque d’espace reste une erreur à traiter, pas une
 raison d’élargir les droits ou de déplacer les caches dans le dépôt.
 
-La version pnpm épinglée est préchargée dans `/opt/mergeron-corepack`, hors du
+La version pnpm épinglée (10.34.9, même majeure que le projet) est préchargée
+dans `/opt/mergeron-corepack`, hors du
 volume personnel et du nettoyage des caches de construction. Le lanceur en fait
 une copie accessible en écriture. La version préchargée est utilisable sans
 téléchargement ; un projet demandant une autre version peut toujours nécessiter

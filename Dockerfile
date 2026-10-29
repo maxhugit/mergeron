@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Canonical hardened image for supported Linux Docker hosts.
 
-ARG PNPM_VERSION=10.18.3
+ARG PNPM_VERSION=10.34.9
 ARG GH_VERSION=2.103.0
 ARG GH_LINUX_AMD64_SHA256=fdd768eb70f6409f80fcfa9f3a1c0adf0fc98d827ab3ce0bed2ac22762c5d786
 ARG PILLOW_VERSION=13.0.0
