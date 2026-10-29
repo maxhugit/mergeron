@@ -21,6 +21,7 @@ export interface AgentPreview {
   lastSyncedAt: number | null;
   updateMode: string;
   requiresRestart: boolean;
+  ready: boolean;
 }
 export function AgentPreviewDialog({
   projectId,
@@ -91,13 +92,15 @@ export function AgentPreviewDialog({
           {query.isPending
             ? t('loading')
             : preview
-              ? ({
-                  starting: t('states.starting'),
-                  running: t('states.running'),
-                  stopping: t('states.stopping'),
-                  stopped: t('states.stopped'),
-                  failed: t('states.failed'),
-                }[preview.state] ?? t('unavailable'))
+              ? preview.state === 'running' && !preview.ready
+                ? t('waitingForHttp')
+                : ({
+                    starting: t('states.starting'),
+                    running: t('states.running'),
+                    stopping: t('states.stopping'),
+                    stopped: t('states.stopped'),
+                    failed: t('states.failed'),
+                  }[preview.state] ?? t('unavailable'))
               : t('notStarted')}
         </p>
         {query.isError && <p role="alert">{t('unavailable')}</p>}
@@ -152,7 +155,7 @@ export function AgentPreviewDialog({
                 {t('startButton')}
               </Button>
             )}
-          {active && (
+          {active && preview.ready && (
             <Button onClick={() => void openPreview()}>{t('open')}</Button>
           )}
           {session.isAdministrator && active && (

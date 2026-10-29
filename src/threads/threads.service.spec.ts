@@ -685,7 +685,7 @@ describe('ThreadsService', () => {
       agentInstructions: { context: () => 'Common instructions' },
     });
     mockKnowledge.contextForConversation.mockResolvedValue('Shared knowledge');
-    mockProjectTools.context.mockReturnValue('Project context');
+    mockProjectTools.context.mockResolvedValue('Project context');
     mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
     await service.startTurn({
       threadId: 't1',
@@ -709,8 +709,8 @@ describe('ThreadsService', () => {
   it('refreshes project identity and catalog on every existing-conversation turn', async () => {
     mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
     mockProjectTools.context
-      .mockReturnValueOnce('Project: Tests 2; tasks: A')
-      .mockReturnValueOnce('Project: Renamed; tasks: A, B');
+      .mockResolvedValueOnce('Project: Tests 2; tasks: A')
+      .mockResolvedValueOnce('Project: Renamed; tasks: A, B');
     const input = [
       { type: 'text' as const, text: 'List my tasks', text_elements: [] },
     ];

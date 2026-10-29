@@ -6,9 +6,72 @@ const contract = require('./preview-profile.cjs');
 test('preview profiles are disabled by default', () => {
   const p = contract.profile({});
   assert.equal(p.enabled, false);
+  assert.equal(p.agentManaged, false);
+  assert.deepEqual(p.agentRuntimes, ['node']);
   assert.equal(p.directory, '.');
   assert.equal(p.port, 3000);
   assert.equal(p.lifetimeMinutes, 60);
+});
+
+test('delegated recipes cannot enable projects, raise caps or inherit manual secrets', () => {
+  const policy = contract.profile({
+    enabled: true,
+    agentManaged: true,
+    agentRuntimes: ['python', 'postgres'],
+    memoryMb: 256,
+    cpus: 1,
+    lifetimeMinutes: 15,
+    env: { PRIVATE_KEY: 'manual-secret' },
+  });
+  const recipe = {
+    runtime: 'python',
+    start: 'python -m http.server 8000',
+    port: 8000,
+    env: { TEST_MODE: 'true' },
+    services: [
+      {
+        name: 'db',
+        runtime: 'postgres',
+        env: { POSTGRES_PASSWORD: 'temporary-test-value' },
+      },
+    ],
+  };
+  const applied = contract.agentProfile(policy, recipe);
+  assert.equal(applied.memoryMb, 256);
+  assert.equal(applied.cpus, 1);
+  assert.equal(applied.lifetimeMinutes, 15);
+  assert.equal(applied.env.PRIVATE_KEY, undefined);
+  assert.throws(
+    () => contract.agentProfile({ ...policy, enabled: false }, recipe),
+    /PREVIEW_AGENT_NOT_AUTHORIZED/,
+  );
+  assert.throws(
+    () => contract.agentProfile({ ...policy, agentManaged: false }, recipe),
+    /PREVIEW_AGENT_NOT_AUTHORIZED/,
+  );
+  assert.throws(
+    () =>
+      contract.agentProfile({ ...policy, agentRuntimes: ['python'] }, recipe),
+    /PREVIEW_RUNTIME_NOT_ALLOWED/,
+  );
+  for (const extra of [
+    { enabled: true },
+    { agentManaged: true },
+    { memoryMb: 4096 },
+    { cpus: 4 },
+    { lifetimeMinutes: 240 },
+    { image: 'x' },
+    { mounts: [] },
+    { url: 'https://example.org' },
+  ])
+    assert.throws(
+      () => contract.agentRecipe({ ...recipe, ...extra }),
+      /PREVIEW_INVALID_CONFIGURATION/,
+    );
+  assert.throws(
+    () => contract.agentRecipe({ ...recipe, env: { PRIVATE_KEY: '[stored]' } }),
+    /PREVIEW_INVALID_CONFIGURATION/,
+  );
 });
 
 test('profiles support unrelated Node and Python projects without Mergeron commands', () => {

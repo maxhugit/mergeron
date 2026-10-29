@@ -519,7 +519,7 @@ export class ThreadsService {
       params.threadId,
     );
     const commonInstructions = this.agentInstructions?.context();
-    const projectContext = this.projectTools?.context(
+    const projectContext = await this.projectTools?.context(
       params.threadId,
       effectiveCwd,
     );

@@ -88,6 +88,55 @@ ne remplace pas cette protection. Le Manager refuse de se rabattre sur ce mode.
 
 ## Définir le profil du projet
 
+### Déléguer la préparation aux agents
+
+Activer « Autoriser les environnements de test pour ce projet », puis
+« Laisser les agents préparer et gérer leur environnement de test ». Choisir
+les technologies autorisées et les plafonds de mémoire, CPU et durée. Cette
+délégation est désactivée par défaut, y compris pour les profils existants.
+Elle ne donne jamais accès au socket Docker, à des images arbitraires, aux
+réseaux privés ou aux données et comptes de production.
+
+L’agent peut alors examiner ses sources et préparer sa propre recette via MCP,
+sans faire ressaisir un profil commun à tous les agents. Il demande des
+précisions en cas d’ambiguïté et ne demande jamais de secret de production dans
+la conversation. Les variables de sa recette sont des valeurs de test jetables ;
+aucune variable ou valeur `[stored]` du profil manuel n’est héritée.
+
+Les recettes sont chiffrées, liées au projet et à l’agent, et stockées séparément
+du profil administrateur. Les plafonds sont imposés par le serveur. Jusqu’à
+trois services de test de 256 Mio peuvent utiliser les technologies autorisées.
+Changer l’autorisation ou les limites invalide les recettes préparées : l’agent
+doit les préparer à nouveau avant de relancer. Il faut arrêter une instance
+avant de changer sa recette ; ses données temporaires sont alors supprimées,
+jamais les fichiers de travail. Les modifications des sources continuent d’être
+synchronisées selon le mode choisi.
+
+Le flux MCP est le suivant :
+
+1. `project_preview_read` / `status` retourne l’autorisation du projet, les
+   technologies et limites, `policyRevision` et `recipeRevision`.
+2. `project_preview_prepare` reçoit la recette, la révision de politique
+   observée, `expectedRevision` (null à la première préparation) et un
+   `requestId` stable. Il enregistre seulement une recette, sans démarrage.
+3. `project_preview_manage` / `start` lance la recette de cet agent à partir de
+   ses fichiers actuels. La délégation constitue une autorisation durable pour
+   les aperçus liés au travail demandé ; un échange administrateur en écriture
+   reste requis. Sans délégation, le profil manuel et la demande humaine
+   explicite restent nécessaires.
+4. L’agent consulte `status` jusqu’à `preview.ready: true` et une URL non nulle.
+   Le Manager vérifie une réponse HTTP 2xx/3xx sur la page configurée, via le
+   relais interne authentifié, sans suivre les redirections ni publier de port.
+   Un processus en cours d’exécution n’est pas présenté comme un site prêt.
+
+Le clic humain sur cette URL dans la conversation vérifie qu’il s’agit de
+l’instance actuelle, puis autorise le navigateur sur cette même origine via le
+mécanisme existant. Aucun jeton n’est transmis à l’agent. L’URL seule n’est pas un
+lien public de partage. La disponibilité HTTP ne remplace pas les tests
+fonctionnels ou la validation visuelle du contenu.
+
+### Profil manuel
+
 Dans les paramètres du projet, ouvrir « Environnement de test ». Un
 administrateur définit le runtime, le sous-dossier relatif, les commandes
 d’installation et de compilation, la commande de démarrage, le port interne,
@@ -136,11 +185,38 @@ Un changement de profil ou de dossier de travail suspend la synchronisation
 automatique jusqu’à la recréation. Le contrôle d’accès du propriétaire du
 lancement est réévalué avant les transferts automatiques.
 
-Les outils MCP `project_preview_read` et `project_preview_manage` utilisent le
-projet et l’agent liés au bail de la conversation. Ils n’acceptent pas de commande,
-d’image ni de secret dans leurs arguments. La gestion requiert un échange
-autorisé en écriture et une demande utilisateur ; elle ne contourne pas les
-permissions d’une session en lecture seule.
+Les trois outils MCP utilisent le projet et l’agent liés au bail de la
+conversation. `project_preview_prepare` reçoit uniquement une recette de test
+bornée ; `project_preview_manage` reçoit des opérations de cycle de vie et
+jamais de commande. Aucun n’accepte d’image, de montage hôte, d’URL arbitraire ni
+de secret de production. La gestion requiert un échange autorisé en écriture et
+l’autorisation décrite ci-dessus ; elle ne contourne pas les permissions d’une
+session en lecture seule.
+
+### Découverte automatique par les agents
+
+À chaque nouveau message, y compris dans une conversation existante, le contexte
+de l’agent contient un résumé `previewEnvironment` recalculé pour son projet et
+sa propre instance. Il distingue la configuration disponible, incomplète ou
+indisponible : activation serveur, domaine, Manager, profil du projet, runtimes
+autorisés et dossier de travail. Une instance absente n’est jamais une preuve que
+le service peut être utilisé. Une instance existante indique son état et son URL
+publique lorsqu’elle est vérifiable.
+
+`project_preview_read` avec `operation: "status"` permet de refaire cette
+vérification en cours de travail et décrit les paramètres manquants. Ce résumé
+ne contient ni commandes de la recette, ni variables, images privées, jetons ou
+secrets de transport. Les appels au Manager ont une échéance totale de 1,5 seconde
+pour cette découverte ; son indisponibilité est signalée sans bloquer une
+conversation qui ne nécessite pas de prévisualisation.
+
+Cette disponibilité décrit une configuration, pas une autorisation d’exécution ni
+une garantie de démarrage. Les droits administrateur et un échange en écriture
+restent obligatoires ; il faut une demande humaine explicite pour le profil
+manuel ou une délégation enregistrée par l’administrateur pour les recettes
+d’agents. La découverte n’active rien et ne lance
+aucune instance. L’URL publique n’est pas un jeton d’accès : l’utilisateur ouvre
+l’aperçu depuis Mergeron pour autoriser son navigateur.
 
 ## Isolation et limites
 

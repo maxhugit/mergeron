@@ -61,6 +61,8 @@ function environment(value = {}) {
 function profile(value) {
   object(value, [
     'enabled',
+    'agentManaged',
+    'agentRuntimes',
     'runtime',
     'directory',
     'install',
@@ -77,8 +79,23 @@ function profile(value) {
   ]);
   if (value.enabled !== undefined && typeof value.enabled !== 'boolean')
     invalid();
+  if (
+    value.agentManaged !== undefined &&
+    typeof value.agentManaged !== 'boolean'
+  )
+    invalid();
   const runtime = text(value.runtime, 40, 'node');
   if (!/^[a-z][a-z0-9-]{0,39}$/.test(runtime)) invalid();
+  const agentRuntimes = value.agentRuntimes ?? [runtime];
+  if (
+    !Array.isArray(agentRuntimes) ||
+    agentRuntimes.length > 16 ||
+    new Set(agentRuntimes).size !== agentRuntimes.length ||
+    agentRuntimes.some(
+      (id) => typeof id !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(id),
+    )
+  )
+    invalid();
   const path = text(value.path, 500, '/');
   if (!path.startsWith('/') || path.startsWith('//') || /[\\\r\n#]/.test(path))
     invalid();
@@ -106,6 +123,8 @@ function profile(value) {
   });
   const result = {
     enabled: value.enabled ?? false,
+    agentManaged: value.agentManaged ?? false,
+    agentRuntimes,
     updateMode,
     runtime,
     directory: directory(value.directory),
@@ -140,4 +159,71 @@ function safeProfile(value) {
     })),
   };
 }
-module.exports = { ID, RUN_ID, profile, directory, fingerprint, safeProfile };
+// Agent recipes cannot enable their project, select images/mounts, alter the
+// network, import stored project secrets or raise human-approved resource caps.
+function agentRecipe(value) {
+  object(value, [
+    'runtime',
+    'directory',
+    'install',
+    'build',
+    'start',
+    'port',
+    'path',
+    'env',
+    'services',
+    'updateMode',
+  ]);
+  const parsed = profile(value);
+  if (!parsed.start.trim()) invalid();
+  if (
+    [
+      ...Object.values(parsed.env),
+      ...parsed.services.flatMap((s) => Object.values(s.env)),
+    ].includes('[stored]')
+  )
+    invalid();
+  return Object.fromEntries(
+    [
+      'runtime',
+      'directory',
+      'install',
+      'build',
+      'start',
+      'port',
+      'path',
+      'env',
+      'services',
+      'updateMode',
+    ].map((k) => [k, parsed[k]]),
+  );
+}
+function agentProfile(policy, input) {
+  const approved = profile(policy),
+    recipe = agentRecipe(input);
+  if (!approved.enabled || !approved.agentManaged)
+    throw Error('PREVIEW_AGENT_NOT_AUTHORIZED');
+  if (
+    [recipe.runtime, ...recipe.services.map((s) => s.runtime)].some(
+      (id) => !approved.agentRuntimes.includes(id),
+    )
+  )
+    throw Error('PREVIEW_RUNTIME_NOT_ALLOWED');
+  return profile({
+    ...recipe,
+    enabled: true,
+    memoryMb: approved.memoryMb,
+    cpus: approved.cpus,
+    lifetimeMinutes: approved.lifetimeMinutes,
+  });
+}
+module.exports = {
+  ID,
+  RUN_ID,
+  profile,
+  directory,
+  fingerprint,
+  safeProfile,
+  agentRecipe,
+  agentProfile,
+};

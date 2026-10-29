@@ -1,5 +1,10 @@
 {
   "title": "Test environment",
+  "agentManaged": "Let agents prepare and manage their test environment",
+  "agentManagedHelp": "Standing authorization scoped to this project: agents can prepare their own recipe and launch a preview through MCP without confirmation on every start. They cannot enable this setting themselves. When disabled, the manual profile is used.",
+  "agentRuntimes": "Allowed agent technologies (application and test services)",
+  "agentLimitsHelp": "The limits below apply to each application. Up to three temporary services can use these technologies (256 MiB each). Agents supply test data only; manual-profile variables and production secrets are never inherited.",
+  "waitingForHttp": "Process started — waiting for a valid HTTP response",
   "settingsTitle": "Project preview",
   "settingsDescription": "Define how to install, build and start this project. Each agent gets an isolated environment from its current files, including uncommitted changes.",
   "setupRequired": "An administrator must enable the service: approved images, wildcard domain, HTTPS certificate and proxy routing. No test application port is published on the host.",
