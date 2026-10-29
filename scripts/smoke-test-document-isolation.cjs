@@ -74,7 +74,7 @@ try {
     assert.equal(preflight.success,true,JSON.stringify(preflight));
     assert.equal(preflight.checks.find(c=>c.id==='node.headers').status,'ok');
     if(process.argv[4]) {
-      cp.execFileSync(process.execPath,['/agent-test-profile.cjs',process.argv[4],root,process.env.CODEX_HOME],{env:process.env,stdio:'inherit',timeout:65000});
+      cp.execFileSync(process.execPath,['/agent-test-profile.cjs',process.argv[4],root,process.env.CODEX_HOME],{env:process.env,stdio:'inherit',timeout:65000,killSignal:'SIGKILL'});
     }
     console.log('PASS: code writable; versions immutable; rename/hardlink refused; private state hidden');
     console.log('PASS: private caches writable; pnpm available offline; loopback and sandboxed Chromium ready inside bwrap');
@@ -94,6 +94,8 @@ try {
   );
   const result = cp.spawnSync('/usr/bin/bwrap', args, {
     encoding: 'utf8',
+    timeout: 120000,
+    killSignal: 'SIGKILL',
     env: documentAgentEnvironment({
       ...process.env,
       CODEX_HOME: home,

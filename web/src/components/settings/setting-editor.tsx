@@ -30,7 +30,9 @@ export function SettingEditor({
   onSave,
   onReset,
 }: Props) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'codexSettings'], {
+    nsMode: 'fallback',
+  });
   const isDbOverride = setting.source === 'db';
 
   return (

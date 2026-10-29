@@ -139,7 +139,9 @@ interface Props {
 }
 
 export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'codexSettings'], {
+    nsMode: 'fallback',
+  });
   const policy = useThreadSecurityPolicy(threadId);
   const threadCwd = useTimelineStore((s) => s.threadCwd);
   const projectsQuery = useQuery({

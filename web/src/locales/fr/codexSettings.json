@@ -1,4 +1,11 @@
 {
+  "agentTestProfile": "Tests du projet",
+  "projectAgentTestProfileLabel": "Profil de test des nouveaux agents de projet",
+  "projectAgentTestProfileDescription": "Réglage global des nouveaux agents de travail : écriture dans le dossier de travail et réseau de commandes filtré, uniquement si le moteur confirme les règles administrateur. Les choix explicites de permissions et les emplacements en lecture seule sont conservés. Ne modifie pas les conversations existantes, ne donne pas accès à Docker et ne publie rien dans Git.",
+  "agentTestProfileEnable": "Activer le réseau de test filtré",
+  "agentTestProfileDisable": "Désactiver le réseau des commandes",
+  "agentTestProfileHint": "À partir du prochain message. Conserve les dossiers autorisés, les protections Git et celles des documents. Limite le réseau aux destinations administrées et aux tests locaux. Aucun accès Docker ni contournement de sandbox ; Chromium doit encore réussir le précontrôle.",
+  "agentTestProfileUnavailable": "Indisponible tant que le moteur ne confirme pas le filtrage réseau administrateur. Les variables du proxy ne suffisent pas. Sélectionner d’abord workspace-write.",
   "commonInstructionsTitle": "Consignes communes aux agents",
   "commonInstructionsScope": "Transmises à tous les agents de travail, nouveaux et existants, à chaque nouvel échange. Enregistrement persistant, sans redémarrage de Codex. Un échange déjà en cours n’est pas modifié.",
   "commonInstructionsSafety": "Réglage administrateur de cette instance : ne pas inclure de secrets. Ne modifie ni les fichiers AGENTS.md, ni les consignes des projets, ni les permissions. Une consigne guide l’agent mais ne garantit pas techniquement son exécution.",

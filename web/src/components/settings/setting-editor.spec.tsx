@@ -31,6 +31,9 @@ it('edits the global new-agent boolean as a switch, using the existing save conv
   };
   const view = render(<SettingEditor {...props} />);
   const toggle = screen.getByRole('switch');
+  expect(toggle).toHaveAccessibleName(
+    'Profil de test des nouveaux agents de projet',
+  );
   expect(toggle).toBeChecked();
   await user.click(toggle);
   expect(onDraftChange).toHaveBeenCalledExactlyOnceWith(setting.key, 'false');

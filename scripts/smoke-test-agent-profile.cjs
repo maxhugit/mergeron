@@ -25,13 +25,21 @@ const child = spawn(binary, ['app-server'], {
 });
 let sequence = 0;
 const pending = new Map();
+child.once('error', () => {
+  for (const waiter of pending.values()) waiter.reject(new Error('Native profile process could not start'));
+  pending.clear();
+});
+child.once('exit', (code, signal) => {
+  for (const waiter of pending.values()) waiter.reject(new Error(`Native profile process exited (${code ?? signal})`));
+  pending.clear();
+});
 child.stderr.resume(); // Never print runtime logs or inherited configuration.
 readline.createInterface({ input: child.stdout }).on('line', line => {
   let response; try { response = JSON.parse(line); } catch { return; }
   const waiter = pending.get(response.id);
   if (waiter) {
     pending.delete(response.id);
-    response.error ? waiter.reject(new Error('Native profile RPC refused')) : waiter.resolve(response.result);
+    response.error ? waiter.reject(new Error(`Native profile RPC refused (${response.error.code})`)) : waiter.resolve(response.result);
   }
 });
 const rpc = (method, params) => new Promise((resolve, reject) => {
@@ -42,8 +50,10 @@ const rpc = (method, params) => new Promise((resolve, reject) => {
 const watchdog = setTimeout(() => { child.kill('SIGKILL'); console.error('Native profile timeout'); process.exit(2); }, 60000);
 (async () => {
   await rpc('initialize', { clientInfo: { name: 'mergeron-network-fixture', version: '1' }, capabilities: { experimentalApi: true } });
+  console.log('Native profile: Core initialized');
   child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
   assert.equal(filteredTestNetworkAvailable(await rpc('configRequirements/read', {})), true, 'Running Core must confirm administrator network rules');
+  console.log('Native profile: managed requirements confirmed');
   const sandboxPolicy = { type: 'workspaceWrite', writableRoots: [root], networkAccess: true, excludeTmpdirEnvVar: false, excludeSlashTmp: false };
   const code = `
     const assert=require('node:assert/strict'),cp=require('node:child_process'),fs=require('node:fs');
@@ -61,10 +71,14 @@ const watchdog = setTimeout(() => { child.kill('SIGKILL'); console.error('Native
     })().catch(()=>{console.error('Sandboxed visual/network probe failed');process.exitCode=1;});
   `;
   const result = await rpc('command/exec', { command: [process.execPath, '-e', code], cwd: root, sandboxPolicy, timeoutMs: 30000, outputBytesCap: 4096 });
+  console.log('Native profile: command completed');
   assert.equal(result.exitCode, 0, 'Loopback, sandboxed Chromium and enforced destination denial must work in the actual command sandbox');
   assert.match(result.stdout, /native-profile-ok/);
   console.log('PASS: actual Core sandbox preserves Git/documents, supports loopback and sandboxed Chromium, and denies an unlisted host');
 })().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => {
   clearTimeout(watchdog);
   child.kill('SIGKILL');
+  child.stdin.destroy();
+  child.stdout.destroy();
+  child.stderr.destroy();
 });
