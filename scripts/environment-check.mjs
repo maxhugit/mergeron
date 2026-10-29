@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { mkdtemp, mkdir, open, readFile, rm } from 'node:fs/promises';
 import { createServer, createConnection } from 'node:net';
-import { tmpdir } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -11,7 +11,8 @@ const help = `Usage: mergeron-environment-check [--cwd <directory>] [--visual]
 
 Run from the agent terminal with its normal permissions, before installing/building.
 Checks temporary writes, caches, offline package-manager versions, local Node
-headers, and the configured proxy's DNS/TCP reachability. --visual also checks
+headers, real network-interface enumeration, and the configured proxy's DNS/TCP
+reachability. --visual also checks
 loopback listening and sandboxed Chromium. --url requests only the supplied URL,
 using curl's existing proxy/TLS settings. No install, project script or permission
 change is performed. Temporary probes are removed; no report is saved by default.
@@ -217,6 +218,26 @@ export function loopbackProbe() {
   });
 }
 
+/** Exercise libuv's real interface query, not a fabricated address or a bind.
+ * Do not disclose interface names, IP/MAC addresses or raw libuv errors.
+ */
+export function networkInterfacesProbe(enumerate = networkInterfaces) {
+  try {
+    enumerate();
+  } catch (error) {
+    if (
+      error?.code === 'EPERM' ||
+      (error?.code === 'ERR_SYSTEM_ERROR' &&
+        error?.info?.syscall === 'uv_interface_addresses' &&
+        Math.abs(error?.info?.errno) === 1)
+    )
+      throw Object.assign(new Error(), {
+        code: 'NETWORK_INTERFACES_DENIED',
+      });
+    throw error;
+  }
+}
+
 export async function browserProbe(timeout) {
   const { chromium } = await import('playwright-core');
   let browser;
@@ -272,6 +293,11 @@ export async function run(options, deps = {}) {
   const missing = () => {
     throw Object.assign(new Error(), { code: 'NOT_CONFIGURED' });
   };
+  await check(
+    'node.network-interfaces',
+    deps.networkInterfacesProbe ?? networkInterfacesProbe,
+    'L’énumération réelle des interfaces par libuv est refusée. Une écoute locale réussie ne suffit pas : vérifier le filtre du sandbox (NETLINK_ROUTE sous Linux), sans désactiver le proxy ni simuler les adresses.',
+  );
   await check(
     'workspace.write',
     () => (deps.writableProbe ?? writableProbe)(options.cwd),

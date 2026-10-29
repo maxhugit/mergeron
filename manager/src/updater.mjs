@@ -23,6 +23,10 @@ import { dirname, join, relative } from 'node:path';
 import { collectInventory } from './inventory.mjs';
 import { agentVisualSandbox } from './agent-visual-sandbox.mjs';
 import {
+  assertCliPolicyImage,
+  cliProtectionFingerprint,
+} from './codex-cli.mjs';
+import {
   evaluateAdoption,
   readAdoptionRecord,
   inventoryFingerprint,
@@ -758,6 +762,7 @@ export class TransactionalUpdater {
       mode,
       images,
       containers,
+      cliProtection: cliProtectionFingerprint(this.configuration),
       blockers: [...new Set(blockers)].sort(),
     };
     return {
@@ -843,6 +848,8 @@ export class TransactionalUpdater {
       const rechecked = await this.plan(plan.images, plan.mode);
       if (rechecked.fingerprint !== plan.fingerprint)
         throw new Error('updatePlanChanged');
+      if (targetImages.application)
+        assertCliPolicyImage(this.configuration, targetImages.application);
       const browserItem = plan.containers.find(
         (item) => item.component === 'browser',
       );
@@ -1067,6 +1074,11 @@ export class TransactionalUpdater {
           inspect.Config.Image !== item.target.Image
         )
           throw new Error('updateCandidateIdentityConflict');
+        if (item.component === 'application')
+          assertCliPolicyImage(
+            this.configuration,
+            await this.docker.inspectImage(item.original.Image),
+          );
       }
       this.current.committed = false;
       this.current.status = 'running';

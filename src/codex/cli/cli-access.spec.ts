@@ -10,6 +10,7 @@ it.each([
   ['GET', '/api/codex/cli?refresh=true'],
   ['POST', '/api/codex/cli/update'],
   ['POST', '/api/codex/cli/rollback'],
+  ['POST', '/api/codex/cli/managed'],
 ])('requires administrator access for %s %s', (method, url) => {
   let role = 'standard';
   const identities = {

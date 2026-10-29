@@ -1,4 +1,13 @@
 {
+  "managedCliIdentity": "CLI personnalisé actif",
+  "managedCliVerified": "Intégrité vérifiée",
+  "managedCliInvalid": "Intégrité invalide — activation bloquée",
+  "managedCliLegacyCustom": "Correctif manuel — migration recommandée",
+  "managedCliOfficialBlocked": "Les mises à jour officielles et les retours arrière non validés sont bloqués pour préserver les protections et le correctif du sandbox.",
+  "managedCliManagerUnavailable": "Le Manager ne fournit pas de CLI validé. Mettez à jour le Manager compatible avant de poursuivre ; aucun CLI officiel ne sera installé en remplacement.",
+  "managedCliAvailable": "Version validée fournie par le Manager",
+  "installManagedCli": "Installer le CLI validé du Manager",
+  "managedCliConfirm": "Installer {{release}} depuis le paquet du Manager, vérifier son intégrité, puis redémarrer Codex uniquement lorsque les agents sont au repos. La sélection précédente sera restaurée si l’activation échoue.",
   "agentTestProfile": "Tests du projet",
   "projectAgentTestProfileLabel": "Profil de test des nouveaux agents de projet",
   "projectAgentTestProfileDescription": "Réglage global des nouveaux agents de travail : écriture dans le dossier de travail et réseau de commandes filtré, uniquement si le moteur confirme les règles administrateur. Les choix explicites de permissions et les emplacements en lecture seule sont conservés. Ne modifie pas les conversations existantes, ne donne pas accès à Docker et ne publie rien dans Git.",

@@ -83,6 +83,120 @@ it('offers a first install and sends only the verified target version', async ()
     ),
   );
 });
+
+it('blocks official updates and installs only the observed Manager identity after confirmation', async () => {
+  const release = {
+    id: '0.164.0-mergeron.1',
+    upstreamVersion: '0.164.0',
+    upstreamCommit: 'a'.repeat(40),
+    patchSha256: 'b'.repeat(64),
+    manifestSha256: 'c'.repeat(64),
+  };
+  fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+    Promise.resolve(
+      json(
+        options?.method === 'POST'
+          ? { success: true }
+          : url.endsWith('/releases')
+            ? {
+                fromVersion: '1.0.0',
+                toVersion: '1.1.0',
+                releases: [],
+                releaseError: null,
+              }
+            : {
+                ...available,
+                officialUpdateBlocked: true,
+                managedRelease: release,
+              },
+      ),
+    ),
+  );
+  const user = userEvent.setup();
+  fixture.render(<CodexCliSettings />);
+  await screen.findByText('0.164.0-mergeron.1');
+  expect(
+    screen.getByRole('button', { name: 'Update Codex CLI' }),
+  ).toBeDisabled();
+  await user.click(
+    screen.getByRole('button', { name: 'Install the Manager-validated CLI' }),
+  );
+  expect(
+    fetchMock.mock.calls.some(([, options]) => options?.method === 'POST'),
+  ).toBe(false);
+  await user.click(screen.getByRole('button', { name: 'Confirm' }));
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/codex/cli/managed',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          releaseId: release.id,
+          manifestSha256: release.manifestSha256,
+          expectedSelection: null,
+        }),
+      }),
+    ),
+  );
+});
+
+it('does not offer an official fallback when Manager is unavailable', async () => {
+  fetchMock.mockResolvedValue(
+    json({
+      ...available,
+      officialUpdateBlocked: true,
+      managerError: 'unavailable',
+      managedRelease: null,
+    }),
+  );
+  fixture.render(<CodexCliSettings />);
+  await screen.findByText(/The Manager does not provide a validated CLI/);
+  expect(
+    screen.getByRole('button', { name: 'Update Codex CLI' }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByRole('button', { name: 'Install the Manager-validated CLI' }),
+  ).not.toBeInTheDocument();
+});
+
+it('loads managed CLI copy from Codex settings in French without growing the shared catalog', async () => {
+  const releaseId = '0.164.0-mergeron.1';
+  fetchMock.mockResolvedValue(
+    json({
+      ...available,
+      officialUpdateBlocked: true,
+      managedRelease: { id: releaseId, manifestSha256: 'a'.repeat(64) },
+    }),
+  );
+  await i18n.changeLanguage('fr');
+  try {
+    expect(
+      i18n.getResource('fr', 'common', 'installManagedCli'),
+    ).toBeUndefined();
+    const user = userEvent.setup();
+    fixture.render(<CodexCliSettings />);
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Installer le CLI validé du Manager',
+      }),
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Installer le CLI validé du Manager',
+      }),
+    ).toBeVisible();
+    expect(
+      await screen.findByText(
+        new RegExp(`Installer ${releaseId} depuis le paquet du Manager`),
+      ),
+    ).toBeVisible();
+    expect(
+      fetchMock.mock.calls.some(([, options]) => options?.method === 'POST'),
+    ).toBe(false);
+  } finally {
+    await i18n.changeLanguage('en');
+  }
+});
 afterEach(() => {
   fixture.dispose();
   vi.unstubAllGlobals();

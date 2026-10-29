@@ -6,6 +6,14 @@
 !manager/stack-manifest.json
 !manager/src/
 !manager/src/**
+!runtime/
+!runtime/**
+!scripts/
+!scripts/build-codex-runtime.sh
+!scripts/package-codex-runtime.cjs
+!security/
+!security/codex-netlink/
+!security/codex-netlink/**
 !deployment/
 !deployment/config/
 !deployment/config/seccomp-bwrap.json

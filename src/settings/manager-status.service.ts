@@ -30,11 +30,13 @@ export class ManagerStatusService {
           socketPath: this.socketPath(),
           timeout: path.startsWith('/v1/images/updates')
             ? 30_000
-            : path === '/v1/backups/delete'
-              ? 120_000
-              : path === '/v1/backups'
-                ? 30_000
-                : 3_000,
+            : path === '/v1/codex-cli/install'
+              ? 210_000
+              : path === '/v1/backups/delete'
+                ? 120_000
+                : path === '/v1/backups'
+                  ? 30_000
+                  : 3_000,
           headers: {
             Accept: 'application/json',
             ...(body
@@ -111,6 +113,17 @@ export class ManagerStatusService {
 
   async backups() {
     return this.requestManager('/v1/backups');
+  }
+
+  codexCli() {
+    return this.requestManager('/v1/codex-cli');
+  }
+
+  installCodexCli(releaseId: string, manifestSha256: string) {
+    return this.requestManager('/v1/codex-cli/install', 'POST', {
+      releaseId,
+      manifestSha256,
+    });
   }
 
   imageUpdates(refresh = false) {

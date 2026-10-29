@@ -8,19 +8,15 @@ set -euo pipefail
 tool="$(basename "$0")"
 codex_home="${CODEX_HOME:-${HOME}/.codex}"
 selection_file="${codex_home}/webui/cli/selection.json"
-selected_version=""
-
-if [ -f "${selection_file}" ]; then
-  selected_version="$(jq -r 'if (.version | type) == "string" then .version else "" end' "${selection_file}" 2>/dev/null || true)"
-fi
-
-if [[ "${selected_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  selected_binary="${codex_home}/webui/cli/releases/${selected_version}/codex"
+if [ -e "${selection_file}" ] || [ -L "${selection_file}" ]; then
+  selected_binary="$(node /app/scripts/resolve-managed-cli.cjs "${codex_home}" "${1:-}")" || exit 78
+  if [ -n "${selected_binary}" ]; then
   if [ ! -x "${selected_binary}" ]; then
-    echo "Codex CLI ${selected_version} is selected but its executable is unavailable." >&2
+    echo "Selected Codex CLI executable is unavailable." >&2
     exit 127
   fi
   exec -a "${tool}" "${selected_binary}" "$@"
+  fi
 fi
 
 legacy_binary="$(find "${HOME}/.local/share/mise/installs/node" -type f -name codex \

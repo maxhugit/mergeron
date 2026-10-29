@@ -4,11 +4,25 @@ image_ref="${1:?Usage: smoke-test-document-isolation.sh <image-ref>}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 native_mounts=()
 native_command=()
+if [ -n "${MERGERON_NETLINK_EVIDENCE:-}" ]; then
+  test "${3:-}" = '--netlink-route'
+  test -d "$MERGERON_NETLINK_EVIDENCE" && test ! -L "$MERGERON_NETLINK_EVIDENCE"
+  test -z "$(find "$MERGERON_NETLINK_EVIDENCE" -mindepth 1 -maxdepth 1 -print -quit)"
+  # Output-only, empty fixture directory. It is read-only in the inner agent
+  # mount namespace; only this trusted outer harness exports approved PNGs.
+  native_mounts+=(--mount "type=bind,src=$MERGERON_NETLINK_EVIDENCE,dst=/netlink-evidence")
+  native_mounts+=(--env MERGERON_NETLINK_EVIDENCE=/netlink-evidence)
+fi
 if [ -n "${2:-}" ]; then
   test -f "$2"
   native_mounts+=(--mount "type=bind,src=$2,dst=/mergeron-test-codex,readonly")
   native_mounts+=(--mount "type=bind,src=${script_dir}/smoke-test-agent-profile.cjs,dst=/agent-test-profile.cjs,readonly")
   native_command+=(/mergeron-test-codex)
+  if [ "${3:-}" = '--netlink-route' ]; then
+    native_command+=(--netlink-route)
+    native_mounts+=(--mount "type=bind,src=${script_dir}/check-agent-netlink.py,dst=/agent-netlink-probe.py,readonly")
+    native_mounts+=(--mount "type=bind,src=${script_dir}/test-agent-backend.cjs,dst=/agent-backend-fixture.cjs,readonly")
+  fi
 fi
 apparmor_profile=unconfined
 if docker info --format '{{json .SecurityOptions}}' | grep -q apparmor; then

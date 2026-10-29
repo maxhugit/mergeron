@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { DockerClient } from './docker-client.mjs';
 import { ImageUpdates } from './image-updates.mjs';
 import { TransactionalUpdater } from './updater.mjs';
+import { ManagedCodexCli } from './codex-cli.mjs';
 import {
   confirmAdoption,
   evaluateAdoption,
@@ -46,6 +47,11 @@ const docker = new DockerClient(
   process.env.MERGERON_DOCKER_SOCKET ?? '/var/run/docker.sock',
 );
 const installConfiguration = readInstallConfiguration(manifest);
+const codexCli = new ManagedCodexCli({
+  docker,
+  manifest,
+  configuration: installConfiguration,
+});
 const imageUpdates = new ImageUpdates({
   docker,
   manifest,
@@ -151,6 +157,7 @@ async function adopt(body) {
   if (
     !ready ||
     installing ||
+    codexCli.busy ||
     updater.busy ||
     updater.current?.status === 'recoveryRequired'
   )
@@ -185,6 +192,7 @@ async function install(body, automatic = false) {
   if (
     !ready ||
     adopting ||
+    codexCli.busy ||
     updater.busy ||
     updater.current?.status === 'recoveryRequired'
   )
@@ -250,12 +258,49 @@ const server = http.createServer(async (request, response) => {
         backupManagement: true,
         backupRetention: true,
         imageUpdates: true,
+        managedCodexCli: true,
         devFastUpdate:
           manifest.environment === 'development' &&
           manifest.stack !== 'mergeron',
       },
     });
     return;
+  }
+  if (
+    request.url === '/v1/codex-cli' ||
+    request.url === '/v1/codex-cli/install'
+  ) {
+    try {
+      if (request.url === '/v1/codex-cli' && request.method === 'GET')
+        return json(response, 200, codexCli.status());
+      if (
+        request.url === '/v1/codex-cli/install' &&
+        request.method === 'POST'
+      ) {
+        if (
+          !ready ||
+          installing ||
+          adopting ||
+          updater.busy ||
+          updater.current?.status === 'recoveryRequired'
+        )
+          throw new Error('managerOperationInProgress');
+        return json(
+          response,
+          200,
+          await codexCli.install(await readJsonBody(request)),
+        );
+      }
+      return json(response, 405, { error: 'methodNotAllowed' });
+    } catch (error) {
+      return json(response, 409, {
+        error: /^(codexRuntime|managerOperation)[A-Za-z]+$/.test(
+          error.message ?? '',
+        )
+          ? error.message
+          : 'codexRuntimeUnavailable',
+      });
+    }
   }
   if (
     ['/v1/images/updates', '/v1/images/updates?refresh=true'].includes(
@@ -284,7 +329,7 @@ const server = http.createServer(async (request, response) => {
     request.method === 'POST'
   ) {
     try {
-      if (!ready || installing || adopting || updater.busy)
+      if (!ready || installing || adopting || updater.busy || codexCli.busy)
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
       if (request.url === '/v1/update/plan')
@@ -318,7 +363,8 @@ const server = http.createServer(async (request, response) => {
     try {
       if (
         !ready ||
-        (request.method === 'POST' && (installing || adopting || updater.busy))
+        (request.method === 'POST' &&
+          (installing || adopting || updater.busy || codexCli.busy))
       )
         throw new Error('managerOperationInProgress');
       json(
@@ -351,7 +397,7 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.url === '/v1/backups/delete' && request.method === 'POST') {
     try {
-      if (!ready || installing || adopting || updater.busy)
+      if (!ready || installing || adopting || updater.busy || codexCli.busy)
         throw new Error('managerOperationInProgress');
       json(
         response,

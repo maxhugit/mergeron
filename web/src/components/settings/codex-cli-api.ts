@@ -13,6 +13,16 @@ export interface CliStatus {
   canManage: boolean;
   canRollback: boolean;
   busy: boolean;
+  officialUpdateBlocked?: boolean;
+  protection?: 'verified' | 'legacy-custom' | 'unprotected' | 'invalid';
+  managedRelease?: {
+    id: string;
+    upstreamVersion: string;
+    upstreamCommit: string;
+    patchSha256: string;
+    manifestSha256: string;
+  } | null;
+  managerError?: string | null;
 }
 
 export const cliStatusQueryKey = ['administration', 'codex-cli'] as const;
