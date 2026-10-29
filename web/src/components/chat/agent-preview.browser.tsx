@@ -159,11 +159,12 @@ test('project profile supports generic runtimes and preserves masked settings on
   await expect
     .element(page.getByRole('button', { name: 'Enregistrer le profil' }))
     .toBeVisible();
-  expect(
-    screen.getByRole('combobox', {
-      name: 'Environnement d’exécution autorisé',
-    }),
-  ).toHaveValue('node');
+  const runtime = screen.getByRole('combobox', {
+    name: 'Environnement d’exécution autorisé',
+  });
+  expect(runtime).toHaveValue('node');
+  // WebKit/GTK native widgets can paint a white surface over dark CSS colors.
+  expect(getComputedStyle(runtime).appearance).toBe('none');
   expect(
     screen.getByRole('combobox', { name: 'Application des modifications' }),
   ).toHaveValue('hot');

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { projectsApi } from '@/lib/projects-api';
 import type { PreviewProfile } from '../../../../runtime/preview-profile.cjs';
@@ -108,9 +109,9 @@ function Editor({
           {t('runtime')}
           {/* WebKit/GTK ignores overflow on native selects; bound their
               anonymous option content with a regular element instead. */}
-          <div className="min-w-0 overflow-hidden rounded border bg-background">
+          <div className="relative min-w-0 overflow-hidden rounded border bg-background focus-within:ring-2 focus-within:ring-ring">
             <select
-              className="block bg-background p-2"
+              className="block appearance-none bg-background p-2 pr-8 text-foreground"
               value={profile.runtime}
               onChange={(e) => field('runtime', e.target.value)}
             >
@@ -123,6 +124,10 @@ function Editor({
                 </option>
               ))}
             </select>
+            <ChevronDown
+              aria-hidden="true"
+              className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
           </div>
         </label>
         <label className="grid gap-1 text-sm">
@@ -169,9 +174,9 @@ function Editor({
         </label>
         <label className="grid gap-1 text-sm">
           {t('updateMode')}
-          <div className="min-w-0 overflow-hidden rounded border bg-background">
+          <div className="relative min-w-0 overflow-hidden rounded border bg-background focus-within:ring-2 focus-within:ring-ring">
             <select
-              className="block bg-background p-2"
+              className="block appearance-none bg-background p-2 pr-8 text-foreground"
               value={profile.updateMode}
               onChange={(e) => field('updateMode', e.target.value)}
             >
@@ -179,6 +184,10 @@ function Editor({
               <option value="restart">{t('restartMode')}</option>
               <option value="manual">{t('manual')}</option>
             </select>
+            <ChevronDown
+              aria-hidden="true"
+              className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
           </div>
         </label>
         <label className="grid gap-1 text-sm">
