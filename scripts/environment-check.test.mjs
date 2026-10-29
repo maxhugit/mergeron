@@ -21,10 +21,87 @@ import {
   localHeaders,
   optionsFrom,
   proxyAddress,
+  projectPackageManager,
   run,
   tcpProbe,
   writableProbe,
 } from './environment-check.mjs';
+
+test('project-selected manager accepts only pinned registry versions, never URLs or tags', async () =>
+  fixture(async (root) => {
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ packageManager: 'pnpm@10.18.3' }),
+    );
+    assert.deepEqual(await projectPackageManager(root), {
+      name: 'pnpm',
+      version: '10.18.3',
+      spec: 'pnpm@10.18.3',
+    });
+    for (const value of [
+      'pnpm@latest',
+      'pnpm@https://secret.invalid/evil.js',
+      'pnpm@10.18.3;touch bad',
+      null,
+    ]) {
+      await writeFile(
+        join(root, 'package.json'),
+        JSON.stringify({ packageManager: value }),
+      );
+      await assert.rejects(projectPackageManager(root), {
+        code: 'UNSUPPORTED_PACKAGE_MANAGER',
+      });
+    }
+  }));
+
+test('installed tools and project-specific offline cache are independent, no project script or download is invoked', async () =>
+  fixture(async (root) => {
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({
+        packageManager: 'pnpm@10.18.3',
+        scripts: { preinstall: 'never execute' },
+      }),
+    );
+    const calls = [];
+    const report = await run(optionsFrom(['--cwd', root]), {
+      env: Object.fromEntries(cacheKeys.map((k) => [k, join(root, k)])),
+      command: async (tool, args, options) => {
+        calls.push([tool, args]);
+        assert.notEqual(options.cwd, root);
+        assert.equal(options.env.COREPACK_ENABLE_NETWORK, '0');
+        if (args[0] === 'pnpm@10.18.3') throw new Error('private cache stderr');
+        return tool === 'pnpm' ? '10.34.9' : '1.2.3';
+      },
+    });
+    assert.equal(report.checks.find((c) => c.id === 'tool.pnpm').status, 'ok');
+    assert.equal(
+      report.checks.find((c) => c.id === 'project.package-manager.offline')
+        .code,
+      'PACKAGE_MANAGER_NOT_CACHED',
+    );
+    assert.deepEqual(calls.at(-1), ['corepack', ['pnpm@10.18.3', '--version']]);
+    assert.doesNotMatch(
+      JSON.stringify(report),
+      /private cache stderr|preinstall/,
+    );
+  }));
+
+test('invalid version output is not misreported as missing cache configuration', async () =>
+  fixture(async (root) => {
+    const report = await run(optionsFrom(['--cwd', root]), {
+      env: {},
+      command: async () => 'not a version',
+    });
+    assert.equal(
+      report.checks.find((c) => c.id === 'tool.npm').code,
+      'VERSION_UNAVAILABLE',
+    );
+    assert.equal(
+      report.checks.find((c) => c.id === 'cache.COREPACK_HOME').code,
+      'NOT_CONFIGURED',
+    );
+  }));
 
 async function fixture(action) {
   const root = await mkdtemp(join(tmpdir(), 'mergeron-env-test-'));

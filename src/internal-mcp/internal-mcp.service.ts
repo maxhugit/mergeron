@@ -340,6 +340,13 @@ export class InternalMcpService implements OnModuleDestroy {
                 'GIT_OUTPUT_LIMIT_EXCEEDED',
                 'GIT_COMMAND_TIMEOUT',
                 'GIT_STALE',
+                'GIT_WORKTREE_DIRTY',
+                'GIT_BRANCH_EXISTS',
+                'GIT_BRANCH_NAME_INVALID',
+                'GIT_IDENTITY_REQUIRED',
+                'GIT_NOTHING_STAGED',
+                'GIT_IN_PROGRESS',
+                'GIT_FILE_UNSAFE',
                 'GIT_BUSY',
                 'GIT_AGENT_STATE_UNKNOWN',
                 'GIT_READ_ONLY',
@@ -366,7 +373,7 @@ export class InternalMcpService implements OnModuleDestroy {
                   text: JSON.stringify({
                     code,
                     message:
-                      'Check project access, configured connection, manager, arguments and observed state. For any mutation retry keep the SAME requestId and payload. An unknown publication outcome may already have succeeded: inspect remote state and never automatically retry with a new ID. Never claim unconfirmed success.',
+                      'Check project access, configured connection, manager, arguments and observed state. For any mutation retry keep the SAME requestId and payload. An unknown outcome may already have succeeded: inspect local and remote state and never automatically retry with a new ID. Never claim unconfirmed success.',
                   }),
                 },
               ],

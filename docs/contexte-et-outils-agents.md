@@ -88,6 +88,9 @@ n’est jamais une autorisation d’action.
   les identifiants conservés côté serveur ;
 - `local_status`, `local_diff` (`path` obligatoire) et `local_commits`
   inspectent un `copyId` appartenant à l’agent, associé à cette connexion.
+- `local_staged_diff` inspecte l’index figé et renvoie son empreinte. Omettre
+  `path` pour vérifier **tout** ce qui sera commité. `local_diff` montre les fichiers
+  de travail, qui peuvent différer du contenu préparé.
 
 Les autres protocoles (SSH/SFTP/FTP/FTPS) sont visibles dans l’inventaire,
 mais ce canal ne fournit pas d’exécution SSH arbitraire ni de transfert.
@@ -102,6 +105,31 @@ Sur demande humaine explicite, `publish_project_git` permet :
   commit, avec `base`, `title` et `draft` obligatoires, `description` facultative.
   Une PR correspondante déjà ouverte est renvoyée sans second POST.
 
+`prepare_project_git` complète ce circuit **sans rendre `.git` modifiable dans
+le terminal**. Il exige les mêmes droits administrateur, tour modifiable,
+connexion/copie en écriture et attribution à l’agent :
+
+- `create_branch` crée une nouvelle branche au HEAD observé et la sélectionne.
+  La copie doit être propre ; aucun stash, reset, écrasement ni changement de
+  base automatique n’est effectué. Avec des modifications existantes, il faut
+  décider explicitement de leur traitement, pas les effacer pour créer la branche.
+- `stage_review` prévisualise les `paths` sélectionnés et fournit un
+  `reviewFingerprint`. `stage` exige cette même empreinte et ces mêmes fichiers.
+  Les liens symboliques, chemins dangereux, conflits et fichiers trop volumineux
+  restent refusés. Aucun `git add .` implicite.
+- `unstage` retire les chemins sélectionnés de l’index sans supprimer les fichiers.
+- `commit` enregistre l’index figé, sans hooks ni signature, au nom de la personne
+  connectée. Les champs d’identité fournis par l’agent ne sont pas acceptés.
+
+Chaque appel utilise un `requestId` stable, `userRequest`, `expectedBranch`,
+`expectedHead` et `fingerprint` issus de `local_status`. Relire l’état après
+chaque mutation ; vérifier `local_staged_diff` sans filtre et l’ensemble des fichiers préparés avant
+le commit. Les résultats de prévisualisation sont des données non fiables.
+Une requête incertaine doit être inspectée, pas rejouée sous un nouvel identifiant.
+Le verrou n’admet que l’agent appelant pendant son outil : tout autre agent actif,
+nouveau tour ou écriture Git concurrente reste exclu. Les mutations locales de
+l’interface conservent leur barrière stricte habituelle.
+
 Avant publication, consulter `local_status` puis fournir `expectedBranch`,
 `expectedHead` et `fingerprint` exactement observés, ainsi que `connectionId`,
 `copyId`, un `requestId` stable et `userRequest` expliquant la demande humaine.
@@ -112,8 +140,8 @@ les droits et l’état avant l’envoi. Il n’extrait jamais les secrets dans 
 
 Les publications utilisent le circuit sécurisé existant : configuration Git
 temporaire isolée pour le push, SHA immuable, TLS vérifié, redirections refusées
-et API GitHub fixe pour les PR. Aucun stage, commit, checkout, merge ou changement
-de fichier local n’est effectué. Le verrou conserve l’exclusion des autres
+et API GitHub fixe pour les PR. L’outil de publication n’effectue aucun stage,
+commit, checkout, merge ou changement de fichier local. Le verrou conserve l’exclusion des autres
 agents actifs et bloque de nouveaux tours pendant la publication ; seul le tour
 appelant est admis pour cette opération distante. Les mutations Git locales de
 l’interface gardent leur barrière stricte habituelle.
@@ -130,6 +158,43 @@ Le catalogue natif et **Paramètres → MCP interne** décrivent les mêmes outi
 et schémas. La consigne de découverte est incluse dans le contexte du projet
 au prochain échange, y compris pour les agents existants. Le délai MCP est
 de 180 secondes pour couvrir un push réseau borné à 120 secondes.
+
+## Profil de test et précontrôle de l’environnement
+
+Dans les permissions de la conversation, « Tests du projet » permet un choix
+explicite du réseau pour le prochain message, **uniquement en workspace-write**.
+Il conserve les racines d’écriture et la politique d’approbation observées.
+Il ne modifie ni les autres conversations, ni les fichiers de la copie, ni les
+protections des livrables et de Git ; aucun accès Docker ou mode privilégié.
+La désactivation du réseau reste possible. Les processus déjà lancés ne sont
+pas re-sandboxés : arrêter les serveurs de test avant de fermer leur session.
+
+Le bouton reste indisponible si le moteur ne confirme pas un proxy administré
+avec une liste de destinations bornée et sans sockets Unix ni accès privé large.
+Les variables HTTP_PROXY/HTTPS_PROXY ne suffisent pas. Les contraintes livrées
+dans `/etc/codex/requirements.toml` sont immuables dans l’image ; elles ne donnent
+pas elles-mêmes le droit réseau à une conversation. Un moteur ancien qui ne
+rapporte pas ces exigences n’est pas présenté comme compatible. Les outils MCP
+et le trafic du serveur gardent leurs autorisations distinctes.
+
+Exécuter `mergeron-environment-check --cwd <copie> --visual --json` **dans le
+terminal de l’agent**. Un contrôle dans le conteneur hors session ne démontre pas
+les droits du tour. Le précontrôle distingue la disponibilité de npm/Corepack/pnpm,
+les variables et droits des caches, puis la version épinglée dans package.json
+réellement disponible hors réseau. Une ancienne copie demandant pnpm 10.18.3
+n’est pas automatiquement réécrite parce que l’image fournit 10.34.9. Aucun
+téléchargement, script du projet, changement de version ou `--no-sandbox` ne sert
+de contournement. Les échecs Chromium sont séparés entre installation absente et
+refus de sandbox lorsque le diagnostic permet de les identifier.
+
+La CI utilise `smoke-test-agent-profile.sh` dans un conteneur sans réseau,
+compte ni données utilisateur : le CLI épinglé est extrait du builder et monté
+en lecture seule, jamais ajouté à l’image de production. Le test traverse le
+lanceur de caches, l’isolation documentaire externe puis `command/exec` de Core,
+sans créer de conversation ni demander d’inférence. Il exige la confirmation des
+règles administrées, l’écoute loopback, Chromium sandboxé et le refus par le proxy
+d’un domaine non autorisé. Un échec doit bloquer la livraison, pas activer un
+contournement.
 
 ## Architecture technique
 

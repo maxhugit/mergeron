@@ -1894,6 +1894,94 @@ describe('confirmed actions', () => {
     );
   });
 
+  it('performs controlled local preparation for the sole active owner without discarding files or opening UI writes', async () => {
+    writable();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'owner',
+        projectId: 'p',
+        workspacePath: path.join(root, 'project'),
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    claimAgentCopy(database.db, 'p', 'owner', copyId);
+    active = ['owner'];
+    const preparer = { threadId: 'owner', assertActive: vi.fn() };
+    const state = await service.snapshot('p', copyId);
+    await actions.createBranch(
+      'p',
+      copyId,
+      {
+        agentThreadId: 'owner',
+        fingerprint: state.fingerprint,
+        name: 'docs/controlled',
+        startRef: 'HEAD',
+        startRevision: state.head,
+        checkout: true,
+        confirmation: 'CREATE_LOCAL_BRANCH',
+      },
+      preparer,
+    );
+    await writeFile(path.join(cwd, 'README.md'), 'selected\n');
+    await writeFile(path.join(cwd, 'other.md'), 'keep unstaged\n');
+    const body = {
+      agentThreadId: 'owner',
+      paths: ['README.md'],
+      fingerprint: (await service.snapshot('p', copyId)).fingerprint,
+    };
+    const review = await actions.stageReview('p', copyId, body);
+    await expect(
+      actions.stage('p', copyId, {
+        ...body,
+        reviewFingerprint: review.reviewFingerprint,
+      }),
+    ).rejects.toThrow('GIT_BUSY');
+    await actions.stage(
+      'p',
+      copyId,
+      { ...body, reviewFingerprint: review.reviewFingerprint },
+      preparer,
+    );
+    const prepared = await service.snapshot('p', copyId);
+    await asPerson(() =>
+      actions.commit(
+        'p',
+        copyId,
+        {
+          agentThreadId: 'owner',
+          fingerprint: prepared.fingerprint,
+          message: 'Controlled docs update',
+        },
+        preparer,
+      ),
+    );
+    expect((await git(['show', 'HEAD:README.md'])).stdout).toBe('selected\n');
+    expect(await readFile(path.join(cwd, 'other.md'), 'utf8')).toBe(
+      'keep unstaged\n',
+    );
+    expect(
+      (await git(['show', '-s', '--format=%an <%ae>'])).stdout.trim(),
+    ).toBe('Reviewer <reviewer@example.invalid>');
+    expect(preparer.assertActive).toHaveBeenCalled();
+    active.push('child');
+    await expect(
+      actions.unstage(
+        'p',
+        copyId,
+        {
+          ...body,
+          fingerprint: (await service.snapshot('p', copyId)).fingerprint,
+        },
+        preparer,
+      ),
+    ).rejects.toThrow('GIT_BUSY');
+    expect(await readFile(path.join(cwd, 'other.md'), 'utf8')).toBe(
+      'keep unstaged\n',
+    );
+  });
+
   it('unstages selected changes without changing their file or other staged entries', async () => {
     writable();
     await writeFile(path.join(cwd, 'README.md'), 'keep me\n');

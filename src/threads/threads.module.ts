@@ -10,6 +10,7 @@ import { DocumentPublicationModule } from '../document-publication/document-publ
 import { KnowledgeProposalsObserverService } from './knowledge-proposals-observer.service';
 import { ProjectKnowledgeModule } from '../project-knowledge/project-knowledge.module';
 import { ThreadSecurityPolicyController } from './thread-security-policy.controller';
+import { AgentTestProfileController } from './agent-test-profile.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ChatModule } from '../chat/chat.module';
 import { CodexModule } from '../codex/codex.module';
@@ -63,6 +64,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     ThreadsDeletionController,
     ThreadCommandsController,
     ThreadSecurityPolicyController,
+    AgentTestProfileController,
     WorkspacesManagementController,
   ],
   providers: [

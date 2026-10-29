@@ -80,6 +80,30 @@ export function errorCode(error) {
   return /^[A-Z][A-Z0-9_]{0,40}$/.test(code) ? code : 'UNAVAILABLE';
 }
 
+/** Repository metadata is untrusted: accept only pinned registry versions,
+ * never a URL, tag, command, Corepack auto-pin or project-selected download.
+ */
+export async function projectPackageManager(cwd) {
+  const file = await open(join(cwd, 'package.json'), 'r');
+  try {
+    const stat = await file.stat();
+    if (stat.size > 256 * 1024)
+      throw Object.assign(new Error(), { code: 'MANIFEST_TOO_LARGE' });
+    const manifest = JSON.parse(await file.readFile('utf8'));
+    if (manifest.packageManager === undefined) return null;
+    if (typeof manifest.packageManager !== 'string')
+      throw Object.assign(new Error(), { code: 'UNSUPPORTED_PACKAGE_MANAGER' });
+    const match = manifest.packageManager.match(
+      /^(pnpm|npm|yarn)@(\d+\.\d+\.\d+(?:-[\w.-]+)?)(\+sha(?:224|256|384|512)\.[a-fA-F0-9]+)?$/,
+    );
+    if (!match)
+      throw Object.assign(new Error(), { code: 'UNSUPPORTED_PACKAGE_MANAGER' });
+    return { name: match[1], version: match[2], spec: manifest.packageManager };
+  } finally {
+    await file.close();
+  }
+}
+
 export async function writableProbe(directory) {
   let probe;
   try {
@@ -195,11 +219,26 @@ export function loopbackProbe() {
 
 export async function browserProbe(timeout) {
   const { chromium } = await import('playwright-core');
-  const browser = await chromium.launch({
-    headless: true,
-    chromiumSandbox: process.platform === 'linux',
-    timeout,
-  });
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      chromiumSandbox: process.platform === 'linux',
+      timeout,
+    });
+  } catch (error) {
+    // Classify locally, never return Chromium stderr (it can contain URLs).
+    const message = String(error?.message ?? '');
+    const code =
+      /Operation not permitted|EPERM|No usable sandbox|Failed to move to new namespace/i.test(
+        message,
+      )
+        ? 'SANDBOX_DENIED'
+        : /Executable doesn.t exist|ENOENT/i.test(message)
+          ? 'BROWSER_NOT_INSTALLED'
+          : errorCode(error);
+    throw Object.assign(new Error(), { code });
+  }
   try {
     const page = await browser.newPage();
     await page.setContent('<!doctype html><h1>Environment ready</h1>', {
@@ -251,6 +290,7 @@ export async function run(options, deps = {}) {
     );
   }
   let scratch;
+  const versions = {};
   try {
     scratch = await mkdtemp(join(tmpdir(), 'mergeron-preflight-'));
     for (const tool of ['npm', 'corepack', 'pnpm']) {
@@ -268,10 +308,74 @@ export async function run(options, deps = {}) {
               COREPACK_ENABLE_PROJECT_SPEC: '0',
             },
           });
-          if (!/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version)) missing();
+          if (!/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version))
+            throw Object.assign(new Error(), { code: 'VERSION_UNAVAILABLE' });
+          versions[tool] = version;
           return version;
         },
-        'Vérifier le gestionnaire préchargé dans l’image ; aucun téléchargement n’est tenté par ce contrôle.',
+        'Vérifier la présence du programme et ses permissions. Ce contrôle hors réseau est indépendant des variables de cache et de la version demandée par le projet.',
+      );
+    }
+    let requested;
+    const manifestOk = await check(
+      'project.package-manager',
+      async () => {
+        try {
+          requested = await (
+            deps.projectPackageManager ?? projectPackageManager
+          )(options.cwd);
+        } catch (error) {
+          if (error.code === 'ENOENT')
+            return 'Aucun package.json dans ce dossier.';
+          throw error;
+        }
+        return requested
+          ? `${requested.name}@${requested.version}`
+          : 'Aucune version épinglée dans package.json.';
+      },
+      'Version du projet illisible ou non épinglée au format reconnu. Aucune URL ni téléchargement issu du projet n’est exécuté.',
+    );
+    if (manifestOk && requested) {
+      await check(
+        'project.package-manager.offline',
+        async () => {
+          try {
+            const actual = await execute(
+              'corepack',
+              [requested.spec, '--version'],
+              {
+                cwd: scratch,
+                timeout: options.timeout,
+                env: {
+                  ...env,
+                  COREPACK_ENABLE_NETWORK: '0',
+                  COREPACK_ENABLE_AUTO_PIN: '0',
+                  COREPACK_ENABLE_PROJECT_SPEC: '0',
+                  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0',
+                },
+              },
+            );
+            if (actual !== requested.version)
+              throw Object.assign(new Error(), {
+                code: 'PACKAGE_MANAGER_VERSION_MISMATCH',
+              });
+            return `${requested.name}@${requested.version} disponible hors réseau.`;
+          } catch (error) {
+            if (
+              [
+                'ENOENT',
+                'EACCES',
+                'EPERM',
+                'PACKAGE_MANAGER_VERSION_MISMATCH',
+              ].includes(error.code)
+            )
+              throw error;
+            throw Object.assign(new Error(), {
+              code: 'PACKAGE_MANAGER_NOT_CACHED',
+            });
+          }
+        },
+        `La version épinglée n’est pas utilisable hors réseau. Le programme peut être installé (${versions[requested.name] ?? 'version non vérifiée'}) sans que cette version soit en cache. Aligner la copie avec la version validée du projet sans écraser ses modifications ; ne pas contourner le proxy.`,
       );
     }
   } catch (error) {

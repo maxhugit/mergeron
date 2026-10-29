@@ -150,6 +150,8 @@ jobs:
           src/projects/workspace-git-limits.spec.ts
           src/projects/project-connection-tools.service.spec.ts
           src/threads/git-mutation-gate.service.spec.ts
+          src/threads/agent-test-profile.spec.ts
+          src/threads/agent-test-profile.controller.spec.ts
           src/projects/workspace-git.controller.spec.ts
           src/projects/workspace-transfers.service.spec.ts
           src/active-folders
@@ -291,6 +293,9 @@ jobs:
 
       - name: Verify project MCP policy on an existing native conversation
         run: bash scripts/smoke-test-project-mcp.sh "mergeron:project-mcp-${{ github.sha }}"
+
+      - name: Verify filtered test profile in the actual Linux agent sandbox
+        run: bash scripts/smoke-test-agent-profile.sh "mergeron:quality-${{ github.sha }}" "mergeron:project-mcp-${{ github.sha }}"
 
       - name: Scan production image dependencies
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

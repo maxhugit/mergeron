@@ -4,6 +4,41 @@ import type { ThreadExecutionInventoryService } from './thread-execution-invento
 import type { CodexProcessManager } from '../codex/codex-process-manager.service';
 const manager = { getClient: () => ({}) } as CodexProcessManager;
 
+it('reserves controlled local preparation for the sole active caller without opening UI writes', async () => {
+  let active = ['caller'];
+  const gate = new GitMutationGateService(
+    { snapshot: () => active } as unknown as ThreadExecutionInventoryService,
+    manager,
+  );
+  let finish!: () => void;
+  const pending = gate.mutateFromAgent(
+    'caller',
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await expect(gate.mutate(() => Promise.resolve())).rejects.toThrow(
+    'GIT_BUSY',
+  );
+  await expect(gate.startTurn(() => Promise.resolve())).rejects.toThrow(
+    'GIT_BUSY',
+  );
+  await expect(
+    gate.mutateFromAgent('caller', () => Promise.resolve()),
+  ).rejects.toThrow('GIT_BUSY');
+  finish();
+  await pending;
+  active = ['caller', 'child'];
+  await expect(
+    gate.mutateFromAgent('caller', () => Promise.resolve()),
+  ).rejects.toThrow('GIT_BUSY');
+  active = [];
+  await expect(
+    gate.mutateFromAgent('caller', () => Promise.resolve()),
+  ).rejects.toThrow('GIT_AGENT_STATE_UNKNOWN');
+});
+
 it('fails closed when the agent connection is unavailable', async () => {
   const gate = new GitMutationGateService(
     { snapshot: () => [] } as unknown as ThreadExecutionInventoryService,

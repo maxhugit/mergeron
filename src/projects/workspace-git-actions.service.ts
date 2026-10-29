@@ -41,6 +41,11 @@ export interface AgentGitPublisher {
   threadId: string;
   assertActive: () => void;
 }
+/** Separate server-only capability: never accepted from a request body. */
+export interface AgentGitPreparer {
+  threadId: string;
+  assertActive: () => void;
+}
 
 @Injectable()
 export class WorkspaceGitActionsService {
@@ -234,13 +239,15 @@ export class WorkspaceGitActionsService {
     projectId: string,
     copyId: string,
     body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
   ) {
     this.body(body);
-    return this.gate.mutate(async () => {
+    return this.localPreparation(preparer, body, async () => {
       const reviewed = await this.stageInputs(projectId, copyId, body);
       if (body.reviewFingerprint !== reviewed.reviewFingerprint)
         throw new ConflictException('GIT_STALE');
       const { cwd, state, records } = reviewed;
+      preparer?.assertActive();
       const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-stage-'));
       const index = path.join(cwd, '.git/index');
       const lockPath = index + '.lock';
@@ -291,6 +298,7 @@ export class WorkspaceGitActionsService {
             .reviewFingerprint !== reviewed.reviewFingerprint
         )
           throw new ConflictException('GIT_STALE');
+        preparer?.assertActive();
         await lock.writeFile(await readFile(frozen));
         await lock.close();
         await rename(lockPath, index);
@@ -313,9 +321,10 @@ export class WorkspaceGitActionsService {
     projectId: string,
     copyId: string,
     body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
   ) {
     this.body(body);
-    return this.gate.mutate(async () => {
+    return this.localPreparation(preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
         projectId,
@@ -369,6 +378,7 @@ export class WorkspaceGitActionsService {
             env,
           );
         await this.copyState(projectId, copyId, body.fingerprint);
+        preparer?.assertActive();
         await lock.writeFile(await readFile(frozen));
         await lock.close();
         await rename(lockPath, index);
@@ -389,6 +399,7 @@ export class WorkspaceGitActionsService {
     projectId: string,
     copyId: string,
     body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
   ) {
     requireExecutionAccess();
     this.body(body);
@@ -404,7 +415,7 @@ export class WorkspaceGitActionsService {
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
     const name = body.name;
-    return this.gate.mutate(async () => {
+    return this.localPreparation(preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
         projectId,
@@ -457,6 +468,7 @@ export class WorkspaceGitActionsService {
         throw new ConflictException('GIT_WORKTREE_DIRTY');
       await this.copyState(projectId, copyId, body.fingerprint);
       // Never reset an existing branch, force a checkout, fetch or push here.
+      preparer?.assertActive();
       await this.git.git(
         cwd,
         body.checkout
@@ -899,6 +911,7 @@ export class WorkspaceGitActionsService {
     projectId: string,
     copyId: string,
     body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
   ) {
     requireExecutionAccess();
     this.body(body);
@@ -923,7 +936,7 @@ export class WorkspaceGitActionsService {
       )
     )
       throw new BadRequestException('GIT_IDENTITY_REQUIRED');
-    return this.gate.mutate(async () => {
+    return this.localPreparation(preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state, branch } = await this.copyState(
         projectId,
@@ -956,6 +969,7 @@ export class WorkspaceGitActionsService {
           GIT_COMMITTER_EMAIL: authorEmail,
         };
         const tree = (await this.git.git(cwd, ['write-tree'], env)).trim();
+        preparer?.assertActive();
         const sha = (
           await this.git.git(
             cwd,
@@ -979,6 +993,7 @@ export class WorkspaceGitActionsService {
         )
           throw new ConflictException('GIT_STALE');
         await this.copyState(projectId, copyId, body.fingerprint);
+        preparer?.assertActive();
         await this.git.git(cwd, [
           'update-ref',
           '-m',
@@ -992,6 +1007,22 @@ export class WorkspaceGitActionsService {
       } finally {
         await rm(folder, { recursive: true, force: true });
       }
+    });
+  }
+
+  private localPreparation<T>(
+    preparer: AgentGitPreparer | undefined,
+    body: Record<string, unknown>,
+    operation: () => Promise<T>,
+  ) {
+    if (!preparer) return this.gate.mutate(operation);
+    if (body.agentThreadId !== preparer.threadId)
+      throw new ForbiddenException('GIT_COPY_OWNED');
+    requireThreadAccess(preparer.threadId);
+    preparer.assertActive();
+    return this.gate.mutateFromAgent(preparer.threadId, async () => {
+      preparer.assertActive();
+      return operation();
     });
   }
 

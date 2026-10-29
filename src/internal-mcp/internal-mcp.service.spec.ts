@@ -259,7 +259,14 @@ describe('native internal MCP over HTTP', () => {
         remoteBranches: () =>
           Promise.resolve({ items: [{ name: 'main', revision: gitHead }] }),
       } as unknown as WorkspaceGitService,
-      { push: pushConnection } as unknown as WorkspaceGitActionsService,
+      {
+        push: pushConnection,
+        stageReview: () =>
+          Promise.resolve({
+            reviewFingerprint: 'c'.repeat(64),
+            files: [{ path: 'README.md', text: 'Untrusted selected content' }],
+          }),
+      } as unknown as WorkspaceGitActionsService,
     );
     pushConnection.mockImplementation(
       (
@@ -393,6 +400,59 @@ describe('native internal MCP over HTTP', () => {
           arguments: {},
         })
       ).isError,
+    ).toBe(true);
+  });
+
+  it('exposes controlled preparation as a real MCP object schema and validates operation fields server-side', async () => {
+    const { client } = await connect();
+    const args = {
+      connectionId: gitConnectionId,
+      copyId: 'own',
+      operation: 'stage_review',
+      paths: ['README.md'],
+      requestId: 'review-1',
+      userRequest: 'Please commit the selected documentation changes.',
+      expectedHead: gitHead,
+      expectedBranch: 'feature/test',
+      fingerprint: gitFingerprint,
+    };
+    activate('admin', false);
+    expect(
+      (await client.callTool({ name: 'prepare_project_git', arguments: args }))
+        .isError,
+    ).toBe(true);
+    activate();
+    const result = await client.callTool({
+      name: 'prepare_project_git',
+      arguments: args,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      operation: 'stage_review',
+      untrustedContent: true,
+      data: { reviewFingerprint: 'c'.repeat(64) },
+    });
+    // Flat schemas are needed by the SDK, but do not weaken per-operation checks.
+    expect(
+      (
+        await client.callTool({
+          name: 'prepare_project_git',
+          arguments: { ...args, operation: 'commit', message: 'x' },
+        })
+      ).isError,
+    ).toBe(true);
+    expect(
+      (
+        await client.callTool({
+          name: 'prepare_project_git',
+          arguments: { ...args, authorName: 'spoof' },
+        })
+      ).isError,
+    ).toBe(true);
+    service.revoke('agent');
+    expect(
+      (await client.callTool({ name: 'prepare_project_git', arguments: args }))
+        .isError,
     ).toBe(true);
   });
 
