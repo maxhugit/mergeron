@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -114,12 +115,14 @@ it('falls back safely for unknown or malformed links', () => {
 it('keeps the same article when the interface language changes', async () => {
   window.history.replaceState(null, '', '/help#guide/infrastructure');
   render(<HelpRoute />);
-  await i18n.changeLanguage('fr');
+  await act(async () => {
+    await i18n.changeLanguage('fr');
+  });
   expect(screen.getByRole('article')).toHaveAccessibleName(
     'Infrastructure et Mergeron Manager',
   );
   expect(screen.getByRole('article')).toHaveTextContent(
-    'ne signifie pas qu’un bouton individuel',
+    'mettre à jour séparément son image publiée',
   );
 });
 it.each(['fr', 'en'])(
