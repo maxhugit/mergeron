@@ -162,11 +162,20 @@ export class DockerClient {
     });
   }
 
-  stopContainer(id) {
-    return this.request(`/containers/${encodeURIComponent(id)}/stop?t=60`, {
-      method: 'POST',
-      timeout: 70_000,
-    });
+  stopContainer(id, graceSeconds = 60) {
+    if (
+      !Number.isInteger(graceSeconds) ||
+      graceSeconds < 1 ||
+      graceSeconds > 60
+    )
+      throw new Error('Invalid container stop grace period');
+    return this.request(
+      `/containers/${encodeURIComponent(id)}/stop?t=${graceSeconds}`,
+      {
+        method: 'POST',
+        timeout: (graceSeconds + 10) * 1000,
+      },
+    );
   }
 
   renameContainer(id, name) {

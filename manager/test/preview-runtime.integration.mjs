@@ -402,7 +402,7 @@ try {
   if (dummy) {
     const c = await docker.inspectContainer(dummy);
     assert.equal(c.Config.Labels['io.mergeron.preview-test'], stack);
-    if (c.State.Running) await docker.stopContainer(dummy);
+    if (c.State.Running) await docker.stopContainer(dummy, 3);
     await docker.removeContainer(dummy);
   }
 }

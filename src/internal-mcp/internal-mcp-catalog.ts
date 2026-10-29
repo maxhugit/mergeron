@@ -82,7 +82,7 @@ export const INTERNAL_MCP_TOOLS = [
     descriptionFr:
       'Consulter l’état ou les journaux expurgés de la prévisualisation de cet agent.',
     input: z.strictObject({ operation: z.enum(['status', 'logs']) }),
-    output: z.record(z.string(), z.unknown()),
+    output: z.object({}).catchall(z.unknown()),
     readOnly: true,
     example: { operation: 'status' },
   },
@@ -97,7 +97,7 @@ export const INTERNAL_MCP_TOOLS = [
       operation: z.enum(['start', 'sync', 'refresh', 'stop']),
       requestId: requestId.optional(),
     }),
-    output: z.record(z.string(), z.unknown()),
+    output: z.object({}).catchall(z.unknown()),
     readOnly: false,
     example: { operation: 'start', requestId: 'preview-start-01' },
   },

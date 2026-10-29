@@ -334,7 +334,7 @@ export class PreviewManager {
   async removeObject(r, item) {
     try {
       const c = await this.owned(item.id, r, item.component);
-      if (c.State?.Running) await this.docker.stopContainer(item.id);
+      if (c.State?.Running) await this.docker.stopContainer(item.id, 3);
       await this.docker.removeContainer(item.id);
     } catch (e) {
       if (!missing(e)) throw e;
@@ -770,7 +770,7 @@ export class PreviewManager {
       await this.owned(r.runtimeId, r, 'preview-app');
       await this.apply(r, input.snapshotId, input.sourceSha);
       if (r.updateMode === 'restart') {
-        await this.docker.stopContainer(r.runtimeId);
+        await this.docker.stopContainer(r.runtimeId, 3);
         await this.docker.startContainer(r.runtimeId);
         r.requiresRestart = false;
         this.save(r);
