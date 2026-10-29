@@ -74,7 +74,7 @@ function Editor({
     setProfile((p) => ({ ...p, [key]: value }));
   return (
     <section
-      className="min-w-0 max-w-full space-y-4 [&_label]:min-w-0 [&_label]:grid-cols-1 [&_input]:min-w-0 [&_input]:max-w-full [&_select]:min-w-0 [&_select]:w-full [&_select]:max-w-full [&_select]:overflow-hidden [&_textarea]:min-w-0 [&_textarea]:w-full [&_textarea]:max-w-full"
+      className="min-w-0 max-w-full space-y-4 [&_label]:min-w-0 [&_label]:grid-cols-1 [&_input]:min-w-0 [&_input]:max-w-full [&_select]:min-w-0 [&_select]:w-full [&_select]:max-w-full [&_textarea]:min-w-0 [&_textarea]:w-full [&_textarea]:max-w-full"
       aria-label={t('settingsTitle')}
     >
       <h2 className="font-semibold">{t('settingsTitle')}</h2>
@@ -106,20 +106,24 @@ function Editor({
       <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
         <label className="grid gap-1 text-sm">
           {t('runtime')}
-          <select
-            className="rounded border bg-background p-2"
-            value={profile.runtime}
-            onChange={(e) => field('runtime', e.target.value)}
-          >
-            {!data.capabilities.runtimes.some(
-              (v) => v.id === profile.runtime,
-            ) && <option value={profile.runtime}>{profile.runtime}</option>}
-            {data.capabilities.runtimes.map((v) => (
-              <option value={v.id} key={v.id}>
-                {v.description}
-              </option>
-            ))}
-          </select>
+          {/* WebKit/GTK ignores overflow on native selects; bound their
+              anonymous option content with a regular element instead. */}
+          <div className="min-w-0 overflow-hidden rounded border bg-background">
+            <select
+              className="block bg-background p-2"
+              value={profile.runtime}
+              onChange={(e) => field('runtime', e.target.value)}
+            >
+              {!data.capabilities.runtimes.some(
+                (v) => v.id === profile.runtime,
+              ) && <option value={profile.runtime}>{profile.runtime}</option>}
+              {data.capabilities.runtimes.map((v) => (
+                <option value={v.id} key={v.id}>
+                  {v.description}
+                </option>
+              ))}
+            </select>
+          </div>
         </label>
         <label className="grid gap-1 text-sm">
           {t('directory')}
@@ -165,15 +169,17 @@ function Editor({
         </label>
         <label className="grid gap-1 text-sm">
           {t('updateMode')}
-          <select
-            className="rounded border bg-background p-2"
-            value={profile.updateMode}
-            onChange={(e) => field('updateMode', e.target.value)}
-          >
-            <option value="hot">{t('hot')}</option>
-            <option value="restart">{t('restartMode')}</option>
-            <option value="manual">{t('manual')}</option>
-          </select>
+          <div className="min-w-0 overflow-hidden rounded border bg-background">
+            <select
+              className="block bg-background p-2"
+              value={profile.updateMode}
+              onChange={(e) => field('updateMode', e.target.value)}
+            >
+              <option value="hot">{t('hot')}</option>
+              <option value="restart">{t('restartMode')}</option>
+              <option value="manual">{t('manual')}</option>
+            </select>
+          </div>
         </label>
         <label className="grid gap-1 text-sm">
           {t('lifetime')}

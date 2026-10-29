@@ -228,6 +228,14 @@ test('mobile preview controls also fit with wider system fallback font metrics',
     document.body.scrollWidth,
     JSON.stringify(overflow),
   ).toBeLessThanOrEqual(390);
+  const mode = screen.getByRole('combobox', {
+    name: 'Application des modifications',
+  });
+  expect(mode).toHaveValue('hot');
+  fireEvent.change(mode, { target: { value: 'manual' } });
+  expect(mode).toHaveValue('manual');
+  fireEvent.change(mode, { target: { value: 'hot' } });
+  expect(document.body.scrollWidth).toBeLessThanOrEqual(390);
   await page.screenshot({
     path: '../../../.vitest-screenshots/preview-fallback-mobile.png',
   });
