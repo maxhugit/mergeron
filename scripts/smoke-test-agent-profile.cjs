@@ -5,6 +5,7 @@ const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const readline = require('node:readline');
 const { filteredTestNetworkAvailable } = require('/app/dist/threads/agent-test-profile.js');
+const { ProjectAgentDefaultsService } = require('/app/dist/threads/project-agent-defaults.service.js');
 const binary = process.argv[2], root = process.argv[3], home = process.argv[4];
 assert(binary && root && home);
 execFileSync('git', ['init', '--quiet', root], { env: { ...process.env, HOME: path.dirname(home) } });
@@ -63,6 +64,12 @@ const watchdog = setTimeout(() => { child.kill('SIGKILL'); console.error('Native
   child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
   assert.equal(filteredTestNetworkAvailable(await rpc('configRequirements/read', {})), true, 'Running Core must confirm administrator network rules');
   console.log('Native profile: managed requirements confirmed');
+  const defaults = new ProjectAgentDefaultsService({ request: rpc }, { getSetting: () => ({ value: true }) });
+  const starting = await defaults.forNewAgent({ cwd: root }, { projectId: 'isolated-fixture', readOnly: false });
+  assert.equal(starting.sandbox, 'workspace-write', 'Global defaults must work against the running Core');
+  assert.equal(starting.config.sandbox_workspace_write.network_access, true);
+  assert.deepEqual(await defaults.forNewAgent({ cwd: root, sandbox: 'read-only' }, { readOnly: false }), {});
+  console.log('Native profile: global defaults and explicit read-only choice verified');
   const sandboxPolicy = { type: 'workspaceWrite', writableRoots: [root], networkAccess: true, excludeTmpdirEnvVar: false, excludeSlashTmp: false };
   const code = `
     const assert=require('node:assert/strict'),cp=require('node:child_process'),fs=require('node:fs');

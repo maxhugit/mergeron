@@ -368,6 +368,8 @@ COPY --chmod=644 deployment/config/codex-requirements.toml /etc/codex/requiremen
 COPY skills/office-files/ /opt/codex-skills/office-files/
 
 RUN chmod -R a+rX /opt/mergeron-corepack \
+ && chmod 755 /etc/codex \
+ && chmod 644 /etc/codex/requirements.toml \
  && chmod +x /usr/local/bin/codex-cli-dispatch /usr/local/bin/mergeron-visual-check \
       /usr/local/bin/mergeron-environment-check /usr/local/bin/mergeron-agent-environment
 

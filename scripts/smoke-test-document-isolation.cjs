@@ -11,8 +11,11 @@ const { agentEnvironmentCommand } = require('/app/dist/codex/agent-environment.j
 
 const workspace = fs.mkdtempSync('/workspaces/.document-isolation-probe-');
 const temporary = fs.mkdtempSync('/tmp/document-isolation-probe-');
+// Core intentionally refuses executable helper aliases in a /tmp CODEX_HOME.
+// This home is disposable RAM in the networkless container, never a host home.
+const nativeHome = process.argv[2] ? fs.mkdtempSync('/home/codex/.native-profile-') : null;
 try {
-  const home = path.join(temporary, 'home', '.codex');
+  const home = path.join(nativeHome || path.join(temporary, 'home'), '.codex');
   fs.mkdirSync(home, { recursive: true });
   const ssh = path.join(temporary, 'home', '.ssh');
   fs.mkdirSync(ssh);
@@ -115,4 +118,5 @@ try {
 } finally {
   fs.rmSync(workspace, { recursive: true });
   fs.rmSync(temporary, { recursive: true });
+  if (nativeHome) fs.rmSync(nativeHome, { recursive: true });
 }
