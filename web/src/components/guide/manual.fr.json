@@ -86,7 +86,8 @@
             "title": "Se déplacer dans l’application",
             "paragraphs": [
               "La barre latérale donne accès aux projets et à leurs ressources. Le bouton de réduction libère de la place sans supprimer les éléments. Les onglets d’un agent permettent de passer entre conversation et outils ouverts.",
-              "Le menu du compte contient les préférences personnelles et la déconnexion. L’administration serveur est distincte des paramètres d’un projet."
+              "Le menu du compte contient les préférences personnelles et la déconnexion. L’administration serveur est distincte des paramètres d’un projet.",
+              "Le Guide de la plateforme propose un sommaire par chapitres et une recherche locale dans les articles, sans interroger les données de vos projets. Sur mobile, Sommaire affiche la navigation. Les liens Voir aussi, Précédent et Suivant conservent la lecture dans le guide ; Copier le lien permet de partager directement un article."
             ]
           },
           {
@@ -229,7 +230,7 @@
           {
             "title": "À quoi sert une conversation simple ?",
             "paragraphs": [
-              "Utilisez-la pour reformuler, traduire, expliquer ou préparer un texte. Elle utilise le fournisseur et le modèle du chat simple, configurés par l’administration, et non la session de travail du CLI Codex.",
+              "Utilisez-la pour reformuler, traduire, expliquer ou préparer un texte. Le moteur se choisit dans Codex → Chat et Audio : clé API OpenAI ou session Codex CLI. Même en mode CLI, ce chat reste distinct d’un agent de travail et n’exécute pas ses outils.",
               "Une réponse n’exécute pas les outils d’un agent, ne crée pas une branche Git et ne valide pas un livrable. L’accès d’un agent aux fichiers de son dossier ne doit pas être supposé pour le chat simple."
             ]
           },
@@ -240,7 +241,7 @@
               "Saisissez une demande avec le contexte nécessaire et envoyez-la.",
               "Complétez ou corrigez votre demande au fil de l’échange, puis relisez la réponse avant utilisation."
             ],
-            "warning": "Une authentification Codex fonctionnelle ne suffit pas à configurer le chat simple : son accès API doit être configuré séparément. Ne collez pas de secrets dans le texte de la demande."
+            "warning": "Vérifiez le moteur choisi avec l’administration : le mode API exige une clé configurée et le mode CLI une session Codex disponible. Aucun repli automatique vers l’API ne masque une erreur CLI. Ne collez pas de secrets dans votre demande."
           }
         ],
         "related": ["simple-messages", "response-copy", "admin-chat"]
@@ -349,7 +350,8 @@
             "paragraphs": [
               "Un agent peut travailler directement pour un livrable sans sous-tâche obligatoire. Si une tâche principale est liée au livrable, une sous-tâche peut être choisie explicitement : l’agent conserve alors les deux liens.",
               "Dans l’en-tête Lié à, le titre du livrable ouvre sa fiche. L’icône de dossier juste à côté ouvre l’explorateur droit directement dans son répertoire, sans changer le dossier d’exécution de l’agent.",
-              "Lorsque le dialogue propose un agent existant, choisissez une session disponible du même projet et non déjà affectée à une autre tâche ou un autre livrable. Sa réutilisation ne signifie pas l’effacement de son historique."
+              "Lorsque le dialogue propose un agent existant, choisissez une session disponible du même projet et non déjà affectée à une autre tâche ou un autre livrable. Sa réutilisation ne signifie pas l’effacement de son historique.",
+              "Un nouvel agent peut être associé à une copie Git avant son premier message. Il n’est pas nécessaire de créer un historique pour préparer cette association. Le premier envoi démarre sa conversation ; un changement d’emplacement reste soumis aux contrôles de dossier et de permissions."
             ],
             "warning": "Les commandes d’exécution peuvent être réservées aux administrateurs. L’accès à un projet ou la création d’une fiche ne garantit pas le droit de lancer des outils."
           }
@@ -568,7 +570,8 @@
             "title": "Préparer le contexte partagé",
             "paragraphs": [
               "Utilisez les connaissances du projet pour les faits durables, le vocabulaire, les contraintes et les décisions validées. Indiquez les sources et distinguez les faits des hypothèses.",
-              "Le fichier AGENTS.md dans un dossier de travail contient les consignes destinées aux agents. Les documents complémentaires doivent être désignés et lus selon ces consignes ; les placer dans un dossier ne garantit pas leur lecture automatique."
+              "Le fichier AGENTS.md dans un dossier de travail contient les consignes destinées aux agents. Les documents complémentaires doivent être désignés et lus selon ces consignes ; les placer dans un dossier ne garantit pas leur lecture automatique.",
+              "À chaque nouvel échange, un agent rattaché reçoit un contexte bref : identité du projet, dossier actif et titres des tâches ou livrables liés. Il consulte les détails à la demande avec les outils projet. Le rattachement explicite de la conversation détermine son projet ; le chemin Git seul ne le détermine pas."
             ]
           },
           {
@@ -581,7 +584,95 @@
             "warning": "La mémoire ne remplace ni les autorisations ni la vérification des faits. Un chat simple ne doit pas être supposé lire automatiquement les mêmes fichiers qu’un agent de travail."
           }
         ],
-        "related": ["agent-create", "integrations", "locations"]
+        "related": [
+          "agent-create",
+          "integrations",
+          "locations",
+          "agent-project-tools",
+          "admin-agent-instructions"
+        ]
+      },
+      {
+        "id": "agent-project-tools",
+        "title": "Consulter le projet et créer des éléments avec un agent",
+        "summary": "Utiliser les outils projet intégrés pour consulter les tâches, livrables et liens de la conversation.",
+        "keywords": [
+          "MCP interne",
+          "contexte",
+          "tâches",
+          "livrables",
+          "renommer",
+          "outils projet"
+        ],
+        "sections": [
+          {
+            "title": "Demander une consultation",
+            "steps": [
+              "Dans un agent rattaché au projet, demandez par exemple « Liste les tâches du projet » ou « Consulte le livrable Présentation ».",
+              "Précisez le gestionnaire ou le titre si plusieurs éléments correspondent ; l’agent peut rechercher puis consulter les détails accessibles.",
+              "Pour changer le titre de cette conversation, demandez explicitement « Renomme cet agent Préparation de la présentation ». Le renommage vise uniquement l’agent appelant, même en lecture seule des fichiers."
+            ]
+          },
+          {
+            "title": "Créer sur demande explicite",
+            "paragraphs": [
+              "« Crée une tâche Préparer la présentation » ou « Crée un livrable Présentation avec ces critères » crée une véritable fiche et son lien. Une sous-tâche exige un parent explicite du même tableau ; aucun gestionnaire manquant, agent ou lancement n’est créé automatiquement.",
+              "Ces créations nécessitent les droits d’exécution administrateur et un mode modifiable. En lecture seule, les consultations restent disponibles. Après une réponse incertaine, faites vérifier le gestionnaire avant de renouveler la demande pour éviter un doublon."
+            ],
+            "warning": "Créer une fiche de livrable n’enregistre aucun document et ne vaut pas validation. Les documents à conserver passent par Enregistrer une nouvelle version ; les restrictions des intégrations et du projet restent applicables."
+          },
+          {
+            "title": "Documentation pour les administrateurs",
+            "paragraphs": [
+              "Paramètres → MCP interne présente les méthodes, paramètres, exemples et règles de droits issus du catalogue du serveur. Cette référence n’est pas une console d’exécution et ne donne aucun droit supplémentaire.",
+              "Ces outils sont destinés aux agents de travail rattachés ; les conversations simples ne reçoivent pas ce canal projet."
+            ]
+          }
+        ],
+        "related": [
+          "agent-knowledge",
+          "task-board",
+          "deliverable-overview",
+          "integrations"
+        ]
+      },
+      {
+        "id": "agent-visual-checks",
+        "title": "Faire vérifier une interface par un agent",
+        "summary": "Obtenir des captures ordinateur et mobile du vrai site et distinguer les tests de l’examen visuel.",
+        "keywords": [
+          "vérification visuelle",
+          "desktop",
+          "mobile",
+          "capture",
+          "Chromium",
+          "mergeron-visual-check",
+          "sandbox"
+        ],
+        "sections": [
+          {
+            "title": "Décrire le site et le résultat attendu",
+            "steps": [
+              "Demandez la création ou la modification de l’interface et précisez la page, la fonctionnalité à contrôler et le résultat attendu.",
+              "L’agent prépare le serveur de test autorisé et utilise mergeron-visual-check avec l’URL réelle et un sélecteur de la fonctionnalité. Un simple test autonome de l’outil ne vérifie pas votre site.",
+              "Les résultats sont placés dans artifacts/visual-check du dossier de travail : desktop.png, mobile.png et report.json. L’agent doit ouvrir et examiner les deux images, corriger les défauts relevant de la demande et refaire le contrôle après correction."
+            ]
+          },
+          {
+            "title": "Lire le compte rendu",
+            "paragraphs": [
+              "Le rapport distingue les vérifications automatiques (page accessible et élément attendu visible), l’examen des captures (lisibilité, disposition, débordements, superpositions et contrôles) et les éventuelles limites. Une assertion réussie ou la présence des PNG ne prouve pas l’examen visuel.",
+              "Par défaut, les consignes communes demandent ce contrôle après une modification d’interface. Elles sont modifiables par un administrateur ; leur texte ne crée ni permission ni garantie technique d’exécution. Une question seule n’autorise pas à lancer un service."
+            ],
+            "warning": "Si le serveur, le navigateur, les droits ou l’outil de consultation manquent, l’agent doit préciser ce qui reste invérifié. Il ne doit ni contourner le sandbox, ni publier un port, ni ajouter automatiquement les captures potentiellement confidentielles dans Git ou une PR."
+          }
+        ],
+        "related": [
+          "admin-agent-instructions",
+          "browser-annotation",
+          "agent-approvals",
+          "git-pr"
+        ]
       }
     ]
   },
@@ -771,6 +862,14 @@
               "La suppression d’un document est logique et réversible via les actions prévues. Les documents publiés bénéficient de protections qui restent actives pour les agents, même avec des permissions étendues."
             ],
             "warning": "Un fichier de code ou un fichier temporaire n’est pas automatiquement un document publié. Un livrable finalisé doit être rouvert avant toute modification documentaire."
+          },
+          {
+            "title": "Joindre un document à une conversation",
+            "steps": [
+              "Dans le menu ⋮ d’un document du livrable, ou dans son menu de fichier dans l’explorateur, utilisez Joindre au chat lorsque cette action est disponible.",
+              "Vérifiez la conversation et la pièce jointe dans son brouillon, complétez votre demande puis envoyez-la explicitement.",
+              "Les menus regroupent les actions de document, de fichier et Git selon le contexte ; joindre un document ne modifie ni sa version ni sa validation."
+            ]
           }
         ],
         "related": ["deliverable-lifecycle", "onlyoffice", "deliverable-agent"]
@@ -913,7 +1012,8 @@
             "title": "Ouvrir le bon emplacement",
             "paragraphs": [
               "Ouvrez l’explorateur dans le contexte du projet ou de l’agent, puis choisissez l’emplacement à consulter. Les menus contextuels regroupent les opérations disponibles sur un dossier, un fichier ou une connexion.",
-              "Les fichiers texte et images ont un aperçu adapté ; les PDF utilisent la visionneuse intégrée. Les formats bureautiques compatibles passent par OnlyOffice lorsqu’il est configuré. Les archives sont consultables dans les limites de sécurité de l’application."
+              "Les fichiers texte et images ont un aperçu adapté ; les PDF utilisent la visionneuse intégrée. Les formats bureautiques compatibles passent par OnlyOffice lorsqu’il est configuré. Les archives sont consultables dans les limites de sécurité de l’application.",
+              "Le menu … en fin de ligne rassemble les actions du fichier et, dans une copie Git, les différences et la préparation du commit. Joindre au chat est également disponible pour les documents de livrable compatibles ; contrôlez la pièce jointe et envoyez le message vous-même."
             ]
           },
           {
@@ -1139,6 +1239,15 @@
               "La suppression automatique d’une branche après fusion dépend du réglage du dépôt GitHub. Elle ne supprime pas vos branches locales et ne nettoie pas rétroactivement toutes les anciennes branches."
             ],
             "warning": "Vérifiez source et destination, notamment avant de proposer des changements à main. Les droits GitHub et les règles du dépôt restent applicables."
+          },
+          {
+            "title": "Depuis une branche distante déjà publiée",
+            "steps": [
+              "Dans la vue Distante de la connexion GitHub, ouvrez le menu … de la branche publiée puis Créer une pull request.",
+              "Une copie locale et un nouveau push ne sont pas nécessaires si les commits voulus sont déjà publiés. Vérifiez la branche source et la branche de destination affichées.",
+              "Renseignez le titre, la description et le mode brouillon, puis confirmez. Si la branche a changé depuis l’ouverture du dialogue, actualisez la préparation ; une PR déjà ouverte est réutilisée."
+            ],
+            "warning": "La création exige une connexion GitHub autorisée. Ouvrir une PR ne fusionne pas la branche et ne publie pas vos modifications locales non poussées."
           }
         ],
         "related": ["git-remote", "git-branches", "server-update"]
@@ -1167,7 +1276,7 @@
           {
             "title": "Ouvrir une vue",
             "steps": [
-              "Depuis un agent autorisé, cliquez sur Navigateur pour ouvrir une vue à côté de Conversation.",
+              "Depuis un agent autorisé, cliquez sur Navigateur puis choisissez Navigateur isolé (actuel). Le mode local par extension est un autre choix explicite, sans basculement automatique en cas d’indisponibilité.",
               "Saisissez une adresse HTTP(S) puis Ouvrir. La vue peut être affichée côte à côte avec la conversation sur ordinateur.",
               "Interagissez avec la page par souris, molette et clavier. Si une autre vue contrôle la session, utilisez explicitement Prendre le contrôle.",
               "Libérez le contrôle lorsque vous quittez la vue ; Effacer la session ferme les pages et détruit leurs cookies temporaires."
@@ -1180,9 +1289,66 @@
               "Seules les destinations publiques HTTP sur 80 et HTTPS sur 443, en IPv4, sont autorisées. Une redirection vers un domaine résolu en adresse privée est également bloquée, même si l’URL commence par HTTPS. Les messages distinguent service non configuré, indisponibilité du runtime et erreur de navigation."
             ],
             "warning": "Le flux peut montrer vos saisies. Il n’est pas automatiquement ajouté au chat. Les dialogues natifs tels que certains QR codes passkey, le multimédia et les transferts de fichiers ne sont pas tous pris en charge. L’accès est réservé aux administrateurs autorisés."
+          },
+          {
+            "title": "Retrouver ses vues et sa session",
+            "paragraphs": [
+              "Les vues ouvertes, la sélection et la disposition sont mémorisées par personne et conversation dans l’onglet Mergeron. Revenir à une conversation reconnecte la page encore vivante, sans rechargement : formulaire, défilement et connexion au site restent dans la session distante.",
+              "Chaque vue possède son contexte isolé. Les réglages Navigateur du projet définissent la page par défaut, le côte-à-côte initial et les fenêtres secondaires des nouvelles sessions. Sur mobile, la vue reste en pleine largeur.",
+              "Si Mergeron reste fermé ou suspendu trop longtemps, l’inactivité de quinze minutes ou le redémarrage du service peut faire perdre la page. L’onglet reste visible avec un avertissement ; utilisez Ouvrir pour démarrer une nouvelle page, sans restauration automatique des saisies."
+            ]
           }
         ],
-        "related": ["browser-annotation", "infrastructure", "agent-approvals"]
+        "related": [
+          "browser-local",
+          "browser-annotation",
+          "infrastructure",
+          "agent-approvals"
+        ]
+      },
+      {
+        "id": "browser-local",
+        "title": "Associer son navigateur local par extension",
+        "summary": "Partager explicitement un onglet Chrome, Edge ou Safari sur Mac avec un agent, en préversion.",
+        "keywords": [
+          "extension",
+          "local",
+          "Chrome",
+          "Edge",
+          "Safari",
+          "Mac",
+          "association",
+          "passkey",
+          "consentement"
+        ],
+        "sections": [
+          {
+            "title": "Installer et associer sur ordinateur",
+            "steps": [
+              "Dans l’agent, ouvrez Association de l’extension (icône de prise), ou Navigateur → Navigateur local · extension (test). Cette préversion est réservée aux administrateurs, hors simulation de droits.",
+              "Pour Chrome ou Edge, téléchargez et extrayez le ZIP. Dans chrome://extensions ou edge://extensions, activez le mode développeur puis chargez l’extension non empaquetée depuis le dossier extrait.",
+              "Dans les options de l’extension, autorisez uniquement l’origine HTTPS de votre instance Mergeron, puis rechargez Mergeron. Gardez Mergeron et la page partagée dans le même navigateur et le même profil.",
+              "Demandez l’association à cet agent, comparez le code dans Mergeron et dans l’extension, puis confirmez dans l’extension. Sur la page HTTPS voulue, choisissez l’agent et cliquez sur Pointer, ou Partager / reprendre cet onglet pour une simple lecture."
+            ]
+          },
+          {
+            "title": "Safari sur Mac : installation temporaire",
+            "paragraphs": [
+              "Téléchargez le paquet Safari proposé dans la même fenêtre. Safari 18.4 minimum sur Mac : Réglages → Développeur → Ajouter une extension temporaire, puis sélectionnez le ZIP Safari ou son dossier. Si nécessaire, activez les fonctionnalités pour les développeurs web dans Réglages → Avancés.",
+              "Validez vous-même l’autorisation de l’extension non signée, configurez l’origine HTTPS Mergeron et suivez la même association. Safari retire cette installation à sa fermeture ou après 24 heures : réinstallez puis associez à nouveau. Ce paquet ne prend pas en charge iPhone ou iPad."
+            ]
+          },
+          {
+            "title": "Contrôler les actions et la durée du partage",
+            "paragraphs": [
+              "L’agent peut demander la lecture du texte visible et proposer des actions sur les éléments observés. Chaque action exige votre accord dans Mergeron. Fermer la fenêtre de consentement n’approuve rien ; une commande refusée, expirée ou incertaine n’est pas rejouée.",
+              "Vous pouvez fermer la fenêtre d’association en restant dans la conversation : le partage reste actif. Quitter l’agent ou fermer Mergeron révoque le partage sans fermer votre onglet natif. Une navigation ou un rechargement suspend le partage ; reprenez-le explicitement dans l’extension.",
+              "Pour une connexion ou une passkey, suspendez le partage et authentifiez-vous vous-même dans le navigateur natif avant de partager à nouveau. La page Mergeron de contrôle ne peut être partagée qu’en annotation : aucune commande de l’agent n’y est autorisée."
+            ],
+            "warning": "La lecture peut transmettre du texte privé affiché. Les valeurs des champs connus, cookies et passkeys ne sont pas exportés ; cela ne détecte pas tous les secrets. Partagez une page adaptée et vérifiez toute capture avant validation. Les mises à jour de l’extension sont manuelles."
+          }
+        ],
+        "related": ["browser-live", "browser-annotation", "agent-approvals"]
       },
       {
         "id": "browser-annotation",
@@ -1199,7 +1365,7 @@
         ],
         "sections": [
           {
-            "title": "Créer un commentaire de page",
+            "title": "Avec le navigateur isolé",
             "steps": [
               "Ouvrez la page voulue puis choisissez Pointer un élément. Le flux direct s’interrompt pour préparer une capture distincte.",
               "Sélectionnez l’élément visible et rédigez une consigne précise sur ce qui doit changer.",
@@ -1214,9 +1380,19 @@
               "Le pointage ne clique pas sur le bouton du site et ne lance pas un agent. Si la page a changé, actualisez la capture avant de recommencer ; un sélecteur n’est pas une garantie de stabilité de l’interface."
             ],
             "warning": "Les captures ne masquent plus systématiquement les champs saisis. Vérifiez qu’aucun secret ou renseignement personnel indésirable n’est visible avant d’ajouter puis d’envoyer la capture."
+          },
+          {
+            "title": "Avec le navigateur local : rédiger dans le chat",
+            "steps": [
+              "Après association, ouvrez l’icône de l’extension sur la page HTTPS au premier plan et choisissez Pointer. Le partage reprend explicitement même après navigation ; Échap annule le pointeur.",
+              "Cliquez sur l’élément : le clic du site est intercepté. Vérifiez l’aperçu de la zone visible avec cadre bleu et repère 1.",
+              "Choisissez Ajouter au message dans Mergeron. La capture marquée rejoint la zone de saisie normale de cet agent et le texte déjà saisi est conservé ; Annuler ne transmet pas la capture.",
+              "Rédigez votre consigne directement dans la conversation, puis envoyez vous-même le message. Il n’y a pas de champ de commentaire séparé dans l’extension."
+            ],
+            "warning": "Le masquage des champs et iframes dans la capture locale ne détecte pas tous les secrets. Vérifiez l’image. Après une mise à jour, rechargez Mergeron et la page partagée puis refaites l’association ; si l’ajout n’est pas confirmé, vérifiez le brouillon avant une reprise manuelle."
           }
         ],
-        "related": ["browser-live", "agent-create"]
+        "related": ["browser-live", "browser-local", "agent-create"]
       }
     ]
   },
@@ -1356,18 +1532,19 @@
           {
             "title": "Avant et pendant la mise à jour",
             "steps": [
-              "Dans Serveur, consultez Version actuelle puis l’onglet Mise à jour pour l’état de disponibilité.",
-              "Actualiser la détection recherche une image sans l’installer. Vérifiez le canal et l’image cible ; les réglages avancés ne doivent être changés qu’en connaissance de cause.",
-              "Utilisez Mettre à jour, lisez le plan et confirmez l’opération proposée.",
-              "Suivez le suivi et les logs pendant l’arrêt temporaire, la sauvegarde, la recréation et les contrôles de santé.",
-              "Après réussite, rechargez l’interface et contrôlez vos fonctions importantes."
+              "Dans Paramètres → Serveur → Mise à jour, consultez la version de l’application et les cartes Mises à jour des conteneurs : application, ingress NGINX, sortie Squid et navigateur lorsqu’il est géré.",
+              "Actualiser la détection recherche les images sans les installer ni les télécharger. Chaque carte indique l’image installée, le canal et la disponibilité ; un état inconnu ou une erreur ne signifie pas « à jour ».",
+              "Choisissez Mettre à jour sur le composant voulu, ou Remplacer par l’image publiée si la migration d’un navigateur local connu est proposée. Relisez le composant et l’empreinte exacte du plan, puis confirmez.",
+              "Même si seule l’image choisie est mise à niveau, toute la pile est arrêtée et recréée pour la sauvegarde cohérente et le retour arrière. Le suivi est préparé avant l’arrêt du serveur ; gardez-le ouvert pendant l’opération.",
+              "Après réussite, rechargez l’interface et contrôlez les fonctions importantes. Voir le suivi et les logs permet de rouvrir le résultat ; si un ancien suivi est signalé comme dépassé, ouvrez le dernier suivi."
             ]
           },
           {
             "title": "Retour arrière et mode DEV",
             "paragraphs": [
               "Lorsque le Manager est configuré, une mise à jour vérifie les prérequis et conserve une sauvegarde. Une défaillance peut déclencher la restauration selon son suivi ; un état exigeant une récupération ne doit pas être ignoré.",
-              "Le mode rapide est réservé à une pile DEV dédiée. Il accélère certaines étapes sans supprimer la sauvegarde complète ni transformer une mise à jour de DEV en mise à jour de production."
+              "Le mode rapide est réservé à une pile DEV dédiée. Il accélère certaines étapes sans supprimer la sauvegarde complète ni transformer une mise à jour de DEV en mise à jour de production.",
+              "Cette détection nécessite une version compatible du Manager et de l’application. Les images des autres composants restent inchangées ; le navigateur géré reste limité à DEV. Le Manager lui-même se met à jour depuis l’hôte. Les liens éditeur des composants n’offrent pas un résumé garanti des différences entre deux empreintes."
             ],
             "warning": "Ne lancez pas deux opérations simultanées. Actualiser l’application, mettre à jour le CLI Codex et mettre à jour l’image serveur sont trois actions différentes."
           }
@@ -1432,8 +1609,9 @@
           {
             "title": "Cas du navigateur géré en DEV",
             "paragraphs": [
-              "Quand cette intégration est explicitement activée, Mergeron Browser apparaît parmi les composants et participe aux transactions globales du Manager. Son DNS public 1.1.1.1 est réappliqué lors des recréations et restaurations, sans changer le DNS de l’hôte.",
-              "La présence du navigateur dans l’inventaire ne signifie pas qu’un bouton individuel de redémarrage ou de mise à jour est disponible. La détection des images de Serveur concerne l’application ; la version du runtime navigateur doit rester compatible avec celle-ci."
+              "Lorsque cette intégration est explicitement activée sur une pile DEV, Mergeron Browser apparaît dans l’inventaire et participe aux transactions du Manager. Son DNS public 1.1.1.1 est réappliqué lors des recréations et restaurations, sans changer le DNS de l’hôte.",
+              "Serveur → Mise à jour peut détecter et mettre à jour séparément son image publiée, comme celles de NGINX et Squid, avec confirmation et transaction sur toute la pile. L’image du navigateur doit rester compatible avec l’application. Un navigateur construit localement sans empreinte publiée peut nécessiter Remplacer par l’image publiée ; un état inconnu n’est pas une preuve de mise à jour.",
+              "Infrastructure sert à consulter l’état et la configuration ; les actions de mise à jour sont dans l’onglet Mise à jour. Le Manager lui-même reste administré depuis l’hôte."
             ],
             "warning": "Ne désactivez pas le sandbox et n’exposez pas le port de contrôle pour résoudre une erreur. Les réglages réservés à DEV ne doivent pas être appliqués implicitement à la production."
           }
@@ -1460,7 +1638,8 @@
               "Ouvrez l’administration Codex puis Compte pour l’authentification nécessaire aux fonctions concernées.",
               "Dans les onglets de configuration, choisissez modèles, raisonnement, instructions et sécurité selon les besoins.",
               "Utilisez la barre fixe Enregistrer pour l’onglet actif. Les autres brouillons d’onglets ne sont pas automatiquement appliqués.",
-              "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation."
+              "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation.",
+              "Chat et Audio regroupe les moteurs du chat simple et de la dictée, y compris sans compte Codex connecté pour préparer le mode API. Instructions contient aussi Consignes communes aux agents, avec son propre bouton d’enregistrement indépendant des réglages natifs Codex."
             ]
           },
           {
@@ -1472,36 +1651,78 @@
             "warning": "Sauvegardez les données Codex avant une mise à jour : revenir à l’ancien exécutable ne restaure pas automatiquement les données éventuellement migrées."
           }
         ],
-        "related": ["agent-composer", "agent-knowledge", "server-update"]
+        "related": [
+          "agent-composer",
+          "agent-knowledge",
+          "server-update",
+          "admin-chat",
+          "admin-agent-instructions"
+        ]
       },
       {
-        "id": "admin-chat",
-        "title": "Configurer le chat simple et l’assistance IA",
-        "summary": "Comprendre les prérequis API distincts de la connexion Codex.",
+        "id": "admin-agent-instructions",
+        "title": "Modifier les consignes communes aux agents",
+        "summary": "Administrer les instructions de l’instance transmises à chaque nouvel échange des agents de travail.",
         "keywords": [
-          "clé API",
-          "chat simple",
-          "OpenAI",
-          "planification",
-          "modèle",
-          "fournisseur"
+          "consignes communes",
+          "instructions",
+          "administrateur",
+          "vérification visuelle",
+          "restaurer",
+          "12000"
         ],
         "sections": [
           {
-            "title": "Deux circuits différents",
-            "paragraphs": [
-              "Le chat simple et certaines fonctions de planification IA utilisent leur propre configuration de fournisseur, modèle et accès API. La connexion à un compte Codex ne les configure pas automatiquement.",
-              "L’administration Chat simple permet de préparer ces paramètres. Ne recopiez pas une clé dans un message, une capture ou un document partagé pour demander un dépannage."
+            "title": "Modifier et enregistrer le texte",
+            "steps": [
+              "En administrateur, ouvrez Paramètres → Codex → Instructions → Consignes communes aux agents. Cette section reste accessible sans compte Codex connecté.",
+              "Modifiez le texte dans la limite de 12 000 caractères puis utilisez Enregistrer les consignes communes. L’enregistrement est indépendant du bouton des paramètres natifs Codex.",
+              "Un texte vide désactive ces consignes. Restaurer le texte par défaut prépare seulement un brouillon : enregistrez-le pour l’appliquer, ou annulez le brouillon."
             ]
           },
           {
-            "title": "Vérifier une indisponibilité",
-            "steps": [
-              "Vérifiez la configuration du chat simple avec un administrateur et enregistrez les changements de formulaire.",
-              "Essayez une demande courte dans une conversation simple, puis vérifiez le résultat ou le message d’erreur.",
-              "Si les conseils ou plans IA échouent aussi, contrôlez ce circuit API avant de modifier le CLI Codex."
+            "title": "Comprendre la portée",
+            "paragraphs": [
+              "Le réglage est persistant et relu à chaque nouvel échange, pour les agents de travail nouveaux et existants. Aucun redémarrage n’est nécessaire ; un échange déjà en cours n’est pas modifié. Les conversations simples ne reçoivent pas ces consignes.",
+              "Le texte par défaut demande la vérification des interfaces modifiées sur ordinateur et mobile, puis l’examen réel des captures et le signalement des limites. Vous pouvez l’adapter aux pratiques de votre instance."
             ],
-            "warning": "Des accès valides ne garantissent pas un quota disponible ou la disponibilité du modèle. Ne contournez pas un échec en donnant des autorisations d’exécution plus larges à un agent."
+            "warning": "Ne placez aucun secret dans ce texte transmis à tous les agents de travail. Il ne modifie ni AGENTS.md, ni les consignes du projet, ni les permissions. Une instruction textuelle ne garantit pas l’exécution d’un contrôle et ne permet pas de contourner les protections."
+          }
+        ],
+        "related": ["admin-codex", "agent-knowledge", "agent-visual-checks"]
+      },
+      {
+        "id": "admin-chat",
+        "title": "Configurer les moteurs du chat simple et de la dictée",
+        "summary": "Choisir séparément les moteurs du chat et de l’audio dans Codex → Chat et Audio.",
+        "keywords": [
+          "Chat et Audio",
+          "clé API",
+          "chat simple",
+          "OpenAI",
+          "Codex CLI",
+          "dictée",
+          "expérimental",
+          "planification"
+        ],
+        "sections": [
+          {
+            "title": "Choisir les moteurs et enregistrer",
+            "steps": [
+              "Ouvrez Paramètres → Codex → Chat et Audio. L’ancienne entrée Chat simple est regroupée dans cet onglet, accessible aussi sans connexion Codex pour configurer la clé API.",
+              "Pour le chat simple, choisissez la clé API OpenAI ou la session Codex CLI et renseignez les options proposées. Une connexion Codex ne configure pas automatiquement le circuit API.",
+              "Pour la dictée, choisissez la clé API ou Codex CLI — expérimental. Sans réglage audio explicite, la dictée suit le moteur du chat ; après enregistrement d’un choix audio, changer le moteur du chat ne le modifie plus.",
+              "Enregistrez, puis essayez séparément une courte conversation et une dictée. La transcription reste dans le brouillon à relire et envoyer explicitement."
+            ]
+          },
+          {
+            "title": "Diagnostiquer un échec sans changer de moteur implicitement",
+            "paragraphs": [
+              "Chat et audio sont indépendants. La clé API est commune aux fonctions qui sélectionnent explicitement ce moteur ; elle n’est jamais utilisée en secours après une erreur du CLI. Vérifiez le moteur concerné avant de modifier le compte ou les paramètres.",
+              "La dictée CLI exige une session Codex authentifiée avec ChatGPT et dépend de la version du CLI et de l’accès vocal du compte. Une seule dictée CLI peut être traitée à la fois par installation. Une incompatibilité, coupure ou expiration produit une erreur explicite, sans appel de secours à l’API.",
+              "Certaines assistances de planification utilisent encore leur circuit API : vérifiez leurs prérequis séparément. Une clé valide ne garantit ni quota ni disponibilité du modèle."
+            ],
+            "warning": "Ne copiez jamais de clé dans un message ou une capture. La dictée CLI est expérimentale et doit être essayée avec le compte de l’installation ; élargir les permissions de l’agent ne résout pas une erreur de transcription."
           }
         ],
         "related": ["simple-chat", "task-planning", "admin-codex"]
