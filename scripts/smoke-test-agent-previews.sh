@@ -10,6 +10,10 @@ preview_manager_image="${1:?Pass the freshly built Manager image}"
 preview_stack="mergeron-preview-check-$(openssl rand -hex 4)"
 preview_root="$(mktemp -d /tmp/mergeron-preview-check-XXXXXXXX)"
 mkdir "$preview_root/workspace"
+# The trusted controller is UID 0 with ALL capabilities dropped, so it cannot
+# bypass the runner-owned mktemp directory's 0700 mode. Assign only this NEW
+# fixture tree to its owner rather than granting DAC_OVERRIDE to the container.
+sudo chown 0:0 "$preview_root" "$preview_root/workspace"
 cleanup() {
   # Every object is resolved by the unique fixture stack label before removal.
   for id in $(docker ps -aq --filter "label=io.mergeron.stack=$preview_stack"); do
