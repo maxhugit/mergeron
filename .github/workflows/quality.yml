@@ -201,6 +201,7 @@ jobs:
         with:
           name: preview-ui-evidence-${{ github.sha }}
           path: web/.vitest-screenshots/
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
 
