@@ -74,7 +74,7 @@ function Editor({
     setProfile((p) => ({ ...p, [key]: value }));
   return (
     <section
-      className="min-w-0 max-w-full space-y-4 [&_label]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0 [&_select]:max-w-full [&_textarea]:min-w-0 [&_textarea]:max-w-full"
+      className="min-w-0 max-w-full space-y-4 [&_label]:min-w-0 [&_label]:grid-cols-1 [&_input]:min-w-0 [&_input]:max-w-full [&_select]:min-w-0 [&_select]:w-full [&_select]:max-w-full [&_select]:overflow-hidden [&_textarea]:min-w-0 [&_textarea]:w-full [&_textarea]:max-w-full"
       aria-label={t('settingsTitle')}
     >
       <h2 className="font-semibold">{t('settingsTitle')}</h2>

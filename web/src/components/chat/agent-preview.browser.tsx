@@ -80,6 +80,7 @@ afterEach(() => {
   cleanup();
   client.clear();
   vi.restoreAllMocks();
+  document.body.style.removeProperty('font-family');
 });
 for (const width of [1440, 390])
   test(`preview controls fit the ${width}px viewport without horizontal scrolling`, async () => {
@@ -176,5 +177,58 @@ test('project profile supports generic runtimes and preserves masked settings on
   ).toHaveValue(JSON.stringify({ TEST_KEY: '[stored]' }, null, 2));
   await page.screenshot({
     path: '../../../.vitest-screenshots/preview-settings-mobile.png',
+  });
+});
+
+test('mobile preview controls also fit with wider system fallback font metrics', async () => {
+  await page.viewport(390, 900);
+  document.body.style.fontFamily = 'monospace';
+  const dialogView = render(
+    <QueryClientProvider client={client}>
+      <AgentPreviewDialog
+        projectId="project"
+        threadId="agent"
+        open
+        onOpenChange={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  await expect
+    .element(page.getByRole('button', { name: 'Ouvrir l’aperçu' }))
+    .toBeVisible();
+  const dialog = screen.getByRole('dialog');
+  expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+  dialogView.unmount();
+  render(
+    <QueryClientProvider client={client}>
+      <main className="p-4">
+        <ProjectPreviewSettings projectId="project" />
+      </main>
+    </QueryClientProvider>,
+  );
+  await expect
+    .element(page.getByRole('button', { name: 'Enregistrer le profil' }))
+    .toBeVisible();
+  const overflow = Array.from(document.querySelectorAll('main *'))
+    .filter(
+      (el) =>
+        el.getBoundingClientRect().right > 390 ||
+        el.scrollWidth > el.clientWidth,
+    )
+    .map((el) => ({
+      tag: el.tagName,
+      label: el.textContent?.slice(0, 80),
+      width: el.getBoundingClientRect().width,
+      scroll: el.scrollWidth,
+      client: el.clientWidth,
+      overflow: getComputedStyle(el).overflow,
+      whiteSpace: getComputedStyle(el).whiteSpace,
+    }));
+  expect(
+    document.body.scrollWidth,
+    JSON.stringify(overflow),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: '../../../.vitest-screenshots/preview-fallback-mobile.png',
   });
 });

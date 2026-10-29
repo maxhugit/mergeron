@@ -81,7 +81,7 @@ export function AgentPreviewDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="min-w-0 max-h-[85dvh] grid-cols-1 overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>{t('description')}</DialogDescription>
@@ -196,7 +196,11 @@ export function AgentPreviewDialog({
         )}
         {preview && (
           <>
-            <Button variant="ghost" onClick={() => setShowLogs((v) => !v)}>
+            <Button
+              variant="ghost"
+              className="h-auto min-h-8 min-w-0 max-w-full whitespace-normal py-1.5"
+              onClick={() => setShowLogs((v) => !v)}
+            >
               {t('logs')}
             </Button>
             {showLogs && (
