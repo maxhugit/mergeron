@@ -39,6 +39,7 @@ import { FileTree } from '@/components/files/file-tree';
 import { filesAddRoot } from '@/generated/api';
 import { filesReadTreeQueryKey } from '@/generated/api/@tanstack/react-query.gen';
 import { useFilesStore } from '@/stores/files-store';
+import { useGitCopyLiveUpdates } from '@/hooks/use-git-copy-live-updates';
 import {
   projectsApi,
   projectsQueryKey,
@@ -285,7 +286,25 @@ function LocalCopySummary({
   const branch =
     (snapshot.data ? snapshot.data.branch : copy.branch) ?? t('gitDetached');
   const revision = snapshot.data?.head ?? copy.revision;
-  return t('gitLocalSummary', { branch, revision: revision.slice(0, 7) });
+  return (
+    <>
+      <span>
+        {t('gitLocalSummary', { branch, revision: revision.slice(0, 7) })}
+      </span>
+      {snapshot.data && !snapshot.error && snapshot.data.changes.length > 0 && (
+        <span className="text-primary">
+          {' '}
+          ·{' '}
+          {t(
+            snapshot.data.changes.length === 1
+              ? 'gitLocalChangeSummary'
+              : 'gitLocalChangesSummary',
+            { count: snapshot.data.changes.length },
+          )}
+        </span>
+      )}
+    </>
+  );
 }
 
 function RepositoryPanel({
@@ -355,6 +374,11 @@ function RepositoryPanel({
   const copy = agentThreadId
     ? ready.find((item) => copyOwnedByAgent(item, agentThreadId))
     : (ready.find((item) => item.localPath === cwd) ?? ready[0]);
+  useGitCopyLiveUpdates(
+    projectId,
+    resource.enabled ? copy : undefined,
+    agentThreadId,
+  );
   const snapshot = useQuery({
     queryKey: ['workspace-git', projectId, copy?.id],
     queryFn: ({ signal }) =>
@@ -558,7 +582,7 @@ function RepositoryPanel({
                             : 'gitTabCommits',
                     )}
                     {id === 'changes' && snapshot.data && !snapshot.error
-                      ? ` (${snapshot.data.changes.filter((change) => ![' ', '?'].includes(change.status[0])).length})`
+                      ? ` (${snapshot.data.changes.length})`
                       : ''}
                   </TabsTrigger>
                 ))}
@@ -1157,21 +1181,21 @@ function Changes({
 }) {
   return (
     <GitStageChanges
-      view="prepared"
+      view="all"
       key={`${copy.id}:${agentThreadId ?? ''}`}
       projectId={projectId}
       copyId={copy.id}
       snapshot={snapshot}
       agentThreadId={agentThreadId}
       writable={writable}
-      onDiff={(path) =>
+      onDiff={(path, staged) =>
         onGitDiff?.({
           projectId,
           copyId: copy.id,
           path,
           localPath: copy.localPath,
           status: snapshot.changes.find((c) => c.path === path)?.status ?? '',
-          staged: true,
+          staged,
         })
       }
     />

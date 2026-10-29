@@ -32,6 +32,8 @@ import type {
 import { sandboxMode } from '@/stores/thread-policy-store';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { cn } from '@/lib/utils';
+import { getAuthorizationHeader } from '@/auth-token';
+import { withBasePath } from '@/base-path';
 import {
   projectForWorkspace,
   projectsApi,
@@ -137,12 +139,32 @@ interface Props {
 }
 
 export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'codexSettings'], {
+    nsMode: 'fallback',
+  });
   const policy = useThreadSecurityPolicy(threadId);
   const threadCwd = useTimelineStore((s) => s.threadCwd);
   const projectsQuery = useQuery({
     queryKey: projectsQueryKey,
     queryFn: () => projectsApi<{ projects: ProjectSummary[] }>(),
+  });
+  const testProfile = useQuery({
+    queryKey: ['agent-test-profile', threadId],
+    queryFn: async () => {
+      const authorization = getAuthorizationHeader();
+      const response = await fetch(
+        withBasePath(
+          `/api/threads/${encodeURIComponent(threadId!)}/test-profile`,
+        ),
+        {
+          headers: authorization ? { Authorization: authorization } : {},
+        },
+      );
+      if (!response.ok) throw new Error('Test profile unavailable');
+      return (await response.json()) as { available: boolean };
+    },
+    enabled: Boolean(threadId) && !readOnly,
+    staleTime: 30_000,
   });
   const project = projectForWorkspace(projectsQuery.data?.projects, threadCwd);
   const currentWorkspace = project?.workspaces
@@ -336,6 +358,66 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
               onClick={() => policy.apply({ sandboxPolicy: option.value })}
             />
           ))}
+        </div>
+
+        <div className="space-y-1 border-t border-border pt-2">
+          <div className="text-xs font-medium text-muted-foreground">
+            {t('agentTestProfile')}
+          </div>
+          <OptionRow
+            label="agentTestProfileEnable"
+            active={false}
+            disabled={
+              policyReadOnly ||
+              policy.isSettling ||
+              policy.stale ||
+              policy.unknown ||
+              !threadCwd ||
+              !testProfile.data?.available ||
+              policy.observed?.sandboxPolicy?.type !== 'workspaceWrite' ||
+              policy.observed.sandboxPolicy.networkAccess
+            }
+            onClick={() => {
+              const sandbox = policy.observed?.sandboxPolicy;
+              if (
+                sandbox?.type !== 'workspaceWrite' ||
+                policy.stale ||
+                policy.unknown ||
+                !testProfile.data?.available
+              )
+                return;
+              policy.apply({
+                sandboxPolicy: { ...sandbox, networkAccess: true },
+              });
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t(
+              testProfile.data?.available
+                ? 'agentTestProfileHint'
+                : 'agentTestProfileUnavailable',
+            )}
+          </p>
+          {policy.observed?.sandboxPolicy?.type === 'workspaceWrite' &&
+            policy.observed.sandboxPolicy.networkAccess && (
+              <OptionRow
+                label="agentTestProfileDisable"
+                active={false}
+                disabled={
+                  policyReadOnly ||
+                  policy.isSettling ||
+                  policy.stale ||
+                  policy.unknown
+                }
+                onClick={() => {
+                  const sandbox = policy.observed?.sandboxPolicy;
+                  if (sandbox?.type === 'workspaceWrite')
+                    policy.apply({
+                      sandboxPolicy: { ...sandbox, networkAccess: false },
+                    });
+                }}
+              />
+            )}
         </div>
 
         <p className="border-t border-border pt-2 text-xs text-muted-foreground">

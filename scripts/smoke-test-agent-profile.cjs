@@ -1,0 +1,104 @@
+/** CI-only: actual Core command sandbox, no account, inference or external network. */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawn, execFileSync } = require('node:child_process');
+const readline = require('node:readline');
+const { filteredTestNetworkAvailable } = require('/app/dist/threads/agent-test-profile.js');
+const { ProjectAgentDefaultsService } = require('/app/dist/threads/project-agent-defaults.service.js');
+const binary = process.argv[2], root = process.argv[3], home = process.argv[4];
+assert(binary && root && home);
+execFileSync('git', ['init', '--quiet', root], { env: { ...process.env, HOME: path.dirname(home) } });
+fs.writeFileSync(path.join(home, 'config.toml'), `model_provider="fixture"
+model="fixture"
+[model_providers.fixture]
+name="fixture"
+base_url="http://127.0.0.1:1/v1"
+wire_api="responses"
+request_max_retries=0
+stream_max_retries=0
+[features]
+apps=false
+plugins=false
+`);
+// No host identity or proxy is needed: Docker disables every external network.
+const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  ['PATH', 'TMPDIR', 'PLAYWRIGHT_BROWSERS_PATH', 'XDG_CACHE_HOME', 'COREPACK_HOME', 'PNPM_HOME', 'npm_config_cache',
+    'npm_config_store_dir', 'pnpm_config_store_dir', 'npm_config_devdir', 'npm_config_nodedir'].includes(key)));
+const child = spawn(binary, ['app-server'], {
+  cwd: root,
+  env: { ...fixtureEnv, CODEX_HOME: home, HOME: path.dirname(home) },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+let sequence = 0;
+let diagnostic = '';
+// Only this sterile, networkless fixture's startup error is retained. Never
+// reuse this diagnostic channel with a real user's home or environment.
+child.stderr.on('data', bytes => { diagnostic = (diagnostic + bytes.toString()).slice(-4000); });
+const pending = new Map();
+child.once('error', () => {
+  for (const waiter of pending.values()) waiter.reject(new Error('Native profile process could not start'));
+  pending.clear();
+});
+child.once('exit', (code, signal) => {
+  for (const waiter of pending.values()) waiter.reject(new Error(`Native profile process exited (${code ?? signal}): ${diagnostic.replace(/https?:\/\/\S+/g, '[redacted-url]')}`));
+  pending.clear();
+});
+readline.createInterface({ input: child.stdout }).on('line', line => {
+  let response; try { response = JSON.parse(line); } catch { return; }
+  const waiter = pending.get(response.id);
+  if (waiter) {
+    pending.delete(response.id);
+    response.error ? waiter.reject(new Error(`Native profile RPC refused (${response.error.code})`)) : waiter.resolve(response.result);
+  }
+});
+const rpc = (method, params) => new Promise((resolve, reject) => {
+  const id = ++sequence;
+  pending.set(id, { resolve, reject });
+  child.stdin.write(JSON.stringify({ id, method, params }) + '\n');
+});
+const watchdog = setTimeout(() => { child.kill('SIGKILL'); console.error('Native profile timeout'); process.exit(2); }, 60000);
+(async () => {
+  await rpc('initialize', { clientInfo: { name: 'mergeron-network-fixture', version: '1' }, capabilities: { experimentalApi: true } });
+  console.log('Native profile: Core initialized');
+  child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
+  assert.equal(filteredTestNetworkAvailable(await rpc('configRequirements/read', {})), true, 'Running Core must confirm administrator network rules');
+  console.log('Native profile: managed requirements confirmed');
+  const defaults = new ProjectAgentDefaultsService({ request: rpc }, { getSetting: () => ({ value: true }) });
+  const starting = await defaults.forNewAgent({ cwd: root }, { projectId: 'isolated-fixture', readOnly: false });
+  assert.equal(starting.sandbox, 'workspace-write', 'Global defaults must work against the running Core');
+  assert.equal(starting.config.sandbox_workspace_write.network_access, true);
+  assert.deepEqual(await defaults.forNewAgent({ cwd: root, sandbox: 'read-only' }, { readOnly: false }), {});
+  console.log('Native profile: global defaults and explicit read-only choice verified');
+  const sandboxPolicy = { type: 'workspaceWrite', writableRoots: [root], networkAccess: true, excludeTmpdirEnvVar: false, excludeSlashTmp: false };
+  const code = `
+    const assert=require('node:assert/strict'),cp=require('node:child_process'),fs=require('node:fs');
+    (async()=>{
+      fs.writeFileSync('native-source.txt','allowed');
+      assert.throws(()=>fs.writeFileSync('.git/native-tamper','forbidden'));
+      assert.throws(()=>fs.writeFileSync('livrables/report.docx','forbidden'));
+      console.log('native-files-protected');
+      const {loopbackProbe,browserProbe}=await import('/app/scripts/environment-check.mjs');
+      await loopbackProbe();
+      console.log('native-loopback-ok');
+      await browserProbe(15000);
+      console.log('native-browser-ok');
+      const rejected=cp.spawnSync('curl',['--disable','--fail','--silent','--show-error','--head','--max-time','3','https://example.invalid'],{encoding:'utf8',timeout:5000});
+      assert.notEqual(rejected.status,0);
+      assert.match(rejected.stderr,/403|denied|blocked/i,'Managed proxy must reject the destination, not merely fail DNS');
+      console.log('native-profile-ok');
+    })().catch(error=>{console.error('Sandboxed fixture probe failed:',error.code||'',error.message);process.exitCode=1;});
+  `;
+  const result = await rpc('command/exec', { command: [process.execPath, '-e', code], cwd: root, sandboxPolicy, timeoutMs: 30000, outputBytesCap: 4096 });
+  console.log('Native profile: command completed');
+  if (result.exitCode !== 0) console.error(JSON.stringify({ exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }));
+  assert.equal(result.exitCode, 0, 'Loopback, sandboxed Chromium and enforced destination denial must work in the actual command sandbox');
+  assert.match(result.stdout, /native-profile-ok/);
+  console.log('PASS: actual Core sandbox preserves Git/documents, supports loopback and sandboxed Chromium, and denies an unlisted host');
+})().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => {
+  clearTimeout(watchdog);
+  child.kill('SIGKILL');
+  child.stdin.destroy();
+  child.stdout.destroy();
+  child.stderr.destroy();
+});

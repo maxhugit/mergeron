@@ -2,6 +2,14 @@
 set -Eeuo pipefail
 image_ref="${1:?Usage: smoke-test-document-isolation.sh <image-ref>}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+native_mounts=()
+native_command=()
+if [ -n "${2:-}" ]; then
+  test -f "$2"
+  native_mounts+=(--mount "type=bind,src=$2,dst=/mergeron-test-codex,readonly")
+  native_mounts+=(--mount "type=bind,src=${script_dir}/smoke-test-agent-profile.cjs,dst=/agent-test-profile.cjs,readonly")
+  native_command+=(/mergeron-test-codex)
+fi
 apparmor_profile=unconfined
 if docker info --format '{{json .SecurityOptions}}' | grep -q apparmor; then
   # A named userns grant is required on Ubuntu runners; do not disable the
@@ -26,4 +34,5 @@ docker run --rm --network none --read-only --cap-drop ALL \
   --tmpfs /run/mergeron-manager:rw,nosuid,nodev,size=1m,uid=11002,gid=11002 \
   --tmpfs /appdata:rw,nosuid,nodev,size=1m,uid=11002,gid=11002 \
   --mount "type=bind,src=${script_dir}/smoke-test-document-isolation.cjs,dst=/document-isolation-probe.cjs,readonly" \
-  "${image_ref}" node /document-isolation-probe.cjs
+  "${native_mounts[@]}" \
+  "${image_ref}" node /document-isolation-probe.cjs "${native_command[@]}"

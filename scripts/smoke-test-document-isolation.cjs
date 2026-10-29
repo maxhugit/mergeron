@@ -11,10 +11,13 @@ const { agentEnvironmentCommand } = require('/app/dist/codex/agent-environment.j
 
 const workspace = fs.mkdtempSync('/workspaces/.document-isolation-probe-');
 const temporary = fs.mkdtempSync('/tmp/document-isolation-probe-');
+// Core intentionally refuses executable helper aliases in a /tmp CODEX_HOME.
+// This home is disposable RAM in the networkless container, never a host home.
+const nativeHome = process.argv[2] ? fs.mkdtempSync('/home/codex/.native-profile-') : null;
 try {
-  const home = path.join(temporary, 'home', '.codex');
+  const home = path.join(nativeHome || path.join(temporary, 'home'), '.codex');
   fs.mkdirSync(home, { recursive: true });
-  const ssh = path.join(temporary, 'home', '.ssh');
+  const ssh = path.join(path.dirname(home), '.ssh');
   fs.mkdirSync(ssh);
   fs.writeFileSync(path.join(ssh, 'operator-key'), 'private-canary');
   const retained = path.join(workspace, 'livrables');
@@ -73,10 +76,13 @@ try {
     const preflight=JSON.parse(cp.execFileSync('mergeron-environment-check',['--cwd',root,'--visual','--json'],{env,encoding:'utf8',timeout:45000}));
     assert.equal(preflight.success,true,JSON.stringify(preflight));
     assert.equal(preflight.checks.find(c=>c.id==='node.headers').status,'ok');
+    if(process.argv[4]) {
+      cp.execFileSync(process.execPath,['/agent-test-profile.cjs',process.argv[4],root,process.env.CODEX_HOME],{env:process.env,stdio:'inherit',timeout:65000,killSignal:'SIGKILL'});
+    }
     console.log('PASS: code writable; versions immutable; rename/hardlink refused; private state hidden');
     console.log('PASS: private caches writable; pnpm available offline; loopback and sandboxed Chromium ready inside bwrap');
   `;
-  const command = agentEnvironmentCommand(process.execPath, ['-e', probe, workspace, databasePath, ssh]);
+  const command = agentEnvironmentCommand(process.execPath, ['-e', probe, workspace, databasePath, ssh, ...(process.argv[2] ? [process.argv[2]] : [])]);
   const args = documentIsolationArgs(
     {
       home,
@@ -91,8 +97,11 @@ try {
   );
   const result = cp.spawnSync('/usr/bin/bwrap', args, {
     encoding: 'utf8',
+    timeout: 120000,
+    killSignal: 'SIGKILL',
     env: documentAgentEnvironment({
       ...process.env,
+      CODEX_HOME: home,
       WEBUI_API_KEY: 'private-canary',
       SSH_AUTH_SOCK: '/fake-agent',
     }),
@@ -109,4 +118,5 @@ try {
 } finally {
   fs.rmSync(workspace, { recursive: true });
   fs.rmSync(temporary, { recursive: true });
+  if (nativeHome) fs.rmSync(nativeHome, { recursive: true });
 }

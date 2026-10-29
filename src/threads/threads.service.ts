@@ -66,6 +66,7 @@ import { GitMutationGateService } from './git-mutation-gate.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
+import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
 const MAX_FORK_CHAIN_WALK = 32;
@@ -108,6 +109,7 @@ export class ThreadsService {
     @Optional() private readonly projectTools?: ProjectAgentToolsService,
     @Optional() private readonly internalMcp?: InternalMcpService,
     @Optional() private readonly agentInstructions?: AgentInstructionsService,
+    @Optional() private readonly agentDefaults?: ProjectAgentDefaultsService,
   ) {}
 
   /**
@@ -134,12 +136,24 @@ export class ThreadsService {
             : {}),
         }
       : null;
+    const defaults =
+      (await this.agentDefaults?.forNewAgent(params, projectPolicy)) ?? {};
     const requestParams: ExperimentalThreadStartParams = {
+      ...defaults,
       ...params,
+      ...(defaults.sandbox && params.sandbox == null
+        ? { sandbox: defaults.sandbox }
+        : {}),
       ...(projectPolicy?.readOnly ? { sandbox: 'read-only' as const } : {}),
       ...(projectPolicy?.model ? { model: projectPolicy.model } : {}),
-      ...(projectConfig
-        ? { config: { ...(params.config ?? {}), ...projectConfig } }
+      ...(projectConfig || defaults.config
+        ? {
+            config: {
+              ...defaults.config,
+              ...(params.config ?? {}),
+              ...projectConfig,
+            },
+          }
         : {}),
       historyMode: REQUIRED_HISTORY_MODE,
     };

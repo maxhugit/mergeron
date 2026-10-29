@@ -1,4 +1,11 @@
 {
+  "agentTestProfile": "Project tests",
+  "projectAgentTestProfileLabel": "Test profile for new project agents",
+  "projectAgentTestProfileDescription": "Global default for new project work agents: writable workspace and filtered command networking, only when the engine confirms enforced administrator network rules. Explicit permission choices and read-only locations are preserved. Does not change existing conversations, grant Docker access or publish Git changes.",
+  "agentTestProfileEnable": "Enable filtered test network",
+  "agentTestProfileDisable": "Disable command networking",
+  "agentTestProfileHint": "Applies from the next message. Keeps the current writable folders, Git and document protections. Allows only managed network destinations and local test targets. No Docker access or sandbox bypass; Chromium must still pass the preflight.",
+  "agentTestProfileUnavailable": "Unavailable until the running engine confirms enforced administrator network rules. Proxy environment variables alone are not sufficient. Select workspace-write first.",
   "commonInstructionsTitle": "Common agent instructions",
   "commonInstructionsScope": "Sent to all work agents, new and existing, at every new turn. Saved persistently without restarting Codex. A turn already in progress is not changed.",
   "commonInstructionsSafety": "Administrator setting for this instance: do not include secrets. Does not change AGENTS.md files, project instructions or permissions. Instructions guide an agent but cannot technically guarantee execution.",

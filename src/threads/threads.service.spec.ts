@@ -16,6 +16,7 @@ import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { CodexRpcError } from '../codex/codex-errors';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
+import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
 
 /** Branch state as the local-only service reports it for an untracked thread. */
 function localBranchState(threadId: string) {
@@ -85,6 +86,7 @@ describe('ThreadsService', () => {
   const mockKnowledge = { contextForConversation: vi.fn() };
   const mockActiveFolders = { resolveAgent: vi.fn() };
   const mockProjectTools = { context: vi.fn() };
+  const mockAgentDefaults = { forNewAgent: vi.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -92,6 +94,7 @@ describe('ThreadsService', () => {
         { provide: ActiveFoldersService, useValue: mockActiveFolders },
         { provide: ProjectKnowledgeService, useValue: mockKnowledge },
         { provide: ProjectAgentToolsService, useValue: mockProjectTools },
+        { provide: ProjectAgentDefaultsService, useValue: mockAgentDefaults },
         ThreadsService,
         { provide: CodexService, useValue: mockCodex },
         { provide: ThreadResumeRegistryService, useValue: mockResumeRegistry },
@@ -121,6 +124,7 @@ describe('ThreadsService', () => {
 
     service = module.get(ThreadsService);
     mockCodex.request.mockReset();
+    mockAgentDefaults.forNewAgent.mockReset().mockResolvedValue({});
     mockKnowledge.contextForConversation.mockReset();
     mockProjectTools.context.mockReset();
     mockProjectTools.context.mockReturnValue(null);
@@ -173,6 +177,54 @@ describe('ThreadsService', () => {
     expect(mockResumeRegistry.markResumed).toHaveBeenCalledWith('t1');
     expect(mockMetadata.publishStartedThread).toHaveBeenCalledWith(
       response.thread,
+    );
+  });
+
+  it('merges global starting defaults with project tools without rewriting explicit approvals or affecting existing turns', async () => {
+    const project = {
+      projectId: 'new-project',
+      readOnly: false,
+      config: { mcp_servers: { mergeron_internal: { enabled: true } } },
+    };
+    mockProjectConnections.policyForCwd.mockResolvedValue(project);
+    mockAgentDefaults.forNewAgent.mockResolvedValue({
+      sandbox: 'workspace-write',
+      config: { sandbox_workspace_write: { network_access: true } },
+    });
+    mockCodex.request.mockResolvedValue({
+      thread: { id: 'new-agent', historyMode: 'paginated' },
+    });
+    await service.startThread({
+      cwd: '/project',
+      approvalPolicy: 'on-request',
+      config: { model_reasoning_effort: 'medium' },
+    });
+    expect(mockCodex.request).toHaveBeenCalledWith(
+      'thread/start',
+      expect.objectContaining({
+        sandbox: 'workspace-write',
+        approvalPolicy: 'on-request',
+        config: {
+          sandbox_workspace_write: { network_access: true },
+          model_reasoning_effort: 'medium',
+          mcp_servers: project.config.mcp_servers,
+        },
+      }),
+    );
+    expect(mockAgentDefaults.forNewAgent).toHaveBeenCalledOnce();
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn' } });
+    await service.startTurn({
+      threadId: 'existing-agent',
+      cwd: '/project',
+      input: [],
+      sandboxPolicy: { type: 'readOnly', networkAccess: false },
+    });
+    expect(mockAgentDefaults.forNewAgent).toHaveBeenCalledOnce();
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        sandboxPolicy: { type: 'readOnly', networkAccess: false },
+      }),
     );
   });
 

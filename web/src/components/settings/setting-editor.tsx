@@ -30,7 +30,9 @@ export function SettingEditor({
   onSave,
   onReset,
 }: Props) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'codexSettings'], {
+    nsMode: 'fallback',
+  });
   const isDbOverride = setting.source === 'db';
 
   return (
@@ -55,7 +57,19 @@ export function SettingEditor({
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        {setting.type === 'number' ? (
+        {setting.type === 'boolean' ? (
+          <input
+            type="checkbox"
+            role="switch"
+            aria-label={t(translationKey(settingLabel(setting.key)))}
+            checked={draft === 'true'}
+            disabled={disabled}
+            onChange={(event) =>
+              onDraftChange(setting.key, String(event.target.checked))
+            }
+            className="h-4 w-4 accent-primary"
+          />
+        ) : setting.type === 'number' ? (
           <Input
             type="number"
             value={draft}

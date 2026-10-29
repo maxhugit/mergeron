@@ -31,6 +31,16 @@ export class GitMutationGateService {
     threadId: string,
     operation: () => Promise<T>,
   ): Promise<T> {
+    return this.mutateFromAgent(threadId, operation);
+  }
+  /** Server-controlled local actions only, while the bound caller awaits its tool.
+   * The actions service must additionally validate ownership and frozen inputs.
+   * This does not open the UI mutation gate or grant terminal .git permissions.
+   */
+  async mutateFromAgent<T>(
+    threadId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
     if (!this.manager.getClient())
       throw new ConflictException('GIT_AGENT_STATE_UNKNOWN');
     const active = this.inventory.snapshot();

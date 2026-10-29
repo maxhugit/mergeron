@@ -46,9 +46,18 @@ describe('project connection agent tools', () => {
     pullRequests: vi.fn(),
     checks: vi.fn(),
     diff: vi.fn(),
+    stagedDiff: vi.fn(),
     commits: vi.fn(),
   };
-  const actions = { push: vi.fn(), createPullRequest: vi.fn() };
+  const actions = {
+    push: vi.fn(),
+    createPullRequest: vi.fn(),
+    stageReview: vi.fn(),
+    stage: vi.fn(),
+    unstage: vi.fn(),
+    commit: vi.fn(),
+    createBranch: vi.fn(),
+  };
   const as = <T>(person: string, run: () => T) =>
     accessContext.run(
       { identities, identity: identities.resolvePerson(person) },
@@ -70,6 +79,13 @@ describe('project connection agent tools', () => {
     fingerprint: state.fingerprint,
     ...extra,
   });
+  const prepare = (extra: Record<string, unknown> = {}) =>
+    publish({
+      tool: 'prepare_project_git',
+      operation: 'stage_review',
+      paths: ['README.md'],
+      ...extra,
+    });
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -176,6 +192,114 @@ describe('project connection agent tools', () => {
   });
   afterEach(() => {
     database.sqlite.close();
+  });
+
+  it('can inspect the entire frozen staged index rather than confusing it with working changes', async () => {
+    git.stagedDiff.mockResolvedValue({
+      fingerprint: state.fingerprint,
+      diff: 'reviewed staged patch',
+    });
+    const result = await call({
+      tool: 'read_project_git',
+      connectionId,
+      copyId: 'own',
+      operation: 'local_staged_diff',
+    });
+    expect(result).toMatchObject({
+      data: { fingerprint: state.fingerprint, diff: 'reviewed staged patch' },
+      untrustedContent: true,
+    });
+    expect(git.stagedDiff).toHaveBeenCalledWith('p', 'own', undefined);
+    await expect(
+      call({
+        tool: 'read_project_git',
+        connectionId,
+        copyId: 'foreign',
+        operation: 'local_staged_diff',
+      }),
+    ).rejects.toThrow('GIT_COPY_OWNED');
+  });
+  it('reviews selected files, binds preparation to the caller, and journals retry results', async () => {
+    actions.stageReview.mockResolvedValue({
+      reviewFingerprint: 'c'.repeat(64),
+      files: [],
+    });
+    const review = await call(prepare());
+    expect(review).toMatchObject({
+      operation: 'stage_review',
+      untrustedContent: true,
+    });
+    expect(actions.stageReview).toHaveBeenCalledWith(
+      'p',
+      'own',
+      expect.objectContaining({ agentThreadId: 'agent', paths: ['README.md'] }),
+    );
+    expect(await call(prepare())).toEqual(review);
+    expect(actions.stageReview).toHaveBeenCalledTimes(1);
+    await expect(call(prepare({ paths: ['other.md'] }))).rejects.toThrow(
+      'PROJECT_CONNECTION_REQUEST_CONFLICT',
+    );
+  });
+  it.each(['stage', 'unstage', 'commit', 'create_branch'] as const)(
+    'dispatches %s only through a bound preparer capability',
+    async (operation) => {
+      actions[
+        operation === 'create_branch' ? 'createBranch' : operation
+      ].mockResolvedValue({ done: true });
+      const args: Record<string, unknown> = prepare({
+        operation,
+        paths: undefined,
+      });
+      delete args.paths;
+      if (operation === 'stage' || operation === 'unstage')
+        Object.assign(args, { paths: ['README.md'] });
+      if (operation === 'stage')
+        Object.assign(args, { reviewFingerprint: 'c'.repeat(64) });
+      if (operation === 'commit')
+        Object.assign(args, { message: 'Update docs' });
+      if (operation === 'create_branch')
+        Object.assign(args, { name: 'docs/update' });
+      await call(args);
+      expect(
+        actions[operation === 'create_branch' ? 'createBranch' : operation],
+      ).toHaveBeenCalledWith(
+        'p',
+        'own',
+        expect.objectContaining({
+          agentThreadId: 'agent',
+          fingerprint: state.fingerprint,
+        }),
+        expect.objectContaining({
+          threadId: 'agent',
+          assertActive: expect.any(Function),
+        }),
+      );
+    },
+  );
+  it('rejects preparation for readers, other copies, stale states and unknown fields', async () => {
+    await expect(
+      as('reader', () => tools.execute('p', 'agent', prepare(), () => {})),
+    ).rejects.toThrow();
+    await expect(call(prepare({ copyId: 'foreign' }))).rejects.toThrow(
+      'GIT_COPY_OWNED',
+    );
+    await expect(
+      call(prepare({ expectedHead: 'd'.repeat(40) })),
+    ).rejects.toThrow('GIT_STALE');
+    for (const fields of [
+      { authorName: 'spoof' },
+      { address: 'https://evil.invalid' },
+      { operation: 'reset' },
+      { command: 'git add .' },
+      {
+        operation: 'commit',
+        paths: undefined,
+        message: 'x',
+        authorEmail: 'spoof@example.com',
+      },
+    ])
+      await expect(call(prepare(fields))).rejects.toThrow();
+    expect(actions.stageReview).not.toHaveBeenCalled();
   });
 
   it('discovers only this project, without endpoints, secrets, diagnostics or other agents’ copy paths', async () => {

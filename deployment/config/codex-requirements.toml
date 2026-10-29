@@ -1,0 +1,23 @@
+# Immutable administrator requirements for sandboxed agent commands only.
+# Network-disabled conversations stay disabled. No global network permission is
+# granted. MCP/hosted tools keep their separate server-side authorization.
+[experimental_network]
+enabled = true
+managed_allowed_domains_only = true
+allow_upstream_proxy = true
+allow_local_binding = false
+dangerously_allow_all_unix_sockets = false
+dangerously_allow_non_loopback_proxy = false
+
+[experimental_network.domains]
+"localhost" = "allow"
+"127.0.0.1" = "allow"
+"::1" = "allow"
+"registry.npmjs.org" = "allow"
+"nodejs.org" = "allow"
+"github.com" = "allow"
+"api.github.com" = "allow"
+"raw.githubusercontent.com" = "allow"
+"objects.githubusercontent.com" = "allow"
+"pypi.org" = "allow"
+"files.pythonhosted.org" = "allow"

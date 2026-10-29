@@ -363,9 +363,13 @@ COPY scripts/mergeron-visual-check.sh /usr/local/bin/mergeron-visual-check
 COPY scripts/environment-check.mjs ./scripts/environment-check.mjs
 COPY scripts/mergeron-environment-check.sh /usr/local/bin/mergeron-environment-check
 COPY scripts/mergeron-agent-environment.sh /usr/local/bin/mergeron-agent-environment
+# Administrator-only command-network constraints; user config cannot widen them.
+COPY --chmod=644 deployment/config/codex-requirements.toml /etc/codex/requirements.toml
 COPY skills/office-files/ /opt/codex-skills/office-files/
 
 RUN chmod -R a+rX /opt/mergeron-corepack \
+ && chmod 755 /etc/codex \
+ && chmod 644 /etc/codex/requirements.toml \
  && chmod +x /usr/local/bin/codex-cli-dispatch /usr/local/bin/mergeron-visual-check \
       /usr/local/bin/mergeron-environment-check /usr/local/bin/mergeron-agent-environment
 
