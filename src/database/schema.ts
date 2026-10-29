@@ -371,6 +371,37 @@ export const projects = sqliteTable(
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
 
+/** Preview recipes are operator-authored; the complete payload is encrypted. */
+export const projectPreviewProfiles = sqliteTable('project_preview_profiles', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  encryptedProfile: text('encrypted_profile').notNull(),
+  revision: text('revision').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** One preview slot per work-agent family. No credentials or transport URLs. */
+export const agentPreviews = sqliteTable('agent_previews', {
+  agentId: text('agent_id').primaryKey(),
+  threadId: text('thread_id').notNull(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  previewId: text('preview_id').notNull().unique(),
+  runId: text('run_id').notNull(),
+  requestId: text('request_id').notNull(),
+  sourcePath: text('source_path').notNull(),
+  sourceSha: text('source_sha'),
+  sourceFingerprint: text('source_fingerprint'),
+  ownerPersonId: text('owner_person_id'),
+  profileRevision: text('profile_revision').notNull(),
+  state: text('state').notNull(),
+  error: text('error'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 /** Import provenance preserves contact details without importing login rights. */
 export const projectArchiveImports = sqliteTable(
   'project_archive_imports',

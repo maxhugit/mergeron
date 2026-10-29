@@ -9,6 +9,7 @@ import {
   FolderKanban,
   FolderOpen,
   Globe,
+  FlaskConical,
   History,
   LayoutDashboard,
   ListTodo,
@@ -57,7 +58,8 @@ export function ProjectRoute() {
   const canSeePeople = session.isAdministrator || isActiveParticipant;
   const visibleTab: ProjectTab =
     (activeTab === 'participants' && !canSeePeople) ||
-    (!session.isAdministrator && ['workspaces', 'browser'].includes(activeTab))
+    (!session.isAdministrator &&
+      ['workspaces', 'browser', 'preview'].includes(activeTab))
       ? 'general'
       : activeTab;
   const activity = useQuery({
@@ -144,6 +146,14 @@ export function ProjectRoute() {
               icon={FolderCog}
               label={t('workspacesLabel')}
               onClick={() => setActiveTab('workspaces')}
+            />
+          )}
+          {session.isAdministrator && (
+            <ProjectTabButton
+              active={visibleTab === 'preview'}
+              icon={FlaskConical}
+              label={t('title', { ns: 'previews' })}
+              onClick={() => setActiveTab('preview')}
             />
           )}
         </div>

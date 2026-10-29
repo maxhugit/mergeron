@@ -414,6 +414,20 @@
       "when": 1793190023943,
       "tag": "0058_project_agent_tools",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1793289639716,
+      "tag": "0059_agent_previews",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "6",
+      "when": 1793292723079,
+      "tag": "0060_preview_live_sync",
+      "breakpoints": true
     }
   ]
 }

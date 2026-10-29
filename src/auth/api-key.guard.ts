@@ -42,6 +42,15 @@ export class ApiKeyGuard implements CanActivate {
 
     if (context.getType() === 'ws') {
       const socket = context.switchToWs().getClient<Socket>();
+      if (
+        process.env.MERGERON_PREVIEWS_ENABLED === 'true' &&
+        socket.handshake.headers['x-webui-auth-source'] === 'authentik'
+      )
+        this.requireSameOrigin(
+          socket.handshake.headers.origin,
+          socket.handshake.headers['x-forwarded-host'] ??
+            socket.handshake.headers.host,
+        );
       // Revalidate the browser session on every event; never reuse a revoked id.
       if (socket.data)
         delete (socket.data as Record<string, unknown>).authenticatedPersonId;
@@ -78,6 +87,11 @@ export class ApiKeyGuard implements CanActivate {
     const request = context
       .switchToHttp()
       .getRequest<FastifyRequest & IdentityRequest>();
+    if (
+      process.env.MERGERON_PREVIEWS_ENABLED === 'true' &&
+      request.headers['x-webui-auth-source'] === 'authentik'
+    )
+      this.requireSameOriginForUnsafeCookieRequest(request);
     const personId = this.localAuth?.authenticateCookie(request.headers.cookie);
     if (personId) {
       this.requireSameOriginForUnsafeCookieRequest(request);
@@ -194,6 +208,21 @@ export class ApiKeyGuard implements CanActivate {
         ErrorCode.auth.invalidToken,
         'Missing origin for cookie-authenticated request',
       );
+    if (process.env.MERGERON_PREVIEWS_ENABLED === 'true') {
+      try {
+        if (
+          !process.env.MERGERON_PUBLIC_URL ||
+          new URL(origin).origin !==
+            new URL(process.env.MERGERON_PUBLIC_URL).origin
+        )
+          throw Error();
+      } catch {
+        throw BusinessException.unauthorized(
+          ErrorCode.auth.invalidToken,
+          'Cross-origin preview request rejected',
+        );
+      }
+    }
     let originHost: string;
     try {
       originHost = new URL(origin).host;

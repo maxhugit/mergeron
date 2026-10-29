@@ -15,6 +15,7 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { normalizeForwardedPrefix, renderIndexHtml } from './public-base-path';
 import { FILES_SETTING_KEYS } from './settings/settings.definitions';
 import { SettingsService } from './settings/settings.service';
+import { isPreviewHost } from './previews/preview-origin';
 
 /** Keeps generated SDK operation names stable across controller renames. */
 function operationIdFactory(controllerKey: string, methodKey: string): string {
@@ -28,6 +29,17 @@ async function bootstrap() {
     new FastifyAdapter(),
     { bufferLogs: true },
   );
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook('onRequest', async (request, reply) => {
+      if (
+        isPreviewHost(request.headers.host, process.env.MERGERON_PREVIEW_DOMAIN)
+      )
+        await reply
+          .code(421)
+          .send('Preview hosts must use the isolated preview gateway.');
+    });
 
   // A full catalog carries every model's instruction text, and JSON string
   // escaping inflates it further, so those routes need far more than Fastify's

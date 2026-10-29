@@ -6,6 +6,11 @@
 !manager/stack-manifest.json
 !manager/src/
 !manager/src/**
+!runtime/
+!runtime/preview-profile.cjs
+!runtime/preview-archive.cjs
+!deployment/browser/
+!deployment/browser/public-proxy.mjs
 !deployment/
 !deployment/config/
 !deployment/config/seccomp-bwrap.json

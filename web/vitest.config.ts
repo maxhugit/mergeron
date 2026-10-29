@@ -8,7 +8,8 @@ import { defineConfig, mergeConfig } from 'vitest/config';
 import viteConfig from './vite.config';
 import { playwright } from '@vitest/browser-playwright';
 import type { BrowserCommand } from 'vitest/node';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /** Chromium's actual manifest fetch, not a fetch() approximation. */
 const authenticatedManifest: BrowserCommand<[]> = async (context) => {
@@ -90,6 +91,16 @@ const explorerDivider: BrowserCommand<
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    // A desktop task may reuse a read-only dependency installation via a
+    // symlink. Permit that exact dependency directory, not the user's home.
+    server: {
+      fs: {
+        allow: [
+          fileURLToPath(new URL('.', import.meta.url)),
+          realpathSync(new URL('./node_modules', import.meta.url)),
+        ],
+      },
+    },
     plugins: [
       {
         name: 'test-auth-proxy-redirect',

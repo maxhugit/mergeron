@@ -155,7 +155,7 @@ export class PlatformAccessGuard implements CanActivate {
       (request.method !== 'GET' &&
         /^\/projects\/[^/]+\/participants(?:\/|$)/.test(url)) ||
       (request.method !== 'GET' &&
-        /^\/projects\/[^/]+\/(?:mcp-servers|apps|agent-settings|browser-settings)$/.test(
+        /^\/projects\/[^/]+\/(?:mcp-servers|apps|agent-settings|browser-settings|test-environment)$/.test(
           url,
         ));
     const workspaceConnectionMutation =
@@ -191,7 +191,8 @@ export class PlatformAccessGuard implements CanActivate {
       const serverExecution =
         /\/deliverables\/[^/]+\/agent$/.test(url) ||
         /\/(?:ai-plan|ai-replan|ai-advice|ai-subtasks)$/.test(url) ||
-        /^\/projects\/[^/]+\/agents(?:\/|$)/.test(url) ||
+        (/^\/projects\/[^/]+\/agents(?:\/|$)/.test(url) &&
+          !/^\/projects\/[^/]+\/agents\/[^/]+\/preview\/open$/.test(url)) ||
         (url.startsWith('/threads') && url !== '/threads/turn-counts') ||
         /\/automations(?:\/|$)|\/automation-runs(?:\/|$)/.test(url) ||
         request.body?.type === 'automation_board' ||

@@ -13,6 +13,7 @@ import {
   Cloud,
   Globe,
   Plug,
+  FlaskConical,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -29,6 +30,7 @@ interface Props {
   onClose: (tab: WorkspaceTab) => void;
   onExplorer: () => void;
   onBrowser?: () => void;
+  onPreview?: () => void;
   onLocalBrowser?: () => void;
   localBrowserStatus?: string;
   onNewTerminal: () => void;
@@ -45,6 +47,7 @@ export function WorkspaceControls({
   onClose,
   onExplorer,
   onBrowser,
+  onPreview,
   onLocalBrowser,
   localBrowserStatus = 'disconnected',
   onNewTerminal,
@@ -263,6 +266,17 @@ export function WorkspaceControls({
           onClick={onBrowser}
         >
           <Globe className="h-4 w-4" />
+        </button>
+      )}
+      {onPreview && (
+        <button
+          type="button"
+          className="h-10 shrink-0 px-3 hover:bg-accent"
+          title={t('title', { ns: 'previews' })}
+          aria-label={t('title', { ns: 'previews' })}
+          onClick={onPreview}
+        >
+          <FlaskConical className="h-4 w-4" />
         </button>
       )}
       {onLocalBrowser && (

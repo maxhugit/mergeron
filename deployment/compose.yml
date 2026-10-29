@@ -26,6 +26,8 @@ services:
       MERGERON_PUBLIC_URL: ${MERGERON_WEBUI_URL:-https://mergeron.example.com}
       MERGERON_STACK_ENVIRONMENT: ${MERGERON_STACK_ENVIRONMENT:-production}
       MERGERON_MANAGER_SOCKET: /run/mergeron-manager/manager.sock
+      MERGERON_PREVIEWS_ENABLED: ${MERGERON_PREVIEWS_ENABLED:-false}
+      MERGERON_PREVIEW_DOMAIN: ${MERGERON_PREVIEW_DOMAIN:-preview.invalid}
       WEBUI_PROTECTED_PATHS: /home/codex,/run/secrets,/app,/proc,/sys,/dev,/etc,/root,/appdata/mergeron
       WORKSPACE_ROOTS: /workspaces,/appdata
       LOG_LEVEL: info
@@ -95,6 +97,8 @@ services:
     image: ${MERGERON_INGRESS_IMAGE:-nginx:stable}
     container_name: ${MERGERON_STACK_PREFIX:-mergeron}-ingress
     restart: unless-stopped
+    environment:
+      MERGERON_PREVIEW_DOMAIN: ${MERGERON_PREVIEW_DOMAIN:-preview.invalid}
     labels:
       io.mergeron.managed: 'true'
       io.mergeron.stack: ${MERGERON_STACK_PREFIX:-mergeron}
@@ -105,7 +109,7 @@ services:
     command:
       - sh
       - -c
-      - export MERGERON_BACKEND_TOKEN="$$(cat /run/secrets/backend_token)"; envsubst '$${MERGERON_BACKEND_TOKEN}' < /etc/nginx/templates-secure/nginx.conf.template > /tmp/nginx.conf; exec nginx -c /tmp/nginx.conf -g 'daemon off;'
+      - export MERGERON_BACKEND_TOKEN="$$(cat /run/secrets/backend_token)"; envsubst '$${MERGERON_BACKEND_TOKEN} $${MERGERON_PREVIEW_DOMAIN}' < /etc/nginx/templates-secure/nginx.conf.template > /tmp/nginx.conf; exec nginx -c /tmp/nginx.conf -g 'daemon off;'
     volumes:
       - ${DEPLOY_ROOT}/config/${MERGERON_NGINX_TEMPLATE:?Set MERGERON_NGINX_TEMPLATE explicitly for the chosen authentication mode}:/etc/nginx/templates-secure/nginx.conf.template:ro
       - ${STATE_ROOT}/backend-token-nginx.txt:/run/secrets/backend_token:ro
@@ -195,6 +199,9 @@ services:
       io.mergeron.component: manager
     environment:
       MERGERON_STACK_PREFIX: ${MERGERON_STACK_PREFIX:-mergeron}
+      MERGERON_PREVIEWS_ENABLED: ${MERGERON_PREVIEWS_ENABLED:-false}
+      MERGERON_PREVIEW_DOMAIN: ${MERGERON_PREVIEW_DOMAIN:-preview.invalid}
+      MERGERON_PREVIEW_IMAGES: ${MERGERON_PREVIEW_IMAGES:-}
       MERGERON_STACK_ENVIRONMENT: ${MERGERON_STACK_ENVIRONMENT:-production}
       MERGERON_MANAGE_BROWSER: ${MERGERON_MANAGE_BROWSER:-false}
       MERGERON_PROXY_NETWORK: ${MERGERON_PROXY_NETWORK:-mergeron-proxy}

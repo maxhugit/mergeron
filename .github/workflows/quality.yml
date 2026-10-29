@@ -76,6 +76,7 @@ jobs:
           pnpm check:release
           pnpm test:release
           node --test manager/test/*.test.mjs
+          node --test runtime/*.test.cjs
           python3 -m unittest discover -s scripts -p 'test_*vex.py'
           python3 -m unittest discover -s scripts -p test_openssh_backport.py
           python3 -m unittest discover -s scripts -p test_libxml2_backport.py
@@ -169,6 +170,8 @@ jobs:
           src/auth/project-authorization.spec.ts
           src/auth/auth-config.service.spec.ts
           src/auth/local-auth.service.spec.ts
+          src/previews
+          src/auth/platform-cookie.spec.ts
           src/auth/impersonation.spec.ts
           src/auth/api-key.guard.spec.ts
           src/auth/platform-access.spec.ts
@@ -183,6 +186,12 @@ jobs:
       - name: Run frontend tests
         if: matrix.part == 'frontend'
         run: pnpm --dir web test
+
+      - name: Test preview controls in Chromium and WebKit
+        if: matrix.part == 'frontend'
+        run: |
+          pnpm --dir web exec playwright install --with-deps chromium webkit
+          pnpm --dir web exec vitest run --project browser src/components/chat/agent-preview.browser.tsx
 
       - name: Build backend
         if: matrix.part == 'backend'
@@ -382,7 +391,7 @@ jobs:
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -408,6 +417,9 @@ jobs:
             type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-${{ env.CACHE_SCOPE }}
             type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-main
           cache-to: type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-${{ env.CACHE_SCOPE }},mode=max,compression=zstd,compression-level=3,oci-mediatypes=true,image-manifest=true
+
+      - name: Validate generic agent previews on the isolated runner
+        run: bash scripts/smoke-test-agent-previews.sh "mergeron-manager:quality-${{ github.sha }}"
 
       - name: Start Manager and verify its Unix socket health check
         env:

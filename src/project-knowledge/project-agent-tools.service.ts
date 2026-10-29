@@ -26,6 +26,7 @@ import { DeliverablesService } from '../deliverables/deliverables.service';
 import type { ProjectsService } from '../projects/projects.service';
 import type { ProjectConnectionToolsService } from '../projects/project-connection-tools.service';
 import { projectConnectionTools } from '../projects/project-connection-tools.schema';
+import type { ProjectPreviewsService } from '../previews/project-previews.service';
 
 /** Business tools, not filesystem mutations. The caller never selects a project. */
 @Injectable()
@@ -165,6 +166,21 @@ export class ProjectAgentToolsService {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new BadRequestException('Invalid tool request');
     const input = value as Record<string, unknown>;
+    if (
+      input.tool === 'project_preview_read' ||
+      input.tool === 'project_preview_manage'
+    ) {
+      if (
+        input.tool === 'project_preview_read' &&
+        !['status', 'logs'].includes(String(input.operation))
+      )
+        throw new BadRequestException('PREVIEW_INVALID_REQUEST');
+      return this.modules
+        .get<ProjectPreviewsService>('PROJECT_PREVIEW_AGENT_TOOLS', {
+          strict: false,
+        })
+        .tool(scope.project.id, threadId, input, assertActive);
+    }
     if (projectConnectionTools.some((name) => name === input.tool)) {
       const connections = this.modules.get<ProjectConnectionToolsService>(
         'PROJECT_CONNECTION_AGENT_TOOLS',

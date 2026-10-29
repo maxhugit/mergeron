@@ -11,6 +11,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { authSessions, localAuthCredentials, people } from '../database/schema';
 import { AuthConfigService } from './auth-config.service';
+import { platformCookie } from './platform-cookie';
 
 const COOKIE_NAME = 'codex_webui_session';
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,63}$/;
@@ -263,7 +264,7 @@ export class LocalAuthService {
   authenticateCookie(cookieHeader: unknown): string | null {
     const config = this.configuration.get();
     if (!config.local.enabled && !config.oidc.enabled) return null;
-    const token = this.readCookie(cookieHeader, COOKIE_NAME);
+    const token = this.readCookie(cookieHeader, platformCookie(COOKIE_NAME));
     if (!token) return null;
     const now = Date.now();
     const session = this.db
@@ -309,7 +310,7 @@ export class LocalAuthService {
   }
 
   logout(cookieHeader: unknown): void {
-    const token = this.readCookie(cookieHeader, COOKIE_NAME);
+    const token = this.readCookie(cookieHeader, platformCookie(COOKIE_NAME));
     if (!token) return;
     this.db
       .update(authSessions)
@@ -331,11 +332,11 @@ export class LocalAuthService {
       0,
       Math.floor((session.expiresAt - Date.now()) / 1000),
     );
-    return `${COOKIE_NAME}=${session.token}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+    return `${platformCookie(COOKIE_NAME)}=${session.token}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure || process.env.MERGERON_PREVIEWS_ENABLED === 'true' ? '; Secure' : ''}`;
   }
 
   clearCookie(secure: boolean): string {
-    return `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+    return `${platformCookie(COOKIE_NAME)}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure || process.env.MERGERON_PREVIEWS_ENABLED === 'true' ? '; Secure' : ''}`;
   }
 
   private recordFailure(id: string, previous: number, now: number): void {

@@ -96,6 +96,8 @@ export function readInstallConfiguration(manifest, env = process.env) {
   const configuration = {
     stackPrefix: manifest.stack,
     enabled: env.MERGERON_INSTALL_ENABLED === 'true',
+    previewsEnabled: env.MERGERON_PREVIEWS_ENABLED === 'true',
+    previewDomain: env.MERGERON_PREVIEW_DOMAIN || 'preview.invalid',
     stateRoot,
     hostStatePath: absoluteSafePath(
       env.MERGERON_MANAGER_HOST_STATE ?? '/host-state',
@@ -135,6 +137,12 @@ export function readInstallConfiguration(manifest, env = process.env) {
   };
   if (!['authentik', 'native'].includes(configuration.authMode))
     throw new Error('MERGERON_AUTH_MODE is invalid');
+  if (
+    !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
+      configuration.previewDomain,
+    )
+  )
+    throw new Error('MERGERON_PREVIEW_DOMAIN is invalid');
   if (!privateIpv4Cidr(configuration.adminSubnet))
     throw new Error('MERGERON_ADMIN_SUBNET is invalid');
   for (const component of manifest.components) {
@@ -534,6 +542,8 @@ export function containerSpecification(manifest, component, configuration) {
         'WEBUI_DB_PATH=/home/codex/.codex/codex-webui.sqlite',
         'WEBUI_REQUIRE_IDENTITY=true',
         `MERGERON_PUBLIC_URL=${configuration.publicUrl}`,
+        `MERGERON_PREVIEWS_ENABLED=${configuration.previewsEnabled === true}`,
+        `MERGERON_PREVIEW_DOMAIN=${configuration.previewDomain ?? 'preview.invalid'}`,
         'MERGERON_MANAGER_SOCKET=/run/mergeron-manager/manager.sock',
         'WEBUI_PROTECTED_PATHS=/home/codex,/run/secrets,/app,/proc,/sys,/dev,/etc,/root,/appdata/mergeron',
         'WORKSPACE_ROOTS=/workspaces,/appdata',
@@ -594,10 +604,13 @@ export function containerSpecification(manifest, component, configuration) {
   if (component.id === 'ingress') {
     return {
       ...base,
+      Env: [
+        `MERGERON_PREVIEW_DOMAIN=${configuration.previewDomain ?? 'preview.invalid'}`,
+      ],
       Cmd: [
         'sh',
         '-c',
-        "export MERGERON_BACKEND_TOKEN=\"$(cat /run/secrets/backend_token)\"; envsubst '${MERGERON_BACKEND_TOKEN}' < /etc/nginx/templates-secure/nginx.conf.template > /tmp/nginx.conf; exec nginx -c /tmp/nginx.conf -g 'daemon off;'",
+        "export MERGERON_BACKEND_TOKEN=\"$(cat /run/secrets/backend_token)\"; envsubst '${MERGERON_BACKEND_TOKEN} ${MERGERON_PREVIEW_DOMAIN}' < /etc/nginx/templates-secure/nginx.conf.template > /tmp/nginx.conf; exec nginx -c /tmp/nginx.conf -g 'daemon off;'",
       ],
       Healthcheck: {
         Test: [

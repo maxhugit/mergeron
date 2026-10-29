@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { DockerClient } from './docker-client.mjs';
 import { ImageUpdates } from './image-updates.mjs';
 import { TransactionalUpdater } from './updater.mjs';
+import { PreviewManager } from './previews.mjs';
 import {
   confirmAdoption,
   evaluateAdoption,
@@ -46,6 +47,11 @@ const docker = new DockerClient(
   process.env.MERGERON_DOCKER_SOCKET ?? '/var/run/docker.sock',
 );
 const installConfiguration = readInstallConfiguration(manifest);
+const previews = new PreviewManager({
+  docker,
+  manifest,
+  configuration: { ...installConfiguration, adoptionPath },
+});
 const imageUpdates = new ImageUpdates({
   docker,
   manifest,
@@ -133,7 +139,10 @@ function readJsonBody(request) {
     request.setEncoding('utf8');
     request.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 16 * 1024)
+      if (
+        body.length >
+        (request.url?.startsWith('/v1/previews/') ? 128 : 16) * 1024
+      )
         request.destroy(new Error('requestBodyTooLarge'));
     });
     request.on('end', () => {
@@ -152,6 +161,7 @@ async function adopt(body) {
     !ready ||
     installing ||
     updater.busy ||
+    previews.busy ||
     updater.current?.status === 'recoveryRequired'
   )
     throw new Error('managerOperationInProgress');
@@ -186,6 +196,7 @@ async function install(body, automatic = false) {
     !ready ||
     adopting ||
     updater.busy ||
+    previews.busy ||
     updater.current?.status === 'recoveryRequired'
   )
     throw new Error('managerOperationInProgress');
@@ -228,6 +239,43 @@ function json(response, status, value) {
 }
 
 const server = http.createServer(async (request, response) => {
+  if (request.url?.startsWith('/v1/previews/') && request.method === 'POST') {
+    try {
+      const operation = request.url.slice('/v1/previews/'.length),
+        body = await readJsonBody(request);
+      if (operation === 'capabilities')
+        return json(response, 200, previews.capabilities());
+      if (
+        !ready ||
+        installing ||
+        adopting ||
+        updater.busy ||
+        updater.current?.status === 'recoveryRequired'
+      )
+        throw new Error('PREVIEW_BUSY');
+      if (operation === 'start')
+        return json(response, 200, await previews.start(body));
+      if (operation === 'sync')
+        return json(response, 200, await previews.sync(body));
+      if (!/^[a-f0-9-]{36}$/.test(body.runId))
+        throw new Error('PREVIEW_INVALID_REQUEST');
+      if (operation === 'status')
+        return json(response, 200, await previews.status(body.runId));
+      if (operation === 'stop')
+        return json(response, 200, await previews.stop(body.runId));
+      if (operation === 'logs')
+        return json(response, 200, await previews.logs(body.runId));
+      if (operation === 'transport')
+        return json(response, 200, await previews.transport(body.runId));
+      return json(response, 404, { error: 'PREVIEW_INVALID_REQUEST' });
+    } catch (error) {
+      return json(response, 409, {
+        error: /^PREVIEW_[A-Z_]+$/.test(error.message ?? '')
+          ? error.message
+          : 'PREVIEW_MANAGER_UNAVAILABLE',
+      });
+    }
+  }
   if (request.url === '/healthz') {
     if (request.method !== 'GET') {
       json(response, 405, { error: 'methodNotAllowed' });
@@ -284,7 +332,7 @@ const server = http.createServer(async (request, response) => {
     request.method === 'POST'
   ) {
     try {
-      if (!ready || installing || adopting || updater.busy)
+      if (!ready || installing || adopting || updater.busy || previews.busy)
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
       if (request.url === '/v1/update/plan')
@@ -318,7 +366,8 @@ const server = http.createServer(async (request, response) => {
     try {
       if (
         !ready ||
-        (request.method === 'POST' && (installing || adopting || updater.busy))
+        (request.method === 'POST' &&
+          (installing || adopting || updater.busy || previews.busy))
       )
         throw new Error('managerOperationInProgress');
       json(
@@ -351,7 +400,7 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.url === '/v1/backups/delete' && request.method === 'POST') {
     try {
-      if (!ready || installing || adopting || updater.busy)
+      if (!ready || installing || adopting || updater.busy || previews.busy)
         throw new Error('managerOperationInProgress');
       json(
         response,
@@ -436,6 +485,13 @@ server.listen(socketPath, async () => {
   }
   await updater.recover();
   ready = true;
+  setInterval(
+    () =>
+      void previews
+        .expire()
+        .catch(() => console.error('Preview cleanup requires attention')),
+    30000,
+  ).unref();
   await refresh();
   if (installConfiguration.enabled) {
     try {

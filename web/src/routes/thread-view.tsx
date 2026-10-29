@@ -67,6 +67,11 @@ const BrowserSidebar = lazy(() =>
     default: module.BrowserSidebar,
   })),
 );
+const AgentPreviewDialog = lazy(() =>
+  import('@/components/chat/agent-preview-dialog').then((m) => ({
+    default: m.AgentPreviewDialog,
+  })),
+);
 const LocalBrowserSidebar = lazy(() =>
   import('@/components/chat/local-browser-sidebar').then((module) => ({
     default: module.LocalBrowserSidebar,
@@ -91,6 +96,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
   const { t: tb } = useTranslation('browser');
   const [browserChoice, setBrowserChoice] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [localBrowserOpen, setLocalBrowserOpen] = useState(false);
   const [localBrowserEnabled, setLocalBrowserEnabled] = useState(false);
   const [localBrowserStatus, setLocalBrowserStatus] = useState('disconnected');
@@ -130,6 +136,10 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
     cwd ?? null,
   );
   const policy = useThreadSecurityPolicy(threadId);
+  const previewProject =
+    projectsQuery.data?.projects.find((p) =>
+      p.agentThreads?.some((a) => a.threadId === threadId),
+    ) ?? project;
   const setActiveWorkspace = useMutation({
     mutationFn: async (nextCwd: string) => {
       const authorization = getAuthorizationHeader();
@@ -389,7 +399,18 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
             session.isAdministrator ? openLocalBrowser : undefined
           }
           localBrowserStatus={localBrowserStatus}
+          onPreview={previewProject ? () => setPreviewOpen(true) : undefined}
         />
+        {previewOpen && previewProject && (
+          <Suspense fallback={null}>
+            <AgentPreviewDialog
+              projectId={previewProject.id}
+              threadId={threadId}
+              open={previewOpen}
+              onOpenChange={setPreviewOpen}
+            />
+          </Suspense>
+        )}
         <AgentContextLinks
           onOpenDirectory={(path) => {
             explorerRef.current?.openDirectory(path);
