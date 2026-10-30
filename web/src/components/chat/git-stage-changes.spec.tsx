@@ -52,7 +52,11 @@ beforeEach(async () => {
   );
 });
 afterEach(() => client.clear());
-function show(writable = true, view: 'all' | 'prepared' = 'all') {
+function show(
+  writable = true,
+  view: 'all' | 'prepared' = 'all',
+  layout: 'flow' | 'split' = 'flow',
+) {
   return render(
     <QueryClientProvider client={client}>
       <GitStageChanges
@@ -62,6 +66,7 @@ function show(writable = true, view: 'all' | 'prepared' = 'all') {
         snapshot={snapshot}
         writable={writable}
         view={view}
+        layout={layout}
         onDiff={vi.fn()}
       />
     </QueryClientProvider>,
@@ -72,6 +77,99 @@ const bodies = () =>
     url,
     body: JSON.parse(options.body as string),
   }));
+
+it('keeps separate labelled lists and a selection action outside the scrolling list', () => {
+  show(true, 'all', 'split');
+  const unprepared = screen.getByRole('region', {
+    name: 'Modifications à préparer (2)',
+  });
+  const prepared = screen.getByRole('region', {
+    name: 'Prêtes pour le commit (1)',
+  });
+  const pendingList = within(unprepared).getByRole('list');
+  const preparedList = within(prepared).getByRole('list');
+  expect(pendingList).toHaveAttribute('tabindex', '0');
+  expect(preparedList).toHaveAttribute('tabindex', '0');
+  expect(
+    within(pendingList).getByRole('button', { name: /coucou.js/ }),
+  ).toBeVisible();
+  expect(
+    within(pendingList).queryByRole('button', { name: /ready.js/ }),
+  ).toBeNull();
+  expect(
+    within(preparedList).getByRole('button', { name: /ready.js/ }),
+  ).toBeVisible();
+  expect(within(preparedList).queryByRole('checkbox')).toBeNull();
+  const select = within(unprepared).getByRole('button', {
+    name: 'Préparer la sélection',
+  });
+  expect(pendingList.contains(select)).toBe(false);
+});
+
+it('keeps both empty sections present with explicit empty states', () => {
+  render(
+    <QueryClientProvider client={client}>
+      <GitStageChanges
+        projectId="p"
+        copyId="copy"
+        snapshot={{ ...snapshot, changes: [] }}
+        writable
+        layout="split"
+        onDiff={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(
+    within(
+      screen.getByRole('region', { name: 'Modifications à préparer (0)' }),
+    ).getByText('Aucune modification à préparer.'),
+  ).toBeVisible();
+  expect(
+    within(
+      screen.getByRole('region', { name: 'Prêtes pour le commit (0)' }),
+    ).getByText(i18n.t('gitNoPreparedFiles', { ns: 'workspaces' })),
+  ).toBeVisible();
+  expect(screen.getAllByRole('list')).toHaveLength(2);
+  expect(
+    screen.queryByRole('button', { name: 'Préparer la sélection' }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Retirer du commit' }),
+  ).toBeNull();
+});
+
+it('compares the correct side of a partly staged file in each split section', () => {
+  const onDiff = vi.fn();
+  render(
+    <QueryClientProvider client={client}>
+      <GitStageChanges
+        projectId="p"
+        copyId="copy"
+        snapshot={{
+          ...snapshot,
+          changes: [{ path: 'mixed.js', status: 'MM' }],
+        }}
+        writable
+        layout="split"
+        onDiff={onDiff}
+      />
+    </QueryClientProvider>,
+  );
+  const unprepared = screen.getByRole('region', {
+    name: 'Modifications à préparer (1)',
+  });
+  const prepared = screen.getByRole('region', {
+    name: 'Prêtes pour le commit (1)',
+  });
+  fireEvent.click(within(unprepared).getByRole('button', { name: /mixed.js/ }));
+  fireEvent.click(within(prepared).getByRole('button', { name: /mixed.js/ }));
+  expect(onDiff.mock.calls).toEqual([
+    ['mixed.js', false],
+    ['mixed.js', true],
+  ]);
+  expect(within(unprepared).getByRole('checkbox')).toBeVisible();
+  expect(within(prepared).queryByRole('checkbox')).toBeNull();
+});
 
 it('lists only staged files in commit preparation', async () => {
   show(true, 'prepared');
