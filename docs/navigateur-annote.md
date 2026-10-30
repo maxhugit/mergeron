@@ -70,30 +70,21 @@ Chromium utilise son sandbox, un utilisateur non root et le profil seccomp déj�
 fourni. Un hôte incompatible doit faire échouer le démarrage : ne pas ajouter
 `--no-sandbox` ou `--privileged` pour contourner le problème.
 
-1. Définissez `BROWSER_WS_PATH` dans l’environnement de Compose avec au moins
-   32 caractères aléatoires. Ne le publiez pas : ce chemin protège le canal de
-   contrôle Playwright. Le service n’expose aucun port sur l’hôte.
-2. Ajoutez `deployment/compose.browser.yml` au déploiement :
+Le Manager actuel sait gérer un navigateur conforme **déjà présent**, mais ne
+sait pas encore créer ce service lors d’une installation neuve. Le parcours
+standard n’installe donc pas le navigateur : laisser
+`MERGERON_MANAGE_BROWSER=false` tant que ce prérequis n’est pas rempli.
+Cette limite ne bloque pas les autres fonctions de Mergeron.
 
-   ```sh
-   docker compose --env-file deployment/.env -f deployment/compose.yml -f deployment/compose.browser.yml up -d --no-build
-   ```
-
-   Définir `MERGERON_BROWSER_IMAGE` par une image stable épinglée par digest en
-   production, ou `edge` en DEV. L’overlay donne des noms de conteneur/réseaux
-   cohérents avec `MERGERON_STACK_PREFIX`, un healthcheck et les labels de gestion.
-
-3. L’overlay définit `MERGERON_BROWSER_ENDPOINT` uniquement dans l’application.
-   Les deux côtés utilisent Playwright 1.64.1 ; leurs versions doivent correspondre.
-   Sans endpoint, l’interface affiche une indisponibilité, sans lancer de navigateur
-   dans l’application ni retomber sur un iframe.
-
-Ce service reste optionnel. Depuis la version 0.5.1 du Manager, sa gestion est
-activable explicitement en production comme en développement.
+Les définitions du navigateur dans `deployment/` sont des ressources techniques,
+pas un second parcours d’installation utilisateur. Les versions Playwright du
+navigateur et de l’application doivent correspondre. Sans endpoint configuré,
+l’interface affiche une indisponibilité sans lancer de navigateur dans
+l’application ni retomber sur un iframe.
 
 ## Gestion par le Manager
 
-Installer d’abord un navigateur sain avec les protections ci-dessus. En
+Pour un navigateur déjà présent, vérifier les protections ci-dessus. En
 production, utiliser l’image stable officielle `ghcr.io/maxhugit/mergeron-browser`
 épinglée par digest, jamais une construction locale ou un tag `edge`. Les versions
 Playwright du navigateur et de l’application doivent correspondre.
@@ -107,7 +98,7 @@ Recréer ensuite **uniquement le Manager**, avec son image stable 0.5.1 ou
 supérieure et sa configuration existante, en ajoutant
 `MERGERON_MANAGE_BROWSER=true`. Conserver ce réglage dans la définition de
 déploiement de l’hôte. Les installations sans ce réglage gardent leurs trois
-composants historiques ; le Manager ne crée jamais un navigateur manquant.
+composants de base ; le Manager ne crée jamais un navigateur manquant.
 
 Un ancien enregistrement d’adoption à trois composants reste accepté uniquement
 si ces trois composants sont strictement inchangés et que le quatrième est le
@@ -125,42 +116,16 @@ En cas d’échec, conserver l’ancien Manager et la définition de déploiemen
 restauration. Aucune migration de profil seccomp de l’application n’est activée
 implicitement en production.
 
-### Cas historique de la DEV
+### Réseau et mises à jour
 
-Sur une pile dédiée `mergeron-dev`, après installation et vérification du
-navigateur isolé, exécuter `scripts/configure-dev-browser.py --confirm-configure`
-sur l’hôte Docker. Cet outil vérifie l’identité et les protections du conteneur
-existant, le recrée avec ses mêmes secrets, image et réseaux, ajoute les labels
-de gestion et définit **uniquement pour lui** `HostConfig.Dns = ["1.1.1.1"]`.
-Il conserve le conteneur précédent pour retour arrière et ne modifie ni le DNS
-de l’hôte, ni les autres conteneurs. Les sessions temporaires sont perdues.
+Le Manager démarre le navigateur géré avant l’application et vérifie sa santé.
+Il conserve ses deux réseaux, son chemin de contrôle secret et son bac à sable,
+puis réapplique le DNS public prévu par le contrat. Les versions de Playwright
+restent à coordonner avec l’application. Aucun port de contrôle n’est publié.
 
-Mettre ensuite à jour le Manager DEV avec
-`scripts/update-dev-manager.py REVISION --confirm-replace --manage-browser`.
-L’option persistante `MERGERON_MANAGE_BROWSER=true` ajoute le navigateur à
-l’inventaire et aux transactions. Sans elle, les trois composants historiques
-restent seuls gérés. Ce script de remplacement demeure limité à la DEV : ne pas
-le détourner pour remplacer le Manager de production.
-Le navigateur doit préexister : le Manager ne crée pas un runtime non configuré.
-
-Le Manager démarre le navigateur avant l’application et vérifie sa santé.
-Lors de la transaction, il raccorde l’application au réseau de contrôle interne
-et configure son endpoint depuis le chemin secret du navigateur existant, sans
-l’exposer dans les plans ou réponses de statut.
-Chaque mise à jour et restauration conserve ses réseaux, son chemin de contrôle
-secret, son sandbox et réapplique le DNS public. Une image locale préexistante
-est conservée par son identifiant immuable, sans téléchargement implicite.
-Le changement de version Playwright reste à coordonner avec l’application.
-La détection des nouvelles images dans les réglages Serveur inclut le navigateur
-géré : canal `edge` en DEV et `latest` en production. Une mise à jour explicite,
-confirmée et compatible reste nécessaire ; rien n’est installé automatiquement.
-Ne jamais ajouter de capacité Linux, désactiver le sandbox ou exposer le port
-de contrôle pour obtenir un démarrage.
-
-Le DNS public évite les réponses privées du DNS local, mais **n’autorise pas**
-les réseaux privés : les contrôles du proxy s’appliquent toujours à chaque
-destination et redirection. Par exemple une connexion à Mergeron peut rediriger
-vers Authentik ; les deux domaines doivent résoudre vers des adresses publiques.
+Le DNS public ne donne aucun droit sur les réseaux privés. Toutes les
+destinations et redirections restent contrôlées. Un site peut rediriger vers un
+fournisseur SSO : les deux domaines doivent résoudre vers des adresses publiques.
 
 ## Vérifications
 

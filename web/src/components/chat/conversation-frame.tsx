@@ -1,5 +1,11 @@
 /** A permanent conversation surface: floating composer, measured transcript, and an external loading gate. */
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { ChatInput, type ChatInputHandle } from './chat-input';
@@ -25,6 +31,8 @@ export function ConversationFrame({
   const [layoutReady, setLayoutReady] = useState(false);
   const [sendSignal, setSendSignal] = useState(0);
   const selected = useTimelineStore((s) => s.threadId === threadId);
+  const parentActive = useContext(SurfaceActivityContext);
+  const visible = parentActive && active && selected;
   const hydrated = useTimelineStore(
     (s) => s.threadsById[threadId]?.hydrated ?? false,
   );
@@ -52,11 +60,11 @@ export function ConversationFrame({
   }, []);
 
   return (
-    <SurfaceActivityContext value={active && selected}>
+    <SurfaceActivityContext value={visible}>
       <div className="relative flex h-full min-h-0 flex-col">
         <ChatTimeline
           conversationId={threadId}
-          active={active && selected}
+          active={visible}
           ready={dataReady && height !== null}
           onReady={measureReady}
           bottomInset={height ?? 0}
@@ -66,7 +74,8 @@ export function ConversationFrame({
         <div ref={composer} className="absolute inset-x-0 bottom-0 w-full">
           <ChatInput
             ref={input}
-            active={active && selected}
+            conversationId={threadId}
+            active={visible}
             onSubmitted={() => setSendSignal((n) => n + 1)}
           />
         </div>

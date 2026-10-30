@@ -2,6 +2,7 @@ import { Fragment, useRef, type ReactNode } from 'react';
 import { DropdownMenu } from 'radix-ui';
 import { MoreVertical, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useSurfaceOpen } from '@/hooks/use-surface-open';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -37,6 +38,7 @@ export function FileActionsMenu({
   buttonLabel?: string;
 }) {
   const { t } = useTranslation();
+  const visibility = useSurfaceOpen({ onOpenChange });
   const pending = useRef<string | null>(null);
   const afterClose = (event: Event) => {
     const action = pending.current;
@@ -92,7 +94,7 @@ export function FileActionsMenu({
       );
     });
   return (
-    <DropdownMenu.Root onOpenChange={onOpenChange}>
+    <DropdownMenu.Root {...visibility}>
       <ContextMenu onOpenChange={onOpenChange}>
         <ContextMenuTrigger asChild>
           <div className="flex min-w-0 flex-1 items-center gap-1">

@@ -1,7 +1,7 @@
 # Prévisualisations des projets et synchronisation des agents
 
 Chaque agent de travail peut lancer une instance de test de son projet et l’ouvrir
-directement sur `https://<identifiant>.preview.hugotlab.fr`. L’instance utilise les
+directement sur `https://<identifiant>.preview.example.com`. L’instance utilise les
 fichiers actuels de sa copie de travail, y compris les changements non commités.
 Elle ne publie aucun port Docker sur l’hôte et ne partage ni base de production,
 ni connexion Codex, ni jeton Git, ni dossier personnel de Mergeron.
@@ -35,21 +35,21 @@ spécialement pour le dépôt Mergeron.
 
 ## Configurer le domaine et le proxy une seule fois
 
-Dans la zone DNS active de `hugotlab.fr`, créer un CNAME dont le sous-domaine est
+Dans la zone DNS active de `example.com`, créer un CNAME dont le sous-domaine est
 `*.preview` et la cible le nom public du reverse proxy, par exemple
-`mergeron-dev.hugotlab.fr.` si ce nom mène déjà à ce proxy. Le CNAME ne change
+`mergeron-dev.example.com.` si ce nom mène déjà à ce proxy. Le CNAME ne change
 pas l’adresse visible dans le navigateur et ne configure pas le routage HTTP.
 
-Le reverse proxy doit ensuite accepter `*.preview.hugotlab.fr` et transmettre
+Le reverse proxy doit ensuite accepter `*.preview.example.com` et transmettre
 les requêtes à l’ingress Mergeron sur son port interne 8080, en conservant
 `Host` et les mises à niveau WebSocket. Utiliser un certificat couvrant
-`*.preview.hugotlab.fr` ; un certificat limité à `*.hugotlab.fr` ne couvre pas
+`*.preview.example.com` ; un certificat limité à `*.example.com` ne couvre pas
 ces noms. Avec Let’s Encrypt, le certificat wildcard utilise DNS-01. Limiter
 les droits du jeton DNS à la validation du certificat et ne jamais le transmettre
 aux agents ou aux instances de test.
 
-Séparer les domaines des environnements : par exemple `*.preview-dev.hugotlab.fr`
-pour la Dev et `*.preview.hugotlab.fr` pour la production, avec leurs certificats,
+Séparer les domaines des environnements : par exemple `*.preview-dev.example.com`
+pour la Dev et `*.preview.example.com` pour la production, avec leurs certificats,
 routages et réglages propres. Le wildcard couvre les instances parallèles :
 aucun nouveau CNAME n’est nécessaire à chaque lancement. Ces noms sont des
 exemples d’intégration, pas des domaines imposés par Mergeron.
@@ -77,11 +77,11 @@ Définir dans le Manager et l’application :
 
 ```dotenv
 MERGERON_PREVIEWS_ENABLED=true
-MERGERON_PREVIEW_DOMAIN=preview.hugotlab.fr
+MERGERON_PREVIEW_DOMAIN=preview.example.com
 ```
 
 L’application doit également disposer de son `MERGERON_PUBLIC_URL` HTTPS
-canonique. Le compose et l’installateur transmettent ces deux réglages aux
+canonique. L’installateur du Manager transmet ces deux réglages aux
 nouvelles instances. Une installation déjà présente doit être recréée avec ces
 variables pour les appliquer ; un simple changement du profil d’un projet
 n’active pas le service sur le serveur.

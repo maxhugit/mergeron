@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { retainManagerUpdateSnapshot } from './manager-update-recovery';
+import { backupDescription, withoutDataBackup } from './manager-backup-policy';
 import { useTranslation } from 'react-i18next';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -121,10 +122,9 @@ export function ManagerUpdateProgressDialog({
     if (operation && !monitoringPaused)
       retainManagerUpdateSnapshot(session, operation);
   }, [operation, session, monitoringPaused]);
-  const stages =
-    operation?.backupPolicy === 'development-none-v1'
-      ? allStages.filter((item) => item !== 'backingUp')
-      : allStages;
+  const stages = withoutDataBackup(operation?.backupPolicy)
+    ? allStages.filter((item) => item !== 'backingUp')
+    : allStages;
   const stage = stages.indexOf(phase);
   const completed = operation?.status === 'succeeded';
   const interrupted = operation?.status === 'recoveryRequired';
@@ -265,9 +265,9 @@ export function ManagerUpdateProgressDialog({
             ))}
           </ol>
         </section>
-        {operation?.backupPolicy === 'development-none-v1' && (
+        {operation?.backupPolicy && (
           <p className="text-xs text-muted-foreground">
-            {t('managerDevelopmentNoBackup')}
+            {t(translationKey(backupDescription(operation.backupPolicy)))}
           </p>
         )}
         {operation?.backupRetained && (

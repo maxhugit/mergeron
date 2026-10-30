@@ -21,9 +21,11 @@ import {
 import { ProjectLocationsService } from './project-locations.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceGitService } from './workspace-git.service';
+import { GitGateRefusal } from '../threads/git-mutation-gate.service';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import {
   listProjectConnectionsInput,
+  createProjectGitCopyInput,
   readProjectGitInput,
   publishProjectGitInput,
   prepareProjectGitOperationInput,
@@ -94,6 +96,7 @@ export class ProjectConnectionToolsService {
               c.enabled && root?.capabilities.read && c.protocol === 'git'
                 ? [
                     'read_project_git',
+                    'create_project_git_copy',
                     ...(root.accessMode === 'read_write' &&
                     root.capabilities.write
                       ? ['prepare_project_git', 'publish_project_git']
@@ -119,6 +122,113 @@ export class ProjectConnectionToolsService {
         nextOffset: offset + 50 < all.length ? offset + 50 : null,
         untrustedContent: true,
       };
+    }
+    if (tool === 'create_project_git_copy') {
+      const args = createProjectGitCopyInput.parse(raw);
+      const assertCreate = () => {
+        const access = check();
+        access.identities.requireAdministrator(access.identity);
+        if (access.identity.impersonation)
+          throw new ForbiddenException('ACCESS_DENIED');
+        const inventory = this.locations.list(projectId);
+        const connection = inventory.connections.find(
+          (c) => c.id === args.connectionId,
+        );
+        const root = inventory.locations.find(
+          (l) => l.connectionId === args.connectionId && l.kind === 'remote',
+        );
+        if (
+          !connection?.enabled ||
+          connection.protocol !== 'git' ||
+          !root?.capabilities.read
+        )
+          throw new ForbiddenException('PROJECT_CONNECTION_UNAVAILABLE');
+        return access;
+      };
+      const observed = this.locations
+        .list(projectId)
+        .connections.find((connection) => connection.id === args.connectionId);
+      const beforeCommit = () => {
+        assertCreate();
+        const latest = this.locations
+          .list(projectId)
+          .connections.find(
+            (connection) => connection.id === args.connectionId,
+          );
+        if (
+          !observed ||
+          latest?.updatedAt !== observed.updatedAt ||
+          latest?.address !== observed.address
+        )
+          throw new ForbiddenException('PROJECT_CONNECTION_UNAVAILABLE');
+      };
+      const access = assertCreate();
+      const key = and(
+        eq(projectAgentToolRequests.projectId, projectId),
+        eq(projectAgentToolRequests.threadId, threadId),
+        eq(projectAgentToolRequests.requestId, args.requestId),
+      );
+      const digest = createHash('sha256')
+        .update(JSON.stringify({ tool, ...args }))
+        .digest('hex');
+      const previous = this.db
+        .select()
+        .from(projectAgentToolRequests)
+        .where(key)
+        .get();
+      if (previous) {
+        if (
+          previous.digest !== digest ||
+          previous.personId !== access.identity.personId
+        )
+          throw new ConflictException('PROJECT_CONNECTION_REQUEST_CONFLICT');
+        if (!previous.result)
+          throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+        // Never return a stale success after ownership was released or revoked.
+        const copy = this.copies
+          .list(projectId)
+          .find((copy) => copy.id === previous.result?.id);
+        if (!copy?.ownerThreadIds.includes(threadId) || copy.state !== 'ready')
+          throw new ForbiddenException('GIT_COPY_OWNED');
+        return previous.result;
+      }
+      const owned = this.copies
+        .list(projectId)
+        .filter((copy) => copy.ownerThreadIds.includes(threadId));
+      if (owned.length) throw new ConflictException('GIT_AGENT_COPY_EXISTS');
+      this.db
+        .insert(projectAgentToolRequests)
+        .values({
+          projectId,
+          threadId,
+          requestId: args.requestId,
+          digest,
+          personId: access.identity.personId,
+          createdAt: Date.now(),
+        })
+        .run();
+      const copy = await this.copies.create(
+        projectId,
+        args.connectionId,
+        {
+          branch: args.branch,
+          agentThreadId: threadId,
+        },
+        beforeCommit,
+      );
+      const result = {
+        id: copy.id,
+        connectionId: args.connectionId,
+        ownerThreadId: threadId,
+        localPath: copy.localPath,
+        branch: copy.branch,
+        revision: copy.revision,
+        state: copy.state,
+        // Ownership is independent of the human's active-folder selection.
+        activeFolderChanged: false,
+      };
+      this.db.update(projectAgentToolRequests).set({ result }).where(key).run();
+      return result;
     }
     const publishing = tool === 'publish_project_git';
     const preparing = tool === 'prepare_project_git';
@@ -174,13 +284,18 @@ export class ProjectConnectionToolsService {
         'connectionId',
         'operation',
         ...(local ? ['copyId'] : []),
-        ...(['files', 'local_diff', 'local_staged_diff'].includes(
-          read.operation,
-        )
+        ...([
+          'files',
+          'local_diff',
+          'local_staged_diff',
+          'local_conflict',
+        ].includes(read.operation)
           ? ['path']
           : []),
         ...(read.operation === 'files' ? ['ref'] : []),
-        ...(read.operation === 'checks' ? ['number'] : []),
+        ...(['checks', 'pull_request'].includes(read.operation)
+          ? ['number']
+          : []),
       ];
       if (Object.keys(raw).some((k) => !allowed.includes(k)))
         throw new BadRequestException('Invalid operation fields');
@@ -203,6 +318,15 @@ export class ProjectConnectionToolsService {
         case 'pull_requests':
           data = await this.git.pullRequests(projectId, connection.id);
           break;
+        case 'pull_request':
+          if (!read.number)
+            throw new BadRequestException('A pull request number is required');
+          data = await this.git.pullRequest(
+            projectId,
+            connection.id,
+            String(read.number),
+          );
+          break;
         case 'checks':
           if (!read.number)
             throw new BadRequestException('A pull request number is required');
@@ -211,6 +335,16 @@ export class ProjectConnectionToolsService {
             connection.id,
             String(read.number),
           );
+          break;
+        case 'local_conflict':
+          data = await this.git.conflictFile(
+            projectId,
+            read.copyId!,
+            read.path,
+          );
+          break;
+        case 'local_merge_status':
+          data = await this.git.mergeStatus(projectId, read.copyId!);
           break;
         case 'local_status':
           data = await this.git.snapshot(projectId, read.copyId!);
@@ -267,6 +401,7 @@ export class ProjectConnectionToolsService {
         'description',
         'draft',
         'number',
+        'expectedUpdatedAt',
         'expectedBase',
         'expectedPullRequestHead',
       ].some((k) => Object.hasOwn(raw, k))
@@ -278,10 +413,24 @@ export class ProjectConnectionToolsService {
     )
       throw new BadRequestException('Pull request fields are required');
     if (
+      publish.operation === 'update_pull_request' &&
+      (!publish.number ||
+        !publish.title ||
+        publish.description === undefined ||
+        !publish.expectedUpdatedAt ||
+        ['base', 'draft', 'expectedBase', 'expectedPullRequestHead'].some((k) =>
+          Object.hasOwn(raw, k),
+        ))
+    )
+      throw new BadRequestException('Pull request update fields are required');
+    if (
       publish.operation === 'create_pull_request' &&
-      ['number', 'expectedBase', 'expectedPullRequestHead'].some((k) =>
-        Object.hasOwn(raw, k),
-      )
+      [
+        'number',
+        'expectedUpdatedAt',
+        'expectedBase',
+        'expectedPullRequestHead',
+      ].some((k) => Object.hasOwn(raw, k))
     )
       throw new BadRequestException('Invalid pull request creation fields');
     if (
@@ -290,7 +439,9 @@ export class ProjectConnectionToolsService {
         !publish.base ||
         !publish.expectedBase ||
         !publish.expectedPullRequestHead ||
-        ['title', 'description', 'draft'].some((k) => Object.hasOwn(raw, k)))
+        ['title', 'description', 'draft', 'expectedUpdatedAt'].some((k) =>
+          Object.hasOwn(raw, k),
+        ))
     )
       throw new BadRequestException(
         'Pull request retarget fields are required',
@@ -345,100 +496,173 @@ export class ProjectConnectionToolsService {
     };
     const publisher = { threadId, assertActive: assertWrite };
     let data: unknown;
-    if (preparing) {
-      const local = prepareProjectGitOperationInput.parse(raw);
-      switch (local.operation) {
-        case 'stage_review':
-          data = await this.actions.stageReview(projectId, local.copyId, {
-            ...body,
-            paths: local.paths,
-          });
-          assertWrite();
-          break;
-        case 'stage':
-          data = await this.actions.stage(
-            projectId,
-            local.copyId,
-            {
+    try {
+      if (preparing) {
+        const local = prepareProjectGitOperationInput.parse(raw);
+        switch (local.operation) {
+          case 'stage_review':
+            data = await this.actions.stageReview(projectId, local.copyId, {
               ...body,
               paths: local.paths,
-              reviewFingerprint: local.reviewFingerprint,
-            },
-            publisher,
-          );
-          break;
-        case 'unstage':
-          data = await this.actions.unstage(
-            projectId,
-            local.copyId,
-            { ...body, paths: local.paths },
-            publisher,
-          );
-          break;
-        case 'commit':
-          data = await this.actions.commit(
-            projectId,
-            local.copyId,
-            { ...body, message: local.message },
-            publisher,
-          );
-          break;
-        case 'create_branch':
-          // Switch only from a clean worktree, at the observed HEAD. No reset,
-          // arbitrary start ref, fetch, force, stash or file restoration.
-          data = await this.actions.createBranch(
-            projectId,
-            local.copyId,
-            {
-              ...body,
-              name: local.name,
-              startRef: 'HEAD',
-              startRevision: local.expectedHead,
-              checkout: true,
-              confirmation: 'CREATE_LOCAL_BRANCH',
-            },
-            publisher,
-          );
-          break;
-      }
-    } else {
-      const remote = publishProjectGitInput.parse(raw);
-      const remoteBody = {
-        ...body,
-        base: remote.base,
-        title: remote.title,
-        description: remote.description ?? '',
-        draft: remote.draft,
-        confirmation: 'CREATE_PULL_REQUEST',
-      };
-      data =
-        remote.operation === 'push'
-          ? await this.actions.push(
+            });
+            assertWrite();
+            break;
+          case 'stage':
+            data = await this.actions.stage(
               projectId,
-              remote.copyId,
-              remoteBody,
+              local.copyId,
+              {
+                ...body,
+                paths: local.paths,
+                reviewFingerprint: local.reviewFingerprint,
+              },
               publisher,
-            )
-          : remote.operation === 'retarget_pull_request'
-            ? await this.actions.retargetPullRequest(
-                projectId,
-                remote.copyId,
-                {
-                  ...body,
-                  confirmation: 'RETARGET_PULL_REQUEST',
-                  number: remote.number,
-                  base: remote.base,
-                  expectedBase: remote.expectedBase,
-                  expectedPullRequestHead: remote.expectedPullRequestHead,
-                },
-                publisher,
-              )
-            : await this.actions.createPullRequest(
+            );
+            break;
+          case 'unstage':
+            data = await this.actions.unstage(
+              projectId,
+              local.copyId,
+              { ...body, paths: local.paths },
+              publisher,
+            );
+            break;
+          case 'commit':
+            data = await this.actions.commit(
+              projectId,
+              local.copyId,
+              { ...body, message: local.message },
+              publisher,
+            );
+            break;
+          case 'fetch_branch':
+            data = await this.actions.retrieveBranch(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                name: local.name,
+                revision: local.revision,
+                confirmation: 'RETRIEVE_REMOTE_BRANCH',
+              },
+              publisher,
+              true,
+            );
+            break;
+          case 'switch_branch':
+            data = await this.actions.localBranchAction(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                action: 'switch',
+                name: local.name,
+                revision: local.revision,
+                confirmation: 'LOCAL_BRANCH_ACTION',
+              },
+              publisher,
+            );
+            break;
+          case 'start_merge':
+            data = await this.actions.startMerge(
+              projectId,
+              local.copyId,
+              { ...body, revision: local.revision },
+              publisher,
+            );
+            break;
+          case 'continue_merge':
+            data = await this.actions.commit(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                mergeRevision: local.revision,
+                message: local.message,
+              },
+              publisher,
+            );
+            break;
+          case 'abort_merge':
+            data = await this.actions.abortMerge(
+              projectId,
+              local.copyId,
+              { ...body, revision: local.revision },
+              publisher,
+            );
+            break;
+          case 'create_branch':
+            // Switch only from a clean worktree, at an observed revision. No reset,
+            // arbitrary start ref, fetch, force, stash or file restoration.
+            data = await this.actions.createBranch(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                name: local.name,
+                startRef: local.startRef ?? 'HEAD',
+                startRevision: local.revision ?? local.expectedHead,
+                checkout: true,
+                confirmation: 'CREATE_LOCAL_BRANCH',
+              },
+              publisher,
+            );
+            break;
+        }
+      } else {
+        const remote = publishProjectGitInput.parse(raw);
+        const remoteBody = {
+          ...body,
+          base: remote.base,
+          title: remote.title,
+          description: remote.description ?? '',
+          draft: remote.draft,
+          confirmation: 'CREATE_PULL_REQUEST',
+          number: remote.number,
+          expectedUpdatedAt: remote.expectedUpdatedAt,
+        };
+        data =
+          remote.operation === 'push'
+            ? await this.actions.push(
                 projectId,
                 remote.copyId,
                 remoteBody,
                 publisher,
-              );
+              )
+            : remote.operation === 'update_pull_request'
+              ? await this.actions.updatePullRequest(
+                  projectId,
+                  remote.copyId,
+                  remoteBody,
+                  publisher,
+                )
+              : remote.operation === 'retarget_pull_request'
+                ? await this.actions.retargetPullRequest(
+                    projectId,
+                    remote.copyId,
+                    {
+                      ...body,
+                      confirmation: 'RETARGET_PULL_REQUEST',
+                      number: remote.number,
+                      base: remote.base,
+                      expectedBase: remote.expectedBase,
+                      expectedPullRequestHead: remote.expectedPullRequestHead,
+                    },
+                    publisher,
+                  )
+                : await this.actions.createPullRequest(
+                    projectId,
+                    remote.copyId,
+                    remoteBody,
+                    publisher,
+                  );
+      }
+    } catch (error) {
+      // A gate refusal happens before dispatch. Preserve the stable requestId
+      // for a safe retry; an error after dispatch remains outcome-unknown.
+      if (error instanceof GitGateRefusal)
+        this.db.delete(projectAgentToolRequests).where(key).run();
+      throw error;
     }
     // Once dispatched, record a confirmed outcome even if the turn ended while waiting.
     const result = {

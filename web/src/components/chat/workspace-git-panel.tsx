@@ -39,7 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileTree } from '@/components/files/file-tree';
 import { filesAddRoot } from '@/generated/api';
 import { filesReadTreeQueryKey } from '@/generated/api/@tanstack/react-query.gen';
-import { useFilesStore } from '@/stores/files-store';
+import { useFileBrowserStoreApi } from '@/components/files/file-browser-context';
 import { useGitCopyLiveUpdates } from '@/hooks/use-git-copy-live-updates';
 import {
   projectsApi,
@@ -327,6 +327,7 @@ function RepositoryPanel({
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
+  const browserStore = useFileBrowserStoreApi();
   const [tab, setTab] = useState('files');
   const [scope, setScope] = useState(
     initialAction === 'remote' ? 'remote' : 'local',
@@ -346,7 +347,7 @@ function RepositoryPanel({
       setRefreshVersion((version) => version + 1);
       await Promise.all([
         ...(copy?.localPath
-          ? [...new Set([copy.localPath, useFilesStore.getState().rootDir])]
+          ? [...new Set([copy.localPath, browserStore.getState().rootDir])]
               .filter((root): root is string =>
                 Boolean(root && pathIsWithin(root, copy.localPath!)),
               )
@@ -430,7 +431,7 @@ function RepositoryPanel({
     }).then(
       () => {
         if (!cancelled) {
-          useFilesStore.getState().setRootDir(copy.localPath!);
+          browserStore.getState().setRootDir(copy.localPath!);
           setBrowseError('');
           setBrowsed(copy.id);
         }
@@ -442,7 +443,16 @@ function RepositoryPanel({
     return () => {
       cancelled = true;
     };
-  }, [scope, tab, copy?.id, copy?.localPath, browsed, browseAttempt, t]);
+  }, [
+    scope,
+    tab,
+    copy?.id,
+    copy?.localPath,
+    browsed,
+    browseAttempt,
+    t,
+    browserStore,
+  ]);
   const writable =
     Boolean(
       copy &&

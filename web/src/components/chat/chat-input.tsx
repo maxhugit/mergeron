@@ -9,10 +9,10 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
-  useState,
 } from 'react';
 import { Send, Square } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useShallow } from 'zustand/react/shallow';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +31,7 @@ import {
 } from '@/lib/turn-submission';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useTimelineStore } from '@/stores/timeline-store';
+import { useComposerDraftStore } from '@/stores/composer-draft-store';
 import { useModelStore } from '@/stores/model-store';
 import { useChatAttachments } from '@/hooks/use-chat-attachments';
 import { useChatMention } from '@/hooks/use-chat-mention';
@@ -57,6 +58,8 @@ export interface ChatInputHandle {
 }
 
 interface Props {
+  /** Stable identity when several agent composers are retained offscreen. */
+  conversationId?: string;
   /** Hidden conversation tabs retain the composer but close transient UI. */
   active?: boolean;
   /** Additional presentation classes; the conversation frame always floats the composer. */
@@ -74,11 +77,21 @@ interface Props {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
-  { active = true, className, onSubmitted },
+  { active = true, conversationId, className, onSubmitted },
   ref,
 ) {
   const footerRef = useRef<HTMLElement>(null);
-  const [value, setValue] = useState('');
+  const selectedId = useTimelineStore((s) => s.threadId);
+  const threadId = conversationId ?? selectedId;
+  const value = useComposerDraftStore((s) =>
+    threadId ? (s.drafts[threadId]?.text ?? '') : '',
+  );
+  const setValue = useCallback(
+    (value: React.SetStateAction<string>) => {
+      if (threadId) useComposerDraftStore.getState().setText(threadId, value);
+    },
+    [threadId],
+  );
   const valueRef = useRef(value);
   useEffect(() => {
     valueRef.current = value;
@@ -86,26 +99,55 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { t } = useTranslation();
-  const threadId = useTimelineStore((s) => s.threadId);
-  const threadCwd = useTimelineStore((s) => s.threadCwd);
-  const threadMode = useTimelineStore((s) => s.threadMode);
-  const readOnlyReason = useTimelineStore((s) => s.readOnlyReason);
-  const deletedRemotely = useTimelineStore((s) => s.deletedRemotely);
-  const turnStartPending = useTimelineStore((s) => s.turnStartPending);
-  const openState = useTimelineStore((s) => s.openState);
-  const hydrated = useTimelineStore((s) => s.hydrated);
-  const activeTurnId = useTimelineStore((s) => s.activeTurnId);
+  // Streaming transcript deltas must not rerender the composer on every token.
+  const {
+    threadCwd,
+    threadMode,
+    readOnlyReason,
+    deletedRemotely,
+    turnStartPending,
+    openState,
+    hydrated,
+    activeTurnId,
+  } = useTimelineStore(
+    useShallow((s) => {
+      const runtime = threadId ? s.threadsById[threadId] : undefined;
+      return {
+        threadCwd: runtime?.threadCwd ?? null,
+        threadMode: runtime?.threadMode ?? 'live',
+        readOnlyReason: runtime?.readOnlyReason ?? null,
+        deletedRemotely: runtime?.deletedRemotely ?? false,
+        turnStartPending: runtime?.turnStartPending ?? false,
+        openState: runtime?.openState ?? 'unopened',
+        hydrated: runtime?.hydrated ?? false,
+        activeTurnId: runtime?.activeTurnId ?? null,
+      };
+    }),
+  );
   const hasPendingApproval = useTimelineStore((s) => {
+    const current = threadId ? s.threadsById[threadId] : undefined;
     const flagBlocked =
-      s.threadStatus?.type === 'active' &&
-      s.threadStatus.activeFlags.includes('waitingOnApproval');
-    const cardBlocked = Object.values(s.approvals).some(
+      current?.threadStatus?.type === 'active' &&
+      current.threadStatus.activeFlags.includes('waitingOnApproval');
+    const cardBlocked = Object.values(current?.approvals ?? {}).some(
       (a) => a.status === 'pending',
     );
     return flagBlocked || cardBlocked;
   });
-  const addUserMessage = useTimelineStore((s) => s.addUserMessage);
-  const addSystemError = useTimelineStore((s) => s.addSystemError);
+  const addUserMessage = useCallback(
+    (text: string, images?: string[]) => {
+      const store = useTimelineStore.getState();
+      if (store.threadId === threadId) store.addUserMessage(text, images);
+    },
+    [threadId],
+  );
+  const addSystemError = useCallback(
+    (message: string) => {
+      if (threadId)
+        useTimelineStore.getState().addSystemErrorForThread(threadId, message);
+    },
+    [threadId],
+  );
   // Three distinct ways to be unwritable, with three different remedies: an
   // archived snapshot, a conversation whose writer ownership is held by another
   // client, and one that was destroyed elsewhere. The latter two still show a
@@ -165,6 +207,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     availability: slashAvailability,
     // Running a command consumes the draft, exactly like the native composer.
     onRun: (command) => {
+      if (!active || useTimelineStore.getState().threadId !== threadId) return;
       setValue('');
       slashDispatch.runCommand(command);
     },
@@ -198,7 +241,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       setInput: setValue,
       addFileAttachment: addFileMention,
     }),
-    [addFileMention],
+    [addFileMention, setValue],
   );
 
   // ── Turn mutations ───────────────────────────────────────
@@ -250,6 +293,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   const handleSend = useCallback(() => {
     const input = buildInput();
     if (
+      !active ||
+      useTimelineStore.getState().threadId !== threadId ||
       input.length === 0 ||
       !threadId ||
       cannotStart ||
@@ -292,6 +337,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     });
     onSubmitted?.();
   }, [
+    active,
     buildInput,
     threadId,
     cannotStart,
@@ -307,6 +353,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   const handleSteer = useCallback(() => {
     const input = buildInput();
     if (
+      !active ||
+      useTimelineStore.getState().threadId !== threadId ||
       input.length === 0 ||
       !canSteer ||
       !threadId ||
@@ -321,6 +369,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     });
     onSubmitted?.();
   }, [
+    active,
     buildInput,
     clearAfterSend,
     canSteer,
@@ -331,9 +380,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   ]);
 
   const handleStop = useCallback(() => {
-    if (!threadId || !activeTurnId || interruptTurn.isPending) return;
+    if (
+      !active ||
+      !threadId ||
+      useTimelineStore.getState().threadId !== threadId ||
+      !activeTurnId ||
+      interruptTurn.isPending
+    )
+      return;
     interruptTurn.mutate({ path: { threadId, turnId: activeTurnId } });
-  }, [threadId, activeTurnId, interruptTurn]);
+  }, [active, threadId, activeTurnId, interruptTurn]);
 
   /**
    * Runs the draft as a slash command when it is one, and reports whether it
@@ -344,6 +400,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
    * would ship `/plan ` to the running turn as steering text.
    */
   const tryRunSlashCommand = useCallback((): boolean => {
+    if (!active || useTimelineStore.getState().threadId !== threadId)
+      return true;
     const parsed = parseSlashInput(valueRef.current.trim());
     if (!parsed) return false;
     const command = SLASH_COMMANDS.find((c) => c.name === parsed.name);
@@ -356,7 +414,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       slashDispatch.runCommand(command);
     }
     return true;
-  }, [valueRef, slashAvailability, closeSlash, slashDispatch]);
+  }, [
+    active,
+    threadId,
+    valueRef,
+    slashAvailability,
+    closeSlash,
+    slashDispatch,
+    setValue,
+  ]);
 
   const handleSubmit = useCallback(() => {
     if (tryRunSlashCommand()) return;
@@ -374,7 +440,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       detectSlash(newValue);
       detectMention(newValue);
     },
-    [detectSlash, detectMention],
+    [detectSlash, detectMention, setValue],
   );
 
   const handleTranscript = useCallback(

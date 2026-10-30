@@ -8,6 +8,8 @@ import {
   DEV_NO_BACKUP,
   PRODUCTION_ESSENTIAL,
   LEGACY_FULL,
+  minimalHomeEntries,
+  withoutDataBackup,
 } from '../src/backup-policy.mjs';
 
 test('environment policy is mandatory and cannot disable production backup', () => {
@@ -56,6 +58,47 @@ test('historical records retain full recovery and unknown policies fail closed',
       }),
     /PolicyInvalid/,
   );
+});
+
+test('all three explicit modes work in either environment and keep legacy journals unchanged', () => {
+  for (const environment of ['production', 'development']) {
+    for (const mode of ['full', 'minimal', 'none']) {
+      const policy = environmentBackupPolicy({ environment }, mode);
+      assert.equal(policy, `${mode}-v1`);
+      assert.equal(
+        recordedBackupPolicy({ environment, backupPolicy: policy }),
+        policy,
+      );
+      assert.equal(withoutDataBackup(policy), mode === 'none');
+      assert.equal(
+        backupEntries(policy).includes('workspace'),
+        mode === 'full',
+      );
+    }
+  }
+  for (const mode of [null, 'unknown', {}, true, '__proto__', 'constructor'])
+    assert.throws(
+      () => environmentBackupPolicy({ environment: 'production' }, mode),
+      /PolicyInvalid/,
+    );
+  const entries = minimalHomeEntries();
+  assert.ok(entries.includes('home/.codex/codex-webui.sqlite-wal'));
+  assert.ok(entries.includes('home/.codex/codex-webui.sqlite.push-vapid.json'));
+  assert.ok(
+    !entries.some((entry) => /sessions|livrables|workspace/.test(entry)),
+  );
+  assert.ok(
+    minimalHomeEntries([
+      'CODEX_HOME=/home/codex/configuration',
+      'WEBUI_DB_PATH=/home/codex/state/app.db',
+    ]).includes('home/state/app.db'),
+  );
+  for (const env of [
+    ['WEBUI_DB_PATH=/workspaces/db.sqlite'],
+    ['CODEX_HOME=/home/codex/../escape'],
+    ['WEBUI_DB_PATH=/home/codex/.codex/config.toml'],
+  ])
+    assert.throws(() => minimalHomeEntries(env), /PathUnsupported/);
 });
 
 test('essential selection preserves documents, historical versions, drafts and unclassified work', () => {

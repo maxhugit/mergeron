@@ -88,6 +88,7 @@ export function useCodexSocket(enabled = true) {
     const handleConnect = () => {
       setConnected(true);
       const store = useTimelineStore.getState();
+      store.clearConfirmedThreads();
       // Also repair the first connection: the route's HTTP open may have
       // finished before the socket joined. The room acknowledgement precedes
       // this read, including after reconnect (Socket.IO provides no replay).
@@ -103,7 +104,10 @@ export function useCodexSocket(enabled = true) {
       refreshPending();
       refreshOverview();
     };
-    const handleDisconnect = () => setConnected(false);
+    const handleDisconnect = () => {
+      setConnected(false);
+      useTimelineStore.getState().clearConfirmedThreads();
+    };
     let lastTransportRecovery = 0;
     let transportRecoveryRunning = false;
     const recoverTransport = () => {
@@ -351,6 +355,7 @@ export function useCodexSocket(enabled = true) {
       const liveThreadIds = [...store.subscribedThreadIds];
 
       if (event.type === 'appServerUnavailable') {
+        store.clearConfirmedThreads();
         for (const threadId of liveThreadIds) {
           store.clearActiveTurnForThread(threadId);
           store.setThreadStatusForThread(threadId, { type: 'systemError' });
@@ -358,6 +363,7 @@ export function useCodexSocket(enabled = true) {
       }
 
       if (event.type === 'appServerRestarting') {
+        store.clearConfirmedThreads();
         void queryClient.cancelQueries({
           predicate: (query) => queryHasId(query, 'threadsListTurnItems'),
         });
@@ -378,6 +384,9 @@ export function useCodexSocket(enabled = true) {
       }
 
       if (event.type === 'appServerReady') {
+        // Retained background agents need the same passive history repair as
+        // the visible one, without starting an agent or taking writer ownership.
+        store.resubscribeAll((id) => void restoreThread(id, 'reconnect'));
         // Includes visible completed owners omitted from autoResumeCompleted's
         // target list. Their item reads are passive and need no writer resume.
         void queryClient.invalidateQueries();
@@ -522,6 +531,7 @@ export function useCodexSocket(enabled = true) {
     if (socket.connected) handleConnect();
 
     return () => {
+      useTimelineStore.getState().clearConfirmedThreads();
       pendingAbort.abort();
       clearTimeout(pendingTimer);
       window.removeEventListener('focus', handleFocus);

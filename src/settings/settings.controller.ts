@@ -105,7 +105,9 @@ export class SettingsController {
   /** Lists runtime settings with optional category filtering. */
   @Post('manager/update/plan')
   @ApiOperation({ summary: 'Preview a transactional stack update' })
-  managerUpdatePlan(@Body() body: { images?: unknown; mode?: unknown }) {
+  managerUpdatePlan(
+    @Body() body: { images?: unknown; mode?: unknown; backupMode?: unknown },
+  ) {
     return this.managerStatus.updateOperation('plan', body);
   }
 
@@ -142,6 +144,7 @@ export class SettingsController {
     body: {
       images?: unknown;
       mode?: unknown;
+      backupMode?: unknown;
       confirmation?: unknown;
       expectedFingerprint?: unknown;
     },

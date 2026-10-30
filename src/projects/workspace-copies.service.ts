@@ -74,6 +74,7 @@ export class WorkspaceCopiesService {
     projectId: string,
     sourceResourceId: string,
     input: { name?: unknown; branch?: unknown; agentThreadId?: unknown },
+    beforeCommit?: () => void,
   ): Promise<WorkspaceCopyView> {
     requireExecutionAccess();
     const agentId =
@@ -132,7 +133,38 @@ export class WorkspaceCopiesService {
       sourceResourceId,
     );
     const target = path.join(parent, id);
-    await mkdir(parent, { recursive: true });
+    const primaryRoot = await realpath(primary.path);
+    const verifyParent = async () => {
+      for (const directory of [
+        path.join(primary.path, 'sources'),
+        path.join(primary.path, 'sources', '.external'),
+        parent,
+      ]) {
+        const entry = await lstat(directory);
+        if (!entry.isDirectory() || entry.isSymbolicLink())
+          throw new ConflictException('GIT_COPY_PATH_UNSAFE');
+      }
+      if (
+        (await realpath(parent)) !==
+        path.join(primaryRoot, 'sources', '.external', sourceResourceId)
+      )
+        throw new ConflictException('GIT_COPY_PATH_UNSAFE');
+    };
+    for (const directory of [
+      path.join(primary.path, 'sources'),
+      path.join(primary.path, 'sources', '.external'),
+      parent,
+    ]) {
+      await mkdir(directory, { recursive: false }).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code !== 'EEXIST') throw error;
+        },
+      );
+      const entry = await lstat(directory);
+      if (!entry.isDirectory() || entry.isSymbolicLink())
+        throw new ConflictException('GIT_COPY_PATH_UNSAFE');
+    }
+    await verifyParent();
     try {
       const git = await this.resources.cloneGit(
         projectId,
@@ -140,6 +172,8 @@ export class WorkspaceCopiesService {
         target,
         branch,
       );
+      await verifyParent();
+      beforeCommit?.();
       const now = Date.now();
       this.db.transaction((tx) => {
         tx.insert(projectWorkspaces)
@@ -183,7 +217,9 @@ export class WorkspaceCopiesService {
           .get()!,
       );
     } catch (error) {
-      await rm(target, { recursive: true, force: true }).catch(() => undefined);
+      await verifyParent()
+        .then(() => rm(target, { recursive: true, force: true }))
+        .catch(() => undefined);
       throw error;
     }
   }

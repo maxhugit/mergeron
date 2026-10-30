@@ -314,7 +314,11 @@ export class InternalMcpService implements OnModuleDestroy {
             idempotentHint: tool.name !== 'local_browser_action',
             openWorldHint:
               tool.name.startsWith('local_browser_') ||
-              ['read_project_git', 'publish_project_git'].includes(tool.name),
+              [
+                'read_project_git',
+                'create_project_git_copy',
+                'publish_project_git',
+              ].includes(tool.name),
           },
         },
         async (
@@ -356,6 +360,8 @@ export class InternalMcpService implements OnModuleDestroy {
                 'GIT_AGENT_STATE_UNKNOWN',
                 'GIT_READ_ONLY',
                 'GIT_COPY_OWNED',
+                'GIT_AGENT_COPY_EXISTS',
+                'WORKSPACE_GIT_CLONE_FAILED',
                 'GIT_AUTH_REQUIRED',
                 'GIT_HTTPS_REQUIRED',
                 'GIT_GITHUB_TOKEN_REQUIRED',

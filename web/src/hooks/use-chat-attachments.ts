@@ -8,6 +8,10 @@ import { clearApiToken, getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { escapeMentionPath } from '@/lib/mention-utils';
 import {
+  useComposerDraftStore,
+  emptyDraftAttachments,
+} from '@/stores/composer-draft-store';
+import {
   BROWSER_ANNOTATION_EVENT,
   type BrowserAnnotationRequest,
 } from '@/lib/browser-annotations';
@@ -47,7 +51,23 @@ export function useChatAttachments({
   addSystemError,
 }: UseChatAttachmentsParams) {
   const { t } = useTranslation();
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [localAttachments, setLocalAttachments] = useState<ChatAttachment[]>(
+    [],
+  );
+  const savedAttachments = useComposerDraftStore((s) =>
+    threadId
+      ? (s.drafts[threadId]?.attachments ?? emptyDraftAttachments)
+      : emptyDraftAttachments,
+  );
+  const attachments = threadId ? savedAttachments : localAttachments;
+  const setAttachments = useCallback(
+    (value: React.SetStateAction<ChatAttachment[]>) => {
+      if (threadId)
+        useComposerDraftStore.getState().setAttachments(threadId, value);
+      else setLocalAttachments(value);
+    },
+    [threadId],
+  );
   const attachmentsRef = useRef(attachments);
   useEffect(() => {
     attachmentsRef.current = attachments;
@@ -106,7 +126,7 @@ export function useChatAttachments({
         } as ChatFileAttachment,
       ]);
     },
-    [insertAtCursor],
+    [insertAtCursor, setAttachments],
   );
 
   // Listen for external "attach file" events from FileTree context menu
@@ -177,7 +197,7 @@ export function useChatAttachments({
     }
     setValue('');
     setAttachments([]);
-  }, [setValue]);
+  }, [setValue, setAttachments]);
 
   /** Upload a file via direct fetch (SDK serializes body as JSON, multipart needs raw FormData). */
   const uploadFile = useCallback(
@@ -256,7 +276,7 @@ export function useChatAttachments({
         }
       }
     },
-    [addSystemError, t, insertAtCursor, uploadFile],
+    [addSystemError, t, insertAtCursor, uploadFile, setAttachments],
   );
 
   useEffect(() => {
@@ -309,15 +329,13 @@ export function useChatAttachments({
       current = false;
       window.removeEventListener(BROWSER_ANNOTATION_EVENT, handler);
     };
-  }, [threadId, readOnly, uploadFile, setValue, textareaRef]);
+  }, [threadId, readOnly, uploadFile, setValue, textareaRef, setAttachments]);
 
   /** Remove attachment. For file mentions, also remove @displayName from text. */
   const handleRemoveAttachment = useCallback(
     (id: string) => {
-      setAttachments((prev) => {
-        const att = prev.find((a) => a.id === id);
-        if (!att) return prev.filter((a) => a.id !== id);
-
+      const att = attachmentsRef.current.find((a) => a.id === id);
+      if (att) {
         if (
           att.type === 'localImage' &&
           (att as ChatImageAttachment).previewUrl
@@ -332,10 +350,10 @@ export function useChatAttachments({
           );
           setValue((v: string) => v.replace(pattern, ' ').trim());
         }
-        return prev.filter((a) => a.id !== id);
-      });
+      }
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
     },
-    [setValue],
+    [setValue, setAttachments],
   );
 
   const handleSkillSelect = useCallback(
@@ -350,7 +368,7 @@ export function useChatAttachments({
         },
       ]);
     },
-    [],
+    [setAttachments],
   );
 
   // Only show chips for images and skills (file mentions are inline in text)

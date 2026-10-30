@@ -379,6 +379,9 @@ test('duration defaults to five hours and an active preview can switch to never 
   const select = await screen.findByRole('combobox', {
     name: 'Durée de disponibilité',
   });
+  await expect
+    .element(page.getByRole('combobox', { name: 'Durée de disponibilité' }))
+    .toBeEnabled();
   const address = await screen.findByRole('textbox', {
     name: 'Adresse de l’environnement de test',
   });

@@ -77,6 +77,13 @@ function renderDialog(
 }
 
 describe('DeleteConversationDialog', () => {
+  it('warns about unpublished Git changes before confirming deletion', () => {
+    renderDialog();
+    expect(
+      screen.getByText(/including unpublished changes and local commits/),
+    ).toBeInTheDocument();
+  });
+
   it('fires one cascade for a double click landing before a repaint', () => {
     const { onConfirm, button } = renderDialog();
 

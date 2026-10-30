@@ -31,6 +31,10 @@ vi.mock('@tanstack/react-router', () => ({
   Link: () => null,
 }));
 vi.mock('@/hooks/use-codex-socket', () => ({ useCodexSocket: vi.fn() }));
+// This fixture tests the shell's session gate; retained workspace behavior has its own browser suite.
+vi.mock('@/components/chat/agent-workspace-host', () => ({
+  AgentWorkspaceHost: () => null,
+}));
 vi.mock('@/socket', () => ({
   getSocket: () => ({ connected: false, emit: vi.fn() }),
   resetSocket: vi.fn(),

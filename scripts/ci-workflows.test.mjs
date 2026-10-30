@@ -109,6 +109,65 @@ test('all previous app integration/security controls remain mandatory', () => {
   assert.match(app, /if: always\(\)[\s\S]*trivy-quality-report/);
 });
 
+test("image scanning releases only this job's completed build resources", () => {
+  const app = job(quality, 'image');
+  const cleanupName = 'Release completed build fixtures before image scanning';
+  const cleanup = app
+    .split(`      - name: ${cleanupName}\n`)[1]
+    ?.split('      - name:')[0];
+  assert.ok(cleanup);
+  assert.ok(app.includes('id: app-builder'));
+  assert.match(
+    cleanup,
+    /BUILDER_NAME: \$\{\{ steps\.app-builder\.outputs\.name \}\}/,
+  );
+  assert.ok(
+    app.indexOf(cleanupName) > app.indexOf('Verify filtered test profile'),
+  );
+  assert.ok(
+    app.indexOf(cleanupName) <
+      app.indexOf('Scan production image dependencies'),
+  );
+  assert.doesNotMatch(
+    cleanup,
+    /docker (?:system|image|volume) prune|--volumes/,
+  );
+  const script = cleanup
+    .split('        run: |\n')[1]
+    .replace(/^          /gm, '');
+  const run = (builder) =>
+    spawnSync(
+      'bash',
+      [
+        '-e',
+        '-c',
+        `
+    docker() { printf '%s\\n' "docker $*"; }
+    df() { :; }
+    ${script}
+  `,
+      ],
+      {
+        env: {
+          ...process.env,
+          BUILDER_NAME: builder,
+          MCP_IMAGE: 'mergeron:project-mcp-fixture',
+        },
+        encoding: 'utf8',
+      },
+    );
+  const result = run('builder-this-job');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.trim().split('\n'), [
+    'docker system df',
+    'docker image rm mergeron:project-mcp-fixture webui-ssh-fixture',
+    'docker buildx prune --builder builder-this-job --all --force',
+  ]);
+  const missing = run('');
+  assert.notEqual(missing.status, 0);
+  assert.doesNotMatch(missing.stdout, /buildx prune/);
+});
+
 test('Manager and browser keep strict scans, smoke tests and reports', () => {
   for (const [name, component] of [
     ['manager-image', 'manager'],
@@ -262,7 +321,11 @@ test('trusted fixture exports only approved evidence readable by a different run
   const end = probe.indexOf('\n} finally {', start);
   assert.ok(start > 0 && end > start);
   const exporter = probe.slice(start, end);
-  const result = spawnSync(process.execPath, ['-e', `
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `
     const fs = require('node:fs');
     const path = require('node:path');
     const assert = require('node:assert/strict');
@@ -296,7 +359,10 @@ test('trusted fixture exports only approved evidence readable by a different run
     } finally {
       fs.rmSync(fixture, { recursive: true, force: true });
     }
-  `], { encoding: 'utf8' });
+  `,
+    ],
+    { encoding: 'utf8' },
+  );
   assert.equal(result.status, 0, result.stderr);
   const smoke = read('scripts/smoke-test-document-isolation.sh');
   assert.match(smoke, /test -z "\$\(find "\$MERGERON_NETLINK_EVIDENCE"/);
@@ -312,8 +378,14 @@ test('browser identity does not invalidate dependencies and cleanup', () => {
   );
   assert.match(dockerfile, /apt-get purge --yes gstreamer1\.0-plugins-bad/);
   assert.match(dockerfile, /apt-get update/);
-  assert.match(dockerfile, /apt-get install --yes --no-install-recommends --only-upgrade libbrotli1/);
-  assert.match(dockerfile, /dpkg --compare-versions.*libbrotli1.*ge '1\.1\.0-2ubuntu0\.1'/);
+  assert.match(
+    dockerfile,
+    /apt-get install --yes --no-install-recommends --only-upgrade libbrotli1/,
+  );
+  assert.match(
+    dockerfile,
+    /dpkg --compare-versions.*libbrotli1.*ge '1\.1\.0-2ubuntu0\.1'/,
+  );
   assert.match(dockerfile, /USER pwuser/);
   const managerContext = read('Dockerfile.manager.dockerignore');
   assert.match(managerContext, /^\*\*$/m);

@@ -228,9 +228,11 @@ export function ThreadSidebar() {
   // refetches in the background. That retained data must not be read as though
   // it were current: see `displayedRows` below.
   const isHomeView = sidebarView.type === 'overview';
+  // Activity updates must not move agents or change which ones occupy the
+  // project preview. Manual project sidebarOrder still takes precedence.
   const overviewThreadsQuery = useQuery({
     ...threadsListOverviewOptions({
-      query: { archived: false, limit: 100, sortKey: 'updated_at' },
+      query: { archived: false, limit: 100, sortKey: 'created_at' },
     }),
     enabled: isHomeView,
   });
@@ -242,7 +244,7 @@ export function ThreadSidebar() {
           sidebarView.type === 'workspaceDetail' ? sidebarView.cwd : undefined,
         cursor: cursor ?? undefined,
         limit: 20,
-        sortKey: 'updated_at',
+        sortKey: 'created_at',
       },
     }),
     enabled: sidebarView.type === 'workspaceDetail',

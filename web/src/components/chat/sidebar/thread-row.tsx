@@ -98,7 +98,8 @@ export function ThreadRow({
   projectId,
 }: Props) {
   const { t } = useTranslation();
-  const dragEnabled = draggable && !archived && !destructiveDisabled;
+  const showDragHandle = draggable && !archived;
+  const dragEnabled = showDragHandle && !destructiveDisabled;
   const {
     ref: dragRef,
     handleRef: dragHandleRef,
@@ -141,11 +142,12 @@ export function ThreadRow({
         isDragging && 'opacity-40',
       )}
     >
-      {dragEnabled && (
+      {showDragHandle && (
         <button
           ref={dragHandleRef}
           type="button"
-          className="touch-none cursor-grab rounded p-0.5 text-muted-foreground/50 hover:bg-accent/50 hover:text-foreground active:cursor-grabbing"
+          disabled={!dragEnabled}
+          className="shrink-0 touch-none cursor-grab rounded p-0.5 text-muted-foreground/50 hover:bg-accent/50 hover:text-foreground active:cursor-grabbing disabled:cursor-not-allowed"
           aria-label={t('moveConversation')}
           title={t('moveConversation')}
         >

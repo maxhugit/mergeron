@@ -24,10 +24,39 @@ the root first, preserving expansion and selection for the same directory.
 `ConversationFrame` and its scroller keep the same React identity across sibling
 view changes. Inactive surfaces retain geometry using `visibility` and `inert`;
 portalled controls observe the surface activity context and close on withdrawal.
-Only the selected conversation keeps a transcript React tree. The desktop
+By default only the selected conversation keeps a transcript React tree. The desktop
 tablist has one tab stop; arrows move focus without activation and Delete closes
 a focused closable tab. Other conversations
 retain data, view descriptors, and semantic reading bookmarks.
+
+### Optional fast navigation
+
+The project context menu can opt one project into fast navigation. The speed
+indicator beside its name identifies the active project; enabling another project
+replaces it. This preference is tab-local, deliberately not stored on disk or
+shared across users. Reloading or closing the tab resets it.
+
+`AgentWorkspaceHost`, outside the route outlet, retains up to five recently
+visited agent workspaces from that project in an LRU. It never preloads the entire
+project. The current view outside that project is not retained on departure.
+React Activity preserves retained DOM/state while suspending hidden effects;
+surface activity also withdraws portalled controls. Draft text and attachment
+references have a separate memory-only owner, so evicting a full view or disabling
+the mode does not discard an unfinished message. Confirmed thread deletion drops
+that draft and revokes image preview URLs. This is not durable draft storage.
+
+Each retained agent has its own file-browser store. Rename/deletion reconciliation
+repairs all retained explorers, but browsing one cannot replace another's folder.
+An already-adopted working directory does not reset the browsed folder when a view
+becomes visible again.
+
+Only acknowledged, continuously connected room subscriptions allow a ready live
+view to skip explicit reopen/history/disk checks. Disconnect, engine unavailability
+or restart clears that evidence; reconnect repairs the desired rooms passively.
+Explicit Retry always takes the full open path. Slow disk reconciliation cannot
+reselect a view withdrawn in the meantime. Successful workspace checks are shared
+for 30 seconds per QueryClient, concurrent checks coalesce, and failed checks are
+not cached. None of these changes bypass server-side access or execution policy.
 
 Phone/tablet controls use an always-reachable Conversation action, a current-view
 chooser, and Explorer. The chooser selects explicitly; moving keyboard focus does
@@ -37,15 +66,17 @@ identity or the remembered desktop width. The left navigation is unchanged.
 
 ## State ownership
 
-| Owner                                   | Lifetime and responsibility                                                                                        |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `workspace-store`                       | In-memory per-conversation tab order, active view, editor view state and one-shot reveal requests; reset on reload |
-| `layout-store`                          | Persisted explorer collapse state and preferred width, alongside existing navigation preferences                   |
-| `document-store`                        | Shared text model, saved content/revision pair, dirty/conflict/save state for an absolute file                     |
-| `terminal-store`                        | Shared metadata, typed operations, creation-free discovery and presented-only recovery                             |
-| `terminal-view-store` / `TerminalHost`  | Local retained attachments and the currently visible presentation rectangle                                        |
-| `timeline-store` and its action modules | Conversation-scoped history, opening, submission, execution and pending decisions                                  |
-| `transcript-anchor`                     | In-memory reading bookmarks independent of runtime-cache eviction                                                  |
+| Owner                                           | Lifetime and responsibility                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `workspace-store`                               | In-memory per-conversation tab order, active view, editor view state and one-shot reveal requests; reset on reload |
+| `layout-store`                                  | Persisted explorer collapse state and preferred width, alongside existing navigation preferences                   |
+| `document-store`                                | Shared text model, saved content/revision pair, dirty/conflict/save state for an absolute file                     |
+| `terminal-store`                                | Shared metadata, typed operations, creation-free discovery and presented-only recovery                             |
+| `terminal-view-store` / `TerminalHost`          | Local retained attachments and the currently visible presentation rectangle                                        |
+| `timeline-store` and its action modules         | Conversation-scoped history, opening, submission, execution and pending decisions                                  |
+| `agent-view-cache-store` / `AgentWorkspaceHost` | Tab-local project opt-in and bounded recent-view retention                                                         |
+| `composer-draft-store`                          | Memory-only text and attachment references keyed by conversation; independent of view eviction                     |
+| `transcript-anchor`                             | In-memory reading bookmarks independent of runtime-cache eviction                                                  |
 
 Opening a file resolves its path in the originating conversation. Changing the
 working directory changes future opens and the tree; existing absolute file
@@ -143,6 +174,15 @@ offset clamped to a smaller scroll extent is geometry, not navigation, including
 when shrinking composer padding leaves the viewport dimensions unchanged. End detection
 uses a two-pixel rounding tolerance; an upward gesture within the former 80-pixel
 threshold must still stop following. Hidden scrolling never changes intent.
+An upward wheel gesture with scrollable history leaves follow mode when its
+intent is received, before the browser applies its first animated offset. A scroll-end notification left
+over from the previous programmatic scroll must not repin the tail and cancel
+that new gesture. Downward input at the tail, Ctrl-wheel zoom and upward input
+without scrollable history keep following.
+Browser regressions cover the late-notification ordering before any displacement,
+then complete the gesture with native input. Cache navigation also asserts that
+the gesture really left the tail before saving its reading point; a positive
+absolute scroll offset alone does not prove that history is being read.
 The same tolerance is passed as `scrollEndThreshold`. It narrows, but does not
 disable, the library's `wasAtEnd` size compensation. That branch and first
 measurements can compensate during backward scrolling; only ordinary non-end
@@ -162,6 +202,14 @@ reveal. Width/font changes invalidate stale height assumptions; ordinary activat
 does not clear the cache. A historical bookmark outside the retained window causes
 bounded full paging. Unrecoverable identity is reported rather than silently
 claiming an exact restoration or jumping to latest.
+
+Immediately before a view is hidden, the pre-mutation snapshot captures its
+actual visible reading point even if native input has not ended. Row estimates
+can settle during an animated gesture while corrections are suspended, making
+the last scroll event's bookmark stale. The hide snapshot saves the current
+point without writing a scroll offset; ordinary visible input commits still do
+not arm corrections. This boundary is tested with a held native pointer, a real
+row resize, and React Activity, alongside repeated desktop/mobile navigation.
 
 Inline bookmarks identify a row, item, block, and logical text offset. React's
 pre-mutation snapshot retains the point; the transcript layout effect runs after

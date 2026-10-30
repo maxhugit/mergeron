@@ -157,6 +157,78 @@ export class WorkspaceGitService {
     };
   }
 
+  /** Merge parents and unmerged stages only; no repository programs are executed. */
+  async mergeStatus(projectId: string, copyId: string) {
+    const cwd = await this.directory(projectId, copyId);
+    const state = await this.snapshot(projectId, copyId);
+    const mergeHead = await readFile(
+      path.join(cwd, '.git/MERGE_HEAD'),
+      'utf8',
+    ).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return '';
+      throw error;
+    });
+    if (mergeHead && !/^[a-f0-9]{40,64}\n?$/.test(mergeHead))
+      throw new ConflictException('GIT_MERGE_STATE_UNSUPPORTED');
+    const unmerged = await this.git(cwd, ['ls-files', '--unmerged', '-z']);
+    return {
+      ...state,
+      mergeHead: mergeHead.trim() || null,
+      conflicts: unmerged
+        .split('\0')
+        .filter(Boolean)
+        .map((record) => {
+          const match = /^(\d+) ([a-f0-9]+) ([123])\t([\s\S]+)$/.exec(record);
+          if (!match)
+            throw new ConflictException('GIT_MERGE_STATE_UNSUPPORTED');
+          return {
+            path: match[4],
+            stage: Number(match[3]),
+            mode: match[1],
+            revision: match[2],
+          };
+        }),
+    };
+  }
+
+  async conflictFile(projectId: string, copyId: string, input: unknown) {
+    if (
+      typeof input !== 'string' ||
+      !input ||
+      input.length > 2048 ||
+      input.includes('\0')
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const cwd = await this.directory(projectId, copyId);
+    const state = await this.mergeStatus(projectId, copyId);
+    const records = state.conflicts.filter((entry) => entry.path === input);
+    if (!records.length) throw new ConflictException('GIT_STALE');
+    const stages = await Promise.all(
+      records.map(async (record) => {
+        const size = Number(
+          (await this.git(cwd, ['cat-file', '-s', record.revision])).trim(),
+        );
+        const blob =
+          record.mode !== '160000' && size <= 128 * 1024
+            ? await this.git(cwd, ['cat-file', 'blob', record.revision])
+            : null;
+        return {
+          ...record,
+          size,
+          text: blob?.includes('\0') ? null : blob,
+          limited: blob === null,
+        };
+      }),
+    );
+    return {
+      path: input,
+      fingerprint: state.fingerprint,
+      mergeHead: state.mergeHead,
+      stages,
+      untrustedContent: true,
+    };
+  }
+
   async diff(projectId: string, copyId: string, input: unknown) {
     if (
       typeof input !== 'string' ||
@@ -719,6 +791,48 @@ export class WorkspaceGitService {
       items: null,
       limited: false,
       content: text && !text.includes('\0') ? text : null,
+    };
+  }
+
+  async pullRequest(projectId: string, resourceId: string, number: string) {
+    if (!/^[1-9]\d{0,8}$/.test(number))
+      throw new BadRequestException('Invalid pull request');
+    const repo = this.github(projectId, resourceId);
+    if (!repo) throw new BadRequestException('Provider not supported');
+    const pr = await this.githubGet<{
+      number: number;
+      title: string;
+      body: string | null;
+      updated_at: string;
+      state: string;
+      draft: boolean;
+      mergeable: boolean | null;
+      head: { sha: string; ref: string; repo: { full_name: string } | null };
+      base: { sha: string; ref: string };
+    }>(repo, `pulls/${number}`);
+    if (
+      pr.number !== Number(number) ||
+      !/^[a-f0-9]{40,64}$/.test(pr.head?.sha) ||
+      !Number.isFinite(Date.parse(pr.updated_at))
+    )
+      throw new ConflictException('GIT_INVALID_REMOTE_STATE');
+    return {
+      number: pr.number,
+      title: pr.title,
+      description: (pr.body ?? '').slice(0, 10000),
+      descriptionLimited: (pr.body?.length ?? 0) > 10000,
+      updatedAt: pr.updated_at,
+      state: pr.state,
+      draft: pr.draft,
+      mergeable: pr.mergeable,
+      head: pr.head.sha,
+      branch: pr.head.ref,
+      base: pr.base.ref,
+      baseHead: pr.base.sha,
+      sameRepository:
+        pr.head.repo?.full_name.toLowerCase() ===
+        `${repo.owner}/${repo.repo}`.toLowerCase(),
+      url: `https://github.com/${repo.owner}/${repo.repo}/pull/${pr.number}`,
     };
   }
 

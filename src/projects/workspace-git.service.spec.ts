@@ -39,6 +39,7 @@ import {
   IdentityService,
   type PlatformIdentity,
 } from '../auth/identity.service';
+import { agentCopyPermissions } from './agent-copy-permissions';
 import { claimAgentCopy } from './git-copy-ownership';
 import { gitCredentialHelper } from './git-credentials';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
@@ -80,6 +81,7 @@ let copies: WorkspaceCopiesService;
 let service: WorkspaceGitService;
 let actions: WorkspaceGitActionsService;
 let active: string[];
+let gate: GitMutationGateService;
 let copyId: string;
 let cwd: string;
 const connectedPerson: PlatformIdentity = {
@@ -172,7 +174,7 @@ beforeEach(async () => {
   copies = new WorkspaceCopiesService(database.db, resources);
   service = new WorkspaceGitService(copies, resources);
   active = [];
-  const gate = new GitMutationGateService(
+  gate = new GitMutationGateService(
     {
       snapshot: () => active,
     } as ThreadExecutionInventoryService,
@@ -1024,6 +1026,34 @@ describe('remote branch retrieval', () => {
       'existing fetch record\n',
     );
   });
+  it('fetches and refreshes a dedicated remote ref while preserving an existing local branch and all edits', async () => {
+    const body = await prepare();
+    await git(['branch', 'dev']);
+    const oldLocal = (await git(['rev-parse', 'dev'])).stdout.trim();
+    await writeFile(path.join(cwd, 'README.md'), 'keep edits\n');
+    fixtureTransport();
+    await actions.retrieveBranch('p', copyId, body, undefined, true);
+    expect(
+      (await git(['rev-parse', 'refs/remotes/mergeron/dev'])).stdout.trim(),
+    ).toBe(body.revision);
+    expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(oldLocal);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'keep edits\n',
+    );
+    const remote = path.join(root, 'remote');
+    await writeFile(path.join(remote, 'next.txt'), 'next\n');
+    await exec('git', ['-C', remote, 'add', '.']);
+    await exec('git', ['-C', remote, 'commit', '-m', 'next']);
+    body.revision = (
+      await exec('git', ['-C', remote, 'rev-parse', 'HEAD'])
+    ).stdout.trim();
+    await actions.retrieveBranch('p', copyId, body, undefined, true);
+    expect(
+      (await git(['rev-parse', 'refs/remotes/mergeron/dev'])).stdout.trim(),
+    ).toBe(body.revision);
+    expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(oldLocal);
+  });
+
   it('never overwrites an existing local branch, including one created during download', async () => {
     const body = await prepare();
     const head = (await git(['rev-parse', 'HEAD'])).stdout.trim();
@@ -1982,6 +2012,294 @@ describe('confirmed actions', () => {
     );
   });
 
+  it('updates only metadata of an observed open PR belonging to the current repository and branch', async () => {
+    writable();
+    resources.update('p', 'remote', { secret: { token: 'unit-update-token' } });
+    const state = await service.snapshot('p', copyId);
+    const observed = {
+      number: 271,
+      title: 'Old title',
+      description: 'Old body',
+      descriptionLimited: false,
+      updatedAt: '2026-10-30T12:00:00Z',
+      state: 'open',
+      draft: false,
+      mergeable: true,
+      head: state.head,
+      branch: state.branch!,
+      base: 'main',
+      baseHead: state.head,
+      sameRepository: true,
+      url: 'https://github.com/example/demo/pull/271',
+    };
+    const inspect = vi
+      .spyOn(service, 'pullRequest')
+      .mockResolvedValue(observed);
+    const updated = {
+      number: 271,
+      title: 'New title',
+      body: 'New body',
+      state: 'open',
+      head: {
+        sha: state.head,
+        ref: state.branch,
+        repo: { full_name: 'example/demo' },
+      },
+    };
+    const transport = vi.fn(() => Promise.resolve(Response.json(updated)));
+    vi.stubGlobal('fetch', transport);
+    const body = {
+      fingerprint: state.fingerprint,
+      head: state.head,
+      address: 'https://github.com/example/demo.git',
+      number: 271,
+      title: 'New title',
+      description: 'New body',
+      expectedUpdatedAt: observed.updatedAt,
+    };
+    await expect(
+      actions.updatePullRequest('p', copyId, body),
+    ).resolves.toMatchObject({ updated: true, number: 271 });
+    expect(transport).toHaveBeenCalledWith(
+      'https://api.github.com/repos/example/demo/pulls/271',
+      expect.objectContaining({
+        method: 'PATCH',
+        redirect: 'error',
+        body: JSON.stringify({ title: 'New title', body: 'New body' }),
+      }),
+    );
+    transport.mockClear();
+    for (const override of [
+      { sameRepository: false },
+      { branch: 'someone-else' },
+      { head: 'c'.repeat(40) },
+      { state: 'closed' },
+      { updatedAt: '2026-10-30T12:01:00Z' },
+    ]) {
+      inspect.mockResolvedValueOnce({ ...observed, ...override });
+      await expect(
+        actions.updatePullRequest('p', copyId, body),
+      ).rejects.toThrow('GIT_STALE');
+    }
+    expect(transport).not.toHaveBeenCalled();
+    for (const response of [
+      Response.json({ ...updated, number: 272 }),
+      Response.json({ ...updated, title: 'Different title' }),
+      Response.json({ ...updated, body: 'Different body' }),
+      Response.json({
+        ...updated,
+        head: { ...updated.head, sha: 'c'.repeat(40) },
+      }),
+      new Response('not JSON', { status: 200 }),
+    ]) {
+      transport.mockResolvedValueOnce(response);
+      await expect(
+        actions.updatePullRequest('p', copyId, body),
+      ).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
+    }
+    transport.mockRejectedValueOnce(new Error('connection lost'));
+    await expect(actions.updatePullRequest('p', copyId, body)).rejects.toThrow(
+      'GIT_OUTCOME_UNKNOWN',
+    );
+  });
+
+  it('prepares, commits and creates two PRs concurrently on separate copies of the same connection', async () => {
+    // Both real local clones share one configured source; GitHub responses are fixtures.
+    const second = await copies.create('p', 'remote', {});
+    writable();
+    resources.update('p', 'remote', {
+      secret: { token: 'unit-concurrent-token' },
+    });
+    const secondCwd = second.localPath!;
+    const entries = [
+      {
+        id: copyId,
+        dir: cwd,
+        owner: 'alice',
+        branch: 'feature/a',
+        content: 'alice change\n',
+      },
+      {
+        id: second.id,
+        dir: secondCwd,
+        owner: 'bob',
+        branch: 'feature/b',
+        content: 'bob change\n',
+      },
+    ];
+    for (const entry of entries) {
+      const state = await service.snapshot('p', entry.id);
+      await actions.createBranch('p', entry.id, {
+        name: entry.branch,
+        startRef: 'HEAD',
+        startRevision: state.head,
+        fingerprint: state.fingerprint,
+        checkout: true,
+        confirmation: 'CREATE_LOCAL_BRANCH',
+      });
+      database.db
+        .insert(projectAgentThreads)
+        .values({
+          threadId: entry.owner,
+          projectId: 'p',
+          workspacePath: path.join(root, 'project'),
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      claimAgentCopy(database.db, 'p', entry.owner, entry.id);
+      await writeFile(path.join(entry.dir, 'README.md'), entry.content);
+    }
+    for (const entry of entries)
+      gate.recordIsolation(
+        entry.owner,
+        agentCopyPermissions(database.db, 'p', entry.owner),
+      );
+    gate.recordIsolation('observer', {
+      writableCopyPath: null,
+      readOnlyRoots: [
+        await realpath(path.join(root, 'project/sources/.external')),
+      ],
+    });
+    active = ['alice', 'bob', 'observer'];
+    const prepared = await Promise.all(
+      entries.map(async (entry) => {
+        const body = {
+          agentThreadId: entry.owner,
+          paths: ['README.md'],
+          fingerprint: (await service.snapshot('p', entry.id)).fingerprint,
+        };
+        const review = await actions.stageReview('p', entry.id, body);
+        return {
+          entry,
+          body: { ...body, reviewFingerprint: review.reviewFingerprint },
+          actor: { threadId: entry.owner, assertActive: vi.fn() },
+        };
+      }),
+    );
+    let allowFirst!: () => void, firstEntered!: () => void;
+    const firstWaiting = new Promise<void>((resolve) => {
+      firstEntered = resolve;
+    });
+    const releaseFirst = new Promise<void>((resolve) => {
+      allowFirst = resolve;
+    });
+    const original = service.git.bind(service) as WorkspaceGitService['git'];
+    const physicalCwd = await realpath(cwd);
+    const spy = vi
+      .spyOn(service, 'git')
+      .mockImplementation(
+        async (...args: Parameters<WorkspaceGitService['git']>) => {
+          if (args[0] === physicalCwd && args[1][0] === 'hash-object') {
+            firstEntered();
+            await releaseFirst;
+          }
+          return original(...args);
+        },
+      );
+    const first = actions.stage(
+      'p',
+      copyId,
+      prepared[0].body,
+      prepared[0].actor,
+    );
+    await firstWaiting;
+    try {
+      await actions.stage('p', second.id, prepared[1].body, prepared[1].actor);
+      expect(
+        (await exec('git', ['-C', secondCwd, 'show', ':README.md'])).stdout,
+      ).toBe('bob change\n');
+      expect(
+        (await exec('git', ['-C', cwd, 'show', ':README.md'])).stdout,
+      ).toBe('initial\n');
+    } finally {
+      allowFirst();
+      await first;
+      spy.mockRestore();
+    }
+    await Promise.all(
+      prepared.map(async ({ entry, actor }) =>
+        commit(
+          'p',
+          entry.id,
+          {
+            agentThreadId: entry.owner,
+            fingerprint: (await service.stagedDiff('p', entry.id)).fingerprint,
+            message: entry.content.trim(),
+          },
+          actor,
+        ),
+      ),
+    );
+    for (const entry of entries)
+      expect(
+        (await exec('git', ['-C', entry.dir, 'show', 'HEAD:README.md'])).stdout,
+      ).toBe(entry.content);
+    const states = await Promise.all(
+      entries.map((entry) => service.snapshot('p', entry.id)),
+    );
+    vi.spyOn(service, 'pullRequestPreparation').mockImplementation(
+      async (_p, _r, branch) => ({
+        head: states[branch === 'feature/a' ? 0 : 1].head,
+        baseHead: 'a'.repeat(40),
+        existingNumber: null,
+      }),
+    );
+    let releasePost!: () => void, postEntered!: () => void;
+    const posting = new Promise<void>((resolve) => {
+      postEntered = resolve;
+    });
+    const finishPost = new Promise<void>((resolve) => {
+      releasePost = resolve;
+    });
+    const fetchFixture = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (typeof options?.body !== 'string')
+        throw new Error('Expected a JSON request body');
+      const data = JSON.parse(options.body) as { head: string };
+      if (data.head === 'feature/a') {
+        postEntered();
+        await finishPost;
+      }
+      return {
+        ok: true,
+        json: async () => ({ number: data.head === 'feature/a' ? 31 : 32 }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchFixture);
+    const publish = (index: number) =>
+      actions.createPullRequest(
+        'p',
+        entries[index].id,
+        {
+          agentThreadId: entries[index].owner,
+          fingerprint: states[index].fingerprint,
+          head: states[index].head,
+          address: 'https://github.com/example/demo.git',
+          base: 'main',
+          title: entries[index].content.trim(),
+          description: '',
+          draft: false,
+          confirmation: 'CREATE_PULL_REQUEST',
+        },
+        prepared[index].actor,
+      );
+    const firstPR = publish(0);
+    await posting;
+    try {
+      await expect(publish(1)).resolves.toMatchObject({
+        number: 32,
+        existing: false,
+      });
+    } finally {
+      releasePost();
+    }
+    await expect(firstPR).resolves.toMatchObject({
+      number: 31,
+      existing: false,
+    });
+    expect(fetchFixture).toHaveBeenCalledTimes(2);
+  }, 15000);
+
   it('unstages selected changes without changing their file or other staged entries', async () => {
     writable();
     await writeFile(path.join(cwd, 'README.md'), 'keep me\n');
@@ -2373,6 +2691,172 @@ describe('confirmed actions', () => {
   });
 });
 
+describe('agent merge conflict workflow', () => {
+  async function divergent(conflict = true) {
+    resources.update('p', 'remote', {
+      accessMode: 'read_write',
+      address: 'https://github.com/example/demo.git',
+    });
+    await git(['config', 'user.name', 'Fixture']);
+    await git(['config', 'user.email', 'fixture@example.invalid']);
+    await git(['switch', '-c', 'topic']);
+    await writeFile(path.join(cwd, 'README.md'), 'topic\n');
+    await git(['add', '.']);
+    await git(['commit', '-m', 'topic']);
+    const revision = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+    await git(['switch', 'main']);
+    await writeFile(
+      path.join(cwd, conflict ? 'README.md' : 'other.txt'),
+      'main\n',
+    );
+    await git(['add', '.']);
+    await git(['commit', '-m', 'main']);
+    const before = await service.snapshot('p', copyId);
+    // The merge must obtain the authenticated identity instead of repository config.
+    await git(['config', '--unset', 'user.name']);
+    await git(['config', '--unset', 'user.email']);
+    return { before, revision };
+  }
+  const start = async (revision: string) =>
+    asPerson(async () =>
+      actions.startMerge('p', copyId, {
+        revision,
+        fingerprint: (await service.snapshot('p', copyId)).fingerprint,
+      }),
+    );
+  it('returns real conflicts, stages reviewed resolutions and commits the frozen result with both parents', async () => {
+    const { before, revision } = await divergent();
+    const pending = await start(revision);
+    expect(pending.head).toBe(before.head);
+    expect(pending.mergeHead).toBe(revision);
+    expect(pending.conflicts).toHaveLength(3);
+    const conflict = await service.conflictFile('p', copyId, 'README.md');
+    expect(conflict.stages.map((entry) => entry.text)).toEqual([
+      'initial\n',
+      'main\n',
+      'topic\n',
+    ]);
+    await expect(
+      service.conflictFile('p', copyId, '../elsewhere'),
+    ).rejects.toThrow('GIT_STALE');
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toContain(
+      '<<<<<<<',
+    );
+    await expect(
+      commit('p', copyId, {
+        fingerprint: pending.fingerprint,
+        mergeRevision: revision,
+        message: 'Resolve',
+      }),
+    ).rejects.toThrow('GIT_MERGE_UNRESOLVED');
+    await writeFile(path.join(cwd, 'README.md'), 'resolved\n');
+    const body = { fingerprint: pending.fingerprint, paths: ['README.md'] };
+    const review = await actions.stageReview('p', copyId, body);
+    await actions.stage('p', copyId, {
+      ...body,
+      reviewFingerprint: review.reviewFingerprint,
+    });
+    const staged = await service.stagedDiff('p', copyId);
+    expect(staged.diff).toContain('+resolved');
+    await writeFile(path.join(cwd, 'README.md'), 'unstaged after review\n');
+    await commit('p', copyId, {
+      fingerprint: staged.fingerprint,
+      mergeRevision: revision,
+      message: 'Resolve',
+    });
+    expect((await git(['show', '-s', '--format=%P'])).stdout.trim()).toBe(
+      `${before.head} ${revision}`,
+    );
+    expect((await git(['show', '-s', '--format=%ae'])).stdout.trim()).toBe(
+      connectedPerson.email,
+    );
+    expect((await git(['show', 'HEAD:README.md'])).stdout).toBe('resolved\n');
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'unstaged after review\n',
+    );
+    expect((await service.mergeStatus('p', copyId)).mergeHead).toBeNull();
+  });
+  it('leaves a clean merge pending review', async () => {
+    const { revision } = await divergent(false);
+    const pending = await start(revision);
+    expect(pending.mergeHead).toBe(revision);
+    expect(pending.conflicts).toEqual([]);
+    const staged = await service.stagedDiff('p', copyId);
+    await commit('p', copyId, {
+      fingerprint: staged.fingerprint,
+      mergeRevision: revision,
+      message: 'Merge topic',
+    });
+    expect((await service.mergeStatus('p', copyId)).mergeHead).toBeNull();
+  });
+  it('aborts only the observed merge, restores the pre-merge state and keeps new untracked files', async () => {
+    const { before, revision } = await divergent();
+    const pending = await start(revision);
+    await expect(
+      actions.abortMerge('p', copyId, {
+        fingerprint: pending.fingerprint,
+        revision: before.head,
+      }),
+    ).rejects.toThrow('GIT_STALE');
+    await writeFile(path.join(cwd, 'untracked.txt'), 'keep\n');
+    await actions.abortMerge('p', copyId, {
+      fingerprint: pending.fingerprint,
+      revision,
+    });
+    const after = await service.mergeStatus('p', copyId);
+    expect(after.head).toBe(before.head);
+    expect(after.mergeHead).toBeNull();
+    expect(after.conflicts).toEqual([]);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe('main\n');
+    expect(await readFile(path.join(cwd, 'untracked.txt'), 'utf8')).toBe(
+      'keep\n',
+    );
+  });
+  it('treats an already integrated revision as a no-op and never overwrites ignored files', async () => {
+    const { before, revision } = await divergent(false);
+    const noop = await start(before.head);
+    expect(noop.mergeHead).toBeNull();
+    expect(noop.head).toBe(before.head);
+    // topic has README.md, so test an ignored path added on a separate branch.
+    await git(['config', 'user.name', 'Fixture']);
+    await git(['config', 'user.email', 'fixture@example.invalid']);
+    await git(['switch', '-c', 'ignored-source', revision]);
+    await writeFile(path.join(cwd, 'ignored.txt'), 'incoming\n');
+    await git(['add', 'ignored.txt']);
+    await git(['commit', '-m', 'incoming ignored name']);
+    const target = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+    await git(['switch', 'main']);
+    await writeFile(path.join(cwd, '.git/info/exclude'), 'ignored.txt\n');
+    await writeFile(path.join(cwd, 'ignored.txt'), 'precious ignored\n');
+    await expect(start(target)).rejects.toThrow();
+    expect(await readFile(path.join(cwd, 'ignored.txt'), 'utf8')).toBe(
+      'precious ignored\n',
+    );
+    expect((await service.snapshot('p', copyId)).head).toBe(before.head);
+  });
+  it('rejects dirty starts, custom drivers, stale fingerprints, and other sequencers without losing work', async () => {
+    const { before, revision } = await divergent();
+    await writeFile(path.join(cwd, 'README.md'), 'precious\n');
+    await expect(start(revision)).rejects.toThrow('GIT_WORKTREE_DIRTY');
+    await writeFile(path.join(cwd, 'README.md'), 'main\n');
+    await git(['config', 'merge.custom.driver', 'touch SHOULD_NOT_RUN']);
+    await expect(start(revision)).rejects.toThrow('GIT_CUSTOM_MERGE_DRIVER');
+    await git(['config', '--unset', 'merge.custom.driver']);
+    await expect(
+      asPerson(() =>
+        actions.startMerge('p', copyId, {
+          revision,
+          fingerprint: '0'.repeat(64),
+        }),
+      ),
+    ).rejects.toThrow('GIT_STALE');
+    await writeFile(path.join(cwd, '.git/CHERRY_PICK_HEAD'), revision);
+    await expect(start(revision)).rejects.toThrow('GIT_IN_PROGRESS');
+    expect((await service.snapshot('p', copyId)).head).toBe(before.head);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe('main\n');
+  });
+});
+
 describe('retargeting existing GitHub pull requests', () => {
   const prepare = async () => {
     resources.update('p', 'remote', {
@@ -2441,6 +2925,49 @@ describe('retargeting existing GitHub pull requests', () => {
       fingerprint: state.fingerprint,
     });
     expect(JSON.stringify(result)).not.toContain('retarget-unit-token');
+  });
+  it('retargets for an isolated active owner while locking the PR rather than the unrelated local branch', async () => {
+    const { input, fetch, state } = await prepare();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'owner',
+        projectId: 'p',
+        workspacePath: path.join(root, 'project'),
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    claimAgentCopy(database.db, 'p', 'owner', copyId);
+    const permissions = agentCopyPermissions(database.db, 'p', 'owner');
+    gate.recordIsolation('owner', permissions);
+    gate.recordIsolation('observer', {
+      writableCopyPath: null,
+      readOnlyRoots: permissions.readOnlyRoots,
+    });
+    active = ['owner', 'observer'];
+    const publication = vi.spyOn(gate, 'publishFromAgent');
+    const assertActive = vi.fn();
+    await expect(
+      asPerson(() =>
+        actions.retargetPullRequest(
+          'p',
+          copyId,
+          { ...input, agentThreadId: 'owner' },
+          { threadId: 'owner', assertActive },
+        ),
+      ),
+    ).resolves.toMatchObject({ number: input.number, base: 'main' });
+    expect(publication).toHaveBeenCalledWith('owner', expect.any(Function), {
+      copyPath: await realpath(cwd),
+      remoteRef: JSON.stringify([input.address, 'pull_request', input.number]),
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(assertActive).toHaveBeenCalledTimes(3);
+    expect(await service.snapshot('p', copyId)).toMatchObject({
+      head: state.head,
+      fingerprint: state.fingerprint,
+    });
   });
   it.each([
     'head',

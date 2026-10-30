@@ -1,37 +1,8 @@
 # Mergeron Manager
 
-## Remplacement du Manager dev sur Unraid
-
-La mise à jour de l’application et le remplacement du Manager lui-même sont
-deux opérations distinctes. Pour remplacer le Manager dev, utiliser depuis
-l’hôte Unraid le script versionné `scripts/update-dev-manager.py` avec la
-révision Git complète de l’image publiée :
-
-```sh
-python3 scripts/update-dev-manager.py REVISION_GIT_COMPLETE --confirm-replace
-```
-
-Cette procédure est limitée à `mergeron-dev-manager` et à l’état dev sous
-`/mnt/pool/appdata/mergeron-dev/state`. Elle refuse une transaction applicative
-en cours et préserve les paramètres de sécurité, montages et configuration du
-Manager existant. L’image doit porter la révision demandée et est épinglée par
-son empreinte. Elle ne remplace pas le Manager de production.
-
-L’ancien conteneur reste arrêté pendant la validation du remplaçant. Si la
-validation échoue, il est redémarré sous son nom initial. Après validation du
-nouveau Manager sain et au repos, l’ancien conteneur est supprimé par son ID
-exact, avec `force=false` et `v=false`. Aucune image, volume, sauvegarde de
-données ou quarantaine n’est supprimé. Un échec du nettoyage est signalé par
-`cleanupPending` et un code de sortie 2 ; il ne déclenche pas le rollback d’un
-Manager déjà validé.
-
-Les anciens conteneurs laissés par les procédures historiques peuvent être
-retirés séparément, après autorisation explicite, avec
-`--cleanup-only --retired NOM=IDENTIFIANT_DOCKER_COMPLET` pour chaque cible.
-Il n’y a ni recherche par joker ni purge globale. Les identités de toutes les
-cibles sont vérifiées avant la première suppression, puis avant chacune ; le
-Manager actif doit rester identique, sain et au repos. Les identifiants des
-sauvegardes de données sont comparés avant et après cette opération.
+Pour une installation neuve, suivre [Installer Mergeron](installation.md) puis
+la [référence des variables](variables-manager.md). Cette page décrit les
+opérations et garanties du Manager, pas une seconde procédure d’installation.
 
 Mergeron Manager est le gestionnaire local de la pile Docker Mergeron. Il
 installe, surveille et met à jour les composants gérés, avec sauvegarde et
@@ -94,8 +65,6 @@ d'inventorier les installations existantes. Il :
 
 - inventorie `mergeron-ui`, `mergeron-ingress` et `mergeron-squid` avec l'API
   Docker locale ;
-- reconnaît aussi les anciens noms `mergeron`, `codex-webui`,
-  `codex-web-ingress` et `codex-web-squid` ;
 - contrôle l'état, la santé, l'image et les réseaux de chaque conteneur ;
 - vérifie que `/home/codex` et `/workspaces` restent montés depuis un stockage
   persistant ;
@@ -115,14 +84,13 @@ géré resté dans l'état `created` ou `stopped`.
 L'image est publiée séparément sous
 `ghcr.io/maxhugit/mergeron-manager`. Elle suit les mêmes tags `edge`,
 `sha-<commit>`, `0.x.y`, `0.x` et `latest` que l'application, mais son cycle de
-vie reste indépendant de `mergeron-ui`. Avant la première publication stable,
-les formulaires utilisent `edge` ; `latest` n'est jamais inventé à partir d'une
-construction non publiée.
+vie reste indépendant de `mergeron-ui`. Choisir des images publiées et validées ;
+un tag stable ne reçoit pas automatiquement les nouveautés du canal `edge`.
 
 ## Barrières contre la perte de données
 
-Le manifeste `manager/stack-manifest.json` décrit les composants acceptés, les
-anciens noms, les réseaux attendus et les montages protégés. Le Manager bloque
+Le manifeste `manager/stack-manifest.json` décrit les composants acceptés,
+les réseaux attendus et les montages protégés. Le Manager bloque
 toute future prise en charge si :
 
 - plusieurs conteneurs correspondent au même composant ;
@@ -159,7 +127,7 @@ elle évite de rendre les secrets lisibles par tous, de changer leurs
 propriétaires ou de les réécrire. Elle s'applique dans l'espace de montages du
 Manager ; aucun montage de la racine de l'hôte n'est ajouté.
 
-Les installations Compose et DockerMan montent le socket dans
+La définition de lancement du Manager monte le socket dans
 `STATE_ROOT/manager-run`. Ce dossier ne contient aucune donnée métier. Le
 Manager fonctionne sans réseau Docker (`network_mode: none`). `STATE_ROOT` est
 également monté dans `/host-state` afin de créer les éléments manquants par des
@@ -180,9 +148,7 @@ internes ne sont créés que s'ils sont absents. Si les deux copies du jeton
 interne existent avec des valeurs différentes, l'installation est bloquée.
 
 Le réseau externe choisi par `MERGERON_PROXY_NETWORK` (`mergeron-proxy` par
-défaut) doit préexister. Pour une installation historique, renseigner son nom
-actuel avant de mettre à jour le Manager (par exemple `net_standard`) ; il
-n’est jamais renommé automatiquement. Le Manager crée uniquement
+défaut) doit préexister. Le Manager crée uniquement
 les réseaux déclarés appartenant à la pile : `isolated`, `external` et `admin`
 pour la base, complétés par le contrôle privé si le navigateur est géré.
 Les images absentes sont téléchargées explicitement dans le plan avant la
@@ -190,14 +156,12 @@ création des conteneurs.
 
 Les valeurs génériques sont `/srv/<préfixe>/state` pour les données et son
 sous-dossier `appdata` pour les dossiers accessibles aux agents.
-`MERGERON_APPDATA_ROOT` choisit ce montage explicitement. Les alias historiques
-restent isolés dans le module d’intégration ; voir les [adaptations](adapters/README.md).
-Les métadonnées d’une interface hôte ne sont générées qu’avec son intégration
+`MERGERON_APPDATA_ROOT` choisit ce montage explicitement. Les métadonnées d’une interface hôte ne sont générées qu’avec son intégration
 explicitement activée ; `MERGERON_HOST_INTEGRATION=none` est le défaut.
 `MERGERON_AUTH_MODE=native|authentik` choisit le modèle ingress uniquement à sa
 création. `native` est le défaut des nouvelles installations, avec compte et mot
 de passe actifs et OIDC désactivé, sans fournisseur d’identité imposé ; un modèle
-existant n’est jamais remplacé. Voir [l’installation portable](installation-portable.md) pour les
+existant n’est jamais remplacé. Voir [le raccordement réseau et SSO](installation-portable.md) pour les
 prérequis d’authentification native et les proxys alternatifs.
 
 ## Adoption d'une installation existante
@@ -235,10 +199,8 @@ fonctionnel comme défaillant après une recréation par l’outil hôte.
 conteneurs et réseaux à observer. Une recette utilise un préfixe dédié, par
 exemple `mergeron-dev`, avec son propre `STATE_ROOT`, son propre sous-réseau
 administratif et ses conteneurs préfixés. Le Manager refuse une pile
-`development` qui réutilise le préfixe de production. Les anciens noms ne sont
-reconnus que pour la pile `production` portant le préfixe canonique, afin qu'un
-Manager de recette ne puisse jamais adopter un conteneur historique de
-production.
+`development` qui réutilise le préfixe de production. La sélection des conteneurs
+reste strictement limitée à la pile choisie, sans adoption d’une autre instance.
 
 Le domaine public ne participe jamais à la sélection des conteneurs. Il est
 fourni séparément par `MERGERON_WEBUI_URL` dans le fichier d'environnement et
@@ -299,19 +261,23 @@ Fermer la fenêtre n’annule rien ; **Voir le suivi et les logs** permet de la
 rouvrir. Les restaurations et nouvelles tentatives de récupération utilisent
 la même fenêtre, sans supprimer leurs confirmations de sécurité.
 
-1. `POST /v1/update/plan` avec `images` sélectionne des images des seuls dépôts
+1. `POST /v1/update/plan` avec `images` et `backupMode` (`full`, `minimal`, `none`)
+   sélectionne le périmètre de sauvegarde et des images des seuls dépôts
    autorisés. Tous les composants concernés doivent être sains, gérés ou explicitement
    adoptés, avec des noms canoniques et des montages compatibles. Une dérive
    d'adoption bloque l'opération. L'ordre variable des montages Docker ne
    modifie pas l'empreinte.
 2. `POST /v1/update` avec cette empreinte et
-   la confirmation fournie par le plan (`UPDATE_WITHOUT_DATA_BACKUP` en Dev,
-   `UPDATE_WITH_ROLLBACK` en production) lance l'opération en arrière-plan. Les
+   le même `backupMode` et la confirmation fournie par le plan
+   (`UPDATE_WITHOUT_DATA_BACKUP` pour aucune sauvegarde,
+   `UPDATE_WITH_ROLLBACK` sinon) lance l'opération en arrière-plan. Les
    images sont téléchargées avant l'arrêt et épinglées par empreinte publiée.
    Les spécifications Docker, réseaux et montages existants sont conservés.
-3. En Dev, le Manager saute entièrement l’inventaire et la sauvegarde de données.
-   En production, après arrêt des services, il sauvegarde les racines essentielles
-   et exclut les journaux, caches et dépendances identifiables selon la
+3. Dans chaque environnement, le choix complet copie toutes les racines
+   persistantes ; le choix minimal copie la base et les fichiers de configuration
+   sélectionnés ; aucune sauvegarde saute entièrement la copie et l’inventaire
+   récursif des données. Les appels anciens sans choix gardent leurs défauts.
+   Le périmètre suit la
    [politique versionnée](sauvegarde-restauration.md#politique-des-mises-à-jour-du-manager).
    La copie reste sous `manager-state/updates/<opération>/backup`. L’espace libre
    est vérifié sur ce périmètre filtré. Les liens symboliques ne sont pas suivis ;
@@ -328,9 +294,9 @@ la même fenêtre, sans supprimer leurs confirmations de sécurité.
    déjà ; aucune adoption implicite n'est créée.
 
 Une erreur avant validation déclenche le redémarrage des anciens conteneurs.
-En production, les données essentielles sauvegardées sont aussi restaurées ;
-en Dev les données et migrations ne sont pas annulées, sans promesse de
-compatibilité avec les anciennes images. Les données écrites dans les racines
+Les éléments sauvegardés selon le choix enregistré sont aussi restaurés ;
+sans sauvegarde, les données et migrations ne sont pas annulées, sans promesse
+de compatibilité avec les anciennes images. Les données écrites dans les racines
 restaurées par la version rejetée
 sont déplacées dans `quarantine`, jamais supprimées. Le journal privé `0600`
 conserve leur référence : les dossiers retenus restent en réalité sous des noms
@@ -346,13 +312,13 @@ validation, le redémarrage termine seulement le nettoyage. Si la récupération
 
 `POST /v1/update/rollback`, avec l'identifiant de la dernière opération réussie
 et `confirmation=ROLLBACK_WITH_DATA_RESTORE`, restaure aussi les données de sa
-sauvegarde en production. En Dev, `confirmation=ROLLBACK_IMAGES_ONLY` remet les
+sauvegarde, en Dev comme en production. Sans sauvegarde,
+`confirmation=ROLLBACK_IMAGES_ONLY` remet les
 images sans copie ni restauration de données. Cela annule, uniquement dans les
 racines sauvegardées, les modifications applicatives postérieures à cette
 sauvegarde, conservées séparément en quarantaine. Les versions plus anciennes
 ne sont pas sélectionnables implicitement. Les sauvegardes suivent la rétention
-configurée après une mise à jour de production réussie ; les anciennes copies
-Dev sont conservées sans purge implicite. Les journaux et quarantaines ne sont
+configurée après une mise à jour réussie ayant créé une sauvegarde. Les journaux et quarantaines ne sont
 pas purgés par cette rétention. Surveiller l’espace et conserver une sauvegarde
 externe indépendante.
 
@@ -367,8 +333,8 @@ mise à jour et la récupération ne peuvent pas s'exécuter simultanément.
   applicatives sous `STATE_ROOT`, pas tous les fichiers de l'hôte.
 - Les ACL et attributs étendus ne sont pas copiés. Un stockage utilisant ces
   mécanismes nécessite une sauvegarde externe adaptée avant mise à jour.
-- Les volumes Docker et les noms historiques doivent être migrés explicitement
-  avant cette première version de l'updater ; ils sont refusés, pas convertis.
+- Les mises à jour exigent les montages persistants de type bind et les noms
+  attendus par le manifeste ; une configuration incompatible est refusée.
 - Le Manager ne se met pas lui-même à jour et ne répare pas encore une pile
   arbitrairement endommagée.
 

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment -- Async service doubles and asymmetric matchers. */
+import { GitGateRefusal } from '../threads/git-mutation-gate.service';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -44,20 +45,37 @@ describe('project connection agent tools', () => {
     remoteBranches: vi.fn(),
     remoteFiles: vi.fn(),
     pullRequests: vi.fn(),
+    pullRequest: vi.fn(),
     checks: vi.fn(),
     diff: vi.fn(),
     stagedDiff: vi.fn(),
     commits: vi.fn(),
+    mergeStatus: vi.fn(),
+    conflictFile: vi.fn(),
   };
+  const createCopy =
+    vi.fn<
+      (
+        projectId: string,
+        connectionId: string,
+        input: { agentThreadId: string; branch?: string },
+        beforeCommit: () => unknown,
+      ) => Promise<WorkspaceCopyView>
+    >();
   const actions = {
     push: vi.fn(),
     createPullRequest: vi.fn(),
+    updatePullRequest: vi.fn(),
     retargetPullRequest: vi.fn(),
     stageReview: vi.fn(),
     stage: vi.fn(),
     unstage: vi.fn(),
     commit: vi.fn(),
     createBranch: vi.fn(),
+    retrieveBranch: vi.fn(),
+    localBranchAction: vi.fn(),
+    startMerge: vi.fn(),
+    abortMerge: vi.fn(),
   };
   const as = <T>(person: string, run: () => T) =>
     accessContext.run(
@@ -186,13 +204,286 @@ describe('project connection agent tools', () => {
     tools = new ProjectConnectionToolsService(
       database.db,
       new ProjectLocationsService(database.db),
-      { list: () => own } as unknown as WorkspaceCopiesService,
+      {
+        list: () => own,
+        create: createCopy,
+      } as unknown as WorkspaceCopiesService,
       git as unknown as WorkspaceGitService,
       actions as unknown as WorkspaceGitActionsService,
     );
   });
   afterEach(() => {
     database.sqlite.close();
+  });
+
+  const create = (extra: Record<string, unknown> = {}) => ({
+    tool: 'create_project_git_copy',
+    connectionId,
+    requestId: 'clone-1',
+    ...extra,
+  });
+  const allowClone = () => {
+    own = [];
+    createCopy.mockImplementation(
+      async (_project, _connection, input, beforeCommit) => {
+        beforeCommit();
+        const copy = {
+          id: 'created-copy',
+          sourceResourceId: connectionId,
+          ownerThreadIds: [input.agentThreadId],
+          localPath: '/workspaces/p/sources/.external/created-copy',
+          branch: 'main',
+          revision: state.head,
+          state: 'ready',
+        } as WorkspaceCopyView;
+        own.push(copy);
+        return copy;
+      },
+    );
+  };
+  it('creates and attaches a managed copy only to the bound conversation, independently of its active folder', async () => {
+    allowClone();
+    const result = await call(create({ branch: 'main' }));
+    expect(createCopy).toHaveBeenCalledWith(
+      'p',
+      connectionId,
+      { agentThreadId: 'agent', branch: 'main' },
+      expect.any(Function),
+    );
+    expect(result).toMatchObject({
+      id: 'created-copy',
+      ownerThreadId: 'agent',
+      activeFolderChanged: false,
+    });
+    expect(await call(create({ branch: 'main' }))).toEqual(result);
+    expect(createCopy).toHaveBeenCalledTimes(1);
+    await expect(call(create({ branch: 'other' }))).rejects.toThrow(
+      'PROJECT_CONNECTION_REQUEST_CONFLICT',
+    );
+  });
+  it.each([
+    'agentThreadId',
+    'ownerThreadId',
+    'threadId',
+    'projectId',
+    'copyId',
+    'path',
+    'address',
+    'secret',
+    'command',
+  ])('rejects caller-selected %s before cloning', async (field) => {
+    allowClone();
+    await expect(call(create({ [field]: 'other' }))).rejects.toThrow();
+    expect(createCopy).not.toHaveBeenCalled();
+  });
+  it('refuses a second copy and never claims or uses the existing one implicitly', async () => {
+    await expect(call(create())).rejects.toThrow('GIT_AGENT_COPY_EXISTS');
+    expect(createCopy).not.toHaveBeenCalled();
+  });
+  it('requires an administrator, a current writable turn and an enabled project connection', async () => {
+    allowClone();
+    await expect(
+      as('reader', () => tools.execute('p', 'agent', create(), () => {})),
+    ).rejects.toThrow();
+    await expect(
+      call(create(), () => {
+        throw new Error('NO_ACTIVE_TURN');
+      }),
+    ).rejects.toThrow('NO_ACTIVE_TURN');
+    as('admin', () => resources.update('p', connectionId, { enabled: false }));
+    await expect(call(create())).rejects.toThrow(
+      'PROJECT_CONNECTION_UNAVAILABLE',
+    );
+    expect(createCopy).not.toHaveBeenCalled();
+  });
+  it('keeps an interrupted clone unconfirmed instead of creating a duplicate on retry', async () => {
+    allowClone();
+    createCopy.mockRejectedValue(new Error('WORKSPACE_GIT_CLONE_FAILED'));
+    await expect(call(create())).rejects.toThrow('WORKSPACE_GIT_CLONE_FAILED');
+    await expect(call(create())).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
+    expect(createCopy).toHaveBeenCalledTimes(1);
+  });
+  it('rechecks source and turn authorization immediately before ownership is committed', async () => {
+    allowClone();
+    createCopy.mockImplementation(async (_p, _c, _input, beforeCommit) => {
+      as('admin', () =>
+        resources.update('p', connectionId, { enabled: false }),
+      );
+      beforeCommit();
+      throw new Error('Unreachable after revocation');
+    });
+    await expect(call(create())).rejects.toThrow(
+      'PROJECT_CONNECTION_UNAVAILABLE',
+    );
+    expect(own).toEqual([]);
+  });
+
+  it.each([
+    [
+      'fetch_branch',
+      'retrieveBranch',
+      { name: 'main', revision: 'c'.repeat(40) },
+    ],
+    [
+      'switch_branch',
+      'localBranchAction',
+      { name: 'work', revision: 'c'.repeat(40) },
+    ],
+    ['start_merge', 'startMerge', { revision: 'c'.repeat(40) }],
+    [
+      'continue_merge',
+      'commit',
+      { revision: 'c'.repeat(40), message: 'Resolve conflicts' },
+    ],
+    ['abort_merge', 'abortMerge', { revision: 'c'.repeat(40) }],
+  ] as const)(
+    'binds %s to the caller, observed copy and stable request',
+    async (operation, method, fields) => {
+      const args = {
+        ...publish(),
+        tool: 'prepare_project_git',
+        operation,
+        ...fields,
+      };
+      actions[method].mockResolvedValue({ confirmed: true });
+      await expect(call(args)).resolves.toMatchObject({
+        data: { confirmed: true },
+      });
+      await call(args);
+      expect(actions[method]).toHaveBeenCalledTimes(1);
+      const invocation = actions[method].mock.calls[0];
+      expect(invocation.slice(0, 2)).toEqual(['p', 'own']);
+      expect(invocation[2]).toMatchObject({
+        agentThreadId: 'agent',
+        fingerprint: state.fingerprint,
+      });
+      expect(invocation[3]).toMatchObject({
+        threadId: 'agent',
+        assertActive: expect.any(Function),
+      });
+      if (operation === 'fetch_branch') expect(invocation[4]).toBe(true);
+      if (operation === 'continue_merge')
+        expect(invocation[2]).toMatchObject({ mergeRevision: fields.revision });
+    },
+  );
+  it('inspects conflicts only on its owned copy and rejects arbitrary commands and remote URLs', async () => {
+    git.mergeStatus.mockResolvedValue({
+      mergeHead: 'c'.repeat(40),
+      conflicts: [],
+    });
+    const args = {
+      tool: 'read_project_git',
+      connectionId,
+      copyId: 'own',
+      operation: 'local_merge_status',
+    };
+    await expect(call(args)).resolves.toMatchObject({
+      data: { mergeHead: 'c'.repeat(40) },
+    });
+    await expect(call({ ...args, copyId: 'foreign' })).rejects.toThrow(
+      'GIT_COPY_OWNED',
+    );
+    for (const extra of [
+      { address: 'https://evil.invalid/repo' },
+      { command: 'fetch --all' },
+      { force: true },
+    ])
+      await expect(
+        call({
+          ...publish(),
+          tool: 'prepare_project_git',
+          operation: 'fetch_branch',
+          name: 'main',
+          revision: 'c'.repeat(40),
+          ...extra,
+        }),
+      ).rejects.toThrow();
+    expect(actions.retrieveBranch).not.toHaveBeenCalled();
+  });
+
+  it('edits only explicitly supplied PR metadata with the observed update timestamp', async () => {
+    const args = publish({
+      operation: 'update_pull_request',
+      number: 271,
+      title: 'Updated title',
+      description: 'Updated description',
+      expectedUpdatedAt: '2026-10-30T12:00:00Z',
+    });
+    actions.updatePullRequest.mockResolvedValue({ updated: true });
+    await expect(call(args)).resolves.toMatchObject({
+      data: { updated: true },
+    });
+    expect(actions.updatePullRequest).toHaveBeenCalledWith(
+      'p',
+      'own',
+      expect.objectContaining({
+        number: 271,
+        title: 'Updated title',
+        expectedUpdatedAt: args.expectedUpdatedAt,
+      }),
+      expect.objectContaining({ threadId: 'agent' }),
+    );
+    await expect(
+      call({ ...args, requestId: 'bad-update', expectedUpdatedAt: undefined }),
+    ).rejects.toThrow();
+    for (const extra of [
+      { base: 'main' },
+      { draft: false },
+      { expectedBase: 'main' },
+      { expectedPullRequestHead: 'c'.repeat(40) },
+    ])
+      await expect(
+        call({ ...args, requestId: 'bad-update-fields', ...extra }),
+      ).rejects.toThrow();
+    expect(actions.updatePullRequest).toHaveBeenCalledOnce();
+  });
+
+  it('creates a separate branch from an observed fetched reference instead of silently using HEAD', async () => {
+    actions.createBranch.mockResolvedValue({ branch: 'new-work' });
+    await call({
+      ...publish(),
+      tool: 'prepare_project_git',
+      operation: 'create_branch',
+      name: 'new-work',
+      startRef: 'refs/remotes/mergeron/main',
+      revision: 'c'.repeat(40),
+    });
+    expect(actions.createBranch).toHaveBeenCalledWith(
+      'p',
+      'own',
+      expect.objectContaining({
+        name: 'new-work',
+        startRef: 'refs/remotes/mergeron/main',
+        startRevision: 'c'.repeat(40),
+        checkout: true,
+      }),
+      expect.objectContaining({ threadId: 'agent' }),
+    );
+  });
+
+  it('allows the same requestId to retry a definitive gate refusal, but not an uncertain dispatched outcome', async () => {
+    actions.stage
+      .mockRejectedValueOnce(new GitGateRefusal('GIT_BUSY'))
+      .mockResolvedValueOnce({ prepared: true });
+    const args = prepare({
+      operation: 'stage',
+      reviewFingerprint: 'c'.repeat(64),
+    });
+    await expect(call(args)).rejects.toThrow('GIT_BUSY');
+    await expect(call(args)).resolves.toMatchObject({
+      data: { prepared: true },
+    });
+    expect(actions.stage).toHaveBeenCalledTimes(2);
+    await expect(call(args)).resolves.toMatchObject({
+      data: { prepared: true },
+    });
+    expect(actions.stage).toHaveBeenCalledTimes(2);
+    actions.stage.mockRejectedValueOnce(
+      new Error('connection lost after dispatch'),
+    );
+    const uncertain = { ...args, requestId: 'uncertain-stage' };
+    await expect(call(uncertain)).rejects.toThrow('connection lost');
+    await expect(call(uncertain)).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
   });
 
   it('can inspect the entire frozen staged index rather than confusing it with working changes', async () => {
@@ -577,6 +868,7 @@ describe('project connection agent tools', () => {
       { description: 'ignored?' },
       { number: 0 },
       { expectedPullRequestHead: 'invalid' },
+      { expectedUpdatedAt: '2026-10-30T12:00:00Z' },
     ])
       await expect(call({ ...input, ...extra })).rejects.toThrow();
     expect(actions.retargetPullRequest).not.toHaveBeenCalled();
