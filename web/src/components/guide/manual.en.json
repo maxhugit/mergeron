@@ -84,6 +84,14 @@
             ]
           },
           {
+            "title": "Resume after inactivity",
+            "paragraphs": [
+              "When returning to an idle tab, Mergeron verifies your identity without reloading the page. During an interruption, a waiting dialog hides the workspace and pauses actions; unsent text and panels remain in this tab’s memory.",
+              "If authentication is required, Restore connection opens a separate window. Allow popups if the browser blocks it. Mergeron verifies your identity again before resuming. An access denial is not treated as a temporary network failure."
+            ],
+            "warning": "No changes or messages are resubmitted automatically. If your account or permissions change, the tab stays locked: sign in with the original account or open a new tab with the new permissions. Retaining state in memory is not a backup: closing, reloading or letting the browser discard the tab can lose drafts."
+          },
+          {
             "title": "Install and refresh",
             "steps": [
               "After signing in, open My account → Install application, or use Edge’s Applications menu when offered.",

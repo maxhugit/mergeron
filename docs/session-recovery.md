@@ -49,11 +49,40 @@ d’une redirection de connexion.
 ## Corrections
 
 Le client ne suit plus les redirections de vérification d’identité dans `fetch`.
-Une redirection de proxy provoque une navigation du navigateur sur **l’URL
-actuelle**, jamais sur une destination fournie par une réponse réseau. Le proxy
-peut alors renouveler le SSO normalement. Cette navigation automatique est limitée
-à une fois par cinq minutes et par onglet ; si le stockage de session est
-indisponible, seul le bouton explicite déclenche une navigation.
+Depuis le correctif de reprise sans rechargement, une redirection de proxy ne
+provoque plus de navigation de l’onglet de travail. La reprise réseau est essayée
+en JavaScript. Si l’authentification est vraiment expirée, le bouton **Rétablir
+la connexion** ouvre une fenêtre sur une URL locale fixe de connexion. Le proxy
+ou le fournisseur OIDC peut y effectuer ses redirections normalement ; aucune
+destination fournie par un `fetch` n’est utilisée pour naviguer l’onglet principal.
+
+L’espace de travail déjà vérifié est conservé dans une frontière React `Activity`
+masquée : état React et DOM conservés, effets et abonnements nettoyés pendant
+l’attente. La fenêtre d’attente n’est pas fermable par Échap ou un clic extérieur.
+Le suivi de mise à jour du Manager reste disponible pendant une interruption.
+Cela ne garantit pas la conservation après fermeture, rechargement volontaire
+ou suppression de l’onglet par le navigateur ; les lecteurs externes peuvent
+aussi devoir reconstruire leur propre session à la reprise.
+
+`session-recovery.ts`, installé avant le rendu, ferme immédiatement une barrière
+locale au retour après 30 secondes sans vérification ou après un refus de session.
+Les requêtes API protégées sont rejetées avec `AbortError`, jamais mises en file ;
+les réponses antérieures à la fermeture sont écartées. Seuls les points de
+connexion et la vérification d’identité restent utilisables. Le socket est
+déconnecté et sa file d’envois est vidée avant reprise. Les contrôles serveur
+restent obligatoires : cette barrière n’est pas une autorisation de sécurité.
+
+La fenêtre de connexion signale sa réussite à la seule origine Mergeron. Le
+parent valide origine, référence de fenêtre et type de message avant d’accepter
+un éventuel JWT de connexion API ; le message ne donne jamais accès. Une nouvelle
+lecture `/api/auth/me` doit confirmer le même compte, rôle et contexte de test
+de droits. Si ceux-ci changent, l’ancien onglet reste verrouillé : un nouvel
+onglet doit être utilisé pour les nouveaux droits. Une fenêtre bloquée est
+signalée ; aucune navigation de remplacement n’est imposée. Un contrôle toutes
+les cinq secondes, limité à deux minutes et aux onglets visibles/en ligne,
+couvre aussi les cookies partagés lorsque le fournisseur coupe `window.opener`.
+Les changements explicites d’identité et les révocations de droits conservent
+leur politique distincte de purge des vues ; ce correctif ne les contourne pas.
 
 La vérification et la lecture de son corps disposent d’un délai de 12 secondes.
 L’annulation par le gestionnaire de requêtes est propagée. Les reprises sur
@@ -121,17 +150,22 @@ doit pouvoir atteindre l’outpost. Ne jamais retirer le contrôle Nginx pour
 3. Avec une session valide, `/api/auth/me` doit retourner une identité JSON
    active et l’interface doit s’ouvrir.
 4. Laisser l’onglet en arrière-plan, révoquer ou expirer sa session SSO de test,
-   puis revenir : le navigateur doit renouveler la connexion, sans afficher une
-   identité en cache comme une autorisation et sans boucle de rechargements.
+   puis revenir : le navigateur doit garder le brouillon non envoyé et l’URL,
+   masquer le contenu protégé, puis reprendre après vérification ou proposer
+   une connexion séparée. Aucun rechargement de l’onglet principal n’est attendu.
 5. Tester séparément une coupure réseau puis un retour en ligne, un retour via
    l’historique du navigateur et un compte réellement désactivé.
 6. Pour un compte désactivé ou un refus d’accès réel, l’espace de travail doit
    rester inaccessible.
+7. Bloquer les popups, annuler une connexion et essayer un autre compte : aucun
+   cas ne doit restaurer une ancienne identité depuis le cache ni rejouer une
+   écriture. Un message venant d’une autre origine ou fenêtre doit être ignoré.
 
 Les tests automatisés simulent redirections, transport interrompu, temporisation,
 annulation et reprise avec une identité en cache. Un essai long sur l’iPhone réel
 reste nécessaire après publication et déploiement de l’image corrigée ; les tests
 de navigateur ne simulent pas une suspension iOS de plusieurs heures.
 
-Références : [mode de redirection de fetch](https://developer.mozilla.org/en-US/docs/Web/API/Request/redirect)
+Références : [mode de redirection de fetch](https://developer.mozilla.org/en-US/docs/Web/API/Request/redirect),
+[conservation d’état avec Activity](https://react.dev/reference/react/Activity)
 et [intégration proxy Traefik Authentik](https://docs.goauthentik.io/add-secure-apps/providers/proxy/server_traefik/).

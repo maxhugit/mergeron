@@ -9,8 +9,10 @@ import { useThemeStore } from './stores/theme-store';
 import { installMobileViewportFixes } from './lib/mobile-viewport';
 import { i18nReady } from './i18n';
 import { initializePwaInstall } from './lib/pwa-install';
+import { installSessionRecovery } from './lib/session-recovery';
 import './index.css';
 
+installSessionRecovery();
 configureApiClient();
 installMobileViewportFixes();
 initializePwaInstall();

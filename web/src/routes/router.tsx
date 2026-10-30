@@ -17,7 +17,11 @@ import {
 } from '@/components/settings/settings-sections';
 import { BASE_PATH } from '@/base-path';
 
-export type LoginSearch = { redirect: string; manual?: boolean };
+export type LoginSearch = {
+  redirect: string;
+  manual?: boolean;
+  renew?: boolean;
+};
 export type IntegrationsSearch = { tab: 'plugins' | 'apps' | 'mcps' };
 export type SimpleChatSearch = { thread?: string };
 
@@ -109,6 +113,7 @@ const loginRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     redirect: sanitizeRedirect(search.redirect),
     manual: search.manual === true || search.manual === 'true',
+    renew: search.renew === true || search.renew === 'true',
   }),
   component: LoginRoute,
 });

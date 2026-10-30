@@ -36,6 +36,15 @@ officiel ; le proxy public-only interdit toujours les destinations privées.
 Le chemin secret Playwright ne doit apparaître ni dans les diagnostics publics
 ni dans Git. Voir [le guide d’exploitation](docs/navigateur-annote.md).
 
+## Reprise de session
+
+La reprise après inactivité ne recharge pas l’onglet de travail et ne réutilise
+pas une identité en cache pour donner accès. Pendant la vérification, l’interface
+est masquée et les appels API protégés et le socket sont suspendus sans rejouer
+les écritures. Une reconnexion séparée exige une nouvelle vérification serveur
+du compte, du rôle et du contexte de test de droits d’origine. Voir le
+[parcours de reprise et ses limites](docs/session-recovery.md).
+
 ## Contrôles de l’image publiée
 
 Les workflows de qualité et de publication analysent l’image finale avec Trivy,

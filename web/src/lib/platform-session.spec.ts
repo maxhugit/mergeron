@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElement, type ReactNode } from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,12 +10,18 @@ import {
   isSessionTransportError,
   platformSessionKey,
   readAuthResource,
-  renewProxySession,
   shouldRetryPlatformSession,
   usePlatformSession,
 } from './platform-session';
+import { installSessionRecovery } from './session-recovery';
+
+let disposeRecovery: () => void;
+beforeEach(() => {
+  disposeRecovery = installSessionRecovery();
+});
 
 afterEach(() => {
+  disposeRecovery();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -327,20 +333,25 @@ describe('platform session recovery', () => {
     expect(isSessionTransportError(null)).toBe(false);
   });
 
-  it('limits automatic browser navigation to one per five minutes', () => {
-    const reload = vi.fn();
-    vi.stubGlobal('window', { location: { reload } });
-    expect(renewProxySession(1_000_000)).toBe(true);
-    expect(renewProxySession(1_000_001)).toBe(false);
-    expect(renewProxySession(1_300_000)).toBe(true);
-    expect(reload).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not automatically navigate without persistent loop protection', () => {
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('Storage blocked');
+  it('does not open a login window automatically after a proxy redirect', async () => {
+    const open = vi.spyOn(window, 'open');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      type: 'opaqueredirect',
+      status: 0,
+    } as Response);
+    const client = new QueryClient();
+    const hook = renderHook(() => usePlatformSession(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
     });
-    expect(renewProxySession()).toBe(false);
+    await waitFor(() =>
+      expect(hook.result.current.error).toBeInstanceOf(AuthRedirectError),
+    );
+    expect(hook.result.current.paused).toBe(true);
+    expect(hook.result.current.isAdministrator).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+    hook.unmount();
+    client.clear();
   });
 
   it('recovers a failed cached identity on pageshow even without a workspace mounted', async () => {

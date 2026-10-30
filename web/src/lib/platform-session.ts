@@ -1,7 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { getAuthorizationHeader } from '@/auth-token';
+import { clearApiToken, getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
+import {
+  acceptVerifiedSession,
+  pauseSession,
+  useSessionPaused,
+} from './session-recovery';
 
 export interface PlatformSession {
   kind: 'person' | 'service' | 'unlinked';
@@ -56,19 +61,11 @@ export function isSessionTransportError(error: Error | null): boolean {
   );
 }
 
-/** Reload only the current protected URL; never trust a redirect target from fetch. */
-export function renewProxySession(now = Date.now()): boolean {
-  const key = 'mergeron.auth-navigation-at';
-  try {
-    const last = Number(sessionStorage.getItem(key));
-    if (last && now - last < 5 * 60_000) return false;
-    sessionStorage.setItem(key, String(now));
-  } catch {
-    // Without durable loop protection, leave navigation to the explicit button.
-    return false;
+export class AuthIdentityChangedError extends AuthResourceError {
+  constructor() {
+    super('Sign in with the original identity to resume this tab', 409);
+    this.name = 'AuthIdentityChangedError';
   }
-  window.location.reload();
-  return true;
 }
 
 export function shouldRetryPlatformSession(
@@ -145,9 +142,20 @@ export async function readAuthResource<T>(
   }
 }
 export function usePlatformSession() {
+  const paused = useSessionPaused();
   const query = useQuery({
     queryKey: platformSessionKey,
-    queryFn: ({ signal }) => readAuthResource<PlatformSession>('me', signal),
+    queryFn: async ({ signal }) => {
+      try {
+        const identity = await readAuthResource<PlatformSession>('me', signal);
+        if (!acceptVerifiedSession(identity) && identity.active)
+          throw new AuthIdentityChangedError();
+        return identity;
+      } catch (error) {
+        if (!signal.aborted) pauseSession();
+        throw error;
+      }
+    },
     staleTime: 10_000,
     refetchInterval: (current) =>
       isSessionTransportError(current.state.error) ? false : 30_000,
@@ -186,25 +194,28 @@ export function usePlatformSession() {
     window.addEventListener('pageshow', recover);
     window.addEventListener('online', recover);
     window.addEventListener('focus', recover);
+    const expired = () => {
+      clearApiToken();
+      pauseSession();
+      void refetch({ cancelRefetch: false });
+    };
+    window.addEventListener('codex-webui:auth-expired', expired);
     document.addEventListener('visibilitychange', recover);
     return () => {
       window.removeEventListener('pageshow', recover);
       window.removeEventListener('online', recover);
       window.removeEventListener('focus', recover);
+      window.removeEventListener('codex-webui:auth-expired', expired);
       document.removeEventListener('visibilitychange', recover);
     };
   }, [refetch]);
-  useEffect(() => {
-    if (
-      query.error instanceof AuthRedirectError &&
-      navigator.onLine &&
-      document.visibilityState === 'visible'
-    )
-      renewProxySession();
-  }, [query.error]);
   return {
     ...query,
+    paused,
     isAdministrator:
-      query.data?.active === true && query.data.role === 'administrator',
+      !paused &&
+      !query.isError &&
+      query.data?.active === true &&
+      query.data.role === 'administrator',
   };
 }

@@ -195,6 +195,10 @@ jobs:
           pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
           pnpm --dir web exec vitest run --project browser src/components/chat/agent-preview.browser.tsx
 
+      - name: Test session recovery in Chromium and WebKit
+        if: matrix.part == 'frontend'
+        run: pnpm --dir web exec vitest run --project browser src/lib/platform-session.browser.tsx src/routes/authenticated-layout.browser.tsx
+
       - name: Preserve preview interface screenshots
         if: always() && matrix.part == 'frontend'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
