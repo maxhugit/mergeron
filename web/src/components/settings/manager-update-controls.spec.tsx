@@ -361,9 +361,11 @@ it('waits for automatic discovery before requesting a plan', async () => {
 
 it('requires an images-only confirmation for Dev rollback even when no data backup exists', async () => {
   const user = userEvent.setup();
-  const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-    json({}),
-  );
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    void input;
+    void init;
+    return json({});
+  });
   vi.stubGlobal('fetch', fetch);
   const updated: ManagerStatus = {
     ...status,
