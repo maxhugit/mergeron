@@ -78,6 +78,10 @@ describe('ProjectConnectionPolicyService', () => {
   it('explicitly disables global MCP servers, plugin servers and per-app enables for an empty selection', async () => {
     const { service, request } = setup();
     await expect(service.configForCwd('/workspaces/project')).resolves.toEqual({
+      default_permissions: expect.stringMatching(
+        /^mergeron_copy_/,
+      ) as unknown as string,
+      permissions: expect.any(Object) as unknown as Record<string, unknown>,
       features: { apps: false },
       apps: { _default: { enabled: false }, github: { enabled: false } },
       mcp_servers: {

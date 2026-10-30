@@ -39,6 +39,7 @@ import {
   IdentityService,
   type PlatformIdentity,
 } from '../auth/identity.service';
+import { agentCopyPermissions } from './agent-copy-permissions';
 import { claimAgentCopy } from './git-copy-ownership';
 import { gitCredentialHelper } from './git-credentials';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
@@ -80,6 +81,7 @@ let copies: WorkspaceCopiesService;
 let service: WorkspaceGitService;
 let actions: WorkspaceGitActionsService;
 let active: string[];
+let gate: GitMutationGateService;
 let copyId: string;
 let cwd: string;
 const connectedPerson: PlatformIdentity = {
@@ -172,7 +174,7 @@ beforeEach(async () => {
   copies = new WorkspaceCopiesService(database.db, resources);
   service = new WorkspaceGitService(copies, resources);
   active = [];
-  const gate = new GitMutationGateService(
+  gate = new GitMutationGateService(
     {
       snapshot: () => active,
     } as ThreadExecutionInventoryService,
@@ -1982,6 +1984,203 @@ describe('confirmed actions', () => {
     );
   });
 
+  it('prepares, commits and creates two PRs concurrently on separate copies of the same connection', async () => {
+    // Both real local clones share one configured source; GitHub responses are fixtures.
+    const second = await copies.create('p', 'remote', {});
+    writable();
+    resources.update('p', 'remote', {
+      secret: { token: 'unit-concurrent-token' },
+    });
+    const secondCwd = second.localPath!;
+    const entries = [
+      {
+        id: copyId,
+        dir: cwd,
+        owner: 'alice',
+        branch: 'feature/a',
+        content: 'alice change\n',
+      },
+      {
+        id: second.id,
+        dir: secondCwd,
+        owner: 'bob',
+        branch: 'feature/b',
+        content: 'bob change\n',
+      },
+    ];
+    for (const entry of entries) {
+      const state = await service.snapshot('p', entry.id);
+      await actions.createBranch('p', entry.id, {
+        name: entry.branch,
+        startRef: 'HEAD',
+        startRevision: state.head,
+        fingerprint: state.fingerprint,
+        checkout: true,
+        confirmation: 'CREATE_LOCAL_BRANCH',
+      });
+      database.db
+        .insert(projectAgentThreads)
+        .values({
+          threadId: entry.owner,
+          projectId: 'p',
+          workspacePath: path.join(root, 'project'),
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      claimAgentCopy(database.db, 'p', entry.owner, entry.id);
+      await writeFile(path.join(entry.dir, 'README.md'), entry.content);
+    }
+    for (const entry of entries)
+      gate.recordIsolation(
+        entry.owner,
+        agentCopyPermissions(database.db, 'p', entry.owner),
+      );
+    gate.recordIsolation('observer', {
+      writableCopyPath: null,
+      readOnlyRoots: [
+        await realpath(path.join(root, 'project/sources/.external')),
+      ],
+    });
+    active = ['alice', 'bob', 'observer'];
+    const prepared = await Promise.all(
+      entries.map(async (entry) => {
+        const body = {
+          agentThreadId: entry.owner,
+          paths: ['README.md'],
+          fingerprint: (await service.snapshot('p', entry.id)).fingerprint,
+        };
+        const review = await actions.stageReview('p', entry.id, body);
+        return {
+          entry,
+          body: { ...body, reviewFingerprint: review.reviewFingerprint },
+          actor: { threadId: entry.owner, assertActive: vi.fn() },
+        };
+      }),
+    );
+    let allowFirst!: () => void, firstEntered!: () => void;
+    const firstWaiting = new Promise<void>((resolve) => {
+      firstEntered = resolve;
+    });
+    const releaseFirst = new Promise<void>((resolve) => {
+      allowFirst = resolve;
+    });
+    const original = service.git.bind(service) as WorkspaceGitService['git'];
+    const physicalCwd = await realpath(cwd);
+    const spy = vi
+      .spyOn(service, 'git')
+      .mockImplementation(
+        async (...args: Parameters<WorkspaceGitService['git']>) => {
+          if (args[0] === physicalCwd && args[1][0] === 'hash-object') {
+            firstEntered();
+            await releaseFirst;
+          }
+          return original(...args);
+        },
+      );
+    const first = actions.stage(
+      'p',
+      copyId,
+      prepared[0].body,
+      prepared[0].actor,
+    );
+    await firstWaiting;
+    try {
+      await actions.stage('p', second.id, prepared[1].body, prepared[1].actor);
+      expect(
+        (await exec('git', ['-C', secondCwd, 'show', ':README.md'])).stdout,
+      ).toBe('bob change\n');
+      expect(
+        (await exec('git', ['-C', cwd, 'show', ':README.md'])).stdout,
+      ).toBe('initial\n');
+    } finally {
+      allowFirst();
+      await first;
+      spy.mockRestore();
+    }
+    await Promise.all(
+      prepared.map(async ({ entry, actor }) =>
+        commit(
+          'p',
+          entry.id,
+          {
+            agentThreadId: entry.owner,
+            fingerprint: (await service.stagedDiff('p', entry.id)).fingerprint,
+            message: entry.content.trim(),
+          },
+          actor,
+        ),
+      ),
+    );
+    for (const entry of entries)
+      expect(
+        (await exec('git', ['-C', entry.dir, 'show', 'HEAD:README.md'])).stdout,
+      ).toBe(entry.content);
+    const states = await Promise.all(
+      entries.map((entry) => service.snapshot('p', entry.id)),
+    );
+    vi.spyOn(service, 'pullRequestPreparation').mockImplementation(
+      async (_p, _r, branch) => ({
+        head: states[branch === 'feature/a' ? 0 : 1].head,
+        baseHead: 'a'.repeat(40),
+        existingNumber: null,
+      }),
+    );
+    let releasePost!: () => void, postEntered!: () => void;
+    const posting = new Promise<void>((resolve) => {
+      postEntered = resolve;
+    });
+    const finishPost = new Promise<void>((resolve) => {
+      releasePost = resolve;
+    });
+    const fetchFixture = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (typeof options?.body !== 'string')
+        throw new Error('Expected a JSON request body');
+      const data = JSON.parse(options.body) as { head: string };
+      if (data.head === 'feature/a') {
+        postEntered();
+        await finishPost;
+      }
+      return {
+        ok: true,
+        json: async () => ({ number: data.head === 'feature/a' ? 31 : 32 }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchFixture);
+    const publish = (index: number) =>
+      actions.createPullRequest(
+        'p',
+        entries[index].id,
+        {
+          agentThreadId: entries[index].owner,
+          fingerprint: states[index].fingerprint,
+          head: states[index].head,
+          address: 'https://github.com/example/demo.git',
+          base: 'main',
+          title: entries[index].content.trim(),
+          description: '',
+          draft: false,
+          confirmation: 'CREATE_PULL_REQUEST',
+        },
+        prepared[index].actor,
+      );
+    const firstPR = publish(0);
+    await posting;
+    try {
+      await expect(publish(1)).resolves.toMatchObject({
+        number: 32,
+        existing: false,
+      });
+    } finally {
+      releasePost();
+    }
+    await expect(firstPR).resolves.toMatchObject({
+      number: 31,
+      existing: false,
+    });
+    expect(fetchFixture).toHaveBeenCalledTimes(2);
+  }, 15000);
+
   it('unstages selected changes without changing their file or other staged entries', async () => {
     writable();
     await writeFile(path.join(cwd, 'README.md'), 'keep me\n');
@@ -2441,6 +2640,49 @@ describe('retargeting existing GitHub pull requests', () => {
       fingerprint: state.fingerprint,
     });
     expect(JSON.stringify(result)).not.toContain('retarget-unit-token');
+  });
+  it('retargets for an isolated active owner while locking the PR rather than the unrelated local branch', async () => {
+    const { input, fetch, state } = await prepare();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'owner',
+        projectId: 'p',
+        workspacePath: path.join(root, 'project'),
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    claimAgentCopy(database.db, 'p', 'owner', copyId);
+    const permissions = agentCopyPermissions(database.db, 'p', 'owner');
+    gate.recordIsolation('owner', permissions);
+    gate.recordIsolation('observer', {
+      writableCopyPath: null,
+      readOnlyRoots: permissions.readOnlyRoots,
+    });
+    active = ['owner', 'observer'];
+    const publication = vi.spyOn(gate, 'publishFromAgent');
+    const assertActive = vi.fn();
+    await expect(
+      asPerson(() =>
+        actions.retargetPullRequest(
+          'p',
+          copyId,
+          { ...input, agentThreadId: 'owner' },
+          { threadId: 'owner', assertActive },
+        ),
+      ),
+    ).resolves.toMatchObject({ number: input.number, base: 'main' });
+    expect(publication).toHaveBeenCalledWith('owner', expect.any(Function), {
+      copyPath: await realpath(cwd),
+      remoteRef: JSON.stringify([input.address, 'pull_request', input.number]),
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(assertActive).toHaveBeenCalledTimes(3);
+    expect(await service.snapshot('p', copyId)).toMatchObject({
+      head: state.head,
+      fingerprint: state.fingerprint,
+    });
   });
   it.each([
     'head',
