@@ -83,6 +83,8 @@ it('keeps old backups manageable but does not offer a retention setting when Dev
 it.each([
   ['production-essential-v1', 'Essential data'],
   ['legacy-full-v1', 'Historical full backup'],
+  ['full-v1', 'Full'],
+  ['minimal-v1', 'Minimal — database and configuration'],
 ])(
   'shows the recorded %s scope for an individual backup',
   async (backupPolicy, label) => {
@@ -111,6 +113,27 @@ it('loads ten by default and saves a validated limit without deleting any backup
   await screen.findByText('Limit saved.');
   expect(api.save).toHaveBeenCalledWith(2, expect.anything());
   expect(api.remove).not.toHaveBeenCalled();
+});
+
+it('offers retention in Dev when the Manager can create explicitly selected backups', async () => {
+  setup({
+    ...status,
+    environment: 'development',
+    backupPolicy: 'development-none-v1',
+    capabilities: {
+      backupManagement: true,
+      backupRetention: true,
+      backupSelection: true,
+    },
+  });
+  expect(
+    await screen.findByRole('spinbutton', {
+      name: 'Number of backups to keep',
+    }),
+  ).toHaveValue(10);
+  expect(
+    screen.getByText(/Choose a full backup, minimal backup or no backup/),
+  ).toBeVisible();
 });
 
 it('shows the verified server path, disk usage and total usage', async () => {

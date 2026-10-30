@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { DatabaseService } from './database.service';
+import { people, pushSubscriptions } from './schema';
 
 let directory: string | undefined;
 let database: DatabaseService | undefined;
@@ -65,6 +66,44 @@ it('exposes schema and bounded read-only rows while masking secrets', () => {
   expect(() => database?.readTable('browser_test', 1, 101)).toThrow(
     'Invalid database pagination',
   );
+});
+
+it('masks push capability URLs and authentication secrets in the administrator database browser', () => {
+  directory = mkdtempSync(join(tmpdir(), 'mergeron-push-db-'));
+  database = new DatabaseService(
+    new ConfigService({ WEBUI_DB_PATH: join(directory, 'app.sqlite') }),
+  );
+  database.db
+    .insert(people)
+    .values({
+      id: 'p',
+      reference: 'p',
+      name: 'Person',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  database.db
+    .insert(pushSubscriptions)
+    .values({
+      id: 'd',
+      personId: 'p',
+      endpoint: 'https://fcm.googleapis.com/secret-url',
+      auth: 'secret-auth',
+      p256dh: 'public-encryption-key',
+      label: 'Phone',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  const result = database.readTable('push_subscriptions', 1, 25);
+  expect(result.rows[0]).toMatchObject({
+    label: 'Phone',
+    endpoint_secret: '••••••',
+    auth_secret: '••••••',
+  });
+  expect(JSON.stringify(result)).not.toContain('secret-url');
+  expect(JSON.stringify(result)).not.toContain('secret-auth');
 });
 
 it('reports the active SQLite path, storage size and safety settings', () => {

@@ -12,7 +12,10 @@ import { FileTree } from '@/components/files/file-tree';
 import { WorkspaceEntryMenu } from './workspace-entry-menu';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { useFilesStore } from '@/stores/files-store';
+import {
+  useFileBrowserState as useFilesStore,
+  useFileBrowserStoreApi,
+} from '@/components/files/file-browser-context';
 import { useLayoutStore } from '@/stores/layout-store';
 import { filesAddRoot } from '@/generated/api';
 import { pathIsWithin } from '@/lib/file-change-events';
@@ -62,6 +65,7 @@ export function WorkspaceTree({
   onGitRemoteFile,
 }: Props) {
   const { t } = useTranslation();
+  const browserStore = useFileBrowserStoreApi();
   const { t: tw } = useTranslation('workspaces');
   const session = usePlatformSession();
   const [systemOpen, setSystemOpen] = useState(false);
@@ -79,7 +83,7 @@ export function WorkspaceTree({
       revealedDirectory.current = { path, cwd };
       setSystemOpen(false);
       setGitResourceId(null);
-      useFilesStore.getState().setRootDir(path);
+      browserStore.getState().setRootDir(path);
     },
   }));
   // This component shares the conversation's keyed lifetime. Adoption is
@@ -89,7 +93,8 @@ export function WorkspaceTree({
     let cancelled = false;
     const adopt = () => {
       if (cancelled) return;
-      useFilesStore
+      if (adoptedCwd === cwd && browserStore.getState().rootDir) return;
+      browserStore
         .getState()
         .setRootDir(
           revealedDirectory.current?.cwd === cwd
@@ -108,7 +113,7 @@ export function WorkspaceTree({
     return () => {
       cancelled = true;
     };
-  }, [cwd]);
+  }, [cwd, adoptedCwd, browserStore]);
   const contents = (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center border-b px-3 text-xs font-medium">
@@ -172,7 +177,7 @@ export function WorkspaceTree({
                     onClick={() => {
                       setGitResourceId(null);
                       setSystemOpen(false);
-                      useFilesStore.getState().setRootDir(workspace.path);
+                      browserStore.getState().setRootDir(workspace.path);
                     }}
                   >
                     <Star
@@ -203,7 +208,7 @@ export function WorkspaceTree({
                         onSelect: () => {
                           setGitResourceId(null);
                           setSystemOpen(false);
-                          useFilesStore.getState().setRootDir(workspace.path);
+                          browserStore.getState().setRootDir(workspace.path);
                         },
                       },
                       {

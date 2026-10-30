@@ -2,19 +2,20 @@
 
 ## Installer et exploiter sur Docker
 
-1. [Fonctionnement du dépôt](fonctionnement-du-depot.md)
-2. [Architecture Docker](architecture.md)
-3. [Choisir le propriétaire de la pile](choisir-mode-installation.md)
-4. [Installation indépendante de l’hôte](installation-portable.md)
-5. [Commandes d’installation Docker](installation-docker.md)
-6. [Configuration des intégrations](configuration-integrations.md)
+1. [Installer Mergeron avec le Manager](installation.md)
+2. [Variables du Manager : défauts, rôle et utilisation](variables-manager.md)
+3. [Raccordement réseau et SSO facultatif](installation-portable.md)
+4. [Architecture de Mergeron](architecture.md)
+5. [Fonctionnement du dépôt](fonctionnement-du-depot.md)
+6. [Configuration des intégrations facultatives](configuration-integrations.md)
 7. [Mergeron Manager](mergeron-manager.md)
 8. [Sauvegarde et restauration](sauvegarde-restauration.md)
 9. [Exploitation et dépannage](exploitation-depannage.md)
 10. [Versions et publications](publications.md)
 11. [Audit de neutralité du déploiement](audit-portabilite.md)
 
-Les [adaptations aux panneaux hôtes](adapters/README.md) sont facultatives et
+Le Manager est le seul parcours d’installation utilisateur. Les
+[adaptations aux panneaux hôtes](adapters/README.md) sont facultatives et
 séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité sont
 également des choix d’intégration, pas des dépendances à un homelab particulier.
 
@@ -31,7 +32,6 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
   par fonctionnalités, recherche, articles français/anglais et vérifications.
 - [Export et import des projets en ZIP](export-import-projets.md) : transfert
   production/development, contenu, sécurité et compatibilité entre versions.
-- [Migration vers Mergeron](migration-mergeron.md)
 - [Droits d’accès aux projets](droits-acces-projets.md)
 - [Organisation des personnes](organisation-personnes-projets.md)
 - [Gestion des livrables](gestion-des-livrables.md)

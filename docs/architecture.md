@@ -1,133 +1,82 @@
-# Architecture Docker de Mergeron
+# Architecture de Mergeron
 
-Cette architecture fonctionne sur les hôtes Docker Linux pris en charge. Les noms de réseaux ci-dessous
-sont les valeurs par défaut ; le raccordement extérieur est configurable par
-`MERGERON_PROXY_NETWORK`. Voir [l’installation portable](installation-portable.md).
+Mergeron s’installe uniquement par son Manager, sur un hôte Docker Linux pris
+en charge. Le stockage, le domaine, le proxy HTTPS et le fournisseur SSO
+facultatif restent au choix de l’administrateur.
 
 ## Vue d’ensemble
 
 ```mermaid
 flowchart LR
-    B[Navigateur ou PWA]
-    V[VPS / accès public]
-    T[Reverse proxy HTTPS au choix]
-    A[Authentik facultatif]
-    N[Nginx ingress]
-    C[Mergeron]
-    S[Squid egress]
-    O[OpenAI / GitHub / PyPI]
-    H[HA-MCP]
-    U[Serveur administré]
-    R[VPS SSH]
-
-    B -->|HTTPS| V
-    V --> T
-    T --> N
-    N -.-> A
-    N -->|session native ou identité vérifiée| C
-    C --> S
-    S --> O
-    C --> H
-    C --> U
-    C --> R
+    U[Utilisateur] -->|HTTPS| P[Proxy HTTPS au choix]
+    P --> I[Entrée Mergeron]
+    I --> A[Application Mergeron]
+    A --> E[Sortie filtrée Mergeron]
+    E --> X[Services externes autorisés]
+    E -.-> S[Fournisseur OIDC facultatif]
+    M[Mergeron Manager] -->|API Docker locale| D[Conteneurs Mergeron]
+    A <-->|Socket Unix privé| M
 ```
 
-## Conteneurs
+Le proxy HTTPS n’est pas le Manager. Le SSO n’est pas obligatoire et aucun
+fournisseur particulier n’est requis. Le Manager est local, sans page Web ni
+port réseau à exposer.
 
-### `mergeron-ui`
+## Composants livrés
 
-Application principale et moteur Codex. Aucun port n’est publié sur l’hôte.
-L’application est joignable uniquement depuis Nginx sur le réseau interne.
+| Composant          | Rôle                                                                                                                                                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mergeron-manager` | Installe les ressources déclarées, observe leur santé, contrôle les mises à jour et retours arrière, fournit le CLI validé et orchestre les aperçus autorisés. |
+| `mergeron-ui`      | Interface, API, conversations, documents et moteur d’agents. Aucun port hôte publié.                                                                           |
+| `mergeron-ingress` | Entrée HTTP/WebSocket entre votre proxy et l’application ; implémentation Nginx fournie avec Mergeron.                                                         |
+| `mergeron-squid`   | Filtre les sorties HTTP(S) autorisées ; implémentation Squid fournie avec Mergeron.                                                                            |
 
-Montages persistants :
+Le [navigateur distant](navigateur-annote.md) est facultatif. Chaque
+[environnement de test](previsualisations-agents.md) utilise ses propres
+ressources jetables, sans compte de production, source hôte ou socket Docker.
+L’extension locale utilise, elle, le navigateur de l’utilisateur.
 
-| Montage            | Usage                                  | Accès            |
-| ------------------ | -------------------------------------- | ---------------- |
-| `/home/codex`      | configuration, OAuth, MCP, base SQLite | lecture/écriture |
-| `/workspaces`      | espaces de travail                     | lecture/écriture |
-| `/appdata`         | dossiers hôtes explicitement autorisés | lecture/écriture |
-| `/app/logs`        | journaux                               | lecture/écriture |
-| `/home/codex/.ssh` | clés et configuration SSH              | lecture seule    |
-| `/run/secrets/*`   | jetons internes et clé OpenAI          | lecture seule    |
+## Données persistantes
 
-### `mergeron-ingress`
+| Montage applicatif | Usage                                                                          |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `/home/codex`      | Configuration, comptes, base SQLite, conversations et configuration du moteur. |
+| `/workspaces`      | Espaces de travail, documents et espaces système des projets.                  |
+| `/appdata`         | Dossiers hôtes explicitement autorisés ; limiter leur périmètre.               |
+| `/app/logs`        | Journaux.                                                                      |
+| `/run/secrets/*`   | Secrets internes, montés en lecture seule.                                     |
+| `/home/codex/.ssh` | Matériel de connexion facultatif, monté en lecture seule.                      |
 
-Passerelle Nginx entre le reverse proxy choisi et l’application. En mode
-historique, elle contrôle Authentik, renouvelle les cookies et injecte le jeton
-interne avec l’identité vérifiée. En mode `native`, elle n’injecte aucun jeton de
-service dans les requêtes navigateur : Mergeron vérifie ses sessions locales ou
-OIDC. Les en-têtes d’identité du navigateur sont effacés dans ce mode.
-
-Les exceptions machine-à-machine sont limitées au retour OAuth MCP et aux deux
-routes OnlyOffice. Les contrôles applicatifs OnlyOffice restent obligatoires.
-
-### `mergeron-squid`
-
-Proxy Squid utilisé par les variables `HTTP_PROXY`, `HTTPS_PROXY` et
-`ALL_PROXY`. Il refuse les adresses privées et n’autorise qu’une liste définie
-de domaines Internet.
-
-### Manager et services facultatifs
-
-`mergeron-manager` est séparé de l’application et conserve `network_mode: none`.
-Il utilise l’API Docker locale et un socket Unix applicatif : ne jamais monter
-ce socket Docker dans un agent. Il installe la pile, contrôle les mises à jour
-et retours arrière, installe le [CLI géré](operations/managed-codex-runtime.md)
-et orchestre les [prévisualisations](previsualisations-agents.md).
-
-Le [navigateur distant](live-browser.md) utilise un conteneur facultatif distinct,
-un réseau de contrôle privé et une sortie filtrée. L’[extension locale](local-browser-extension.md)
-utilise au contraire le navigateur de l’utilisateur, notamment pour ses passkeys.
-Elle ne remplace pas le mode distant et ne lui transfère pas ses identifiants.
-
-Chaque aperçu dispose de son runtime, de ses volumes éphémères, d’un réseau
-privé isolé et d’un proxy sortant filtré. Un relais authentifié rejoint le réseau
-administratif ; le runtime du projet n’y est pas raccordé. Aucun port hôte,
-montage de sources hôte, compte de production ou socket Docker n’est fourni
-au runtime. Le wildcard HTTPS est configuré une fois, sans DNS par instance.
+La racine hôte est `MERGERON_STATE_ROOT`. Le Manager la retrouve sous
+`/host-state`. Son socket et son état privé restent dans `manager-run` et
+`manager-state`. Les [sauvegardes externes](sauvegarde-restauration.md) restent
+nécessaires, notamment pour les dossiers externes exposés sous `/appdata`.
 
 ## Réseaux
 
-| Réseau                                      | Type           | Membres                                     | Fonction                            |
-| ------------------------------------------- | -------------- | ------------------------------------------- | ----------------------------------- |
-| `mergeron-isolated`                         | bridge interne | les trois conteneurs                        | trafic privé entre les composants   |
-| `mergeron-external`                         | bridge         | Squid                                       | sortie Internet du proxy            |
-| `mergeron-admin`                            | bridge `/28`   | application                                 | SSH, MCP et services administratifs |
-| `MERGERON_PROXY_NETWORK` (`mergeron-proxy`) | réseau externe | ingress, proxy choisi, Authentik si utilisé | entrée HTTPS                        |
+| Réseau par défaut        | Membres de base                      | Fonction                                     |
+| ------------------------ | ------------------------------------ | -------------------------------------------- |
+| `mergeron-isolated`      | Application, ingress, filtre sortant | Échanges privés ; réseau Docker interne.     |
+| `mergeron-external`      | Filtre sortant                       | Sorties Internet.                            |
+| `mergeron-admin`         | Application                          | Accès aux services autorisés.                |
+| `MERGERON_PROXY_NETWORK` | Ingress et proxy choisi              | Raccordement à l’entrée HTTPS ; préexistant. |
 
-`mergeron-isolated` possède `internal: true` : il ne fournit pas de route Internet.
-Cette table décrit la pile de base. Le navigateur facultatif ajoute son réseau
-de contrôle ; les réseaux privés et de sortie des aperçus sont propres à chaque
-instance et supprimés lors de son arrêt.
+Les noms sont préfixés par `MERGERON_STACK_PREFIX`. Le Manager crée seulement
+les réseaux de sa pile, jamais le réseau externe du proxy. Il reste lui-même
+en `network none`. Les services facultatifs ajoutent leurs réseaux dédiés.
 
-## Flux entrant
+## Frontières de sécurité
 
-1. Le reverse proxy choisi termine TLS pour le domaine public.
-2. Il transmet à `mergeron-ingress:8080`, jamais au backend.
-3. L’ingress contrôle Authentik dans le mode historique ; en mode natif,
-   l’application vérifie la session Mergeron/OIDC.
-4. Une identité absente ou non autorisée ne donne aucun accès aux API.
-5. Le backend reste sur son réseau privé, sans port hôte publié.
+- Seul le Manager reçoit le socket Docker. Son montage en lecture seule
+  n’enlève pas les privilèges de l’API : cet accès reste réservé à l’administrateur.
+- Le proxy cible l’ingress sur 8080, jamais le backend.
+- Mergeron vérifie ses sessions locales ou OIDC et efface les en-têtes
+  d’identité non fiables ; aucun accès métier anonyme n’est créé.
+- Les conteneurs ont une racine en lecture seule, des capacités réduites, des
+  limites de ressources, des temporaires séparés et des journaux bornés.
+- Le bac à sable interne utilise le profil système livré, pas le mode privilégié.
+- Le filtre HTTP(S) n’est pas un pare-feu absolu pour un programme ignorant le
+  proxy : le réseau administratif conserve une route vers les services autorisés.
 
-## Flux sortant
-
-Les logiciels respectant les variables de proxy passent par Squid. Les domaines
-autorisés sont définis dans `deployment/config/squid.conf`.
-
-Le réseau `mergeron-admin` offre une route directe nécessaire aux connexions SSH et
-aux services locaux. Il s’agit d’un compromis connu : Squid n’est donc pas un
-pare-feu absolu pour un programme qui ignorerait volontairement le proxy.
-
-## Durcissement Docker
-
-- `privileged: false` ;
-- aucun socket Docker dans l’application, l’ingress, Squid, le navigateur ou
-  les runtimes de prévisualisation ; seul le Manager dispose
-  de l’API Docker locale, avec les privilèges importants que cela implique ;
-- `read_only: true` ;
-- `cap_drop: ALL` ;
-- `no-new-privileges:true` ;
-- ressources CPU, mémoire et PID limitées ;
-- répertoires temporaires en `tmpfs` avec `nosuid,nodev` ;
-- profil seccomp spécifique pour le bac à sable Bubblewrap ;
-- rotation des journaux Docker.
+Voir [l’installation](installation.md), les [variables](variables-manager.md)
+et la [politique de sécurité](../SECURITY.md).

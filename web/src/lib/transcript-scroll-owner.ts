@@ -70,6 +70,11 @@ export class TranscriptScrollOwner {
     this.offset = saved?.offset ?? 0;
   }
 
+  /** Library measurement writes must not cancel a native animated gesture. */
+  get inputInProgress(): boolean {
+    return this.userIntent;
+  }
+
   /** Binds the stable scroller. Ref cleanup only saves state; it does not navigate. */
   bind(element: HTMLDivElement | null): void {
     if (!element && this.element) this.save();
@@ -78,16 +83,21 @@ export class TranscriptScrollOwner {
   }
 
   /** Captures before React mutation; subsequent changes in the same batch keep the first point. */
-  beforeCommit(): void {
+  beforeCommit(nextActive = true): void {
     if (
       !this.active ||
       this.following ||
-      this.userIntent ||
+      (this.userIntent && nextActive) ||
       this.restore ||
       this.pending ||
-      !this.element
+      !this.element?.clientHeight
     )
       return;
+    // During input, estimates can settle without compensation so the visible
+    // point may differ from the last scroll event's bookmark. Hiding must save
+    // that actual point before display:none destroys its layout, even if the
+    // native gesture has not emitted scrollend yet. Ordinary input commits
+    // still never arm a correction that would fight the gesture.
     this.pending = captureReadingAnchor(this.element) ?? this.anchor;
   }
 
@@ -145,6 +155,9 @@ export class TranscriptScrollOwner {
       this.restore = true;
     }
     this.lastSignal = options.signal;
+    // An Activity-hidden view has zero layout geometry. Measuring it would
+    // discard valid row sizes and drift the saved reading point on reactivation.
+    if (!this.active) return;
     this.checkGeometry();
     this.correct();
   }
@@ -156,6 +169,7 @@ export class TranscriptScrollOwner {
     const width =
       element.querySelector<HTMLElement>('[data-transcript-column]')
         ?.clientWidth ?? element.clientWidth;
+    if (!width || !element.clientHeight) return false;
     const changed = this.width !== 0 && width !== this.width;
     if (changed) {
       if (!this.pending && !this.following) this.pending = this.anchor;
@@ -171,6 +185,7 @@ export class TranscriptScrollOwner {
 
   /** Handles real viewport/font events without waiting for an unrelated React render. */
   geometryChanged(fonts = false): void {
+    if (!this.active || !this.element?.clientHeight) return;
     if (!this.pending && !this.following) this.pending = this.anchor;
     if (fonts) this.virtualizer?.measure();
     if (this.checkGeometry() && this.following) this.restore = true;

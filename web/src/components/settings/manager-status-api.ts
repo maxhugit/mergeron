@@ -47,6 +47,9 @@ export interface ManagerComponent {
 }
 
 export type ManagerBackupPolicy =
+  | 'full-v1'
+  | 'minimal-v1'
+  | 'none-v1'
   | 'development-none-v1'
   | 'production-essential-v1'
   | 'legacy-full-v1';
@@ -57,6 +60,7 @@ export interface ManagerStatus {
     backupManagement?: boolean;
     devFastUpdate?: boolean;
     backupRetention?: boolean;
+    backupSelection?: boolean;
   };
   available: boolean;
   schemaVersion?: number;
@@ -97,6 +101,7 @@ export interface ManagerStatus {
 }
 
 export interface ManagerUpdatePlan {
+  backupMode?: 'full' | 'minimal' | 'none';
   backupPolicy?: ManagerBackupPolicy;
   backupScope?: string[];
   excludedFromDataRollback?: string[];

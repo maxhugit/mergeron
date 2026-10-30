@@ -2,7 +2,8 @@
  * Authenticated layout: sidebar + header + main content outlet.
  * Replaces the old App.tsx conditional rendering.
  */
-import { Activity, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { RetainedSurface } from '@/components/retained-surface';
 import { readManagerUpdateReceipt } from '@/components/settings/manager-update-recovery';
 import { ManagerUpdateReconnecting } from '@/components/settings/manager-update-reconnecting';
 import { LoaderCircle } from 'lucide-react';
@@ -54,13 +55,14 @@ import { MobileRefresh } from '@/components/mobile-refresh';
 import { ImpersonationBanner } from '@/components/impersonation-controls';
 import { installBrowserWorkspaceSessions } from '@/lib/browser-workspace-sessions';
 import { useWorkspaceStore } from '@/stores/workspace-store';
+import { AgentWorkspaceHost } from '@/components/chat/agent-workspace-host';
 
 /**
  * Bound on retained per-conversation state.
  *
  * Named for subscriptions historically, and it still unsubscribes what it
- * evicts, but with rooms following the visible transcript there is rarely more
- * than one. What it actually bounds now is the runtime cache — including the
+ * evicts. There is normally one room, plus the recently visited views of a
+ * project opting into fast navigation. It bounds the runtime cache — including the
  * conversations attention delivery creates state for without ever opening.
  */
 const DEFAULT_MAX_IDLE_SUBSCRIPTIONS = 30;
@@ -93,7 +95,7 @@ function AuthenticatedContent() {
     <>
       {/* Activity retains React/DOM state but cleans up effects and portals while
           hidden. Cached identity never grants access during verification. */}
-      <Activity mode={ready ? 'visible' : 'hidden'}>
+      <RetainedSurface active={ready}>
         {retained && (
           <div className="flex h-full min-h-0 flex-col">
             <ImpersonationBanner />
@@ -110,7 +112,7 @@ function AuthenticatedContent() {
             </div>
           </div>
         )}
-      </Activity>
+      </RetainedSurface>
       {!ready && (
         <SessionRecovery
           session={session}
@@ -459,7 +461,12 @@ function AuthenticatedWorkspace({
               {t('administratorAccessRequired')}
             </div>
           ) : (
-            <Outlet />
+            <>
+              <Outlet />
+              <AgentWorkspaceHost
+                activeThreadId={/^\/t\/([^/]+)\/?$/.exec(pathname)?.[1] ?? null}
+              />
+            </>
           )}
           {isAdministrator && (
             <GlobalFilesHost active={pathname === '/files'} />

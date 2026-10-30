@@ -5,6 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  backupDescription,
+  backupLabel,
+  withoutDataBackup,
+} from './manager-backup-policy';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -78,6 +83,11 @@ export function ManagerUpdateControls({
   const [imageOverride, setImage] = useState<string | null>(null);
   const [manualSelection, setManualSelection] = useState(false);
   const [fastEnabled, setFastEnabled] = useState(true);
+  const [backupMode, setBackupMode] = useState<'full' | 'minimal' | 'none'>(
+    'full',
+  );
+  const backupSelection = status.capabilities?.backupSelection === true;
+  const backupInput = backupSelection ? { backupMode } : {};
   const fastAvailable =
     status.environment === 'development' &&
     status.capabilities?.devFastUpdate === true;
@@ -176,6 +186,39 @@ export function ManagerUpdateControls({
           }}
         />
       </div>
+      {backupSelection && (
+        <div className="space-y-2">
+          <label htmlFor="manager-backup-mode" className="text-sm">
+            {t('managerBackupMode')}
+          </label>
+          <select
+            id="manager-backup-mode"
+            aria-describedby="manager-backup-mode-help"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={backupMode}
+            disabled={busy || blocked}
+            onChange={(event) => {
+              setBackupMode(event.target.value as typeof backupMode);
+              setPlan(null);
+              setConfirm(null);
+            }}
+          >
+            <option value="full">{t('managerFullBackup')}</option>
+            <option value="minimal">{t('managerMinimalBackup')}</option>
+            <option value="none">{t('managerNoBackup')}</option>
+          </select>
+          <p
+            id="manager-backup-mode-help"
+            className={
+              backupMode === 'none'
+                ? 'text-sm text-destructive'
+                : 'text-xs text-muted-foreground'
+            }
+          >
+            {t(translationKey(backupDescription(`${backupMode}-v1`)))}
+          </p>
+        </div>
+      )}
       {fastAvailable && (
         <div className="space-y-1">
           <label className="flex items-center gap-2 text-sm">
@@ -192,9 +235,11 @@ export function ManagerUpdateControls({
           </label>
           <p className="text-xs text-muted-foreground">
             {t(
-              status.backupPolicy === 'development-none-v1'
-                ? 'managerFastDevNoBackupHelp'
-                : 'managerFastDevUpdateHelp',
+              backupSelection
+                ? 'managerFastSelectedBackupHelp'
+                : status.backupPolicy === 'development-none-v1'
+                  ? 'managerFastDevNoBackupHelp'
+                  : 'managerFastDevUpdateHelp',
             )}
           </p>
         </div>
@@ -205,19 +250,25 @@ export function ManagerUpdateControls({
         onUpdate={(images) => {
           mutation.mutate({
             action: 'plan',
-            input: { images, ...(fastMode ? { mode: 'dev-fast' } : {}) },
+            input: {
+              images,
+              ...backupInput,
+              ...(fastMode ? { mode: 'dev-fast' } : {}),
+            },
           });
         }}
       />
-      <p className="text-xs text-muted-foreground">
-        {t(
-          status.backupPolicy === 'development-none-v1'
-            ? 'managerDevelopmentNoBackup'
-            : status.backupPolicy === 'production-essential-v1'
-              ? 'managerProductionEssentialBackup'
-              : 'managerUpdateSafetyDescription',
-        )}
-      </p>
+      {!backupSelection && (
+        <p className="text-xs text-muted-foreground">
+          {t(
+            status.backupPolicy === 'development-none-v1'
+              ? 'managerDevelopmentNoBackup'
+              : status.backupPolicy === 'production-essential-v1'
+                ? 'managerProductionEssentialBackup'
+                : 'managerUpdateSafetyDescription',
+          )}
+        </p>
+      )}
       {operation && operation.status !== 'succeeded' && (
         <div
           role="status"
@@ -291,6 +342,7 @@ export function ManagerUpdateControls({
                   action: 'plan',
                   input: {
                     images: { application: target },
+                    ...backupInput,
                     ...(fastMode ? { mode: 'dev-fast' } : {}),
                   },
                 });
@@ -364,6 +416,21 @@ export function ManagerUpdateControls({
               )}
             </AlertDialogTitle>
             <AlertDialogDescription>
+              {(confirm === 'apply'
+                ? plan?.backupPolicy
+                : operation?.backupPolicy) && (
+                <span className="mb-2 block font-medium">
+                  {t(
+                    translationKey(
+                      backupLabel(
+                        confirm === 'apply'
+                          ? plan?.backupPolicy
+                          : operation?.backupPolicy,
+                      ),
+                    ),
+                  )}
+                </span>
+              )}
               {confirm === 'apply' && plan && (
                 <span className="mb-2 block break-all font-mono text-xs">
                   {Object.entries(plan.images)
@@ -373,14 +440,20 @@ export function ManagerUpdateControls({
               )}
               {t(
                 confirm === 'rollback'
-                  ? operation?.backupPolicy === 'development-none-v1'
+                  ? withoutDataBackup(operation?.backupPolicy)
                     ? 'managerRollbackImagesOnlyWarning'
-                    : 'managerRollbackDataWarning'
-                  : plan?.backupPolicy === 'development-none-v1'
-                    ? 'managerUpdateNoBackupWarning'
-                    : plan?.backupPolicy === 'production-essential-v1'
-                      ? 'managerUpdateEssentialWarning'
-                      : 'managerUpdateDowntimeWarning',
+                    : operation?.backupPolicy === 'minimal-v1'
+                      ? 'managerMinimalRollbackWarning'
+                      : 'managerRollbackDataWarning'
+                  : plan?.backupPolicy === 'none-v1'
+                    ? 'managerNoBackupHelp'
+                    : plan?.backupPolicy === 'minimal-v1'
+                      ? 'managerMinimalUpdateWarning'
+                      : plan?.backupPolicy === 'development-none-v1'
+                        ? 'managerUpdateNoBackupWarning'
+                        : plan?.backupPolicy === 'production-essential-v1'
+                          ? 'managerUpdateEssentialWarning'
+                          : 'managerUpdateDowntimeWarning',
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -392,20 +465,19 @@ export function ManagerUpdateControls({
                 if (confirm === 'apply' && plan)
                   launch('apply', {
                     images: plan.images,
-                    confirmation:
-                      plan.backupPolicy === 'development-none-v1'
-                        ? 'UPDATE_WITHOUT_DATA_BACKUP'
-                        : 'UPDATE_WITH_ROLLBACK',
+                    ...(plan.backupMode ? { backupMode: plan.backupMode } : {}),
+                    confirmation: withoutDataBackup(plan.backupPolicy)
+                      ? 'UPDATE_WITHOUT_DATA_BACKUP'
+                      : 'UPDATE_WITH_ROLLBACK',
                     expectedFingerprint: plan.fingerprint,
                     ...(plan.mode ? { mode: plan.mode } : {}),
                   });
                 if (confirm === 'rollback' && operation)
                   launch('rollback', {
                     operationId: operation.id,
-                    confirmation:
-                      operation.backupPolicy === 'development-none-v1'
-                        ? 'ROLLBACK_IMAGES_ONLY'
-                        : 'ROLLBACK_WITH_DATA_RESTORE',
+                    confirmation: withoutDataBackup(operation.backupPolicy)
+                      ? 'ROLLBACK_IMAGES_ONLY'
+                      : 'ROLLBACK_WITH_DATA_RESTORE',
                   });
               }}
             >

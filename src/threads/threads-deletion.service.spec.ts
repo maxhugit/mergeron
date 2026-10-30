@@ -14,6 +14,7 @@ import { ThreadHistoryService } from './thread-history.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import { ThreadsDeletePlannerService } from './threads-delete-planner.service';
 import { ThreadsDeletionService } from './threads-deletion.service';
+import type { AgentGitCopyCleanupService } from './agent-git-copy-cleanup.service';
 import { makeThreadFixture } from './threads.testing';
 
 const readyAdoption = {
@@ -63,6 +64,7 @@ describe('ThreadsDeletionService', () => {
     listTurns: vi.fn(),
   };
   const mockDb = makeDbMock();
+  const mockGitCopyCleanup = { cleanup: vi.fn() };
 
   beforeEach(() => {
     requestLog = [];
@@ -83,6 +85,7 @@ describe('ThreadsDeletionService', () => {
       mockDeletionRegistry as unknown as ThreadDeletionRegistryService,
       mockHistory as unknown as ThreadHistoryService,
       mockDb as unknown as AppDatabase,
+      mockGitCopyCleanup as unknown as AgentGitCopyCleanupService,
     );
 
     mockCodex.request.mockReset();
@@ -94,6 +97,7 @@ describe('ThreadsDeletionService', () => {
     Object.values(mockDeletionRegistry).forEach((mock) => mock.mockReset());
     Object.values(mockHistory).forEach((mock) => mock.mockReset());
     mockDb.delete.mockClear();
+    mockGitCopyCleanup.cleanup.mockReset().mockResolvedValue(undefined);
     mockAdoption.getStatus.mockReturnValue(readyAdoption);
     mockAdoption.getBlockingDiagnostics.mockReturnValue([]);
     mockBranchMutations.listEdges.mockReturnValue([]);
@@ -136,6 +140,29 @@ describe('ThreadsDeletionService', () => {
     expect(result.deleteOrder).toEqual(['grandchild', 'child', 'root']);
     expect(deleted).toEqual(['grandchild', 'child', 'root']);
     expect(mockBranchMutations.reapDeletedThread).toHaveBeenCalledTimes(3);
+    expect(mockGitCopyCleanup.cleanup.mock.calls).toEqual([
+      ['grandchild'],
+      ['child'],
+      ['root'],
+    ]);
+  });
+
+  it('reports copy cleanup failures and keeps local topology for a retry', async () => {
+    mockCodex.request.mockImplementation((method: string, params) => {
+      if (method === 'thread/list')
+        return Promise.resolve(listResponse(params, [makeThread('root')]));
+      if (method === 'thread/delete') return Promise.resolve({});
+      throw new Error(`unexpected ${method}`);
+    });
+    mockGitCopyCleanup.cleanup.mockRejectedValue(new Error('GIT_COPY_IN_USE'));
+
+    const result = await service.deleteThread('root', {
+      expectedThreadIds: ['root'],
+    });
+
+    expect(result.status).toBe('partial');
+    expect(result.failure?.stage).toBe('local_cleanup');
+    expect(mockBranchMutations.reapDeletedThread).not.toHaveBeenCalled();
   });
 
   // The observer normally evicts on `thread/deleted`, but a thread app-server

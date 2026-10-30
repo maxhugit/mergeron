@@ -2,7 +2,7 @@
 
 ## Rôle du projet
 
-Ce dépôt transforme Codex CLI en application Web persistante. Le backend NestJS
+Ce dépôt contient Mergeron et son Manager. Le backend NestJS
 pilote `codex app-server`, conserve les conversations dans SQLite, expose des
 API REST et Socket.IO, et sert l’interface React compilée. Le navigateur ne
 dispose jamais directement des secrets OpenAI, SSH ou MCP.
@@ -59,17 +59,16 @@ avec `MERGERON_APPDATA_ROOT`, sans obligation de monter tous les fichiers de l�
 
 ## Cycle d’une requête
 
-1. Le navigateur ouvre le domaine public configuré pour Codex.
-2. Le reverse proxy choisi termine HTTPS et transmet la requête à Nginx.
-3. En mode historique Nginx vérifie Authentik ; en mode natif Mergeron vérifie
-   ses propres sessions locales/OIDC. Voir [les choix d’installation](installation-portable.md).
+1. Le navigateur ouvre le domaine public de Mergeron.
+2. Le proxy choisi termine HTTPS et transmet la requête à l’entrée Mergeron.
+3. Mergeron vérifie sa session locale ou OIDC. Voir le
+   [raccordement réseau et SSO](installation-portable.md).
 4. Le backend répond, démarre Codex CLI ou accède aux données persistantes.
 5. Les connexions Internet autorisées passent par Squid.
 
 ## Mise à jour du code
 
-Le projet d’origine n’est pas fusionné automatiquement. Toute correction externe
-est étudiée et reprise manuellement. Une mise à jour normale de ce dépôt produit
+Une mise à jour de ce dépôt produit
 une nouvelle image ; les données persistantes ne sont pas remplacées.
 
 Codex CLI n'est pas intégré à l'image d'exécution. Sa première installation et

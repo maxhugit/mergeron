@@ -39,6 +39,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     selectedThreadId: null,
     threadsById: {},
     subscribedThreadIds: new Set<string>(),
+    retainedThreadIds: new Set<string>(),
+    confirmedThreadIds: new Set<string>(),
     maxIdleSubscriptions: DEFAULT_MAX_IDLE_SUBSCRIPTIONS,
     threadId: null,
     threadCwd: null,

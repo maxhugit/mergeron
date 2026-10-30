@@ -53,6 +53,7 @@ it('allows an update plan slower than three seconds without retrying or starting
   const result = f.service.updateOperation('plan', {
     images: { application: 'approved' },
     mode: 'dev-fast',
+    backupMode: 'minimal',
   });
   expect(vi.mocked(http.request).mock.calls[0][0]).toMatchObject({
     path: '/v1/update/plan',
@@ -63,6 +64,9 @@ it('allows an update plan slower than three seconds without retrying or starting
   f.respond(JSON.stringify({ applicable: true, fingerprint: 'verified' }));
   await expect(result).resolves.toMatchObject({ applicable: true });
   expect(http.request).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(f.request.write.mock.calls[0][0]))).toMatchObject({
+    backupMode: 'minimal',
+  });
   expect(vi.getTimerCount()).toBe(0);
 });
 

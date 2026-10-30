@@ -1555,6 +1555,71 @@ export const conversationOwners = sqliteTable(
   (table) => [primaryKey({ columns: [table.kind, table.conversationId] })],
 );
 
+/** Private Web Push capabilities; never returned by profile/list endpoints. */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    personId: text('person_id')
+      .notNull()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint_secret').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth_secret').notNull(),
+    label: text('label').notNull(),
+    language: text('language').notNull().default('en'),
+    completed: integer('completed', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    approvals: integer('approvals', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    questions: integer('questions', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    lastTestAt: integer('last_test_at'),
+  },
+  (table) => [index('idx_push_person').on(table.personId)],
+);
+
+/** Receipt deduplication also covers subscription changes and zero recipients. */
+export const pushEvents = sqliteTable('push_events', {
+  eventKey: text('event_key').primaryKey(),
+  createdAt: integer('created_at').notNull(),
+});
+
+/** Durable per-device outbox. A stable ID/tag coalesces ambiguous network retries. */
+export const pushDeliveries = sqliteTable(
+  'push_deliveries',
+  {
+    id: text('id').primaryKey(),
+    subscriptionId: text('subscription_id')
+      .notNull()
+      .references(() => pushSubscriptions.id, { onDelete: 'cascade' }),
+    eventKey: text('event_key').notNull(),
+    threadId: text('thread_id'),
+    requestInstanceId: text('request_instance_id'),
+    kind: text('kind')
+      .$type<'completed' | 'approvals' | 'questions' | 'test'>()
+      .notNull(),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+    nextAttemptAt: integer('next_attempt_at').notNull(),
+    leaseAt: integer('lease_at'),
+  },
+  (table) => [
+    uniqueIndex('idx_push_event_device').on(
+      table.subscriptionId,
+      table.eventKey,
+    ),
+    index('idx_push_due').on(table.status, table.nextAttemptAt),
+  ],
+);
+
 /** Revocable server-to-server document capabilities, never general login tokens. */
 export const documentAccessSessions = sqliteTable('document_access_sessions', {
   id: text('id').primaryKey(),

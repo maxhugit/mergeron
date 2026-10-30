@@ -33,12 +33,18 @@ it('advertises retargeting and its remote preconditions to native MCP clients', 
     const { tools } = await client.listTools();
     expect(tools[0].inputSchema.properties).toMatchObject({
       operation: {
-        enum: ['push', 'create_pull_request', 'retarget_pull_request'],
+        enum: [
+          'push',
+          'create_pull_request',
+          'retarget_pull_request',
+          'update_pull_request',
+        ],
       },
       number: { type: 'integer' },
       base: { type: 'string' },
       expectedBase: { type: 'string' },
       expectedPullRequestHead: { type: 'string' },
+      expectedUpdatedAt: { type: 'string', format: 'date-time' },
     });
     expect(tools[0].annotations?.readOnlyHint).toBe(false);
   } finally {

@@ -76,6 +76,7 @@ vi.mock('@/lib/projects-api', () => ({
                 sourceEnabled: true,
                 state: 'ready',
                 branch: 'main',
+                revision: 'a'.repeat(40),
                 accessMode: 'read_write',
               },
             ]
@@ -237,7 +238,7 @@ test.each([1100, 390])(
       </QueryClientProvider>,
     );
     try {
-      await screen.findByText('Copie locale disponible');
+      await screen.findByText('Local : main · aaaaaaa');
       expect(screen.queryByText('Git Test — copie')).toBeNull();
       await page
         .getByRole('button', { name: 'Actions Git · Git Test' })

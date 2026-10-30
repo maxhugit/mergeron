@@ -3,7 +3,12 @@ import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { applyFileChange, reconcileExternalPaths } from './file-reconciler';
 import { emitFileChange, subscribeFileChanges } from './file-change-events';
-import { useFilesStore, useGlobalFilesStore } from '@/stores/files-store';
+import {
+  getAgentFilesStore,
+  retainAgentFilesStores,
+  useFilesStore,
+  useGlobalFilesStore,
+} from '@/stores/files-store';
 import { useDocumentStore } from '@/stores/document-store';
 import {
   filesGetMetadataQueryKey,
@@ -16,6 +21,7 @@ vi.mock('@/generated/api', async (original) => ({
 }));
 
 beforeEach(() => {
+  retainAgentFilesStores([]);
   vi.clearAllMocks();
   useDocumentStore.setState({ documents: {}, pathIndex: {} });
   useGlobalFilesStore.setState({ rootDir: null, selectedFile: null });
@@ -23,6 +29,29 @@ beforeEach(() => {
     rootDir: '/work/a/sub',
     selectedFile: '/work/ab/file.ts',
   });
+});
+
+it('repairs cached agent explorers without mixing their folders', () => {
+  const a = getAgentFilesStore('a');
+  const b = getAgentFilesStore('b');
+  a.getState().setRootDir('/work/a/sub');
+  b.getState().setRootDir('/work/b/sub');
+  a.getState().selectFile('/work/a/sub/report.md');
+  const client = new QueryClient();
+  applyFileChange(client, {
+    source: 'local',
+    kind: 'rename',
+    oldPath: '/work/a',
+    newPath: '/work/renamed',
+  });
+  expect(a.getState().rootDir).toBe('/work/renamed/sub');
+  expect(b.getState().rootDir).toBe('/work/b/sub');
+  applyFileChange(client, {
+    source: 'local',
+    kind: 'delete',
+    path: '/work/renamed/sub/report.md',
+  });
+  expect(a.getState().selectedFile).toBeNull();
 });
 
 it('repairs the browser directory but leaves a string-prefix sibling alone', () => {

@@ -1,11 +1,23 @@
 /** Real Chromium/WebKit layout verifies the production virtualizer and scroll owner together. */
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, beforeAll, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
 import { act, cleanup, render } from '@testing-library/react';
 import { VirtualTranscript } from './virtual-transcript';
-import { forgetTranscriptBookmarks } from '@/lib/transcript-anchor';
+import { RetainedSurface } from '@/components/retained-surface';
+import {
+  captureReadingAnchor,
+  forgetTranscriptBookmarks,
+  readTranscriptBookmark,
+  readingAnchorDelta,
+} from '@/lib/transcript-anchor';
 import '@/index.css';
-import '@/i18n';
+import { i18nReady } from '@/i18n';
+
+// Geometry assertions must start after the translated surface can mount,
+// including a cold browser run with asynchronously loaded locale catalogs.
+beforeAll(async () => {
+  await i18nReady;
+});
 
 declare module 'vitest/browser' {
   interface BrowserCommands {
@@ -130,6 +142,74 @@ test('retains the hidden scroll box and restores a historical sentence after hid
     <Fixture id={id} changes={new Map([[index, 210]])} extra={700} />,
   );
   await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
+  expect(distance()).toBeGreaterThan(500);
+});
+
+test('does not replace measured row heights with zero while a retained view has no layout', async () => {
+  const id = `browser:${++threadSequence}`;
+  const view = render(
+    <div style={{ display: 'contents' }}>
+      <Fixture id={id} />
+    </div>,
+  );
+  const index = await readHistory();
+  const before = y(index);
+  view.rerender(
+    <div style={{ display: 'none' }}>
+      <Fixture id={id} active={false} />
+    </div>,
+  );
+  // ResizeObserver reports zero boxes while React retains this DOM subtree.
+  // Wait for actual frames, rather than assuming the hide/reveal is synchronous.
+  await finishGesture();
+  expect(scroller().clientHeight).toBe(0);
+  view.rerender(
+    <div style={{ display: 'contents' }}>
+      <Fixture id={id} extra={700} />
+    </div>,
+  );
+  await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
+  await finishGesture();
+  expect(Math.abs(y(index) - before)).toBeLessThan(2);
+  expect(distance()).toBeGreaterThan(500);
+});
+
+test('snapshots the visible reading point when Activity hides during a gesture after row resizing', async () => {
+  const id = `browser:${++threadSequence}`;
+  const fixture = (active: boolean, extra = 0) => (
+    <RetainedSurface active={active}>
+      <Fixture id={id} active={active} extra={extra} />
+    </RetainedSurface>
+  );
+  const view = render(fixture(true));
+  const index = await readHistory();
+  const original = scroller();
+  await commands.holdTranscriptPointer(true);
+  // Like estimate-to-measured rows arriving during Linux WebKit's animation:
+  // resize an actual row above the reading point, while corrections are paused.
+  const late = document.createElement('div');
+  late.style.height = '144px';
+  document
+    .querySelector(`[data-transcript-item="answer:${index - 1}"]`)!
+    .before(late);
+  await finishGesture();
+  const before = y(index);
+  const heldBookmark = readTranscriptBookmark(id);
+  expect(heldBookmark?.anchor).not.toBeNull();
+  expect(
+    Math.abs(readingAnchorDelta(original, heldBookmark!.anchor!)!),
+  ).toBeGreaterThan(2);
+  const visibleAnchor = captureReadingAnchor(original);
+  view.rerender(fixture(false));
+  expect(readTranscriptBookmark(id)?.anchor).toEqual(visibleAnchor);
+  await commands.holdTranscriptPointer(false);
+  await finishGesture();
+  view.rerender(fixture(false, 700));
+  view.rerender(fixture(true, 700));
+  expect(scroller()).toBe(original);
+  await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
+  await finishGesture();
+  expect(Math.abs(y(index) - before)).toBeLessThan(2);
   expect(distance()).toBeGreaterThan(500);
 });
 
@@ -265,6 +345,30 @@ test('large native scrolling mounts the new range while remaining in history', a
   render(<Fixture id={id} />);
   await expect.poll(distance).toBeLessThan(2);
   await commands.scrollTranscript(-3500);
+  // wheel() only dispatches input; WebKit on Linux can still be animating a
+  // large gesture after the short scroll-end grace used by the other cases.
+  // Keep the full-distance requirement and wait for the real browser to reach it.
+  await expect.poll(distance).toBeGreaterThan(3000);
+  await finishGesture();
+  expect(distance()).toBeGreaterThan(3000);
+  const viewport = scroller().getBoundingClientRect();
+  expect(
+    document
+      .elementFromPoint(viewport.left + 20, viewport.top + 200)
+      ?.closest('[data-transcript-row]'),
+  ).not.toBeNull();
+});
+
+test('a large browser-animated scroll is not interrupted by row measurement', async () => {
+  const id = `browser:${++threadSequence}`;
+  render(<Fixture id={id} />);
+  await expect.poll(distance).toBeLessThan(2);
+  await finishGesture();
+  // Linux WebKit animates wheel input. Explicit native smooth scrolling also
+  // exercises that path on platforms whose wheel input moves immediately.
+  scroller().focus({ preventScroll: true });
+  scroller().scrollBy({ top: -3500, behavior: 'smooth' });
+  await expect.poll(distance, { timeout: 3000 }).toBeGreaterThan(3000);
   await finishGesture();
   expect(distance()).toBeGreaterThan(3000);
   const viewport = scroller().getBoundingClientRect();
@@ -344,7 +448,9 @@ test('rows fill the surface rather than a centred column, and dissolve under the
     '[data-transcript-column]',
   )!;
   expect(column.getBoundingClientRect().width).toBeCloseTo(
-    scroller().getBoundingClientRect().width,
+    // Linux reserves a classic scrollbar gutter; rows must fill the usable
+    // content box, not paint beneath that gutter. macOS overlays its scrollbar.
+    scroller().clientWidth,
     0,
   );
 

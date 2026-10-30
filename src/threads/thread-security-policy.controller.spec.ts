@@ -121,6 +121,34 @@ describe('ThreadSecurityPolicyController', () => {
     expect(codex.request).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses policy changes that would disable the managed copy boundary, including queued continuations', async () => {
+    const guarded = new ThreadSecurityPolicyController(
+      codex as never,
+      observer as never,
+      deletion as never,
+      {
+        policyForThread: vi
+          .fn()
+          .mockResolvedValue({ copyPermissions: { writable: 'own' } }),
+      } as never,
+    );
+    await expect(
+      guarded.patchSecurityPolicy('t1', {
+        sandboxPolicy: { type: 'dangerFullAccess' },
+      }),
+    ).rejects.toThrow('GIT_COPY_ISOLATION_REQUIRED');
+    await expect(
+      guarded.patchSecurityPolicy('t1', { approvalPolicy: 'on-request' }),
+    ).rejects.toThrow('GIT_COPY_ISOLATION_REQUIRED');
+    expect(codex.request).not.toHaveBeenCalledWith(
+      'thread/settings/update',
+      expect.anything(),
+    );
+    await expect(
+      guarded.patchSecurityPolicy('t1', { approvalPolicy: 'never' }),
+    ).resolves.toEqual({ status: 'accepted' });
+  });
+
   it('propagates upstream rejection without falling back to global config', async () => {
     codex.request
       .mockResolvedValueOnce({ thread: { status: { type: 'idle' } } })
