@@ -785,3 +785,41 @@ it('does not expose publication for a read-only resource', async () => {
     screen.queryByRole('button', { name: '↑ Publier les commits…' }),
   ).toBeNull();
 });
+
+it('adds a Merges tab under GitHub and refreshes it with the repository toolbar', async () => {
+  const original = api.getMockImplementation()!;
+  api.mockImplementation((url: string, options?: RequestInit) => {
+    if (url.endsWith('/merges'))
+      return Promise.resolve({
+        supported: true,
+        limited: false,
+        inspectedAt: 1000,
+        items: [],
+      });
+    return original(url, options);
+  });
+  show();
+  fireEvent.mouseDown(await screen.findByRole('tab', { name: 'GitHub' }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Merges' }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(
+    await screen.findByText(
+      'Aucune fusion dans les PR fermées récemment mises à jour.',
+    ),
+  ).toBeInTheDocument();
+  const count = () =>
+    api.mock.calls.filter(([url]) => String(url).endsWith('/merges')).length;
+  const before = count();
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: i18n.t('gitRefreshAll', { ns: 'workspaces' }),
+    }),
+  );
+  await waitFor(() => expect(count()).toBeGreaterThan(before));
+  expect(onActive).not.toHaveBeenCalled();
+});

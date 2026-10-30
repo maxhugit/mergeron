@@ -736,6 +736,75 @@ export class WorkspaceGitService {
     }>(repo, `pulls/${number}`);
     if (!/^[a-f0-9]{40,64}$/.test(pr.head.sha))
       throw new ConflictException('Invalid GitHub revision');
+    return {
+      ...(await this.revisionChecks(repo, pr.head.sha)),
+      baseHead: pr.base?.sha ?? null,
+      mergeable: pr.mergeable,
+      mergeableState: pr.mergeable_state,
+      draft: pr.draft,
+    };
+  }
+
+  async merges(projectId: string, resourceId: string) {
+    const repo = this.github(projectId, resourceId);
+    if (!repo)
+      return {
+        supported: false,
+        items: [],
+        limited: false,
+        inspectedAt: Date.now(),
+      };
+    // Bound both the history scan and the number of polling cards in the UI.
+    const closed = await this.githubGet<
+      Array<{
+        number: number;
+        title: string;
+        merged_at: string | null;
+        head: { ref: string };
+        base: { ref: string };
+      }>
+    >(repo, 'pulls?state=closed&per_page=30&sort=updated&direction=desc');
+    const merged = closed
+      .filter((pr) => pr.merged_at)
+      .sort((a, b) => b.merged_at!.localeCompare(a.merged_at!));
+    return {
+      supported: true,
+      limited: closed.length === 30 || merged.length > 5,
+      inspectedAt: Date.now(),
+      items: merged.slice(0, 5).map((pr) => ({
+        number: pr.number,
+        title: pr.title,
+        branch: pr.head.ref,
+        base: pr.base.ref,
+        mergedAt: pr.merged_at!,
+        url: `https://github.com/${repo.owner}/${repo.repo}/pull/${pr.number}`,
+      })),
+    };
+  }
+
+  async mergeChecks(projectId: string, resourceId: string, number: string) {
+    if (!/^[1-9]\d{0,8}$/.test(number))
+      throw new BadRequestException('Invalid pull request');
+    const repo = this.github(projectId, resourceId);
+    if (!repo) throw new BadRequestException('Provider not supported');
+    const pr = await this.githubGet<{
+      merged: boolean;
+      merge_commit_sha: string | null;
+    }>(repo, `pulls/${number}`);
+    if (!pr.merged || !pr.merge_commit_sha)
+      throw new ConflictException('Pull request has not been merged');
+    return {
+      ...(await this.revisionChecks(repo, pr.merge_commit_sha)),
+      url: `https://github.com/${repo.owner}/${repo.repo}/commit/${pr.merge_commit_sha}/checks`,
+    };
+  }
+
+  private async revisionChecks(
+    repo: NonNullable<ReturnType<WorkspaceGitService['github']>>,
+    revision: string,
+  ) {
+    if (!/^[a-f0-9]{40,64}$/.test(revision))
+      throw new ConflictException('Invalid GitHub revision');
     const [checks, statuses] = await Promise.all([
       this.githubGet<{
         total_count: number;
@@ -745,18 +814,14 @@ export class WorkspaceGitService {
           status: string;
           conclusion: string | null;
         }>;
-      }>(repo, `commits/${pr.head.sha}/check-runs?per_page=100`),
+      }>(repo, `commits/${revision}/check-runs?per_page=100`),
       this.githubGet<{
         total_count: number;
         statuses: Array<{ id: number; context: string; state: string }>;
-      }>(repo, `commits/${pr.head.sha}/status?per_page=100`),
+      }>(repo, `commits/${revision}/status?per_page=100`),
     ]);
     return {
-      head: pr.head.sha,
-      baseHead: pr.base?.sha ?? null,
-      mergeable: pr.mergeable,
-      mergeableState: pr.mergeable_state,
-      draft: pr.draft,
+      head: revision,
       limited: checks.total_count > 100 || statuses.total_count > 100,
       items: [
         ...checks.check_runs.map((item) => ({

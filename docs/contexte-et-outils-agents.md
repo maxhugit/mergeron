@@ -224,6 +224,25 @@ connexion actualisent les données locales, regroupées par petites fenêtres ; 
 rafraîchissement périodique reste un secours. Rien n’est préparé, commité, fetché
 ou publié automatiquement. Chaque agent continue de voir sa propre copie.
 
+Dans la barre latérale droite, **GitHub → Merges** suit les vérifications
+exécutées sur le commit créé par la fusion d’une PR. Cette vue complète les
+checks avant fusion de l’onglet PR. Elle affiche jusqu’à cinq fusions parmi les
+trente PR fermées récemment mises à jour, avec la date, les branches, le SHA et
+un lien vers les checks GitHub. L’historique borné est signalé lorsqu’il est
+incomplet. La liste est actualisée chaque minute, les jobs toutes les trente
+secondes tant que l’onglet est ouvert ; le bouton d’actualisation du dépôt
+rafraîchit aussi cette vue.
+
+Chaque fusion présente un état global et le détail repliable des jobs. Un échec,
+une annulation ou un délai dépassé est signalé comme échec. Aucun check, un
+résultat inconnu, tronqué ou inaccessible ne confirme une réussite. Une erreur
+de lecture masque le précédent état positif et permet de réessayer. Les routes
+`GET /api/projects/:projectId/git/connections/:resourceId/merges` et
+`GET /api/projects/:projectId/git/connections/:resourceId/merges/:number/checks`
+réutilisent les accès de la connexion, sans copie locale ni nouveau droit
+d’écriture. Elles consultent les check runs et statuts du **commit de fusion**,
+plutôt que les checks du dernier commit de la branche source.
+
 Dans les permissions de la conversation, « Tests du projet » permet un choix
 explicite du réseau pour le prochain message, **uniquement en workspace-write**.
 Il conserve les racines d’écriture et la politique d’approbation observées.

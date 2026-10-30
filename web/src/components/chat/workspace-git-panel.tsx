@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { GitRemoteFiles } from './git-remote-files';
+import { GitMerges } from './git-merges';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
 import { GitStageChanges, type GitStageHandle } from './git-stage-changes';
@@ -364,6 +365,7 @@ function RepositoryPanel({
           ['workspace-git-remote-branches', projectId, resource.id],
           ['workspace-git-prs', projectId, resource.id],
           ['workspace-git-checks', projectId, resource.id],
+          ['workspace-git-merges', projectId, resource.id],
         ].map((queryKey) =>
           client.invalidateQueries({ queryKey, refetchType: 'all' }),
         ),
@@ -882,6 +884,9 @@ function RepositoryPanel({
                 <TabsTrigger value="published" className="px-2 py-1 text-xs">
                   {t('gitPublishedBranches')}
                 </TabsTrigger>
+                <TabsTrigger value="merges" className="px-2 py-1 text-xs">
+                  {t('gitTabMerges')}
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="files">
                 <GitRemoteFiles
@@ -890,6 +895,9 @@ function RepositoryPanel({
                   refreshVersion={refreshVersion}
                   onFile={onGitRemoteFile}
                 />
+              </TabsContent>
+              <TabsContent value="merges">
+                <GitMerges projectId={projectId} resourceId={resource.id} />
               </TabsContent>
               <TabsContent value="prs">
                 <PullRequests
