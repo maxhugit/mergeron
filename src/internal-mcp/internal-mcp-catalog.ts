@@ -137,14 +137,24 @@ export const INTERNAL_MCP_TOOLS = [
   },
   {
     name: 'project_preview_manage',
-    title: 'Start or stop this agent’s isolated test environment',
+    title: 'Manage this agent’s isolated test environment',
     description:
-      'Start/sync/refresh/stop this agent’s preview using its prepared recipe when the project has standing agent-preview authorization; otherwise only on explicit human request using the administrator-approved manual recipe. Stable requestId for start/refresh; never retry an unknown outcome under a new ID. Poll project_preview_read status and announce readiness only when preview.ready is true and preview.url exists (verified HTTP response, not merely a running container). The public URL carries no credential; Mergeron authorizes the human browser when opening it. Stop removes this instance’s Docker containers, private networks and ephemeral volumes; confirm this only when preview.cleanup.runtimeResourcesRemoved is true. Source files, launch configuration and history remain: a stopped history record is not a retained Docker environment. No image, command, path, credential, mount or Docker parameters are accepted. Refresh snapshots current uncommitted files and deletes ephemeral test data. Does not deploy or publish Git. Requires a writable authenticated administrator turn.',
+      'Start/sync/refresh/stop this agent’s preview using its prepared recipe when the project has standing agent-preview authorization; otherwise only on explicit human request using the administrator-approved manual recipe. Use operation=lifetime with lifetimeMinutes=60,180,300,600,1440 or null (never) and a stable requestId to change an active environment without restarting it; the new duration begins now. Start/refresh also accept lifetimeMinutes. New profiles default to 300 minutes. Access-grant expiration is unchanged. Stable requestId for start/refresh; never retry an unknown outcome under a new ID. Poll project_preview_read status and announce readiness only when preview.ready is true and preview.url exists (verified HTTP response, not merely a running container). The public URL carries no credential; Mergeron authorizes the human browser when opening it. Stop removes this instance’s Docker containers, private networks and ephemeral volumes; confirm this only when preview.cleanup.runtimeResourcesRemoved is true. Source files, launch configuration and history remain: a stopped history record is not a retained Docker environment. No image, command, path, credential, mount or Docker parameters are accepted. Refresh snapshots current uncommitted files and deletes ephemeral test data. Does not deploy or publish Git. Requires a writable authenticated administrator turn.',
     descriptionFr:
-      'Gérer l’instance isolée et vérifier sa disponibilité HTTP. Stop arrête et supprime ses conteneurs, réseaux et volumes temporaires ; confirmer cette suppression uniquement lorsque preview.cleanup.runtimeResourcesRemoved vaut true. Les sources, la recette et l’historique restent conservés. Aucun accès Docker ni déploiement.',
+      'Gérer l’instance isolée et vérifier sa disponibilité HTTP. L’opération lifetime modifie la durée sans redémarrer : 60, 180, 300, 600, 1440 minutes ou null pour jamais ; requestId stable requis. Stop arrête et supprime ses conteneurs, réseaux et volumes temporaires ; confirmer cette suppression uniquement lorsque preview.cleanup.runtimeResourcesRemoved vaut true. Les sources, la recette et l’historique restent conservés. Aucun accès Docker ni déploiement.',
     input: z.strictObject({
-      operation: z.enum(['start', 'sync', 'refresh', 'stop']),
+      operation: z.enum(['start', 'sync', 'refresh', 'stop', 'lifetime']),
       requestId: requestId.optional(),
+      lifetimeMinutes: z
+        .union([
+          z.literal(60),
+          z.literal(180),
+          z.literal(300),
+          z.literal(600),
+          z.literal(1440),
+          z.null(),
+        ])
+        .optional(),
     }),
     output: z.object({}).catchall(z.unknown()),
     readOnly: false,

@@ -13,7 +13,7 @@ export interface PreviewProfile {
   env: Record<string, string>;
   memoryMb: number;
   cpus: number;
-  lifetimeMinutes: number;
+  lifetimeMinutes: number | null;
   services: {
     name: string;
     runtime: string;
@@ -35,6 +35,8 @@ export type AgentPreviewRecipe = Pick<
   | 'updateMode'
 >;
 declare const value: {
+  LIFETIME_MINUTES: readonly (number | null)[];
+  lifetime(input: unknown): number | null;
   ID: RegExp;
   RUN_ID: RegExp;
   profile(input: unknown): PreviewProfile;
