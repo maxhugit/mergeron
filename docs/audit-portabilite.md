@@ -1,47 +1,25 @@
-# Audit de neutralité du déploiement
+# Indépendance de l’environnement
 
-## Parcours standard
+Le parcours utilisateur est [l’installation par le Manager](installation.md).
+Il exige Docker Linux amd64 et un noyau compatible avec le bac à sable, mais
+aucun NAS, panneau d’administration, proxy HTTPS ou fournisseur SSO particulier.
 
-| Zone                  | Contrat vérifié                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| Checks de publication | Nom de workflow « Build and publish Mergeron images »                                       |
-| Image officielle      | Un seul `Dockerfile` canonique durci ; Manager dans `Dockerfile.manager`                    |
-| Build et caches CI    | Références aux fichiers génériques et au dépôt GHCR Mergeron                                |
-| Déploiement           | `deployment/compose.yml`, sans labels d’un panneau hôte                                     |
-| Manager               | Trois réseaux privés ; réseau externe configurable ; intégration hôte désactivée par défaut |
-| Stockage              | Chemins Linux paramétrables, aucune dépendance au nom d’un pool                             |
-| Interface             | Configuration serveur, sans déduire le système hôte d’une clé externe                       |
-| Documentation         | Installation Docker standard ; adaptations isolées dans `docs/adapters/`                    |
+| Sujet        | Contrat                                                                              |
+| ------------ | ------------------------------------------------------------------------------------ |
+| Installation | Le Manager crée les dépendances ; aucune seconde procédure utilisateur Compose.      |
+| Stockage     | Racine et dossiers accessibles aux projets configurables, sans nom de pool imposé.   |
+| Entrée       | Proxy HTTPS au choix, raccordé à l’ingress sur 8080 par un réseau externe explicite. |
+| Identité     | Compte local par défaut ; SSO OIDC facultatif sans fournisseur imposé.               |
+| Hôte         | Métadonnées de panneau désactivées par défaut, isolées dans les adaptations.         |
+| Sécurité     | Socket Docker réservé au Manager, stockage persistant et contrôles de santé.         |
+| Options      | Navigateur distant et environnements de test activés explicitement.                  |
 
-Cet audit ponctuel a porté sur les noms des workflows, les fichiers canoniques,
-les documents génériques, le code d’exécution et les traductions. Aucun contrôle
-automatique spécifique de neutralité n’est ajouté au pipeline.
-Les tests du Manager vérifient également l’absence de labels hôtes par défaut
-et leur activation uniquement par une intégration explicite.
+Les limites réelles figurent dans la [référence des variables](variables-manager.md).
+Les tests du Manager contrôlent notamment l’absence de métadonnées hôtes par
+défaut, l’isolation développement/production et les montages persistants.
 
-## Références conservées intentionnellement
-
-- Adaptateurs, métadonnées facultatives, XML et procédures propres aux panneaux
-  hôtes : uniquement dans [les adaptations](adapters/README.md).
-- Ancien nom de variable d’environnement : accepté dans le module d’intégration
-  pour ne pas changer un montage existant.
-- Ancien dépôt d’image : reconnu dans le manifeste pour la compatibilité
-  d’adoption, jamais utilisé comme publication ou cache CI.
-- Tests de migration : références historiques explicites pour vérifier cette
-  compatibilité, pas des valeurs imposées aux installations neuves.
-
-Le nom des checks **déjà exécutés** reste dans l’historique de la plateforme Git.
-Le nouveau nom s’applique aux exécutions utilisant le workflow corrigé ; aucun
-historique distant n’est supprimé ou réécrit.
-
-## Limites et sécurité
-
-L’image officielle cible Linux amd64 et un noyau permettant le sandbox non
-privilégié. Cet audit ne constitue ni une publication ARM ni une recette réelle
-sur tous les NAS et tous les reverse proxys. Les guides indiquent les paramètres
-à choisir et la recette à exécuter avant exposition.
-
-Aucun renommage automatique de réseau, déplacement de données, effacement
-d’adoption ou changement de fournisseur d’identité n’est effectué. Les fichiers
-privés existants restent conservés. Les [règles de migration](migration-mergeron.md)
-priment sur les nouvelles valeurs d’exemple.
+L’indépendance de l’hôte ne constitue ni une publication ARM ni une validation
+réelle sur toutes les distributions, tous les noyaux et tous les proxys.
+Exécuter la [recette réseau et authentification](installation-portable.md#recette-avant-exposition)
+sur l’hôte retenu. Aucun exemple ne déplace les données ni ne modifie
+automatiquement votre proxy ou votre fournisseur d’identité.

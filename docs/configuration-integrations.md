@@ -1,261 +1,100 @@
-# Configuration des intégrations
+# Configurer Mergeron après l’installation
 
-## Navigation d’administration et outils d’exploitation
+Commencer par [Installer Mergeron](installation.md). Les intégrations ci-dessous
+sont facultatives : elles n’imposent ni fournisseur SSO, ni serveur externe,
+ni environnement particulier.
 
-L’entrée **Paramètres** de l’en-tête (menu « … » sur mobile) ouvre une
-navigation latérale dédiée. **Administration** regroupe les réglages généraux
-du serveur, les personnes, le compte, Codex, le chat simple, les réglages des
-fichiers et du terminal, la sécurité et les intégrations.
-**Outils d’exploitation** donne accès au navigateur global de fichiers et au
-terminal global. Ces deux outils ne figurent plus dans la navigation des projets.
-Les explorateurs et terminaux des conversations ne sont pas modifiés.
+## Administration et rôles
 
-Pendant la session du navigateur, quitter puis rouvrir **Fichiers** conserve
-son dossier, le document affiché et la vue (dont le défilement). L’explorateur
-global dispose d’un état séparé de ceux des conversations. La vue conservée est
-masquée et inactive quand une autre page est affichée. Les changements de nom
-et suppressions de fichiers continuent à être répercutés.
-**Terminal** conserve déjà ses onglets, la sélection et ses instances attachées
-au niveau de la session authentifiée ; naviguer vers une autre page ne ferme
-pas les shells. Cette conservation ne garantit pas la survie d’un shell après
-redémarrage du serveur ou fermeture complète du navigateur.
+Les paramètres de l’en-tête ouvrent les rubriques du serveur, des personnes,
+du moteur d’agents, du chat, des fichiers, de la sécurité et des intégrations.
+Sur mobile, elles sont accessibles par le menu de navigation.
 
-Chaque rubrique de réglage dispose d’un lien `/settings?section=…`.
-Sur mobile, le bouton de navigation de l’en-tête ouvre le
-même menu et la sélection d’une rubrique le referme.
+Les réglages d’administration et les exécutions serveur sont réservés aux
+administrateurs. Les droits des personnes et des participants sont vérifiés
+côté serveur ; masquer un bouton n’est pas une protection suffisante.
+Les personnes standard n’obtiennent aucun accès administrateur en présentant
+simplement la même adresse e-mail qu’une autre personne.
 
-## Personnes, connexion et rôles
-
-Une fiche exige une référence manuelle unique, un prénom, un nom, une adresse
-e-mail unique et un numéro de téléphone. Le nom complet est calculé côté serveur
-(`Prénom Nom`) ; il n’est pas saisissable. Le rôle par défaut est **Standard**.
-Les anciennes fiches sont conservées ; leurs nouveaux champs doivent être
-complétés avant leur prochaine modification.
-
-Le proxy Nginx récupère l’identifiant stable et l’e-mail depuis la réponse de son
-propre contrôle Authentik, puis écrase les en-têtes d’identité du navigateur.
-À la première connexion, une fiche standard active préalablement créée peut être liée par
-égalité de l’e-mail, sans tenir compte de la casse. Ensuite seul l’identifiant
-stable sert à reconnaître la personne. Les connexions administrateurs exigent
-toujours une liaison explicite par identifiant stable via l’outil serveur décrit
-ci-dessous : une simple égalité d’e-mail ne suffit pas. Aucune fiche et aucun rôle administrateur
-ne sont créés automatiquement. Une fiche déjà liée ne peut pas être récupérée
-par un autre identifiant présentant le même e-mail. Une fiche standard déjà liée
-peut être promue administrateur par un administrateur existant, après vérification
-de la personne : son identifiant stable est alors déjà connu.
-
-En déploiement Docker, `WEBUI_REQUIRE_IDENTITY=true` refuse toute session humaine
-sans identité du proxy. Le backend ne doit pas publier son port sur le réseau
-externe. Le jeton technique de déploiement reste un secret administrateur, réservé
-aux services internes ; il n’est ni transmis au navigateur ni aux utilisateurs.
-Un déploiement local sans cette option conserve le mode historique à clé API,
-qui est un accès technique administrateur, pas un compte utilisateur standard.
-
-Les rôles sont relus en base pour chaque requête. Les réglages, intégrations,
-informations de compte serveur, journaux techniques et modifications des personnes
-sont réservés aux administrateurs côté API, en plus de la protection des pages.
-Les listes de personnes servies aux standards ne contiennent pas les coordonnées
-ni les identifiants de connexion. Les requêtes de fichiers standards restent
-limitées aux workspaces des projets, avec vérification des liens symboliques.
-`WEBUI_PROTECTED_PATHS` exclut en plus les répertoires privés du serveur, même
-si un projet référence un parent trop large. Adapter en particulier l’alias
-`/appdata/mergeron` si le dossier d’installation change ; les secrets et la base
-ne doivent jamais devenir des fichiers de projet accessibles aux standards.
-
-Sans isolation système par utilisateur, un répertoire de travail n’est pas une
-barrière de sécurité pour un shell ou un agent. Les exécutions d’agents,
-automatisations serveur et terminaux (globaux et de conversation) sont donc
-réservées aux administrateurs dans ce premier lot. Les standards peuvent utiliser
-le chat simple et gérer les tâches manuelles. Leurs appels directs d’exécution
-sont refusés côté REST et WebSocket, pas seulement masqués par l’interface.
-Ce contrôle de rôles ne remplace pas une future isolation système des agents,
-ni une isolation des fichiers et des commandes par projet.
-
-## Applications et MCP par projet
-
-La fenêtre **Paramètres du projet > Connecteurs MCP** contient deux listes :
-les serveurs MCP puis les applications Codex. Chaque entrée est simplement
-active ou inactive pour le projet. Les applications indisponibles ou désactivées
-dans la configuration globale restent visibles mais ne peuvent pas être activées.
-
-Les sélections sont conservées dans la base WebUI. À la création d’une
-conversation dont le workspace appartient au projet, le backend ajoute une
-couche `config` à `thread/start`. Les applications sont refusées par défaut et
-seuls les identifiants sélectionnés sont activés. Chaque serveur MCP connu est
-également activé ou désactivé, y compris les MCP fournis par un plugin. Cette
-couche ne modifie pas le fichier `config.toml` global et ne contient aucun secret
-OAuth. Elle s’applique aux nouvelles conversations ; une conversation déjà
-chargée conserve la configuration avec laquelle elle a été démarrée.
-
-Une désactivation ou un changement de rôle déconnecte les sockets de la personne.
-Le navigateur revérifie aussi périodiquement son identité. Le dernier
-administrateur actif disposant d’une connexion liée ne peut pas être désactivé ou
-rétrogradé depuis le formulaire s’il n’existe aucun autre administrateur actif
-déjà lié. Une fiche administrateur encore non liée ne constitue pas une relève.
+Les explorateurs et terminaux d’un projet ne donnent pas un droit sur tout
+l’hôte. Limiter les dossiers exposés et les permissions des connexions.
+Voir les [droits des projets](droits-acces-projets.md).
 
 ### Initialisation et récupération administrateur
 
-Après démarrage de l’image (et migration de la base), un administrateur de l’hôte
-peut provisionner la première fiche depuis un fichier JSON **privé, hors Git** :
+Le premier compte local se crée depuis l’hôte selon
+[l’étape dédiée du guide](installation.md#4-créer-le-premier-administrateur).
+L’outil livré `scripts/provision-person.cjs` réutilise les validations du serveur
+et crée atomiquement la fiche et son compte. Il ne crée ni mot de passe par
+défaut ni page publique d’inscription.
 
-```json
-{
-  "reference": "ADM-001",
-  "firstName": "Prénom",
-  "lastName": "Nom",
-  "email": "admin@example.com",
-  "phone": "+33600000000",
-  "role": "administrator",
-  "active": true,
-  "localAccount": {
-    "username": "administrateur",
-    "password": "REMPLACER_PAR_UN_MOT_DE_PASSE_UNIQUE_D_AU_MOINS_12_CARACTERES"
-  }
-}
-```
+En cas de récupération, un administrateur de l’hôte peut utiliser ce même outil
+avec un fichier JSON privé, après sauvegarde de la base. Ne pas placer le mot
+de passe dans un argument de commande, un journal ou Git. Une fiche ou une
+liaison déjà utilisée n’est pas écrasée pour contourner un conflit.
 
-```sh
-docker exec -i mergeron-ui node /app/scripts/provision-person.cjs < personne-privee.json
-```
+Pour un compte SSO administrateur, renseigner explicitement `identitySubject`
+avec le sujet stable vérifié du fournisseur, sans `localAccount`. Vérifier
+humainement cette identité : une simple égalité d’e-mail ne suffit pas.
+Tester une relève administrateur avant de retirer un accès existant.
 
-Ce programme requiert un accès privilégié au conteneur et réutilise la validation
-du serveur, y compris Argon2id et les protections des comptes locaux. Le mot de
-passe ci-dessus est un emplacement de saisie, pas un secret livré ou un compte
-créé automatiquement. Choisir un identifiant unique et un vrai mot de passe
-privé. Fiche et compte sont créés atomiquement ; un échec annule les deux.
-Le programme ne change pas les méthodes d’authentification déjà configurées.
-Il ne journalise pas les coordonnées ou le mot de passe. Sauvegarder d’abord la base et
-protéger puis retirer le fichier privé après utilisation. En cas de différence
-entre l’e-mail de la fiche et celui d’Authentik, ne pas forcer une correspondance
-depuis le navigateur : un administrateur peut fournir au même programme le champ
-`identitySubject`, sans `localAccount`, lu sur la page `/api/auth/me` après authentification. Cette
-liaison explicite doit être vérifiée humainement. Un identifiant déjà lié à une
-autre personne est refusé.
+## Authentification : compte local et SSO OIDC
 
-### Prévisualisation des documents
+Le compte local est activé par défaut ; OIDC et sa redirection automatique
+restent désactivés tant qu’un administrateur ne les configure pas.
+Le mode ingress reste `native`, y compris avec un fournisseur OIDC.
 
-Les prévisualisations interactives utilisent `/api/files/preview` et restent
-authentifiées par Authentik. OnlyOffice télécharge via `/api/files/serve` avec un
-jeton signé valable une heure, limité au chemin du document. Le jeton général de
-l’application n’apparaît plus dans la configuration de l’éditeur. Le retour de
-sauvegarde OnlyOffice conserve sa validation JWT et son état signé.
-
-## Authentification : OIDC et Authentik facultatif
-
-Le fournisseur n’est pas imposé : le mode ingress `native` utilise les sessions
-Mergeron et un fournisseur OIDC compatible sans contrôle proxy Authentik.
-Voir [le parcours portable](installation-portable.md#authentification-sans-authentik)
-pour l’installation neuve et la bascule sécurisée. Les sections suivantes
-conservent Authentik comme exemple et décrivent aussi le mode historique.
-
-Le WebUI prend en charge un fournisseur OpenID Connect avec le flux Authorization
-Code, PKCE, `state` et `nonce`. Créer dans Authentik un fournisseur
-**OAuth2/OpenID**, puis enregistrer exactement l’URI de redirection :
+Dans les réglages d’authentification, renseigner l’émetteur, l’identifiant et le
+secret du client, l’URI de rappel et les portées. La redirection est :
 
 ```text
 https://mergeron.example.com/api/auth/oidc/callback
 ```
 
-Dans **Administration > Réglages généraux du serveur > Authentification**, saisir
-l’URL d’émetteur publiée par Authentik, l’identifiant client, le secret client,
-l’URI ci-dessus et les portées `openid profile email`. Le serveur vérifie le
-document de découverte et ses points de terminaison avant d’accepter
-l’activation. Le secret est conservé uniquement dans
-`$CODEX_HOME/webui-auth.json`, avec des droits `0600`, et n’est jamais renvoyé au
-navigateur.
+Le serveur contrôle la découverte OIDC et les points de terminaison avant
+activation. Le secret est conservé dans la configuration privée de l’application,
+pas renvoyé au navigateur. Aucun fournisseur particulier n’est requis.
+Voir le [raccordement SSO](installation-portable.md#sso-facultatif).
 
-Une personne standard active préprovisionnée peut être liée lors de sa première
-connexion uniquement si Authentik affirme un e-mail vérifié correspondant. Un
-administrateur nécessite toujours une liaison explicite de son identifiant
-stable ; l’égalité de l’e-mail ne suffit pas à obtenir ce rôle. Le WebUI ne
-conserve ni jeton d’accès ni jeton de renouvellement OIDC : il crée sa propre
-session opaque, révocable et limitée dans le temps.
+Après configuration, tester connexion, déconnexion, refus d’un compte inconnu
+et récupération avant d’ouvrir largement le service. Ne pas faire confiance
+aux en-têtes d’identité directement fournis par un navigateur.
 
-### Transition depuis le proxy Authentik
+## Moteur d’agents et chat
 
-Cette version conserve volontairement le fournisseur proxy existant devant
-l’application. Nginx en est l’unique point de contrôle afin d’éviter deux états
-de session concurrents entre Traefik et Nginx. Configurer et tester d’abord le
-nouveau bouton SSO tout en étant protégé par ce proxy. Ne retirer cette
-vérification Nginx que dans une bascule ultérieure, après avoir validé au
-minimum :
+Installer le [CLI validé par le Manager](operations/managed-codex-runtime.md)
+depuis les réglages du moteur, puis configurer son authentification.
+Le moteur actuellement intégré est Codex. Les paramètres et l’authentification
+restent dans le stockage persistant de Mergeron.
 
-1. un compte administrateur explicitement lié ;
-2. une connexion SSO complète dans une fenêtre privée ;
-3. une connexion locale de récupération et la clé API technique ;
-4. une sauvegarde de la base et de `webui-auth.json`.
+Le chat simple possède sa propre configuration d’accès. Si une clé est utilisée,
+la conserver uniquement dans le stockage privé prévu, jamais dans Git ou une
+capture. Vérifier une réponse et le rechargement d’une conversation après
+redémarrage.
 
-Le fournisseur proxy actuel continue donc à protéger toutes les routes publiques
-pendant cette étape.
+## Connexions et outils des projets
 
-Nginx réalise la vérification interne auprès de :
+Configurer seulement les connexions nécessaires au projet, avec un périmètre
+et des droits minimaux. Une connexion configurée ne donne pas automatiquement
+à un agent l’autorisation d’écrire ou de publier.
 
-```text
-http://authentik:9000/outpost.goauthentik.io/auth/nginx
-```
+Les sélections MCP et les applications disponibles se règlent par projet.
+Les outils refusés dans la configuration globale ne peuvent pas être réactivés
+par un participant. Vérifier les effets sur les nouvelles conversations et
+renouveler une autorisation expirée depuis l’interface, sans copier le secret
+dans une conversation.
 
-Dans ce mode uniquement, le conteneur Authentik et `mergeron-ingress` doivent
-partager le réseau choisi par `MERGERON_PROXY_NETWORK` (`mergeron-proxy` par
-défaut). Si Authentik n’est pas joignable sous `authentik:9000`, adapter
-`$authentik_backend` dans le modèle privé de l’ingress.
-Les routes `/outpost.goauthentik.io/*` doivent rester publiques
-sur ce domaine. Après configuration, une fenêtre privée doit être redirigée vers
-Authentik ; aucune page Mergeron ne doit apparaître avant authentification.
+Voir le [contexte et les outils des agents](contexte-et-outils-agents.md), les
+[espaces de travail](workspaces-projets.md) et le guide intégré des fonctionnalités.
 
-## OpenAI et Codex
+## Documents et services facultatifs
 
-L’authentification Codex est conservée sous `STATE_ROOT/home`. Le chat simple
-utilise la clé placée dans `STATE_ROOT/openai-api-key.txt`. Ne jamais inscrire
-cette clé dans Git, Compose ou une capture d’écran.
+Les PDF disposent d’une visionneuse intégrée. Pour l’édition de documents,
+configurer l’intégration proposée par Mergeron depuis l’administration et
+tester un fichier de test. Ses téléchargements et sauvegardes utilisent les
+contrôles signés prévus ; ne pas exposer un jeton de service dans le navigateur
+ni ajouter un contrôle interactif incompatible devant ses rappels.
 
-Après un redémarrage, vérifier qu’une ancienne conversation se recharge et que
-le chat simple retourne une réponse.
-
-## MCP Home Assistant
-
-Configurer l’URL :
-
-```text
-https://ha-mcp.example.com/mcp
-```
-
-Effectuer OAuth depuis l’interface. Pour une session durable, le fournisseur
-doit délivrer un jeton de renouvellement et accepter la portée
-`offline_access`. Les données OAuth sont persistées dans `STATE_ROOT/home`.
-
-Valider avec une requête en lecture seule, par exemple la liste de quelques
-entités Home Assistant.
-
-## GitHub
-
-Connecter GitHub depuis les paramètres de l’interface. Le jeton ou l’autorisation
-OAuth est conservé dans le volume persistant, jamais dans le dépôt. Accorder le
-minimum de dépôts et de permissions nécessaires.
-
-## SSH vers les serveurs autorisés
-
-Placer une clé distincte par destination dans `STATE_ROOT/ssh`. Ajouter les clés
-publiques dans les comptes distants concernés et enregistrer les empreintes dans
-`known_hosts`. Les clés sont montées en lecture seule dans le conteneur.
-
-Éviter une clé root sans restriction. Idéalement, limiter les commandes dans
-`authorized_keys` ou utiliser un compte d’administration dédié.
-
-## OnlyOffice
-
-Renseigner l’adresse publique du Document Server :
-
-```text
-https://office.example.com
-```
-
-Le secret JWT doit être identique dans OnlyOffice et dans Mergeron. Le serveur
-OnlyOffice doit pouvoir rappeler les routes de document autorisées sur le
-domaine public de Codex. Tester l’ouverture puis l’enregistrement d’un document de
-test avant d’utiliser un fichier important.
-
-## PDF et fichiers
-
-Les fichiers sous `/workspaces` et `/appdata` sont visibles dans l’explorateur.
-Les PDF s’ouvrent dans la visionneuse intégrée. Les fichiers Office utilisent
-OnlyOffice. Les autres formats sont téléchargés ou ouverts selon leur type.
+Le [navigateur distant](navigateur-annote.md) et les
+[environnements de test](previsualisations-agents.md) s’activent séparément.
+Leur absence n’empêche pas la première connexion à Mergeron.
