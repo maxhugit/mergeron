@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { backupLabel, withoutDataBackup } from './manager-backup-policy';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -158,19 +159,24 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
     <section className="space-y-3" aria-label={t('managerBackupsTitle')}>
       <h3 className="font-medium">{t('managerBackupsTitle')}</h3>
       <p className="text-xs text-muted-foreground">{t('managerBackupsHelp')}</p>
-      {status.backupPolicy && (
-        <p className="text-sm">
-          {t(
-            status.backupPolicy === 'development-none-v1'
-              ? 'managerDevelopmentNoBackup'
-              : status.backupPolicy === 'production-essential-v1'
-                ? 'managerProductionEssentialBackup'
-                : 'managerLegacyFullBackup',
-          )}
-        </p>
+      {status.capabilities?.backupSelection ? (
+        <p className="text-sm">{t('managerBackupSelectionHelp')}</p>
+      ) : (
+        status.backupPolicy && (
+          <p className="text-sm">
+            {t(
+              status.backupPolicy === 'development-none-v1'
+                ? 'managerDevelopmentNoBackup'
+                : status.backupPolicy === 'production-essential-v1'
+                  ? 'managerProductionEssentialBackup'
+                  : 'managerLegacyFullBackup',
+            )}
+          </p>
+        )
       )}
       {status.capabilities?.backupRetention &&
-        status.backupPolicy !== 'development-none-v1' && (
+        (status.capabilities?.backupSelection ||
+          !withoutDataBackup(status.backupPolicy)) && (
           <BackupRetention busy={busy} />
         )}
       {query.data && (
@@ -274,12 +280,10 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                     </td>
                     <td className="break-words px-3 py-3">
                       {backup.backupPolicy &&
-                        backup.backupPolicy !== 'development-none-v1' && (
+                        !withoutDataBackup(backup.backupPolicy) && (
                           <p className="text-xs text-muted-foreground">
                             {t(
-                              backup.backupPolicy === 'production-essential-v1'
-                                ? 'managerBackupEssentialLabel'
-                                : 'managerBackupFullLabel',
+                              translationKey(backupLabel(backup.backupPolicy)),
                             )}
                           </p>
                         )}

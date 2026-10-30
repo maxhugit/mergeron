@@ -299,19 +299,23 @@ Fermer la fenêtre n’annule rien ; **Voir le suivi et les logs** permet de la
 rouvrir. Les restaurations et nouvelles tentatives de récupération utilisent
 la même fenêtre, sans supprimer leurs confirmations de sécurité.
 
-1. `POST /v1/update/plan` avec `images` sélectionne des images des seuls dépôts
+1. `POST /v1/update/plan` avec `images` et `backupMode` (`full`, `minimal`, `none`)
+   sélectionne le périmètre de sauvegarde et des images des seuls dépôts
    autorisés. Tous les composants concernés doivent être sains, gérés ou explicitement
    adoptés, avec des noms canoniques et des montages compatibles. Une dérive
    d'adoption bloque l'opération. L'ordre variable des montages Docker ne
    modifie pas l'empreinte.
 2. `POST /v1/update` avec cette empreinte et
-   la confirmation fournie par le plan (`UPDATE_WITHOUT_DATA_BACKUP` en Dev,
-   `UPDATE_WITH_ROLLBACK` en production) lance l'opération en arrière-plan. Les
+   le même `backupMode` et la confirmation fournie par le plan
+   (`UPDATE_WITHOUT_DATA_BACKUP` pour aucune sauvegarde,
+   `UPDATE_WITH_ROLLBACK` sinon) lance l'opération en arrière-plan. Les
    images sont téléchargées avant l'arrêt et épinglées par empreinte publiée.
    Les spécifications Docker, réseaux et montages existants sont conservés.
-3. En Dev, le Manager saute entièrement l’inventaire et la sauvegarde de données.
-   En production, après arrêt des services, il sauvegarde les racines essentielles
-   et exclut les journaux, caches et dépendances identifiables selon la
+3. Dans chaque environnement, le choix complet copie toutes les racines
+   persistantes ; le choix minimal copie la base et les fichiers de configuration
+   sélectionnés ; aucune sauvegarde saute entièrement la copie et l’inventaire
+   récursif des données. Les appels anciens sans choix gardent leurs défauts.
+   Le périmètre suit la
    [politique versionnée](sauvegarde-restauration.md#politique-des-mises-à-jour-du-manager).
    La copie reste sous `manager-state/updates/<opération>/backup`. L’espace libre
    est vérifié sur ce périmètre filtré. Les liens symboliques ne sont pas suivis ;
@@ -328,9 +332,9 @@ la même fenêtre, sans supprimer leurs confirmations de sécurité.
    déjà ; aucune adoption implicite n'est créée.
 
 Une erreur avant validation déclenche le redémarrage des anciens conteneurs.
-En production, les données essentielles sauvegardées sont aussi restaurées ;
-en Dev les données et migrations ne sont pas annulées, sans promesse de
-compatibilité avec les anciennes images. Les données écrites dans les racines
+Les éléments sauvegardés selon le choix enregistré sont aussi restaurés ;
+sans sauvegarde, les données et migrations ne sont pas annulées, sans promesse
+de compatibilité avec les anciennes images. Les données écrites dans les racines
 restaurées par la version rejetée
 sont déplacées dans `quarantine`, jamais supprimées. Le journal privé `0600`
 conserve leur référence : les dossiers retenus restent en réalité sous des noms
@@ -346,13 +350,13 @@ validation, le redémarrage termine seulement le nettoyage. Si la récupération
 
 `POST /v1/update/rollback`, avec l'identifiant de la dernière opération réussie
 et `confirmation=ROLLBACK_WITH_DATA_RESTORE`, restaure aussi les données de sa
-sauvegarde en production. En Dev, `confirmation=ROLLBACK_IMAGES_ONLY` remet les
+sauvegarde, en Dev comme en production. Sans sauvegarde,
+`confirmation=ROLLBACK_IMAGES_ONLY` remet les
 images sans copie ni restauration de données. Cela annule, uniquement dans les
 racines sauvegardées, les modifications applicatives postérieures à cette
 sauvegarde, conservées séparément en quarantaine. Les versions plus anciennes
 ne sont pas sélectionnables implicitement. Les sauvegardes suivent la rétention
-configurée après une mise à jour de production réussie ; les anciennes copies
-Dev sont conservées sans purge implicite. Les journaux et quarantaines ne sont
+configurée après une mise à jour réussie ayant créé une sauvegarde. Les journaux et quarantaines ne sont
 pas purgés par cette rétention. Surveiller l’espace et conserver une sauvegarde
 externe indépendante.
 

@@ -11,6 +11,7 @@ import {
   truncate,
   link,
   chmod,
+  chown,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -194,6 +195,290 @@ async function begin(updater) {
   });
   await updater.task;
 }
+
+for (const environment of ['production', 'development']) {
+  for (const backupMode of ['full', 'minimal', 'none']) {
+    test(`${environment} explicitly selects ${backupMode}, recovers after restart and preserves excluded data`, async (t) => {
+      const { updater, root, options } = await fixture(t, environment);
+      const files = {
+        'home/.codex/codex-webui.sqlite': 'database-before',
+        'home/.codex/codex-webui.sqlite-wal': 'wal-before',
+        'home/.codex/config.toml': 'configuration-before',
+        'home/.codex/sessions/conversation.jsonl': 'conversation-before',
+        'workspace/project/livrables/document.docx': 'document-before',
+        'workspace/project/node_modules/cache': 'cache-before',
+      };
+      for (const [name, value] of Object.entries(files)) {
+        await mkdir(join(root, name, '..'), { recursive: true });
+        await writeFile(join(root, name), value);
+      }
+      const plan = await updater.plan(images, 'standard', backupMode);
+      assert.deepEqual(plan.blockers, []);
+      assert.equal(plan.backupPolicy, `${backupMode}-v1`);
+      await assert.rejects(
+        updater.begin({
+          images,
+          backupMode: backupMode === 'none' ? 'full' : 'none',
+          confirmation: plan.confirmation,
+          expectedFingerprint: plan.fingerprint,
+        }),
+        /ConfirmationRequired|PlanChanged/,
+      );
+      await updater.begin({
+        images,
+        backupMode,
+        confirmation: plan.confirmation,
+        expectedFingerprint: plan.fingerprint,
+      });
+      await updater.task;
+      assert.equal(updater.current.status, 'succeeded');
+      assert.equal(updater.current.backupComplete, backupMode !== 'none');
+      const backup = join(options.directory, updater.current.id, 'backup');
+      if (backupMode !== 'none') {
+        assert.equal(
+          await readFile(
+            join(backup, 'home/.codex/codex-webui.sqlite'),
+            'utf8',
+          ),
+          'database-before',
+        );
+      }
+      if (backupMode === 'minimal') {
+        for (const name of ['workspace', 'home/.codex/sessions'])
+          await assert.rejects(lstat(join(backup, name)), { code: 'ENOENT' });
+      }
+      for (const name of Object.keys(files))
+        await writeFile(join(root, name), 'after');
+      // This sidecar was absent from the backup, and must not corrupt a restored DB.
+      await writeFile(
+        join(root, 'home/.codex/codex-webui.sqlite-shm'),
+        'new-sidecar',
+      );
+      const recovered = new TransactionalUpdater(options);
+      await recovered.recover();
+      await recovered.requestRollback({
+        operationId: recovered.current.id,
+        confirmation: rollbackConfirmation(recovered.current.backupPolicy),
+      });
+      await recovered.task;
+      assert.equal(recovered.current.status, 'rolledBack');
+      for (const [name, value] of Object.entries(files)) {
+        const included =
+          backupMode === 'full' ||
+          (backupMode === 'minimal' && /sqlite|config.toml/.test(name));
+        assert.equal(
+          await readFile(join(root, name), 'utf8'),
+          included ? value : 'after',
+          name,
+        );
+      }
+      if (backupMode !== 'none')
+        await assert.rejects(
+          lstat(join(root, 'home/.codex/codex-webui.sqlite-shm')),
+          { code: 'ENOENT' },
+        );
+      else
+        assert.equal(
+          await readFile(
+            join(root, 'home/.codex/codex-webui.sqlite-shm'),
+            'utf8',
+          ),
+          'new-sidecar',
+        );
+    });
+  }
+}
+
+test('minimal mode rejects missing databases, linked parents and tampered restoration scopes', async (t) => {
+  const { updater, root, options } = await fixture(t);
+  assert.ok(
+    (await updater.plan(images, 'standard', 'minimal')).blockers.includes(
+      'updateMinimalDatabaseMissing',
+    ),
+  );
+  await mkdir(join(root, 'home/.codex'));
+  await writeFile(join(root, 'home/.codex/codex-webui.sqlite'), 'db');
+  const plan = await updater.plan(images, 'standard', 'minimal');
+  await updater.begin({
+    images,
+    backupMode: 'minimal',
+    confirmation: plan.confirmation,
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  updater.current.backupScope.push('../../escape');
+  updater.current.committed = false;
+  updater.current.status = 'running';
+  await updater.save('rollingBack');
+  const recovered = new TransactionalUpdater(options);
+  await recovered.recover();
+  assert.equal(recovered.current.status, 'recoveryRequired');
+  assert.equal(
+    await readFile(join(root, 'home/.codex/codex-webui.sqlite'), 'utf8'),
+    'db',
+  );
+});
+
+test('minimal mode blocks symbolic links in configuration ancestors', async (t) => {
+  const { root, updater } = await fixture(t);
+  await symlink(join(root, 'workspace'), join(root, 'home/.codex'));
+  await writeFile(join(root, 'workspace/codex-webui.sqlite'), 'outside');
+  assert.ok(
+    (await updater.plan(images, 'standard', 'minimal')).blockers.includes(
+      'updateUnsafePath',
+    ),
+  );
+});
+
+test('minimal health failure restores database but keeps current documents and conversations', async (t) => {
+  const { updater, root, docker } = await fixture(t);
+  await mkdir(join(root, 'home/.codex/sessions'), { recursive: true });
+  const db = join(root, 'home/.codex/codex-webui.sqlite');
+  const conversation = join(root, 'home/.codex/sessions/thread.jsonl');
+  await writeFile(db, 'before');
+  await writeFile(conversation, 'before');
+  docker.unhealthy = true;
+  docker.afterStart = async (id) => {
+    if (docker.values.get(id).Config.Labels['io.mergeron.transaction']) {
+      await writeFile(db, 'migrated');
+      await writeFile(conversation, 'current');
+    }
+  };
+  const plan = await updater.plan(images, 'standard', 'minimal');
+  await updater.begin({
+    images,
+    backupMode: 'minimal',
+    confirmation: plan.confirmation,
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'rolledBack');
+  assert.equal(await readFile(db, 'utf8'), 'before');
+  assert.equal(await readFile(conversation, 'utf8'), 'current');
+  assert.equal(
+    await readFile(
+      join(
+        updater.directory,
+        updater.current.id,
+        'quarantine/home/.codex/codex-webui.sqlite',
+      ),
+      'utf8',
+    ),
+    'migrated',
+  );
+});
+
+test('minimal image pull failure before container preparation never blocks later updates', async (t) => {
+  const { updater, root, docker } = await fixture(t);
+  await mkdir(join(root, 'home/.codex'));
+  await writeFile(join(root, 'home/.codex/codex-webui.sqlite'), 'before');
+  docker.pullFailure = true;
+  const plan = await updater.plan(images, 'standard', 'minimal');
+  await updater.begin({
+    images,
+    backupMode: 'minimal',
+    confirmation: plan.confirmation,
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'rolledBack');
+  assert.equal(updater.busy, false);
+  assert.ok(!docker.calls.some(([action]) => action === 'stop'));
+  assert.ok((await updater.plan(images, 'standard', 'minimal')).applicable);
+});
+
+test('a missing saved database blocks minimal rollback without deleting current data or stopping services', async (t) => {
+  const { updater, root, docker } = await fixture(t);
+  await mkdir(join(root, 'home/.codex'));
+  await writeFile(join(root, 'home/.codex/codex-webui.sqlite'), 'before');
+  const plan = await updater.plan(images, 'standard', 'minimal');
+  await updater.begin({
+    images,
+    backupMode: 'minimal',
+    confirmation: plan.confirmation,
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  await writeFile(join(root, 'home/.codex/codex-webui.sqlite'), 'current');
+  await rm(
+    join(
+      updater.directory,
+      updater.current.id,
+      'backup/home/.codex/codex-webui.sqlite',
+    ),
+  );
+  const callsBefore = docker.calls.length;
+  await updater.requestRollback({
+    operationId: updater.current.id,
+    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'recoveryRequired');
+  assert.equal(
+    await readFile(join(root, 'home/.codex/codex-webui.sqlite'), 'utf8'),
+    'current',
+  );
+  assert.ok(
+    !docker.calls
+      .slice(callsBefore)
+      .some(([action]) => ['stop', 'remove'].includes(action)),
+  );
+});
+
+test(
+  'minimal recovery restores private directory ownership after an interrupted permission adjustment',
+  { skip: process.getuid() !== 0 },
+  async (t) => {
+    const { updater, root, options } = await fixture(t);
+    const home = join(root, 'home/.codex');
+    await mkdir(home);
+    await writeFile(join(home, 'codex-webui.sqlite'), 'before');
+    await chmod(home, 0o500);
+    await chown(home, 11002, 11002);
+    try {
+      const info = await lstat(home);
+      const plan = await updater.plan(images, 'standard', 'minimal');
+      await updater.begin({
+        images,
+        backupMode: 'minimal',
+        confirmation: plan.confirmation,
+        expectedFingerprint: plan.fingerprint,
+      });
+      await updater.task;
+      assert.equal(updater.current.status, 'succeeded');
+      await writeFile(join(home, 'codex-webui.sqlite'), 'migrated');
+      updater.current.restoreDirectoryMetadata = {
+        'home/.codex': {
+          uid: info.uid,
+          gid: info.gid,
+          mode: info.mode & 0o7777,
+          dev: info.dev,
+          ino: info.ino,
+        },
+      };
+      updater.current.committed = false;
+      updater.current.status = 'running';
+      await updater.save('rollingBack');
+      // Simulate death after the metadata was fsynced and the parent made writable.
+      await chown(home, 0, 0);
+      await chmod(home, 0o700);
+      const recovered = new TransactionalUpdater(options);
+      await recovered.recover();
+      assert.equal(recovered.current.status, 'rolledBack');
+      const restored = await lstat(home);
+      assert.equal(restored.uid, 11002);
+      assert.equal(restored.gid, 11002);
+      assert.equal(restored.mode & 0o7777, 0o500);
+      assert.equal(
+        await readFile(join(home, 'codex-webui.sqlite'), 'utf8'),
+        'before',
+      );
+    } finally {
+      await chown(home, 0, 0);
+      await chmod(home, 0o700);
+    }
+  },
+);
 
 test('DEV visual image migrates only target seccomp and restores the exact old profile on rollback', async (t) => {
   const { updater, docker } = await fixture(t, 'development');

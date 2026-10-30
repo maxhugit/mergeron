@@ -310,6 +310,7 @@ const server = http.createServer(async (request, response) => {
       capabilities: {
         backupManagement: true,
         backupRetention: true,
+        backupSelection: true,
         imageUpdates: true,
         managedCodexCli: true,
         devFastUpdate:
@@ -394,7 +395,11 @@ const server = http.createServer(async (request, response) => {
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
       if (request.url === '/v1/update/plan')
-        json(response, 200, await updater.plan(body.images, body.mode));
+        json(
+          response,
+          200,
+          await updater.plan(body.images, body.mode, body.backupMode),
+        );
       else if (request.url === '/v1/update/rollback')
         json(response, 200, await updater.requestRollback(body));
       else if (request.url === '/v1/update/recover') {

@@ -99,6 +99,9 @@ function sanitizeSnapshot(value: unknown): ManagerUpdateOperation | null {
       'development-none-v1',
       'production-essential-v1',
       'legacy-full-v1',
+      'full-v1',
+      'minimal-v1',
+      'none-v1',
     ].includes(snapshot.backupPolicy ?? '')
       ? {
           backupPolicy: snapshot.backupPolicy,
