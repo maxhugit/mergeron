@@ -31,7 +31,12 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { VirtualTranscript } from './virtual-transcript';
-import { forgetTranscriptBookmarks } from '@/lib/transcript-anchor';
+import {
+  forgetTranscriptBookmarks,
+  readTranscriptBookmark,
+  readingAnchorDelta,
+} from '@/lib/transcript-anchor';
+import { TranscriptScrollOwner } from '@/lib/transcript-scroll-owner';
 import { WorkspaceEntryMenu } from './workspace-entry-menu';
 import { FileActionsMenu } from '@/components/files/file-actions-menu';
 import { FileText } from 'lucide-react';
@@ -308,6 +313,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   client.clear();
   document.documentElement.classList.remove('dark');
 });
@@ -338,12 +344,7 @@ async function select(id: string) {
   await waitFor(() => expect(timeline.getState().threadId).toBe(id));
   return screen.findByRole('textbox');
 }
-test.each([
-  [390, 1],
-  [1180, 1],
-  [1180, 2],
-  [1180, 3],
-])(
+test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
   'retains desktop/mobile drafts, scroll and background updates at %ipx (run %i)',
   async (width) => {
     await page.viewport(width, 900);
@@ -354,6 +355,62 @@ test.each([
     const scroll = screen
       .getByRole('region', { name: 'Agent a' })
       .querySelector<HTMLDivElement>('[data-transcript-scroller]')!;
+    const trace: unknown[] = [];
+    const record = (phase: string, owner?: TranscriptScrollOwner) => {
+      const bookmark = readTranscriptBookmark('a');
+      trace.push({
+        time: performance.now(),
+        phase,
+        top: scroll.scrollTop,
+        height: scroll.scrollHeight,
+        viewport: scroll.clientHeight,
+        bookmark: bookmark ? JSON.parse(JSON.stringify(bookmark)) : null,
+        anchorDelta: bookmark?.anchor
+          ? readingAnchorDelta(scroll, bookmark.anchor)
+          : null,
+        owner: owner
+          ? Object.fromEntries(
+              [
+                'active',
+                'following',
+                'anchor',
+                'userIntent',
+                'restore',
+                'expectedOffset',
+                'pending',
+                'passes',
+                'settled',
+                'disposed',
+              ].map((key) => [key, Reflect.get(owner, key)]),
+            )
+          : null,
+      });
+      if (trace.length > 160) trace.shift();
+    };
+    for (const name of [
+      'beforeCommit',
+      'commit',
+      'endInput',
+      'scrolled',
+      'rowResized',
+      'geometryChanged',
+      'dispose',
+      'programmaticScroll',
+    ] as const) {
+      const original = TranscriptScrollOwner.prototype[name];
+      vi.spyOn(TranscriptScrollOwner.prototype, name).mockImplementation(
+        function (this: TranscriptScrollOwner, ...args: never[]) {
+          if (this.threadId === 'a')
+            record(
+              `before ${name}${name === 'beforeCommit' ? ` ${String(args[0])}` : ''}`,
+              this,
+            );
+          const result = Reflect.apply(original, this, args);
+          if (this.threadId === 'a') record(`after ${name}`, this);
+          return result;
+        } as never,
+      );
+    }
     await expect
       .poll(() => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight)
       .toBeLessThan(2);
@@ -379,6 +436,7 @@ test.each([
     const readingY =
       readingRow.getBoundingClientRect().top -
       scroll.getBoundingClientRect().top;
+    record('reading point captured');
     const b = await select('b');
     fireEvent.change(b, { target: { value: 'Autre brouillon pour b' } });
     expect(calls.effects).toEqual(new Set(['b']));
@@ -399,20 +457,29 @@ test.each([
       'Brouillon conservé pour cet agent',
     );
     // The same sentence must stay put even when remeasurement changes total offsets.
-    await expect
-      .poll(() => {
-        const row = scroll.querySelector<HTMLElement>(
-          `[data-reading-row="${rowId}"]`,
-        );
-        return row
-          ? Math.abs(
-              row.getBoundingClientRect().top -
-                scroll.getBoundingClientRect().top -
-                readingY,
-            )
-          : Infinity;
-      })
-      .toBeLessThan(2);
+    try {
+      await expect
+        .poll(() => {
+          const row = scroll.querySelector<HTMLElement>(
+            `[data-reading-row="${rowId}"]`,
+          );
+          return row
+            ? Math.abs(
+                row.getBoundingClientRect().top -
+                  scroll.getBoundingClientRect().top -
+                  readingY,
+              )
+            : Infinity;
+        })
+        .toBeLessThan(2);
+    } catch (error) {
+      record('restoration failed');
+      console.error(
+        'Retained geometry trace',
+        JSON.stringify({ rowId, readingY, trace }),
+      );
+      throw error;
+    }
     expect(
       timeline.getState().getThreadRuntime('a')?.timeline.at(-1),
     ).toMatchObject({ content: 'Travail reçu en arrière-plan' });
