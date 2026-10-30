@@ -217,6 +217,11 @@ Si une phase termine avec un code non nul, les suivantes ne sont pas lancées,
 y compris lorsque la commande utilise une chaîne `commande1 && commande2`.
 Les variables exportées et les changements de dossier restent conservés entre
 les phases ; leurs commandes doivent signaler correctement leurs erreurs.
+Le lanceur écrit une ligne de diagnostic en cas d’échec, par exemple
+`[mergeron-preview] phase=build exitCode=23`, sans recopier la commande ni ses
+variables. Le processus conserve le code de sortie original. Cette ligne fait
+partie des journaux applicatifs non fiables, pas des observations de sécurité
+du Manager.
 
 Pour un projet Vite, le lancement peut être
 `npm run dev -- --host 0.0.0.0 --port 5173 --strictPort`, avec le port 5173 dans
