@@ -400,11 +400,34 @@ test('stopping removes only this run, never another stack or backup', async () =
     Driver: 'local',
     Labels: { 'io.mergeron.stack': 'production' },
   });
-  await f.manager.stop(f.input.runId);
+  const stopped = await f.manager.stop(f.input.runId);
+  assert.equal(stopped.state, 'stopped');
+  assert.equal(stopped.cleanupComplete, true);
   assert.equal(f.docker.containers.size, 0);
   assert.deepEqual([...f.docker.volumes.keys()], ['production-data']);
   assert.equal(f.docker.networks.size, 0);
-  await f.manager.stop(f.input.runId);
+  assert.ok(fs.existsSync(path.join(f.source, 'index.html')));
+  assert.ok(
+    fs.existsSync(
+      path.join(f.configuration.previewJournal, f.input.runId + '.json'),
+    ),
+  );
+  assert.equal((await f.manager.stop(f.input.runId)).cleanupComplete, true);
+});
+test('partial or refused cleanup never reports the runtime resources removed', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  assert.equal((await f.manager.status(f.input.runId)).cleanupComplete, false);
+  f.docker.removeContainer = async () => {
+    throw Error('Docker removal refused');
+  };
+  await assert.rejects(
+    () => f.manager.stop(f.input.runId),
+    /Docker removal refused/,
+  );
+  assert.equal((await f.manager.status(f.input.runId)).cleanupComplete, false);
+  assert.ok(f.docker.containers.size > 0);
+  assert.ok(f.docker.volumes.size > 0);
 });
 test('recovers running jobs across Manager restart and refuses changed ownership before deletion', async () => {
   const f = await fixture();

@@ -665,6 +665,15 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         ready: observed.ready === true,
         httpStatus:
           typeof observed.httpStatus === 'number' ? observed.httpStatus : null,
+        cleanup:
+          observed.state === 'stopped' && observed.cleanupComplete === true
+            ? {
+                runtimeResourcesRemoved: true,
+                sourceFilesPreserved: true,
+                launchConfigurationRetained: true,
+                historyRetained: true,
+              }
+            : null,
       },
     };
   }
@@ -883,6 +892,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
                 ? status.preview.lastSyncedAt
                 : null,
             requiresRestart: status.preview.requiresRestart === true,
+            cleanup: status.preview.cleanup,
             error:
               safeError == null
                 ? null

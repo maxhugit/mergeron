@@ -519,6 +519,109 @@ describe('project-scoped generic preview service', () => {
     expect(JSON.stringify(result)).not.toContain('PRIVATE_MANAGER_DIAGNOSTIC');
   });
 
+  it('reports confirmed Docker cleanup separately from retained configuration, source and history', async () => {
+    const f = configured();
+    const runId = '22222222-2222-4222-8222-222222222222';
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId,
+      state: 'failed',
+      profileRevision: f.rows.get(projectPreviewProfiles)!.revision,
+      sourcePath: '/workspaces/source',
+    });
+    const configuration = f.rows.get(projectPreviewProfiles);
+    const unlinkCalls = vi.mocked(fs.unlink).mock.calls.length;
+    let stopped = false;
+    f.request.mockImplementation((operation) => {
+      if (operation === 'capabilities')
+        return Promise.resolve({
+          enabled: true,
+          domain: 'preview.example.org',
+          runtimes: [{ id: 'node' }],
+        });
+      if (operation === 'stop') stopped = true;
+      return Promise.resolve({
+        runId,
+        projectId: 'p',
+        agentId: 't',
+        state: stopped ? 'stopped' : 'failed',
+        cleanupComplete: stopped,
+        ready: false,
+        url: null,
+      });
+    });
+    const result = await f.run(() =>
+      f.service.tool(
+        'p',
+        't',
+        {
+          tool: 'project_preview_manage',
+          operation: 'stop',
+        },
+        () => {},
+      ),
+    );
+    expect(result).toMatchObject({
+      preview: {
+        state: 'stopped',
+        ready: false,
+        url: null,
+        cleanup: {
+          runtimeResourcesRemoved: true,
+          sourceFilesPreserved: true,
+          launchConfigurationRetained: true,
+          historyRetained: true,
+        },
+      },
+    });
+    expect(f.request.mock.calls.filter(([op]) => op === 'stop')).toHaveLength(
+      1,
+    );
+    expect(f.rows.get(projectPreviewProfiles)).toEqual(configuration);
+    expect(f.rows.get(agentPreviews)).toMatchObject({
+      runId,
+      state: 'stopped',
+    });
+    expect(vi.mocked(fs.unlink).mock.calls.length).toBe(unlinkCalls);
+  });
+
+  it('never infers cleanup from stopped history, an old Manager, failed transport or mismatched identity', async () => {
+    const f = configured();
+    const runId = '22222222-2222-4222-8222-222222222222';
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId,
+      state: 'stopped',
+      profileRevision: f.rows.get(projectPreviewProfiles)!.revision,
+    });
+    for (const observed of [
+      { state: 'stopped' },
+      { state: 'stopped', cleanupComplete: false },
+      { state: 'failed', cleanupComplete: true },
+      { state: 'running', cleanupComplete: true },
+      { state: 'stopped', cleanupComplete: true, agentId: 'other-agent' },
+    ]) {
+      f.request.mockResolvedValue({
+        runId,
+        projectId: 'p',
+        agentId: 't',
+        ...observed,
+      });
+      expect(
+        (await f.run(() => f.service.status('p', 't'))).preview?.cleanup,
+      ).toBeNull();
+    }
+    f.request.mockRejectedValue(new Error('PREVIEW_MANAGER_UNAVAILABLE'));
+    expect(
+      (await f.run(() => f.service.status('p', 't'))).preview?.cleanup,
+    ).toBeNull();
+    await expect(f.run(() => f.service.stop('p', 't'))).rejects.toThrow(
+      'PREVIEW_MANAGER_UNAVAILABLE',
+    );
+  });
+
   it('does not confuse configuration availability with the caller’s execution permission', async () => {
     const f = configured('standard');
     const result = await f.run(() => f.service.discovery('p', 't'));
