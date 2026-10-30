@@ -5,6 +5,7 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import contract from '../../runtime/preview-profile.cjs';
 import archives from '../../runtime/preview-archive.cjs';
 import { relayReadiness } from './preview-health.mjs';
+import { previewCommand } from './preview-command.mjs';
 import storage from '../../runtime/preview-storage.cjs';
 const { previewStorage, cacheEnvironment, readStorageObservation } = storage;
 
@@ -700,12 +701,7 @@ export class PreviewManager {
         this.catalog[profile.runtime].image,
         {
           Entrypoint: ['/bin/sh', '-c'],
-          Cmd: [
-            'set -eu\numask 077\nmkdir -p "$HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$COREPACK_HOME" "$PNPM_HOME" "$npm_config_cache" "$npm_config_store_dir" "$npm_config_devdir"\n' +
-              [profile.install, profile.build, profile.start]
-                .filter((s) => s.trim())
-                .join('\n'),
-          ],
+          Cmd: [previewCommand(profile)],
           WorkingDir:
             '/workspace' +
             (profile.directory === '.' ? '' : '/' + profile.directory),

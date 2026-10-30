@@ -119,6 +119,62 @@ describe('filtered preview sources', () => {
       previewSourceFingerprint(path.join(f.root, 'alias')),
     ).rejects.toThrow('PREVIEW_UNSAFE_SOURCE');
   });
+  it('includes nested logs source modules but not output logs or their data', async () => {
+    const f = await fixture();
+    const code = [
+      'src/logs/logs.module.ts',
+      'src/logs/log-retention.ts',
+      'packages/api/src/logs/tests/logger.test.ts',
+    ];
+    const excluded = [
+      'logs/app.ts',
+      'logs/app.log',
+      'src/logs/runtime.log',
+      'src/logs/requests.json',
+      'src/logs/events.ndjson',
+      'src/logs/archive.gz',
+      'src/logs/private.key',
+      'src/logs/store.sqlite',
+      'src/logs/.env',
+      'src/logs/credentials/token.ts',
+      'src/logs/node_modules/index.ts',
+    ];
+    for (const file of [...code, ...excluded]) {
+      await fs.mkdir(path.dirname(path.join(f.source, file)), {
+        recursive: true,
+      });
+      await fs.writeFile(path.join(f.source, file), 'fixture');
+    }
+    await previewSnapshot(f.source, f.destination);
+    const names = (await read(f.destination)).map((v) => v.name);
+    for (const file of code) expect(names).toContain(file);
+    for (const file of excluded) expect(names).not.toContain(file);
+    const before = await previewSourceFingerprint(f.source);
+    await fs.writeFile(path.join(f.source, code[0]), 'changed source');
+    expect(await previewSourceFingerprint(f.source)).not.toBe(before);
+    const sourceChanged = await previewSourceFingerprint(f.source);
+    await fs.writeFile(
+      path.join(f.source, 'src/logs/requests.json'),
+      'changed data',
+    );
+    expect(await previewSourceFingerprint(f.source)).toBe(sourceChanged);
+  });
+  it('does not permit links through the nested logs source exception', async () => {
+    const f = await fixture();
+    await fs.mkdir(path.join(f.source, 'src/logs'), { recursive: true });
+    const outside = path.join(f.root, 'outside.ts');
+    const link = path.join(f.source, 'src/logs/link.ts');
+    await fs.writeFile(outside, 'not accessible');
+    await fs.symlink(outside, link);
+    await expect(previewSnapshot(f.source, f.destination)).rejects.toThrow(
+      'PREVIEW_SOURCE_SYMLINK',
+    );
+    await fs.unlink(link);
+    await fs.link(outside, link);
+    await expect(previewSnapshot(f.source, f.destination)).rejects.toThrow(
+      'PREVIEW_UNSAFE_SOURCE',
+    );
+  });
   it('detects changes and never overwrites an existing temporary export', async () => {
     const f = await fixture();
     await fs.writeFile(path.join(f.source, 'index'), 'old');

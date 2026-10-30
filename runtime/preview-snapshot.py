@@ -8,7 +8,11 @@ import stat
 import sys
 import tarfile
 
-EXCLUDED = re.compile(r"^(?:\.git|\.env(?:\..*)?|\.ssh|\.codex|\.aws|\.docker|\.kube|\.config|\.local|\.npmrc|\.yarnrc(?:\.yml)?|\.netrc|\.pypirc|\.gitconfig|\.secrets|credentials|id_rsa|id_ed25519|authorized_keys|\.mergeron.*|\.webui|\.agent-document-drafts|node_modules|\.venv|venv|\.cache|\.next|\.pytest_cache|__pycache__|dist|build|coverage|artifacts|logs)$", re.I)
+EXCLUDED = re.compile(r"^(?:\.git|\.env(?:\..*)?|\.ssh|\.codex|\.aws|\.docker|\.kube|\.config|\.local|\.npmrc|\.yarnrc(?:\.yml)?|\.netrc|\.pypirc|\.gitconfig|\.secrets|credentials|id_rsa|id_ed25519|authorized_keys|\.mergeron.*|\.webui|\.agent-document-drafts|node_modules|\.venv|venv|\.cache|\.next|\.pytest_cache|__pycache__|dist|build|coverage|artifacts)$", re.I)
+# A nested module such as src/logs is source code, not the root output logs/.
+# Keep only source-code files there: never broaden this exception to JSON,
+# NDJSON, text logs, archives or the otherwise excluded secret/data names.
+LOG_SOURCE = re.compile(r"\.(?:[cm]?[jt]sx?|pyi?|rb|go|rs|java|kts?|swift|[ch]|cc|cpp|hpp|cs|fsx?|vue|svelte|astro)$", re.I)
 PRIVATE = re.compile(r"\.(?:pem|key|p12|pfx|sqlite3?(?:-wal|-shm|-journal)?|db)$", re.I)
 FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY
 
@@ -37,12 +41,14 @@ def open_root(value):
 def inventory(root):
     result, total = [], 0
 
-    def walk(fd, prefix="", depth=0):
+    def walk(fd, prefix="", depth=0, in_logs=False):
         nonlocal total
         if depth > 40:
             fail("PREVIEW_SOURCE_LIMIT")
         for name in sorted(os.listdir(fd)):
             if EXCLUDED.match(name) or PRIVATE.search(name):
+                continue
+            if not prefix and name.lower() == "logs":
                 continue
             relative = prefix + name
             if len(relative.encode("utf8")) > 240 or re.search(r"[\x00-\x1f\\]", relative):
@@ -59,10 +65,13 @@ def inventory(root):
                     if (opened.st_ino, opened.st_dev) != (value.st_ino, value.st_dev):
                         fail("PREVIEW_SOURCE_CHANGED")
                     result.append(["d"] + row)
-                    walk(child, relative + "/", depth + 1)
+                    walk(child, relative + "/", depth + 1,
+                         in_logs or name.lower() == "logs")
                 finally:
                     os.close(child)
             elif stat.S_ISREG(value.st_mode) and value.st_nlink == 1:
+                if in_logs and not LOG_SOURCE.search(name):
+                    continue
                 total += value.st_size
                 if value.st_size > 16 * 1024**2 or total > 50 * 1024**2:
                     fail("PREVIEW_SOURCE_LIMIT")
