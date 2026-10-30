@@ -534,6 +534,7 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
                         <FileViewer
                           filePath={tab.path}
                           documentId={tab.documentId}
+                          onOpenFile={(path) => openFile(context, path)}
                           viewId={fileViewId(context, tab.id)}
                           active={active}
                         />

@@ -308,7 +308,7 @@ test.each([260, 330, 600])(
       await page.getByRole('button', { name: /#12/ }).click();
       await screen.findByText('En cours');
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
-      await page.getByRole('tab', { name: 'Branches publiées' }).click();
+      await page.getByRole('tab', { name: 'Branches' }).click();
       const remoteMenuName =
         'Actions de la branche distante feature/publiee-sur-github';
       const remoteTrigger = await screen.findByRole('button', {
@@ -372,7 +372,7 @@ test.each([260, 330, 600])(
       await page.screenshot({
         path: `../../../.vitest-screenshots/git-panel-${width}.png`,
       });
-      await page.getByRole('tab', { name: 'Branches publiées' }).click();
+      await page.getByRole('tab', { name: 'Branches' }).click();
       expect(
         await screen.findByText('feature/publiee-sur-github'),
       ).toBeVisible();
