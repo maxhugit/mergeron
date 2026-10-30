@@ -130,6 +130,29 @@ describe('project MCP connection lifetime', () => {
     expect(manager.restartControlled).not.toHaveBeenCalled();
   });
 
+  it('preserves an unmaterialized conversation instead of restarting away its first-turn state when permissions change', async () => {
+    const { service, manager, policies, codex } = setup();
+    service.record('t', policy);
+    policies.policyForThread.mockResolvedValue({
+      ...policy,
+      config: { ...policy.config, default_permissions: 'new-copy-profile' },
+    });
+    codex.request.mockRejectedValue(
+      new CodexRpcError(
+        {
+          code: -32600,
+          message:
+            'thread t is not materialized yet; thread/turns/list is unavailable before first user message',
+        },
+        { method: 'thread/turns/list' },
+      ),
+    );
+    await expect(service.beforeTurn('t', '/workspaces/p')).rejects.toThrow(
+      'premier tour',
+    );
+    expect(manager.restartControlled).not.toHaveBeenCalled();
+  });
+
   it('never approves unknown or changed native integration permissions as a fresh cwd-only change', () => {
     const { service } = setup();
     service.record('t', policy);

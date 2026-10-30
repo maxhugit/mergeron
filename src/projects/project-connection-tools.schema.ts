@@ -6,6 +6,12 @@ export const listProjectConnectionsInput = z.strictObject({
   query: z.string().max(200).optional(),
   offset: z.number().int().min(0).optional(),
 });
+/** Ownership and target paths are always selected by the server. */
+export const createProjectGitCopyInput = z.strictObject({
+  connectionId: id,
+  requestId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+  branch: z.string().trim().min(1).max(200).optional(),
+});
 export const readProjectGitInput = z.strictObject({
   connectionId: id,
   operation: z.enum([
@@ -96,6 +102,7 @@ export const prepareProjectGitOperationInput = z.discriminatedUnion(
 );
 export const projectConnectionTools = [
   'list_project_connections',
+  'create_project_git_copy',
   'read_project_git',
   'publish_project_git',
   'prepare_project_git',

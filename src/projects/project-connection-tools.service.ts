@@ -24,6 +24,7 @@ import { WorkspaceGitService } from './workspace-git.service';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import {
   listProjectConnectionsInput,
+  createProjectGitCopyInput,
   readProjectGitInput,
   publishProjectGitInput,
   prepareProjectGitOperationInput,
@@ -94,6 +95,7 @@ export class ProjectConnectionToolsService {
               c.enabled && root?.capabilities.read && c.protocol === 'git'
                 ? [
                     'read_project_git',
+                    'create_project_git_copy',
                     ...(root.accessMode === 'read_write' &&
                     root.capabilities.write
                       ? ['prepare_project_git', 'publish_project_git']
@@ -119,6 +121,113 @@ export class ProjectConnectionToolsService {
         nextOffset: offset + 50 < all.length ? offset + 50 : null,
         untrustedContent: true,
       };
+    }
+    if (tool === 'create_project_git_copy') {
+      const args = createProjectGitCopyInput.parse(raw);
+      const assertCreate = () => {
+        const access = check();
+        access.identities.requireAdministrator(access.identity);
+        if (access.identity.impersonation)
+          throw new ForbiddenException('ACCESS_DENIED');
+        const inventory = this.locations.list(projectId);
+        const connection = inventory.connections.find(
+          (c) => c.id === args.connectionId,
+        );
+        const root = inventory.locations.find(
+          (l) => l.connectionId === args.connectionId && l.kind === 'remote',
+        );
+        if (
+          !connection?.enabled ||
+          connection.protocol !== 'git' ||
+          !root?.capabilities.read
+        )
+          throw new ForbiddenException('PROJECT_CONNECTION_UNAVAILABLE');
+        return access;
+      };
+      const observed = this.locations
+        .list(projectId)
+        .connections.find((connection) => connection.id === args.connectionId);
+      const beforeCommit = () => {
+        assertCreate();
+        const latest = this.locations
+          .list(projectId)
+          .connections.find(
+            (connection) => connection.id === args.connectionId,
+          );
+        if (
+          !observed ||
+          latest?.updatedAt !== observed.updatedAt ||
+          latest?.address !== observed.address
+        )
+          throw new ForbiddenException('PROJECT_CONNECTION_UNAVAILABLE');
+      };
+      const access = assertCreate();
+      const key = and(
+        eq(projectAgentToolRequests.projectId, projectId),
+        eq(projectAgentToolRequests.threadId, threadId),
+        eq(projectAgentToolRequests.requestId, args.requestId),
+      );
+      const digest = createHash('sha256')
+        .update(JSON.stringify({ tool, ...args }))
+        .digest('hex');
+      const previous = this.db
+        .select()
+        .from(projectAgentToolRequests)
+        .where(key)
+        .get();
+      if (previous) {
+        if (
+          previous.digest !== digest ||
+          previous.personId !== access.identity.personId
+        )
+          throw new ConflictException('PROJECT_CONNECTION_REQUEST_CONFLICT');
+        if (!previous.result)
+          throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+        // Never return a stale success after ownership was released or revoked.
+        const copy = this.copies
+          .list(projectId)
+          .find((copy) => copy.id === previous.result?.id);
+        if (!copy?.ownerThreadIds.includes(threadId) || copy.state !== 'ready')
+          throw new ForbiddenException('GIT_COPY_OWNED');
+        return previous.result;
+      }
+      const owned = this.copies
+        .list(projectId)
+        .filter((copy) => copy.ownerThreadIds.includes(threadId));
+      if (owned.length) throw new ConflictException('GIT_AGENT_COPY_EXISTS');
+      this.db
+        .insert(projectAgentToolRequests)
+        .values({
+          projectId,
+          threadId,
+          requestId: args.requestId,
+          digest,
+          personId: access.identity.personId,
+          createdAt: Date.now(),
+        })
+        .run();
+      const copy = await this.copies.create(
+        projectId,
+        args.connectionId,
+        {
+          branch: args.branch,
+          agentThreadId: threadId,
+        },
+        beforeCommit,
+      );
+      const result = {
+        id: copy.id,
+        connectionId: args.connectionId,
+        ownerThreadId: threadId,
+        localPath: copy.localPath,
+        branch: copy.branch,
+        revision: copy.revision,
+        state: copy.state,
+        // Ownership is independent of the human's active-folder selection.
+        activeFolderChanged: false,
+      };
+      this.db.update(projectAgentToolRequests).set({ result }).where(key).run();
+      return result;
     }
     const publishing = tool === 'publish_project_git';
     const preparing = tool === 'prepare_project_git';
