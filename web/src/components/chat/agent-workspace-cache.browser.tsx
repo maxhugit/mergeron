@@ -338,12 +338,7 @@ async function select(id: string) {
   await waitFor(() => expect(timeline.getState().threadId).toBe(id));
   return screen.findByRole('textbox');
 }
-test.each([
-  [390, 1],
-  [1180, 1],
-  [1180, 2],
-  [1180, 3],
-])(
+test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
   'retains desktop/mobile drafts, scroll and background updates at %ipx (run %i)',
   async (width) => {
     await page.viewport(width, 900);
@@ -366,6 +361,11 @@ test.each([
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => resolve()),
     );
+    // A positive absolute offset also holds at the tail: prove the native
+    // upward gesture actually left follow mode before recording a reading point.
+    await expect
+      .poll(() => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight)
+      .toBeGreaterThan(300);
     const before = scroll.scrollTop;
     expect(before).toBeGreaterThan(0);
     const readingRow = [

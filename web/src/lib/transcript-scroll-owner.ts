@@ -323,6 +323,25 @@ export class TranscriptScrollOwner {
     this.restore = false;
   }
 
+  /** Upward wheel intent leaves follow mode before its first animated offset. */
+  beginWheel(deltaY: number): void {
+    this.beginInput();
+    if (
+      !this.active ||
+      deltaY >= 0 ||
+      !this.element ||
+      !this.following ||
+      this.element.scrollTop <= 0
+    )
+      return;
+    // An old scroll-end notification can arrive before the new wheel has
+    // moved scrollTop. Keeping follow=true until that offset would let it
+    // repin the tail and cancel the new native animation entirely.
+    this.following = false;
+    this.anchor = captureReadingAnchor(this.element) ?? this.anchor;
+    this.save();
+  }
+
   /** Ends pointer capture; inertia is still tracked by the virtualizer's scrolling lifecycle. */
   endPointer(): void {
     this.pointerHeld = false;

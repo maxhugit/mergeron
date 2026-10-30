@@ -228,7 +228,9 @@ export function VirtualTranscript({
           onFocusCapture={() => owner.beginInput()}
           style={composerFade}
           className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] [overflow-anchor:none]"
-          onWheel={() => owner.beginInput()}
+          onWheel={(event) =>
+            owner.beginWheel(event.ctrlKey ? 0 : event.deltaY)
+          }
           onTouchStart={() => owner.beginInput(true)}
           onTouchEnd={() => owner.endPointer()}
           onPointerDown={() => owner.beginInput(true)}

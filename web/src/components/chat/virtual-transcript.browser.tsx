@@ -1,9 +1,10 @@
 /** Real Chromium/WebKit layout verifies the production virtualizer and scroll owner together. */
-import { afterEach, beforeAll, expect, test } from 'vitest';
-import { commands } from 'vitest/browser';
-import { act, cleanup, render } from '@testing-library/react';
+import { afterEach, beforeAll, expect, test, vi } from 'vitest';
+import { commands, page } from 'vitest/browser';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { VirtualTranscript } from './virtual-transcript';
 import { RetainedSurface } from '@/components/retained-surface';
+import { TranscriptScrollOwner } from '@/lib/transcript-scroll-owner';
 import {
   captureReadingAnchor,
   forgetTranscriptBookmarks,
@@ -117,8 +118,89 @@ async function readHistory(): Promise<number> {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   for (let i = 1; i <= threadSequence; i++)
     forgetTranscriptBookmarks([`browser:${i}`]);
+});
+
+test('a stale scroll-end notification cannot repin an upward native wheel gesture', async () => {
+  const id = `browser:${++threadSequence}`;
+  await page.viewport(1180, 900);
+  const state: { owner?: TranscriptScrollOwner } = {};
+  const commit = TranscriptScrollOwner.prototype.commit;
+  const commits = vi
+    .spyOn(TranscriptScrollOwner.prototype, 'commit')
+    .mockImplementation(function (this: TranscriptScrollOwner, ...args) {
+      commit.apply(this, args);
+      if (this.threadId === id) state.owner = this;
+    });
+  render(<Fixture id={id} />);
+  await expect.poll(distance).toBeLessThan(2);
+  await finishGesture();
+  await expect.poll(() => state.owner?.virtualizer?.isScrolling).toBe(false);
+  const writes = vi.spyOn(
+    TranscriptScrollOwner.prototype,
+    'programmaticScroll',
+  );
+  // Reproduce the observed Linux ordering without relying on an OS timer:
+  // deliver wheel intent, then the old scroll's end, before any new offset.
+  // No geometry is fabricated. Complete the gesture with native input below.
+  try {
+    expect(state.owner?.following).toBe(true);
+    fireEvent.wheel(scroller(), { deltaY: -650 });
+    expect(state.owner?.inputInProgress).toBe(true);
+    state.owner!.endInput();
+    expect(writes).not.toHaveBeenCalled();
+    await commands.scrollTranscript(-650);
+    await expect.poll(distance).toBeGreaterThan(300);
+  } finally {
+    commits.mockRestore();
+    writes.mockRestore();
+  }
+});
+
+test.each([
+  { label: 'downward', deltaY: 650, ctrlKey: false },
+  { label: 'zoom', deltaY: -650, ctrlKey: true },
+])(
+  '$label wheel input at the tail keeps following new output',
+  async ({ deltaY, ctrlKey }) => {
+    const id = `browser:${++threadSequence}`;
+    const view = render(<Fixture id={id} />);
+    await expect.poll(distance).toBeLessThan(2);
+    await finishGesture();
+    fireEvent.wheel(scroller(), { deltaY, ctrlKey });
+    scroller().dispatchEvent(new Event('scrollend'));
+    expect(readTranscriptBookmark(id)?.follow).toBe(true);
+    view.rerender(<Fixture id={id} extra={700} />);
+    await expect.poll(distance).toBeLessThan(2);
+  },
+);
+
+test('upward wheel input without scrollable history keeps following new output', async () => {
+  const id = `browser:${++threadSequence}`;
+  const fixture = (height: number) => (
+    <div style={{ width: 800, height: 480 }}>
+      <VirtualTranscript
+        threadId={id}
+        keys={['only']}
+        active
+        ready
+        bottomInset={64}
+        scrollSignal={0}
+        renderRow={() => <div style={{ height }}>Short conversation</div>}
+      />
+    </div>
+  );
+  const view = render(fixture(40));
+  await expect.poll(distance).toBeLessThan(2);
+  await finishGesture();
+  expect(scroller().scrollTop).toBe(0);
+  fireEvent.wheel(scroller(), { deltaY: -650 });
+  scroller().dispatchEvent(new Event('scrollend'));
+  expect(readTranscriptBookmark(id)?.follow).toBe(true);
+  view.rerender(fixture(900));
+  await expect.poll(distance).toBeLessThan(2);
 });
 
 test('retains the hidden scroll box and restores a historical sentence after hidden changes', async () => {
