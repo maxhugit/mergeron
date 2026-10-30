@@ -112,6 +112,11 @@ test('a running process is not presented as an openable HTTP preview', async () 
     )
     .toBeVisible();
   expect(screen.queryByRole('button', { name: 'Ouvrir l’aperçu' })).toBeNull();
+  expect(
+    screen.queryByRole('textbox', {
+      name: 'Adresse de l’environnement de test',
+    }),
+  ).toBeNull();
 });
 for (const width of [1440, 390])
   test(`standing agent-preview authorization fits ${width}px and keeps caps human-controlled`, async () => {
@@ -173,6 +178,19 @@ for (const width of [1440, 390])
       .element(page.getByRole('button', { name: 'Ouvrir l’aperçu' }))
       .toBeVisible();
     const dialog = screen.getByRole('dialog');
+    const address = screen.getByRole('textbox', {
+      name: 'Adresse de l’environnement de test',
+    });
+    expect(address).toHaveValue(
+      'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
+    );
+    expect(address).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'Copier l’URL' })).toBeVisible();
+    expect(address.getBoundingClientRect().top).toBeLessThan(
+      screen
+        .getByRole('region', { name: 'Stockage du runtime' })
+        .getBoundingClientRect().top,
+    );
     expect(
       screen.getByRole('region', { name: 'Stockage du runtime' }),
     ).toBeVisible();
