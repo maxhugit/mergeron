@@ -31,6 +31,7 @@ import { ThreadsController } from './threads.controller';
 import { ThreadsDeletePlannerService } from './threads-delete-planner.service';
 import { ThreadsDeletionController } from './threads-deletion.controller';
 import { ThreadsDeletionService } from './threads-deletion.service';
+import { AgentGitCopyCleanupService } from './agent-git-copy-cleanup.service';
 import { ThreadsGateway } from './threads.gateway';
 import { ThreadExecutionInventoryService } from './thread-execution-inventory.service';
 import { ThreadMetadataService } from './thread-metadata.service';
@@ -79,6 +80,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     ThreadsBranchingService,
     ThreadsDeletePlannerService,
     ThreadsDeletionService,
+    AgentGitCopyCleanupService,
     ThreadsGateway,
     ThreadHistoryService,
     ThreadResumeRegistryService,

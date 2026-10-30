@@ -73,6 +73,14 @@ comme agents de travail, ne reçoivent pas ce canal.
 
 ## Connexions du projet et utilisation de Git
 
+La suppression d’un agent supprime aussi sa copie Git locale attribuée, y compris
+les modifications non publiées et le dossier `.git`, puis ses références en base.
+Le dépôt distant reste intact. Supprimer une seule version de message conserve
+la copie de l’agent. Une copie encore utilisée par un autre agent ou contexte
+n’est pas supprimée : le nettoyage signale un échec partiel et conserve les
+références nécessaires à une nouvelle tentative. Les chemins hors du dossier
+des copies gérées et les liens symboliques sont refusés.
+
 Les agents découvrent les connexions configurées dans **leur projet** avec
 `list_project_connections` (`query` et `offset` facultatifs, pages de 50).
 Le résultat indique le nom, le protocole, l’activation, l’état, le mode d’accès,
