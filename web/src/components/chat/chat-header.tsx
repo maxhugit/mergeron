@@ -63,6 +63,8 @@ import {
 } from '@/components/settings/setting-helpers';
 import type { SettingsSection } from '@/components/settings/settings-sections';
 import { ProfileAppearance } from '@/components/account/profile-appearance';
+import { PushNotificationSettings } from '@/components/account/push-notification-settings';
+import { disconnectPushOnLogout } from '@/lib/push-notifications';
 import { clearApiToken } from '@/auth-token';
 import { authLogout } from '@/generated/api';
 import { resetSocket } from '@/socket';
@@ -205,6 +207,7 @@ export function ChatHeader() {
     : t('collapseSidebar');
 
   const handleLogout = async () => {
+    await disconnectPushOnLogout();
     await authLogout({ throwOnError: false }).catch(() => undefined);
     clearApiToken();
     resetSocket();
@@ -472,6 +475,7 @@ export function ChatHeader() {
             </div>
           </dl>
           <ProfileAppearance />
+          <PushNotificationSettings />
           <PwaInstall />
           <DialogFooter className="sm:justify-between">
             <Button variant="destructive" onClick={() => void handleLogout()}>

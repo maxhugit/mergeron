@@ -104,7 +104,7 @@ export function minimalHomeEntries(environment = []) {
     return `home/${path.slice('/home/codex/'.length)}`;
   };
   const entries = [
-    ...['', '-wal', '-shm', '-journal'].map((suffix) =>
+    ...['', '-wal', '-shm', '-journal', '.push-vapid.json'].map((suffix) =>
       relative(`${database}${suffix}`),
     ),
     ...['config.toml', 'auth.json', 'AGENTS.md', 'webui/model-catalog'].map(

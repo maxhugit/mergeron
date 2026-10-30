@@ -35,6 +35,7 @@ import { TokenUsageModule } from './token-usage/token-usage.module';
 import { TurnDiffModule } from './turn-diff/turn-diff.module';
 import { TurnErrorsModule } from './turn-errors/turn-errors.module';
 import { PreviewsModule } from './previews/previews.module';
+import { PushModule } from './push/push.module';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -153,6 +154,7 @@ const PINO_REDACT = {
     PluginsModule,
     ProjectsModule,
     PreviewsModule,
+    PushModule,
     OnlyOfficeModule,
     TurnDiffModule,
     TurnErrorsModule,

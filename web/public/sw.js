@@ -74,3 +74,52 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+// Only a small typed envelope is accepted. Titles, URLs and HTML supplied in a
+// payload are never rendered or used as navigation targets.
+function pushEnvelope(value) {
+  if (!value || value.version !== 1 || typeof value.id !== 'string' || !/^[\w-]{1,128}$/.test(value.id)) return null;
+  if (!['completed', 'approvals', 'questions', 'test'].includes(value.kind)) return null;
+  if (value.kind !== 'test' && (typeof value.threadId !== 'string' || !/^[\w-]{1,128}$/.test(value.threadId))) return null;
+  return { id: value.id, kind: value.kind, threadId: value.kind === 'test' ? null : value.threadId, language: value.language === 'fr' ? 'fr' : 'en' };
+}
+self.addEventListener('push', (event) => {
+  let value;
+  try {
+    if (!event.data || event.data.text().length > 2048) return;
+    value = pushEnvelope(event.data.json());
+  } catch { return; }
+  if (!value) return;
+  const fr = value.language === 'fr';
+  const title = value.kind === 'completed'
+    ? (fr ? 'Mergeron — Réponse prête' : 'Mergeron — Response ready')
+    : value.kind === 'test'
+      ? (fr ? 'Mergeron — Notification de test' : 'Mergeron — Test notification')
+      : (fr ? 'Mergeron — Votre attention est requise' : 'Mergeron — Your attention is needed');
+  event.waitUntil(self.registration.showNotification(title, {
+    body: fr ? 'Ouvrez Mergeron pour consulter les détails.' : 'Open Mergeron to view details.',
+    icon: new URL('pwa-icon-192.png', self.registration.scope).href,
+    badge: new URL('pwa-icon-192.png', self.registration.scope).href,
+    tag: `mergeron:${value.id}`, renotify: false,
+    data: { ...value, version: 1 },
+  }));
+});
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const value = pushEnvelope(event.notification.data);
+  if (!value) return;
+  const scope = new URL(self.registration.scope);
+  const target = new URL(value.threadId ? `t/${encodeURIComponent(value.threadId)}` : './', scope).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Never navigate an unrelated application or a cross-origin login window.
+    const client = windows.find((item) => item.url === target) || windows.find((item) => {
+      const url = new URL(item.url);
+      return url.origin === scope.origin && url.pathname.startsWith(scope.pathname);
+    });
+    if (client) {
+      if (client.url !== target) await client.navigate(target);
+      await client.focus();
+    } else await self.clients.openWindow(target);
+  })());
+});

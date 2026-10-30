@@ -83,6 +83,7 @@ test('all three explicit modes work in either environment and keep legacy journa
     );
   const entries = minimalHomeEntries();
   assert.ok(entries.includes('home/.codex/codex-webui.sqlite-wal'));
+  assert.ok(entries.includes('home/.codex/codex-webui.sqlite.push-vapid.json'));
   assert.ok(
     !entries.some((entry) => /sessions|livrables|workspace/.test(entry)),
   );
