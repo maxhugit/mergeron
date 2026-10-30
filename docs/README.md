@@ -18,6 +18,13 @@ Les [adaptations aux panneaux hôtes](adapters/README.md) sont facultatives et
 séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité sont
 également des choix d’intégration, pas des dépendances à un homelab particulier.
 
+- [Mises à jour des composants](container-updates.md) : détection, confirmation,
+  sauvegarde, interruption et suivi.
+- [CLI Codex géré et protégé](operations/managed-codex-runtime.md) : provenance,
+  installation par le Manager et contrôle des mises à jour.
+- [Prévisualisations des agents](previsualisations-agents.md) : domaine wildcard,
+  images approuvées, autorisation projet, MCP et nettoyage des instances.
+
 ## Guides d’utilisation
 
 - [Guide utilisateur intégré et maintenance](guide-utilisateur.md) : sommaire
@@ -29,6 +36,9 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 - [Organisation des personnes](organisation-personnes-projets.md)
 - [Gestion des livrables](gestion-des-livrables.md)
 - [Workspaces des projets](workspaces-projets.md)
+- [Navigateur distant interactif](live-browser.md)
+- [Extension locale Chrome, Edge et Safari sur Mac](local-browser-extension.md)
+- [Navigateur annoté et déploiement du service](navigateur-annote.md)
 - [Administration Codex](administration-codex.md)
 - [Gestionnaire de tâches](gestionnaire-de-taches.md)
 - [Contexte projet et outils des agents](contexte-et-outils-agents.md) :
@@ -38,11 +48,13 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 - [Contribuer](../CONTRIBUTING.md)
 - [Interface Web](../web/README.md)
+- [Caches et précontrôle de l’environnement des agents](environnement-agents.md)
+- [Vérification visuelle du vrai site](verification-visuelle.md)
 - [Politique de sécurité](../SECURITY.md)
 - [Évaluation des composants système](../security/system-components.md)
 - [Évaluation des en-têtes noyau](../security/linux-libc-dev-assessment.csv)
 
 `upstream/` conserve des références officielles figées dans leur langue d’origine.
-Ces documents ne sont pas nécessaires à l’installation.
-
-- [Navigateur annoté](navigateur-annote.md)
+Ces documents ne sont pas nécessaires à l’installation. Les guides fonctionnels
+suivent `main`/`edge` ; vérifier la révision installée et les notes de version
+avant de supposer qu’une ancienne version stable possède toutes ces fonctions.

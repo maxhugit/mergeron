@@ -10,6 +10,11 @@ Chaque projet possède un workspace principal permanent dans `/workspaces/<id-du
 
 Chaque agent, conversation simple, tâche et livrable possède son propre dossier actif. Le choix d'un dossier actif ne change pas le principal du projet. Parcourir un dossier dans l'explorateur ne change pas non plus le contexte d'exécution.
 
+Dans la sidebar de l’agent, **Espace système** est présenté en premier aux
+administrateurs, en lecture seule. **Espace de travail** contient les fichiers
+du projet. L’étoile colorée indique le dossier de travail actif ; les menus
+contextuels permettent de parcourir un autre emplacement sans le rendre actif.
+
 À la création, un agent ou une conversation simple utilise le principal. Une tâche utilise le dossier explicitement choisi, celui de sa tâche parente, puis le principal. Un livrable utilise son propre sous-dossier dans `livrables/`. Lorsqu'un agent est lié à une tâche, le dossier actif de la tâche est prioritaire sur le défaut de l'agent.
 
 Le serveur résout la ressource et le chemin relatif avant chaque nouvelle opération. Il vérifie leur appartenance au projet, l'existence du dossier, son confinement dans la ressource et l'absence de lien symbolique. Un changement s'applique aux opérations suivantes ; une exécution déjà lancée conserve le contexte résolu à son démarrage.
@@ -35,17 +40,22 @@ via le MCP interne](contexte-et-outils-agents.md#connexions-du-projet-et-utilisa
 
 ### Structure
 
-| Chemin relatif                         | Usage                                                  |
-| -------------------------------------- | ------------------------------------------------------ |
-| `.mergeron/project.json`               | Marqueur de propriété et version de structure          |
-| `.mergeron/knowledge/AGENTS.md`        | Emplacement réservé aux futures instructions partagées |
-| `.mergeron/knowledge/CONNAISSANCES.md` | Emplacement réservé aux connaissances                  |
-| `.mergeron/knowledge/DECISIONS.md`     | Emplacement réservé aux décisions                      |
-| `.mergeron/history/`                   | Emplacement réservé à l'historique applicatif          |
-| `AGENTS.md`                            | Explication de l'organisation du dossier               |
-| `documents/`, `sources/`, `livrables/` | Contenu de travail utilisateur                         |
+La structure actuelle est en version **3** et sépare deux racines :
 
-L'onglet **Connaissances** des paramètres du projet permet aux administrateurs de consulter et modifier les trois fichiers Markdown avec un seul bouton d'enregistrement. Il contient aussi les propositions de mémoire des conversations. Le contenu de `.mergeron` reste consultable, mais réservé à l'application pour les écritures via l'API de fichiers générique.
+| Racine / chemin | Usage |
+| --- | --- |
+| `/workspaces/<id>/` | Espace de travail permanent du projet |
+| `AGENTS.md` | Explication de l’organisation du dossier de travail |
+| `documents/`, `sources/`, `livrables/` | Contenu de travail utilisateur sous cette racine |
+| `/workspaces/.mergeron-system/<id>/` | Espace système séparé, réservé aux administrateurs |
+| `project.json` | Marqueur de propriété et version, sous la racine système |
+| `knowledge/AGENTS.md`, `knowledge/CONNAISSANCES.md`, `knowledge/DECISIONS.md` | Connaissances partagées, sous la racine système |
+| `history/` | Versions et historique applicatif, sous la racine système |
+
+Les brouillons isolés des agents utilisent une racine privée sœur
+`.mergeron-agent-drafts/<id>/`, pas un dossier de documents utilisateur.
+
+L'onglet **Connaissances** des paramètres du projet permet aux administrateurs de consulter et modifier les trois fichiers Markdown avec un seul bouton d'enregistrement. Il contient aussi les propositions de mémoire des conversations. L’espace système ne s’édite pas via l’API de fichiers générique ; utiliser les actions métier dédiées. Un utilisateur non administrateur ne peut pas le consulter par un chemin direct.
 
 Les dossiers de premier niveau `documents/`, `sources/` et `livrables/` constituent la structure imposée des projets en version 2. Les opérations génériques ne peuvent pas les renommer, les déplacer, les supprimer ou les remplacer. Leur contenu reste modifiable : création de sous-dossiers, édition, renommage et suppression de fichiers. Les mêmes protections s'appliquent aux chemins résolus par un alias symbolique. L'ancien nom `.webui` reste également réservé pour éviter sa réutilisation comme dossier utilisateur.
 
@@ -53,7 +63,7 @@ L'évolution distingue le principal, les dossiers actifs, les connexions externe
 
 ## Connaissance partagée entre conversations
 
-Les fichiers sont relus dans le principal à chaque nouveau tour Codex et à chaque réponse OpenAI des conversations simples du projet. Le workspace actif reste inchangé, y compris pour une conversation dans un secondaire. Les agents sont rattachés par leur association explicite au projet ; les exécutions éphémères utilisent le rattachement du workspace. Les conversations simples OpenAI utilisent directement leur identifiant de projet.
+Les fichiers sont relus dans l’espace système du projet à chaque nouveau tour Codex et à chaque réponse OpenAI des conversations simples du projet. Le workspace actif reste inchangé, y compris pour une conversation dans un secondaire. Les agents sont rattachés par leur association explicite au projet ; les exécutions éphémères utilisent le rattachement du workspace. Les conversations simples OpenAI utilisent directement leur identifiant de projet.
 
 Les changements enregistrés s'appliquent au prochain échange d'une conversation existante. Une réponse déjà en cours continue avec son instantané de départ. Un instantané vide précise au modèle que les anciennes connaissances ont été retirées. La connaissance reste du contexte de projet et ne remplace pas les règles de sécurité ni les instructions de priorité supérieure.
 
@@ -83,7 +93,7 @@ Une modification locale de la proposition doit être enregistrée avant son acce
 
 Chaque proposition conserve sa version de départ. Si les connaissances ont changé entre-temps, l'acceptation est refusée et la proposition reste en attente. Refuser cette proposition périmée puis demander une nouvelle suggestion dans la conversation, qui recevra les connaissances actuelles au prochain échange. Deux validateurs ne peuvent pas accepter ou refuser silencieusement une même version concurrente. Une proposition déjà traitée ne peut pas être appliquée une seconde fois.
 
-Les fichiers de connaissance restent dans `.mergeron/knowledge/` du principal. Les versions de départ et les propositions sont des données applicatives conservées dans SQLite, comme les tâches et les conversations simples ; sauvegarder la base avec les workspaces. Les propositions survivent à un redémarrage et sont supprimées avec leur projet. La suppression d'une conversation ne modifie pas la référence historique conservée dans une proposition, mais son lien peut alors ne plus être disponible.
+Les fichiers de connaissance restent dans `knowledge/` de l’espace système séparé. Les versions de départ et les propositions sont des données applicatives conservées dans SQLite, comme les tâches et les conversations simples ; sauvegarder la base avec les espaces de travail et système. Les propositions survivent à un redémarrage et sont supprimées avec leur projet. La suppression d'une conversation ne modifie pas la référence historique conservée dans une proposition, mais son lien peut alors ne plus être disponible.
 
 ### Capture et API
 
@@ -103,15 +113,52 @@ Les migrations SQL existantes fournissent `workspace_layout_version` et imposent
 
 1. Il crée `/workspaces/<id>/` et sa structure réservée.
 2. Il conserve l'ancien dossier comme secondaire, en ajoutant son rattachement s'il manquait.
-3. Une transaction remplace le chemin principal du projet, normalise les rôles et inscrit la version 2.
+3. Une transaction remplace le chemin principal du projet, normalise les rôles et inscrit la version de structure courante (aujourd’hui 3).
 
 Aucun fichier existant n'est déplacé ou supprimé. Les chemins des conversations d'agents, des conversations simples et des tâches restent inchangés. Les conversations simples utilisant Codex exécutent désormais dans leur chemin conservé, plutôt que dans le nouveau principal.
 
 La migration SQL `0046_graceful_white_queen` ajoute les références de dossiers actifs. Au démarrage, un rattrapage idempotent associe chaque chemin absolu existant à la ressource locale la plus précise du même projet et conserve son chemin relatif. Les agents, conversations simples, tâches et livrables ne sont ni déplacés ni réaffectés. Une référence qui ne peut plus être résolue reste visible à corriger au lieu d'être remplacée.
 
-Pour un principal existant en version 1, la migration vérifie le marqueur de propriété, les dossiers système et les dossiers structurants, puis renomme `.webui` en `.mergeron` sur le même volume. Elle conserve les connaissances, l'historique et les fichiers utilisateur. Une transaction réécrit les chemins des copies historiques des livrables, des versions de documents et des archives de changements OnlyOffice, uniquement pour le projet concerné, puis inscrit la version 2. Les chemins des fichiers sources, des tâches et des conversations restent inchangés. Le fichier racine `AGENTS.md` est actualisé uniquement s'il correspond exactement au texte ancien généré par l'application ; les instructions personnalisées sont conservées.
+Les principaux existants en version 1 ou 2 contiennent encore un dossier
+interne `.webui` ou `.mergeron`. La migration vers la version 3 vérifie leur
+marqueur de propriété et leur structure, puis déplace les données internes
+dans `/workspaces/.mergeron-system/<id>/`. Elle conserve connaissances,
+historiques et fichiers utilisateur, adapte les références historiques des
+livrables et d’OnlyOffice, et garde les anciens chemins internes protégés.
+Les anciens brouillons sont archivés dans l’espace système ; les nouveaux
+utilisent l’espace privé séparé. Les documents, sources et livrables restent
+dans le dossier de travail. Le fichier racine `AGENTS.md` n’est actualisé que
+s’il correspond exactement à l’ancien texte généré ; les instructions
+personnalisées sont conservées.
 
-La migration peut être relancée, notamment après une interruption entre le renommage sur disque et la transaction en base. Les projets déjà en version 2 sont ignorés. Si `.webui` et `.mergeron` existent simultanément, la migration s'arrête sans fusionner ni écraser leurs contenus. Un marqueur absent, invalide ou appartenant à un autre projet, ainsi qu'un lien symbolique à la place d'un dossier réservé ou du marqueur, bloque également la migration. Les dossiers structurants manquants sont recréés sans toucher aux dossiers utilisateur renommés. Corriger les collisions ou les permissions puis relancer ; ne pas supprimer un dossier système pour forcer la migration sans avoir sauvegardé son contenu.
+La migration peut être relancée après une interruption entre les déplacements
+et la transaction en base. Des dossiers anciens et nouveaux présents en même
+temps, un marqueur absent ou étranger au projet, une collision ou un lien
+symbolique réservé la bloquent plutôt que de fusionner ou écraser les contenus.
+Corriger la cause après sauvegarde ; ne pas supprimer un dossier système pour
+forcer le démarrage. Sauvegarder la base et toutes ces racines ensemble avant
+déploiement ; un simple renommage manuel ne suffit pas.
+
+## Git dans la sidebar de l’agent
+
+Une connexion Git est présentée par une **entrée unique**, avec un indicateur
+de copie locale disponible ou absente pour l’agent. Le menu « … » distingue
+parcours local, parcours distant et ouverture du graphe des branches/commits.
+Le graphe, les comparaisons et les fichiers distants s’ouvrent dans des onglets
+à côté de Conversation. Un fichier GitHub est explicitement en lecture seule.
+
+Une seule copie locale peut être attribuée à un agent de travail. Changer de
+branche ne crée pas une seconde copie. Les actions de création, attribution,
+libération ou suppression gardent leurs confirmations et leurs blocages quand
+la copie est utilisée ; aucun travail non publié n’est supprimé implicitement.
+
+Le panneau sépare **Local**, **Distant · GitHub** et **Synchronisation**.
+Dans Local, préparer les fichiers puis vérifier l’index avant de confirmer le
+commit ; l’auteur vient de la personne connectée, pas d’un champ libre.
+Publier les commits est une action distincte dans Synchronisation. L’état
+local, les branches distantes déjà connues et les informations GitHub ne sont
+pas présentés comme un fetch ou un push automatique. Le [MCP Git](contexte-et-outils-agents.md#connexions-du-projet-et-utilisation-de-git)
+permet le même travail borné sans rendre `.git` modifiable dans le terminal.
 
 Un principal déjà migré qui disparaît du disque n'est pas recréé automatiquement : la réconciliation le signale comme non résolu et ne promeut aucun secondaire. Restaurer le dossier depuis la sauvegarde avant de reprendre les opérations concernées.
 
@@ -158,4 +205,4 @@ Le principal ne peut pas être détaché, remplacé, renommé, déplacé ou supp
 
 La suppression confirmée du projet conserve le choix existant : préserver ses dossiers ou sélectionner ceux à supprimer physiquement, principal compris. Les secondaires détachés restent sur disque. Les activités qui les référencent passent à l'état **À résoudre** et ne basculent pas vers le principal.
 
-Avant de déployer, sauvegarder la base et le volume `/workspaces` ensemble. Le stockage contenant `/workspaces` doit être persistant et accessible en écriture au serveur. La migration concerne une seule instance Mergeron : arrêter les autres instances partageant les volumes et éviter les modifications directes sur disque pendant l'opération. Un retour vers une ancienne version nécessite la restauration cohérente de cette sauvegarde, car l'ancienne version attend `.webui` et les anciens chemins d'historique ; un simple renommage du dossier ne suffit pas.
+Avant de déployer, sauvegarder la base et le volume `/workspaces` ensemble, y compris les racines système et brouillons séparées. Le stockage contenant `/workspaces` doit être persistant et accessible en écriture au serveur. La migration concerne une seule instance Mergeron : arrêter les autres instances partageant les volumes et éviter les modifications directes sur disque pendant l'opération. Un retour vers une ancienne version nécessite la restauration cohérente de cette sauvegarde, car l'ancienne version attend une autre organisation et d’autres chemins d’historique ; un simple renommage du dossier ne suffit pas.

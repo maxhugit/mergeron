@@ -26,6 +26,12 @@ ces noms. Avec Let’s Encrypt, le certificat wildcard utilise DNS-01. Limiter
 les droits du jeton DNS à la validation du certificat et ne jamais le transmettre
 aux agents ou aux instances de test.
 
+Séparer les domaines des environnements : par exemple `*.preview-dev.hugotlab.fr`
+pour la Dev et `*.preview.hugotlab.fr` pour la production, avec leurs certificats,
+routages et réglages propres. Le wildcard couvre les instances parallèles :
+aucun nouveau CNAME n’est nécessaire à chaque lancement. Ces noms sont des
+exemples d’intégration, pas des domaines imposés par Mergeron.
+
 Les modèles nginx fournis dans `deployment/config/` contiennent un serveur
 distinct pour les hôtes des aperçus, qui joint le port interne 8173 de
 l’application. Il n’injecte pas le jeton serveur ni l’identité de Mergeron.
@@ -75,6 +81,12 @@ lecture seule. Exemple de structure, dont les digests doivent être remplacés :
   }
 }
 ```
+
+La présence dans le catalogue n’effectue pas de téléchargement automatique.
+Après un nettoyage du cache Docker de l’hôte, vérifier que chaque empreinte
+autorisée est toujours disponible et, si nécessaire, la recharger exactement
+depuis son registre de confiance. Ne pas remplacer discrètement le digest par
+un tag mutable ou élargir les permissions du runtime pour réparer ce prérequis.
 
 Le processus principal utilise l’UID et le GID 11002. Un service associé peut
 déclarer un autre `user` non root et des répertoires `tmpfs` approuvés dans le

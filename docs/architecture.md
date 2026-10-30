@@ -34,7 +34,7 @@ flowchart LR
 
 ## Conteneurs
 
-### `mergeron`
+### `mergeron-ui`
 
 Application principale et moteur Codex. Aucun port n’est publié sur l’hôte.
 L’application est joignable uniquement depuis Nginx sur le réseau interne.
@@ -67,6 +67,25 @@ Proxy Squid utilisé par les variables `HTTP_PROXY`, `HTTPS_PROXY` et
 `ALL_PROXY`. Il refuse les adresses privées et n’autorise qu’une liste définie
 de domaines Internet.
 
+### Manager et services facultatifs
+
+`mergeron-manager` est séparé de l’application et conserve `network_mode: none`.
+Il utilise l’API Docker locale et un socket Unix applicatif : ne jamais monter
+ce socket Docker dans un agent. Il installe la pile, contrôle les mises à jour
+et retours arrière, installe le [CLI géré](operations/managed-codex-runtime.md)
+et orchestre les [prévisualisations](previsualisations-agents.md).
+
+Le [navigateur distant](live-browser.md) utilise un conteneur facultatif distinct,
+un réseau de contrôle privé et une sortie filtrée. L’[extension locale](local-browser-extension.md)
+utilise au contraire le navigateur de l’utilisateur, notamment pour ses passkeys.
+Elle ne remplace pas le mode distant et ne lui transfère pas ses identifiants.
+
+Chaque aperçu dispose de son runtime, de ses volumes éphémères, d’un réseau
+privé isolé et d’un proxy sortant filtré. Un relais authentifié rejoint le réseau
+administratif ; le runtime du projet n’y est pas raccordé. Aucun port hôte,
+montage de sources hôte, compte de production ou socket Docker n’est fourni
+au runtime. Le wildcard HTTPS est configuré une fois, sans DNS par instance.
+
 ## Réseaux
 
 | Réseau                                      | Type           | Membres                                     | Fonction                            |
@@ -77,6 +96,9 @@ de domaines Internet.
 | `MERGERON_PROXY_NETWORK` (`mergeron-proxy`) | réseau externe | ingress, proxy choisi, Authentik si utilisé | entrée HTTPS                        |
 
 `mergeron-isolated` possède `internal: true` : il ne fournit pas de route Internet.
+Cette table décrit la pile de base. Le navigateur facultatif ajoute son réseau
+de contrôle ; les réseaux privés et de sortie des aperçus sont propres à chaque
+instance et supprimés lors de son arrêt.
 
 ## Flux entrant
 
@@ -99,7 +121,8 @@ pare-feu absolu pour un programme qui ignorerait volontairement le proxy.
 ## Durcissement Docker
 
 - `privileged: false` ;
-- aucun socket Docker dans les trois dépendances ; seul le Manager dispose
+- aucun socket Docker dans l’application, l’ingress, Squid, le navigateur ou
+  les runtimes de prévisualisation ; seul le Manager dispose
   de l’API Docker locale, avec les privilèges importants que cela implique ;
 - `read_only: true` ;
 - `cap_drop: ALL` ;

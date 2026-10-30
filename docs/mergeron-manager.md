@@ -33,11 +33,18 @@ cibles sont vérifiées avant la première suppression, puis avant chacune ; le
 Manager actif doit rester identique, sain et au repos. Les identifiants des
 sauvegardes de données sont comparés avant et après cette opération.
 
-Mergeron Manager est le futur gestionnaire local de la pile Docker Mergeron. Il
-doit à terme installer, mettre à jour, surveiller et réparer les trois
-conteneurs de la plateforme. Son déploiement est séparé de l'application afin
+Mergeron Manager est le gestionnaire local de la pile Docker Mergeron. Il
+installe, surveille et met à jour les composants gérés, avec sauvegarde et
+restauration transactionnelles. La réparation arbitraire reste hors périmètre.
+Son déploiement est séparé de l'application afin
 qu'une panne ou une mise à jour de `mergeron-ui` ne supprime jamais le composant
 chargé de l'observer.
+
+Le [navigateur facultatif](navigateur-annote.md#gestion-par-le-manager), le
+[CLI personnalisé protégé](operations/managed-codex-runtime.md) et les
+[prévisualisations isolées](previsualisations-agents.md) possèdent leurs
+procédures dédiées. Une nouvelle application ne met pas automatiquement à jour
+un ancien Manager. Le remplacement du Manager lui-même reste une opération hôte.
 
 ## Chemin et espace disque des sauvegardes
 
@@ -93,7 +100,7 @@ d'inventorier les installations existantes. Il :
 - vérifie que `/home/codex` et `/workspaces` restent montés depuis un stockage
   persistant ;
 - expose son résultat à l'application par un socket Unix local ;
-- produit un plan signé avant toute installation ;
+- produit un plan avec empreinte d’état à revérifier avant toute installation ;
 - crée uniquement les dossiers, fichiers, réseaux et conteneurs manquants
   déclarés par le manifeste ;
 - conserve l'adoption explicite d'une installation existante.
@@ -136,12 +143,14 @@ Le backend Mergeron relaie l'inventaire aux seuls administrateurs via
 
 L'accès à `/var/run/docker.sock` donne techniquement des droits élevés sur
 l'hôte. L'image du Manager reste donc minimale, sans accès Internet entrant et
-sans outil client arbitraire. Son client Docker limite les écritures à la
-création des réseaux et conteneurs du manifeste et au démarrage de ces derniers.
+sans outil client arbitraire. L’installation limite les écritures à la création
+des réseaux et conteneurs du manifeste et au démarrage de ces derniers.
 La mise à jour ajoute uniquement l'arrêt, le renommage et la suppression des
-conteneurs vérifiés de la pile sélectionnée, sans suppression de volume, de
-réseau ou de données persistantes. Aucune opération Docker arbitraire n'est
-exposée par HTTP.
+conteneurs vérifiés de la pile sélectionnée, sans suppression des volumes ou
+réseaux persistants de la pile. La sauvegarde, sa rétention et la restauration
+ont leur périmètre de fichiers explicite. Les prévisualisations peuvent créer
+puis retirer leurs propres conteneurs, réseaux et volumes éphémères, vérifiés
+par identité et labels. Aucune opération Docker arbitraire n’est exposée par HTTP.
 
 Le Manager conserve seulement `CHOWN` (création des dossiers applicatifs) et
 `DAC_READ_SEARCH` (relecture des secrets privés appartenant à l'UID 11002).
@@ -174,7 +183,8 @@ Le réseau externe choisi par `MERGERON_PROXY_NETWORK` (`mergeron-proxy` par
 défaut) doit préexister. Pour une installation historique, renseigner son nom
 actuel avant de mettre à jour le Manager (par exemple `net_standard`) ; il
 n’est jamais renommé automatiquement. Le Manager crée uniquement
-les trois réseaux appartenant à la pile : `isolated`, `external` et `admin`.
+les réseaux déclarés appartenant à la pile : `isolated`, `external` et `admin`
+pour la base, complétés par le contrôle privé si le navigateur est géré.
 Les images absentes sont téléchargées explicitement dans le plan avant la
 création des conteneurs.
 
@@ -239,8 +249,10 @@ aucun domaine propre à une installation.
 
 ### Détection et confirmation dans l’interface
 
-La carte de version constitue l’unique point d’entrée pour les mises à jour.
-Elle vérifie automatiquement le canal `edge` (recette) ou `latest` (stable),
+L’onglet **Version actuelle** détecte la révision de l’application ; l’onglet
+**Mise à jour** présente les cartes des composants gérés et prépare les
+[mises à jour individuelles](container-updates.md). La détection de l’application
+vérifie automatiquement le canal `edge` (recette) ou `latest` (stable),
 avec un cache de cinq minutes et un rafraîchissement manuel possible. La
 détection lit les métadonnées OCI du registre GHCR, sans télécharger les
 couches d’image ni modifier Docker. L’identité de l’image installée est
@@ -288,7 +300,7 @@ rouvrir. Les restaurations et nouvelles tentatives de récupération utilisent
 la même fenêtre, sans supprimer leurs confirmations de sécurité.
 
 1. `POST /v1/update/plan` avec `images` sélectionne des images des seuls dépôts
-   autorisés. Les trois services doivent être sains, gérés ou explicitement
+   autorisés. Tous les composants concernés doivent être sains, gérés ou explicitement
    adoptés, avec des noms canoniques et des montages compatibles. Une dérive
    d'adoption bloque l'opération. L'ordre variable des montages Docker ne
    modifie pas l'empreinte.
@@ -296,7 +308,7 @@ la même fenêtre, sans supprimer leurs confirmations de sécurité.
    `confirmation=UPDATE_WITH_ROLLBACK` lance l'opération en arrière-plan. Les
    images sont téléchargées avant l'arrêt et épinglées par empreinte publiée.
    Les spécifications Docker, réseaux et montages existants sont conservés.
-3. Après arrêt des trois services, le Manager sauvegarde `home`, `workspace`,
+3. Après arrêt des services gérés, le Manager sauvegarde `home`, `workspace`,
    `logs`, `ssh`, `config` et les trois fichiers secrets sous
    `manager-state/updates/<opération>/backup`. L'espace libre doit permettre la
    sauvegarde et sa restauration. Les liens symboliques ne sont pas suivis ;
@@ -304,8 +316,9 @@ la même fenêtre, sans supprimer leurs confirmations de sécurité.
    la sauvegarde. La copie conserve propriétaires, permissions ordinaires et
    dates, sans nécessiter de capacité supplémentaire.
 4. Les anciens conteneurs sont conservés arrêtés sous un nom de secours. Les
-   remplaçants démarrent dans l'ordre Squid, application, ingress. Chacun doit
-   devenir sain dans un délai borné, puis les trois sont contrôlés ensemble.
+   remplaçants démarrent dans l'ordre Squid, navigateur s’il est géré,
+   application, ingress. Chacun doit devenir sain dans un délai borné, puis
+   l’ensemble est contrôlé.
 5. Après validation durable du résultat, seuls les anciens conteneurs arrêtés
    sont supprimés (`force=false`, `v=false`). Les images et sauvegardes restent
    présentes. Le référentiel d'adoption est actualisé uniquement s'il existait
@@ -329,8 +342,10 @@ validation, le redémarrage termine seulement le nettoyage. Si la récupération
 et `confirmation=ROLLBACK_WITH_DATA_RESTORE`, restaure aussi les données de sa
 sauvegarde. Cela annule les modifications applicatives postérieures à cette
 sauvegarde, conservées séparément en quarantaine. Les versions plus anciennes
-ne sont pas sélectionnables implicitement. Les sauvegardes et journaux ne sont
-pas purgés automatiquement : prévoir leur rétention et surveiller l'espace.
+ne sont pas sélectionnables implicitement. Les sauvegardes suivent la rétention
+configurée après une mise à jour réussie ; les journaux et quarantaines ne sont
+pas purgés par cette rétention. Surveiller l’espace et conserver une sauvegarde
+externe indépendante.
 
 Le suivi public ne contient jamais les spécifications complètes, variables
 d'environnement ni secrets du journal privé. L'installation, l'adoption, la
@@ -352,5 +367,8 @@ mise à jour et la récupération ne peuvent pas s'exécuter simultanément.
 
 Réparation limitée aux conteneurs et réseaux déclarés dans le manifeste.
 
-Les volumes ou dossiers persistants ne feront pas partie d'une suppression ou
-d'un retour arrière automatique.
+Ne pas confondre les fichiers persistants de la pile et les ressources jetables
+des aperçus : l’arrêt d’un aperçu retire uniquement ses conteneurs, réseaux et
+volumes vérifiés par identité et labels. Les données applicatives couvertes
+par `STATE_ROOT` sont restaurées lors du rollback transactionnel ; les dossiers
+externes sous `/appdata` n’en font pas partie.
