@@ -50,6 +50,8 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 - [Interface Web](../web/README.md)
 - [Caches et précontrôle de l’environnement des agents](environnement-agents.md)
 - [Vérification visuelle du vrai site](verification-visuelle.md)
+- [Environnement de test par agent](environnement-test.md) : lancement isolé,
+  compte local et rechargement à chaud avec Nest/Fastify et Vite.
 - [Politique de sécurité](../SECURITY.md)
 - [Évaluation des composants système](../security/system-components.md)
 - [Évaluation des en-têtes noyau](../security/linux-libc-dev-assessment.csv)

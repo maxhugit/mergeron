@@ -66,6 +66,7 @@ describe('project connection agent tools', () => {
     push: vi.fn(),
     createPullRequest: vi.fn(),
     updatePullRequest: vi.fn(),
+    retargetPullRequest: vi.fn(),
     stageReview: vi.fn(),
     stage: vi.fn(),
     unstage: vi.fn(),
@@ -425,9 +426,16 @@ describe('project connection agent tools', () => {
     await expect(
       call({ ...args, requestId: 'bad-update', expectedUpdatedAt: undefined }),
     ).rejects.toThrow();
-    await expect(
-      call({ ...args, requestId: 'bad-base', base: 'main' }),
-    ).rejects.toThrow();
+    for (const extra of [
+      { base: 'main' },
+      { draft: false },
+      { expectedBase: 'main' },
+      { expectedPullRequestHead: 'c'.repeat(40) },
+    ])
+      await expect(
+        call({ ...args, requestId: 'bad-update-fields', ...extra }),
+      ).rejects.toThrow();
+    expect(actions.updatePullRequest).toHaveBeenCalledOnce();
   });
 
   it('creates a separate branch from an observed fetched reference instead of silently using HEAD', async () => {
@@ -785,5 +793,107 @@ describe('project connection agent tools', () => {
     expect(
       database.db.select().from(projectAgentToolRequests).all()[0].result,
     ).toBeNull();
+  });
+  it('retargets once using separate observed remote PR state and records the change', async () => {
+    const input = publish({
+      operation: 'retarget_pull_request',
+      number: 267,
+      base: 'main',
+      expectedBase: 'feature/old',
+      expectedPullRequestHead: 'c'.repeat(40),
+    });
+    actions.retargetPullRequest.mockResolvedValue({
+      number: 267,
+      base: 'main',
+      unchanged: false,
+    });
+    const first = await call(input);
+    expect(first).toMatchObject({
+      operation: 'retarget_pull_request',
+      data: { number: 267, base: 'main' },
+    });
+    expect(await call(input)).toEqual(first);
+    expect(actions.retargetPullRequest).toHaveBeenCalledTimes(1);
+    expect(actions.retargetPullRequest).toHaveBeenCalledWith(
+      'p',
+      'own',
+      expect.objectContaining({
+        confirmation: 'RETARGET_PULL_REQUEST',
+        number: 267,
+        base: 'main',
+        expectedBase: 'feature/old',
+        expectedPullRequestHead: 'c'.repeat(40),
+        head: state.head,
+      }),
+      expect.objectContaining({ threadId: 'agent' }),
+    );
+    expect(actions.createPullRequest).not.toHaveBeenCalled();
+    expect(actions.push).not.toHaveBeenCalled();
+    expect(database.db.select().from(projectActivity).all()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          details: expect.objectContaining({
+            number: 267,
+            base: 'main',
+            expectedBase: 'feature/old',
+          }),
+        }),
+      ]),
+    );
+    await expect(call({ ...input, base: 'develop' })).rejects.toThrow(
+      'PROJECT_CONNECTION_REQUEST_CONFLICT',
+    );
+  });
+  it('rejects incomplete or mixed retarget fields before dispatch', async () => {
+    const input = publish({
+      operation: 'retarget_pull_request',
+      number: 267,
+      base: 'main',
+      expectedBase: 'old',
+      expectedPullRequestHead: 'c'.repeat(40),
+    });
+    for (const field of [
+      'number',
+      'base',
+      'expectedBase',
+      'expectedPullRequestHead',
+    ]) {
+      const invalid: Record<string, unknown> = { ...input };
+      delete invalid[field];
+      await expect(call(invalid)).rejects.toThrow();
+    }
+    for (const extra of [
+      { title: 'ignored?' },
+      { draft: false },
+      { description: 'ignored?' },
+      { number: 0 },
+      { expectedPullRequestHead: 'invalid' },
+      { expectedUpdatedAt: '2026-10-30T12:00:00Z' },
+    ])
+      await expect(call({ ...input, ...extra })).rejects.toThrow();
+    expect(actions.retargetPullRequest).not.toHaveBeenCalled();
+  });
+  it('requires administrator write access, ownership and fresh local state for retargeting', async () => {
+    const input = publish({
+      operation: 'retarget_pull_request',
+      number: 267,
+      base: 'main',
+      expectedBase: 'old',
+      expectedPullRequestHead: 'c'.repeat(40),
+    });
+    await expect(
+      as('reader', () => tools.execute('p', 'agent', input, () => {})),
+    ).rejects.toThrow();
+    await expect(
+      call({ ...input, expectedHead: 'd'.repeat(40) }),
+    ).rejects.toThrow('GIT_STALE');
+    own[0].ownerThreadIds = ['another'];
+    await expect(call(input)).rejects.toThrow('GIT_COPY_OWNED');
+    own[0].ownerThreadIds = ['agent'];
+    as('admin', () =>
+      resources.update('p', connectionId, { accessMode: 'read_only' }),
+    );
+    await expect(call(input)).rejects.toThrow('GIT_READ_ONLY');
+    expect(actions.retargetPullRequest).not.toHaveBeenCalled();
   });
 });

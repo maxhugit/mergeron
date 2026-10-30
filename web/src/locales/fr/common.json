@@ -719,6 +719,7 @@
   "effectiveWindowReportedByCodexItCanBeSmallerThanModelContextWindowInConfigTomlWc14c05a8": "Fenêtre effective rapportée par Codex. Elle peut être plus petite que model_context_window dans config.toml, qui est limitée par le modèle.",
   "email": "E-mail",
   "emptyArchive": "Archive vide",
+  "folderContents": "Contenu du dossier",
   "emptyDirectory": "Répertoire vide",
   "emptySheet": "Feuille vide",
   "enabled": "Activé",

@@ -7,6 +7,7 @@ import { projectsApi } from '@/lib/projects-api';
 import type { PreviewProfile } from '../../../../runtime/preview-profile.cjs';
 import type { PreviewStorageLimits } from '../../../../runtime/preview-storage.cjs';
 import { PreviewStorageSummary } from './preview-storage-summary';
+import { PreviewLifetimeSelect } from './preview-lifetime-select';
 
 interface Settings {
   profile: PreviewProfile;
@@ -245,17 +246,10 @@ function Editor({
             </label>
           </>
         )}
-        <label className="grid gap-1 text-sm">
-          {t('lifetime')}
-          <input
-            type="number"
-            min={5}
-            max={240}
-            className="rounded border bg-background p-2"
-            value={profile.lifetimeMinutes}
-            onChange={(e) => field('lifetimeMinutes', Number(e.target.value))}
-          />
-        </label>
+        <PreviewLifetimeSelect
+          value={profile.lifetimeMinutes}
+          onChange={(value) => field('lifetimeMinutes', value)}
+        />
         <label className="grid gap-1 text-sm">
           {t('memory')}
           <input

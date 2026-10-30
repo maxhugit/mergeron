@@ -611,3 +611,79 @@ test('archive parser rejects traversal, links and corrupt checksums', async () =
   broken[0] ^= 1;
   assert.throws(() => archives.entries(broken), /PREVIEW_UNSAFE_ARCHIVE/);
 });
+
+test('lifetime changes persist without recreating resources; unlimited still uses finite access grants', async () => {
+  const f = await fixture();
+  const initial = await f.manager.start(f.input);
+  assert.equal(initial.lifetimeMinutes, 300);
+  const resources = f.docker.created.length;
+  const requestId = randomUUID();
+  const unlimited = await f.manager.setLifetime({
+    runId: f.input.runId,
+    requestId,
+    lifetimeMinutes: null,
+  });
+  assert.equal(unlimited.expiresAt, null);
+  assert.equal(unlimited.lifetimeMinutes, null);
+  assert.equal(unlimited.runId, initial.runId);
+  assert.equal(unlimited.sourceSha, initial.sourceSha);
+  assert.equal(f.docker.created.length, resources);
+  const grant = await f.manager.transport(f.input.runId);
+  assert.ok(Number.isFinite(grant.expiresAt));
+  assert.ok(grant.expiresAt <= Date.now() + 30 * 60000);
+  await f.manager.expire();
+  assert.equal((await f.manager.status(f.input.runId)).state, 'running');
+  const recovered = new PreviewManager({
+    docker: f.docker,
+    manifest: f.manifest,
+    configuration: f.configuration,
+    env: f.env,
+    self: 'self',
+  });
+  await recovered.ready;
+  assert.equal((await recovered.status(f.input.runId)).expiresAt, null);
+  const change = {
+    runId: f.input.runId,
+    requestId: randomUUID(),
+    lifetimeMinutes: 60,
+  };
+  const finite = await recovered.setLifetime(change);
+  assert.ok(Math.abs(finite.expiresAt - Date.now() - 3600000) < 1000);
+  assert.equal(
+    (await recovered.setLifetime(change)).expiresAt,
+    finite.expiresAt,
+  );
+  await assert.rejects(
+    () => recovered.setLifetime({ ...change, lifetimeMinutes: 180 }),
+    /PREVIEW_REQUEST_CONFLICT/,
+  );
+  for (const lifetimeMinutes of [0, 61, '300', undefined])
+    await assert.rejects(
+      () =>
+        recovered.setLifetime({
+          ...change,
+          requestId: randomUUID(),
+          lifetimeMinutes,
+        }),
+      /PREVIEW_INVALID_CONFIGURATION/,
+    );
+  recovered.records.get(f.input.runId).expiresAt = Date.now() - 1;
+  await assert.rejects(
+    () => recovered.setLifetime({ ...change, requestId: randomUUID() }),
+    /PREVIEW_EXPIRED/,
+  );
+  await recovered.expire();
+  assert.equal((await recovered.status(f.input.runId)).cleanupComplete, true);
+});
+
+test('an unlimited environment can be selected at launch and stopped manually', async () => {
+  const f = await fixture();
+  const result = await f.manager.start({
+    ...f.input,
+    profile: { ...f.input.profile, lifetimeMinutes: null },
+  });
+  assert.equal(result.state, 'running');
+  assert.equal(result.expiresAt, null);
+  await f.manager.stop(f.input.runId);
+  assert.equal((await f.manager.status(f.input.runId)).cleanupComplete, true);
+});

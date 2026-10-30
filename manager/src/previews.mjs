@@ -105,7 +105,9 @@ export class PreviewManager {
         image: v.image,
       })),
       maxActive: 2,
-      maxLifetimeMinutes: 240,
+      maxLifetimeMinutes: 1440,
+      lifetimeChoices: contract.LIFETIME_MINUTES,
+      defaultLifetimeMinutes: 300,
       synchronization: 'filtered-copy',
       data: 'ephemeral',
       storage: previewStorage,
@@ -144,7 +146,7 @@ export class PreviewManager {
         !Array.isArray(r.volumes) ||
         !Array.isArray(r.networks) ||
         !Array.isArray(r.entries) ||
-        !Number.isFinite(r.expiresAt)
+        (r.expiresAt !== null && !Number.isFinite(r.expiresAt))
       )
         fail('PREVIEW_UNSAFE_JOURNAL');
       this.records.set(r.runId, r);
@@ -514,7 +516,11 @@ export class PreviewManager {
       fingerprint,
       state: 'starting',
       createdAt: Date.now(),
-      expiresAt: Date.now() + profile.lifetimeMinutes * 60000,
+      expiresAt:
+        profile.lifetimeMinutes === null
+          ? null
+          : Date.now() + profile.lifetimeMinutes * 60000,
+      lifetimeMinutes: profile.lifetimeMinutes,
       objects: [],
       volumes: [],
       networks: [],
@@ -837,11 +843,40 @@ export class PreviewManager {
     }
     return this.status(r.runId);
   }
+  async setLifetime(input) {
+    await this.ready;
+    const r = this.records.get(input?.runId);
+    if (!r || r.state !== 'running') fail('PREVIEW_NOT_RUNNING');
+    if (this.busy) fail('PREVIEW_BUSY');
+    if (
+      typeof input.requestId !== 'string' ||
+      !contract.ID.test(input.requestId)
+    )
+      fail('PREVIEW_INVALID_REQUEST');
+    const minutes = contract.lifetime(input.lifetimeMinutes);
+    if (r.lifetimeChange?.requestId === input.requestId) {
+      if (r.lifetimeChange.minutes !== minutes)
+        fail('PREVIEW_REQUEST_CONFLICT');
+      return this.status(r.runId);
+    }
+    if (r.expiresAt !== null && r.expiresAt <= Date.now())
+      fail('PREVIEW_EXPIRED');
+    r.lifetimeMinutes = minutes;
+    r.expiresAt = minutes === null ? null : Date.now() + minutes * 60000;
+    r.lifetimeChange = { requestId: input.requestId, minutes };
+    this.save(r);
+    return this.status(r.runId);
+  }
   async status(runId, checkHttp = true) {
     await this.ready;
     const r = this.records.get(runId);
     if (!r) fail('PREVIEW_NOT_FOUND');
-    if (r.state === 'running' && r.expiresAt <= Date.now() && !this.busy)
+    if (
+      r.state === 'running' &&
+      r.expiresAt !== null &&
+      r.expiresAt <= Date.now() &&
+      !this.busy
+    )
       await this.stop(runId);
     if (r.state === 'running') {
       const runtime = await this.owned(r.runtimeId, r, 'preview-app');
@@ -880,6 +915,9 @@ export class PreviewManager {
       error: r.error ?? null,
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
+      lifetimeMinutes:
+        r.lifetimeMinutes ??
+        (r.expiresAt === null ? null : (r.expiresAt - r.createdAt) / 60000),
       sourceSha: r.sourceSha,
       lastSyncedAt: r.lastSyncedAt ?? null,
       updateMode: r.updateMode,
@@ -920,6 +958,8 @@ export class PreviewManager {
     );
     return {
       ...status,
+      // Environment lifetime never extends the lifetime of an access grant.
+      expiresAt: Math.min(Date.now() + 30 * 60000, r.expiresAt ?? Infinity),
       endpoint: r.endpoint,
       token: r.transportToken,
       publicHost: r.publicHost,
@@ -1011,6 +1051,7 @@ export class PreviewManager {
       await this.observeStorage(r);
       await this.cleanup(r);
       r.state = 'stopped';
+      r.stoppedAt = Date.now();
       this.save(r);
     } finally {
       this.busy = false;
@@ -1023,10 +1064,15 @@ export class PreviewManager {
     for (const r of this.records.values()) {
       if (
         (r.objects.length || ['starting', 'running'].includes(r.state)) &&
+        r.expiresAt !== null &&
         r.expiresAt <= Date.now()
       )
         await this.stop(r.runId);
-      else if (!r.objects.length && r.expiresAt < Date.now() - 86400000) {
+      else if (
+        !r.objects.length &&
+        ['stopped', 'failed'].includes(r.state) &&
+        (r.stoppedAt ?? r.expiresAt ?? r.createdAt) < Date.now() - 86400000
+      ) {
         fs.unlinkSync(path.join(this.location, r.runId + '.json'));
         this.records.delete(r.runId);
       }

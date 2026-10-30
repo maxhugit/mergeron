@@ -10,7 +10,7 @@ test('preview profiles are disabled by default', () => {
   assert.deepEqual(p.agentRuntimes, ['node']);
   assert.equal(p.directory, '.');
   assert.equal(p.port, 3000);
-  assert.equal(p.lifetimeMinutes, 60);
+  assert.equal(p.lifetimeMinutes, 300);
   assert.equal(p.memoryMb, 1024);
 });
 
@@ -18,7 +18,7 @@ test('an administrator may approve 8 GiB without changing other project defaults
   const p = contract.profile({ memoryMb: 8192 });
   assert.equal(p.memoryMb, 8192);
   assert.equal(p.cpus, 1);
-  assert.equal(p.lifetimeMinutes, 60);
+  assert.equal(p.lifetimeMinutes, 300);
   assert.throws(
     () => contract.agentRecipe({ start: 'node server.js', memoryMb: 8192 }),
     /PREVIEW_INVALID_CONFIGURATION/,
@@ -237,4 +237,16 @@ test('limits fail closed, including the total request body size', () => {
     () => contract.profile({ env }),
     /PREVIEW_INVALID_CONFIGURATION/,
   );
+});
+
+test('lifetime choices include unlimited, with five hours as default', () => {
+  for (const value of [60, 180, 300, 600, 1440, null]) {
+    assert.equal(
+      contract.profile({ lifetimeMinutes: value }).lifetimeMinutes,
+      value,
+    );
+    assert.equal(contract.lifetime(value), value);
+  }
+  for (const value of [undefined, 0, -1, 240, 301, 1441, '300'])
+    assert.throws(() => contract.lifetime(value));
 });
