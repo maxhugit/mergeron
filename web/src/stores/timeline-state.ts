@@ -92,6 +92,10 @@ export interface TimelineState {
   selectedThreadId: string | null;
   threadsById: Record<string, ThreadRuntimeState>;
   subscribedThreadIds: Set<string>;
+  /** Desired background rooms for the one project explicitly opted into caching. */
+  retainedThreadIds: Set<string>;
+  /** Room joins acknowledged by the current transport, never just requested. */
+  confirmedThreadIds: Set<string>;
   maxIdleSubscriptions: number;
 
   threadId: string | null;
@@ -133,6 +137,8 @@ export interface TimelineState {
   ensureThreadState: (input: ThreadRuntimeInput) => void;
   selectThread: (threadId: string | null) => void;
   resubscribeAll: (onSubscribed?: (threadId: string) => void) => void;
+  setRetainedThreads: (threadIds: readonly string[]) => void;
+  clearConfirmedThreads: () => void;
   unsubscribeThread: (threadId: string) => void;
   forgetThreads: (threadIds: string[]) => void;
   setMaxIdleSubscriptions: (limit: number) => void;

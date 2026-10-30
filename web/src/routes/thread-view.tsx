@@ -3,11 +3,11 @@ import {
   lazy,
   Suspense,
   useCallback,
+  useContext,
   useEffect,
   useState,
   useRef,
 } from 'react';
-import { useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { ChatHeader } from '@/components/chat/chat-header';
@@ -27,17 +27,12 @@ import { BrowserModeDialog } from '@/components/chat/browser-mode-dialog';
 import { TerminalSurface } from '@/components/terminal/terminal-host';
 import { TerminalStatusBar } from '@/components/terminal/terminal-status-bar';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import {
-  applyReadOnlySnapshot,
-  HISTORY_PAGE_SIZE,
-  useOpenThread,
-} from '@/hooks/use-thread-open';
+import { useWorkspaceNavigation } from '@/hooks/use-workspace-navigation';
 import {
   OPEN_FILE_EVENT,
   type OpenFileRequestDetail,
 } from '@/lib/open-file-request';
 import { SurfaceActivityContext } from '@/lib/surface-activity';
-import { currentThreadEpoch } from '@/lib/thread-recovery-epoch';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useTimelineStore } from '@/stores/timeline-store';
 import {
@@ -49,7 +44,6 @@ import { useLayoutStore } from '@/stores/layout-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useTerminalViewStore } from '@/stores/terminal-view-store';
 import { useTerminalDiscovery } from '@/hooks/use-terminal-discovery';
-import { threadsListTurns, threadsReadThread } from '@/generated/api/sdk.gen';
 import {
   projectForWorkspace,
   projectsApi,
@@ -60,7 +54,8 @@ import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { showSnackbar } from '@/stores/snackbar-store';
 import { useThreadSecurityPolicy } from '@/hooks/use-thread-security-policy';
-import { invalidateThreadListSoon } from '@/lib/query-invalidation';
+import { getAgentFilesStore } from '@/stores/files-store';
+import { FileBrowserContext } from '@/components/files/file-browser-context';
 import { usePlatformSession } from '@/lib/platform-session';
 import { PreviewLinkContext } from '@/lib/preview-link-context';
 const BrowserSidebar = lazy(() =>
@@ -81,19 +76,14 @@ const LocalBrowserSidebar = lazy(() =>
 
 /** URL identity owns opening; tab identity controls only presentation and never subscription. */
 export function ThreadView() {
-  const params: unknown = useParams({ strict: false });
-  const threadId =
-    params &&
-    typeof params === 'object' &&
-    'threadId' in params &&
-    typeof params.threadId === 'string'
-      ? params.threadId
-      : '';
-  return <ConversationWorkspace key={threadId} threadId={threadId} />;
+  // The authenticated host owns the view's lifetime, not this route outlet.
+  return null;
 }
 
 /** Keeps every surface at a fixed tree position throughout a conversation's tab switches. */
-function ConversationWorkspace({ threadId }: { threadId: string }) {
+export function ConversationWorkspace({ threadId }: { threadId: string }) {
+  const surfaceActive = useContext(SurfaceActivityContext);
+  const [filesStore] = useState(() => getAgentFilesStore(threadId));
   const { t } = useTranslation();
   const { t: tb } = useTranslation('browser');
   const [browserChoice, setBrowserChoice] = useState(false);
@@ -246,93 +236,27 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
     browserTabs.find((tab) => tab.id === lastBrowserId) ??
     browserTabs.at(-1);
   const browserVisible =
+    surfaceActive &&
     Boolean(displayedBrowser) &&
     (Boolean(selectedBrowser) ||
       (desktop && browserDocked && workspace.activeId === 'conversation'));
   const splitBrowser = browserVisible && desktop && browserDocked;
   const conversationVisible =
-    workspace.activeId === 'conversation' ||
-    (splitBrowser && Boolean(selectedBrowser));
+    surfaceActive &&
+    (workspace.activeId === 'conversation' ||
+      (splitBrowser && Boolean(selectedBrowser)));
   const [creatingTerminal, setCreatingTerminal] = useState(false);
   const { requestClose, dialog } = useWorkspaceClose(context);
-  const { mutate: openThread } = useOpenThread();
-
-  const open = useCallback(() => {
-    const resume = () =>
-      openThread(
-        { path: { threadId } },
-        {
-          onError: () => {
-            if (
-              useTimelineStore.getState().getThreadRuntime(threadId)?.hydrated
-            )
-              return;
-            const epoch = currentThreadEpoch(threadId);
-            // Archived/read-only fallback uses the same full-page display contract.
-            void Promise.all([
-              threadsReadThread({ path: { threadId }, throwOnError: true }),
-              threadsListTurns({
-                path: { threadId },
-                query: {
-                  limit: HISTORY_PAGE_SIZE,
-                  sortDirection: 'desc',
-                  itemsView: 'full',
-                },
-                throwOnError: true,
-              }),
-            ])
-              .then(([metadata, page]) => {
-                if (
-                  epoch === currentThreadEpoch(threadId) &&
-                  useTimelineStore.getState().threadId === threadId
-                )
-                  return applyReadOnlySnapshot(metadata.data, page.data);
-              })
-              .catch((error: unknown) => {
-                if (epoch !== currentThreadEpoch(threadId)) return;
-                useTimelineStore.getState().setOpenStateForThread(threadId, {
-                  openState: 'error',
-                  historyRequest: 'error',
-                  historyError: getApiErrorMessage(error),
-                });
-              });
-          },
-        },
-      );
-    void projectsApi<{
-      removed: string[];
-      reassignedAgents: number;
-      reassignedSimpleChats: number;
-      unresolved: string[];
-    }>('/reconcile-workspaces', { method: 'POST' })
-      .then(async (result) => {
-        if (result.removed.length) {
-          await queryClient.invalidateQueries({ queryKey: projectsQueryKey });
-          invalidateThreadListSoon(queryClient);
-          showSnackbar(
-            t('countMissingWorkspaceReferenceSCleanedUp', {
-              count: result.removed.length,
-            }),
-            'info',
-          );
-        }
-        if (result.unresolved.length)
-          showSnackbar(t('aProjectHasNoRemainingWorkspaceOnDisk'), 'warning');
-      })
-      .catch((error) => showSnackbar(getApiErrorMessage(error), 'warning'))
-      .finally(resume);
-  }, [openThread, queryClient, t, threadId]);
+  const open = useWorkspaceNavigation(threadId);
 
   useEffect(() => {
-    open();
     return () => {
-      useTimelineStore.getState().unsubscribeThread(threadId);
       const current = useWorkspaceStore.getState().contexts[context];
       const tab = current?.tabs.find((entry) => entry.id === current.activeId);
       if (tab?.kind === 'file')
         useWorkspaceStore.getState().cancelReveal(fileViewId(context, tab.id));
     };
-  }, [threadId, context, open]);
+  }, [context]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -367,259 +291,261 @@ function ConversationWorkspace({ threadId }: { threadId: string }) {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <ChatHeader />
-        <WorkspaceControls
-          key={desktop ? 'desktop' : 'mobile'}
-          workspace={workspace}
-          running={running}
-          pending={pending}
-          onSelect={(id) => {
-            if (browserTabs.some((tab) => tab.id === id))
-              setBrowserLayout(context, { lastBrowserId: id });
-            select(context, id);
-          }}
-          onClose={requestClose}
-          onNewTerminal={() => void newTerminal()}
-          canCreateTerminal={session.isAdministrator}
-          terminalCreationDisabled={creatingTerminal || !cwd}
-          onExplorer={() => {
-            if (desktop)
-              useLayoutStore
-                .getState()
-                .setWorkspaceTreeCollapsed(
-                  !useLayoutStore.getState().workspaceTreeCollapsed,
+    <FileBrowserContext value={filesStore}>
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <ChatHeader />
+          <WorkspaceControls
+            key={desktop ? 'desktop' : 'mobile'}
+            workspace={workspace}
+            running={running}
+            pending={pending}
+            onSelect={(id) => {
+              if (browserTabs.some((tab) => tab.id === id))
+                setBrowserLayout(context, { lastBrowserId: id });
+              select(context, id);
+            }}
+            onClose={requestClose}
+            onNewTerminal={() => void newTerminal()}
+            canCreateTerminal={session.isAdministrator}
+            terminalCreationDisabled={creatingTerminal || !cwd}
+            onExplorer={() => {
+              if (desktop)
+                useLayoutStore
+                  .getState()
+                  .setWorkspaceTreeCollapsed(
+                    !useLayoutStore.getState().workspaceTreeCollapsed,
+                  );
+              else setMobileTree(true);
+            }}
+            onBrowser={
+              session.isAdministrator ? () => setBrowserChoice(true) : undefined
+            }
+            onLocalBrowser={
+              session.isAdministrator ? openLocalBrowser : undefined
+            }
+            localBrowserStatus={localBrowserStatus}
+            onPreview={previewProject ? () => setPreviewOpen(true) : undefined}
+          />
+          {previewOpen && previewProject && (
+            <Suspense fallback={null}>
+              <AgentPreviewDialog
+                projectId={previewProject.id}
+                threadId={threadId}
+                open={previewOpen}
+                onOpenChange={setPreviewOpen}
+              />
+            </Suspense>
+          )}
+          <AgentContextLinks
+            onOpenDirectory={(path) => {
+              explorerRef.current?.openDirectory(path);
+              if (desktop)
+                useLayoutStore.getState().setWorkspaceTreeCollapsed(false);
+              else setMobileTree(true);
+            }}
+            key={threadId}
+            threadId={threadId}
+            project={
+              projectsQuery.data?.projects.find((item) =>
+                item.agentThreads?.some((agent) => agent.threadId === threadId),
+              ) ?? project
+            }
+            loading={projectsQuery.isPending}
+            failed={projectsQuery.isError}
+          />
+          <div
+            className="relative min-h-0 flex-1"
+            aria-label={t('workspaceContent')}
+          >
+            <div
+              role="tabpanel"
+              aria-label={t('conversation')}
+              className="absolute inset-0"
+              inert={!conversationVisible}
+              style={{
+                visibility: conversationVisible ? 'visible' : 'hidden',
+                right: splitBrowser ? '50%' : 0,
+              }}
+            >
+              <PreviewLinkContext.Provider
+                value={
+                  previewProject
+                    ? { projectId: previewProject.id, threadId }
+                    : null
+                }
+              >
+                <ConversationFrame
+                  threadId={threadId}
+                  active={conversationVisible}
+                  onRetry={() => open(true)}
+                />
+              </PreviewLinkContext.Provider>
+            </div>
+            {browserTabs.map((tab) => (
+              <div
+                key={tab.id}
+                role="tabpanel"
+                aria-label={tb('title')}
+                className="absolute inset-0 min-h-0 border-l"
+                inert={!browserVisible || tab.id !== displayedBrowser?.id}
+                style={{
+                  visibility:
+                    browserVisible && tab.id === displayedBrowser?.id
+                      ? 'visible'
+                      : 'hidden',
+                  left: splitBrowser ? '50%' : 0,
+                }}
+              >
+                <Suspense
+                  fallback={
+                    <div role="status" className="p-4">
+                      …
+                    </div>
+                  }
+                >
+                  <BrowserSidebar
+                    threadId={threadId}
+                    instanceId={tab.id}
+                    wasOpened={tab.opened ?? false}
+                    onSessionChange={(opened) =>
+                      useWorkspaceStore
+                        .getState()
+                        .setBrowserOpened(context, tab.id, opened)
+                    }
+                    homeUrl={
+                      project?.browserSettings?.homeUrl ??
+                      'https://www.google.com'
+                    }
+                    allowPopups={project?.browserSettings?.allowPopups ?? true}
+                    visible={browserVisible && tab.id === displayedBrowser?.id}
+                    docked={splitBrowser}
+                    onToggleDocked={
+                      desktop
+                        ? () =>
+                            setBrowserLayout(context, {
+                              browserDocked: !browserDocked,
+                            })
+                        : undefined
+                    }
+                    onClose={() => requestClose(tab)}
+                  />
+                </Suspense>
+              </div>
+            ))}
+            {workspace.tabs
+              .filter((tab) => tab.kind !== 'browser')
+              .map((tab) => {
+                const active = surfaceActive && workspace.activeId === tab.id;
+                return (
+                  <SurfaceActivityContext key={tab.id} value={active}>
+                    <div
+                      role="tabpanel"
+                      aria-label={
+                        tab.kind === 'file' ||
+                        tab.kind === 'git-diff' ||
+                        tab.kind === 'git-remote-file'
+                          ? tab.path
+                          : tab.kind === 'git-graph'
+                            ? tab.name
+                            : t('terminal')
+                      }
+                      className="absolute inset-0 flex min-h-0 flex-col"
+                      inert={!active}
+                      style={{ visibility: active ? 'visible' : 'hidden' }}
+                    >
+                      {tab.kind === 'file' ? (
+                        active && (
+                          <FileViewer
+                            filePath={tab.path}
+                            documentId={tab.documentId}
+                            onOpenFile={(path) => openFile(context, path)}
+                            viewId={fileViewId(context, tab.id)}
+                            active={active}
+                          />
+                        )
+                      ) : tab.kind === 'git-remote-file' ? (
+                        <WorkspaceGitRemoteFile target={tab} active={active} />
+                      ) : tab.kind === 'git-graph' ? (
+                        <WorkspaceGitGraph target={tab} active={active} />
+                      ) : tab.kind === 'git-diff' ? (
+                        <WorkspaceGitDiff
+                          target={tab}
+                          active={active}
+                          onFile={(path) => openFile(context, path)}
+                        />
+                      ) : (
+                        <>
+                          <div className="min-h-0 flex-1">
+                            <TerminalSurface
+                              terminalId={tab.terminalId}
+                              contextKey={context}
+                              active={active}
+                            />
+                          </div>
+                          <TerminalStatusBar
+                            contextKey={context}
+                            activeTerminalId={tab.terminalId}
+                          />
+                        </>
+                      )}
+                    </div>
+                  </SurfaceActivityContext>
                 );
-            else setMobileTree(true);
-          }}
-          onBrowser={
-            session.isAdministrator ? () => setBrowserChoice(true) : undefined
+              })}
+          </div>
+        </div>
+        <WorkspaceTree
+          ref={explorerRef}
+          onGitRemoteFile={(target) =>
+            useWorkspaceStore.getState().openGitRemoteFile(context, target)
           }
-          onLocalBrowser={
-            session.isAdministrator ? openLocalBrowser : undefined
+          onGitGraph={(target) =>
+            useWorkspaceStore.getState().openGitGraph(context, target)
           }
-          localBrowserStatus={localBrowserStatus}
-          onPreview={previewProject ? () => setPreviewOpen(true) : undefined}
+          agentThreadId={threadId}
+          onGitDiff={(target) =>
+            useWorkspaceStore.getState().openGitDiff(context, target)
+          }
+          cwd={cwd ?? null}
+          project={project}
+          activeWorkspacePending={setActiveWorkspace.isPending}
+          onActiveWorkspaceChange={(path) => setActiveWorkspace.mutate(path)}
+          desktop={desktop}
+          mobileOpen={mobileTree}
+          onMobileClose={() => setMobileTree(false)}
+          onFile={(path) => openFile(context, path)}
         />
-        {previewOpen && previewProject && (
+        <BrowserModeDialog
+          open={browserChoice}
+          onOpenChange={setBrowserChoice}
+          isolatedDisabled={browserTabs.length >= 5}
+          onChoose={(mode) => {
+            if (mode === 'local') openLocalBrowser();
+            else {
+              useWorkspaceStore.getState().openBrowser(context);
+              setBrowserLayout(context, {
+                browserDocked: project?.browserSettings?.desktopSplit ?? true,
+              });
+            }
+            setMobileTree(false);
+            setBrowserChoice(false);
+          }}
+        />
+        {session.isAdministrator && localBrowserEnabled && (
           <Suspense fallback={null}>
-            <AgentPreviewDialog
-              projectId={previewProject.id}
+            <LocalBrowserSidebar
               threadId={threadId}
-              open={previewOpen}
-              onOpenChange={setPreviewOpen}
+              open={localBrowserOpen}
+              onOpenChange={setLocalBrowserOpen}
+              onAnnotationAdded={showAnnotation}
+              onStatusChange={setLocalBrowserStatus}
             />
           </Suspense>
         )}
-        <AgentContextLinks
-          onOpenDirectory={(path) => {
-            explorerRef.current?.openDirectory(path);
-            if (desktop)
-              useLayoutStore.getState().setWorkspaceTreeCollapsed(false);
-            else setMobileTree(true);
-          }}
-          key={threadId}
-          threadId={threadId}
-          project={
-            projectsQuery.data?.projects.find((item) =>
-              item.agentThreads?.some((agent) => agent.threadId === threadId),
-            ) ?? project
-          }
-          loading={projectsQuery.isPending}
-          failed={projectsQuery.isError}
-        />
-        <div
-          className="relative min-h-0 flex-1"
-          aria-label={t('workspaceContent')}
-        >
-          <div
-            role="tabpanel"
-            aria-label={t('conversation')}
-            className="absolute inset-0"
-            inert={!conversationVisible}
-            style={{
-              visibility: conversationVisible ? 'visible' : 'hidden',
-              right: splitBrowser ? '50%' : 0,
-            }}
-          >
-            <PreviewLinkContext.Provider
-              value={
-                previewProject
-                  ? { projectId: previewProject.id, threadId }
-                  : null
-              }
-            >
-              <ConversationFrame
-                threadId={threadId}
-                active={conversationVisible}
-                onRetry={open}
-              />
-            </PreviewLinkContext.Provider>
-          </div>
-          {browserTabs.map((tab) => (
-            <div
-              key={tab.id}
-              role="tabpanel"
-              aria-label={tb('title')}
-              className="absolute inset-0 min-h-0 border-l"
-              inert={!browserVisible || tab.id !== displayedBrowser?.id}
-              style={{
-                visibility:
-                  browserVisible && tab.id === displayedBrowser?.id
-                    ? 'visible'
-                    : 'hidden',
-                left: splitBrowser ? '50%' : 0,
-              }}
-            >
-              <Suspense
-                fallback={
-                  <div role="status" className="p-4">
-                    …
-                  </div>
-                }
-              >
-                <BrowserSidebar
-                  threadId={threadId}
-                  instanceId={tab.id}
-                  wasOpened={tab.opened ?? false}
-                  onSessionChange={(opened) =>
-                    useWorkspaceStore
-                      .getState()
-                      .setBrowserOpened(context, tab.id, opened)
-                  }
-                  homeUrl={
-                    project?.browserSettings?.homeUrl ??
-                    'https://www.google.com'
-                  }
-                  allowPopups={project?.browserSettings?.allowPopups ?? true}
-                  visible={browserVisible && tab.id === displayedBrowser?.id}
-                  docked={splitBrowser}
-                  onToggleDocked={
-                    desktop
-                      ? () =>
-                          setBrowserLayout(context, {
-                            browserDocked: !browserDocked,
-                          })
-                      : undefined
-                  }
-                  onClose={() => requestClose(tab)}
-                />
-              </Suspense>
-            </div>
-          ))}
-          {workspace.tabs
-            .filter((tab) => tab.kind !== 'browser')
-            .map((tab) => {
-              const active = workspace.activeId === tab.id;
-              return (
-                <SurfaceActivityContext key={tab.id} value={active}>
-                  <div
-                    role="tabpanel"
-                    aria-label={
-                      tab.kind === 'file' ||
-                      tab.kind === 'git-diff' ||
-                      tab.kind === 'git-remote-file'
-                        ? tab.path
-                        : tab.kind === 'git-graph'
-                          ? tab.name
-                          : t('terminal')
-                    }
-                    className="absolute inset-0 flex min-h-0 flex-col"
-                    inert={!active}
-                    style={{ visibility: active ? 'visible' : 'hidden' }}
-                  >
-                    {tab.kind === 'file' ? (
-                      active && (
-                        <FileViewer
-                          filePath={tab.path}
-                          documentId={tab.documentId}
-                          onOpenFile={(path) => openFile(context, path)}
-                          viewId={fileViewId(context, tab.id)}
-                          active={active}
-                        />
-                      )
-                    ) : tab.kind === 'git-remote-file' ? (
-                      <WorkspaceGitRemoteFile target={tab} active={active} />
-                    ) : tab.kind === 'git-graph' ? (
-                      <WorkspaceGitGraph target={tab} active={active} />
-                    ) : tab.kind === 'git-diff' ? (
-                      <WorkspaceGitDiff
-                        target={tab}
-                        active={active}
-                        onFile={(path) => openFile(context, path)}
-                      />
-                    ) : (
-                      <>
-                        <div className="min-h-0 flex-1">
-                          <TerminalSurface
-                            terminalId={tab.terminalId}
-                            contextKey={context}
-                            active={active}
-                          />
-                        </div>
-                        <TerminalStatusBar
-                          contextKey={context}
-                          activeTerminalId={tab.terminalId}
-                        />
-                      </>
-                    )}
-                  </div>
-                </SurfaceActivityContext>
-              );
-            })}
-        </div>
+        {dialog}
       </div>
-      <WorkspaceTree
-        ref={explorerRef}
-        onGitRemoteFile={(target) =>
-          useWorkspaceStore.getState().openGitRemoteFile(context, target)
-        }
-        onGitGraph={(target) =>
-          useWorkspaceStore.getState().openGitGraph(context, target)
-        }
-        agentThreadId={threadId}
-        onGitDiff={(target) =>
-          useWorkspaceStore.getState().openGitDiff(context, target)
-        }
-        cwd={cwd ?? null}
-        project={project}
-        activeWorkspacePending={setActiveWorkspace.isPending}
-        onActiveWorkspaceChange={(path) => setActiveWorkspace.mutate(path)}
-        desktop={desktop}
-        mobileOpen={mobileTree}
-        onMobileClose={() => setMobileTree(false)}
-        onFile={(path) => openFile(context, path)}
-      />
-      <BrowserModeDialog
-        open={browserChoice}
-        onOpenChange={setBrowserChoice}
-        isolatedDisabled={browserTabs.length >= 5}
-        onChoose={(mode) => {
-          if (mode === 'local') openLocalBrowser();
-          else {
-            useWorkspaceStore.getState().openBrowser(context);
-            setBrowserLayout(context, {
-              browserDocked: project?.browserSettings?.desktopSplit ?? true,
-            });
-          }
-          setMobileTree(false);
-          setBrowserChoice(false);
-        }}
-      />
-      {session.isAdministrator && localBrowserEnabled && (
-        <Suspense fallback={null}>
-          <LocalBrowserSidebar
-            threadId={threadId}
-            open={localBrowserOpen}
-            onOpenChange={setLocalBrowserOpen}
-            onAnnotationAdded={showAnnotation}
-            onStatusChange={setLocalBrowserStatus}
-          />
-        </Suspense>
-      )}
-      {dialog}
-    </div>
+    </FileBrowserContext>
   );
 }
 import { localExecutionSelection } from '@/lib/project-execution-location';

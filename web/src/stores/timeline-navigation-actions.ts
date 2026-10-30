@@ -1,10 +1,16 @@
 /** Conversation timeline navigation actions. */
 import { useWorkspaceStore } from './workspace-store';
+import { useComposerDraftStore } from './composer-draft-store';
 import { forgetTranscriptBookmarks } from '@/lib/transcript-anchor';
 import { getSocket } from '../socket';
 import { forgetThreadPolicy } from './thread-policy-store';
 import { invalidateThreadEpoch } from '../lib/thread-recovery-epoch';
 import { excludePendingReads } from '../lib/pending-read-coverage';
+import { currentThreadEpoch } from '../lib/thread-recovery-epoch';
+import {
+  MAX_CACHED_AGENT_VIEWS,
+  useAgentViewCacheStore,
+} from './agent-view-cache-store';
 import {
   type TimelineState,
   type TimelineActionContext,
@@ -31,6 +37,8 @@ export function createTimelineNavigationActions({
   | 'ensureThreadState'
   | 'selectThread'
   | 'resubscribeAll'
+  | 'setRetainedThreads'
+  | 'clearConfirmedThreads'
   | 'unsubscribeThread'
   | 'forgetThreads'
   | 'setMaxIdleSubscriptions'
@@ -44,6 +52,8 @@ export function createTimelineNavigationActions({
   | 'setThreadCwdForThread'
   | 'clearThread'
 > {
+  let leaseSequence = 0;
+  const roomLeases = new Map<string, number>();
   return {
     ensureThreadState: (input) => {
       set((state) => {
@@ -60,7 +70,8 @@ export function createTimelineNavigationActions({
 
     selectThread: (threadId) => {
       for (const subscribed of get().subscribedThreadIds) {
-        if (subscribed !== threadId) get().unsubscribeThread(subscribed);
+        if (subscribed !== threadId && !get().retainedThreadIds.has(subscribed))
+          get().unsubscribeThread(subscribed);
       }
       set((state) => {
         const threadsById = persistSelectedRuntime(state);
@@ -84,24 +95,62 @@ export function createTimelineNavigationActions({
 
     resubscribeAll: (onSubscribed) => {
       const socket = getSocket();
+      const connection = socket.id;
       for (const threadId of get().subscribedThreadIds) {
+        const epoch = currentThreadEpoch(threadId);
+        const lease = ++leaseSequence;
+        roomLeases.set(threadId, lease);
         socket.emit(
           'thread.subscribe',
           { threadId },
           (reply: { ok?: boolean }) => {
-            if (reply?.ok) onSubscribed?.(threadId);
+            if (
+              reply?.ok &&
+              socket.connected &&
+              socket.id === connection &&
+              get().subscribedThreadIds.has(threadId) &&
+              roomLeases.get(threadId) === lease &&
+              epoch === currentThreadEpoch(threadId)
+            ) {
+              set((state) => ({
+                confirmedThreadIds: new Set(state.confirmedThreadIds).add(
+                  threadId,
+                ),
+              }));
+              onSubscribed?.(threadId);
+            }
           },
         );
       }
     },
 
+    setRetainedThreads: (ids) => {
+      const retainedThreadIds = new Set(ids.slice(-MAX_CACHED_AGENT_VIEWS));
+      if (
+        retainedThreadIds.size !== get().retainedThreadIds.size ||
+        [...retainedThreadIds].some((id) => !get().retainedThreadIds.has(id))
+      )
+        set({ retainedThreadIds });
+      for (const subscribed of get().subscribedThreadIds)
+        if (subscribed !== get().threadId && !retainedThreadIds.has(subscribed))
+          get().unsubscribeThread(subscribed);
+    },
+
+    clearConfirmedThreads: () => {
+      roomLeases.clear();
+      set({ confirmedThreadIds: new Set<string>() });
+    },
+
     unsubscribeThread: (threadId) => {
+      roomLeases.delete(threadId);
       const socket = getSocket();
       if (socket.connected) socket.emit('thread.unsubscribe', { threadId });
       set((state) => {
         const subscribedThreadIds = new Set(state.subscribedThreadIds);
         subscribedThreadIds.delete(threadId);
-        return { subscribedThreadIds };
+        const confirmedThreadIds = new Set(state.confirmedThreadIds);
+        confirmedThreadIds.delete(threadId);
+        return { subscribedThreadIds, confirmedThreadIds };
       });
     },
 
@@ -118,6 +167,8 @@ export function createTimelineNavigationActions({
      * @param threadIds - Threads that were destroyed
      */
     forgetThreads: (threadIds) => {
+      useComposerDraftStore.getState().forget(threadIds);
+      useAgentViewCacheStore.getState().forget(threadIds);
       useWorkspaceStore.getState().forgetConversations(threadIds);
       forgetTranscriptBookmarks(threadIds);
       const doomed = new Set(threadIds);
@@ -127,6 +178,7 @@ export function createTimelineNavigationActions({
       const socket = getSocket();
       const subscribed = get().subscribedThreadIds;
       for (const threadId of doomed) {
+        roomLeases.delete(threadId);
         invalidateThreadEpoch(threadId);
         if (subscribed.has(threadId)) {
           if (socket.connected) socket.emit('thread.unsubscribe', { threadId });
@@ -135,7 +187,13 @@ export function createTimelineNavigationActions({
 
       set((state) => {
         const subscribedThreadIds = new Set(state.subscribedThreadIds);
-        for (const threadId of doomed) subscribedThreadIds.delete(threadId);
+        const retainedThreadIds = new Set(state.retainedThreadIds);
+        const confirmedThreadIds = new Set(state.confirmedThreadIds);
+        for (const threadId of doomed) {
+          subscribedThreadIds.delete(threadId);
+          retainedThreadIds.delete(threadId);
+          confirmedThreadIds.delete(threadId);
+        }
 
         const selectedDoomed =
           state.selectedThreadId !== null && doomed.has(state.selectedThreadId);
@@ -150,8 +208,15 @@ export function createTimelineNavigationActions({
               selectedThreadId: null,
               threadsById,
               subscribedThreadIds,
+              retainedThreadIds,
+              confirmedThreadIds,
             }
-          : { threadsById, subscribedThreadIds };
+          : {
+              threadsById,
+              subscribedThreadIds,
+              retainedThreadIds,
+              confirmedThreadIds,
+            };
       });
     },
 
@@ -178,7 +243,10 @@ export function createTimelineNavigationActions({
         // still refuses to evict anything running or awaiting a decision.
         for (const threadId of Object.keys(persistSelectedRuntime(state))) {
           const runtime = readRuntime(state, threadId);
-          if (isSafeToCleanupIdleRuntime(runtime, state.threadId)) {
+          if (
+            !state.retainedThreadIds.has(threadId) &&
+            isSafeToCleanupIdleRuntime(runtime, state.threadId)
+          ) {
             candidates.push({
               threadId,
               lastActivityAt: runtime.lastActivityAt,
@@ -192,20 +260,23 @@ export function createTimelineNavigationActions({
         candidates.sort((a, b) => compareIdleCleanupCandidates(now, a, b));
         const evictCount = candidates.length - maxIdleSubscriptions;
         const subscribedThreadIds = new Set(state.subscribedThreadIds);
+        const confirmedThreadIds = new Set(state.confirmedThreadIds);
         const threadsById = { ...persistSelectedRuntime(state) };
 
         for (const candidate of candidates.slice(0, evictCount)) {
           subscribedThreadIds.delete(candidate.threadId);
+          confirmedThreadIds.delete(candidate.threadId);
           delete threadsById[candidate.threadId];
           evictedThreadIds.push(candidate.threadId);
         }
 
-        return { subscribedThreadIds, threadsById };
+        return { subscribedThreadIds, confirmedThreadIds, threadsById };
       });
 
       const socket = getSocket();
       excludePendingReads(evictedThreadIds);
       for (const threadId of evictedThreadIds) {
+        roomLeases.delete(threadId);
         invalidateThreadEpoch(threadId);
         forgetThreadPolicy(threadId);
         if (socket.connected && subscribedBefore.has(threadId))
@@ -237,6 +308,12 @@ export function createTimelineNavigationActions({
       }));
       get().cleanupIdleThreadSubscriptions();
       const socket = getSocket();
+      if (socket.connected && get().confirmedThreadIds.has(threadId))
+        return Promise.resolve(true);
+      const connection = socket.id;
+      const epoch = currentThreadEpoch(threadId);
+      const lease = ++leaseSequence;
+      roomLeases.set(threadId, lease);
       // Do not buffer room changes while disconnected. Reconnect joins the
       // final desired room; the opener can independently paint its HTTP page.
       if (!socket.connected) return Promise.resolve(false);
@@ -246,8 +323,23 @@ export function createTimelineNavigationActions({
           .emit(
             'thread.subscribe',
             { threadId },
-            (error: Error | null, reply?: { ok?: boolean }) =>
-              resolve(!error && Boolean(reply?.ok)),
+            (error: Error | null, reply?: { ok?: boolean }) => {
+              const joined =
+                !error &&
+                Boolean(reply?.ok) &&
+                socket.connected &&
+                socket.id === connection &&
+                get().subscribedThreadIds.has(threadId) &&
+                roomLeases.get(threadId) === lease &&
+                epoch === currentThreadEpoch(threadId);
+              if (joined)
+                set((state) => ({
+                  confirmedThreadIds: new Set(state.confirmedThreadIds).add(
+                    threadId,
+                  ),
+                }));
+              resolve(joined);
+            },
           );
       });
     },

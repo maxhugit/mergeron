@@ -12,6 +12,7 @@ import {
   Package,
   Plus,
   Download,
+  Gauge,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useDroppable } from '@dnd-kit/react';
@@ -30,6 +31,7 @@ import type { WorkspaceGroup } from './sidebar-types';
 import type { ProjectResourceSummary } from '@/lib/projects-api';
 import { workspaceLabel } from './sidebar-types';
 import { ProjectResourceRow } from './project-resource-row';
+import { useAgentViewCacheStore } from '@/stores/agent-view-cache-store';
 
 const collapseVariants = {
   open: { height: 'auto', opacity: 1 },
@@ -111,7 +113,10 @@ export function WorkspaceOverview({
   const { t } = useTranslation(['common', 'projectArchives'], {
     nsMode: 'fallback',
   });
+  const { t: tw } = useTranslation('workspaces');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const cachedProjectId = useAgentViewCacheStore((s) => s.projectId);
+  const toggleProjectCache = useAgentViewCacheStore((s) => s.toggleProject);
 
   if (isLoading) {
     return (
@@ -181,6 +186,16 @@ export function WorkspaceOverview({
                 <span className="truncate">
                   {group.name ?? workspaceLabel(group.cwd)}
                 </span>
+                {group.projectId && group.projectId === cachedProjectId && (
+                  <span
+                    title={tw('agentCacheActiveHelp')}
+                    className="shrink-0 text-sky-500"
+                    role="img"
+                    aria-label={tw('agentCacheActive')}
+                  >
+                    <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                )}
                 {(group.workspaces?.length ?? 0) > 1 && (
                   <span className="shrink-0 rounded bg-muted px-1 text-[9px] font-normal text-muted-foreground">
                     {group.workspaces?.length} {t('workspaces')}
@@ -203,6 +218,23 @@ export function WorkspaceOverview({
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-56 p-1">
+                    {group.projectId && (
+                      <Button
+                        variant="ghost"
+                        className="h-auto min-h-8 w-full justify-start gap-2 whitespace-normal px-2 text-left text-xs"
+                        onClick={() => {
+                          toggleProjectCache(group.projectId!);
+                          setOpenMenu(null);
+                        }}
+                      >
+                        <Gauge className="h-3.5 w-3.5 shrink-0" />
+                        {tw(
+                          cachedProjectId === group.projectId
+                            ? 'agentCacheDisable'
+                            : 'agentCacheEnable',
+                        )}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       className="h-8 w-full justify-start gap-2 px-2 text-xs"

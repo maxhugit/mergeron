@@ -73,7 +73,17 @@
         "id": "desktop",
         "title": "Navigation, account and installed application",
         "summary": "Use panels, install the application and refresh its interface.",
-        "keywords": ["PWA", "Edge", "Windows", "refresh", "sidebar", "theme"],
+        "keywords": [
+          "PWA",
+          "Edge",
+          "Windows",
+          "refresh",
+          "sidebar",
+          "theme",
+          "cache",
+          "fast navigation",
+          "performance"
+        ],
         "sections": [
           {
             "title": "Find your way around",
@@ -82,6 +92,21 @@
               "The account menu contains personal preferences and sign-out. Server administration is separate from project settings.",
               "The Platform guide provides a chapter tree and local article search without querying your project data. On mobile, Contents opens navigation. Related articles, Previous and Next keep you in the guide; Copy link shares a direct link to an article."
             ]
+          },
+          {
+            "title": "Fast navigation between a project’s agents",
+            "steps": [
+              "Open a project’s menu in the sidebar by right-clicking its name or using its actions button.",
+              "Choose Enable fast navigation for this project. A speed indicator appears next to the project name.",
+              "Open the agents you need: up to five recently visited views stay in memory. Returning to one preserves its scroll position and open panels without reloading the entire history.",
+              "To stop, choose Disable fast navigation in the same menu. Enabling another project replaces the previous one."
+            ],
+            "paragraphs": [
+              "Retained agents keep receiving updates over the real-time connection. Hidden panels are suspended; this option does not start agents or preload every agent in a project.",
+              "The sixth view replaces the least recently visited one. Small drafts and attachment references remain separated by agent in the tab’s memory, even if its full view later needs to reload. Nothing is sent automatically.",
+              "After a disconnection or engine restart, Mergeron verifies and catches up conversation state. The cache bypasses neither identity verification nor access checks."
+            ],
+            "warning": "The setting and retained data belong to this tab and are lost on reload or close. This is not a backup or offline mode. Other projects keep normal navigation."
           },
           {
             "title": "Resume after inactivity",

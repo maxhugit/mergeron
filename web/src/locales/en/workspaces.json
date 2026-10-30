@@ -1,4 +1,8 @@
 {
+  "agentCacheEnable": "Enable fast navigation for this project",
+  "agentCacheDisable": "Disable fast navigation",
+  "agentCacheActive": "Fast navigation enabled",
+  "agentCacheActiveHelp": "This project keeps up to 5 recent agent views in this tab, with live updates. One project at a time; no history is stored on disk.",
   "gitCreateRemotePrHelp": "Creates a pull request from this branch already published on GitHub, regardless of which tool published it. No local copy or new push is required. No merge or deployment is performed.",
   "gitRemotePrStale": "The remote branch changed. Refresh the list and reopen this dialog before creating the pull request.",
   "gitRetrieveDestination": "Local copy: {{name}}",

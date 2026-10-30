@@ -79,7 +79,10 @@
           "Windows",
           "rafraîchir",
           "sidebar",
-          "thème"
+          "thème",
+          "cache",
+          "navigation rapide",
+          "performance"
         ],
         "sections": [
           {
@@ -89,6 +92,21 @@
               "Le menu du compte contient les préférences personnelles et la déconnexion. L’administration serveur est distincte des paramètres d’un projet.",
               "Le Guide de la plateforme propose un sommaire par chapitres et une recherche locale dans les articles, sans interroger les données de vos projets. Sur mobile, Sommaire affiche la navigation. Les liens Voir aussi, Précédent et Suivant conservent la lecture dans le guide ; Copier le lien permet de partager directement un article."
             ]
+          },
+          {
+            "title": "Navigation rapide entre agents d’un projet",
+            "steps": [
+              "Ouvrez le menu d’un projet dans la barre latérale, par clic droit sur son nom ou avec son bouton d’actions.",
+              "Choisissez Activer la navigation rapide pour ce projet. Un indicateur de vitesse apparaît près du nom du projet.",
+              "Ouvrez les agents dont vous avez besoin : jusqu’à cinq vues récemment consultées restent en mémoire. Revenir à l’une d’elles conserve le défilement et les panneaux ouverts, sans recharger tout l’historique.",
+              "Pour arrêter, choisissez Désactiver la navigation rapide dans le même menu. Activer un autre projet remplace le précédent."
+            ],
+            "paragraphs": [
+              "Les agents conservés continuent de recevoir leurs mises à jour par la connexion temps réel. Leurs panneaux masqués sont mis en veille ; aucun agent n’est démarré et aucun projet entier n’est préchargé par cette option.",
+              "La sixième vue remplace la moins récemment consultée. Ses petits brouillons et références de pièces jointes restent séparés par agent dans la mémoire de l’onglet, même si la vue complète doit ensuite être rechargée. Rien n’est envoyé automatiquement.",
+              "Après une déconnexion ou un redémarrage du moteur, Mergeron vérifie et rattrape l’état des conversations. Le cache ne contourne ni la vérification de l’identité ni les contrôles d’accès."
+            ],
+            "warning": "Ce réglage et les données conservées sont propres à cet onglet : ils sont perdus au rechargement ou à sa fermeture. Ce n’est ni une sauvegarde ni un mode hors ligne. Les autres projets gardent la navigation habituelle."
           },
           {
             "title": "Reprendre après une inactivité",
