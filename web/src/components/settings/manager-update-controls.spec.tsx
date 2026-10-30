@@ -359,6 +359,51 @@ it('waits for automatic discovery before requesting a plan', async () => {
   ).toHaveValue('ghcr.io/maxhugit/mergeron:0.1.1');
 });
 
+it('requires an images-only confirmation for Dev rollback even when no data backup exists', async () => {
+  const user = userEvent.setup();
+  const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+    json({}),
+  );
+  vi.stubGlobal('fetch', fetch);
+  const updated: ManagerStatus = {
+    ...status,
+    environment: 'development',
+    backupPolicy: 'development-none-v1',
+    update: {
+      busy: false,
+      operation: {
+        id: 'dev-operation',
+        status: 'succeeded',
+        phase: 'complete',
+        events: [],
+        images: {},
+        previousImages: {},
+        backupRetained: false,
+        rollbackAvailable: true,
+        backupPolicy: 'development-none-v1',
+      },
+    },
+  };
+  fixture.render(<ManagerUpdateControls status={updated} />);
+  await user.click(
+    screen.getByRole('button', { name: 'Restaurer la version précédente' }),
+  );
+  expect(screen.getByRole('alertdialog')).toHaveTextContent(
+    'sans restaurer les données',
+  );
+  expect(fetch).not.toHaveBeenCalled();
+  await user.click(
+    screen.getByRole('button', { name: 'Confirmer' }),
+  );
+  expect(
+    fetch.mock.calls.some(
+      ([, init]) =>
+        JSON.parse(String(init?.body ?? '{}')).confirmation ===
+        'ROLLBACK_IMAGES_ONLY',
+    ),
+  ).toBe(true);
+});
+
 it('warns that rollback also restores data and does not run without confirmation', async () => {
   const user = userEvent.setup();
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
