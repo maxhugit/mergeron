@@ -34,6 +34,7 @@ import type {
 } from '@/generated/api';
 import { ingestRequestFailure } from '@/lib/server-request-failures';
 import { reconcileExternalPaths } from '@/lib/file-reconciler';
+import { isSessionPaused } from '@/lib/session-recovery';
 
 type CodexLifecycleEvent =
   | { type: 'appServerRestarting'; generation: number; delayMs: number }
@@ -106,7 +107,12 @@ export function useCodexSocket(enabled = true) {
     let lastTransportRecovery = 0;
     let transportRecoveryRunning = false;
     const recoverTransport = () => {
-      if (document.visibilityState === 'hidden' || !navigator.onLine) return;
+      if (
+        isSessionPaused() ||
+        document.visibilityState === 'hidden' ||
+        !navigator.onLine
+      )
+        return;
       // A failed fetch dispatches the same recovery event as focus/pageshow.
       // Without a single-flight guard, the refetch started here can fail and
       // recursively start another full refetch forever while a sleeping tab's

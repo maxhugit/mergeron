@@ -2,7 +2,7 @@
  * Authenticated layout: sidebar + header + main content outlet.
  * Replaces the old App.tsx conditional rendering.
  */
-import { useEffect, useState } from 'react';
+import { Activity, useEffect, useState } from 'react';
 import { readManagerUpdateReceipt } from '@/components/settings/manager-update-recovery';
 import { ManagerUpdateReconnecting } from '@/components/settings/manager-update-reconnecting';
 import { LoaderCircle } from 'lucide-react';
@@ -31,15 +31,24 @@ import {
 import { useTimelineStore } from '@/stores/timeline-store';
 import { isThemeId, useThemeStore } from '@/stores/theme-store';
 import { cn } from '@/lib/utils';
-import { clearApiToken } from '@/auth-token';
-import { resetSocket } from '@/socket';
 import { filesGetRoots, filesAddRoot } from '@/generated/api';
 import {
   AuthRedirectError,
+  AuthResourceError,
+  AuthIdentityChangedError,
   isSessionTransportError,
   readAuthResource,
   usePlatformSession,
+  type PlatformSession,
 } from '@/lib/platform-session';
+import { sessionOwner } from '@/lib/session-recovery';
+import { useSessionRenewal } from '@/lib/session-renewal';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { isSupportedLocale } from '@/locales';
 import { MobileRefresh } from '@/components/mobile-refresh';
 import { ImpersonationBanner } from '@/components/impersonation-controls';
@@ -58,22 +67,82 @@ const DEFAULT_MAX_IDLE_SUBSCRIPTIONS = 30;
 const IDLE_SUBSCRIPTION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 export function AuthenticatedLayout() {
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <ImpersonationBanner />
-      <div className="min-h-0 flex-1">
-        <AuthenticatedContent />
-      </div>
-    </div>
-  );
+  return <AuthenticatedContent />;
 }
 
 function AuthenticatedContent() {
   const session = usePlatformSession();
+  const [retained, setRetained] = useState<PlatformSession | null>(null);
+  const verified =
+    !session.paused &&
+    !session.isPending &&
+    !session.isError &&
+    session.data?.active;
+  const changed =
+    session.error instanceof AuthIdentityChangedError ||
+    Boolean(
+      verified &&
+      retained &&
+      sessionOwner(retained) !== sessionOwner(session.data!),
+    );
+  if (verified && !changed && session.data !== retained)
+    setRetained(session.data!);
+  const ready = Boolean(verified && !changed);
+
+  return (
+    <>
+      {/* Activity retains React/DOM state but cleans up effects and portals while
+          hidden. Cached identity never grants access during verification. */}
+      <Activity mode={ready ? 'visible' : 'hidden'}>
+        {retained && (
+          <div className="flex h-full min-h-0 flex-col">
+            <ImpersonationBanner />
+            <div className="min-h-0 flex-1">
+              <AuthenticatedWorkspace
+                isAdministrator={retained.role === 'administrator'}
+                browserOwner={JSON.stringify([
+                  retained.personId ?? retained.subject ?? retained.kind,
+                  retained.impersonation?.sessionId ?? '',
+                ])}
+                profileTheme={retained.theme}
+                profileLanguage={retained.language}
+              />
+            </div>
+          </div>
+        )}
+      </Activity>
+      {!ready && (
+        <SessionRecovery
+          session={session}
+          changed={changed}
+          retained={retained !== null}
+        />
+      )}
+    </>
+  );
+}
+
+function SessionRecovery({
+  session,
+  changed,
+  retained,
+}: {
+  session: ReturnType<typeof usePlatformSession>;
+  changed: boolean;
+  retained: boolean;
+}) {
   const { t } = useTranslation('authentication');
-  const navigate = useNavigate();
+  const renewal = useSessionRenewal(
+    () => void session.refetch({ cancelRefetch: false }),
+  );
   const reconnecting = isSessionTransportError(session.error);
-  const proxyExpired = session.error instanceof AuthRedirectError;
+  const proxyExpired =
+    session.error instanceof AuthRedirectError ||
+    (session.error instanceof AuthResourceError &&
+      session.error.status === 401);
+  const checking =
+    session.isPending ||
+    (session.paused && !session.isError && session.data?.active);
   // A local receipt only restores progress display, never the authenticated workspace.
   if (session.isPending || (session.isError && reconnecting)) {
     const receipt = readManagerUpdateReceipt();
@@ -81,83 +150,103 @@ function AuthenticatedContent() {
     // A lazy import here would require a network request precisely during downtime.
     if (receipt) return <ManagerUpdateReconnecting receipt={receipt} />;
   }
-  if (session.isPending)
+  if (session.isPending && !retained)
     return <div className="p-6">{t('access.verifying')}</div>;
-  if (session.isError || !session.data?.active)
-    return (
-      <main className="mx-auto max-w-xl space-y-4 p-6">
-        <h1 className="text-xl font-semibold">
-          {reconnecting && (
-            <LoaderCircle
-              aria-hidden="true"
-              className="mr-2 inline size-5 animate-spin"
-            />
-          )}
-          {t(
-            reconnecting
-              ? 'access.reconnecting'
-              : proxyExpired
-                ? 'access.sessionExpired'
-                : 'access.unavailable',
-          )}
-        </h1>
-        <p>
-          {t(
-            reconnecting
-              ? 'access.connectionInterrupted'
-              : proxyExpired
-                ? 'access.proxySessionExpired'
-                : session.isError
-                  ? 'access.verificationError'
-                  : 'access.inactivePerson',
-          )}
-        </p>
-        {!session.isError && session.data?.email && <p>{session.data.email}</p>}
-        {!session.isError && session.data?.subject && (
+  const content = (
+    <main className="mx-auto max-w-xl space-y-4 p-6">
+      <h1 className="text-xl font-semibold">
+        {(reconnecting || checking) && (
+          <LoaderCircle
+            aria-hidden="true"
+            className="mr-2 inline size-5 animate-spin"
+          />
+        )}
+        {t(
+          changed
+            ? 'access.identityChanged'
+            : checking
+              ? 'access.verifying'
+              : reconnecting
+                ? 'access.reconnecting'
+                : proxyExpired
+                  ? 'access.sessionExpired'
+                  : 'access.unavailable',
+        )}
+      </h1>
+      <p>
+        {t(
+          changed
+            ? 'access.identityChangedHelp'
+            : checking
+              ? 'access.retained'
+              : reconnecting
+                ? 'access.connectionInterrupted'
+                : proxyExpired
+                  ? 'access.proxySessionExpired'
+                  : session.isError
+                    ? 'access.verificationError'
+                    : 'access.inactivePerson',
+        )}
+      </p>
+      {retained && !checking && <p>{t('access.retained')}</p>}
+      {!session.isError &&
+        !checking &&
+        !changed &&
+        !session.data?.active &&
+        session.data?.email && <p>{session.data.email}</p>}
+      {!session.isError &&
+        !checking &&
+        !changed &&
+        !session.data?.active &&
+        session.data?.subject && (
           <p className="break-all text-xs">
             {t('access.reference')}: {session.data.subject}
           </p>
         )}
+      <button
+        className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
+        onClick={() => void session.refetch()}
+      >
+        {t('access.retry')}
+      </button>
+      {proxyExpired && (
         <button
           className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
-          onClick={() => void session.refetch()}
+          onClick={() => renewal.open()}
         >
-          {t('access.retry')}
+          {t('access.restoreConnection')}
         </button>
-        {proxyExpired && (
-          <button
-            className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
-            onClick={() => window.location.reload()}
-          >
-            {t('access.restoreConnection')}
-          </button>
-        )}
-        {!reconnecting && (
-          <button
-            className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
-            onClick={() =>
-              void navigate({
-                to: '/login',
-                search: { redirect: window.location.pathname, manual: true },
-              })
-            }
-          >
-            {t('access.anotherMethod')}
-          </button>
-        )}
-      </main>
-    );
+      )}
+      {!reconnecting && !checking && (
+        <button
+          className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
+          onClick={() => renewal.open(true)}
+        >
+          {t('access.anotherMethod')}
+        </button>
+      )}
+      {renewal.popupBlocked && <p role="alert">{t('access.popupBlocked')}</p>}
+    </main>
+  );
+  if (!retained) return content;
   return (
-    <AuthenticatedWorkspace
-      key={session.data.personId ?? session.data.kind}
-      isAdministrator={session.isAdministrator}
-      browserOwner={JSON.stringify([
-        session.data.personId ?? session.data.subject ?? session.data.kind,
-        session.data.impersonation?.sessionId ?? '',
-      ])}
-      profileTheme={session.data.theme}
-      profileLanguage={session.data.language}
-    />
+    <Dialog open>
+      <DialogContent
+        showCloseButton={false}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="sm:max-w-xl"
+      >
+        <DialogTitle className="sr-only">
+          {t('access.sessionExpired')}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {t('access.retained')}
+        </DialogDescription>
+        {content}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -253,18 +342,6 @@ function AuthenticatedWorkspace({
     window.addEventListener('codex-webui:jump-thread', handleJump);
     return () =>
       window.removeEventListener('codex-webui:jump-thread', handleJump);
-  }, [navigate]);
-
-  // Handle auth expiry → redirect to /login
-  useEffect(() => {
-    const handleAuthExpired = () => {
-      clearApiToken();
-      resetSocket();
-      void navigate({ to: '/login', search: { redirect: '/' } });
-    };
-    window.addEventListener('codex-webui:auth-expired', handleAuthExpired);
-    return () =>
-      window.removeEventListener('codex-webui:auth-expired', handleAuthExpired);
   }, [navigate]);
 
   // Conversation roots are adopted by their keyed WorkspaceTree. This owner

@@ -91,6 +91,14 @@
             ]
           },
           {
+            "title": "Reprendre après une inactivité",
+            "paragraphs": [
+              "Au retour dans un onglet inactif, Mergeron revérifie votre identité sans recharger la page. Pendant une interruption, une fenêtre d’attente masque l’espace de travail et suspend les actions ; le texte non envoyé et les panneaux restent en mémoire dans cet onglet.",
+              "Si une authentification est nécessaire, Rétablir la connexion ouvre une fenêtre séparée. Autorisez les fenêtres surgissantes si le navigateur la bloque. Après connexion, Mergeron vérifie à nouveau votre identité avant de reprendre. Un refus d’accès n’est pas traité comme une simple panne réseau."
+            ],
+            "warning": "Aucune modification ni aucun message n’est renvoyé automatiquement. Si les droits ou le compte ont changé, l’onglet reste verrouillé : reconnectez le compte d’origine ou ouvrez un nouvel onglet avec les nouveaux droits. Cette conservation en mémoire ne remplace pas une sauvegarde : fermer, recharger ou laisser le navigateur supprimer l’onglet peut perdre les brouillons."
+          },
+          {
             "title": "Installer et actualiser",
             "steps": [
               "Après connexion, ouvrez Mon compte → Installer l’application, ou le menu Applications d’Edge si le navigateur le propose.",
