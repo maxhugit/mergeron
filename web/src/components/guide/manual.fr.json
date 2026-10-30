@@ -1033,6 +1033,13 @@
               "Pour faire travailler l’agent dans ce dossier, changez explicitement son dossier actif ; une navigation dans l’explorateur ne suffit pas."
             ],
             "warning": "Les chemins sont côté serveur. Un téléchargement copie vers votre poste ; un fichier présent sur une connexion distante n’est pas automatiquement disponible localement."
+          },
+          {
+            "title": "Actualisation automatique et chemins absents",
+            "paragraphs": [
+              "Pendant le travail d’un agent, Mergeron vérifie les changements de fichiers en arrière-plan. L’absence attendue d’un chemin ou d’un dossier facultatif ne déclenche pas d’alerte « Path not found » ; l’explorateur et les documents ouverts restent synchronisés.",
+              "Une ouverture explicite d’un fichier introuvable et les erreurs de droits ou de serveur restent signalées. Les problèmes de connexion et d’authentification conservent leur procédure habituelle de reconnexion. Ne confondez pas une absence attendue avec un échec d’enregistrement."
+            ]
           }
         ],
         "related": ["locations", "onlyoffice", "transfers"]

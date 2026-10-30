@@ -1005,6 +1005,13 @@
               "Explicitly change the agent’s active folder if it should work there. Explorer navigation alone does not change it."
             ],
             "warning": "Paths are server-side. Download copies to your device; a file on a remote connection is not automatically available locally."
+          },
+          {
+            "title": "Automatic refresh and missing paths",
+            "paragraphs": [
+              "While an agent works, Mergeron checks file changes in the background. An expected missing path or optional directory does not trigger a Path not found alert; the explorer and open documents still stay synchronized.",
+              "Explicitly opening a missing file and access or server failures still produce errors. Connection and authentication issues keep their usual recovery flow. Do not confuse an expected absence with a failed save."
+            ]
           }
         ],
         "related": ["locations", "onlyoffice", "transfers"]
