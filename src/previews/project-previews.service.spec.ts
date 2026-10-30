@@ -1,3 +1,5 @@
+import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
+import { workAgentId } from '../projects/git-copy-ownership';
 import { describe, it, expect, vi } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -37,7 +39,7 @@ vi.mock('../active-folders/active-folders.service', () => ({
   ActiveFoldersService: class {},
 }));
 vi.mock('../projects/git-copy-ownership', () => ({
-  workAgentId: (_db: unknown, thread: string) => thread,
+  workAgentId: vi.fn((_db: unknown, thread: string) => thread),
 }));
 
 function setup(role: 'administrator' | 'standard' = 'administrator') {
@@ -56,6 +58,10 @@ function setup(role: 'administrator' | 'standard' = 'administrator') {
     ],
   ]);
   const db = {
+    transaction: (fn: (tx: unknown) => unknown) => fn(db),
+    delete: (table: unknown) => ({
+      where: () => ({ run: () => rows.delete(table) }),
+    }),
     select: () => ({
       from: (table: unknown) => ({
         where: () => ({
@@ -114,16 +120,18 @@ function setup(role: 'administrator' | 'standard' = 'administrator') {
     MERGERON_PREVIEW_DOMAIN: 'preview.example.org',
     MERGERON_PREVIEWS_ENABLED: 'false',
   });
+  const deletionRegistry = new ThreadDeletionRegistryService();
   const service = new ProjectPreviewsService(
     db as unknown as AppDatabase,
     config,
     { resolveAgent: () => null } as unknown as ActiveFoldersService,
     { request } as unknown as PreviewManagerClient,
     identities,
+    deletionRegistry,
   );
   const run = <T>(fn: () => T) =>
     accessContext.run({ identity, identities }, fn);
-  return { service, rows, identity, run, request, config };
+  return { service, rows, identity, run, request, config, deletionRegistry };
 }
 describe('project-scoped generic preview service', () => {
   function configured(role: 'administrator' | 'standard' = 'administrator') {
@@ -964,5 +972,105 @@ describe('project-scoped generic preview service', () => {
       ),
     ).rejects.toThrow();
     expect(f.request).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleted-agent preview cleanup', () => {
+  function fixture() {
+    const f = setup();
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId: '11111111-1111-4111-8111-111111111111',
+    });
+    f.rows.set(agentPreviewRecipes, { agentId: 't' });
+    return f;
+  }
+  it('purges runtime and metadata only after confirmed cleanup', async () => {
+    const f = fixture();
+    f.request.mockResolvedValue({ deleted: true, cleanupComplete: true });
+    await f.run(() => f.service.cleanupDeletedAgent('t'));
+    expect(f.request).toHaveBeenCalledWith('delete', {
+      runId: '11111111-1111-4111-8111-111111111111',
+      projectId: 'p',
+      agentId: 't',
+    });
+    expect(f.rows.has(agentPreviews)).toBe(false);
+    expect(f.rows.has(agentPreviewRecipes)).toBe(false);
+  });
+  it.each([{}, { deleted: true, cleanupComplete: false }])(
+    'keeps metadata when cleanup is not confirmed: %j',
+    async (response) => {
+      const f = fixture();
+      f.request.mockResolvedValue(response);
+      await expect(
+        f.run(() => f.service.cleanupDeletedAgent('t')),
+      ).rejects.toThrow('PREVIEW_CLEANUP_INCOMPLETE');
+      expect(f.rows.has(agentPreviews)).toBe(true);
+      expect(f.rows.has(agentPreviewRecipes)).toBe(true);
+    },
+  );
+  it('preserves metadata after manager failure and permits retry', async () => {
+    const f = fixture();
+    f.request.mockRejectedValueOnce(new Error('PREVIEW_BUSY'));
+    await expect(
+      f.run(() => f.service.cleanupDeletedAgent('t')),
+    ).rejects.toThrow('PREVIEW_BUSY');
+    expect(f.rows.has(agentPreviews)).toBe(true);
+    f.request.mockResolvedValue({ deleted: true, cleanupComplete: true });
+    await f.run(() => f.service.cleanupDeletedAgent('t'));
+    expect(f.rows.has(agentPreviews)).toBe(false);
+  });
+  it('preserves records if temporary snapshot removal fails', async () => {
+    const f = fixture();
+    f.request.mockResolvedValue({ deleted: true, cleanupComplete: true });
+    vi.mocked(fs.unlink).mockRejectedValueOnce(
+      Object.assign(new Error('snapshot denied'), { code: 'EACCES' }),
+    );
+    await expect(
+      f.run(() => f.service.cleanupDeletedAgent('t')),
+    ).rejects.toThrow('snapshot denied');
+    expect(f.rows.has(agentPreviews)).toBe(true);
+    expect(f.rows.has(agentPreviewRecipes)).toBe(true);
+  });
+  it('rejects concurrent cleanup without erasing retry metadata', async () => {
+    const f = fixture();
+    let resolve!: (result: Record<string, unknown>) => void;
+    f.request.mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const pending = f.run(() => f.service.cleanupDeletedAgent('t'));
+    await expect(
+      f.run(() => f.service.cleanupDeletedAgent('t')),
+    ).rejects.toThrow('PREVIEW_BUSY');
+    expect(f.rows.has(agentPreviews)).toBe(true);
+    resolve({ deleted: true, cleanupComplete: true });
+    await pending;
+    expect(f.rows.has(agentPreviews)).toBe(false);
+  });
+  it('cleans a recipe without contacting the manager when no runtime exists', async () => {
+    const f = fixture();
+    f.rows.delete(agentPreviews);
+    await f.run(() => f.service.cleanupDeletedAgent('t'));
+    expect(f.request).not.toHaveBeenCalled();
+    expect(f.rows.has(agentPreviewRecipes)).toBe(false);
+  });
+  it('refuses to start an environment while its agent is being deleted', async () => {
+    const f = fixture();
+    f.deletionRegistry.begin(['t']);
+    await expect(
+      f.run(() => f.service.start('p', 't', { requestId: 'start' })),
+    ).rejects.toThrow('A delete operation is already running');
+    expect(f.request).not.toHaveBeenCalled();
+  });
+  it('leaves the shared environment intact when deleting a message version', async () => {
+    const f = fixture();
+    vi.mocked(workAgentId).mockReturnValueOnce('root');
+    await f.run(() => f.service.cleanupDeletedAgent('t'));
+    expect(f.request).not.toHaveBeenCalled();
+    expect(f.rows.has(agentPreviews)).toBe(true);
+    expect(f.rows.has(agentPreviewRecipes)).toBe(true);
   });
 });

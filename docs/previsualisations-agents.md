@@ -402,3 +402,23 @@ le contrôle d’accès. Le contrôleur de ce test utilise le socket du runner i
 jamais celui d’Unraid, de Dev ou de production. Les runtimes testés ne le montent
 pas. Le service de prévisualisation normal demeure désactivé tant que sa
 configuration serveur n’a pas été appliquée.
+
+## Suppression d’un agent et de son environnement
+
+La suppression d’un agent nettoie son environnement de test avant de supprimer
+sa conversation : conteneurs, réseaux privés, volumes temporaires (dont `/data`)
+et journaux du Manager, y compris ceux des anciennes recréations. La recette de
+l’agent et son enregistrement de prévisualisation sont ensuite supprimés.
+L’arrêt normal conserve son historique ; la suppression de l’agent le purge.
+
+Si le Manager est indisponible, si une ressource a changé de propriétaire ou si
+le nettoyage n’est pas confirmé, la suppression s’arrête avec une erreur et
+conserve les métadonnées nécessaires à une nouvelle tentative. Cette règle
+s’applique aussi aux environnements dont la durée est « jamais ». Une version
+de message partage l’environnement de son agent racine : la supprimer seule
+ne supprime pas l’environnement de l’agent encore présent. Aucun nouvel
+environnement ne peut démarrer pendant la suppression de son agent.
+
+Cette fonctionnalité nécessite la mise à jour de l’application **et** du Manager.
+Elle ne supprime pas les ressources GitHub publiées ni la configuration de
+prévisualisation commune au projet.

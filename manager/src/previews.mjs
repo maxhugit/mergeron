@@ -1040,10 +1040,36 @@ export class PreviewManager {
       this.save(r);
     }
   }
-  async stop(runId) {
+  async deleteAgent(input) {
+    await this.ready;
+    if (
+      typeof input.projectId !== 'string' ||
+      typeof input.agentId !== 'string' ||
+      !contract.ID.test(input.projectId) ||
+      !contract.ID.test(input.agentId)
+    )
+      fail('PREVIEW_INVALID_REQUEST');
+    const current = this.records.get(input.runId);
+    if (
+      current &&
+      (current.projectId !== input.projectId ||
+        current.agentId !== input.agentId)
+    )
+      fail('PREVIEW_IDENTITY_CHANGED');
+    // Recreated environments have older journal entries under the same agent.
+    const runs = [...this.records.values()].filter(
+      (r) => r.projectId === input.projectId && r.agentId === input.agentId,
+    );
+    for (const r of runs) await this.stop(r.runId, true);
+    return { deleted: true, cleanupComplete: true };
+  }
+  async stop(runId, forget = false) {
     await this.ready;
     const r = this.records.get(runId);
-    if (!r) fail('PREVIEW_NOT_FOUND');
+    if (!r) {
+      if (forget) return { deleted: true, cleanupComplete: true };
+      fail('PREVIEW_NOT_FOUND');
+    }
     if (this.busy) fail('PREVIEW_BUSY');
     this.busy = true;
     try {
@@ -1053,6 +1079,14 @@ export class PreviewManager {
       r.state = 'stopped';
       r.stoppedAt = Date.now();
       this.save(r);
+      if (forget) {
+        // Purge the journal only after all owned runtime resources are gone.
+        if (r.objects.length || r.volumes.length || r.networks.length)
+          fail('PREVIEW_CLEANUP_INCOMPLETE');
+        fs.unlinkSync(path.join(this.location, r.runId + '.json'));
+        this.records.delete(r.runId);
+        return { deleted: true, cleanupComplete: true };
+      }
     } finally {
       this.busy = false;
     }
