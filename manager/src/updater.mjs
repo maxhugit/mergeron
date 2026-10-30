@@ -19,7 +19,7 @@ import {
   utimes,
   unlink,
 } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { collectInventory } from './inventory.mjs';
 import { agentVisualSandbox } from './agent-visual-sandbox.mjs';
 import {
@@ -30,7 +30,10 @@ import {
   excludesBackupDirectory,
   updateConfirmation,
   rollbackConfirmation,
-  DEV_NO_BACKUP,
+  MINIMAL,
+  LEGACY_FULL,
+  withoutDataBackup,
+  minimalHomeEntries,
 } from './backup-policy.mjs';
 import {
   assertCliPolicyImage,
@@ -279,26 +282,40 @@ async function allocatedTreeSize(path) {
 const backupIdentity = (value) =>
   `${value.dev}:${value.ino}:${value.mtimeMs}:${value.ctimeMs}`;
 
-export async function restorePersistentEntry(stateRoot, base, id, name) {
+export async function restorePersistentEntry(
+  stateRoot,
+  base,
+  id,
+  name,
+  { allowMissing = false } = {},
+) {
   const source = join(stateRoot, name);
   // Linux requires write permission on a directory when changing its parent.
   // Same-parent renames keep UID-11002 private directories intact without
   // CAP_DAC_OVERRIDE, temporary chmod/chown, or permission-changing crash windows.
-  const retained = join(stateRoot, `.manager-quarantine-${id}-${name}`);
-  const restore = join(stateRoot, `.manager-restore-${id}-${name}`);
+  const retained = join(
+    dirname(source),
+    `.manager-quarantine-${id}-${basename(name)}`,
+  );
+  const restore = join(
+    dirname(source),
+    `.manager-restore-${id}-${basename(name)}`,
+  );
   const quarantined = join(base, 'quarantine', name);
   await mkdir(dirname(quarantined), { recursive: true, mode: 0o700 });
+  const saved = await exists(join(base, 'backup', name));
+  if (!saved && !allowMissing) throw new Error('updateJournalInvalid');
   if (!(await exists(retained))) {
-    if (!(await exists(restore))) {
+    if (saved && !(await exists(restore))) {
       const temporary = `${restore}.partial-${randomUUID()}`;
       await copyPersistentTree(join(base, 'backup', name), temporary);
       await durableRename(temporary, restore);
     }
-    await durableRename(source, retained);
+    if (await exists(source)) await durableRename(source, retained);
   }
-  if (!(await exists(quarantined)))
+  if ((await exists(retained)) && !(await exists(quarantined)))
     await symlink(relative(dirname(quarantined), retained), quarantined);
-  if (!(await exists(source))) await durableRename(restore, source);
+  if (saved && !(await exists(source))) await durableRename(restore, source);
 }
 
 export function specification(inspect, image, component) {
@@ -371,7 +388,7 @@ export class TransactionalUpdater {
         rollbackAvailable:
           operation.status === 'succeeded' &&
           (operation.backupComplete === true ||
-            recordedBackupPolicy(operation) === DEV_NO_BACKUP),
+            withoutDataBackup(recordedBackupPolicy(operation))),
         mode: operation.mode ?? 'standard',
       },
     };
@@ -641,7 +658,7 @@ export class TransactionalUpdater {
     await atomicJson(join(this.directory, 'transaction.json'), this.current);
   }
 
-  async plan(images, mode = 'standard') {
+  async plan(images, mode = 'standard', backupMode) {
     if (!['standard', 'dev-fast'].includes(mode))
       throw new Error('updateInvalidMode');
     if (
@@ -650,6 +667,7 @@ export class TransactionalUpdater {
         this.manifest.stack === 'mergeron')
     )
       throw new Error('updateFastDevelopmentOnly');
+    const backupPolicy = environmentBackupPolicy(this.manifest, backupMode);
     if (
       !images ||
       Object.keys(images).length === 0 ||
@@ -794,12 +812,39 @@ export class TransactionalUpdater {
       if (!(await exists(path)) || (await lstat(path)).isSymbolicLink())
         blockers.push(`persistent:${name}:updateUnsafePath`);
     }
-    const backupPolicy = environmentBackupPolicy(this.manifest);
+    let backupScope = backupEntries(backupPolicy);
+    if (backupPolicy === MINIMAL) {
+      const application = containers.find(
+        (item) => item.component === 'application',
+      );
+      if (!application) throw new Error('updateBlocked');
+      const inspect = await this.docker.inspectContainer(application.id);
+      const homeEntries = minimalHomeEntries(inspect.Config.Env);
+      backupScope = [...backupScope, ...homeEntries];
+      // Refuse ancestor links: lstat of just a leaf would still follow its parents.
+      for (const name of backupScope) {
+        const parts = name.split('/');
+        for (let index = 1; index <= parts.length; index++) {
+          const path = join(
+            this.configuration.hostStatePath,
+            ...parts.slice(0, index),
+          );
+          if (!(await exists(path))) break;
+          if ((await lstat(path)).isSymbolicLink())
+            blockers.push('updateUnsafePath');
+        }
+      }
+      const database = join(this.configuration.hostStatePath, homeEntries[0]);
+      if (!(await exists(database)) || !(await lstat(database)).isFile())
+        blockers.push('updateMinimalDatabaseMissing');
+    }
     const stable = {
       stack: this.manifest.stack,
       environment: this.manifest.environment,
       mode,
       backupPolicy,
+      ...(backupMode !== undefined ? { backupMode } : {}),
+      backupScope,
       images,
       containers,
       cliProtection: cliProtectionFingerprint(this.configuration),
@@ -809,11 +854,19 @@ export class TransactionalUpdater {
       ...stable,
       fingerprint: digest(stable),
       applicable: !stable.blockers.length && !this.busy,
-      backupScope: backupEntries(backupPolicy),
-      excludedFromDataRollback:
-        backupPolicy === DEV_NO_BACKUP
-          ? ['all-data']
-          : ['/appdata', 'logs', 'regenerable-caches-and-dependencies'],
+      excludedFromDataRollback: withoutDataBackup(backupPolicy)
+        ? ['all-data']
+        : backupPolicy === MINIMAL
+          ? [
+              '/appdata',
+              'workspace',
+              'conversations-on-disk',
+              'logs',
+              'other-home-files',
+            ]
+          : backupPolicy === LEGACY_FULL || backupPolicy === 'full-v1'
+            ? ['/appdata']
+            : ['/appdata', 'logs', 'regenerable-caches-and-dependencies'],
       confirmation: updateConfirmation(backupPolicy),
       busy: this.busy,
     };
@@ -824,16 +877,17 @@ export class TransactionalUpdater {
     confirmation,
     expectedFingerprint,
     mode = 'standard',
+    backupMode,
   }) {
     if (this.busy) throw new Error('managerOperationInProgress');
     if (
       confirmation !==
-      updateConfirmation(environmentBackupPolicy(this.manifest))
+      updateConfirmation(environmentBackupPolicy(this.manifest, backupMode))
     )
       throw new Error('updateConfirmationRequired');
     this.busy = true;
     try {
-      const plan = await this.plan(images, mode);
+      const plan = await this.plan(images, mode, backupMode);
       if (plan.fingerprint !== expectedFingerprint)
         throw new Error('updatePlanChanged');
       if (plan.blockers.length) throw new Error('updateBlocked');
@@ -855,6 +909,8 @@ export class TransactionalUpdater {
         startedAt: new Date().toISOString(),
         mode,
         backupPolicy: plan.backupPolicy,
+        backupScope: plan.backupScope,
+        backupMissing: [],
         images,
         previousImages: {},
         containers: [],
@@ -893,7 +949,11 @@ export class TransactionalUpdater {
           cached ?? (await this.docker.inspectImage(reference));
         imageIds[component] = pinnedImage(targetImages[component], reference);
       }
-      const rechecked = await this.plan(plan.images, plan.mode);
+      const rechecked = await this.plan(
+        plan.images,
+        plan.mode,
+        plan.backupMode,
+      );
       if (rechecked.fingerprint !== plan.fingerprint)
         throw new Error('updatePlanChanged');
       if (targetImages.application)
@@ -961,14 +1021,15 @@ export class TransactionalUpdater {
           backupName: `${item.name}-rollback-${this.current.id}`,
         });
       }
-      const entries = backupEntries(recordedBackupPolicy(this.current));
+      const entries = plan.backupScope;
       if (entries.length) {
         let bytes = 0;
         for (const name of entries)
-          bytes += await treeSize(
-            join(this.configuration.hostStatePath, name),
-            { policy: plan.backupPolicy, path: name },
-          );
+          if (await exists(join(this.configuration.hostStatePath, name)))
+            bytes += await treeSize(
+              join(this.configuration.hostStatePath, name),
+              { policy: plan.backupPolicy, path: name },
+            );
         const space = await statfs(this.directory);
         if (space.bavail * space.bsize < bytes * 2.2 + 64 * 1024 ** 2)
           throw new Error('updateInsufficientBackupSpace');
@@ -985,13 +1046,33 @@ export class TransactionalUpdater {
         await this.save('backingUp');
         const backup = join(this.directory, this.current.id, 'backup');
         await mkdir(backup, { recursive: true, mode: 0o700 });
-        for (const name of entries)
+        for (const name of entries) {
+          if (!(await exists(join(this.configuration.hostStatePath, name)))) {
+            // Only optional minimal leaves may legitimately be absent.
+            const optional =
+              plan.backupPolicy === MINIMAL &&
+              minimalHomeEntries(
+                this.current.containers.find(
+                  (item) => item.component === 'application',
+                ).original.Env,
+              )
+                .slice(1)
+                .includes(name);
+            if (!optional) throw new Error('updateUnsafePath');
+            this.current.backupMissing.push(name);
+            continue;
+          }
+          await mkdir(dirname(join(backup, name)), {
+            recursive: true,
+            mode: 0o700,
+          });
           await copyPersistentTree(
             join(this.configuration.hostStatePath, name),
             join(backup, name),
             1,
             { policy: plan.backupPolicy, path: name },
           );
+        }
         this.current.backupComplete = true;
       }
       await this.save('replacing');
@@ -1118,7 +1199,7 @@ export class TransactionalUpdater {
     if (
       this.current?.id !== operationId ||
       this.current.status !== 'succeeded' ||
-      (!this.current.backupComplete && policy !== DEV_NO_BACKUP)
+      (!this.current.backupComplete && !withoutDataBackup(policy))
     )
       throw new Error('updateRollbackUnavailable');
     this.busy = true;
@@ -1161,10 +1242,114 @@ export class TransactionalUpdater {
     return (await this.docker.listContainers()).some((c) => c.Id === id);
   }
 
+  validMinimalScope(entries) {
+    const application = this.current.containers.find(
+      (item) => item.component === 'application',
+    );
+    if (!application) return false;
+    const home = minimalHomeEntries(application.original.Env);
+    const missing = this.current.backupMissing;
+    if (
+      !Array.isArray(missing) ||
+      new Set(missing).size !== missing.length ||
+      missing.some((name) => !home.slice(1).includes(name))
+    )
+      return false;
+    return digest(entries) === digest([...backupEntries(MINIMAL), ...home]);
+  }
+
+  async restoreMinimalEntry(storageBase, name) {
+    const parent = dirname(name);
+    const allowMissing = this.current.backupMissing?.includes(name) === true;
+    const saved = await exists(join(storageBase, 'backup', name));
+    if (!saved && !allowMissing) throw new Error('updateJournalInvalid');
+    if (saved && allowMissing) throw new Error('updateJournalInvalid');
+    if (
+      !saved &&
+      !(await exists(join(this.configuration.hostStatePath, name))) &&
+      !this.current.restoreDirectoryMetadata?.[parent]
+    )
+      return;
+    // The Manager has CHOWN + DAC_READ_SEARCH, not DAC_OVERRIDE/FOWNER.
+    // Journal original parent metadata before temporarily making a private
+    // directory writable. A crash retries using this same original metadata.
+    const parts = parent === '.' ? [] : parent.split('/');
+    for (let index = 1; index <= parts.length; index++) {
+      const info = await lstat(
+        join(this.configuration.hostStatePath, ...parts.slice(0, index)),
+      );
+      if (!info.isDirectory() || info.isSymbolicLink())
+        throw new Error('updateUnsafePath');
+    }
+    const directory = await open(
+      join(this.configuration.hostStatePath, parent),
+      constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+    );
+    try {
+      const info = await directory.stat();
+      this.current.restoreDirectoryMetadata ??= {};
+      let original = this.current.restoreDirectoryMetadata[parent];
+      if (!original) {
+        original = {
+          uid: info.uid,
+          gid: info.gid,
+          mode: info.mode & 0o7777,
+          dev: info.dev,
+          ino: info.ino,
+        };
+        this.current.restoreDirectoryMetadata[parent] = original;
+        await this.save('rollingBack');
+      }
+      if (info.dev !== original.dev || info.ino !== original.ino)
+        throw new Error('updateUnsafePath');
+      try {
+        await directory.chown(process.getuid(), process.getgid());
+        await directory.chmod(original.mode | 0o700);
+        await restorePersistentEntry(
+          this.configuration.hostStatePath,
+          storageBase,
+          this.current.id,
+          name,
+          { allowMissing },
+        );
+      } finally {
+        await directory.chmod(original.mode);
+        await directory.chown(original.uid, original.gid);
+        await directory.sync();
+      }
+    } finally {
+      await directory.close();
+    }
+  }
+
   async rollback() {
     if (this.current.committed) {
       await this.commit();
       return;
+    }
+    const policy = recordedBackupPolicy(this.current);
+    const entries = !this.current.backupComplete
+      ? []
+      : policy === MINIMAL
+        ? this.current.backupScope
+        : backupEntries(policy);
+    if (
+      !Array.isArray(entries) ||
+      (policy === MINIMAL &&
+        this.current.backupComplete &&
+        !this.validMinimalScope(entries))
+    )
+      throw new Error('updateJournalInvalid');
+    // A missing/corrupt saved entry is not the same as a file absent before
+    // backup. Refuse it before stopping or removing any healthy candidate.
+    for (const name of entries) {
+      const saved = await exists(
+        join(this.directory, this.current.id, 'backup', name),
+      );
+      const expected = !(
+        policy === MINIMAL && this.current.backupMissing.includes(name)
+      );
+      if (saved !== expected) throw new Error('updateJournalInvalid');
     }
     await this.save('rollingBack');
     for (const item of this.stopOrder()) {
@@ -1210,15 +1395,22 @@ export class TransactionalUpdater {
       )
         throw new Error('updateJournalInvalid');
       await mkdir(join(base, 'quarantine'), { recursive: true, mode: 0o700 });
-      for (const name of backupEntries(recordedBackupPolicy(this.current))) {
-        if (this.current.restored.includes(name)) continue;
-        await restorePersistentEntry(
-          this.configuration.hostStatePath,
-          storageBase,
-          this.current.id,
-          name,
-        );
-        this.current.restored.push(name);
+      for (const name of entries) {
+        // Even a previously restored minimal leaf may have a parent whose
+        // ownership restoration was interrupted immediately before a crash.
+        if (this.current.restored.includes(name) && policy !== MINIMAL)
+          continue;
+        if (policy === MINIMAL)
+          await this.restoreMinimalEntry(storageBase, name);
+        else
+          await restorePersistentEntry(
+            this.configuration.hostStatePath,
+            storageBase,
+            this.current.id,
+            name,
+          );
+        if (!this.current.restored.includes(name))
+          this.current.restored.push(name);
         await this.save('rollingBack');
       }
     }

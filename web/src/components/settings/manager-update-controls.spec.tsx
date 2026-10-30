@@ -154,6 +154,105 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each(['production', 'development'] as const)(
+  'offers all backup scopes in %s, including individual container updates',
+  async (environment) => {
+    const user = userEvent.setup();
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        if (body.expectedFingerprint)
+          return json({ busy: true, operation: null });
+        return json({
+          applicable: true,
+          fingerprint: 'scope-checked',
+          blockers: [],
+          images: body.images,
+          backupMode: body.backupMode,
+          backupPolicy: `${body.backupMode}-v1`,
+        });
+      },
+    );
+    vi.stubGlobal('fetch', fetch);
+    fixture.render(
+      <ManagerUpdateControls
+        status={{
+          ...status,
+          environment,
+          capabilities: { backupSelection: true },
+        }}
+      />,
+    );
+    const select = screen.getByRole('combobox', {
+      name: 'Sauvegarde avant cette mise à jour',
+    });
+    expect(select).toHaveValue('full');
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    await user.selectOptions(select, 'minimal');
+    expect(screen.getByText(/Aucun fichier de projet/)).toBeVisible();
+    await user.click(
+      screen.getByRole('button', { name: 'Test ingress update' }),
+    );
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      /La base entière et la configuration/,
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Installer et redémarrer' }),
+    );
+    expect(
+      fetch.mock.calls.some(([, init]) => {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        return (
+          body.expectedFingerprint === 'scope-checked' &&
+          body.backupMode === 'minimal' &&
+          body.confirmation === 'UPDATE_WITH_ROLLBACK' &&
+          body.images.ingress
+        );
+      }),
+    ).toBe(true);
+  },
+);
+
+it('explicitly confirms no backup in production and does not enable selection on older Managers', async () => {
+  const user = userEvent.setup();
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body ?? '{}'));
+    if (body.expectedFingerprint) return json({ busy: true, operation: null });
+    return json({
+      applicable: true,
+      fingerprint: 'none-checked',
+      blockers: [],
+      images: body.images,
+      backupMode: 'none',
+      backupPolicy: 'none-v1',
+    });
+  });
+  vi.stubGlobal('fetch', fetch);
+  const view = fixture.render(<ManagerUpdateControls status={status} />);
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  view.unmount();
+  fixture.render(
+    <ManagerUpdateControls
+      status={{ ...status, capabilities: { backupSelection: true } }}
+    />,
+  );
+  await user.selectOptions(screen.getByRole('combobox'), 'none');
+  await user.click(screen.getByRole('button', { name: 'Mettre à jour' }));
+  expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+    /Aucune donnée ne sera sauvegardée/,
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Installer et redémarrer' }),
+  );
+  expect(
+    fetch.mock.calls.some(
+      ([, init]) =>
+        JSON.parse(String(init?.body ?? '{}')).confirmation ===
+        'UPDATE_WITHOUT_DATA_BACKUP',
+    ),
+  ).toBe(true);
+});
+
 it('reopens the completed update after the authenticated workspace was remounted without replaying it', async () => {
   const completed: ManagerStatus = {
     ...status,
@@ -394,9 +493,7 @@ it('requires an images-only confirmation for Dev rollback even when no data back
     'sans restaurer les données',
   );
   expect(fetch).not.toHaveBeenCalled();
-  await user.click(
-    screen.getByRole('button', { name: 'Confirmer' }),
-  );
+  await user.click(screen.getByRole('button', { name: 'Confirmer' }));
   expect(
     fetch.mock.calls.some(
       ([, init]) =>

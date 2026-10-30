@@ -198,6 +198,7 @@ export class ManagerStatusService {
       expectedFingerprint?: unknown;
       operationId?: unknown;
       mode?: unknown;
+      backupMode?: unknown;
     },
   ) {
     const path = action === 'apply' ? '/v1/update' : `/v1/update/${action}`;
@@ -207,6 +208,9 @@ export class ManagerStatusService {
       expectedFingerprint: input?.expectedFingerprint,
       operationId: input?.operationId,
       ...(input?.mode !== undefined ? { mode: input.mode } : {}),
+      ...(input?.backupMode !== undefined
+        ? { backupMode: input.backupMode }
+        : {}),
     });
   }
 

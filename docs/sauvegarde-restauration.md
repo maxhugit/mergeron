@@ -32,8 +32,57 @@ Une base restaurée sans ces fichiers peut référencer des documents inexistant
 
 ## Politique des mises à jour du Manager
 
-La politique est globale et déterminée par l’environnement déclaré de la pile,
-pas par l’agent ni par le composant mis à jour :
+Dans **Serveur → Mise à jour**, le champ **Sauvegarde avant cette mise à jour**
+propose trois options en Dev comme en production. Le choix concerne la pile
+ouverte, jamais l’autre environnement. Il s’applique aussi à une mise à jour
+individuelle de conteneur. L’interface sélectionne **Complète** par défaut ; le
+choix est figé dans le plan à confirmer puis enregistré dans la transaction.
+
+| Option                                              | Copié avant la mise à jour                                                                                                                                                                                       | Retour arrière                                                                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Complète** (`full-v1`)                            | Toutes les racines persistantes gérées : `home`, `workspace`, `logs`, `ssh`, `config` et secrets, y compris fichiers de projets, conversations, livrables, versions, brouillons et caches.                       | Anciennes images et toutes ces racines.                                                                                                 |
+| **Minimale — base et configuration** (`minimal-v1`) | Base SQLite entière et fichiers `-wal`, `-shm`, `-journal` présents ; configuration et authentification Codex, instructions globales, catalogue de modèles, `.gitconfig`, `ssh`, `config` et secrets de la pile. | Anciennes images et uniquement les éléments sauvegardés. Les fichiers exclus restent dans leur état courant.                            |
+| **Aucune sauvegarde** (`none-v1`)                   | Aucune copie ni inventaire récursif préalable des données.                                                                                                                                                       | Images uniquement. Les migrations et modifications de données restent appliquées, sans garantie de compatibilité avec l’ancienne image. |
+
+Les contrôles de santé et d’identité des conteneurs restent obligatoires dans
+les trois modes. Le mode rapide Dev ne change pas le périmètre de sauvegarde.
+Le mode sans sauvegarde exige la confirmation explicite affichée avant l’arrêt.
+Les montages externes `/appdata` restent hors périmètre dans tous les modes.
+
+### Périmètre et limites du mode minimal
+
+La base entière conserve aussi ses métadonnées de projets/livrables et certains
+messages de chat simple : le mode minimal n’est **pas** un export sélectif de
+tables. En revanche, aucun fichier de `workspace`, aucun historique Codex de
+`sessions`/`archived_sessions`, aucun document/version de livrable ni brouillon
+de projet n’est copié. Une base restaurée peut donc ne plus correspondre aux
+fichiers exclus. L’interface l’indique avant mise à jour et avant restauration.
+
+Le Manager déduit les chemins de `CODEX_HOME` et `WEBUI_DB_PATH` du conteneur
+applicatif. Ils doivent rester sous `/home/codex`, sans `..` ni ancêtre
+symbolique. La base doit exister. Seuls les fichiers explicitement sélectionnés
+sont copiés : `config.toml`, `auth.json`, `AGENTS.md`, `webui/model-catalog`,
+`.gitconfig` et la base avec ses fichiers compagnons. Il ne copie jamais
+`CODEX_HOME` ou `webui` en entier dans ce mode.
+
+La restauration minimale conserve les données remplacées en quarantaine et
+retire aussi un fichier compagnon SQLite créé après une sauvegarde où il était
+absent. Elle préserve les permissions des répertoires parents privés ; leurs
+métadonnées sont journalisées avant tout ajustement temporaire de propriété.
+Le périmètre de restauration est validé contre la configuration enregistrée,
+jamais accepté comme une liste de chemins arbitraire.
+
+### API et compatibilité des anciennes opérations
+
+`POST /v1/update/plan` accepte `backupMode: "full" | "minimal" | "none"`,
+indépendamment de `mode: "standard" | "dev-fast"`. Le même `backupMode` doit
+être fourni à `POST /v1/update` avec l’empreinte et la confirmation du plan :
+changer de choix invalide l’empreinte. La récupération utilise la politique
+et le périmètre enregistrés, pas un réglage actuel ou un autre environnement.
+La capacité `backupSelection` annonce ce contrat ; une interface connectée à
+un ancien Manager n’affiche pas de choix qu’il ne saurait appliquer.
+
+Pour compatibilité, un appel **sans** `backupMode` conserve les anciens défauts :
 
 - **Dev — `development-none-v1`** : aucune copie de données, aucun inventaire
   récursif préalable, aucun calcul d’espace nécessaire à une sauvegarde. Les
@@ -45,7 +94,8 @@ pas par l’agent ni par le composant mis à jour :
   journaux SQLite, conversations, documents, versions, brouillons, connaissances
   et travail Git local non publié restent conservés. Le dossier `logs` est exclu.
 
-En production, seuls les répertoires régénérables identifiés sont écartés :
+Dans l’ancienne politique `production-essential-v1` seulement, les répertoires
+régénérables identifiés suivants sont écartés :
 `home/.cache`, `home/.npm`, `home/.pnpm-store`, `home/.yarn/cache`,
 `home/.local/share/pnpm/store` ; dans les sources, `node_modules`, `.build-cache`,
 `.pnpm-store`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache` et `__pycache__`.
@@ -65,8 +115,8 @@ Chaque transaction journalise sa politique avant toute interruption. Une reprise
 utilise cette politique, pas les nouveaux réglages. Un ancien journal sans ce
 champ reste une sauvegarde complète historique, restaurée comme telle ; une
 politique inconnue bloque la récupération. Les anciennes sauvegardes ne sont
-pas supprimées par ce changement. Les nouvelles mises à jour Dev ne déclenchent
-pas leur rétention automatique puisqu’elles ne créent plus de sauvegarde.
+pas supprimées par ce changement. La rétention configurée s’applique après une
+mise à jour réussie ayant créé une sauvegarde, en Dev comme en production.
 
 Ces règles concernent les mises à jour du Manager. Elles ne désactivent pas les
 sauvegardes externes de l’administrateur, ni ne les remplacent en cas de perte du
