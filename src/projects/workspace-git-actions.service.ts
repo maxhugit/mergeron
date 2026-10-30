@@ -493,6 +493,7 @@ export class WorkspaceGitActionsService {
     body: Record<string, unknown>,
     preparer?: AgentGitPreparer,
     tracking = false,
+    cleanRequired = false,
   ) {
     requireExecutionAccess();
     this.body(body);
@@ -516,6 +517,10 @@ export class WorkspaceGitActionsService {
         body.fingerprint,
       );
       if (!state.head) throw new ConflictException('GIT_NO_COMMIT');
+      if (cleanRequired && (!state.branch || state.changes.length))
+        throw new ConflictException(
+          state.branch ? 'GIT_WORKTREE_DIRTY' : 'GIT_BRANCH_REQUIRED',
+        );
       if (source.resource.address !== body.address)
         throw new ConflictException('GIT_STALE');
       let url: URL;
@@ -701,6 +706,7 @@ export class WorkspaceGitActionsService {
     copyId: string,
     body: Record<string, unknown>,
     preparer?: AgentGitPreparer,
+    remoteMerge = false,
   ) {
     requireExecutionAccess();
     this.body(body);
@@ -711,19 +717,22 @@ export class WorkspaceGitActionsService {
           ? 'DELETE_LOCAL_BRANCH'
           : 'LOCAL_BRANCH_ACTION') ||
       typeof body.name !== 'string' ||
-      typeof body.revision !== 'string'
+      typeof body.revision !== 'string' ||
+      (remoteMerge && body.action !== 'merge')
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
     const copy = { projectId, copyId };
     return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
-      const { cwd, state } = await this.copyState(
+      const { cwd, state, source } = await this.copyState(
         projectId,
         copyId,
         body.fingerprint,
       );
+      if (remoteMerge && source.resource.address !== body.address)
+        throw new ConflictException('GIT_STALE');
       const target = state.branches.find(
-        (b) => !b.remote && b.name === body.name,
+        (b) => b.remote === remoteMerge && b.name === body.name,
       );
       if (body.action === 'delete' && target?.name === state.branch)
         throw new ConflictException('GIT_BRANCH_ACTIVE');
@@ -753,7 +762,7 @@ export class WorkspaceGitActionsService {
             await this.git.git(cwd, [
               'rev-parse',
               '--verify',
-              `refs/heads/${target.name}`,
+              `refs/${remoteMerge ? 'remotes' : 'heads'}/${target.name}`,
             ])
           ).trim() !== target.revision
         )
@@ -906,6 +915,42 @@ export class WorkspaceGitActionsService {
         sha: revision,
       };
     });
+  }
+
+  /** Fetch a pinned remote tip, then integrate only into the reviewed local state.
+   * Each phase holds the copy lock. A changed HEAD/index is rejected by the
+   * original fingerprint and pending edits by the clean-worktree check; no freshly observed state is silently adopted.
+   */
+  async integrateBranch(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    if (body.confirmation !== 'INTEGRATE_REMOTE_BRANCH')
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const fetched = await this.retrieveBranch(
+      projectId,
+      copyId,
+      { ...body, confirmation: 'RETRIEVE_REMOTE_BRANCH' },
+      undefined,
+      true,
+      true,
+    );
+    return this.localBranchAction(
+      projectId,
+      copyId,
+      {
+        ...body,
+        action: 'merge',
+        name: `mergeron/${fetched.branch}`,
+        revision: fetched.sha,
+        confirmation: 'LOCAL_BRANCH_ACTION',
+      },
+      undefined,
+      true,
+    );
   }
 
   /** Start from a clean worktree; conflicts are a confirmed, inspectable result. */

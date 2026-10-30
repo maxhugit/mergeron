@@ -1210,6 +1210,16 @@
             ]
           },
           {
+            "title": "Update the local copy from GitHub",
+            "steps": [
+              "Open the repository’s Synchronization tab, then Integrate commits….",
+              "Check the local copy and branch shown as the destination. Integration targets the active branch; it does not switch branches.",
+              "Choose the source GitHub branch, review its revision and confirm with Retrieve and integrate.",
+              "Wait for the success message: the copy’s files and Git information are refreshed."
+            ],
+            "warning": "The copy must be writable and have no pending changes. A merge may create a local commit using your identity. Conflicts leave the local branch, index and files unchanged; fetched remote references may be updated. Nothing is pushed to GitHub. If the copy or remote revision changes during confirmation, refresh and review again."
+          },
+          {
             "title": "Publish a branch",
             "steps": [
               "Review local commits and the selected branch.",

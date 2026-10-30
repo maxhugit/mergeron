@@ -72,6 +72,15 @@ export class WorkspaceGitController {
     return this.actions.localBranchAction(projectId, copyId, body);
   }
 
+  @Post('copies/:copyId/integrate')
+  integrateBranch(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.integrateBranch(projectId, copyId, body);
+  }
+
   @Post('copies/:copyId/commit')
   commit(
     @Param('projectId') projectId: string,
