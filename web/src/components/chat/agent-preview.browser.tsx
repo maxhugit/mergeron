@@ -133,6 +133,11 @@ test('a running process is not presented as an openable HTTP preview', async () 
     )
     .toBeVisible();
   expect(screen.queryByRole('button', { name: 'Ouvrir l’aperçu' })).toBeNull();
+  expect(
+    screen.queryByRole('textbox', {
+      name: 'Adresse de l’environnement de test',
+    }),
+  ).toBeNull();
 });
 for (const width of [1440, 390])
   test(`standing agent-preview authorization fits ${width}px and keeps caps human-controlled`, async () => {
@@ -194,6 +199,19 @@ for (const width of [1440, 390])
       .element(page.getByRole('button', { name: 'Ouvrir l’aperçu' }))
       .toBeVisible();
     const dialog = screen.getByRole('dialog');
+    const address = screen.getByRole('textbox', {
+      name: 'Adresse de l’environnement de test',
+    });
+    expect(address).toHaveValue(
+      'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
+    );
+    expect(address).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'Copier l’URL' })).toBeVisible();
+    expect(address.getBoundingClientRect().top).toBeLessThan(
+      screen
+        .getByRole('region', { name: 'Stockage du runtime' })
+        .getBoundingClientRect().top,
+    );
     expect(
       screen.getByRole('region', { name: 'Stockage du runtime' }),
     ).toBeVisible();
@@ -361,6 +379,13 @@ test('duration defaults to five hours and an active preview can switch to never 
   const select = await screen.findByRole('combobox', {
     name: 'Durée de disponibilité',
   });
+  const address = await screen.findByRole('textbox', {
+    name: 'Adresse de l’environnement de test',
+  });
+  const stableUrl = (address as HTMLInputElement).value;
+  expect(stableUrl).toBe(
+    'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
+  );
   expect((select as HTMLSelectElement).value).toBe('300');
   expect(
     [...select.querySelectorAll('option')].map((option) => option.value),
@@ -375,6 +400,9 @@ test('duration defaults to five hours and an active preview can switch to never 
   await expect
     .element(page.getByText('Arrêt automatique: Jamais'))
     .toBeVisible();
+  expect(address).toHaveValue(stableUrl);
+  expect(screen.getByRole('button', { name: 'Copier l’URL' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Ouvrir l’aperçu' })).toBeVisible();
   expect(data.calls.some((path) => /\/(start|refresh|stop)$/.test(path))).toBe(
     false,
   );

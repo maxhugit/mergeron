@@ -76,6 +76,7 @@
   "gitRemoteEmpty": "This repository or folder is empty.",
   "gitRemoteNoPreview": "Preview unavailable: binary file, symbolic link, or file larger than 128 KiB.",
   "gitUnprepared": "Changes to prepare",
+  "gitNoUnpreparedFiles": "No changes to prepare.",
   "gitPrepared": "Ready to commit",
   "gitSelectFile": "Select {{path}}",
   "gitStage": "Prepare",
