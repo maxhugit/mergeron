@@ -42,6 +42,18 @@ class ManagerDeploymentTest(unittest.TestCase):
         )[0]
         self.assertIn("${STATE_ROOT}/manager-run:/run/mergeron-manager", application)
         self.assertIn("MERGERON_INSTALL_ENABLED: ${MERGERON_INSTALL_ENABLED:-false}", manager)
+        self.assertIn("mem_limit: 512m", manager)
+        self.assertIn("cpus: 0.25", manager)
+        self.assertIn("pids_limit: 64", manager)
+
+    def test_manager_templates_allow_bounded_snapshot_memory_without_weakening_isolation(self) -> None:
+        for name in ['my-mergeron-manager.xml', 'my-mergeron-dev-manager.xml']:
+            root = ET.parse(ROOT / 'deployment/docker-man' / name).getroot()
+            options = root.findtext('ExtraParams')
+            for expected in ['--memory 512m', '--cpus 0.25', '--pids-limit 64', '--read-only', '--cap-drop ALL', '--security-opt no-new-privileges:true']:
+                self.assertIn(expected, options)
+            self.assertEqual(root.findtext('Network'), 'none')
+            self.assertIsNone(root.find("Config[@Type='Port']"))
 
     def test_dockerman_manager_has_no_network_or_published_port(self) -> None:
         root = ET.parse(

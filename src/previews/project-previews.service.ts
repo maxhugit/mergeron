@@ -731,6 +731,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         reasons.push('start_command_missing');
       if (
         profile.agentManaged &&
+        capabilities &&
         !profile.agentRuntimes.some((id) => runtimes.has(id))
       )
         reasons.push('agent_runtimes_missing');
@@ -799,7 +800,10 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         const candidate = new URL(previewUrl);
         if (
           candidate.protocol === 'https:' &&
-          candidate.hostname === `${row.runId}.${domain}` &&
+          // Keep already running legacy hosts usable until their normal stop.
+          [row.previewId, row.runId].some(
+            (id) => candidate.hostname === `${id}.${domain}`,
+          ) &&
           !candidate.username &&
           !candidate.password &&
           !candidate.port &&

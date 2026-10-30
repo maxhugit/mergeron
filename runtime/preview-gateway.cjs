@@ -45,11 +45,13 @@ function cookieMap(header) {
   }
   return map;
 }
-function appCookies(header) {
+function appCookies(header, runId) {
+  if (!uuid.test(runId)) return '';
+  const prefix = APP_COOKIE + runId + '_';
   const values = [];
   for (const [name, value] of cookieMap(header)) {
-    if (!name.startsWith(APP_COOKIE)) continue;
-    const encoded = name.slice(APP_COOKIE.length);
+    if (!name.startsWith(prefix)) continue;
+    const encoded = name.slice(prefix.length);
     const decoded = Buffer.from(encoded, 'base64url').toString('utf8');
     if (
       !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(decoded) ||
@@ -60,7 +62,8 @@ function appCookies(header) {
   }
   return values.join('; ');
 }
-function appSetCookie(value) {
+function appSetCookie(value, runId) {
+  if (!uuid.test(runId)) return null;
   const parts = value.split(';'),
     first = parts.shift(),
     index = first.indexOf('=');
@@ -75,6 +78,8 @@ function appSetCookie(value) {
     .filter((v) => /^(?:Max-Age|Expires|HttpOnly)(?:=|$)/i.test(v));
   return (
     APP_COOKIE +
+    runId +
+    '_' +
     Buffer.from(name).toString('base64url') +
     first.slice(index) +
     '; Path=/; Secure; SameSite=Strict' +
@@ -139,6 +144,13 @@ class PreviewGateway {
     )
       throw Error('PREVIEW_ACCESS_DENIED');
     const verified = await this.authorize(grant);
+    if (
+      ![
+        `${grant.previewId}.${this.domain}`,
+        `${grant.runId}.${this.domain}`,
+      ].includes(verified.publicHost)
+    )
+      throw Error('PREVIEW_IDENTITY_CHANGED');
     if (this.tickets.size >= 1000 || this.sessions.size >= 2000)
       throw Error('PREVIEW_SESSION_LIMIT');
     const token = randomBytes(32).toString('base64url');
@@ -147,7 +159,7 @@ class PreviewGateway {
       expiresAt: Math.min(this.now() + 60000, verified.expiresAt),
     });
     return {
-      url: `https://${grant.runId}.${this.domain}/.__mergeron_preview/open#mergeron-preview=${token}&path=${encodeURIComponent(path)}`,
+      url: `https://${verified.publicHost}/.__mergeron_preview/open#mergeron-preview=${token}&path=${encodeURIComponent(path)}`,
       expiresAt: this.now() + 60000,
     };
   }
@@ -219,9 +231,14 @@ class PreviewGateway {
     const key = digest(token),
       grant = this.tickets.get(key);
     this.tickets.delete(key);
-    if (!grant || grant.runId !== target.id || grant.expiresAt <= this.now())
+    if (
+      !grant ||
+      ![grant.previewId, grant.runId].includes(target.id) ||
+      grant.expiresAt <= this.now()
+    )
       throw Error();
     const transport = await this.authorize(grant);
+    if (transport.publicHost !== target.host) throw Error();
     const session = randomBytes(32).toString('base64url'),
       expiresAt = Math.min(this.now() + 30 * 60000, transport.expiresAt);
     this.sessions.set(digest(session), { ...grant, expiresAt });
@@ -236,13 +253,17 @@ class PreviewGateway {
     this.prune();
     const token = cookieMap(req.headers.cookie).get(COOKIE);
     const grant = token && this.sessions.get(digest(token));
-    if (!grant || grant.runId !== target.id || grant.expiresAt <= this.now())
+    if (
+      !grant ||
+      ![grant.previewId, grant.runId].includes(target.id) ||
+      grant.expiresAt <= this.now()
+    )
       return null;
     const transport = await this.authorize(grant);
     const url = new URL(transport.endpoint);
     if (
       url.protocol !== 'http:' ||
-      url.hostname !== `pv-${target.id.replaceAll('-', '')}-relay` ||
+      url.hostname !== `pv-${grant.runId.replaceAll('-', '')}-relay` ||
       url.port !== '8180' ||
       !/^[a-f0-9]{64}$/.test(transport.token) ||
       transport.publicHost !== target.host
@@ -258,7 +279,7 @@ class PreviewGateway {
       'x-forwarded-proto': 'https',
       'x-forwarded-host': target.host,
     };
-    const cookies = appCookies(req.headers.cookie);
+    const cookies = appCookies(req.headers.cookie, access.grant.runId);
     if (cookies) h.cookie = cookies;
     if (upgrade) {
       h.connection = 'Upgrade';
@@ -266,18 +287,25 @@ class PreviewGateway {
     }
     return h;
   }
-  responseHeaders(headers) {
+  responseHeaders(headers, runId) {
     const h = clean(headers);
     h['cache-control'] = 'no-store';
     h['referrer-policy'] = 'no-referrer';
     h['x-content-type-options'] = 'nosniff';
     // A preview cannot mint parent-domain cookies or capture the gateway cookie.
     if (headers['set-cookie'])
-      h['set-cookie'] = headers['set-cookie'].map(appSetCookie).filter(Boolean);
+      h['set-cookie'] = headers['set-cookie']
+        .map((value) => appSetCookie(value, runId))
+        .filter(Boolean);
+    delete h['service-worker-allowed'];
     return h;
   }
   async handle(req, res) {
     const target = this.host(req);
+    // A worker must not persist past a stopped run and intercept future grants
+    // on the stable agent origin. Ordinary application Web Workers are unaffected.
+    if (req.headers['service-worker'] !== undefined)
+      return this.error(res, 403);
     if (!req.url.startsWith('/') || req.url.startsWith('//')) throw Error();
     if (req.url === '/.__mergeron_preview/open' && req.method === 'GET')
       return this.bootstrap(res);
@@ -302,7 +330,7 @@ class PreviewGateway {
       (reply) => {
         res.writeHead(
           reply.statusCode ?? 502,
-          this.responseHeaders(reply.headers),
+          this.responseHeaders(reply.headers, access.grant.runId),
         );
         reply.pipe(res);
       },
@@ -349,7 +377,7 @@ class PreviewGateway {
         client.destroy();
         return;
       }
-      const h = this.responseHeaders(reply.headers);
+      const h = this.responseHeaders(reply.headers, access.grant.runId);
       h.connection = 'Upgrade';
       h.upgrade = 'websocket';
       client.write(
