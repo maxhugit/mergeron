@@ -14,7 +14,6 @@ import { translationKey } from '@/locales/translation-key';
  * belongs. This control changes one conversation, and says so.
  */
 import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -65,7 +64,7 @@ type SandboxPatch = NonNullable<PatchThreadSecurityPolicyDto['sandboxPolicy']>;
 function sandboxOptions(
   cwd: string | null,
   networkAccess: boolean | null,
-  projectWorkspacePaths: readonly string[],
+  writableRoots: readonly string[],
 ): Array<{ label: string; value: SandboxPatch; risky?: boolean }> {
   return [
     // Both of these must state a network flag, so neither can be offered until
@@ -83,9 +82,7 @@ function sandboxOptions(
                   label: 'workspace-write',
                   value: {
                     type: 'workspaceWrite' as const,
-                    writableRoots: projectWorkspacePaths.filter(
-                      (workspacePath) => workspacePath !== cwd,
-                    ),
+                    writableRoots: writableRoots.filter((root) => root !== cwd),
                     networkAccess,
                     excludeTmpdirEnvVar: false,
                     excludeSlashTmp: false,
@@ -143,7 +140,13 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
     nsMode: 'fallback',
   });
   const policy = useThreadSecurityPolicy(threadId);
-  const threadCwd = useTimelineStore((s) => s.threadCwd);
+  const threadCwd = useTimelineStore((s) =>
+    threadId
+      ? ((s.threadId === threadId
+          ? s.threadCwd
+          : s.threadsById[threadId]?.threadCwd) ?? null)
+      : null,
+  );
   const projectsQuery = useQuery({
     queryKey: projectsQueryKey,
     queryFn: () => projectsApi<{ projects: ProjectSummary[] }>(),
@@ -166,7 +169,10 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
     enabled: Boolean(threadId) && !readOnly,
     staleTime: 30_000,
   });
-  const project = projectForWorkspace(projectsQuery.data?.projects, threadCwd);
+  const project =
+    projectsQuery.data?.projects.find((entry) =>
+      entry.agentThreads?.some((agent) => agent.threadId === threadId),
+    ) ?? projectForWorkspace(projectsQuery.data?.projects, threadCwd);
   const currentWorkspace = project?.workspaces
     .filter(
       (workspace) =>
@@ -175,49 +181,13 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
     )
     .sort((a, b) => b.path.length - a.path.length)[0];
   const policyReadOnly = readOnly || currentWorkspace?.readOnly === true;
-  const projectWorkspacePaths =
-    project?.workspaces
-      .filter((workspace) => !workspace.readOnly)
-      .map((workspace) => workspace.path) ?? (threadCwd ? [threadCwd] : []);
-  const desiredAdditionalRoots = projectWorkspacePaths.filter(
-    (workspacePath) => workspacePath !== threadCwd,
-  );
-  const reconciliationKey = `${threadId ?? ''}:${desiredAdditionalRoots
-    .slice()
-    .sort()
-    .join('|')}`;
-  const attemptedReconciliation = useRef<string | null>(null);
-  useEffect(() => {
-    const sandbox = policy.observed?.sandboxPolicy;
-    if (
-      !threadId ||
-      policyReadOnly ||
-      !project ||
-      sandbox?.type !== 'workspaceWrite' ||
-      policy.pending ||
-      sandboxOptionIsActive(sandbox, {
-        ...sandbox,
-        writableRoots: desiredAdditionalRoots,
-      })
-    ) {
-      return;
-    }
-    if (attemptedReconciliation.current === reconciliationKey) return;
-    attemptedReconciliation.current = reconciliationKey;
-    policy.apply({
-      sandboxPolicy: {
-        ...sandbox,
-        writableRoots: desiredAdditionalRoots,
-      },
-    });
-  }, [
-    desiredAdditionalRoots,
-    policy,
-    project,
-    policyReadOnly,
-    reconciliationKey,
-    threadId,
-  ]);
+  // Opening or retaining a view only observes policy. Project permissions are
+  // managed by the server; the project inventory includes OTHER agents' copies
+  // and must never be turned into a list of writable roots by the client.
+  const writableRoots =
+    policy.observed?.sandboxPolicy?.type === 'workspaceWrite'
+      ? policy.observed.sandboxPolicy.writableRoots
+      : [];
   if (!threadId) return null;
 
   const observedApproval = describeApproval(policy.observed?.approvalPolicy);
@@ -326,7 +296,9 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
               key={option}
               label={option}
               active={observedApproval === option}
-              requested={policy.pending?.approvalPolicy === option}
+              requested={
+                policy.isSettling && policy.pending?.approvalPolicy === option
+              }
               risky={option === 'never'}
               disabled={policyReadOnly || policy.isSettling}
               onClick={() => policy.apply({ approvalPolicy: option })}
@@ -341,7 +313,7 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
           {sandboxOptions(
             policyReadOnly ? null : threadCwd,
             observedNetworkAccess(policy.observed?.sandboxPolicy),
-            projectWorkspacePaths,
+            writableRoots,
           ).map((option) => (
             <OptionRow
               key={option.label}
@@ -351,6 +323,7 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
                 option.value,
               )}
               requested={
+                policy.isSettling &&
                 policy.pending?.sandboxPolicy?.type === option.value.type
               }
               risky={option.risky}

@@ -53,7 +53,6 @@ import {
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { showSnackbar } from '@/stores/snackbar-store';
-import { useThreadSecurityPolicy } from '@/hooks/use-thread-security-policy';
 import { getAgentFilesStore } from '@/stores/files-store';
 import { FileBrowserContext } from '@/components/files/file-browser-context';
 import { usePlatformSession } from '@/lib/platform-session';
@@ -126,7 +125,6 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
     projectsQuery.data?.projects,
     cwd ?? null,
   );
-  const policy = useThreadSecurityPolicy(threadId);
   const previewProject =
     projectsQuery.data?.projects.find((p) =>
       p.agentThreads?.some((a) => a.threadId === threadId),
@@ -178,18 +176,8 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
       const timeline = useTimelineStore.getState();
       for (const id of threadIds) timeline.setThreadCwdForThread(id, nextCwd);
       void queryClient.invalidateQueries({ queryKey: projectsQueryKey });
-      const sandbox = policy.observed?.sandboxPolicy;
-      if (sandbox?.type === 'workspaceWrite' && project) {
-        policy.apply({
-          sandboxPolicy: {
-            ...sandbox,
-            writableRoots: project.workspaces
-              .filter((workspace) => !workspace.readOnly)
-              .map((workspace) => workspace.path)
-              .filter((workspacePath) => workspacePath !== nextCwd),
-          },
-        });
-      }
+      // The server renews the execution profile for this selection. Do not
+      // follow it with a legacy sandbox patch derived from all project copies.
     },
     onError: (error) => showSnackbar(getApiErrorMessage(error), 'error'),
   });

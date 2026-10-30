@@ -102,6 +102,16 @@ escalades qui retireraient la protection sont refusées ; les conversations
 protégées utilisent `approvalPolicy=never`. Les intégrations MCP et leurs
 contrôles d’accès restent distincts.
 
+L’ouverture d’une conversation, le passage d’un agent à l’autre (y compris
+avec les vues conservées en navigation rapide) et le changement de dossier actif
+ne recalculent pas les racines d’écriture dans le navigateur. L’interface lit
+la politique observée de **cette conversation** et laisse le serveur renouveler
+son profil d’exécution. La liste des emplacements du projet peut contenir les
+copies d’autres agents : elle ne constitue jamais une liste de dossiers
+autorisés en écriture. Seul un choix explicite dans le contrôle de sécurité
+demande une modification, toujours soumise aux refus du serveur ; les racines
+déjà observées sont conservées, sans ajout automatique de copies voisines.
+
 Cette frontière nécessite les profils natifs du runtime Codex géré actuel
 (0.164.0-mergeron.1). Un ancien moteur sans accusé de réception échoue avant le
 tour avec `GIT_COPY_ISOLATION_UNAVAILABLE`, sans repli permissif. Les profils
