@@ -265,6 +265,10 @@ test('large native scrolling mounts the new range while remaining in history', a
   render(<Fixture id={id} />);
   await expect.poll(distance).toBeLessThan(2);
   await commands.scrollTranscript(-3500);
+  // wheel() only dispatches input; WebKit on Linux can still be animating a
+  // large gesture after the short scroll-end grace used by the other cases.
+  // Keep the full-distance requirement and wait for the real browser to reach it.
+  await expect.poll(distance).toBeGreaterThan(3000);
   await finishGesture();
   expect(distance()).toBeGreaterThan(3000);
   const viewport = scroller().getBoundingClientRect();
@@ -344,7 +348,9 @@ test('rows fill the surface rather than a centred column, and dissolve under the
     '[data-transcript-column]',
   )!;
   expect(column.getBoundingClientRect().width).toBeCloseTo(
-    scroller().getBoundingClientRect().width,
+    // Linux reserves a classic scrollbar gutter; rows must fill the usable
+    // content box, not paint beneath that gutter. macOS overlays its scrollbar.
+    scroller().clientWidth,
     0,
   );
 
