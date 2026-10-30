@@ -232,6 +232,26 @@ it('previews without applying and requires a second explicit confirmation', asyn
   });
 });
 
+it('explains a Manager timeout in French without retrying or applying an unconfirmed plan', async () => {
+  const fetch = vi.fn(async () =>
+    json({ message: 'mergeronManagerTimeout' }, 504),
+  );
+  vi.stubGlobal('fetch', fetch);
+  fixture.render(<ManagerUpdateControls status={status} />);
+  await screen.findByDisplayValue('ghcr.io/maxhugit/mergeron:0.1.1');
+  await userEvent
+    .setup()
+    .click(screen.getByRole('button', { name: 'Mettre à jour' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Le Manager n’a pas répondu dans le délai prévu',
+  );
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Vérifiez l’état de l’opération avant de réessayer',
+  );
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
 it('uses edge only for an explicitly declared development stack', () => {
   fixture.render(
     <ManagerUpdateControls

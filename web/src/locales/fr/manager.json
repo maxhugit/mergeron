@@ -1,4 +1,7 @@
 {
+  "mergeronManagerUnavailable": "Mergeron Manager est indisponible.",
+  "mergeronManagerTimeout": "Le Manager n’a pas répondu dans le délai prévu. Vérifiez l’état de l’opération avant de réessayer : elle peut avoir démarré.",
+  "mergeronManagerInvalidResponse": "La réponse du Manager est incomplète ou invalide. Actualisez son état avant de réessayer.",
   "managerUpdateSuperseded": "Ce suivi n’est plus l’opération courante",
   "managerUpdateSupersededHelp": "Une autre opération est terminée et le Manager est libre. Ce journal conservé est incomplet : fermez cette fenêtre puis ouvrez le dernier suivi pour consulter le résultat courant.",
   "componentUpdatesTitle": "Mises à jour des conteneurs",
