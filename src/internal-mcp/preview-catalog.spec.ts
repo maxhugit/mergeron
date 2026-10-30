@@ -72,3 +72,25 @@ it('advertises preview output schemas exactly as administration displays them', 
     await server.close();
   }
 });
+
+it('advertises the lifetime operation and the exact duration choices', () => {
+  const input = INTERNAL_MCP_TOOLS.find(
+    (tool) => tool.name === 'project_preview_manage',
+  )!.input;
+  for (const lifetimeMinutes of [60, 180, 300, 600, 1440, null])
+    expect(
+      input.safeParse({
+        operation: 'lifetime',
+        requestId: 'change',
+        lifetimeMinutes,
+      }).success,
+    ).toBe(true);
+  for (const lifetimeMinutes of [0, 61, 301, 1441, '300'])
+    expect(
+      input.safeParse({
+        operation: 'lifetime',
+        requestId: 'change',
+        lifetimeMinutes,
+      }).success,
+    ).toBe(false);
+});

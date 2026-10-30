@@ -13,6 +13,7 @@ import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import type { PreviewStorageStatus } from '../../../../runtime/preview-storage.cjs';
 import { PreviewStorageSummary } from '../projects/preview-storage-summary';
+import { PreviewLifetimeSelect } from '../projects/preview-lifetime-select';
 
 export interface AgentPreview {
   state: string;
@@ -20,6 +21,7 @@ export interface AgentPreview {
   sourcePath: string;
   error: string | null;
   expiresAt: number | null;
+  lifetimeMinutes?: number | null;
   lastSyncedAt: number | null;
   updateMode: string;
   requiresRestart: boolean;
@@ -42,11 +44,18 @@ export function AgentPreviewDialog({
     client = useQueryClient();
   const [showLogs, setShowLogs] = useState(false),
     [openError, setOpenError] = useState('');
+  const [duration, setDuration] = useState<number | null | undefined>(
+    undefined,
+  );
   const prefix = `/${projectId}/agents/${threadId}/preview`,
     key = ['agent-preview', projectId, threadId];
   const query = useQuery({
     queryKey: key,
-    queryFn: () => projectsApi<{ preview: AgentPreview | null }>(prefix),
+    queryFn: () =>
+      projectsApi<{
+        preview: AgentPreview | null;
+        defaultLifetimeMinutes?: number | null;
+      }>(prefix),
     enabled: open,
     refetchInterval: open ? 3000 : false,
   });
@@ -60,12 +69,39 @@ export function AgentPreviewDialog({
     mutationFn: (operation: 'start' | 'sync' | 'refresh' | 'stop') =>
       projectsApi(prefix + '/' + operation, {
         method: 'POST',
-        body: JSON.stringify({ requestId: crypto.randomUUID() }),
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          ...(['start', 'refresh'].includes(operation)
+            ? { lifetimeMinutes: selectedDuration }
+            : {}),
+        }),
       }),
     onSettled: () => client.invalidateQueries({ queryKey: key }),
   });
   const preview = query.data?.preview,
     active = preview?.state === 'running';
+  const selectedDuration =
+    duration === undefined
+      ? preview?.lifetimeMinutes === undefined
+        ? query.data?.defaultLifetimeMinutes === undefined
+          ? 300
+          : query.data.defaultLifetimeMinutes
+        : preview.lifetimeMinutes
+      : duration;
+  const lifetime = useMutation({
+    mutationFn: () =>
+      projectsApi(prefix + '/lifetime', {
+        method: 'PUT',
+        body: JSON.stringify({
+          lifetimeMinutes: selectedDuration,
+          requestId: crypto.randomUUID(),
+        }),
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: key });
+      setDuration(undefined);
+    },
+  });
   const openPreview = async () => {
     setOpenError('');
     const tab = window.open('about:blank', '_blank');
@@ -130,8 +166,14 @@ export function AgentPreviewDialog({
               <p className="text-xs">
                 {t('expiry')}:{' '}
                 {new Intl.DateTimeFormat(i18n.language, {
+                  dateStyle: 'medium',
                   timeStyle: 'short',
                 }).format(preview.expiresAt)}
+              </p>
+            )}
+            {active && preview.expiresAt === null && (
+              <p className="text-xs">
+                {t('expiry')}: {t('never')}
               </p>
             )}
             {preview.requiresRestart && (
@@ -149,11 +191,55 @@ export function AgentPreviewDialog({
             )}
           </>
         )}
+        {session.isAdministrator && (
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <PreviewLifetimeSelect
+              value={selectedDuration}
+              onChange={setDuration}
+              disabled={
+                query.isPending ||
+                query.isError ||
+                mutation.isPending ||
+                lifetime.isPending
+              }
+            />
+            {active && (
+              <Button
+                variant="outline"
+                disabled={
+                  query.isPending ||
+                  query.isError ||
+                  mutation.isPending ||
+                  lifetime.isPending
+                }
+                onClick={() => lifetime.mutate()}
+              >
+                {t('applyLifetime')}
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              {t('lifetimeHelp')}
+            </p>
+            {lifetime.isError && (
+              <p
+                role="alert"
+                className="text-sm text-destructive sm:col-span-2"
+              >
+                {lifetime.error.message}
+              </p>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {session.isAdministrator &&
             (!preview || preview.state === 'stopped') && (
               <Button
-                disabled={mutation.isPending}
+                disabled={
+                  query.isPending ||
+                  query.isError ||
+                  mutation.isPending ||
+                  lifetime.isPending
+                }
                 onClick={() => mutation.mutate('start')}
               >
                 {t('startButton')}
@@ -165,7 +251,12 @@ export function AgentPreviewDialog({
           {session.isAdministrator && active && (
             <Button
               variant="outline"
-              disabled={mutation.isPending}
+              disabled={
+                query.isPending ||
+                query.isError ||
+                mutation.isPending ||
+                lifetime.isPending
+              }
               onClick={() => mutation.mutate('sync')}
             >
               {t('sync')}
@@ -174,7 +265,12 @@ export function AgentPreviewDialog({
           {session.isAdministrator && preview && (
             <Button
               variant="outline"
-              disabled={mutation.isPending}
+              disabled={
+                query.isPending ||
+                query.isError ||
+                mutation.isPending ||
+                lifetime.isPending
+              }
               onClick={() => {
                 if (window.confirm(t('recreateConfirm')))
                   mutation.mutate('refresh');
@@ -186,7 +282,12 @@ export function AgentPreviewDialog({
           {session.isAdministrator && active && (
             <Button
               variant="destructive"
-              disabled={mutation.isPending}
+              disabled={
+                query.isPending ||
+                query.isError ||
+                mutation.isPending ||
+                lifetime.isPending
+              }
               onClick={() => {
                 if (window.confirm(t('stopConfirm'))) mutation.mutate('stop');
               }}

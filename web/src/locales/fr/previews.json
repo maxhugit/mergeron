@@ -22,7 +22,7 @@
   "hot": "Synchronisation automatique et rechargement à chaud",
   "restartMode": "Synchronisation automatique et redémarrage du processus",
   "manual": "Synchronisation manuelle",
-  "lifetime": "Durée maximale (minutes)",
+  "lifetime": "Durée de disponibilité",
   "memory": "Mémoire maximale de l’application (Mio)",
   "storageTitle": "Stockage du runtime",
   "storageLimits": "Stockage temporaire borné : sources et compilation {{workspace}} Mio · caches {{cache}} Mio · temporaire {{temporary}} Mio · données {{data}} Mio.",
@@ -66,5 +66,11 @@
   "logs": "Journaux de l’application (contenu non fiable)",
   "recreateConfirm": "Recréer cet environnement à partir des fichiers actuels ? Ses données de test temporaires seront supprimées, jamais les sources de l’agent.",
   "stopConfirm": "Arrêter cet environnement et supprimer ses données de test temporaires ? Les sources de l’agent restent intactes.",
-  "popupBlocked": "Votre navigateur a bloqué l’ouverture. Autorisez les fenêtres pour Mergeron puis réessayez."
+  "popupBlocked": "Votre navigateur a bloqué l’ouverture. Autorisez les fenêtres pour Mergeron puis réessayez.",
+  "lifetimeHours_one": "{{count}} heure",
+  "lifetimeHours_other": "{{count}} heures",
+  "never": "Jamais",
+  "legacyLifetime": "{{minutes}} minutes (ancienne valeur)",
+  "applyLifetime": "Appliquer la durée",
+  "lifetimeHelp": "La durée est comptée à partir du démarrage ou de cette modification. Le changement ne redémarre pas l’environnement. « Jamais » désactive l’arrêt automatique."
 }

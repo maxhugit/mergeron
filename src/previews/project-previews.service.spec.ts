@@ -900,4 +900,69 @@ describe('project-scoped generic preview service', () => {
     await expect(f.run(() => f.service.open('p', 't'))).rejects.toThrow();
     await gateway.close();
   });
+  it('changes a running lifetime through MCP without a snapshot or refresh, with administrator scope', async () => {
+    const f = configured();
+    const runId = '22222222-2222-4222-8222-222222222222';
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      threadId: 't',
+      projectId: 'p',
+      runId,
+      state: 'running',
+      profileRevision: f.rows.get(projectPreviewProfiles)!.revision,
+    });
+    f.request.mockImplementation(() =>
+      Promise.resolve({
+        runId,
+        projectId: 'p',
+        agentId: 't',
+        state: 'running',
+        ready: true,
+        lifetimeMinutes: null,
+        expiresAt: null,
+      }),
+    );
+    await f.run(() =>
+      f.service.tool(
+        'p',
+        't',
+        {
+          tool: 'project_preview_manage',
+          operation: 'lifetime',
+          lifetimeMinutes: null,
+          requestId: 'change-lifetime',
+        },
+        () => {},
+      ),
+    );
+    expect(f.request).toHaveBeenCalledWith('lifetime', {
+      runId,
+      lifetimeMinutes: null,
+      requestId: 'change-lifetime',
+    });
+    expect(
+      f.request.mock.calls.some((call) =>
+        ['start', 'stop', 'sync'].includes(String(call[0])),
+      ),
+    ).toBe(false);
+    f.request.mockClear();
+    await expect(
+      f.run(() =>
+        f.service.setLifetime('p', 't', {
+          lifetimeMinutes: 301,
+          requestId: 'invalid',
+        }),
+      ),
+    ).rejects.toThrow('PREVIEW_INVALID_LIFETIME');
+    f.identity.role = 'standard';
+    await expect(
+      f.run(() =>
+        f.service.setLifetime('p', 't', {
+          lifetimeMinutes: 60,
+          requestId: 'denied',
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(f.request).not.toHaveBeenCalled();
+  });
 });

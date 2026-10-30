@@ -22,7 +22,7 @@
   "hot": "Automatic synchronization and hot reload",
   "restartMode": "Automatic synchronization and process restart",
   "manual": "Manual synchronization",
-  "lifetime": "Maximum lifetime (minutes)",
+  "lifetime": "Availability duration",
   "memory": "Application memory limit (MiB)",
   "storageTitle": "Runtime storage",
   "storageLimits": "Bounded ephemeral storage: sources and builds {{workspace}} MiB · caches {{cache}} MiB · temporary {{temporary}} MiB · data {{data}} MiB.",
@@ -66,5 +66,11 @@
   "logs": "Application logs (untrusted content)",
   "recreateConfirm": "Recreate this environment from the current files? Its ephemeral test data will be deleted, never the agent’s sources.",
   "stopConfirm": "Stop this environment and delete its ephemeral test data? The agent’s sources remain intact.",
-  "popupBlocked": "Your browser blocked the window. Allow popups for Mergeron and try again."
+  "popupBlocked": "Your browser blocked the window. Allow popups for Mergeron and try again.",
+  "lifetimeHours_one": "{{count}} hour",
+  "lifetimeHours_other": "{{count}} hours",
+  "never": "Never",
+  "legacyLifetime": "{{minutes}} minutes (legacy value)",
+  "applyLifetime": "Apply duration",
+  "lifetimeHelp": "Duration starts at launch or when this change is applied. Changing it does not restart the environment. “Never” disables automatic shutdown."
 }

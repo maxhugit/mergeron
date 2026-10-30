@@ -619,7 +619,12 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   async status(projectId: string, threadId: string, deadlineMs?: number) {
     const scope = this.scope(projectId, threadId),
       row = this.row(scope.agentId);
-    if (!row || row.projectId !== projectId) return { preview: null };
+    const policy = this.stored(projectId);
+    const defaultLifetimeMinutes = policy
+      ? this.decrypt(policy.encryptedProfile, projectId).lifetimeMinutes
+      : 300;
+    if (!row || row.projectId !== projectId)
+      return { preview: null, defaultLifetimeMinutes };
     let observed: Record<string, unknown> = {
       state: row.state,
       error: row.error,
@@ -648,6 +653,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       };
     }
     return {
+      defaultLifetimeMinutes,
       preview: {
         id: row.previewId,
         runId: row.runId,
@@ -657,6 +663,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         sourceSha: row.sourceSha,
         profileRevision: row.profileRevision,
         expiresAt: observed.expiresAt ?? null,
+        lifetimeMinutes: observed.lifetimeMinutes,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         url: observed.ready === true ? (observed.url ?? null) : null,
@@ -894,6 +901,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
               Number.isFinite(status.preview.expiresAt)
                 ? status.preview.expiresAt
                 : null,
+            lifetimeMinutes: status.preview.lifetimeMinutes,
             lastSyncedAt:
               typeof status.preview.lastSyncedAt === 'number' &&
               Number.isFinite(status.preview.lastSyncedAt)
@@ -918,6 +926,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     requestId: unknown,
     refresh = false,
     assertActive: () => void = () => {},
+    lifetimeMinutes?: unknown,
   ) {
     const scope = this.scope(projectId, threadId);
     requireExecutionAccess();
@@ -938,7 +947,14 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     this.locks.add(scope.agentId);
     try {
       const recipe = this.effectiveProfile(projectId, scope.agentId);
-      const profile = recipe.profile;
+      const profile = { ...recipe.profile };
+      if (lifetimeMinutes !== undefined) {
+        try {
+          profile.lifetimeMinutes = contract.lifetime(lifetimeMinutes);
+        } catch {
+          throw new BadRequestException('PREVIEW_INVALID_LIFETIME');
+        }
+      }
       if (!profile.enabled || !profile.start.trim())
         throw new ConflictException('PREVIEW_DISABLED');
       const check = () => {
@@ -1100,6 +1116,61 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       this.locks.delete(scope.agentId);
     }
   }
+  async setLifetime(
+    projectId: string,
+    threadId: string,
+    input: { lifetimeMinutes?: unknown; requestId?: unknown },
+    assertActive: () => void = () => {},
+  ) {
+    const scope = this.scope(projectId, threadId);
+    requireExecutionAccess();
+    assertActive();
+    const identity = currentAccess()!.identity;
+    if (
+      identity.kind !== 'person' ||
+      !identity.personId ||
+      identity.impersonation
+    )
+      throw new ForbiddenException('PREVIEW_PERSONAL_SESSION_REQUIRED');
+    let minutes: number | null;
+    try {
+      minutes = contract.lifetime(input.lifetimeMinutes);
+    } catch {
+      throw new BadRequestException('PREVIEW_INVALID_LIFETIME');
+    }
+    if (
+      typeof input.requestId !== 'string' ||
+      !contract.ID.test(input.requestId)
+    )
+      throw new BadRequestException('PREVIEW_REQUEST_ID_REQUIRED');
+    if (this.locks.has(scope.agentId))
+      throw new ConflictException('PREVIEW_BUSY');
+    this.locks.add(scope.agentId);
+    try {
+      const row = this.row(scope.agentId);
+      if (!row || row.state !== 'running')
+        throw new ConflictException('PREVIEW_NOT_RUNNING');
+      if (row.projectId !== projectId)
+        throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+      const effective = this.effectiveProfile(projectId, scope.agentId);
+      if (
+        !effective.profile.enabled ||
+        effective.revision !== row.profileRevision
+      )
+        throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+      await this.manager.request('lifetime', {
+        runId: row.runId,
+        lifetimeMinutes: minutes,
+        requestId: input.requestId,
+      });
+      this.scope(projectId, threadId);
+      requireExecutionAccess();
+      assertActive();
+      return this.status(projectId, threadId);
+    } finally {
+      this.locks.delete(scope.agentId);
+    }
+  }
   async stop(projectId: string, threadId: string) {
     const scope = this.scope(projectId, threadId);
     requireExecutionAccess();
@@ -1136,7 +1207,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     const allowed =
       input.tool === 'project_preview_prepare'
         ? ['tool', 'requestId', 'recipe', 'policyRevision', 'expectedRevision']
-        : ['tool', 'operation', 'requestId'];
+        : ['tool', 'operation', 'requestId', 'lifetimeMinutes'];
     if (Object.keys(input).some((k) => !allowed.includes(k)))
       throw new BadRequestException('PREVIEW_INVALID_REQUEST');
     if (input.tool === 'project_preview_prepare')
@@ -1144,6 +1215,10 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     if (input.operation === 'status')
       return this.discovery(projectId, threadId);
     if (input.operation === 'logs') return this.logs(projectId, threadId);
+    if (input.operation === 'lifetime') {
+      await this.setLifetime(projectId, threadId, input, assertActive);
+      return this.discovery(projectId, threadId);
+    }
     if (input.operation === 'sync') {
       await this.synchronize(projectId, threadId, true, assertActive);
       return this.discovery(projectId, threadId);
@@ -1155,6 +1230,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         input.requestId,
         input.operation === 'refresh',
         assertActive,
+        input.lifetimeMinutes,
       );
       assertActive();
       return this.discovery(projectId, threadId);
