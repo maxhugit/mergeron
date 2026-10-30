@@ -151,6 +151,7 @@ test('environment overrides cannot disable the egress transport or load native c
     'PATH',
     'HOME',
     'NODE_OPTIONS',
+    'NODE_USE_ENV_PROXY',
     'LD_PRELOAD',
     'DOCKER_HOST',
     'MERGERON_PREVIEW_TARGET',
@@ -159,6 +160,23 @@ test('environment overrides cannot disable the egress transport or load native c
       () => contract.profile({ env: { [key]: 'x' } }),
       /PREVIEW_INVALID_CONFIGURATION/,
     );
+  assert.throws(
+    () =>
+      contract.agentRecipe({
+        start: 'node server.js',
+        env: { NODE_USE_ENV_PROXY: '0' },
+      }),
+    /PREVIEW_INVALID_CONFIGURATION/,
+  );
+  assert.throws(
+    () =>
+      contract.profile({
+        services: [
+          { name: 'api', runtime: 'node', env: { NODE_USE_ENV_PROXY: '0' } },
+        ],
+      }),
+    /PREVIEW_INVALID_CONFIGURATION/,
+  );
   for (const env of [null, [], 1, 'x'])
     assert.throws(
       () => contract.profile({ env }),
