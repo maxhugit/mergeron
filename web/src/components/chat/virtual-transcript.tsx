@@ -216,7 +216,7 @@ export function VirtualTranscript({
   }, [element, owner]);
 
   return (
-    <TranscriptSnapshot beforeCommit={() => owner.beforeCommit()}>
+    <TranscriptSnapshot beforeCommit={() => owner.beforeCommit(active)}>
       <div
         className="relative flex h-full min-h-0 flex-1 flex-col"
         style={{ visibility: ready && measured ? undefined : 'hidden' }}

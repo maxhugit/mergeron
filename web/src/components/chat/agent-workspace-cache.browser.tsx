@@ -35,11 +35,6 @@ import { forgetTranscriptBookmarks } from '@/lib/transcript-anchor';
 import { WorkspaceEntryMenu } from './workspace-entry-menu';
 import { FileActionsMenu } from '@/components/files/file-actions-menu';
 import { FileText } from 'lucide-react';
-import { TranscriptScrollOwner } from '@/lib/transcript-scroll-owner';
-import {
-  readTranscriptBookmark,
-  readingAnchorDelta,
-} from '@/lib/transcript-anchor';
 
 const calls = vi.hoisted(() => ({
   open: vi.fn(),
@@ -313,7 +308,6 @@ beforeEach(async () => {
 });
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
   client.clear();
   document.documentElement.classList.remove('dark');
 });
@@ -360,64 +354,6 @@ test.each([
     const scroll = screen
       .getByRole('region', { name: 'Agent a' })
       .querySelector<HTMLDivElement>('[data-transcript-scroller]')!;
-    const trace: unknown[] = [];
-    const record = (phase: string, owner?: TranscriptScrollOwner) => {
-      const bookmark = readTranscriptBookmark('a');
-      trace.push({
-        phase,
-        top: scroll.scrollTop,
-        height: scroll.scrollHeight,
-        viewport: scroll.clientHeight,
-        bookmark: bookmark ? JSON.parse(JSON.stringify(bookmark)) : null,
-        anchorDelta: bookmark?.anchor
-          ? readingAnchorDelta(scroll, bookmark.anchor)
-          : null,
-        owner: owner
-          ? {
-              active: owner.active,
-              following: owner.following,
-              userIntent: Reflect.get(owner, 'userIntent'),
-              restore: Reflect.get(owner, 'restore'),
-              expected: Reflect.get(owner, 'expectedOffset'),
-              pending: Reflect.get(owner, 'pending'),
-              passes: Reflect.get(owner, 'passes'),
-            }
-          : null,
-      });
-      if (trace.length > 120) trace.shift();
-    };
-    const prototype = TranscriptScrollOwner.prototype;
-    const commit = prototype.commit;
-    const end = prototype.endInput;
-    const scrolled = prototype.scrolled;
-    const write = prototype.programmaticScroll;
-    vi.spyOn(prototype, 'commit').mockImplementation(function (
-      this: TranscriptScrollOwner,
-      ...args
-    ) {
-      if (this.threadId === 'a') record('before commit', this);
-      commit.apply(this, args);
-      if (this.threadId === 'a') record('after commit', this);
-    });
-    vi.spyOn(prototype, 'endInput').mockImplementation(function (
-      this: TranscriptScrollOwner,
-    ) {
-      end.call(this);
-      if (this.threadId === 'a') record('end input', this);
-    });
-    vi.spyOn(prototype, 'scrolled').mockImplementation(function (
-      this: TranscriptScrollOwner,
-    ) {
-      const result = scrolled.call(this);
-      if (this.threadId === 'a') record(`scroll ${result}`, this);
-      return result;
-    });
-    vi.spyOn(prototype, 'programmaticScroll').mockImplementation(function (
-      this: TranscriptScrollOwner,
-    ) {
-      write.call(this);
-      if (this.threadId === 'a') record('write', this);
-    });
     await expect
       .poll(() => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight)
       .toBeLessThan(2);
@@ -443,7 +379,6 @@ test.each([
     const readingY =
       readingRow.getBoundingClientRect().top -
       scroll.getBoundingClientRect().top;
-    record('reading point captured');
     const b = await select('b');
     fireEvent.change(b, { target: { value: 'Autre brouillon pour b' } });
     expect(calls.effects).toEqual(new Set(['b']));
@@ -464,30 +399,20 @@ test.each([
       'Brouillon conservé pour cet agent',
     );
     // The same sentence must stay put even when remeasurement changes total offsets.
-    try {
-      await expect
-        .poll(() => {
-          const row = scroll.querySelector<HTMLElement>(
-            `[data-reading-row="${rowId}"]`,
-          );
-          return row
-            ? Math.abs(
-                row.getBoundingClientRect().top -
-                  scroll.getBoundingClientRect().top -
-                  readingY,
-              )
-            : Infinity;
-        })
-        .toBeLessThan(2);
-    } catch (error) {
-      record('failed restoration');
-      console.error(
-        'Retained view geometry trace',
-        JSON.stringify({ rowId, readingY, trace }),
-      );
-      throw error;
-    }
-    vi.restoreAllMocks();
+    await expect
+      .poll(() => {
+        const row = scroll.querySelector<HTMLElement>(
+          `[data-reading-row="${rowId}"]`,
+        );
+        return row
+          ? Math.abs(
+              row.getBoundingClientRect().top -
+                scroll.getBoundingClientRect().top -
+                readingY,
+            )
+          : Infinity;
+      })
+      .toBeLessThan(2);
     expect(
       timeline.getState().getThreadRuntime('a')?.timeline.at(-1),
     ).toMatchObject({ content: 'Travail reçu en arrière-plan' });
