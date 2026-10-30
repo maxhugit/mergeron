@@ -26,7 +26,7 @@ export const readProjectGitInput = z.strictObject({
 export const publishProjectGitInput = z.strictObject({
   connectionId: id,
   copyId: id,
-  operation: z.enum(['push', 'create_pull_request']),
+  operation: z.enum(['push', 'create_pull_request', 'retarget_pull_request']),
   requestId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
   userRequest: z.string().trim().min(1).max(2000),
   expectedHead: revision,
@@ -36,6 +36,9 @@ export const publishProjectGitInput = z.strictObject({
   title: z.string().trim().min(1).max(256).optional(),
   description: z.string().max(10000).optional(),
   draft: z.boolean().optional(),
+  number: z.number().int().min(1).max(999999999).optional(),
+  expectedBase: z.string().min(1).max(200).optional(),
+  expectedPullRequestHead: revision.optional(),
 });
 /** Local mutations never accept shell commands, author identity or repository URLs. */
 const localContext = {

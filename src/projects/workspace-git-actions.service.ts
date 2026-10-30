@@ -1218,6 +1218,151 @@ export class WorkspaceGitActionsService {
     });
   }
 
+  /** Change only the base of an existing, same-repository GitHub PR. */
+  async retargetPullRequest(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    publisher?: AgentGitPublisher,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    if (
+      body.confirmation !== 'RETARGET_PULL_REQUEST' ||
+      !Number.isSafeInteger(body.number) ||
+      Number(body.number) < 1 ||
+      Number(body.number) > 999999999 ||
+      typeof body.base !== 'string' ||
+      !body.base ||
+      body.base.length > 200 ||
+      body.base.startsWith('-') ||
+      typeof body.expectedBase !== 'string' ||
+      !body.expectedBase ||
+      body.expectedBase.length > 200 ||
+      typeof body.expectedPullRequestHead !== 'string' ||
+      !/^[a-f0-9]{40,64}$/.test(body.expectedPullRequestHead)
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const number = Number(body.number),
+      base = body.base,
+      expectedBase = body.expectedBase;
+    const expectedHead = body.expectedPullRequestHead;
+    return this.remotePublication(publisher, body, async () => {
+      this.assertCopyAgent(projectId, copyId, body);
+      const { copy, source, cwd, state } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      if (body.head !== state.head || body.address !== source.resource.address)
+        throw new ConflictException('GIT_STALE');
+      try {
+        if (
+          (
+            await this.git.git(cwd, ['check-ref-format', '--branch', base])
+          ).trim() !== base
+        )
+          throw Error();
+      } catch {
+        throw new BadRequestException('GIT_INVALID_INPUT');
+      }
+      const repo = this.git.github(projectId, copy.sourceResourceId);
+      if (!repo?.token)
+        throw new ForbiddenException('GIT_GITHUB_TOKEN_REQUIRED');
+      const fullName = `${repo.owner}/${repo.repo}`.toLowerCase();
+      const endpoint = `https://api.github.com/repos/${repo.owner}/${repo.repo}/pulls/${number}`;
+      const headers = {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        Authorization: `Bearer ${repo.token}`,
+        'Content-Type': 'application/json',
+      };
+      type PullRequest = {
+        number: number;
+        state: string;
+        merged: boolean;
+        head: { ref: string; sha: string; repo: { full_name: string } | null };
+        base: { ref: string; repo: { full_name: string } | null };
+      };
+      let current: PullRequest;
+      try {
+        const response = await fetch(endpoint, {
+          headers,
+          redirect: 'error',
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) throw Error();
+        current = (await response.json()) as PullRequest;
+      } catch {
+        throw new ConflictException('GIT_PR_READ_FAILED');
+      }
+      const sameRepository = (pr: PullRequest) =>
+        pr?.number === number &&
+        pr.base?.repo?.full_name?.toLowerCase() === fullName &&
+        pr.head?.repo?.full_name?.toLowerCase() === fullName;
+      if (!sameRepository(current))
+        throw new ForbiddenException('GIT_PR_REPOSITORY_MISMATCH');
+      if (current.state !== 'open' || current.merged !== false)
+        throw new ConflictException('GIT_PR_NOT_OPEN');
+      if (
+        current.head.sha !== expectedHead ||
+        current.base.ref !== expectedBase
+      )
+        throw new ConflictException('GIT_STALE');
+      if (base === current.head.ref)
+        throw new BadRequestException('GIT_PR_SAME_BRANCH');
+      const fresh = await this.copyState(projectId, copyId, body.fingerprint);
+      if (
+        fresh.state.head !== state.head ||
+        fresh.source.resource.address !== body.address ||
+        this.git.github(projectId, copy.sourceResourceId)?.token !== repo.token
+      )
+        throw new ConflictException('GIT_STALE');
+      publisher?.assertActive();
+      const url = `https://github.com/${repo.owner}/${repo.repo}/pull/${number}`;
+      if (base === expectedBase)
+        return { number, url, base, head: expectedHead, unchanged: true };
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'PATCH',
+          headers,
+          redirect: 'error',
+          signal: AbortSignal.timeout(20000),
+          body: JSON.stringify({ base }),
+        });
+      } catch {
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      }
+      if (!response.ok)
+        throw new ConflictException(
+          response.status >= 500
+            ? 'GIT_OUTCOME_UNKNOWN'
+            : 'GIT_PR_RETARGET_FAILED',
+        );
+      try {
+        const updated = (await response.json()) as PullRequest;
+        if (
+          !sameRepository(updated) ||
+          updated.state !== 'open' ||
+          updated.merged !== false ||
+          updated.base.ref !== base ||
+          updated.head.sha !== expectedHead
+        )
+          throw Error();
+      } catch {
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      }
+      this.audit(projectId, copyId, 'git_pr_retargeted', {
+        number,
+        previousBase: expectedBase,
+        base,
+        head: expectedHead,
+      });
+      return { number, url, base, head: expectedHead, unchanged: false };
+    });
+  }
+
   async createRemotePullRequest(
     projectId: string,
     resourceId: string,
