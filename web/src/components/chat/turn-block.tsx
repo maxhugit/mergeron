@@ -67,10 +67,12 @@ function assertNever(value: never): never {
 function ItemBody({
   item,
   turnId,
+  threadId,
   approvals,
 }: {
   item: TurnItem;
   turnId: string;
+  threadId?: string | null;
   approvals: ApprovalRequest[];
 }) {
   // userInputRequests keyed by requestId — find matching entry by itemId.
@@ -99,7 +101,7 @@ function ItemBody({
     case 'agentMessage':
       return (
         <>
-          <AgentMessageItem item={item} />
+          <AgentMessageItem item={item} threadId={threadId} />
           {inputCard}
         </>
       );
@@ -316,10 +318,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
           ),
         ) ||
       Object.values(userInputRequests).some(
-        (r) =>
-          r.turnId === entry.turnId &&
-          r.itemId === item.itemId &&
-          r.status !== 'resolved',
+        (r) => r.turnId === entry.turnId && r.itemId === item.itemId,
       ) ||
       isFailedTechnicalItem(item);
     const technical = isTechnicalItem(item) && !needsAttention;
@@ -378,6 +377,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
             <ItemWithRequests
               key={item.itemId}
               item={item}
+              threadId={threadId}
               turnId={entry.turnId}
               approvals={approvalsByItemId.get(item.itemId) ?? []}
             />
@@ -388,10 +388,10 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
               expanded={displayMode === 'expanded'}
               label={
                 (group.items[0].type === 'commandExecution'
-                    ? t('terminal')
-                    : group.items[0].type === 'reasoning'
-                      ? t('thinking')
-                      : t('technicalDetails')) +
+                  ? t('terminal')
+                  : group.items[0].type === 'reasoning'
+                    ? t('thinking')
+                    : t('technicalDetails')) +
                 (group.items.some((item) => !item.completed)
                   ? ` · ${t('running')}`
                   : '')

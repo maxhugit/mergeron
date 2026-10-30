@@ -1664,5 +1664,8 @@
   "transferActionUpdate": "Mettre à jour",
   "transferActionConflict": "Conflit",
   "transferActionDelete": "Suppression à propager",
-  "transferActionUnchanged": "Inchangé"
+  "transferActionUnchanged": "Inchangé",
+  "questionReplyHint": "Vous pouvez répondre quand vous êtes prêt, même si l’agent continue. Un choix prépare votre message sans l’envoyer.",
+  "retiredQuestionReplyHint": "Cette demande est terminée. Vous pouvez encore préparer une réponse à envoyer comme message dans la conversation.",
+  "prepareQuestionReply": "Préparer une réponse"
 }
