@@ -31,11 +31,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { VirtualTranscript } from './virtual-transcript';
-import {
-  forgetTranscriptBookmarks,
-  readTranscriptBookmark,
-} from '@/lib/transcript-anchor';
-import { TranscriptScrollOwner } from '@/lib/transcript-scroll-owner';
+import { forgetTranscriptBookmarks } from '@/lib/transcript-anchor';
 import { WorkspaceEntryMenu } from './workspace-entry-menu';
 import { FileActionsMenu } from '@/components/files/file-actions-menu';
 import { FileText } from 'lucide-react';
@@ -312,7 +308,6 @@ beforeEach(async () => {
 });
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
   client.clear();
   document.documentElement.classList.remove('dark');
 });
@@ -354,83 +349,6 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
     const scroll = screen
       .getByRole('region', { name: 'Agent a' })
       .querySelector<HTMLDivElement>('[data-transcript-scroller]')!;
-    const trace: unknown[] = [];
-    const trackedRow = { id: undefined as string | undefined };
-    const record = (
-      phase: string,
-      owner?: TranscriptScrollOwner,
-      geometry = false,
-    ) => {
-      const bookmark = readTranscriptBookmark('a');
-      trace.push({
-        time: performance.now(),
-        phase,
-        bookmark: bookmark ? JSON.parse(JSON.stringify(bookmark)) : null,
-        geometry: geometry
-          ? {
-              top: scroll.scrollTop,
-              height: scroll.scrollHeight,
-              viewport: scroll.clientHeight,
-              readingY:
-                (scroll
-                  .querySelector<HTMLElement>(
-                    `[data-reading-row="${trackedRow.id}"]`,
-                  )
-                  ?.getBoundingClientRect().top ?? NaN) -
-                scroll.getBoundingClientRect().top,
-            }
-          : undefined,
-        owner: owner
-          ? Object.fromEntries(
-              [
-                'active',
-                'following',
-                'anchor',
-                'userIntent',
-                'restore',
-                'expectedOffset',
-                'pending',
-                'passes',
-                'settled',
-                'disposed',
-                'offset',
-                'width',
-                'queued',
-              ].map((key) => [key, Reflect.get(owner, key)]),
-            )
-          : null,
-      });
-      if (trace.length > 160) trace.shift();
-    };
-    for (const name of [
-      'beforeCommit',
-      'commit',
-      'endInput',
-      'scrolled',
-      'rowResized',
-      'geometryChanged',
-      'dispose',
-      'programmaticScroll',
-    ] as const) {
-      const original = TranscriptScrollOwner.prototype[name];
-      vi.spyOn(TranscriptScrollOwner.prototype, name).mockImplementation(
-        function (this: TranscriptScrollOwner, ...args: never[]) {
-          if (this.threadId === 'a')
-            record(
-              `before ${name}${name === 'beforeCommit' ? ` ${String(args[0])}` : ''}`,
-              this,
-            );
-          const result = Reflect.apply(original, this, args);
-          if (this.threadId === 'a')
-            record(
-              `after ${name}`,
-              this,
-              name === 'beforeCommit' && args[0] === false,
-            );
-          return result;
-        } as never,
-      );
-    }
     await expect
       .poll(() => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight)
       .toBeLessThan(2);
@@ -443,6 +361,11 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => resolve()),
     );
+    // A positive absolute offset also holds at the tail: prove the native
+    // upward gesture actually left follow mode before recording a reading point.
+    await expect
+      .poll(() => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight)
+      .toBeGreaterThan(300);
     const before = scroll.scrollTop;
     expect(before).toBeGreaterThan(0);
     const readingRow = [
@@ -453,11 +376,9 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
         scroll.getBoundingClientRect().top + 20,
     )!;
     const rowId = readingRow.dataset.readingRow;
-    trackedRow.id = rowId;
     const readingY =
       readingRow.getBoundingClientRect().top -
       scroll.getBoundingClientRect().top;
-    record('reading point captured', undefined, true);
     const b = await select('b');
     fireEvent.change(b, { target: { value: 'Autre brouillon pour b' } });
     expect(calls.effects).toEqual(new Set(['b']));
@@ -478,29 +399,20 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
       'Brouillon conservé pour cet agent',
     );
     // The same sentence must stay put even when remeasurement changes total offsets.
-    try {
-      await expect
-        .poll(() => {
-          const row = scroll.querySelector<HTMLElement>(
-            `[data-reading-row="${rowId}"]`,
-          );
-          return row
-            ? Math.abs(
-                row.getBoundingClientRect().top -
-                  scroll.getBoundingClientRect().top -
-                  readingY,
-              )
-            : Infinity;
-        })
-        .toBeLessThan(2);
-    } catch (error) {
-      record('restoration failed', undefined, true);
-      console.error(
-        'Retained geometry trace',
-        JSON.stringify({ rowId, readingY, trace }),
-      );
-      throw error;
-    }
+    await expect
+      .poll(() => {
+        const row = scroll.querySelector<HTMLElement>(
+          `[data-reading-row="${rowId}"]`,
+        );
+        return row
+          ? Math.abs(
+              row.getBoundingClientRect().top -
+                scroll.getBoundingClientRect().top -
+                readingY,
+            )
+          : Infinity;
+      })
+      .toBeLessThan(2);
     expect(
       timeline.getState().getThreadRuntime('a')?.timeline.at(-1),
     ).toMatchObject({ content: 'Travail reçu en arrière-plan' });

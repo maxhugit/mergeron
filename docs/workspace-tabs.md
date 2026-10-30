@@ -174,6 +174,15 @@ offset clamped to a smaller scroll extent is geometry, not navigation, including
 when shrinking composer padding leaves the viewport dimensions unchanged. End detection
 uses a two-pixel rounding tolerance; an upward gesture within the former 80-pixel
 threshold must still stop following. Hidden scrolling never changes intent.
+An upward wheel gesture with scrollable history leaves follow mode when its
+intent is received, before the browser applies its first animated offset. A scroll-end notification left
+over from the previous programmatic scroll must not repin the tail and cancel
+that new gesture. Downward input at the tail, Ctrl-wheel zoom and upward input
+without scrollable history keep following.
+Browser regressions cover the late-notification ordering before any displacement,
+then complete the gesture with native input. Cache navigation also asserts that
+the gesture really left the tail before saving its reading point; a positive
+absolute scroll offset alone does not prove that history is being read.
 The same tolerance is passed as `scrollEndThreshold`. It narrows, but does not
 disable, the library's `wasAtEnd` size compensation. That branch and first
 measurements can compensate during backward scrolling; only ordinary non-end
