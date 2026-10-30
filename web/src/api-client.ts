@@ -2,7 +2,7 @@
 import { client } from './generated/api/client.gen';
 import { getApiToken, clearApiToken } from './auth-token';
 import { showSnackbar } from './stores/snackbar-store';
-import { getApiErrorMessage } from './lib/api-error';
+import { getApiErrorCode, getApiErrorMessage } from './lib/api-error';
 import { BASE_PATH } from './base-path';
 
 /** HMR-safe guard — bound to the client instance, survives module reload. */
@@ -68,6 +68,17 @@ export function configureApiClient() {
       options as unknown as { meta?: Record<string, unknown> } | undefined
     )?.meta;
     if (response?.status === 401 || meta?.silent) {
+      return error;
+    }
+
+    // Background existence probes expect one precise kind of absence. Keep the
+    // rejection intact, and never silence other 404s, access failures or 5xxs.
+    const expectedNotFoundCode = meta?.expectedNotFoundCode;
+    if (
+      response?.status === 404 &&
+      typeof expectedNotFoundCode === 'string' &&
+      getApiErrorCode(error) === expectedNotFoundCode
+    ) {
       return error;
     }
 

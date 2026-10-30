@@ -168,7 +168,11 @@ async function inspect(
   path: string,
 ): Promise<'missing' | 'present' | 'unknown'> {
   try {
-    await filesGetMetadata({ query: { path }, throwOnError: true });
+    await filesGetMetadata({
+      query: { path },
+      throwOnError: true,
+      meta: { expectedNotFoundCode: 'files.path_not_found' },
+    });
     return 'present';
   } catch (error) {
     return getApiErrorCode(error) === 'files.path_not_found'
