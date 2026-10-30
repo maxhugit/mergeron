@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { Copy, ExternalLink } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import type { PreviewStorageStatus } from '../../../../runtime/preview-storage.cjs';
@@ -47,6 +49,11 @@ export function AgentPreviewDialog({
   const [duration, setDuration] = useState<number | null | undefined>(
     undefined,
   );
+  const addressId = useId();
+  const [copyResult, setCopyResult] = useState<{
+    url: string;
+    status: 'copied' | 'failed';
+  } | null>(null);
   const prefix = `/${projectId}/agents/${threadId}/preview`,
     key = ['agent-preview', projectId, threadId];
   const query = useQuery({
@@ -102,18 +109,52 @@ export function AgentPreviewDialog({
       setDuration(undefined);
     },
   });
+  const address = (() => {
+    if (!active || !preview.ready || query.isError || !preview.url) return null;
+    try {
+      const url = new URL(preview.url);
+      // Display/copy the stable address, never the short-lived access grant.
+      return url.protocol === 'https:' &&
+        !url.username &&
+        !url.password &&
+        !url.hash
+        ? url.href
+        : null;
+    } catch {
+      return null;
+    }
+  })();
+  const copyAddress = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopyResult({ url: address, status: 'copied' });
+    } catch {
+      setCopyResult({ url: address, status: 'failed' });
+    }
+  };
   const openPreview = async () => {
+    if (!address) return;
     setOpenError('');
     const tab = window.open('about:blank', '_blank');
-    if (tab) tab.opener = null;
+    if (!tab) {
+      setOpenError(t('popupBlocked'));
+      return;
+    }
+    tab.opener = null;
     try {
       const result = await projectsApi<{ url: string }>(prefix + '/open', {
         method: 'POST',
       });
       const url = new URL(result.url);
-      if (url.protocol !== 'https:') throw Error(t('unavailable'));
-      if (tab) tab.location.replace(url.toString());
-      else throw Error(t('popupBlocked'));
+      if (
+        url.origin !== new URL(address).origin ||
+        url.pathname !== '/.__mergeron_preview/open' ||
+        url.username ||
+        url.password
+      )
+        throw Error(t('unavailable'));
+      tab.location.replace(url.toString());
     } catch (e) {
       tab?.close();
       setOpenError(e instanceof Error ? e.message : t('unavailable'));
@@ -143,17 +184,56 @@ export function AgentPreviewDialog({
               : t('notStarted')}
         </p>
         {query.isError && <p role="alert">{t('unavailable')}</p>}
+        {address && (
+          <section
+            aria-labelledby={addressId + '-label'}
+            className="min-w-0 space-y-2 rounded-lg border bg-muted/30 p-3"
+          >
+            <label
+              id={addressId + '-label'}
+              htmlFor={addressId}
+              className="block text-sm font-medium"
+            >
+              {t('address')}
+            </label>
+            <Input
+              id={addressId}
+              value={address}
+              readOnly
+              className="min-w-0 font-mono text-xs"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void openPreview()}>
+                <ExternalLink aria-hidden="true" className="size-4" />
+                {t('open')}
+              </Button>
+              <Button variant="outline" onClick={() => void copyAddress()}>
+                <Copy aria-hidden="true" className="size-4" />
+                {t('copyAddress')}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">{t('addressHelp')}</p>
+            {copyResult?.url === address && (
+              <p
+                role={copyResult.status === 'copied' ? 'status' : 'alert'}
+                className="text-xs"
+              >
+                {t(
+                  copyResult.status === 'copied'
+                    ? 'addressCopied'
+                    : 'copyFailed',
+                )}
+              </p>
+            )}
+          </section>
+        )}
         {preview && (
           <>
             <p className="break-all text-xs text-muted-foreground">
               {t('source')}: {preview.sourcePath}
             </p>
             {preview.storage && <PreviewStorageSummary {...preview.storage} />}
-            {preview.url && (
-              <code className="block break-all rounded border p-2 text-xs">
-                {preview.url}
-              </code>
-            )}
             {preview.lastSyncedAt && (
               <p className="text-xs">
                 {t('lastSync')}:{' '}
@@ -245,9 +325,6 @@ export function AgentPreviewDialog({
                 {t('startButton')}
               </Button>
             )}
-          {active && preview.ready && (
-            <Button onClick={() => void openPreview()}>{t('open')}</Button>
-          )}
           {session.isAdministrator && active && (
             <Button
               variant="outline"
