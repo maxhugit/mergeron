@@ -3,7 +3,13 @@ import { afterEach, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
 import { act, cleanup, render } from '@testing-library/react';
 import { VirtualTranscript } from './virtual-transcript';
-import { forgetTranscriptBookmarks } from '@/lib/transcript-anchor';
+import { RetainedSurface } from '@/components/retained-surface';
+import {
+  captureReadingAnchor,
+  forgetTranscriptBookmarks,
+  readTranscriptBookmark,
+  readingAnchorDelta,
+} from '@/lib/transcript-anchor';
 import '@/index.css';
 import '@/i18n';
 
@@ -156,6 +162,45 @@ test('does not replace measured row heights with zero while a retained view has 
       <Fixture id={id} extra={700} />
     </div>,
   );
+  await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
+  await finishGesture();
+  expect(Math.abs(y(index) - before)).toBeLessThan(2);
+  expect(distance()).toBeGreaterThan(500);
+});
+
+test('snapshots the visible reading point when Activity hides during a gesture after row resizing', async () => {
+  const id = `browser:${++threadSequence}`;
+  const fixture = (active: boolean, extra = 0) => (
+    <RetainedSurface active={active}>
+      <Fixture id={id} active={active} extra={extra} />
+    </RetainedSurface>
+  );
+  const view = render(fixture(true));
+  const index = await readHistory();
+  const original = scroller();
+  await commands.holdTranscriptPointer(true);
+  // Like estimate-to-measured rows arriving during Linux WebKit's animation:
+  // resize an actual row above the reading point, while corrections are paused.
+  const late = document.createElement('div');
+  late.style.height = '144px';
+  document
+    .querySelector(`[data-transcript-item="answer:${index - 1}"]`)!
+    .before(late);
+  await finishGesture();
+  const before = y(index);
+  const heldBookmark = readTranscriptBookmark(id);
+  expect(heldBookmark?.anchor).not.toBeNull();
+  expect(
+    Math.abs(readingAnchorDelta(original, heldBookmark!.anchor!)!),
+  ).toBeGreaterThan(2);
+  const visibleAnchor = captureReadingAnchor(original);
+  view.rerender(fixture(false));
+  expect(readTranscriptBookmark(id)?.anchor).toEqual(visibleAnchor);
+  await commands.holdTranscriptPointer(false);
+  await finishGesture();
+  view.rerender(fixture(false, 700));
+  view.rerender(fixture(true, 700));
+  expect(scroller()).toBe(original);
   await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
   await finishGesture();
   expect(Math.abs(y(index) - before)).toBeLessThan(2);

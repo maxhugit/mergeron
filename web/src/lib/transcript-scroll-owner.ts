@@ -83,16 +83,21 @@ export class TranscriptScrollOwner {
   }
 
   /** Captures before React mutation; subsequent changes in the same batch keep the first point. */
-  beforeCommit(): void {
+  beforeCommit(nextActive = true): void {
     if (
       !this.active ||
       this.following ||
-      this.userIntent ||
+      (this.userIntent && nextActive) ||
       this.restore ||
       this.pending ||
-      !this.element
+      !this.element?.clientHeight
     )
       return;
+    // During input, estimates can settle without compensation so the visible
+    // point may differ from the last scroll event's bookmark. Hiding must save
+    // that actual point before display:none destroys its layout, even if the
+    // native gesture has not emitted scrollend yet. Ordinary input commits
+    // still never arm a correction that would fight the gesture.
     this.pending = captureReadingAnchor(this.element) ?? this.anchor;
   }
 
