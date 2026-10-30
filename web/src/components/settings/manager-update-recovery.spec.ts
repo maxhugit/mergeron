@@ -10,6 +10,30 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
+it('retains only a known backup policy so a reconnected Dev journal never claims data restoration', () => {
+  const startedAt = Date.now();
+  saveManagerUpdateReceipt({
+    startedAt,
+    operationId: 'dev-operation',
+    excludedOperationId: null,
+    snapshot: {
+      id: 'dev-operation',
+      status: 'running',
+      phase: 'replacing',
+      backupRetained: false,
+      backupPolicy: 'development-none-v1',
+      rollbackAvailable: true,
+      events: [],
+      images: {},
+      previousImages: {},
+    },
+  });
+  expect(readManagerUpdateReceipt()?.snapshot).toMatchObject({
+    backupPolicy: 'development-none-v1',
+    backupRetained: false,
+  });
+});
+
 it('keeps a bounded display-only journal, omitting image references, errors and unknown fields', () => {
   const startedAt = Date.now();
   saveManagerUpdateReceipt({

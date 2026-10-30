@@ -158,7 +158,21 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
     <section className="space-y-3" aria-label={t('managerBackupsTitle')}>
       <h3 className="font-medium">{t('managerBackupsTitle')}</h3>
       <p className="text-xs text-muted-foreground">{t('managerBackupsHelp')}</p>
-      {status.capabilities?.backupRetention && <BackupRetention busy={busy} />}
+      {status.backupPolicy && (
+        <p className="text-sm">
+          {t(
+            status.backupPolicy === 'development-none-v1'
+              ? 'managerDevelopmentNoBackup'
+              : status.backupPolicy === 'production-essential-v1'
+                ? 'managerProductionEssentialBackup'
+                : 'managerLegacyFullBackup',
+          )}
+        </p>
+      )}
+      {status.capabilities?.backupRetention &&
+        status.backupPolicy !== 'development-none-v1' && (
+          <BackupRetention busy={busy} />
+        )}
       {query.data && (
         <p className="text-sm font-medium">
           {t('managerBackupsTotalSize', {
@@ -259,6 +273,16 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                       </p>
                     </td>
                     <td className="break-words px-3 py-3">
+                      {backup.backupPolicy &&
+                        backup.backupPolicy !== 'development-none-v1' && (
+                          <p className="text-xs text-muted-foreground">
+                            {t(
+                              backup.backupPolicy === 'production-essential-v1'
+                                ? 'managerBackupEssentialLabel'
+                                : 'managerBackupFullLabel',
+                            )}
+                          </p>
+                        )}
                       {backup.current && (
                         <p className="text-xs">{t('managerBackupsLatest')}</p>
                       )}

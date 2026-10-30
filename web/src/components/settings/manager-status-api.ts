@@ -46,7 +46,13 @@ export interface ManagerComponent {
   protectedMounts: Omit<ManagerProtectedMount, 'component'>[];
 }
 
+export type ManagerBackupPolicy =
+  | 'development-none-v1'
+  | 'production-essential-v1'
+  | 'legacy-full-v1';
+
 export interface ManagerStatus {
+  backupPolicy?: ManagerBackupPolicy;
   capabilities?: {
     backupManagement?: boolean;
     devFastUpdate?: boolean;
@@ -81,6 +87,8 @@ export interface ManagerStatus {
       phase: string;
       error?: string;
       backupRetained: boolean;
+      backupPolicy?: ManagerBackupPolicy;
+      rollbackAvailable?: boolean;
       images: Record<string, string>;
       previousImages: Record<string, string>;
       events: { at: string; phase: string; status: string }[];
@@ -89,6 +97,10 @@ export interface ManagerStatus {
 }
 
 export interface ManagerUpdatePlan {
+  backupPolicy?: ManagerBackupPolicy;
+  backupScope?: string[];
+  excludedFromDataRollback?: string[];
+  confirmation?: 'UPDATE_WITHOUT_DATA_BACKUP' | 'UPDATE_WITH_ROLLBACK';
   mode?: 'standard' | 'dev-fast';
   fingerprint: string;
   applicable: boolean;
@@ -134,6 +146,7 @@ export async function requestManagerUpdate(
 export const managerStatusQueryKey = ['administration', 'manager-status'];
 
 export interface ManagerBackup {
+  backupPolicy?: ManagerBackupPolicy | null;
   id: string;
   path?: string | null;
   managerPath?: string;

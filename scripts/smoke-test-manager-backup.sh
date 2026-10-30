@@ -12,6 +12,10 @@ await fs.mkdir("/fixture/home", {mode: 0o700});
 await fs.writeFile("/fixture/home/database", "private-state", {mode: 0o600});
 await fs.chown("/fixture/home/database", 11002, 11002);
 await fs.symlink("/outside-the-fixture", "/fixture/home/link");
+await fs.mkdir("/fixture/home/.cache", {mode:0o700});
+await fs.writeFile("/fixture/home/.cache/download", "regenerable", {mode:0o600});
+await fs.chown("/fixture/home/.cache/download", 11002, 11002);
+await fs.chown("/fixture/home/.cache", 11002, 11002);
 await fs.chown("/fixture/home", 11002, 11002);
 await copyPersistentTree("/fixture/home", "/fixture/backup");
 assert.equal(await fs.readFile("/fixture/backup/database", "utf8"), "private-state");
@@ -19,6 +23,11 @@ const copied = await fs.stat("/fixture/backup/database");
 assert.equal(copied.uid, 11002); assert.equal(copied.gid, 11002); assert.equal(copied.mode & 0o777, 0o600);
 assert.equal((await fs.stat("/fixture/backup")).mode & 0o777, 0o700);
 assert.equal(await fs.readlink("/fixture/backup/link"), "/outside-the-fixture");
+// Essential production selection keeps private data while skipping owner-only caches.
+await copyPersistentTree("/fixture/home", "/fixture/essential", 1, {policy:"production-essential-v1",path:"home"});
+assert.equal(await fs.readFile("/fixture/essential/database", "utf8"), "private-state");
+assert.equal((await fs.stat("/fixture/essential/database")).uid, 11002);
+await assert.rejects(fs.lstat("/fixture/essential/.cache"), {code:"ENOENT"});
 await fs.mkdir("/fixture/operation/backup", {recursive: true});
 await copyPersistentTree("/fixture/home", "/fixture/operation/backup/home");
 // Write as the owner would, without depending on DAC_OVERRIDE in this fixture.

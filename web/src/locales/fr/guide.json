@@ -87,5 +87,5 @@
   "administrationButton2": "Rétention des logs → Enregistrer",
   "administrationEffect2": "Les règles se règlent dans Logs. Après enregistrement, les archives trop anciennes ou trop nombreuses peuvent être supprimées automatiquement ; le fichier actif reste protégé.",
   "administrationButton3": "Restaurer la version précédente / supprimer une sauvegarde",
-  "administrationEffect3": "La restauration revient à l’état sauvegardé selon le suivi du Manager. Supprimer une sauvegarde est définitif et retire cette possibilité de retour ; ne le faites pas comme simple nettoyage sans vérifier son utilité."
+  "administrationEffect3": "En Dev, les mises à jour ne sauvegardent pas les données : le retour arrière remet uniquement les images, sans annuler les migrations. En production, seules les données essentielles sauvegardées sont restaurées. Une ancienne sauvegarde complète garde son périmètre d’origine. Supprimer une sauvegarde est définitif et retire ce retour arrière ; vérifier son utilité avant tout nettoyage."
 }

@@ -23,6 +23,16 @@ import { dirname, join, relative } from 'node:path';
 import { collectInventory } from './inventory.mjs';
 import { agentVisualSandbox } from './agent-visual-sandbox.mjs';
 import {
+  persistentEntries as dataEntries,
+  environmentBackupPolicy,
+  recordedBackupPolicy,
+  backupEntries,
+  excludesBackupDirectory,
+  updateConfirmation,
+  rollbackConfirmation,
+  DEV_NO_BACKUP,
+} from './backup-policy.mjs';
+import {
   assertCliPolicyImage,
   cliProtectionFingerprint,
 } from './codex-cli.mjs';
@@ -84,16 +94,6 @@ const repository = (ref) =>
     .split('@')[0]
     .replace(/:[^/:]+$/, '');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const dataEntries = [
-  'home',
-  'workspace',
-  'logs',
-  'ssh',
-  'config',
-  'backend-token.txt',
-  'backend-token-nginx.txt',
-  'openai-api-key.txt',
-];
 const pinnedImage = (image, reference) => {
   const repo = repository(reference);
   const pinned = image.RepoDigests?.find((d) =>
@@ -145,10 +145,21 @@ async function durableRename(source, destination) {
 
 // Never follow a symlink out of the state directory, or copy transient sockets.
 // Set ownership last: the Manager intentionally does not have CAP_FOWNER.
-export async function copyPersistentTree(source, destination, concurrency = 1) {
+export async function copyPersistentTree(
+  source,
+  destination,
+  concurrency = 1,
+  selection = null,
+) {
   if (![1, 8].includes(concurrency))
     throw new Error('updateInvalidCopyConcurrency');
   const info = await lstat(source);
+  if (
+    info.isDirectory() &&
+    selection &&
+    excludesBackupDirectory(selection.policy, selection.path)
+  )
+    return;
   if (info.isSocket()) return;
   if (info.isSymbolicLink()) {
     await symlink(await readlink(source), destination);
@@ -160,22 +171,29 @@ export async function copyPersistentTree(source, destination, concurrency = 1) {
     const entries = await readdir(source, { withFileTypes: true });
     if (concurrency === 1) {
       for (const { name } of entries)
-        await copyPersistentTree(join(source, name), join(destination, name));
+        await copyPersistentTree(
+          join(source, name),
+          join(destination, name),
+          concurrency,
+          selection && { ...selection, path: `${selection.path}/${name}` },
+        );
     } else {
       // Subdirectories stay sequential: the limit is global, not multiplied at
       // every recursion level. Symlinks are still handled with lstat/no-follow.
       const files = entries.filter((entry) => !entry.isDirectory());
       for (let index = 0; index < files.length; index += concurrency) {
         const results = await Promise.allSettled(
-          files
-            .slice(index, index + concurrency)
-            .map(({ name }) =>
-              copyPersistentTree(
-                join(source, name),
-                join(destination, name),
-                concurrency,
-              ),
+          files.slice(index, index + concurrency).map(({ name }) =>
+            copyPersistentTree(
+              join(source, name),
+              join(destination, name),
+              concurrency,
+              selection && {
+                ...selection,
+                path: `${selection.path}/${name}`,
+              },
             ),
+          ),
         );
         const failed = results.find((result) => result.status === 'rejected');
         if (failed) throw failed.reason;
@@ -185,6 +203,7 @@ export async function copyPersistentTree(source, destination, concurrency = 1) {
           join(source, name),
           join(destination, name),
           concurrency,
+          selection && { ...selection, path: `${selection.path}/${name}` },
         );
     }
   } else if (info.isFile()) {
@@ -216,12 +235,17 @@ export async function copyPersistentTree(source, destination, concurrency = 1) {
   }
 }
 
-async function treeSize(path) {
+async function treeSize(path, selection = null) {
   const value = await lstat(path);
   if (value.isDirectory()) {
+    if (selection && excludesBackupDirectory(selection.policy, selection.path))
+      return 0;
     let total = 0;
     for (const name of await readdir(path))
-      total += await treeSize(join(path, name));
+      total += await treeSize(
+        join(path, name),
+        selection && { ...selection, path: `${selection.path}/${name}` },
+      );
     return total;
   }
   return value.isFile() ? value.size : 0;
@@ -343,6 +367,11 @@ export class TransactionalUpdater {
         images: operation.images,
         previousImages: operation.previousImages,
         backupRetained: operation.backupComplete === true,
+        backupPolicy: recordedBackupPolicy(operation),
+        rollbackAvailable:
+          operation.status === 'succeeded' &&
+          (operation.backupComplete === true ||
+            recordedBackupPolicy(operation) === DEV_NO_BACKUP),
         mode: operation.mode ?? 'standard',
       },
     };
@@ -399,10 +428,17 @@ export class TransactionalUpdater {
           }
         }
       }
+      let policy = null;
+      try {
+        if (operation) policy = recordedBackupPolicy(operation);
+      } catch {
+        /* Unknown policies stay protected. */
+      }
       const valid =
         operation?.id === id &&
         operation.stack === this.manifest.stack &&
-        operation.environment === this.manifest.environment;
+        operation.environment === this.manifest.environment &&
+        policy !== null;
       const blocked =
         this.busy || (this.current && !terminal.has(this.current.status));
       const measurable = valid && terminal.has(operation.status) && !blocked;
@@ -412,6 +448,7 @@ export class TransactionalUpdater {
       const sizeBytes = measured?.bytes ?? null;
       backups.push({
         id,
+        backupPolicy: valid ? policy : null,
         path: hostDirectory ? join(hostDirectory, id, 'backup') : null,
         managerPath: join(directory, 'backup'),
         sizeBytes,
@@ -530,6 +567,7 @@ export class TransactionalUpdater {
     )
       throw new Error('managerBackupInvalid');
     const path = join(directory, 'backup');
+    recordedBackupPolicy(operation);
     const backup = await lstat(path).catch(() => null);
     if (backup && (!backup.isDirectory() || backup.isSymbolicLink()))
       throw new Error('managerBackupInvalid');
@@ -756,10 +794,12 @@ export class TransactionalUpdater {
       if (!(await exists(path)) || (await lstat(path)).isSymbolicLink())
         blockers.push(`persistent:${name}:updateUnsafePath`);
     }
+    const backupPolicy = environmentBackupPolicy(this.manifest);
     const stable = {
       stack: this.manifest.stack,
       environment: this.manifest.environment,
       mode,
+      backupPolicy,
       images,
       containers,
       cliProtection: cliProtectionFingerprint(this.configuration),
@@ -769,8 +809,12 @@ export class TransactionalUpdater {
       ...stable,
       fingerprint: digest(stable),
       applicable: !stable.blockers.length && !this.busy,
-      backupScope: dataEntries,
-      excludedFromDataRollback: ['/appdata'],
+      backupScope: backupEntries(backupPolicy),
+      excludedFromDataRollback:
+        backupPolicy === DEV_NO_BACKUP
+          ? ['all-data']
+          : ['/appdata', 'logs', 'regenerable-caches-and-dependencies'],
+      confirmation: updateConfirmation(backupPolicy),
       busy: this.busy,
     };
   }
@@ -782,7 +826,10 @@ export class TransactionalUpdater {
     mode = 'standard',
   }) {
     if (this.busy) throw new Error('managerOperationInProgress');
-    if (confirmation !== 'UPDATE_WITH_ROLLBACK')
+    if (
+      confirmation !==
+      updateConfirmation(environmentBackupPolicy(this.manifest))
+    )
       throw new Error('updateConfirmationRequired');
     this.busy = true;
     try {
@@ -807,6 +854,7 @@ export class TransactionalUpdater {
         phase: 'preparing',
         startedAt: new Date().toISOString(),
         mode,
+        backupPolicy: plan.backupPolicy,
         images,
         previousImages: {},
         containers: [],
@@ -913,12 +961,18 @@ export class TransactionalUpdater {
           backupName: `${item.name}-rollback-${this.current.id}`,
         });
       }
-      let bytes = 0;
-      for (const name of dataEntries)
-        bytes += await treeSize(join(this.configuration.hostStatePath, name));
-      const space = await statfs(this.directory);
-      if (space.bavail * space.bsize < bytes * 2.2 + 64 * 1024 ** 2)
-        throw new Error('updateInsufficientBackupSpace');
+      const entries = backupEntries(recordedBackupPolicy(this.current));
+      if (entries.length) {
+        let bytes = 0;
+        for (const name of entries)
+          bytes += await treeSize(
+            join(this.configuration.hostStatePath, name),
+            { policy: plan.backupPolicy, path: name },
+          );
+        const space = await statfs(this.directory);
+        if (space.bavail * space.bsize < bytes * 2.2 + 64 * 1024 ** 2)
+          throw new Error('updateInsufficientBackupSpace');
+      }
       await this.save('stopping');
       const stopped = await Promise.allSettled(
         this.stopOrder().map((item) => this.docker.stopContainer(item.id)),
@@ -927,16 +981,19 @@ export class TransactionalUpdater {
         (result) => result.status === 'rejected',
       );
       if (stopFailure) throw stopFailure.reason;
-      await this.save('backingUp');
-      const backup = join(this.directory, this.current.id, 'backup');
-      await mkdir(backup, { recursive: true, mode: 0o700 });
-      for (const name of dataEntries)
-        await copyPersistentTree(
-          join(this.configuration.hostStatePath, name),
-          join(backup, name),
-          plan.mode === 'dev-fast' ? 8 : 1,
-        );
-      this.current.backupComplete = true;
+      if (entries.length) {
+        await this.save('backingUp');
+        const backup = join(this.directory, this.current.id, 'backup');
+        await mkdir(backup, { recursive: true, mode: 0o700 });
+        for (const name of entries)
+          await copyPersistentTree(
+            join(this.configuration.hostStatePath, name),
+            join(backup, name),
+            1,
+            { policy: plan.backupPolicy, path: name },
+          );
+        this.current.backupComplete = true;
+      }
       await this.save('replacing');
       for (const item of this.current.containers) {
         await this.docker.renameContainer(item.id, item.backupName);
@@ -1030,7 +1087,7 @@ export class TransactionalUpdater {
     await this.save('complete', 'succeeded');
     // Cleanup failure must never turn a healthy committed update into a rollback.
     try {
-      await this.#enforceBackupRetention();
+      if (this.current.backupComplete) await this.#enforceBackupRetention();
     } catch {
       console.error(
         'Manager backup retention cleanup failed; backups retained',
@@ -1055,12 +1112,13 @@ export class TransactionalUpdater {
 
   async requestRollback({ confirmation, operationId }) {
     if (this.busy) throw new Error('managerOperationInProgress');
-    if (confirmation !== 'ROLLBACK_WITH_DATA_RESTORE')
+    const policy = this.current ? recordedBackupPolicy(this.current) : null;
+    if (confirmation !== rollbackConfirmation(policy))
       throw new Error('updateConfirmationRequired');
     if (
       this.current?.id !== operationId ||
       this.current.status !== 'succeeded' ||
-      !this.current.backupComplete
+      (!this.current.backupComplete && policy !== DEV_NO_BACKUP)
     )
       throw new Error('updateRollbackUnavailable');
     this.busy = true;
@@ -1152,7 +1210,7 @@ export class TransactionalUpdater {
       )
         throw new Error('updateJournalInvalid');
       await mkdir(join(base, 'quarantine'), { recursive: true, mode: 0o700 });
-      for (const name of dataEntries) {
+      for (const name of backupEntries(recordedBackupPolicy(this.current))) {
         if (this.current.restored.includes(name)) continue;
         await restorePersistentEntry(
           this.configuration.hostStatePath,
@@ -1209,6 +1267,7 @@ export class TransactionalUpdater {
         !/^[a-f0-9-]{36}$/.test(this.current.id)
       )
         throw new Error('updateJournalInvalid');
+      recordedBackupPolicy(this.current);
       if (terminal.has(this.current.status)) return;
       try {
         await this.rollback();

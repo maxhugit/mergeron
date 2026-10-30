@@ -19,7 +19,7 @@ import {
   type ManagerUpdateOperation,
 } from './manager-status-api';
 
-const stages = [
+const allStages = [
   'preparing',
   'stopping',
   'backingUp',
@@ -121,6 +121,10 @@ export function ManagerUpdateProgressDialog({
     if (operation && !monitoringPaused)
       retainManagerUpdateSnapshot(session, operation);
   }, [operation, session, monitoringPaused]);
+  const stages =
+    operation?.backupPolicy === 'development-none-v1'
+      ? allStages.filter((item) => item !== 'backingUp')
+      : allStages;
   const stage = stages.indexOf(phase);
   const completed = operation?.status === 'succeeded';
   const interrupted = operation?.status === 'recoveryRequired';
@@ -261,6 +265,11 @@ export function ManagerUpdateProgressDialog({
             ))}
           </ol>
         </section>
+        {operation?.backupPolicy === 'development-none-v1' && (
+          <p className="text-xs text-muted-foreground">
+            {t('managerDevelopmentNoBackup')}
+          </p>
+        )}
         {operation?.backupRetained && (
           <p className="text-xs text-muted-foreground">
             {t('managerUpdateBackupRetained')}

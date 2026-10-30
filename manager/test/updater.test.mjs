@@ -14,15 +14,19 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { TransactionalUpdater } from '../src/updater.mjs';
+import { TransactionalUpdater, copyPersistentTree } from '../src/updater.mjs';
 import { scopeManifest } from '../src/inventory.mjs';
+import {
+  recordedBackupPolicy,
+  rollbackConfirmation,
+} from '../src/backup-policy.mjs';
 
 const manifest = scopeManifest(
   JSON.parse(
     await readFile(new URL('../stack-manifest.json', import.meta.url)),
   ),
-  'mergeron-dev',
-  'development',
+  'mergeron',
+  'production',
 );
 const images = { application: 'ghcr.io/maxhugit/mergeron:next' };
 
@@ -146,7 +150,7 @@ class Docker {
   }
 }
 
-async function fixture(t, environment = 'development') {
+async function fixture(t, environment = 'production') {
   const scopedManifest = scopeManifest(
     JSON.parse(
       await readFile(new URL('../stack-manifest.json', import.meta.url)),
@@ -185,14 +189,14 @@ async function begin(updater) {
   assert.deepEqual(plan.blockers, []);
   await updater.begin({
     images,
-    confirmation: 'UPDATE_WITH_ROLLBACK',
+    confirmation: plan.confirmation,
     expectedFingerprint: plan.fingerprint,
   });
   await updater.task;
 }
 
 test('DEV visual image migrates only target seccomp and restores the exact old profile on rollback', async (t) => {
-  const { updater, docker } = await fixture(t);
+  const { updater, docker } = await fixture(t, 'development');
   const oldProfile = JSON.parse(
     await readFile(
       new URL('../../deployment/config/seccomp-bwrap.json', import.meta.url),
@@ -238,7 +242,7 @@ test('DEV visual image migrates only target seccomp and restores the exact old p
   );
   await updater.requestRollback({
     operationId: updater.current.id,
-    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+    confirmation: rollbackConfirmation(recordedBackupPolicy(updater.current)),
   });
   await updater.task;
   assert.equal(updater.current.status, 'rolledBack');
@@ -461,7 +465,7 @@ for (const [environment, local] of [
   });
 
 test('fast mode is rejected for production, unknown environments and production stack names', async (t) => {
-  const { updater } = await fixture(t);
+  const { updater } = await fixture(t, 'development');
   const original = updater.manifest;
   for (const change of [
     { environment: 'production' },
@@ -479,8 +483,8 @@ test('fast mode is rejected for production, unknown environments and production 
   await assert.rejects(updater.plan(images, 'unknown'), /updateInvalidMode/);
 });
 
-test('fast dev update preserves a complete backup and full data rollback', async (t) => {
-  const { root, updater } = await fixture(t);
+test('fast dev update skips backup and inventory and rolls back images without reverting data', async (t) => {
+  const { root, updater } = await fixture(t, 'development');
   for (let n = 0; n < 24; n++)
     await writeFile(join(root, 'workspace', `file-${n}`), `original-${n}`, {
       mode: 0o640,
@@ -492,7 +496,7 @@ test('fast dev update preserves a complete backup and full data rollback', async
     updater.begin({
       images,
       mode: 'standard',
-      confirmation: 'UPDATE_WITH_ROLLBACK',
+      confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
       expectedFingerprint: plan.fingerprint,
     }),
     /updatePlanChanged/,
@@ -500,41 +504,41 @@ test('fast dev update preserves a complete backup and full data rollback', async
   await updater.begin({
     images,
     mode: 'dev-fast',
-    confirmation: 'UPDATE_WITH_ROLLBACK',
+    confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
     expectedFingerprint: plan.fingerprint,
   });
   await updater.task;
   assert.equal(updater.current.status, 'succeeded');
-  assert.equal(updater.current.backupComplete, true);
+  assert.equal(updater.current.backupComplete, false);
+  assert.equal(plan.backupPolicy, 'development-none-v1');
+  assert.deepEqual(plan.backupScope, []);
+  assert.ok(
+    !updater.current.events.some((event) => event.phase === 'backingUp'),
+  );
+  await assert.rejects(
+    lstat(join(updater.directory, updater.current.id, 'backup')),
+    { code: 'ENOENT' },
+  );
   for (let n = 0; n < 24; n++)
     assert.equal(
-      await readFile(
-        join(
-          updater.directory,
-          updater.current.id,
-          'backup',
-          'workspace',
-          `file-${n}`,
-        ),
-        'utf8',
-      ),
+      await readFile(join(root, 'workspace', `file-${n}`), 'utf8'),
       `original-${n}`,
     );
   await writeFile(join(root, 'home', 'database'), 'modified-after-update');
   await updater.requestRollback({
     operationId: updater.current.id,
-    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+    confirmation: 'ROLLBACK_IMAGES_ONLY',
   });
   await updater.task;
   assert.equal(updater.current.status, 'rolledBack');
   assert.equal(
     await readFile(join(root, 'home', 'database'), 'utf8'),
-    'original',
+    'modified-after-update',
   );
 });
 
 test('fast mode reuses only a verified local immutable image, never a mutable tag', async (t) => {
-  const { updater, docker } = await fixture(t);
+  const { updater, docker } = await fixture(t, 'development');
   const immutable = {
     application: `ghcr.io/maxhugit/mergeron@sha256:${'b'.repeat(64)}`,
   };
@@ -547,7 +551,7 @@ test('fast mode reuses only a verified local immutable image, never a mutable ta
   await updater.begin({
     images: immutable,
     mode: 'dev-fast',
-    confirmation: 'UPDATE_WITH_ROLLBACK',
+    confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
     expectedFingerprint: plan.fingerprint,
   });
   await updater.task;
@@ -557,7 +561,7 @@ test('fast mode reuses only a verified local immutable image, never a mutable ta
 
 test('fast mode still pulls mutable tags and missing immutable images', async (t) => {
   for (const mutable of [true, false]) {
-    const { updater, docker } = await fixture(t);
+    const { updater, docker } = await fixture(t, 'development');
     const requested = mutable
       ? images
       : { application: `ghcr.io/maxhugit/mergeron@sha256:${'b'.repeat(64)}` };
@@ -579,7 +583,7 @@ test('fast mode still pulls mutable tags and missing immutable images', async (t
     await updater.begin({
       images: requested,
       mode: 'dev-fast',
-      confirmation: 'UPDATE_WITH_ROLLBACK',
+      confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
       expectedFingerprint: plan.fingerprint,
     });
     await updater.task;
@@ -589,6 +593,186 @@ test('fast mode still pulls mutable tags and missing immutable images', async (t
       1,
     );
   }
+});
+
+for (const mode of ['standard', 'dev-fast']) {
+  test(`development ${mode} does not traverse source trees, create backups or prune old backups`, async (t) => {
+    const { root, updater, options, docker } = await fixture(t, 'development');
+    const unreadable = join(root, 'workspace', 'do-not-traverse');
+    await mkdir(unreadable, { mode: 0o000 });
+    const old = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    await mkdir(join(options.directory, old, 'backup'), { recursive: true });
+    await writeFile(
+      join(options.directory, `${old}.json`),
+      JSON.stringify({
+        id: old,
+        stack: 'mergeron-dev',
+        environment: 'development',
+        status: 'succeeded',
+        backupComplete: true,
+        startedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    );
+    await updater.setBackupRetention({ maxBackups: 1 });
+    const plan = await updater.plan(images, mode);
+    await assert.rejects(
+      updater.begin({
+        images,
+        mode,
+        confirmation: 'UPDATE_WITH_ROLLBACK',
+        expectedFingerprint: plan.fingerprint,
+      }),
+      /ConfirmationRequired/,
+    );
+    try {
+      await updater.begin({
+        images,
+        mode,
+        confirmation: plan.confirmation,
+        expectedFingerprint: plan.fingerprint,
+      });
+      await updater.task;
+    } finally {
+      await chmod(unreadable, 0o700);
+    }
+    assert.equal(updater.current.status, 'succeeded');
+    assert.equal(updater.status().operation.backupRetained, false);
+    assert.equal(updater.status().operation.rollbackAvailable, true);
+    assert.ok(
+      (await lstat(join(options.directory, old, 'backup'))).isDirectory(),
+    );
+    assert.ok(
+      !updater.current.events.some((event) => event.phase === 'backingUp'),
+    );
+    assert.ok([...docker.values.values()].every((c) => c.State.Running));
+  });
+}
+
+test('production backs up essential state, never regenerable trees, and restores the recorded scope', async (t) => {
+  const { root, updater } = await fixture(t);
+  const keep = [
+    'home/.codex/sessions/conversation.jsonl',
+    'workspace/project/documents/node_modules/document.txt',
+    'workspace/project/livrables/result.pptx',
+    'workspace/.mergeron-system/project/history/version.pptx',
+    'workspace/.mergeron-agent-drafts/project/draft.txt',
+    'workspace/project/sources/repo/.git/objects/local-commit',
+    'workspace/project/sources/repo/unpublished.js',
+    'workspace/project/sources/repo/dist/manual.txt',
+  ];
+  const skip = [
+    'home/.cache/download',
+    'workspace/project/sources/repo/node_modules/package/index.js',
+    'workspace/project/sources/repo/.build-cache/result',
+    'workspace/.mergeron-system/project/previews/run/source.tar',
+    'logs/application.log',
+  ];
+  for (const name of [...keep, ...skip]) {
+    await mkdir(join(root, name, '..'), { recursive: true });
+    await writeFile(join(root, name), name, { mode: 0o600 });
+  }
+  await begin(updater);
+  const backup = join(updater.directory, updater.current.id, 'backup');
+  assert.equal(updater.current.backupPolicy, 'production-essential-v1');
+  for (const name of keep)
+    assert.equal(await readFile(join(backup, name), 'utf8'), name);
+  for (const name of skip)
+    await assert.rejects(lstat(join(backup, name)), { code: 'ENOENT' });
+  await writeFile(join(root, 'home/database'), 'migrated');
+  await writeFile(join(root, 'logs/application.log'), 'new-log');
+  await updater.requestRollback({
+    operationId: updater.current.id,
+    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'rolledBack');
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'original');
+  assert.equal(
+    await readFile(join(root, 'logs/application.log'), 'utf8'),
+    'new-log',
+  );
+  for (const name of keep)
+    assert.equal(await readFile(join(root, name), 'utf8'), name);
+});
+
+test('a failed development health check returns to old images without pretending to restore migrated data', async (t) => {
+  const { root, updater, docker, options } = await fixture(t, 'development');
+  docker.unhealthy = true;
+  await begin(updater);
+  assert.equal(updater.current.status, 'rolledBack');
+  assert.equal(updater.status().operation.backupRetained, false);
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'migrated');
+  const recovered = new TransactionalUpdater(options);
+  await recovered.recover();
+  assert.equal(
+    recovered.status().operation.backupPolicy,
+    'development-none-v1',
+  );
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'migrated');
+});
+
+test('recovery of a historical full backup still restores logs and caches under the new defaults', async (t) => {
+  const { root, updater, options } = await fixture(t);
+  await writeFile(join(root, 'logs/previous.log'), 'old-log');
+  await begin(updater);
+  const backup = join(updater.directory, updater.current.id, 'backup');
+  await copyPersistentTree(join(root, 'logs'), join(backup, 'logs'));
+  await mkdir(join(backup, 'home/.cache'));
+  await writeFile(join(backup, 'home/.cache/historical'), 'old-cache');
+  delete updater.current.backupPolicy; // A journal written before versioned policies existed.
+  await writeFile(
+    join(updater.directory, 'transaction.json'),
+    JSON.stringify(updater.current),
+  );
+  await writeFile(join(root, 'logs/previous.log'), 'new-log');
+  const recovered = new TransactionalUpdater(options);
+  await recovered.recover();
+  assert.equal(recovered.status().operation.backupPolicy, 'legacy-full-v1');
+  await recovered.requestRollback({
+    operationId: recovered.current.id,
+    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+  });
+  await recovered.task;
+  assert.equal(recovered.current.status, 'rolledBack');
+  assert.equal(
+    await readFile(join(root, 'logs/previous.log'), 'utf8'),
+    'old-log',
+  );
+  assert.equal(
+    await readFile(join(root, 'home/.cache/historical'), 'utf8'),
+    'old-cache',
+  );
+});
+
+test('restart of a development transaction recovers images only; a corrupt policy blocks recovery', async (t) => {
+  const { root, updater, options, docker } = await fixture(t, 'development');
+  await begin(updater);
+  await writeFile(join(root, 'home/database'), 'migration-kept');
+  updater.current.committed = false;
+  updater.current.status = 'running';
+  updater.current.phase = 'checkingHealth';
+  await writeFile(
+    join(updater.directory, 'transaction.json'),
+    JSON.stringify(updater.current),
+  );
+  const recovered = new TransactionalUpdater(options);
+  await recovered.recover();
+  assert.equal(recovered.current.status, 'rolledBack');
+  assert.equal(
+    await readFile(join(root, 'home/database'), 'utf8'),
+    'migration-kept',
+  );
+  recovered.current.backupPolicy = 'unknown-policy';
+  await writeFile(
+    join(updater.directory, 'transaction.json'),
+    JSON.stringify(recovered.current),
+  );
+  const calls = docker.calls.length;
+  await assert.rejects(
+    new TransactionalUpdater(options).recover(),
+    /BackupPolicyInvalid/,
+  );
+  assert.equal(docker.calls.length, calls);
 });
 
 test('retains ten backups by default and persists a validated stack-scoped limit', async (t) => {

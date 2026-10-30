@@ -66,6 +66,35 @@ function setup(value = status) {
   );
 }
 
+it('keeps old backups manageable but does not offer a retention setting when Dev creates no new backups', async () => {
+  setup({
+    ...status,
+    backupPolicy: 'development-none-v1',
+    capabilities: { backupManagement: true, backupRetention: true },
+  });
+  expect(await screen.findByText(/Dev: no data backup/)).toBeVisible();
+  expect(
+    await screen.findByRole('button', { name: 'Delete backup' }),
+  ).toBeVisible();
+  expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  expect(api.retention).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['production-essential-v1', 'Essential data'],
+  ['legacy-full-v1', 'Historical full backup'],
+])(
+  'shows the recorded %s scope for an individual backup',
+  async (backupPolicy, label) => {
+    api.list.mockResolvedValue({
+      backups: [{ ...backup, backupPolicy }],
+      totalSizeBytes: 2048,
+    });
+    setup();
+    expect(await screen.findByText(label)).toBeVisible();
+  },
+);
+
 it('loads ten by default and saves a validated limit without deleting any backup', async () => {
   setup({
     ...status,
