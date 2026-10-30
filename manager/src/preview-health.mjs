@@ -45,11 +45,15 @@ export function relayReadiness(health, now = Date.now()) {
   }
 }
 
-export function probePreview({ runId, domain, path = '/', token }) {
+export function probePreview({ runId, domain, publicHost, path = '/', token }) {
+  publicHost ??= `${runId}.${domain}`;
   if (
     !contract.RUN_ID.test(runId) ||
     typeof domain !== 'string' ||
     !/^(?:[a-z0-9-]+\.)+[a-z]{2,63}$/.test(domain) ||
+    typeof publicHost !== 'string' ||
+    !publicHost.endsWith('.' + domain) ||
+    !contract.RUN_ID.test(publicHost.slice(0, -domain.length - 1)) ||
     typeof token !== 'string' ||
     !/^[a-f0-9]{64}$/.test(token)
   )
@@ -75,7 +79,7 @@ export function probePreview({ runId, domain, path = '/', token }) {
         method: 'GET',
         path,
         headers: {
-          host: `${runId}.${domain}`,
+          host: publicHost,
           'x-mergeron-preview-transport': token,
           'cache-control': 'no-cache',
         },

@@ -311,7 +311,7 @@ try {
   );
   assert.equal(
     verifiedReady.url,
-    'https://' + input.runId + '.preview.example.test/',
+    'https://' + input.previewId + '.preview.example.test/',
   );
   results.push('HTTP readiness verified by Manager before advertising the URL');
   const grant = {
@@ -452,6 +452,80 @@ try {
     },
   });
   assert.ok(!forged.text.includes('Python project B'));
+  console.log('Fixture phase: recreate at the same public URL');
+  await manager.stop(input.runId);
+  const rebuiltSource = snapshot('node-project', {
+    'server.js': server,
+    'index.html': '<h1>Recreated Node project A</h1>',
+  });
+  const rebuiltInput = {
+    ...input,
+    runId: rebuiltSource.snapshotId,
+    sourceSha: rebuiltSource.sourceSha,
+    // This phase tests recreation/routing, not a second cold package download.
+    profile: { ...input.profile, install: '' },
+  };
+  await manager.start(rebuiltInput);
+  const rebuiltTransport = await manager.transport(rebuiltInput.runId);
+  assert.equal(rebuiltTransport.publicHost, host);
+  assert.notEqual(rebuiltTransport.endpoint, transport.endpoint);
+  await ready(
+    rebuiltTransport.endpoint,
+    {
+      headers: { host, 'x-mergeron-preview-transport': rebuiltTransport.token },
+    },
+    'Recreated Node project A',
+  );
+  for (
+    let i = 0;
+    i < 30 && !(await manager.status(rebuiltInput.runId)).ready;
+    i++
+  )
+    await sleep(200);
+  assert.equal(
+    (await manager.status(rebuiltInput.runId)).url,
+    verifiedReady.url,
+  );
+  assert.equal(
+    (await request('http://127.0.0.1:8173/', { headers })).status,
+    403,
+  );
+  const reopened = await gateway.mint({ ...grant, runId: rebuiltInput.runId });
+  assert.equal(new URL(reopened.url).origin, new URL(minted.url).origin);
+  const reopenedToken = new URLSearchParams(
+    new URL(reopened.url).hash.slice(1),
+  ).get('mergeron-preview');
+  const reopenedSession = await request(
+    'http://127.0.0.1:8173/.__mergeron_preview/session',
+    {
+      method: 'POST',
+      headers: {
+        host,
+        origin: 'https://' + host,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ token: reopenedToken }),
+    },
+  );
+  assert.equal(reopenedSession.status, 204);
+  headers.cookie = reopenedSession.headers['set-cookie'][0].split(';')[0];
+  await ready(
+    'http://127.0.0.1:8173/',
+    { headers },
+    'Recreated Node project A',
+  );
+  await websocket('http://127.0.0.1:8173/hmr', headers);
+  assert.equal(
+    (
+      await request('http://127.0.0.1:8173/sw.js', {
+        headers: { ...headers, 'service-worker': 'script' },
+      })
+    ).status,
+    403,
+  );
+  results.push(
+    'Stop/recreate retains the public URL, replaces the relay and requires a new grant; WebSocket works and persistent service workers are refused',
+  );
   authorized = false;
   assert.equal(
     (await request('http://127.0.0.1:8173/', { headers })).status,

@@ -86,6 +86,7 @@ test('probe process rejects invalid control metadata without outputting diagnost
 });
 const input = {
   runId: '22222222-2222-4222-8222-222222222222',
+  publicHost: '11111111-1111-4111-8111-111111111111.preview.example.org',
   domain: 'preview.example.org',
   path: '/health',
   token: 'a'.repeat(64),
@@ -112,7 +113,7 @@ test('HTTP readiness uses only the fixed relay with its private capability, with
   assert.equal(observed.hostname, 'pv-22222222222242228222222222222222-relay');
   assert.equal(observed.port, 8180);
   assert.equal(observed.path, '/health');
-  assert.equal(observed.headers.host, input.runId + '.' + input.domain);
+  assert.equal(observed.headers.host, input.publicHost);
   assert.equal(observed.headers['x-mergeron-preview-transport'], input.token);
 });
 test('HTTP errors and unavailable transport never claim readiness', async () => {
@@ -152,6 +153,11 @@ test('cannot probe an arbitrary host, URL, invalid target or transport token', a
     { ...input, runId: 'arbitrary-host' },
     { ...input, token: '' },
     { ...input, domain: 'bad@host' },
+    {
+      ...input,
+      publicHost: '11111111-1111-4111-8111-111111111111.other.example',
+    },
+    { ...input, publicHost: 'arbitrary.preview.example.org' },
   ])
     assert.deepEqual(await probePreview(value), {
       ready: false,

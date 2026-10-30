@@ -6,6 +6,19 @@ fichiers actuels de sa copie de travail, y compris les changements non commités
 Elle ne publie aucun port Docker sur l’hôte et ne partage ni base de production,
 ni connexion Codex, ni jeton Git, ni dossier personnel de Mergeron.
 
+L’identifiant public est permanent pour un agent de travail : il est conservé
+après un arrêt, une recréation ou une nouvelle recette. L’URL de base reste donc
+identique ; le chemin initial peut changer avec la recette. Les ressources
+Docker et autorisations utilisent toujours un nouvel identifiant d’exécution.
+Un autre agent conserve sa propre origine. Les anciennes instances déjà lancées
+avec une adresse par exécution restent utilisables jusqu’à leur arrêt normal.
+
+Après une recréation, rouvrir l’aperçu depuis Mergeron pour autoriser la nouvelle
+instance. Les anciens tickets, sessions de passerelle et cookies applicatifs
+ne donnent pas accès au nouveau runtime. Les service workers persistants sont
+refusés sur ces origines ; les Web Workers applicatifs et WebSocket restent
+disponibles. Aucune identité Mergeron ou Authentik n’est transmise au projet.
+
 Le service reste désactivé par défaut. Il convient aux projets capables de
 démarrer dans une image Linux autorisée, avec un port HTTP principal. Le profil
 du projet définit ses commandes et ses services ; aucun lancement n’est codé
@@ -97,6 +110,16 @@ un montage hôte, une capacité Linux ou un réseau Docker arbitraire.
 Docker 28 ou plus récent est requis pour les ponts internes en mode `isolated`.
 Un pont simplement `internal` conserve une adresse de passerelle sur l’hôte et
 ne remplace pas cette protection. Le Manager refuse de se rabattre sur ce mode.
+
+Le Manager lui-même dispose de 512 Mio dans les modèles Compose et Unraid. Cette
+limite est distincte de la RAM du runtime : il doit pouvoir valider et transférer
+les archives de sources bornées tout en répondant à ses sondes de santé. Pour
+une installation existante limitée à 128 Mio, reporter ce réglage dans Docker
+et dans le modèle persistant ; les mises à jour conservent les limites existantes.
+Ne pas modifier le réseau `none`, les capacités, le système racine en lecture
+seule ou le filtrage pour corriger une saturation mémoire. Un Manager arrêté
+avec `OOMKilled=true` et un code 137 explique un socket indisponible, pas un
+échec DNS de l’installation des dépendances.
 
 ### Dépendances Node et proxy du runtime
 

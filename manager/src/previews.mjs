@@ -486,6 +486,14 @@ export class PreviewManager {
         fail('PREVIEW_REQUEST_CONFLICT');
       return this.status(previous.runId);
     }
+    if (
+      [...this.records.values()].some(
+        (r) =>
+          r.previewId === input.previewId &&
+          (r.projectId !== input.projectId || r.agentId !== input.agentId),
+      )
+    )
+      fail('PREVIEW_IDENTITY_CHANGED');
     const active = [...this.records.values()].filter(
       (r) => r.objects.length || ['starting', 'running'].includes(r.state),
     );
@@ -513,7 +521,8 @@ export class PreviewManager {
       entries: [],
       updateMode: profile.updateMode,
       path: profile.path,
-      publicHost: input.runId + '.' + this.domain,
+      // Stable per work agent; run IDs still isolate resources and grants.
+      publicHost: input.previewId + '.' + this.domain,
     };
     try {
       this.save(r);
@@ -756,6 +765,7 @@ export class PreviewManager {
             `MERGERON_PREVIEW_TARGET=http://app:${profile.port}`,
             `MERGERON_PREVIEW_TRANSPORT_TOKEN=${token}`,
             `MERGERON_PREVIEW_PUBLIC_HOST=${r.publicHost}`,
+            `MERGERON_PREVIEW_RUN_ID=${r.runId}`,
             `MERGERON_PREVIEW_HEALTH_PATH=${r.path}`,
           ],
           Healthcheck: {

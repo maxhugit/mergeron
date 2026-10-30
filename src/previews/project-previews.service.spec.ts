@@ -419,6 +419,53 @@ describe('project-scoped generic preview service', () => {
     ).rejects.toThrow();
     expect(f.request.mock.calls.some(([op]) => op === 'start')).toBe(false);
   });
+  it('retains the agent preview identity and public URL across stop and restart', async () => {
+    const f = delegated();
+    await f.run(() => f.service.tool('p', 't', f.input, () => {}));
+    let live: Record<string, unknown> = {};
+    f.request.mockImplementation((operation, input) => {
+      if (operation === 'capabilities')
+        return Promise.resolve({
+          enabled: true,
+          domain: 'preview.example.org',
+          runtimes: [{ id: 'node' }],
+        });
+      if (operation === 'start') live = { ...input, state: 'running' };
+      if (operation === 'stop') live = { ...live, state: 'stopped' };
+      return Promise.resolve({
+        projectId: live.projectId,
+        agentId: live.agentId,
+        runId: live.runId,
+        previewId: live.previewId,
+        state: live.state,
+        ready: live.state === 'running',
+        httpStatus: 200,
+        url: `https://${String(live.previewId)}.preview.example.org/`,
+        cleanupComplete: live.state === 'stopped',
+      });
+    });
+    const first = await f.run(() => f.service.start('p', 't', 'first-run'));
+    const stopped = await f.run(() => f.service.stop('p', 't'));
+    expect(stopped.preview?.cleanup?.runtimeResourcesRemoved).toBe(true);
+    const next = await f.run(() => f.service.start('p', 't', 'second-run'));
+    expect(next.preview?.id).toBe(first.preview?.id);
+    expect(next.preview?.runId).not.toBe(first.preview?.runId);
+    expect(next.preview?.url).toBe(first.preview?.url);
+    f.config.set('MERGERON_PREVIEWS_ENABLED', 'true');
+    Object.assign(f.service, { gateway: { server: { listening: true } } });
+    const discovery = await f.run(() => f.service.discovery('p', 't'));
+    expect(discovery.preview?.url).toBe(next.preview?.url);
+  });
+  it('does not claim that authorized runtimes are missing when the Manager cannot be contacted', async () => {
+    const f = delegated();
+    f.request.mockRejectedValue(new Error('PREVIEW_MANAGER_UNAVAILABLE'));
+    const discovery = await f.run(() => f.service.discovery('p', 't'));
+    expect(discovery.available).toBe(false);
+    expect(discovery.missingConfiguration).toContain('manager_unavailable');
+    expect(discovery.missingConfiguration).not.toContain(
+      'agent_runtimes_missing',
+    );
+  });
 
   it('distinguishes missing configuration from an absent instance without launching', async () => {
     const f = setup();
@@ -830,10 +877,10 @@ describe('project-scoped generic preview service', () => {
         runId,
         state: 'running',
         ready: true,
-        url: 'https://' + runId + '.preview.example.org/',
+        url: 'https://' + previewId + '.preview.example.org/',
         endpoint: 'http://pv-' + runId.replaceAll('-', '') + '-relay:8180',
         token: 'a'.repeat(64),
-        publicHost: runId + '.preview.example.org',
+        publicHost: previewId + '.preview.example.org',
         expiresAt: Date.now() + 60000,
       }),
     );
@@ -846,7 +893,9 @@ describe('project-scoped generic preview service', () => {
     });
     Object.assign(f.service, { gateway });
     const opened = await f.run(() => f.service.open('p', 't'));
-    expect(opened.url).toContain('https://' + runId + '.preview.example.org/');
+    expect(opened.url).toContain(
+      'https://' + previewId + '.preview.example.org/',
+    );
     f.identity.active = false;
     await expect(f.run(() => f.service.open('p', 't'))).rejects.toThrow();
     await gateway.close();

@@ -279,7 +279,7 @@ test('starts a generic source snapshot with no host mounts, published ports, roo
   assert.equal(result.state, 'running');
   assert.equal(
     result.url,
-    'https://' + f.input.runId + '.preview.example.org/',
+    'https://' + f.input.previewId + '.preview.example.org/',
   );
   assert.ok(!('token' in result));
   assert.ok(!('endpoint' in result));
@@ -288,6 +288,16 @@ test('starts a generic source snapshot with no host mounts, published ports, roo
   assert.equal(transport.endpoint, `http://${alias}:8180`);
   const relay = f.docker.created.find(
     (c) => c.Config.Labels['io.mergeron.component'] === 'preview-relay',
+  );
+  assert.ok(
+    relay.Config.Env.includes('MERGERON_PREVIEW_RUN_ID=' + f.input.runId),
+  );
+  assert.ok(
+    relay.Config.Env.includes(
+      'MERGERON_PREVIEW_PUBLIC_HOST=' +
+        f.input.previewId +
+        '.preview.example.org',
+    ),
   );
   assert.ok(
     Object.values(relay.Config.NetworkingConfig.EndpointsConfig).every((n) =>
@@ -524,8 +534,37 @@ test('does not announce a URL until the application answers HTTP, not only Docke
   relay.State.Health = f.docker.health();
   const ready = await f.manager.status(f.input.runId);
   assert.equal(ready.ready, true);
-  assert.equal(ready.url, `https://${f.input.runId}.preview.example.org/`);
+  assert.equal(ready.url, `https://${f.input.previewId}.preview.example.org/`);
   await f.manager.stop(f.input.runId);
+});
+test('recreating an agent preview retains its public URL but replaces private runtime resources', async () => {
+  const f = await fixture();
+  const first = await f.manager.start(f.input);
+  const oldTransport = await f.manager.transport(f.input.runId);
+  await f.manager.stop(f.input.runId);
+  const next = f.exportSource();
+  const input = {
+    ...f.input,
+    runId: next.snapshotId,
+    sourceSha: next.sourceSha,
+  };
+  const recreated = await f.manager.start(input);
+  const transport = await f.manager.transport(input.runId);
+  assert.equal(recreated.url, first.url);
+  assert.equal(transport.publicHost, oldTransport.publicHost);
+  assert.notEqual(transport.endpoint, oldTransport.endpoint);
+  assert.notEqual(transport.token, oldTransport.token);
+  await f.manager.stop(input.runId);
+  assert.equal((await f.manager.status(input.runId)).cleanupComplete, true);
+  await assert.rejects(
+    () =>
+      f.manager.start({
+        ...input,
+        agentId: 'different-agent',
+        runId: randomUUID(),
+      }),
+    /PREVIEW_IDENTITY_CHANGED/,
+  );
 });
 test('readiness never opens a network socket in the Manager and runs the fixed probe in its owned relay', async (t) => {
   const f = await fixture();
