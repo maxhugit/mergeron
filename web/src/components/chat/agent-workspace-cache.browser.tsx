@@ -338,8 +338,13 @@ async function select(id: string) {
   await waitFor(() => expect(timeline.getState().threadId).toBe(id));
   return screen.findByRole('textbox');
 }
-test.each([390, 1180])(
-  'retains desktop/mobile drafts, scroll and background updates at %ipx',
+test.each([
+  [390, 1],
+  [1180, 1],
+  [1180, 2],
+  [1180, 3],
+])(
+  'retains desktop/mobile drafts, scroll and background updates at %ipx (run %i)',
   async (width) => {
     await page.viewport(width, 900);
     const a = await start();
@@ -428,6 +433,7 @@ test.each([390, 1180])(
     await waitFor(() => expect(screen.getByRole('textbox')).toBe(a));
   },
 );
+
 test('bounds retained views, keeps evicted drafts, switches the opted project and scopes sends', async () => {
   await page.viewport(1180, 900);
   const a = await start();

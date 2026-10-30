@@ -194,6 +194,14 @@ does not clear the cache. A historical bookmark outside the retained window caus
 bounded full paging. Unrecoverable identity is reported rather than silently
 claiming an exact restoration or jumping to latest.
 
+Immediately before a view is hidden, the pre-mutation snapshot captures its
+actual visible reading point even if native input has not ended. Row estimates
+can settle during an animated gesture while corrections are suspended, making
+the last scroll event's bookmark stale. The hide snapshot saves the current
+point without writing a scroll offset; ordinary visible input commits still do
+not arm corrections. This boundary is tested with a held native pointer, a real
+row resize, and React Activity, alongside repeated desktop/mobile navigation.
+
 Inline bookmarks identify a row, item, block, and logical text offset. React's
 pre-mutation snapshot retains the point; the transcript layout effect runs after
 adapter effects, synchronously measures mounted rows, then writes only the
