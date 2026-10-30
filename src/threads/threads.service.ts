@@ -673,10 +673,23 @@ export class ThreadsService {
         effectiveParams,
       );
     };
+    if (projectPolicy?.copyPermissions) {
+      // Record the maximum writable scope of the acknowledged profile group,
+      // even for a read-only turn: a stricter pending turn must not understate
+      // the permissions of the currently running turn.
+      this.projectConnections.assertCopyOwnership(
+        projectPolicy,
+        params.threadId,
+      );
+      this.gitMutations?.recordIsolation?.(
+        params.threadId,
+        projectPolicy.copyPermissions,
+      );
+    } else this.gitMutations?.clearIsolation?.(params.threadId);
     let response: v2.TurnStartResponse;
     try {
       response = await (this.gitMutations
-        ? this.gitMutations.startTurn(send)
+        ? this.gitMutations.startTurn(send, params.threadId)
         : send());
       publication?.bind(response.turn.id);
       mcpLease?.bind(response.turn.id);

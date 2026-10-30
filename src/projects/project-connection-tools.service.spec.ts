@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment -- Async service doubles and asymmetric matchers. */
+import { GitGateRefusal } from '../threads/git-mutation-gate.service';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -306,6 +307,31 @@ describe('project connection agent tools', () => {
       'PROJECT_CONNECTION_UNAVAILABLE',
     );
     expect(own).toEqual([]);
+  });
+
+  it('allows the same requestId to retry a definitive gate refusal, but not an uncertain dispatched outcome', async () => {
+    actions.stage
+      .mockRejectedValueOnce(new GitGateRefusal('GIT_BUSY'))
+      .mockResolvedValueOnce({ prepared: true });
+    const args = prepare({
+      operation: 'stage',
+      reviewFingerprint: 'c'.repeat(64),
+    });
+    await expect(call(args)).rejects.toThrow('GIT_BUSY');
+    await expect(call(args)).resolves.toMatchObject({
+      data: { prepared: true },
+    });
+    expect(actions.stage).toHaveBeenCalledTimes(2);
+    await expect(call(args)).resolves.toMatchObject({
+      data: { prepared: true },
+    });
+    expect(actions.stage).toHaveBeenCalledTimes(2);
+    actions.stage.mockRejectedValueOnce(
+      new Error('connection lost after dispatch'),
+    );
+    const uncertain = { ...args, requestId: 'uncertain-stage' };
+    await expect(call(uncertain)).rejects.toThrow('connection lost');
+    await expect(call(uncertain)).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
   });
 
   it('can inspect the entire frozen staged index rather than confusing it with working changes', async () => {

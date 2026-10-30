@@ -117,3 +117,31 @@ utilise seulement des fichiers temporaires, un fournisseur local factice et
 aucun tour de modèle : il vérifie le profil reconnu, l’écriture dans sa copie,
 le refus des écritures et renommages d’une copie voisine, les alias symboliques
 et le maintien de la lecture seule.
+
+## PR simultanées sur une même connexion Git
+
+Plusieurs agents peuvent utiliser la **même connexion Git**, chacun avec sa
+copie gérée et sa branche de travail. Ils peuvent préparer leurs fichiers,
+créer leurs commits, pousser leurs branches et ouvrir leurs PR en parallèle.
+Les identifiants de la connexion restent conservés côté serveur.
+
+Le verrou des opérations MCP est limité au **chemin physique de la copie**.
+Une publication verrouille également le couple dépôt configuré / branche
+distante : deux branches différentes du même dépôt peuvent être publiées
+simultanément ; deux opérations sur la même copie ou la même branche distante
+restent exclusives. Les pushes conservent leurs contrôles d’état et ne forcent
+jamais l’historique distant.
+
+Cette concurrence n’est autorisée qu’après confirmation du profil natif de
+chaque conversation active. Le serveur conserve une preuve de ses racines
+protégées et de sa copie éventuellement modifiable, liée à la génération du
+moteur. Un nouveau tour d’un agent protégé peut commencer pendant l’opération
+sur une autre copie. Un tour visant la copie verrouillée, un autre propriétaire
+de cette copie ou une session sans preuve d’isolation bloque l’opération.
+Un remplacement du moteur invalide toutes ces preuves. Les mutations manuelles
+et opérations de maintenance conservent leur verrou exclusif global.
+
+Un refus du verrou avant tout début d’opération peut être retenté avec le
+**même `requestId`**, après libération du verrou. Une erreur après début de
+l’opération reste une issue inconnue : inspecter l’état avant toute reprise,
+sans changer arbitrairement l’identifiant ni republier aveuglément.

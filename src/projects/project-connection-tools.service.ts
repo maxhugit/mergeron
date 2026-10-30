@@ -21,6 +21,7 @@ import {
 import { ProjectLocationsService } from './project-locations.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceGitService } from './workspace-git.service';
+import { GitGateRefusal } from '../threads/git-mutation-gate.service';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import {
   listProjectConnectionsInput,
@@ -430,86 +431,94 @@ export class ProjectConnectionToolsService {
     };
     const publisher = { threadId, assertActive: assertWrite };
     let data: unknown;
-    if (preparing) {
-      const local = prepareProjectGitOperationInput.parse(raw);
-      switch (local.operation) {
-        case 'stage_review':
-          data = await this.actions.stageReview(projectId, local.copyId, {
-            ...body,
-            paths: local.paths,
-          });
-          assertWrite();
-          break;
-        case 'stage':
-          data = await this.actions.stage(
-            projectId,
-            local.copyId,
-            {
+    try {
+      if (preparing) {
+        const local = prepareProjectGitOperationInput.parse(raw);
+        switch (local.operation) {
+          case 'stage_review':
+            data = await this.actions.stageReview(projectId, local.copyId, {
               ...body,
               paths: local.paths,
-              reviewFingerprint: local.reviewFingerprint,
-            },
-            publisher,
-          );
-          break;
-        case 'unstage':
-          data = await this.actions.unstage(
-            projectId,
-            local.copyId,
-            { ...body, paths: local.paths },
-            publisher,
-          );
-          break;
-        case 'commit':
-          data = await this.actions.commit(
-            projectId,
-            local.copyId,
-            { ...body, message: local.message },
-            publisher,
-          );
-          break;
-        case 'create_branch':
-          // Switch only from a clean worktree, at the observed HEAD. No reset,
-          // arbitrary start ref, fetch, force, stash or file restoration.
-          data = await this.actions.createBranch(
-            projectId,
-            local.copyId,
-            {
-              ...body,
-              name: local.name,
-              startRef: 'HEAD',
-              startRevision: local.expectedHead,
-              checkout: true,
-              confirmation: 'CREATE_LOCAL_BRANCH',
-            },
-            publisher,
-          );
-          break;
-      }
-    } else {
-      const remote = publishProjectGitInput.parse(raw);
-      const remoteBody = {
-        ...body,
-        base: remote.base,
-        title: remote.title,
-        description: remote.description ?? '',
-        draft: remote.draft,
-        confirmation: 'CREATE_PULL_REQUEST',
-      };
-      data =
-        remote.operation === 'push'
-          ? await this.actions.push(
+            });
+            assertWrite();
+            break;
+          case 'stage':
+            data = await this.actions.stage(
               projectId,
-              remote.copyId,
-              remoteBody,
-              publisher,
-            )
-          : await this.actions.createPullRequest(
-              projectId,
-              remote.copyId,
-              remoteBody,
+              local.copyId,
+              {
+                ...body,
+                paths: local.paths,
+                reviewFingerprint: local.reviewFingerprint,
+              },
               publisher,
             );
+            break;
+          case 'unstage':
+            data = await this.actions.unstage(
+              projectId,
+              local.copyId,
+              { ...body, paths: local.paths },
+              publisher,
+            );
+            break;
+          case 'commit':
+            data = await this.actions.commit(
+              projectId,
+              local.copyId,
+              { ...body, message: local.message },
+              publisher,
+            );
+            break;
+          case 'create_branch':
+            // Switch only from a clean worktree, at the observed HEAD. No reset,
+            // arbitrary start ref, fetch, force, stash or file restoration.
+            data = await this.actions.createBranch(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                name: local.name,
+                startRef: 'HEAD',
+                startRevision: local.expectedHead,
+                checkout: true,
+                confirmation: 'CREATE_LOCAL_BRANCH',
+              },
+              publisher,
+            );
+            break;
+        }
+      } else {
+        const remote = publishProjectGitInput.parse(raw);
+        const remoteBody = {
+          ...body,
+          base: remote.base,
+          title: remote.title,
+          description: remote.description ?? '',
+          draft: remote.draft,
+          confirmation: 'CREATE_PULL_REQUEST',
+        };
+        data =
+          remote.operation === 'push'
+            ? await this.actions.push(
+                projectId,
+                remote.copyId,
+                remoteBody,
+                publisher,
+              )
+            : await this.actions.createPullRequest(
+                projectId,
+                remote.copyId,
+                remoteBody,
+                publisher,
+              );
+      }
+    } catch (error) {
+      // A gate refusal happens before dispatch. Preserve the stable requestId
+      // for a safe retry; an error after dispatch remains outcome-unknown.
+      if (error instanceof GitGateRefusal)
+        this.db.delete(projectAgentToolRequests).where(key).run();
+      throw error;
     }
     // Once dispatched, record a confirmed outcome even if the turn ended while waiting.
     const result = {

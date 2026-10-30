@@ -16,6 +16,8 @@ export interface CopyPermissionProfiles {
   writable: string;
   readOnly: string;
   config: Record<string, unknown>;
+  writableCopyPath: string | null;
+  readOnlyRoots: string[];
 }
 const canonical = (root: string) => {
   try {
@@ -45,6 +47,7 @@ export function agentCopyPermissions(
   const connections = db.select().from(projectConnections).all();
   const agentId = threadId ? workAgentId(db, threadId) : null;
   let ownCount = 0;
+  let writableCopyPath: string | null = null;
   for (const copy of db.select().from(projectWorkspaceCopies).all()) {
     const workspace = workspaces.find(
       (workspace) => workspace.id === copy.localWorkspaceId,
@@ -96,6 +99,7 @@ export function agentCopyPermissions(
     )
       continue;
     if (baseProfile !== ':workspace') continue;
+    writableCopyPath = physical;
     filesystem[physical] = 'write';
     filesystem[path.resolve(workspace.path)] = 'write';
   }
@@ -111,6 +115,10 @@ export function agentCopyPermissions(
   return {
     writable,
     readOnly,
+    writableCopyPath,
+    readOnlyRoots: Object.entries(stable)
+      .filter(([, access]) => access === 'read')
+      .map(([root]) => root),
     config: {
       [writable]: { extends: baseProfile, filesystem: stable },
       [readOnly]: {

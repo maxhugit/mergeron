@@ -536,6 +536,51 @@ describe('ThreadsService', () => {
     );
   });
 
+  it.each([
+    { type: 'dangerFullAccess' },
+    { type: 'readOnly', networkAccess: false },
+  ] as const)(
+    'records only acknowledged maximum isolation before admitting a named turn (%j)',
+    async (sandboxPolicy) => {
+      const copyPermissions = {
+        writable: 'managed-own',
+        readOnly: 'managed-read',
+        baseProfile: ':workspace',
+        writableCopyPath: '/workspaces/p/sources/.external/git/own',
+        readOnlyRoots: ['/workspaces/p/sources/.external'],
+      };
+      mockProjectConnections.policyForCwd.mockResolvedValue({
+        projectId: 'p',
+        readOnly: false,
+        copyPermissions,
+      });
+      cachedPermissionProfile.mockReturnValue({
+        activePermissionProfile: { id: 'managed-own' },
+      });
+      const recordIsolation = vi.fn(),
+        clearIsolation = vi.fn();
+      const startTurn = vi.fn((send: () => Promise<unknown>) => send());
+      Object.assign(service, {
+        gitMutations: { recordIsolation, clearIsolation, startTurn },
+      });
+      mockCodex.request.mockResolvedValue({ turn: { id: 'isolated-turn' } });
+      await service.startTurn({ threadId: 't1', input: [], sandboxPolicy });
+      expect(recordIsolation).toHaveBeenCalledWith('t1', copyPermissions);
+      expect(recordIsolation.mock.invocationCallOrder[0]).toBeLessThan(
+        startTurn.mock.invocationCallOrder[0],
+      );
+      expect(startTurn).toHaveBeenCalledWith(expect.any(Function), 't1');
+      cachedPermissionProfile.mockReturnValue({});
+      recordIsolation.mockClear();
+      startTurn.mockClear();
+      await expect(
+        service.startTurn({ threadId: 't1', input: [] }),
+      ).rejects.toThrow('GIT_COPY_ISOLATION_UNAVAILABLE');
+      expect(recordIsolation).not.toHaveBeenCalled();
+      expect(startTurn).not.toHaveBeenCalled();
+    },
+  );
+
   it('should call turn/start', async () => {
     mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
 

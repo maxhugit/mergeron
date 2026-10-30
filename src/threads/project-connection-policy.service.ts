@@ -26,7 +26,13 @@ type JsonObject = { [key: string]: JsonValue };
 
 export interface ProjectExecutionPolicy {
   internalMcpId?: string;
-  copyPermissions?: { writable: string; readOnly: string; baseProfile: string };
+  copyPermissions?: {
+    writable: string;
+    readOnly: string;
+    baseProfile: string;
+    writableCopyPath: string | null;
+    readOnlyRoots: string[];
+  };
   executionCwd?: string;
   projectId: string;
   config: JsonObject;
@@ -200,6 +206,8 @@ export class ProjectConnectionPolicyService {
         writable: copyPermissions.writable,
         readOnly: copyPermissions.readOnly,
         baseProfile,
+        writableCopyPath: copyPermissions.writableCopyPath,
+        readOnlyRoots: copyPermissions.readOnlyRoots,
       },
       ...location,
       model: project.agentModel,
