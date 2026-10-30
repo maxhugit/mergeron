@@ -857,6 +857,24 @@ describe('native internal MCP over HTTP', () => {
     expect(await service.connection('p', 'new-agent')).toEqual(pending);
   });
 
+  it('preapproves only publication in the native transport without disguising its write access', async () => {
+    const { client, connection } = await connect();
+    expect(connection.config.tools).toEqual({
+      publish_project_git: { approval_mode: 'approve' },
+    });
+    expect(connection.config).not.toHaveProperty('default_tools_approval_mode');
+    const catalog = await client.listTools();
+    expect(
+      catalog.tools.find((tool) => tool.name === 'publish_project_git')
+        ?.annotations,
+    ).toMatchObject({
+      readOnlyHint: false,
+      openWorldHint: true,
+    });
+    expect(connection.config.tools).not.toHaveProperty('local_browser_action');
+    expect(connection.config.tools).not.toHaveProperty('prepare_project_git');
+  });
+
   it('protects the technical catalog with administrator authorization', () => {
     const controller = new InternalMcpController();
     expect(() => controller.catalog()).toThrow();
