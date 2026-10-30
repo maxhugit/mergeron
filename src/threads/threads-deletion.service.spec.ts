@@ -14,6 +14,7 @@ import { ThreadHistoryService } from './thread-history.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import { ThreadsDeletePlannerService } from './threads-delete-planner.service';
 import { ThreadsDeletionService } from './threads-deletion.service';
+import type { ProjectPreviewsService } from '../previews/project-previews.service';
 import type { AgentGitCopyCleanupService } from './agent-git-copy-cleanup.service';
 import { makeThreadFixture } from './threads.testing';
 
@@ -64,10 +65,12 @@ describe('ThreadsDeletionService', () => {
     listTurns: vi.fn(),
   };
   const mockDb = makeDbMock();
+  const mockPreviews = { cleanupDeletedAgent: vi.fn() };
   const mockGitCopyCleanup = { cleanup: vi.fn() };
 
   beforeEach(() => {
     requestLog = [];
+    mockPreviews.cleanupDeletedAgent.mockReset().mockResolvedValue(undefined);
     const planner = new ThreadsDeletePlannerService(
       mockCodex as unknown as CodexService,
       mockAdoption as unknown as ConversationBranchAdoptionService,
@@ -86,6 +89,7 @@ describe('ThreadsDeletionService', () => {
       mockHistory as unknown as ThreadHistoryService,
       mockDb as unknown as AppDatabase,
       mockGitCopyCleanup as unknown as AgentGitCopyCleanupService,
+      mockPreviews as unknown as ProjectPreviewsService,
     );
 
     mockCodex.request.mockReset();
@@ -139,12 +143,39 @@ describe('ThreadsDeletionService', () => {
     expect(result.status).toBe('completed');
     expect(result.deleteOrder).toEqual(['grandchild', 'child', 'root']);
     expect(deleted).toEqual(['grandchild', 'child', 'root']);
+    expect(mockPreviews.cleanupDeletedAgent.mock.calls).toEqual([
+      ['grandchild'],
+      ['child'],
+      ['root'],
+    ]);
     expect(mockBranchMutations.reapDeletedThread).toHaveBeenCalledTimes(3);
     expect(mockGitCopyCleanup.cleanup.mock.calls).toEqual([
       ['grandchild'],
       ['child'],
       ['root'],
     ]);
+  });
+
+  it('keeps the conversation and topology when preview cleanup fails', async () => {
+    mockCodex.request.mockImplementation((method: string, params) => {
+      if (method === 'thread/list')
+        return Promise.resolve(listResponse(params, [makeThread('root')]));
+      throw new Error(`unexpected ${method}`);
+    });
+    mockPreviews.cleanupDeletedAgent.mockRejectedValue(
+      new Error('PREVIEW_BUSY'),
+    );
+    const result = await service.deleteThread('root', {
+      expectedThreadIds: ['root'],
+    });
+    expect(result.status).not.toBe('completed');
+    expect(
+      mockCodex.request.mock.calls.some(
+        ([method]) => method === 'thread/delete',
+      ),
+    ).toBe(false);
+    expect(mockGitCopyCleanup.cleanup).not.toHaveBeenCalled();
+    expect(mockBranchMutations.reapDeletedThread).not.toHaveBeenCalled();
   });
 
   it('reports copy cleanup failures and keeps local topology for a retry', async () => {

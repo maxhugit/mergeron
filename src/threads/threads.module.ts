@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PreviewsModule } from '../previews/previews.module';
 import { SettingsModule } from '../settings/settings.module';
 import { InternalMcpModule } from '../internal-mcp/internal-mcp.module';
 import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
@@ -45,6 +46,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
 
 @Module({
   imports: [
+    PreviewsModule,
     SettingsModule,
     InternalMcpModule,
     ActiveFoldersModule,

@@ -19,7 +19,7 @@ export class PreviewManagerClient {
             '/run/mergeron-manager/manager.sock',
           path: '/v1/previews/' + operation,
           method: 'POST',
-          timeout: ['start', 'sync', 'stop'].includes(operation)
+          timeout: ['start', 'sync', 'stop', 'delete'].includes(operation)
             ? 180000
             : 15000,
           headers: {

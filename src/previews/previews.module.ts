@@ -1,3 +1,4 @@
+import { ThreadDeletionModule } from '../thread-deletion/thread-deletion.module';
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { ActiveFoldersModule } from '../active-folders/active-folders.module';
@@ -7,7 +8,13 @@ import { ProjectPreviewsService } from './project-previews.service';
 import { PreviewManagerClient } from './preview-manager-client';
 import { PreviewsController } from './previews.controller';
 @Module({
-  imports: [DatabaseModule, ActiveFoldersModule, ConfigModule, AuthModule],
+  imports: [
+    ThreadDeletionModule,
+    DatabaseModule,
+    ActiveFoldersModule,
+    ConfigModule,
+    AuthModule,
+  ],
   providers: [
     ProjectPreviewsService,
     PreviewManagerClient,

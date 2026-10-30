@@ -1,3 +1,4 @@
+import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
 import {
   Injectable,
   Inject,
@@ -61,6 +62,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     private readonly folders: ActiveFoldersService,
     private readonly manager: PreviewManagerClient,
     private readonly identities: IdentityService,
+    private readonly deletionRegistry: ThreadDeletionRegistryService,
   ) {}
   async onModuleInit() {
     if (this.config.get<string>('MERGERON_PREVIEWS_ENABLED') !== 'true') return;
@@ -174,14 +176,31 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       snapshotId,
     );
   }
-  private async removeSnapshot(projectId: string, snapshotId: string) {
+  private async removeSnapshot(
+    projectId: string,
+    snapshotId: string,
+    strict = false,
+  ) {
     const target = this.snapshotDirectory(projectId, snapshotId);
     // These are only our filtered temporary exports, never the working tree,
     // test databases, document versions or application backups.
-    if ((await fs.realpath(target).catch(() => '')) !== target) return;
+    const actual = await fs
+      .realpath(target)
+      .catch((error: NodeJS.ErrnoException) => {
+        if (strict && error.code !== 'ENOENT') throw error;
+        return null;
+      });
+    if (actual === null) return;
+    if (actual !== target) {
+      if (strict) throw new ConflictException('PREVIEW_UNSAFE_SNAPSHOT');
+      return;
+    }
+    const tolerateMissing = (error: NodeJS.ErrnoException) => {
+      if (strict && error.code !== 'ENOENT') throw error;
+    };
     for (const name of ['source.tar', 'source.tar.tmp'])
-      await fs.unlink(path.join(target, name)).catch(() => {});
-    await fs.rmdir(target).catch(() => {});
+      await fs.unlink(path.join(target, name)).catch(tolerateMissing);
+    await fs.rmdir(target).catch(tolerateMissing);
   }
   private async synchronizeAll() {
     if (this.synchronizing) return;
@@ -330,7 +349,10 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         )
         .get();
       if (!agent) throw new ForbiddenException('PREVIEW_ACCESS_DENIED');
-      return { project, agent, agentId: workAgentId(this.db, threadId) };
+      const agentId = workAgentId(this.db, threadId);
+      this.deletionRegistry.assertMutable(threadId);
+      this.deletionRegistry.assertMutable(agentId);
+      return { project, agent, agentId };
     }
     return { project, agent: null, agentId: '' };
   }
@@ -1169,6 +1191,38 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       return this.status(projectId, threadId);
     } finally {
       this.locks.delete(scope.agentId);
+    }
+  }
+  /** Called before topology is removed: message versions share their root's runtime. */
+  async cleanupDeletedAgent(threadId: string): Promise<void> {
+    requireExecutionAccess();
+    requireThreadAccess(threadId);
+    if (workAgentId(this.db, threadId) !== threadId) return;
+    if (this.locks.has(threadId)) throw new ConflictException('PREVIEW_BUSY');
+    this.locks.add(threadId);
+    try {
+      const row = this.row(threadId);
+      if (row) {
+        const result = await this.manager.request('delete', {
+          runId: row.runId,
+          projectId: row.projectId,
+          agentId: row.agentId,
+        });
+        if (result.deleted !== true || result.cleanupComplete !== true)
+          throw new ConflictException('PREVIEW_CLEANUP_INCOMPLETE');
+        await this.removeSnapshot(row.projectId, row.runId, true);
+      }
+      // Keep both records on any failure, so deletion can be retried safely.
+      this.db.transaction((tx) => {
+        tx.delete(agentPreviews)
+          .where(eq(agentPreviews.agentId, threadId))
+          .run();
+        tx.delete(agentPreviewRecipes)
+          .where(eq(agentPreviewRecipes.agentId, threadId))
+          .run();
+      });
+    } finally {
+      this.locks.delete(threadId);
     }
   }
   async stop(projectId: string, threadId: string) {

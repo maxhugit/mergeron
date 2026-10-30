@@ -687,3 +687,82 @@ test('an unlimited environment can be selected at launch and stopped manually', 
   await f.manager.stop(f.input.runId);
   assert.equal((await f.manager.status(f.input.runId)).cleanupComplete, true);
 });
+
+test('deleting an unlimited preview removes runtime and journal, with safe retry', async () => {
+  const f = await fixture();
+  f.input.profile.lifetimeMinutes = null;
+  await f.manager.start(f.input);
+  const journal = path.join(
+    f.configuration.previewJournal,
+    f.input.runId + '.json',
+  );
+  assert.equal(fs.existsSync(journal), true);
+  assert.deepEqual(await f.manager.deleteAgent(f.input), {
+    deleted: true,
+    cleanupComplete: true,
+  });
+  assert.equal(f.docker.containers.size, 0);
+  assert.equal(f.docker.volumes.size, 0);
+  assert.equal(f.docker.networks.size, 0);
+  assert.equal(fs.existsSync(journal), false);
+  assert.equal(f.manager.records.has(f.input.runId), false);
+  assert.deepEqual(await f.manager.deleteAgent(f.input), {
+    deleted: true,
+    cleanupComplete: true,
+  });
+});
+test('failed preview deletion keeps its journal for retry', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  const container = [...f.docker.containers.values()][0];
+  container.Config.Labels = {};
+  await assert.rejects(
+    () => f.manager.deleteAgent(f.input),
+    /PREVIEW_OBJECT_CHANGED/,
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(f.configuration.previewJournal, f.input.runId + '.json'),
+    ),
+    true,
+  );
+  assert.equal(f.manager.records.has(f.input.runId), true);
+});
+
+test('agent deletion purges previous runs and preserves other agents', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  await f.manager.stop(f.input.runId);
+  const next = f.exportSource();
+  const current = {
+    ...f.input,
+    runId: next.snapshotId,
+    sourceSha: next.sourceSha,
+  };
+  await f.manager.start(current);
+  const otherId = randomUUID();
+  const previous = f.manager.records.get(f.input.runId);
+  f.manager.save({ ...previous, runId: otherId, agentId: 'another-agent' });
+  await assert.rejects(
+    () => f.manager.deleteAgent({ ...current, agentId: 'another-agent' }),
+    /PREVIEW_IDENTITY_CHANGED/,
+  );
+  await f.manager.deleteAgent(current);
+  assert.deepEqual([...f.manager.records.keys()], [otherId]);
+  assert.equal(
+    fs.existsSync(
+      path.join(f.configuration.previewJournal, f.input.runId + '.json'),
+    ),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(f.configuration.previewJournal, current.runId + '.json'),
+    ),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(f.configuration.previewJournal, otherId + '.json')),
+    true,
+  );
+});

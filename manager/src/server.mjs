@@ -275,6 +275,8 @@ const server = http.createServer(async (request, response) => {
         return json(response, 200, await previews.setLifetime(body));
       if (operation === 'stop')
         return json(response, 200, await previews.stop(body.runId));
+      if (operation === 'delete')
+        return json(response, 200, await previews.deleteAgent(body));
       if (operation === 'logs')
         return json(response, 200, await previews.logs(body.runId));
       if (operation === 'transport')

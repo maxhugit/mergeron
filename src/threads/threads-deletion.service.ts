@@ -17,6 +17,7 @@ import { PendingApprovalsService } from '../pending-approvals/pending-approvals.
 import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
 import { ThreadResumeRegistryService } from './thread-resume-registry.service';
 import { ThreadHistoryService } from './thread-history.service';
+import { ProjectPreviewsService } from '../previews/project-previews.service';
 import { AgentGitCopyCleanupService } from './agent-git-copy-cleanup.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import {
@@ -50,6 +51,7 @@ export class ThreadsDeletionService {
     private readonly history: ThreadHistoryService,
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     private readonly gitCopyCleanup: AgentGitCopyCleanupService,
+    private readonly previews: ProjectPreviewsService,
   ) {}
 
   /** Builds the exact cascade set the frontend must show before confirmation. */
@@ -326,6 +328,16 @@ export class ThreadsDeletionService {
     reapedThreadIds: string[],
     cancelledApprovalRequestIds: string[],
   ): Promise<ThreadDeleteFailureDto | null> {
+    try {
+      await this.previews.cleanupDeletedAgent(threadId);
+    } catch (err) {
+      return this.failure(
+        'local_cleanup',
+        ErrorCode.threads.deleteLocalCleanupFailed,
+        err,
+        threadId,
+      );
+    }
     try {
       await this.codex.request<v2.ThreadDeleteResponse>('thread/delete', {
         threadId,
