@@ -2372,3 +2372,174 @@ describe('confirmed actions', () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 });
+
+describe('retargeting existing GitHub pull requests', () => {
+  const prepare = async () => {
+    resources.update('p', 'remote', {
+      accessMode: 'read_write',
+      address: 'https://github.com/example/demo.git',
+      secret: { token: 'retarget-unit-token' },
+    });
+    const state = await service.snapshot('p', copyId);
+    const input = {
+      confirmation: 'RETARGET_PULL_REQUEST',
+      fingerprint: state.fingerprint,
+      head: state.head,
+      address: 'https://github.com/example/demo.git',
+      number: 267,
+      base: 'main',
+      expectedBase: 'feature/previous',
+      expectedPullRequestHead: 'c'.repeat(40),
+    };
+    const pr = {
+      number: 267,
+      state: 'open',
+      merged: false,
+      head: {
+        ref: 'feature/proposal',
+        sha: input.expectedPullRequestHead,
+        repo: { full_name: 'example/demo' },
+      },
+      base: { ref: input.expectedBase, repo: { full_name: 'example/demo' } },
+    };
+    const fetch = vi.fn((_url: unknown, options?: RequestInit) =>
+      Promise.resolve(
+        Response.json(
+          options?.method === 'PATCH'
+            ? { ...pr, base: { ...pr.base, ref: input.base } }
+            : pr,
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    return { input, pr, fetch, state };
+  };
+  it('changes only the requested base on the fixed API and leaves the local copy unchanged', async () => {
+    const { input, fetch, state } = await prepare();
+    const result = await asPerson(() =>
+      actions.retargetPullRequest('p', copyId, input),
+    );
+    expect(result).toEqual({
+      number: 267,
+      url: 'https://github.com/example/demo/pull/267',
+      base: 'main',
+      head: input.expectedPullRequestHead,
+      unchanged: false,
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.github.com/repos/example/demo/pulls/267',
+      expect.objectContaining({
+        method: 'PATCH',
+        redirect: 'error',
+        body: JSON.stringify({ base: 'main' }),
+      }),
+    );
+    expect(await service.snapshot('p', copyId)).toMatchObject({
+      head: state.head,
+      fingerprint: state.fingerprint,
+    });
+    expect(JSON.stringify(result)).not.toContain('retarget-unit-token');
+  });
+  it.each([
+    'head',
+    'base',
+    'closed',
+    'merged',
+    'fork',
+    'foreign',
+    'number',
+  ] as const)(
+    'refuses changed remote state (%s) before any PATCH',
+    async (change) => {
+      const { input, pr, fetch } = await prepare();
+      if (change === 'head') pr.head.sha = 'd'.repeat(40);
+      if (change === 'base') pr.base.ref = 'changed';
+      if (change === 'closed') pr.state = 'closed';
+      if (change === 'merged') pr.merged = true;
+      if (change === 'fork') pr.head.repo.full_name = 'another/repo';
+      if (change === 'foreign') pr.base.repo.full_name = 'another/repo';
+      if (change === 'number') pr.number = 268;
+      await expect(
+        asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+      ).rejects.toThrow();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('accepts an already correct target without a write', async () => {
+    const { input, pr, fetch } = await prepare();
+    pr.base.ref = 'main';
+    expect(
+      await asPerson(() =>
+        actions.retargetPullRequest('p', copyId, {
+          ...input,
+          expectedBase: 'main',
+        }),
+      ),
+    ).toMatchObject({ unchanged: true });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it('blocks revoked credentials or changed local state between inspection and PATCH', async () => {
+    const { input, pr, fetch } = await prepare();
+    fetch.mockImplementationOnce(async () => {
+      resources.update('p', 'remote', { secret: { token: 'rotated' } });
+      return Response.json(pr);
+    });
+    await expect(
+      asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+    ).rejects.toThrow('GIT_STALE');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each(['network', 'server', 'invalid', 'wrong-base', 'rejected'] as const)(
+    'does not retry an uncertain or rejected PATCH (%s)',
+    async (failure) => {
+      const { input, pr, fetch } = await prepare();
+      fetch.mockImplementationOnce(async () => Response.json(pr));
+      fetch.mockImplementationOnce(async () => {
+        if (failure === 'network') throw Error('private diagnostic');
+        if (failure === 'server') return new Response('', { status: 503 });
+        if (failure === 'invalid')
+          return new Response('not JSON', { status: 200 });
+        if (failure === 'rejected') return new Response('', { status: 422 });
+        return Response.json(pr);
+      });
+      await expect(
+        asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+      ).rejects.toThrow(
+        failure === 'rejected'
+          ? 'GIT_PR_RETARGET_FAILED'
+          : 'GIT_OUTCOME_UNKNOWN',
+      );
+      expect(fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+  it('refuses invalid branches, same-branch targets, read-only sources and missing tokens', async () => {
+    const { input, pr, fetch } = await prepare();
+    await expect(
+      asPerson(() =>
+        actions.retargetPullRequest('p', copyId, {
+          ...input,
+          base: 'invalid branch',
+        }),
+      ),
+    ).rejects.toThrow('GIT_INVALID_INPUT');
+    await expect(
+      asPerson(() =>
+        actions.retargetPullRequest('p', copyId, {
+          ...input,
+          base: pr.head.ref,
+        }),
+      ),
+    ).rejects.toThrow('GIT_PR_SAME_BRANCH');
+    resources.update('p', 'remote', { accessMode: 'read_only' });
+    await expect(
+      asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+    ).rejects.toThrow('GIT_READ_ONLY');
+    resources.update('p', 'remote', { accessMode: 'read_write', secret: null });
+    await expect(
+      asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+    ).rejects.toThrow('GIT_GITHUB_TOKEN_REQUIRED');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
