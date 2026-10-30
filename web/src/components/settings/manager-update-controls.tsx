@@ -191,7 +191,11 @@ export function ManagerUpdateControls({
             {t('managerFastDevUpdate')}
           </label>
           <p className="text-xs text-muted-foreground">
-            {t('managerFastDevUpdateHelp')}
+            {t(
+              status.backupPolicy === 'development-none-v1'
+                ? 'managerFastDevNoBackupHelp'
+                : 'managerFastDevUpdateHelp',
+            )}
           </p>
         </div>
       )}
@@ -206,7 +210,13 @@ export function ManagerUpdateControls({
         }}
       />
       <p className="text-xs text-muted-foreground">
-        {t('managerUpdateSafetyDescription')}
+        {t(
+          status.backupPolicy === 'development-none-v1'
+            ? 'managerDevelopmentNoBackup'
+            : status.backupPolicy === 'production-essential-v1'
+              ? 'managerProductionEssentialBackup'
+              : 'managerUpdateSafetyDescription',
+        )}
       </p>
       {operation && operation.status !== 'succeeded' && (
         <div
@@ -305,15 +315,16 @@ export function ManagerUpdateControls({
                 {t('managerViewUpdateProgress')}
               </Button>
             )}
-            {operation?.status === 'succeeded' && operation.backupRetained && (
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => setConfirm('rollback')}
-              >
-                {t('managerRestorePreviousVersion')}
-              </Button>
-            )}
+            {operation?.status === 'succeeded' &&
+              (operation.rollbackAvailable ?? operation.backupRetained) && (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setConfirm('rollback')}
+                >
+                  {t('managerRestorePreviousVersion')}
+                </Button>
+              )}
           </>,
         )}
       </div>
@@ -362,8 +373,14 @@ export function ManagerUpdateControls({
               )}
               {t(
                 confirm === 'rollback'
-                  ? 'managerRollbackDataWarning'
-                  : 'managerUpdateDowntimeWarning',
+                  ? operation?.backupPolicy === 'development-none-v1'
+                    ? 'managerRollbackImagesOnlyWarning'
+                    : 'managerRollbackDataWarning'
+                  : plan?.backupPolicy === 'development-none-v1'
+                    ? 'managerUpdateNoBackupWarning'
+                    : plan?.backupPolicy === 'production-essential-v1'
+                      ? 'managerUpdateEssentialWarning'
+                      : 'managerUpdateDowntimeWarning',
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -375,14 +392,20 @@ export function ManagerUpdateControls({
                 if (confirm === 'apply' && plan)
                   launch('apply', {
                     images: plan.images,
-                    confirmation: 'UPDATE_WITH_ROLLBACK',
+                    confirmation:
+                      plan.backupPolicy === 'development-none-v1'
+                        ? 'UPDATE_WITHOUT_DATA_BACKUP'
+                        : 'UPDATE_WITH_ROLLBACK',
                     expectedFingerprint: plan.fingerprint,
                     ...(plan.mode ? { mode: plan.mode } : {}),
                   });
                 if (confirm === 'rollback' && operation)
                   launch('rollback', {
                     operationId: operation.id,
-                    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+                    confirmation:
+                      operation.backupPolicy === 'development-none-v1'
+                        ? 'ROLLBACK_IMAGES_ONLY'
+                        : 'ROLLBACK_WITH_DATA_RESTORE',
                   });
               }}
             >

@@ -191,7 +191,13 @@ export function ManagerStatusCard() {
         </div>
         <p className="text-xs text-muted-foreground">
           {data?.update
-            ? tm('managerUpdateSafetyDescription')
+            ? tm(
+                data.backupPolicy === 'development-none-v1'
+                  ? 'managerDevelopmentNoBackup'
+                  : data.backupPolicy === 'production-essential-v1'
+                    ? 'managerProductionEssentialBackup'
+                    : 'managerUpdateSafetyDescription',
+              )
             : t(
                 'managerObservesTheExistingStackWithoutChangingContainersOrData',
               )}

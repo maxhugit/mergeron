@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { DockerClient } from './docker-client.mjs';
 import { ImageUpdates } from './image-updates.mjs';
 import { TransactionalUpdater } from './updater.mjs';
+import { environmentBackupPolicy } from './backup-policy.mjs';
 import { PreviewManager } from './previews.mjs';
 import { ManagedCodexCli } from './codex-cli.mjs';
 import {
@@ -303,6 +304,7 @@ const server = http.createServer(async (request, response) => {
       ...snapshot,
       events: [...events],
       update: updater.status(),
+      backupPolicy: environmentBackupPolicy(manifest),
       capabilities: {
         backupManagement: true,
         backupRetention: true,

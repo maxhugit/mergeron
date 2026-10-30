@@ -7,10 +7,12 @@ une mise à jour **de cette image uniquement**. Le plan affiche le composant et
 l’empreinte exacte avant confirmation. Aucun téléchargement ni installation
 n’est déclenché par la détection.
 
-La transaction conserve les sauvegardes, contrôles de santé et restauration
-existants. Les autres images ne sont pas mises à niveau implicitement, mais
-**la stack entière est arrêtée et recréée** pour garantir une sauvegarde cohérente
-et un retour arrière complet. Ce n’est donc pas un redémarrage à chaud sans
+La transaction applique la [politique de sauvegarde de l’environnement](sauvegarde-restauration.md#politique-des-mises-à-jour-du-manager) :
+aucune sauvegarde en Dev, données essentielles seulement en production.
+Les contrôles de santé restent obligatoires. Les autres images ne sont pas mises
+à niveau implicitement, mais **la stack entière est arrêtée et recréée**. Le
+retour arrière Dev ne remet que les images, pas les données ou migrations.
+Ce n’est donc pas un redémarrage à chaud sans
 interruption. Aucun choix ne contourne les blocages du Manager.
 
 Les résultats terminés se consultent avec **Voir le suivi et les logs** : le
@@ -61,7 +63,8 @@ au navigateur et aucun identifiant de registre n’est retourné.
 
 L’interface prépare le plan existant avec
 `images: { [componentId]: "repository@sha256:…" }`, puis transmet le fingerprint
-vérifié et la confirmation `UPDATE_WITH_ROLLBACK`. Une modification d’état entre
+vérifié et la confirmation du plan : `UPDATE_WITHOUT_DATA_BACKUP` en Dev,
+`UPDATE_WITH_ROLLBACK` en production. Une modification d’état entre
 préparation et application invalide le plan. La détection ne crée pas de nouvelle
 voie d’exécution et ne modifie pas les règles d’autorisation du Manager.
 

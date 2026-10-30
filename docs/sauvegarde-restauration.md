@@ -30,19 +30,47 @@ espaces système sous `workspace/.mergeron-system/` et les brouillons privés,
 ainsi que le travail Git non publié, y compris les commits uniquement locaux.
 Une base restaurée sans ces fichiers peut référencer des documents inexistants.
 
-La sauvegarde transactionnelle actuelle du [Manager](mergeron-manager.md) est
-une copie complète de ses racines déclarées, incluant `home`, `workspace`,
-`logs`, `ssh`, `config` et les fichiers secrets. Elle ne filtre pas encore les
-dépendances ou compilations présentes dans les dossiers des agents. L’inventaire
-préalable et les copies durables par fichier peuvent donc prendre longtemps,
-même avec peu de données métier et des disques rapides. Le mode dev rapide
-borne la concurrence, mais reste une sauvegarde complète, pas incrémentale.
+## Politique des mises à jour du Manager
 
-Ne pas supprimer des dossiers ni ajouter des exclusions au milieu d’une
-transaction. Une politique ciblée distinguant données irremplaçables et caches
-régénérables doit être testée avec la restauration avant de remplacer ce circuit.
-Cette sauvegarde de mise à jour ne remplace pas la stratégie externe de reprise
-après perte du serveur.
+La politique est globale et déterminée par l’environnement déclaré de la pile,
+pas par l’agent ni par le composant mis à jour :
+
+- **Dev — `development-none-v1`** : aucune copie de données, aucun inventaire
+  récursif préalable, aucun calcul d’espace nécessaire à une sauvegarde. Les
+  contrôles de santé restent obligatoires. Le retour arrière remet uniquement
+  les images ; les données et migrations restent dans leur état courant et
+  peuvent être incompatibles avec l’ancienne image. La confirmation le précise.
+- **Production — `production-essential-v1`** : copie cohérente de `home`,
+  `workspace`, `ssh`, `config` et des trois fichiers secrets. La base et ses
+  journaux SQLite, conversations, documents, versions, brouillons, connaissances
+  et travail Git local non publié restent conservés. Le dossier `logs` est exclu.
+
+En production, seuls les répertoires régénérables identifiés sont écartés :
+`home/.cache`, `home/.npm`, `home/.pnpm-store`, `home/.yarn/cache`,
+`home/.local/share/pnpm/store` ; dans les sources, `node_modules`, `.build-cache`,
+`.pnpm-store`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache` et `__pycache__`.
+Les instantanés techniques `workspace/.mergeron-system/<id>/previews` sont recréables.
+Les documents/livrables, historiques système et brouillons protégés ne sont pas
+filtrés par ces noms, y compris dans les anciennes structures avant migration.
+Les dossiers génériques `dist` et `build` ne sont pas exclus aveuglément : un
+projet peut y conserver des fichiers manuels. Les liens sont copiés sans être suivis.
+
+Le calcul de place disponible applique exactement le même filtre que la copie.
+La restauration remet les racines incluses depuis la sauvegarde filtrée ; les
+caches/dépendances manquants doivent être régénérés. Les racines exclues telles
+que `logs` restent inchangées. Les données plus récentes des racines restaurées
+sont conservées en quarantaine, pas écrasées sans conservation.
+
+Chaque transaction journalise sa politique avant toute interruption. Une reprise
+utilise cette politique, pas les nouveaux réglages. Un ancien journal sans ce
+champ reste une sauvegarde complète historique, restaurée comme telle ; une
+politique inconnue bloque la récupération. Les anciennes sauvegardes ne sont
+pas supprimées par ce changement. Les nouvelles mises à jour Dev ne déclenchent
+pas leur rétention automatique puisqu’elles ne créent plus de sauvegarde.
+
+Ces règles concernent les mises à jour du Manager. Elles ne désactivent pas les
+sauvegardes externes de l’administrateur, ni ne les remplacent en cas de perte du
+serveur ; `/appdata` nécessite toujours une stratégie externe adaptée.
 
 ## Sauvegarde cohérente
 

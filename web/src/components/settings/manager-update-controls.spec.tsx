@@ -95,6 +95,59 @@ it('offers fast updates only when a development Manager explicitly supports them
     }),
   ).toBeChecked();
 });
+
+it.each(['development-none-v1', 'production-essential-v1'] as const)(
+  'confirms the actual %s policy instead of promising a full backup',
+  async (backupPolicy) => {
+    const user = userEvent.setup();
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        if (body.expectedFingerprint)
+          return json({ busy: true, operation: null });
+        return json({
+          applicable: true,
+          fingerprint: 'policy-checked',
+          blockers: [],
+          backupPolicy,
+          images: { application: 'ghcr.io/maxhugit/mergeron:edge' },
+        });
+      },
+    );
+    vi.stubGlobal('fetch', fetch);
+    fixture.render(
+      <ManagerUpdateControls
+        status={{
+          ...status,
+          backupPolicy,
+          environment:
+            backupPolicy === 'development-none-v1'
+              ? 'development'
+              : 'production',
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Mettre à jour' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent(
+      backupPolicy === 'development-none-v1'
+        ? 'Aucune donnée ne sera sauvegardée en Dev'
+        : 'sauvegarde des données essentielles',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Installer et redémarrer' }),
+    );
+    expect(
+      fetch.mock.calls.some(
+        ([, init]) =>
+          JSON.parse(String(init?.body ?? '{}')).confirmation ===
+          (backupPolicy === 'development-none-v1'
+            ? 'UPDATE_WITHOUT_DATA_BACKUP'
+            : 'UPDATE_WITH_ROLLBACK'),
+      ),
+    ).toBe(true);
+  },
+);
 afterEach(() => {
   sessionStorage.clear();
   fixture.dispose();

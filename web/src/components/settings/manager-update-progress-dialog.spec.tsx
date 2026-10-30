@@ -50,6 +50,28 @@ beforeEach(async () => {
   fixture = catalogFixture();
   await i18n.changeLanguage('fr');
 });
+
+it('shows five real stages and no backup stage for a development transaction', async () => {
+  const current: ManagerUpdateOperation = {
+    ...operation,
+    backupPolicy: 'development-none-v1',
+    phase: 'replacing',
+    events: [],
+    backupRetained: false,
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json(response(current))),
+  );
+  fixture.render(
+    <ManagerUpdateProgressDialog {...props} operation={current} />,
+  );
+  expect(
+    await screen.findByText(/Dev : aucune sauvegarde de données/),
+  ).toBeVisible();
+  expect(screen.queryByText('Sauvegarde des données')).not.toBeInTheDocument();
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '5');
+});
 afterEach(() => {
   fixture.dispose();
   vi.unstubAllGlobals();

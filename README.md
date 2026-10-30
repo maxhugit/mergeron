@@ -12,8 +12,9 @@ est d'abord publié sous `ghcr.io/maxhugit/mergeron-manager:edge` ; son tag
 `latest` est créé avec une version stable. Les conteneurs
 applicatifs sont nommés `mergeron-ui`, `mergeron-ingress` et `mergeron-squid` ;
 `mergeron-manager` peut créer les ressources manquantes après validation d'un
-plan non destructif, puis surveiller et mettre à jour la pile avec sauvegarde
-et retour arrière. Les variables de
+plan non destructif, puis surveiller et mettre à jour la pile selon la politique
+de l’environnement : aucune sauvegarde en Dev, données essentielles seulement
+en production, avec contrôles de santé et retour arrière adapté. Les variables de
 configuration, volumes et clés de stockage existants sont conservés.
 La [migration vers Mergeron](docs/migration-mergeron.md) décrit les changements
 à reporter dans une installation Docker existante.

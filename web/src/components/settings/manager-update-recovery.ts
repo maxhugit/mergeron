@@ -95,6 +95,16 @@ function sanitizeSnapshot(value: unknown): ManagerUpdateOperation | null {
     phase: snapshot.phase,
     status: snapshot.status,
     backupRetained: snapshot.backupRetained === true,
+    ...([
+      'development-none-v1',
+      'production-essential-v1',
+      'legacy-full-v1',
+    ].includes(snapshot.backupPolicy ?? '')
+      ? {
+          backupPolicy: snapshot.backupPolicy,
+          rollbackAvailable: snapshot.rollbackAvailable === true,
+        }
+      : {}),
     images: {},
     previousImages: {},
     events: snapshot.events
