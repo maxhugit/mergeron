@@ -141,9 +141,9 @@ function request(url, { headers = {}, method = 'GET', body } = {}) {
     req.end(body);
   });
 }
-async function ready(url, options, expected) {
+async function ready(url, options, expected, attempts = 30) {
   let last;
-  for (let n = 0; n < 30; n++) {
+  for (let n = 0; n < attempts; n++) {
     try {
       last = await request(url, options);
       if (last.status === 200 && last.text.includes(expected)) return last;
@@ -227,6 +227,11 @@ try {
   const a = snapshot('node-project', {
       'server.js': server,
       'index.html': '<h1>Uncommitted Node project A</h1>',
+      'package.json': JSON.stringify({
+        private: true,
+        packageManager: 'pnpm@10.18.3',
+        dependencies: { 'is-number': '7.0.0' },
+      }),
     }),
     input = {
       projectId: 'node-project',
@@ -237,8 +242,10 @@ try {
       profile: {
         enabled: true,
         runtime: 'node',
+        install:
+          'timeout 60s corepack pnpm@10.18.3 install --ignore-scripts --lockfile=false --reporter=append-only\nnode -e "if (!require(\'is-number\')(42)) process.exit(1)"',
         start: 'node server.js',
-        memoryMb: 256,
+        memoryMb: 512,
       },
     };
   console.log('Fixture phase: start Node preview');
@@ -249,6 +256,10 @@ try {
     transport.endpoint,
     { headers: { host, 'x-mergeron-preview-transport': transport.token } },
     'project A',
+    350,
+  );
+  results.push(
+    'Cold Corepack pnpm 10.18.3 and npm package download through filtered proxy',
   );
   results.push('Node HTTP application from current source');
   // The real Manager uses network_mode:none. Trap accidental TCP probes here,

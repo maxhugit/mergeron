@@ -49,7 +49,7 @@ function environment(value = {}) {
   for (const [key, v] of Object.entries(value)) {
     if (
       !/^[A-Z][A-Z0-9_]{0,63}$/.test(key) ||
-      /^(?:HOME|PATH|LD_.*|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_OPTIONS|DOCKER_.*|MERGERON_PREVIEW_.*)$/.test(
+      /^(?:HOME|PATH|LD_.*|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_OPTIONS|NODE_USE_ENV_PROXY|DOCKER_.*|MERGERON_PREVIEW_.*)$/.test(
         key,
       )
     )

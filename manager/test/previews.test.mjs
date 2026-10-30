@@ -307,6 +307,22 @@ test('starts a generic source snapshot with no host mounts, published ports, roo
     (c) => c.Config.Labels['io.mergeron.component'] === 'preview-app',
   );
   assert.deepEqual(runtime.Config.HostConfig.Dns, ['127.0.0.1']);
+  assert.ok(runtime.Config.Env.includes('NODE_USE_ENV_PROXY=1'));
+  assert.ok(runtime.Config.Env.includes('HTTP_PROXY=http://egress:3129'));
+  assert.ok(runtime.Config.Env.includes('HTTPS_PROXY=http://egress:3129'));
+  assert.equal(
+    Object.keys(runtime.Config.NetworkingConfig.EndpointsConfig).length,
+    1,
+  );
+  const egress = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-egress',
+  );
+  assert.deepEqual(egress.Config.HostConfig.Dns, []);
+  assert.ok(
+    egress.Config.Env.some((v) =>
+      v.startsWith('MERGERON_PREVIEW_ALLOWED_DOMAINS=registry.npmjs.org,'),
+    ),
+  );
   const network = [...f.docker.networks.values()].find((n) => n.Internal);
   assert.equal(
     network.Options['com.docker.network.bridge.gateway_mode_ipv4'],

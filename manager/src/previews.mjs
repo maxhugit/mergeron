@@ -695,6 +695,10 @@ export class PreviewManager {
             'HTTPS_PROXY=http://egress:3129',
             'http_proxy=http://egress:3129',
             'https_proxy=http://egress:3129',
+            // Modern Corepack uses Node's native fetch, which ignores proxy
+            // variables unless this opt-in is set at process startup. Keep
+            // external DNS disabled in the runtime; the filtered proxy resolves.
+            'NODE_USE_ENV_PROXY=1',
             'NO_PROXY=localhost,127.0.0.1,app,' +
               profile.services.map((s) => s.name).join(','),
             'PORT=' + profile.port,

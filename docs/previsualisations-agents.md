@@ -86,6 +86,27 @@ Docker 28 ou plus récent est requis pour les ponts internes en mode `isolated`.
 Un pont simplement `internal` conserve une adresse de passerelle sur l’hôte et
 ne remplace pas cette protection. Le Manager refuse de se rabattre sur ce mode.
 
+### Dépendances Node et proxy du runtime
+
+Le terminal de l’agent et son instance de prévisualisation ont des réseaux
+distincts. Le contrôle du terminal ne valide donc pas le téléchargement des
+dépendances dans l’instance. Le runtime ne résout pas les domaines externes :
+seul son proxy filtré `egress` résout les destinations autorisées, dont
+`registry.npmjs.org` par défaut.
+
+Le Manager fournit `HTTP_PROXY`, `HTTPS_PROXY` et `NODE_USE_ENV_PROXY=1`.
+Cette dernière variable active le proxy natif de Node (Node 22.21+ ou 24+),
+nécessaire aux versions récentes de Corepack qui utilisent `fetch`. Elle est
+réservée au Manager et n’est pas surchargeable par une recette. L’image SDK
+doit fournir une version de Node/Corepack compatible ; le téléchargement
+conserve la validation TLS et les contrôles d’intégrité de Corepack.
+
+Une erreur `EAI_AGAIN registry.npmjs.org` dans le runtime ne justifie pas
+d’ouvrir son DNS externe ou de le rattacher au réseau de l’hôte. Vérifier le
+proxy depuis cette instance et recréer les instances anciennes après mise à
+jour du Manager. La CI vérifie un téléchargement à froid de pnpm et d’une
+dépendance publique, pas seulement un serveur sans dépendances.
+
 ## Définir le profil du projet
 
 ### Déléguer la préparation aux agents
