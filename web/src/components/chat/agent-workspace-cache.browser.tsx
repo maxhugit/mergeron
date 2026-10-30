@@ -34,7 +34,6 @@ import { VirtualTranscript } from './virtual-transcript';
 import {
   forgetTranscriptBookmarks,
   readTranscriptBookmark,
-  readingAnchorDelta,
 } from '@/lib/transcript-anchor';
 import { TranscriptScrollOwner } from '@/lib/transcript-scroll-owner';
 import { WorkspaceEntryMenu } from './workspace-entry-menu';
@@ -356,18 +355,31 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
       .getByRole('region', { name: 'Agent a' })
       .querySelector<HTMLDivElement>('[data-transcript-scroller]')!;
     const trace: unknown[] = [];
-    const record = (phase: string, owner?: TranscriptScrollOwner) => {
+    const trackedRow = { id: undefined as string | undefined };
+    const record = (
+      phase: string,
+      owner?: TranscriptScrollOwner,
+      geometry = false,
+    ) => {
       const bookmark = readTranscriptBookmark('a');
       trace.push({
         time: performance.now(),
         phase,
-        top: scroll.scrollTop,
-        height: scroll.scrollHeight,
-        viewport: scroll.clientHeight,
         bookmark: bookmark ? JSON.parse(JSON.stringify(bookmark)) : null,
-        anchorDelta: bookmark?.anchor
-          ? readingAnchorDelta(scroll, bookmark.anchor)
-          : null,
+        geometry: geometry
+          ? {
+              top: scroll.scrollTop,
+              height: scroll.scrollHeight,
+              viewport: scroll.clientHeight,
+              readingY:
+                (scroll
+                  .querySelector<HTMLElement>(
+                    `[data-reading-row="${trackedRow.id}"]`,
+                  )
+                  ?.getBoundingClientRect().top ?? NaN) -
+                scroll.getBoundingClientRect().top,
+            }
+          : undefined,
         owner: owner
           ? Object.fromEntries(
               [
@@ -381,6 +393,9 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
                 'passes',
                 'settled',
                 'disposed',
+                'offset',
+                'width',
+                'queued',
               ].map((key) => [key, Reflect.get(owner, key)]),
             )
           : null,
@@ -406,7 +421,12 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
               this,
             );
           const result = Reflect.apply(original, this, args);
-          if (this.threadId === 'a') record(`after ${name}`, this);
+          if (this.threadId === 'a')
+            record(
+              `after ${name}`,
+              this,
+              name === 'beforeCommit' && args[0] === false,
+            );
           return result;
         } as never,
       );
@@ -433,10 +453,11 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
         scroll.getBoundingClientRect().top + 20,
     )!;
     const rowId = readingRow.dataset.readingRow;
+    trackedRow.id = rowId;
     const readingY =
       readingRow.getBoundingClientRect().top -
       scroll.getBoundingClientRect().top;
-    record('reading point captured');
+    record('reading point captured', undefined, true);
     const b = await select('b');
     fireEvent.change(b, { target: { value: 'Autre brouillon pour b' } });
     expect(calls.effects).toEqual(new Set(['b']));
@@ -473,7 +494,7 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
         })
         .toBeLessThan(2);
     } catch (error) {
-      record('restoration failed');
+      record('restoration failed', undefined, true);
       console.error(
         'Retained geometry trace',
         JSON.stringify({ rowId, readingY, trace }),
