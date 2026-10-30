@@ -98,11 +98,48 @@ async function finishGesture() {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
 
+/** Snapshot history only after native wheel animation has ended, including on Linux WebKit. */
+async function scrollAndFinish(delta: number): Promise<void> {
+  const element = scroller();
+  let timeout: number | undefined;
+  let wheelStarted = false;
+  let finish!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const onWheel = () => {
+    wheelStarted = true;
+  };
+  const onScrollEnd = () => {
+    if (wheelStarted) finish();
+  };
+  element.addEventListener('wheel', onWheel);
+  element.addEventListener('scrollend', onScrollEnd);
+  try {
+    await commands.scrollTranscript(delta);
+    await Promise.race([
+      finished,
+      new Promise<never>((_, reject) => {
+        timeout = window.setTimeout(
+          () => reject(new Error('Native transcript scrolling did not finish')),
+          5000,
+        );
+      }),
+    ]);
+  } finally {
+    window.clearTimeout(timeout);
+    element.removeEventListener('wheel', onWheel);
+    element.removeEventListener('scrollend', onScrollEnd);
+  }
+  // The adapter also has a scroll-end grace period. Native scrollend can
+  // arrive before its isScrolling state clears, so wait for that lifecycle too.
+  await finishGesture();
+}
+
 /** Positions an actual rendered sentence at the reading line, then records native wheel intent. */
 async function readHistory(): Promise<number> {
   await expect.poll(distance).toBeLessThan(2);
-  await commands.scrollTranscript(-1300);
-  await finishGesture();
+  await scrollAndFinish(-1300);
   const viewport = scroller().getBoundingClientRect();
   const sentence = [
     ...document.querySelectorAll<HTMLElement>('[data-sentence]'),
@@ -110,8 +147,7 @@ async function readHistory(): Promise<number> {
   const index = Number(sentence.dataset.sentence);
   scroller().scrollTop +=
     sentence.getBoundingClientRect().top - viewport.top - 12;
-  await commands.scrollTranscript(-1);
-  await finishGesture();
+  await scrollAndFinish(-1);
   return index;
 }
 
