@@ -382,6 +382,13 @@ test('duration defaults to five hours and an active preview can switch to never 
   await expect
     .element(page.getByRole('combobox', { name: 'Durée de disponibilité' }))
     .toBeEnabled();
+  const address = await screen.findByRole('textbox', {
+    name: 'Adresse de l’environnement de test',
+  });
+  const stableUrl = (address as HTMLInputElement).value;
+  expect(stableUrl).toBe(
+    'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
+  );
   expect((select as HTMLSelectElement).value).toBe('300');
   expect(
     [...select.querySelectorAll('option')].map((option) => option.value),
@@ -396,6 +403,9 @@ test('duration defaults to five hours and an active preview can switch to never 
   await expect
     .element(page.getByText('Arrêt automatique: Jamais'))
     .toBeVisible();
+  expect(address).toHaveValue(stableUrl);
+  expect(screen.getByRole('button', { name: 'Copier l’URL' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Ouvrir l’aperçu' })).toBeVisible();
   expect(data.calls.some((path) => /\/(start|refresh|stop)$/.test(path))).toBe(
     false,
   );

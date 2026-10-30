@@ -62,6 +62,7 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
     <FileViewer
       key={documentId ?? selectedFile}
       filePath={selectedFile}
+      onOpenFile={selectFile}
       documentId={documentId}
       viewId={fileViewId('files', documentId ?? selectedFile)}
       active={active}

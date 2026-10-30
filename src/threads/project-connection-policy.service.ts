@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { INTERNAL_MCP_NAME } from '../internal-mcp/internal-mcp-catalog';
+import { agentCopyPermissions } from '../projects/agent-copy-permissions';
 import { randomUUID } from 'node:crypto';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { eq } from 'drizzle-orm';
@@ -25,6 +26,13 @@ type JsonObject = { [key: string]: JsonValue };
 
 export interface ProjectExecutionPolicy {
   internalMcpId?: string;
+  copyPermissions?: {
+    writable: string;
+    readOnly: string;
+    baseProfile: string;
+    writableCopyPath: string | null;
+    readOnlyRoots: string[];
+  };
   executionCwd?: string;
   projectId: string;
   config: JsonObject;
@@ -171,6 +179,21 @@ export class ProjectConnectionPolicyService {
       pluginConfig[server.pluginId] = plugin;
     }
 
+    const baseProfile =
+      typeof global.default_permissions === 'string'
+        ? global.default_permissions
+        : global.sandbox_mode === 'read-only' || location.readOnly
+          ? ':read-only'
+          : ':workspace';
+    if (![':workspace', ':read-only'].includes(baseProfile))
+      throw new ConflictException('GIT_COPY_ISOLATION_UNAVAILABLE');
+    const copyPermissions = agentCopyPermissions(
+      this.db,
+      location.projectId,
+      threadId,
+      baseProfile,
+      threadId ? undefined : cwd,
+    );
     const internal = await this.internalMcp?.connection(
       location.projectId,
       threadId,
@@ -179,16 +202,45 @@ export class ProjectConnectionPolicyService {
     return {
       ...(internal ? { internalMcpId: internal.id } : {}),
       executionCwd: cwd ?? undefined,
+      copyPermissions: {
+        writable: copyPermissions.writable,
+        readOnly: copyPermissions.readOnly,
+        baseProfile,
+        writableCopyPath: copyPermissions.writableCopyPath,
+        readOnlyRoots: copyPermissions.readOnlyRoots,
+      },
       ...location,
       model: project.agentModel,
       reasoningEffort: project.agentReasoningEffort,
       config: {
         ...(project.appIds.length === 0 ? { features: { apps: false } } : {}),
+        default_permissions: location.readOnly
+          ? copyPermissions.readOnly
+          : copyPermissions.writable,
+        permissions: {
+          ...object(global.permissions),
+          ...copyPermissions.config,
+        } as JsonObject,
         apps: appConfig,
         mcp_servers: directMcpConfig,
         plugins: pluginConfig,
       },
     };
+  }
+
+  assertCopyOwnership(
+    policy: ProjectExecutionPolicy | null,
+    threadId: string,
+  ): void {
+    if (!policy?.copyPermissions) return;
+    const current = agentCopyPermissions(
+      this.db,
+      policy.projectId,
+      threadId,
+      policy.copyPermissions.baseProfile,
+    );
+    if (current.writable !== policy.copyPermissions.writable)
+      throw new ConflictException('GIT_COPY_OWNED');
   }
 
   /** Recheck after asynchronous preparation, immediately before native dispatch. */

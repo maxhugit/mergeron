@@ -242,7 +242,8 @@ export class WorkspaceGitActionsService {
     preparer?: AgentGitPreparer,
   ) {
     this.body(body);
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       const reviewed = await this.stageInputs(projectId, copyId, body);
       if (body.reviewFingerprint !== reviewed.reviewFingerprint)
         throw new ConflictException('GIT_STALE');
@@ -324,7 +325,8 @@ export class WorkspaceGitActionsService {
     preparer?: AgentGitPreparer,
   ) {
     this.body(body);
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
         projectId,
@@ -415,7 +417,8 @@ export class WorkspaceGitActionsService {
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
     const name = body.name;
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
         projectId,
@@ -936,7 +939,8 @@ export class WorkspaceGitActionsService {
       )
     )
       throw new BadRequestException('GIT_IDENTITY_REQUIRED');
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state, branch } = await this.copyState(
         projectId,
@@ -1010,36 +1014,71 @@ export class WorkspaceGitActionsService {
     });
   }
 
-  private localPreparation<T>(
+  private async localPreparation<T>(
+    copy: { projectId: string; copyId: string },
     preparer: AgentGitPreparer | undefined,
     body: Record<string, unknown>,
     operation: () => Promise<T>,
   ) {
+    const { projectId, copyId } = copy;
     if (!preparer) return this.gate.mutate(operation);
     if (body.agentThreadId !== preparer.threadId)
       throw new ForbiddenException('GIT_COPY_OWNED');
     requireThreadAccess(preparer.threadId);
     preparer.assertActive();
-    return this.gate.mutateFromAgent(preparer.threadId, async () => {
-      preparer.assertActive();
-      return operation();
-    });
+    this.assertCopyAgent(projectId, copyId, body);
+    const scope = this.gate.hasIsolation(preparer.threadId)
+      ? { copyPath: await this.git.directory(projectId, copyId) }
+      : undefined;
+    return this.gate.mutateFromAgent(
+      preparer.threadId,
+      async () => {
+        preparer.assertActive();
+        return operation();
+      },
+      scope,
+    );
   }
 
-  private remotePublication<T>(
+  private async remotePublication<T>(
+    copy: { projectId: string; copyId: string; pullRequestNumber?: number },
     publisher: AgentGitPublisher | undefined,
     body: Record<string, unknown>,
     operation: () => Promise<T>,
   ) {
+    const { projectId, copyId } = copy;
     if (!publisher) return this.gate.mutate(operation);
     if (body.agentThreadId !== publisher.threadId)
       throw new ForbiddenException('GIT_COPY_OWNED');
     requireThreadAccess(publisher.threadId);
     publisher.assertActive();
-    return this.gate.publishFromAgent(publisher.threadId, async () => {
-      publisher.assertActive();
-      return operation();
-    });
+    this.assertCopyAgent(projectId, copyId, body);
+    let scope: { copyPath: string; remoteRef: string } | undefined;
+    if (this.gate.hasIsolation(publisher.threadId)) {
+      const { cwd, source, branch } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      // Lock the destination ref (or the retargeted PR), not the connection:
+      // distinct publications can proceed, but two base changes must serialize.
+      scope = {
+        copyPath: cwd,
+        remoteRef: JSON.stringify(
+          copy.pullRequestNumber === undefined
+            ? [source.resource.address, branch]
+            : [source.resource.address, 'pull_request', copy.pullRequestNumber],
+        ),
+      };
+    }
+    return this.gate.publishFromAgent(
+      publisher.threadId,
+      async () => {
+        publisher.assertActive();
+        return operation();
+      },
+      scope,
+    );
   }
 
   async push(
@@ -1050,7 +1089,8 @@ export class WorkspaceGitActionsService {
   ) {
     requireExecutionAccess();
     this.body(body);
-    return this.remotePublication(publisher, body, async () => {
+    const copy = { projectId, copyId };
+    return this.remotePublication(copy, publisher, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { source, cwd, state, branch } = await this.copyState(
         projectId,
@@ -1138,7 +1178,10 @@ export class WorkspaceGitActionsService {
           env,
           120000,
         );
-        this.audit(projectId, copyId, 'git_push', { branch, sha: state.head });
+        this.audit(projectId, copyId, 'git_push', {
+          branch,
+          sha: state.head,
+        });
         return { sha: state.head, branch };
       } finally {
         await rm(folder, { recursive: true, force: true });
@@ -1155,7 +1198,8 @@ export class WorkspaceGitActionsService {
     requireExecutionAccess();
     this.body(body);
     const pr = this.pullRequestInput(body, 'CREATE_PULL_REQUEST');
-    return this.remotePublication(publisher, body, async () => {
+    const copy = { projectId, copyId };
+    return this.remotePublication(copy, publisher, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { copy, source, cwd, state, branch } = await this.copyState(
         projectId,
@@ -1215,6 +1259,152 @@ export class WorkspaceGitActionsService {
         branch,
         state.head,
       );
+    });
+  }
+
+  /** Change only the base of an existing, same-repository GitHub PR. */
+  async retargetPullRequest(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    publisher?: AgentGitPublisher,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    if (
+      body.confirmation !== 'RETARGET_PULL_REQUEST' ||
+      !Number.isSafeInteger(body.number) ||
+      Number(body.number) < 1 ||
+      Number(body.number) > 999999999 ||
+      typeof body.base !== 'string' ||
+      !body.base ||
+      body.base.length > 200 ||
+      body.base.startsWith('-') ||
+      typeof body.expectedBase !== 'string' ||
+      !body.expectedBase ||
+      body.expectedBase.length > 200 ||
+      typeof body.expectedPullRequestHead !== 'string' ||
+      !/^[a-f0-9]{40,64}$/.test(body.expectedPullRequestHead)
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const number = Number(body.number),
+      base = body.base,
+      expectedBase = body.expectedBase;
+    const expectedHead = body.expectedPullRequestHead;
+    const copy = { projectId, copyId, pullRequestNumber: number };
+    return this.remotePublication(copy, publisher, body, async () => {
+      this.assertCopyAgent(projectId, copyId, body);
+      const { copy, source, cwd, state } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      if (body.head !== state.head || body.address !== source.resource.address)
+        throw new ConflictException('GIT_STALE');
+      try {
+        if (
+          (
+            await this.git.git(cwd, ['check-ref-format', '--branch', base])
+          ).trim() !== base
+        )
+          throw Error();
+      } catch {
+        throw new BadRequestException('GIT_INVALID_INPUT');
+      }
+      const repo = this.git.github(projectId, copy.sourceResourceId);
+      if (!repo?.token)
+        throw new ForbiddenException('GIT_GITHUB_TOKEN_REQUIRED');
+      const fullName = `${repo.owner}/${repo.repo}`.toLowerCase();
+      const endpoint = `https://api.github.com/repos/${repo.owner}/${repo.repo}/pulls/${number}`;
+      const headers = {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        Authorization: `Bearer ${repo.token}`,
+        'Content-Type': 'application/json',
+      };
+      type PullRequest = {
+        number: number;
+        state: string;
+        merged: boolean;
+        head: { ref: string; sha: string; repo: { full_name: string } | null };
+        base: { ref: string; repo: { full_name: string } | null };
+      };
+      let current: PullRequest;
+      try {
+        const response = await fetch(endpoint, {
+          headers,
+          redirect: 'error',
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) throw Error();
+        current = (await response.json()) as PullRequest;
+      } catch {
+        throw new ConflictException('GIT_PR_READ_FAILED');
+      }
+      const sameRepository = (pr: PullRequest) =>
+        pr?.number === number &&
+        pr.base?.repo?.full_name?.toLowerCase() === fullName &&
+        pr.head?.repo?.full_name?.toLowerCase() === fullName;
+      if (!sameRepository(current))
+        throw new ForbiddenException('GIT_PR_REPOSITORY_MISMATCH');
+      if (current.state !== 'open' || current.merged !== false)
+        throw new ConflictException('GIT_PR_NOT_OPEN');
+      if (
+        current.head.sha !== expectedHead ||
+        current.base.ref !== expectedBase
+      )
+        throw new ConflictException('GIT_STALE');
+      if (base === current.head.ref)
+        throw new BadRequestException('GIT_PR_SAME_BRANCH');
+      const fresh = await this.copyState(projectId, copyId, body.fingerprint);
+      if (
+        fresh.state.head !== state.head ||
+        fresh.source.resource.address !== body.address ||
+        this.git.github(projectId, copy.sourceResourceId)?.token !== repo.token
+      )
+        throw new ConflictException('GIT_STALE');
+      publisher?.assertActive();
+      const url = `https://github.com/${repo.owner}/${repo.repo}/pull/${number}`;
+      if (base === expectedBase)
+        return { number, url, base, head: expectedHead, unchanged: true };
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'PATCH',
+          headers,
+          redirect: 'error',
+          signal: AbortSignal.timeout(20000),
+          body: JSON.stringify({ base }),
+        });
+      } catch {
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      }
+      if (!response.ok)
+        throw new ConflictException(
+          response.status >= 500
+            ? 'GIT_OUTCOME_UNKNOWN'
+            : 'GIT_PR_RETARGET_FAILED',
+        );
+      try {
+        const updated = (await response.json()) as PullRequest;
+        if (
+          !sameRepository(updated) ||
+          updated.state !== 'open' ||
+          updated.merged !== false ||
+          updated.base.ref !== base ||
+          updated.head.sha !== expectedHead
+        )
+          throw Error();
+      } catch {
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      }
+      this.audit(projectId, copyId, 'git_pr_retargeted', {
+        number,
+        previousBase: expectedBase,
+        base,
+        head: expectedHead,
+      });
+      return { number, url, base, head: expectedHead, unchanged: false };
     });
   }
 

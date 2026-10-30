@@ -148,10 +148,11 @@ export class ProjectConnectionRuntimeService {
     // A locally owned session with no first turn must not be destroyed by a
     // restart merely to move its cwd. Native transports must be identical;
     // turn/start still applies cwd/sandbox and revalidates the exact location.
-    if (
-      this.applied.get(threadId)?.transport === this.key(policy, true) &&
-      (await isUnmaterializedThread(this.codex, threadId))
-    ) {
+    if (await isUnmaterializedThread(this.codex, threadId)) {
+      if (this.applied.get(threadId)?.transport !== this.key(policy, true))
+        throw new ConflictException(
+          'Les droits ou intégrations de cet agent ont changé avant son premier tour. Sa conversation est conservée ; rétablissez son contexte initial ou créez un agent dans le dossier voulu.',
+        );
       this.assertGeneration(generation);
       this.policies.assertExecutionLocation(policy, cwd);
       this.record(threadId, policy, generation);

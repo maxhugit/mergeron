@@ -161,6 +161,10 @@ export class ThreadResumeRegistryService {
     return this.codexManager.getGeneration();
   }
 
+  readCachedPermissionProfile(threadId: string): unknown {
+    return this.responseCache.get(threadId);
+  }
+
   /** Returns the cached resolved model from a successful start/resume/fork. */
   readCachedModel(threadId: string): string | null {
     const model = this.responseCache.get(threadId)?.model;

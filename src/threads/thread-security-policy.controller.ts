@@ -2,6 +2,8 @@
 import {
   Body,
   Controller,
+  ConflictException,
+  Optional,
   Get,
   HttpCode,
   Logger,
@@ -20,6 +22,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { v2 } from '../codex/codex-schema';
+import { ProjectConnectionPolicyService } from './project-connection-policy.service';
 import { CodexService } from '../codex/codex.service';
 import { CODEX_V2_EXTRA_MODELS } from '../codex/dto/v2';
 import { BusinessException } from '../common/business.exception';
@@ -45,6 +48,8 @@ export class ThreadSecurityPolicyController {
     private readonly codex: CodexService,
     private readonly settingsObserver: ThreadSettingsObserverService,
     private readonly deletionRegistry: ThreadDeletionRegistryService,
+    @Optional()
+    private readonly projectConnections?: ProjectConnectionPolicyService,
   ) {}
 
   /** Reads observations only; never resumes a thread or substitutes global defaults. */
@@ -100,6 +105,17 @@ export class ThreadSecurityPolicyController {
         'Open this conversation for writing before changing its security policy',
       );
     }
+    const project = await this.projectConnections?.policyForThread(
+      threadId,
+      thread.cwd,
+    );
+    if (
+      project?.copyPermissions &&
+      (patch.sandboxPolicy !== undefined ||
+        (patch.approvalPolicy !== undefined &&
+          patch.approvalPolicy !== 'never'))
+    )
+      throw new ConflictException('GIT_COPY_ISOLATION_REQUIRED');
     this.deletionRegistry.assertMutable(threadId);
     await this.codex.request<Record<string, never>>('thread/settings/update', {
       threadId,

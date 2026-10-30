@@ -39,6 +39,7 @@ import {
   IdentityService,
   type PlatformIdentity,
 } from '../auth/identity.service';
+import { agentCopyPermissions } from './agent-copy-permissions';
 import { claimAgentCopy } from './git-copy-ownership';
 import { gitCredentialHelper } from './git-credentials';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
@@ -80,6 +81,7 @@ let copies: WorkspaceCopiesService;
 let service: WorkspaceGitService;
 let actions: WorkspaceGitActionsService;
 let active: string[];
+let gate: GitMutationGateService;
 let copyId: string;
 let cwd: string;
 const connectedPerson: PlatformIdentity = {
@@ -172,7 +174,7 @@ beforeEach(async () => {
   copies = new WorkspaceCopiesService(database.db, resources);
   service = new WorkspaceGitService(copies, resources);
   active = [];
-  const gate = new GitMutationGateService(
+  gate = new GitMutationGateService(
     {
       snapshot: () => active,
     } as ThreadExecutionInventoryService,
@@ -1982,6 +1984,203 @@ describe('confirmed actions', () => {
     );
   });
 
+  it('prepares, commits and creates two PRs concurrently on separate copies of the same connection', async () => {
+    // Both real local clones share one configured source; GitHub responses are fixtures.
+    const second = await copies.create('p', 'remote', {});
+    writable();
+    resources.update('p', 'remote', {
+      secret: { token: 'unit-concurrent-token' },
+    });
+    const secondCwd = second.localPath!;
+    const entries = [
+      {
+        id: copyId,
+        dir: cwd,
+        owner: 'alice',
+        branch: 'feature/a',
+        content: 'alice change\n',
+      },
+      {
+        id: second.id,
+        dir: secondCwd,
+        owner: 'bob',
+        branch: 'feature/b',
+        content: 'bob change\n',
+      },
+    ];
+    for (const entry of entries) {
+      const state = await service.snapshot('p', entry.id);
+      await actions.createBranch('p', entry.id, {
+        name: entry.branch,
+        startRef: 'HEAD',
+        startRevision: state.head,
+        fingerprint: state.fingerprint,
+        checkout: true,
+        confirmation: 'CREATE_LOCAL_BRANCH',
+      });
+      database.db
+        .insert(projectAgentThreads)
+        .values({
+          threadId: entry.owner,
+          projectId: 'p',
+          workspacePath: path.join(root, 'project'),
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      claimAgentCopy(database.db, 'p', entry.owner, entry.id);
+      await writeFile(path.join(entry.dir, 'README.md'), entry.content);
+    }
+    for (const entry of entries)
+      gate.recordIsolation(
+        entry.owner,
+        agentCopyPermissions(database.db, 'p', entry.owner),
+      );
+    gate.recordIsolation('observer', {
+      writableCopyPath: null,
+      readOnlyRoots: [
+        await realpath(path.join(root, 'project/sources/.external')),
+      ],
+    });
+    active = ['alice', 'bob', 'observer'];
+    const prepared = await Promise.all(
+      entries.map(async (entry) => {
+        const body = {
+          agentThreadId: entry.owner,
+          paths: ['README.md'],
+          fingerprint: (await service.snapshot('p', entry.id)).fingerprint,
+        };
+        const review = await actions.stageReview('p', entry.id, body);
+        return {
+          entry,
+          body: { ...body, reviewFingerprint: review.reviewFingerprint },
+          actor: { threadId: entry.owner, assertActive: vi.fn() },
+        };
+      }),
+    );
+    let allowFirst!: () => void, firstEntered!: () => void;
+    const firstWaiting = new Promise<void>((resolve) => {
+      firstEntered = resolve;
+    });
+    const releaseFirst = new Promise<void>((resolve) => {
+      allowFirst = resolve;
+    });
+    const original = service.git.bind(service) as WorkspaceGitService['git'];
+    const physicalCwd = await realpath(cwd);
+    const spy = vi
+      .spyOn(service, 'git')
+      .mockImplementation(
+        async (...args: Parameters<WorkspaceGitService['git']>) => {
+          if (args[0] === physicalCwd && args[1][0] === 'hash-object') {
+            firstEntered();
+            await releaseFirst;
+          }
+          return original(...args);
+        },
+      );
+    const first = actions.stage(
+      'p',
+      copyId,
+      prepared[0].body,
+      prepared[0].actor,
+    );
+    await firstWaiting;
+    try {
+      await actions.stage('p', second.id, prepared[1].body, prepared[1].actor);
+      expect(
+        (await exec('git', ['-C', secondCwd, 'show', ':README.md'])).stdout,
+      ).toBe('bob change\n');
+      expect(
+        (await exec('git', ['-C', cwd, 'show', ':README.md'])).stdout,
+      ).toBe('initial\n');
+    } finally {
+      allowFirst();
+      await first;
+      spy.mockRestore();
+    }
+    await Promise.all(
+      prepared.map(async ({ entry, actor }) =>
+        commit(
+          'p',
+          entry.id,
+          {
+            agentThreadId: entry.owner,
+            fingerprint: (await service.stagedDiff('p', entry.id)).fingerprint,
+            message: entry.content.trim(),
+          },
+          actor,
+        ),
+      ),
+    );
+    for (const entry of entries)
+      expect(
+        (await exec('git', ['-C', entry.dir, 'show', 'HEAD:README.md'])).stdout,
+      ).toBe(entry.content);
+    const states = await Promise.all(
+      entries.map((entry) => service.snapshot('p', entry.id)),
+    );
+    vi.spyOn(service, 'pullRequestPreparation').mockImplementation(
+      async (_p, _r, branch) => ({
+        head: states[branch === 'feature/a' ? 0 : 1].head,
+        baseHead: 'a'.repeat(40),
+        existingNumber: null,
+      }),
+    );
+    let releasePost!: () => void, postEntered!: () => void;
+    const posting = new Promise<void>((resolve) => {
+      postEntered = resolve;
+    });
+    const finishPost = new Promise<void>((resolve) => {
+      releasePost = resolve;
+    });
+    const fetchFixture = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (typeof options?.body !== 'string')
+        throw new Error('Expected a JSON request body');
+      const data = JSON.parse(options.body) as { head: string };
+      if (data.head === 'feature/a') {
+        postEntered();
+        await finishPost;
+      }
+      return {
+        ok: true,
+        json: async () => ({ number: data.head === 'feature/a' ? 31 : 32 }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchFixture);
+    const publish = (index: number) =>
+      actions.createPullRequest(
+        'p',
+        entries[index].id,
+        {
+          agentThreadId: entries[index].owner,
+          fingerprint: states[index].fingerprint,
+          head: states[index].head,
+          address: 'https://github.com/example/demo.git',
+          base: 'main',
+          title: entries[index].content.trim(),
+          description: '',
+          draft: false,
+          confirmation: 'CREATE_PULL_REQUEST',
+        },
+        prepared[index].actor,
+      );
+    const firstPR = publish(0);
+    await posting;
+    try {
+      await expect(publish(1)).resolves.toMatchObject({
+        number: 32,
+        existing: false,
+      });
+    } finally {
+      releasePost();
+    }
+    await expect(firstPR).resolves.toMatchObject({
+      number: 31,
+      existing: false,
+    });
+    expect(fetchFixture).toHaveBeenCalledTimes(2);
+  }, 15000);
+
   it('unstages selected changes without changing their file or other staged entries', async () => {
     writable();
     await writeFile(path.join(cwd, 'README.md'), 'keep me\n');
@@ -2370,5 +2569,219 @@ describe('confirmed actions', () => {
       }),
     ).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
     expect(fetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('retargeting existing GitHub pull requests', () => {
+  const prepare = async () => {
+    resources.update('p', 'remote', {
+      accessMode: 'read_write',
+      address: 'https://github.com/example/demo.git',
+      secret: { token: 'retarget-unit-token' },
+    });
+    const state = await service.snapshot('p', copyId);
+    const input = {
+      confirmation: 'RETARGET_PULL_REQUEST',
+      fingerprint: state.fingerprint,
+      head: state.head,
+      address: 'https://github.com/example/demo.git',
+      number: 267,
+      base: 'main',
+      expectedBase: 'feature/previous',
+      expectedPullRequestHead: 'c'.repeat(40),
+    };
+    const pr = {
+      number: 267,
+      state: 'open',
+      merged: false,
+      head: {
+        ref: 'feature/proposal',
+        sha: input.expectedPullRequestHead,
+        repo: { full_name: 'example/demo' },
+      },
+      base: { ref: input.expectedBase, repo: { full_name: 'example/demo' } },
+    };
+    const fetch = vi.fn((_url: unknown, options?: RequestInit) =>
+      Promise.resolve(
+        Response.json(
+          options?.method === 'PATCH'
+            ? { ...pr, base: { ...pr.base, ref: input.base } }
+            : pr,
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    return { input, pr, fetch, state };
+  };
+  it('changes only the requested base on the fixed API and leaves the local copy unchanged', async () => {
+    const { input, fetch, state } = await prepare();
+    const result = await asPerson(() =>
+      actions.retargetPullRequest('p', copyId, input),
+    );
+    expect(result).toEqual({
+      number: 267,
+      url: 'https://github.com/example/demo/pull/267',
+      base: 'main',
+      head: input.expectedPullRequestHead,
+      unchanged: false,
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.github.com/repos/example/demo/pulls/267',
+      expect.objectContaining({
+        method: 'PATCH',
+        redirect: 'error',
+        body: JSON.stringify({ base: 'main' }),
+      }),
+    );
+    expect(await service.snapshot('p', copyId)).toMatchObject({
+      head: state.head,
+      fingerprint: state.fingerprint,
+    });
+    expect(JSON.stringify(result)).not.toContain('retarget-unit-token');
+  });
+  it('retargets for an isolated active owner while locking the PR rather than the unrelated local branch', async () => {
+    const { input, fetch, state } = await prepare();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'owner',
+        projectId: 'p',
+        workspacePath: path.join(root, 'project'),
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    claimAgentCopy(database.db, 'p', 'owner', copyId);
+    const permissions = agentCopyPermissions(database.db, 'p', 'owner');
+    gate.recordIsolation('owner', permissions);
+    gate.recordIsolation('observer', {
+      writableCopyPath: null,
+      readOnlyRoots: permissions.readOnlyRoots,
+    });
+    active = ['owner', 'observer'];
+    const publication = vi.spyOn(gate, 'publishFromAgent');
+    const assertActive = vi.fn();
+    await expect(
+      asPerson(() =>
+        actions.retargetPullRequest(
+          'p',
+          copyId,
+          { ...input, agentThreadId: 'owner' },
+          { threadId: 'owner', assertActive },
+        ),
+      ),
+    ).resolves.toMatchObject({ number: input.number, base: 'main' });
+    expect(publication).toHaveBeenCalledWith('owner', expect.any(Function), {
+      copyPath: await realpath(cwd),
+      remoteRef: JSON.stringify([input.address, 'pull_request', input.number]),
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(assertActive).toHaveBeenCalledTimes(3);
+    expect(await service.snapshot('p', copyId)).toMatchObject({
+      head: state.head,
+      fingerprint: state.fingerprint,
+    });
+  });
+  it.each([
+    'head',
+    'base',
+    'closed',
+    'merged',
+    'fork',
+    'foreign',
+    'number',
+  ] as const)(
+    'refuses changed remote state (%s) before any PATCH',
+    async (change) => {
+      const { input, pr, fetch } = await prepare();
+      if (change === 'head') pr.head.sha = 'd'.repeat(40);
+      if (change === 'base') pr.base.ref = 'changed';
+      if (change === 'closed') pr.state = 'closed';
+      if (change === 'merged') pr.merged = true;
+      if (change === 'fork') pr.head.repo.full_name = 'another/repo';
+      if (change === 'foreign') pr.base.repo.full_name = 'another/repo';
+      if (change === 'number') pr.number = 268;
+      await expect(
+        asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+      ).rejects.toThrow();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('accepts an already correct target without a write', async () => {
+    const { input, pr, fetch } = await prepare();
+    pr.base.ref = 'main';
+    expect(
+      await asPerson(() =>
+        actions.retargetPullRequest('p', copyId, {
+          ...input,
+          expectedBase: 'main',
+        }),
+      ),
+    ).toMatchObject({ unchanged: true });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it('blocks revoked credentials or changed local state between inspection and PATCH', async () => {
+    const { input, pr, fetch } = await prepare();
+    fetch.mockImplementationOnce(async () => {
+      resources.update('p', 'remote', { secret: { token: 'rotated' } });
+      return Response.json(pr);
+    });
+    await expect(
+      asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+    ).rejects.toThrow('GIT_STALE');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each(['network', 'server', 'invalid', 'wrong-base', 'rejected'] as const)(
+    'does not retry an uncertain or rejected PATCH (%s)',
+    async (failure) => {
+      const { input, pr, fetch } = await prepare();
+      fetch.mockImplementationOnce(async () => Response.json(pr));
+      fetch.mockImplementationOnce(async () => {
+        if (failure === 'network') throw Error('private diagnostic');
+        if (failure === 'server') return new Response('', { status: 503 });
+        if (failure === 'invalid')
+          return new Response('not JSON', { status: 200 });
+        if (failure === 'rejected') return new Response('', { status: 422 });
+        return Response.json(pr);
+      });
+      await expect(
+        asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+      ).rejects.toThrow(
+        failure === 'rejected'
+          ? 'GIT_PR_RETARGET_FAILED'
+          : 'GIT_OUTCOME_UNKNOWN',
+      );
+      expect(fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+  it('refuses invalid branches, same-branch targets, read-only sources and missing tokens', async () => {
+    const { input, pr, fetch } = await prepare();
+    await expect(
+      asPerson(() =>
+        actions.retargetPullRequest('p', copyId, {
+          ...input,
+          base: 'invalid branch',
+        }),
+      ),
+    ).rejects.toThrow('GIT_INVALID_INPUT');
+    await expect(
+      asPerson(() =>
+        actions.retargetPullRequest('p', copyId, {
+          ...input,
+          base: pr.head.ref,
+        }),
+      ),
+    ).rejects.toThrow('GIT_PR_SAME_BRANCH');
+    resources.update('p', 'remote', { accessMode: 'read_only' });
+    await expect(
+      asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+    ).rejects.toThrow('GIT_READ_ONLY');
+    resources.update('p', 'remote', { accessMode: 'read_write', secret: null });
+    await expect(
+      asPerson(() => actions.retargetPullRequest('p', copyId, input)),
+    ).rejects.toThrow('GIT_GITHUB_TOKEN_REQUIRED');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

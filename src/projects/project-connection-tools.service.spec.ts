@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment -- Async service doubles and asymmetric matchers. */
+import { GitGateRefusal } from '../threads/git-mutation-gate.service';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -49,9 +50,19 @@ describe('project connection agent tools', () => {
     stagedDiff: vi.fn(),
     commits: vi.fn(),
   };
+  const createCopy =
+    vi.fn<
+      (
+        projectId: string,
+        connectionId: string,
+        input: { agentThreadId: string; branch?: string },
+        beforeCommit: () => unknown,
+      ) => Promise<WorkspaceCopyView>
+    >();
   const actions = {
     push: vi.fn(),
     createPullRequest: vi.fn(),
+    retargetPullRequest: vi.fn(),
     stageReview: vi.fn(),
     stage: vi.fn(),
     unstage: vi.fn(),
@@ -185,13 +196,143 @@ describe('project connection agent tools', () => {
     tools = new ProjectConnectionToolsService(
       database.db,
       new ProjectLocationsService(database.db),
-      { list: () => own } as unknown as WorkspaceCopiesService,
+      {
+        list: () => own,
+        create: createCopy,
+      } as unknown as WorkspaceCopiesService,
       git as unknown as WorkspaceGitService,
       actions as unknown as WorkspaceGitActionsService,
     );
   });
   afterEach(() => {
     database.sqlite.close();
+  });
+
+  const create = (extra: Record<string, unknown> = {}) => ({
+    tool: 'create_project_git_copy',
+    connectionId,
+    requestId: 'clone-1',
+    ...extra,
+  });
+  const allowClone = () => {
+    own = [];
+    createCopy.mockImplementation(
+      async (_project, _connection, input, beforeCommit) => {
+        beforeCommit();
+        const copy = {
+          id: 'created-copy',
+          sourceResourceId: connectionId,
+          ownerThreadIds: [input.agentThreadId],
+          localPath: '/workspaces/p/sources/.external/created-copy',
+          branch: 'main',
+          revision: state.head,
+          state: 'ready',
+        } as WorkspaceCopyView;
+        own.push(copy);
+        return copy;
+      },
+    );
+  };
+  it('creates and attaches a managed copy only to the bound conversation, independently of its active folder', async () => {
+    allowClone();
+    const result = await call(create({ branch: 'main' }));
+    expect(createCopy).toHaveBeenCalledWith(
+      'p',
+      connectionId,
+      { agentThreadId: 'agent', branch: 'main' },
+      expect.any(Function),
+    );
+    expect(result).toMatchObject({
+      id: 'created-copy',
+      ownerThreadId: 'agent',
+      activeFolderChanged: false,
+    });
+    expect(await call(create({ branch: 'main' }))).toEqual(result);
+    expect(createCopy).toHaveBeenCalledTimes(1);
+    await expect(call(create({ branch: 'other' }))).rejects.toThrow(
+      'PROJECT_CONNECTION_REQUEST_CONFLICT',
+    );
+  });
+  it.each([
+    'agentThreadId',
+    'ownerThreadId',
+    'threadId',
+    'projectId',
+    'copyId',
+    'path',
+    'address',
+    'secret',
+    'command',
+  ])('rejects caller-selected %s before cloning', async (field) => {
+    allowClone();
+    await expect(call(create({ [field]: 'other' }))).rejects.toThrow();
+    expect(createCopy).not.toHaveBeenCalled();
+  });
+  it('refuses a second copy and never claims or uses the existing one implicitly', async () => {
+    await expect(call(create())).rejects.toThrow('GIT_AGENT_COPY_EXISTS');
+    expect(createCopy).not.toHaveBeenCalled();
+  });
+  it('requires an administrator, a current writable turn and an enabled project connection', async () => {
+    allowClone();
+    await expect(
+      as('reader', () => tools.execute('p', 'agent', create(), () => {})),
+    ).rejects.toThrow();
+    await expect(
+      call(create(), () => {
+        throw new Error('NO_ACTIVE_TURN');
+      }),
+    ).rejects.toThrow('NO_ACTIVE_TURN');
+    as('admin', () => resources.update('p', connectionId, { enabled: false }));
+    await expect(call(create())).rejects.toThrow(
+      'PROJECT_CONNECTION_UNAVAILABLE',
+    );
+    expect(createCopy).not.toHaveBeenCalled();
+  });
+  it('keeps an interrupted clone unconfirmed instead of creating a duplicate on retry', async () => {
+    allowClone();
+    createCopy.mockRejectedValue(new Error('WORKSPACE_GIT_CLONE_FAILED'));
+    await expect(call(create())).rejects.toThrow('WORKSPACE_GIT_CLONE_FAILED');
+    await expect(call(create())).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
+    expect(createCopy).toHaveBeenCalledTimes(1);
+  });
+  it('rechecks source and turn authorization immediately before ownership is committed', async () => {
+    allowClone();
+    createCopy.mockImplementation(async (_p, _c, _input, beforeCommit) => {
+      as('admin', () =>
+        resources.update('p', connectionId, { enabled: false }),
+      );
+      beforeCommit();
+      throw new Error('Unreachable after revocation');
+    });
+    await expect(call(create())).rejects.toThrow(
+      'PROJECT_CONNECTION_UNAVAILABLE',
+    );
+    expect(own).toEqual([]);
+  });
+
+  it('allows the same requestId to retry a definitive gate refusal, but not an uncertain dispatched outcome', async () => {
+    actions.stage
+      .mockRejectedValueOnce(new GitGateRefusal('GIT_BUSY'))
+      .mockResolvedValueOnce({ prepared: true });
+    const args = prepare({
+      operation: 'stage',
+      reviewFingerprint: 'c'.repeat(64),
+    });
+    await expect(call(args)).rejects.toThrow('GIT_BUSY');
+    await expect(call(args)).resolves.toMatchObject({
+      data: { prepared: true },
+    });
+    expect(actions.stage).toHaveBeenCalledTimes(2);
+    await expect(call(args)).resolves.toMatchObject({
+      data: { prepared: true },
+    });
+    expect(actions.stage).toHaveBeenCalledTimes(2);
+    actions.stage.mockRejectedValueOnce(
+      new Error('connection lost after dispatch'),
+    );
+    const uncertain = { ...args, requestId: 'uncertain-stage' };
+    await expect(call(uncertain)).rejects.toThrow('connection lost');
+    await expect(call(uncertain)).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
   });
 
   it('can inspect the entire frozen staged index rather than confusing it with working changes', async () => {
@@ -501,5 +642,106 @@ describe('project connection agent tools', () => {
     expect(
       database.db.select().from(projectAgentToolRequests).all()[0].result,
     ).toBeNull();
+  });
+  it('retargets once using separate observed remote PR state and records the change', async () => {
+    const input = publish({
+      operation: 'retarget_pull_request',
+      number: 267,
+      base: 'main',
+      expectedBase: 'feature/old',
+      expectedPullRequestHead: 'c'.repeat(40),
+    });
+    actions.retargetPullRequest.mockResolvedValue({
+      number: 267,
+      base: 'main',
+      unchanged: false,
+    });
+    const first = await call(input);
+    expect(first).toMatchObject({
+      operation: 'retarget_pull_request',
+      data: { number: 267, base: 'main' },
+    });
+    expect(await call(input)).toEqual(first);
+    expect(actions.retargetPullRequest).toHaveBeenCalledTimes(1);
+    expect(actions.retargetPullRequest).toHaveBeenCalledWith(
+      'p',
+      'own',
+      expect.objectContaining({
+        confirmation: 'RETARGET_PULL_REQUEST',
+        number: 267,
+        base: 'main',
+        expectedBase: 'feature/old',
+        expectedPullRequestHead: 'c'.repeat(40),
+        head: state.head,
+      }),
+      expect.objectContaining({ threadId: 'agent' }),
+    );
+    expect(actions.createPullRequest).not.toHaveBeenCalled();
+    expect(actions.push).not.toHaveBeenCalled();
+    expect(database.db.select().from(projectActivity).all()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          details: expect.objectContaining({
+            number: 267,
+            base: 'main',
+            expectedBase: 'feature/old',
+          }),
+        }),
+      ]),
+    );
+    await expect(call({ ...input, base: 'develop' })).rejects.toThrow(
+      'PROJECT_CONNECTION_REQUEST_CONFLICT',
+    );
+  });
+  it('rejects incomplete or mixed retarget fields before dispatch', async () => {
+    const input = publish({
+      operation: 'retarget_pull_request',
+      number: 267,
+      base: 'main',
+      expectedBase: 'old',
+      expectedPullRequestHead: 'c'.repeat(40),
+    });
+    for (const field of [
+      'number',
+      'base',
+      'expectedBase',
+      'expectedPullRequestHead',
+    ]) {
+      const invalid: Record<string, unknown> = { ...input };
+      delete invalid[field];
+      await expect(call(invalid)).rejects.toThrow();
+    }
+    for (const extra of [
+      { title: 'ignored?' },
+      { draft: false },
+      { description: 'ignored?' },
+      { number: 0 },
+      { expectedPullRequestHead: 'invalid' },
+    ])
+      await expect(call({ ...input, ...extra })).rejects.toThrow();
+    expect(actions.retargetPullRequest).not.toHaveBeenCalled();
+  });
+  it('requires administrator write access, ownership and fresh local state for retargeting', async () => {
+    const input = publish({
+      operation: 'retarget_pull_request',
+      number: 267,
+      base: 'main',
+      expectedBase: 'old',
+      expectedPullRequestHead: 'c'.repeat(40),
+    });
+    await expect(
+      as('reader', () => tools.execute('p', 'agent', input, () => {})),
+    ).rejects.toThrow();
+    await expect(
+      call({ ...input, expectedHead: 'd'.repeat(40) }),
+    ).rejects.toThrow('GIT_STALE');
+    own[0].ownerThreadIds = ['another'];
+    await expect(call(input)).rejects.toThrow('GIT_COPY_OWNED');
+    own[0].ownerThreadIds = ['agent'];
+    as('admin', () =>
+      resources.update('p', connectionId, { accessMode: 'read_only' }),
+    );
+    await expect(call(input)).rejects.toThrow('GIT_READ_ONLY');
+    expect(actions.retargetPullRequest).not.toHaveBeenCalled();
   });
 });
