@@ -242,7 +242,8 @@ export class WorkspaceGitActionsService {
     preparer?: AgentGitPreparer,
   ) {
     this.body(body);
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       const reviewed = await this.stageInputs(projectId, copyId, body);
       if (body.reviewFingerprint !== reviewed.reviewFingerprint)
         throw new ConflictException('GIT_STALE');
@@ -324,7 +325,8 @@ export class WorkspaceGitActionsService {
     preparer?: AgentGitPreparer,
   ) {
     this.body(body);
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
         projectId,
@@ -415,7 +417,8 @@ export class WorkspaceGitActionsService {
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
     const name = body.name;
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
         projectId,
@@ -936,7 +939,8 @@ export class WorkspaceGitActionsService {
       )
     )
       throw new BadRequestException('GIT_IDENTITY_REQUIRED');
-    return this.localPreparation(preparer, body, async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state, branch } = await this.copyState(
         projectId,
@@ -1010,36 +1014,71 @@ export class WorkspaceGitActionsService {
     });
   }
 
-  private localPreparation<T>(
+  private async localPreparation<T>(
+    copy: { projectId: string; copyId: string },
     preparer: AgentGitPreparer | undefined,
     body: Record<string, unknown>,
     operation: () => Promise<T>,
   ) {
+    const { projectId, copyId } = copy;
     if (!preparer) return this.gate.mutate(operation);
     if (body.agentThreadId !== preparer.threadId)
       throw new ForbiddenException('GIT_COPY_OWNED');
     requireThreadAccess(preparer.threadId);
     preparer.assertActive();
-    return this.gate.mutateFromAgent(preparer.threadId, async () => {
-      preparer.assertActive();
-      return operation();
-    });
+    this.assertCopyAgent(projectId, copyId, body);
+    const scope = this.gate.hasIsolation(preparer.threadId)
+      ? { copyPath: await this.git.directory(projectId, copyId) }
+      : undefined;
+    return this.gate.mutateFromAgent(
+      preparer.threadId,
+      async () => {
+        preparer.assertActive();
+        return operation();
+      },
+      scope,
+    );
   }
 
-  private remotePublication<T>(
+  private async remotePublication<T>(
+    copy: { projectId: string; copyId: string; pullRequestNumber?: number },
     publisher: AgentGitPublisher | undefined,
     body: Record<string, unknown>,
     operation: () => Promise<T>,
   ) {
+    const { projectId, copyId } = copy;
     if (!publisher) return this.gate.mutate(operation);
     if (body.agentThreadId !== publisher.threadId)
       throw new ForbiddenException('GIT_COPY_OWNED');
     requireThreadAccess(publisher.threadId);
     publisher.assertActive();
-    return this.gate.publishFromAgent(publisher.threadId, async () => {
-      publisher.assertActive();
-      return operation();
-    });
+    this.assertCopyAgent(projectId, copyId, body);
+    let scope: { copyPath: string; remoteRef: string } | undefined;
+    if (this.gate.hasIsolation(publisher.threadId)) {
+      const { cwd, source, branch } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      // Lock the destination ref (or the retargeted PR), not the connection:
+      // distinct publications can proceed, but two base changes must serialize.
+      scope = {
+        copyPath: cwd,
+        remoteRef: JSON.stringify(
+          copy.pullRequestNumber === undefined
+            ? [source.resource.address, branch]
+            : [source.resource.address, 'pull_request', copy.pullRequestNumber],
+        ),
+      };
+    }
+    return this.gate.publishFromAgent(
+      publisher.threadId,
+      async () => {
+        publisher.assertActive();
+        return operation();
+      },
+      scope,
+    );
   }
 
   async push(
@@ -1050,7 +1089,8 @@ export class WorkspaceGitActionsService {
   ) {
     requireExecutionAccess();
     this.body(body);
-    return this.remotePublication(publisher, body, async () => {
+    const copy = { projectId, copyId };
+    return this.remotePublication(copy, publisher, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { source, cwd, state, branch } = await this.copyState(
         projectId,
@@ -1138,7 +1178,10 @@ export class WorkspaceGitActionsService {
           env,
           120000,
         );
-        this.audit(projectId, copyId, 'git_push', { branch, sha: state.head });
+        this.audit(projectId, copyId, 'git_push', {
+          branch,
+          sha: state.head,
+        });
         return { sha: state.head, branch };
       } finally {
         await rm(folder, { recursive: true, force: true });
@@ -1155,7 +1198,8 @@ export class WorkspaceGitActionsService {
     requireExecutionAccess();
     this.body(body);
     const pr = this.pullRequestInput(body, 'CREATE_PULL_REQUEST');
-    return this.remotePublication(publisher, body, async () => {
+    const copy = { projectId, copyId };
+    return this.remotePublication(copy, publisher, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { copy, source, cwd, state, branch } = await this.copyState(
         projectId,
@@ -1247,7 +1291,8 @@ export class WorkspaceGitActionsService {
       base = body.base,
       expectedBase = body.expectedBase;
     const expectedHead = body.expectedPullRequestHead;
-    return this.remotePublication(publisher, body, async () => {
+    const copy = { projectId, copyId, pullRequestNumber: number };
+    return this.remotePublication(copy, publisher, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { copy, source, cwd, state } = await this.copyState(
         projectId,

@@ -1029,7 +1029,7 @@
   "thinking": "Réfléchit",
   "thinkinga7311e3e": "Réfléchit...",
   "thisAppIdCannotBeEditedThroughTheCuratedConfigPath": "Cet identifiant d'application ne peut pas être modifié via le chemin de configuration sélectionné.",
-  "thisCannotBeUndoneFilesAlreadyWrittenToTheWorkspaceAreNotReverted": "Ceci est irréversible. Les fichiers déjà écrits dans l'espace de travail ne seront pas restaurés.",
+  "thisCannotBeUndoneFilesAlreadyWrittenToTheWorkspaceAreNotReverted": "Ceci est irréversible. Supprimer un agent de travail supprime aussi sa copie Git gérée, y compris les modifications non publiées et les commits locaux. Le dépôt distant et les autres fichiers du projet restent inchangés. Supprimer uniquement une version de message conserve la copie de l’agent.",
   "thisChangeOnlyTakesEffectAfterCodexRestartsUseRestartCodexInTheModelCatalogSectionBelow": "Ce changement ne prendra effet qu'après le redémarrage de Codex. Utilisez “Restart Codex” dans la section du catalogue de modèles ci‑dessous.",
   "thisChangesWhoReviewsPermissionRequestsAutomaticReviewOrAGuardianSubagentCanApp4f7053df": "Cela change la personne qui examine les demandes d'autorisation. La révision automatique ou un sous‑agent gardien peut approuver ou refuser des opérations sans que la demande ne vous soit d'abord adressée lorsque la politique le permet.",
   "thisClearsOnlyThisReviewerOverrideFutureApprovalRoutingWillInheritFromTheNextCo4dc19380": "Cela ne supprime que ce contournement de réviseur. Le routage des approbations futur héritera de la couche suivante configurée ou de la valeur par défaut utilisateur intégrée.",

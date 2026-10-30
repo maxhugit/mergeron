@@ -146,10 +146,7 @@ it('deletes the checkout and its metadata, including local changes and Git data'
 });
 
 it('finds a reserved copy even after the agent selected a different workspace', async () => {
-  database.db
-    .update(projectAgentThreads)
-    .set({ workspacePath: root })
-    .run();
+  database.db.update(projectAgentThreads).set({ workspacePath: root }).run();
   database.db.delete(projectActiveFolders).run();
 
   await service.cleanup('agent');
@@ -205,13 +202,19 @@ it('preserves a copy used by another context and retains ownership for retry', a
 });
 
 it('rejects unsafe paths without deleting an attached workspace', async () => {
+  const unrelated = path.join(root, 'documents');
+  await mkdir(unrelated);
+  await writeFile(path.join(unrelated, 'keep.txt'), 'keep');
   database.db
     .update(projectWorkspaces)
-    .set({ path: root })
+    .set({ path: unrelated })
     .where(eq(projectWorkspaces.id, 'copy'))
     .run();
-  await expect(service.cleanup('agent')).rejects.toThrow('GIT_COPY_PATH_UNSAFE');
+  await expect(service.cleanup('agent')).rejects.toThrow(
+    'GIT_COPY_PATH_UNSAFE',
+  );
   expect((await stat(root)).isDirectory()).toBe(true);
+  expect(await readFile(path.join(unrelated, 'keep.txt'), 'utf8')).toBe('keep');
 });
 
 it('rejects symlinks without touching their contents', async () => {
@@ -221,7 +224,9 @@ it('rejects symlinks without touching their contents', async () => {
   await rm(checkout, { recursive: true });
   await symlink(elsewhere, checkout);
 
-  await expect(service.cleanup('agent')).rejects.toThrow('GIT_COPY_PATH_UNSAFE');
+  await expect(service.cleanup('agent')).rejects.toThrow(
+    'GIT_COPY_PATH_UNSAFE',
+  );
   expect(await readFile(path.join(elsewhere, 'keep.txt'), 'utf8')).toBe('keep');
 });
 

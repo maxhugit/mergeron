@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { ConfigService } from '@nestjs/config';
 import { execFile } from 'node:child_process';
 import * as os from 'node:os';
@@ -20,11 +21,16 @@ import {
 } from '../database/database.testing';
 import {
   projectActiveFolders,
+  projectLocations,
   projects,
   projectWorkspaceResources,
   projectWorkspaces,
   projectAgentThreads,
 } from '../database/schema';
+import {
+  agentCopyPermissions,
+  assertCopyPermissionProfile,
+} from './agent-copy-permissions';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { ProjectConnectionPolicyService } from '../threads/project-connection-policy.service';
@@ -250,6 +256,130 @@ describe('WorkspaceCopiesService', () => {
       await readFile(path.join(copy.localPath!, 'README.md'), 'utf8'),
     ).toBe('source repository\n');
     expect(copies.list('project')).toHaveLength(1);
+  });
+
+  it('grants writes only to the calling agent’s registered copy, even from the writable parent workspace', async () => {
+    database.db
+      .insert(projectAgentThreads)
+      .values(
+        ['agent-a', 'agent-b'].map((threadId) => ({
+          threadId,
+          projectId: 'project',
+          workspacePath: primary,
+          createdAt: 1,
+          updatedAt: 1,
+        })),
+      )
+      .run();
+    const own = await copies.create('project', 'git-source', {
+      agentThreadId: 'agent-a',
+    });
+    const foreign = await copies.create('project', 'git-source', {
+      agentThreadId: 'agent-b',
+    });
+    database.db
+      .update(projectLocations)
+      .set({
+        accessMode: 'read_write',
+        capabilities: { read: true, write: true, execute: true },
+      })
+      .where(eq(projectLocations.projectId, 'project'))
+      .run();
+    const profiles = agentCopyPermissions(database.db, 'project', 'agent-a');
+    const writable = profiles.config[profiles.writable] as {
+      filesystem: Record<string, string>;
+    };
+    const readOnly = profiles.config[profiles.readOnly] as {
+      filesystem: Record<string, string>;
+    };
+    expect(
+      writable.filesystem[path.join(primary, 'sources', '.external')],
+    ).toBe('read');
+    expect(writable.filesystem[own.localPath!]).toBe('write');
+    expect(writable.filesystem[foreign.localPath!]).toBe('read');
+    expect(
+      Object.values(readOnly.filesystem).every((access) => access === 'read'),
+    ).toBe(true);
+    const unbound = agentCopyPermissions(database.db, 'project', undefined);
+    expect(JSON.stringify(unbound.config)).not.toContain('"write"');
+    expect(() => assertCopyPermissionProfile(profiles.writable, {})).toThrow(
+      'GIT_COPY_ISOLATION_UNAVAILABLE',
+    );
+    expect(() =>
+      assertCopyPermissionProfile(profiles.writable, {
+        activePermissionProfile: { id: profiles.writable },
+      }),
+    ).not.toThrow();
+    database.db
+      .update(projectLocations)
+      .set({
+        accessMode: 'read_only',
+        capabilities: { read: true, write: false, execute: false },
+      })
+      .where(eq(projectLocations.projectId, 'project'))
+      .run();
+    const restricted = agentCopyPermissions(database.db, 'project', 'agent-a');
+    expect(JSON.stringify(restricted.config)).not.toContain('"write"');
+  });
+
+  it('keeps the native profile stable when a fresh thread claims its previously unowned execution copy', async () => {
+    const copy = await copies.create('project', 'git-source', {});
+    database.db
+      .update(projectLocations)
+      .set({
+        accessMode: 'read_write',
+        capabilities: { read: true, write: true, execute: true },
+      })
+      .where(eq(projectLocations.projectId, 'project'))
+      .run();
+    const before = agentCopyPermissions(
+      database.db,
+      'project',
+      undefined,
+      ':workspace',
+      copy.localPath,
+    );
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'new-agent',
+        projectId: 'project',
+        workspacePath: copy.localPath!,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    const after = agentCopyPermissions(database.db, 'project', 'new-agent');
+    expect(after).toEqual(before);
+    const foreignStart = agentCopyPermissions(
+      database.db,
+      'project',
+      undefined,
+      ':workspace',
+      copy.localPath,
+    );
+    expect(JSON.stringify(foreignStart.config)).not.toContain('"write"');
+  });
+
+  it('refuses a symlinked copy container before cloning into another agent’s directory', async () => {
+    await mkdir(path.join(primary, 'sources'), { recursive: true });
+    await symlink(remote, path.join(primary, 'sources', '.external'));
+    await expect(copies.create('project', 'git-source', {})).rejects.toThrow(
+      'GIT_COPY_PATH_UNSAFE',
+    );
+    expect(await readFile(path.join(remote, 'README.md'), 'utf8')).toBe(
+      'source repository\n',
+    );
+    expect(copies.list('project')).toEqual([]);
+  });
+
+  it('cleans up an unregistered clone if authorization expires before ownership is committed', async () => {
+    await expect(
+      copies.create('project', 'git-source', {}, () => {
+        throw new Error('NO_ACTIVE_TURN');
+      }),
+    ).rejects.toThrow('NO_ACTIVE_TURN');
+    expect(copies.list('project')).toEqual([]);
   });
 
   it('preserves dirty files and unpublished commits while removing only the selected duplicate', async () => {

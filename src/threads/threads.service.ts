@@ -1,6 +1,7 @@
 /**
  * Handles thread and turn operations by delegating to Codex app-server.
  */
+import { assertCopyPermissionProfile } from '../projects/agent-copy-permissions';
 import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   canReadThread,
@@ -73,6 +74,8 @@ const MAX_FORK_CHAIN_WALK = 32;
 
 type ExperimentalThreadStartParams = v2.ThreadStartParams & {
   historyMode: typeof REQUIRED_HISTORY_MODE;
+  permissions?: string;
+  runtimeWorkspaceRoots?: string[];
 };
 
 type ThreadForkParamsWithGoalCarry = v2.ThreadForkParams & {
@@ -157,12 +160,23 @@ export class ThreadsService {
         : {}),
       historyMode: REQUIRED_HISTORY_MODE,
     };
+    if (projectPolicy?.copyPermissions) {
+      delete requestParams.sandbox;
+      requestParams.permissions =
+        projectPolicy.readOnly || params.sandbox === 'read-only'
+          ? projectPolicy.copyPermissions.readOnly
+          : projectPolicy.copyPermissions.writable;
+      // A shell escalation must not remove the ownership boundary.
+      requestParams.approvalPolicy = 'never';
+      requestParams.runtimeWorkspaceRoots = params.cwd ? [params.cwd] : [];
+    }
     this.connections?.assertGeneration(settingsGeneration);
     this.projectConnections.assertExecutionLocation(projectPolicy, params.cwd);
     const response = await this.codex.request<v2.ThreadStartResponse>(
       'thread/start',
       requestParams,
     );
+    assertCopyPermissionProfile(requestParams.permissions, response);
     if (projectPolicy && params.cwd)
       this.projectConnections.recordExecutionContext(
         projectPolicy,
@@ -420,8 +434,25 @@ export class ThreadsService {
         threadId,
         cwd,
         excludeTurns: true,
-        ...(projectPolicy?.readOnly ? { sandbox: 'read-only' as const } : {}),
-      } satisfies v2.ThreadResumeParams,
+        ...(projectPolicy?.copyPermissions
+          ? {
+              permissions: projectPolicy.readOnly
+                ? projectPolicy.copyPermissions.readOnly
+                : projectPolicy.copyPermissions.writable,
+              approvalPolicy: 'never' as const,
+              runtimeWorkspaceRoots: [cwd],
+            }
+          : projectPolicy?.readOnly
+            ? { sandbox: 'read-only' as const }
+            : {}),
+      },
+    );
+    assertCopyPermissionProfile(
+      projectPolicy?.copyPermissions &&
+        (projectPolicy.readOnly
+          ? projectPolicy.copyPermissions.readOnly
+          : projectPolicy.copyPermissions.writable),
+      response,
     );
     this.resumeRegistry.cacheResponse(threadId, response);
   }
@@ -592,6 +623,32 @@ export class ThreadsService {
         ],
       };
     }
+    if (projectPolicy?.copyPermissions) {
+      const isolated = effectiveParams as v2.TurnStartParams & {
+        permissions?: string;
+        runtimeWorkspaceRoots?: string[];
+      };
+      isolated.permissions =
+        projectPolicy.readOnly || executionSandbox?.type === 'readOnly'
+          ? projectPolicy.copyPermissions.readOnly
+          : projectPolicy.copyPermissions.writable;
+      delete isolated.sandboxPolicy;
+      isolated.approvalPolicy = 'never';
+      isolated.runtimeWorkspaceRoots = [
+        effectiveCwd,
+        publication?.draftDirectory,
+      ].filter((root): root is string => Boolean(root));
+      // The engine acknowledged this exact profile when this generation opened.
+      const cached = this.resumeRegistry.readCachedPermissionProfile(
+        params.threadId,
+      ) as { activePermissionProfile?: { id?: string } } | undefined;
+      const expected =
+        cached?.activePermissionProfile?.id ===
+        projectPolicy.copyPermissions.readOnly
+          ? projectPolicy.copyPermissions.readOnly
+          : projectPolicy.copyPermissions.writable;
+      assertCopyPermissionProfile(expected, cached);
+    }
     if (projectPolicy && effectiveCwd)
       this.projectConnections.recordExecutionContext(
         projectPolicy,
@@ -604,6 +661,11 @@ export class ThreadsService {
         projectPolicy,
         effectiveCwd,
       );
+      if (projectPolicy?.copyPermissions)
+        this.projectConnections.assertCopyOwnership(
+          projectPolicy,
+          params.threadId,
+        );
       if (connectionState)
         this.connections?.assertGeneration(connectionState.generation);
       return this.codex.request<v2.TurnStartResponse>(
@@ -611,10 +673,23 @@ export class ThreadsService {
         effectiveParams,
       );
     };
+    if (projectPolicy?.copyPermissions) {
+      // Record the maximum writable scope of the acknowledged profile group,
+      // even for a read-only turn: a stricter pending turn must not understate
+      // the permissions of the currently running turn.
+      this.projectConnections.assertCopyOwnership(
+        projectPolicy,
+        params.threadId,
+      );
+      this.gitMutations?.recordIsolation?.(
+        params.threadId,
+        projectPolicy.copyPermissions,
+      );
+    } else this.gitMutations?.clearIsolation?.(params.threadId);
     let response: v2.TurnStartResponse;
     try {
       response = await (this.gitMutations
-        ? this.gitMutations.startTurn(send)
+        ? this.gitMutations.startTurn(send, params.threadId)
         : send());
       publication?.bind(response.turn.id);
       mcpLease?.bind(response.turn.id);

@@ -1,3 +1,4 @@
+import { assertCopyPermissionProfile } from '../projects/agent-copy-permissions';
 /** Experimental paged thread-history access isolated from stable Codex types. */
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
@@ -129,7 +130,19 @@ export class ThreadHistoryService {
       threadId: params.threadId,
       ...(policy ? { config: policy.config } : {}),
       ...(policy?.executionCwd ? { cwd: policy.executionCwd } : {}),
-      ...(policy?.readOnly ? { sandbox: 'read-only' as const } : {}),
+      ...(policy?.copyPermissions
+        ? {
+            permissions: policy.readOnly
+              ? policy.copyPermissions.readOnly
+              : policy.copyPermissions.writable,
+            approvalPolicy: 'never' as const,
+            runtimeWorkspaceRoots: policy.executionCwd
+              ? [policy.executionCwd]
+              : [],
+          }
+        : policy?.readOnly
+          ? { sandbox: 'read-only' as const }
+          : {}),
       excludeTurns: true,
       initialTurnsPage: {
         limit: params.initialTurnsLimit,
@@ -140,6 +153,13 @@ export class ThreadHistoryService {
     const response = await this.codex.request<MetadataFirstResumeResponse>(
       'thread/resume',
       request,
+    );
+    assertCopyPermissionProfile(
+      policy?.copyPermissions &&
+        (policy.readOnly
+          ? policy.copyPermissions.readOnly
+          : policy.copyPermissions.writable),
+      response,
     );
     this.connections?.record(params.threadId, policy ?? null, generation);
     assertPaginatedThread(response.thread, 'thread/resume');

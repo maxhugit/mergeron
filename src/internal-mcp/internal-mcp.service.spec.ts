@@ -61,6 +61,8 @@ describe('native internal MCP over HTTP', () => {
   const gitHead = 'a'.repeat(40),
     gitFingerprint = 'b'.repeat(64);
   const pushConnection = vi.fn();
+  let ownCopies: Array<Record<string, unknown>>;
+  const cloneConnection = vi.fn();
   let notify: (note: ServerNotification) => void;
   const clients: Client[] = [];
   const setThreadName = vi
@@ -232,22 +234,48 @@ describe('native internal MCP over HTTP', () => {
         secret: { token: 'never-return-this-token' },
       }),
     ).id;
-    const connections = new ProjectConnectionToolsService(
-      database.db,
-      new ProjectLocationsService(database.db),
+    ownCopies = [
       {
-        list: () => [
-          {
-            id: 'own',
-            sourceResourceId: gitConnectionId,
-            ownerThreadIds: ['agent'],
-            branch: 'feature/test',
+        id: 'own',
+        sourceResourceId: gitConnectionId,
+        ownerThreadIds: ['agent'],
+        branch: 'feature/test',
+        revision: gitHead,
+        state: 'ready',
+        localPath: root,
+        accessMode: 'read_write',
+      },
+    ];
+    cloneConnection
+      .mockReset()
+      .mockImplementation(
+        (
+          _project: string,
+          connection: string,
+          input: { agentThreadId: string },
+          beforeCommit: () => unknown,
+        ) => {
+          beforeCommit();
+          const copy = {
+            id: 'created',
+            sourceResourceId: connection,
+            ownerThreadIds: [input.agentThreadId],
+            branch: 'main',
             revision: gitHead,
             state: 'ready',
             localPath: root,
             accessMode: 'read_write',
-          },
-        ],
+          };
+          ownCopies.push(copy);
+          return Promise.resolve(copy);
+        },
+      );
+    const connections = new ProjectConnectionToolsService(
+      database.db,
+      new ProjectLocationsService(database.db),
+      {
+        list: () => ownCopies,
+        create: cloneConnection,
       } as unknown as WorkspaceCopiesService,
       {
         snapshot: () =>
@@ -401,6 +429,43 @@ describe('native internal MCP over HTTP', () => {
         })
       ).isError,
     ).toBe(true);
+  });
+
+  it('creates and attaches a copy through MCP with server-bound conversation identity and a writable-turn lease', async () => {
+    const { client } = await connect();
+    ownCopies = [];
+    const args = {
+      connectionId: gitConnectionId,
+      requestId: 'copy-mcp-1',
+      branch: 'main',
+    };
+    activate('admin', false);
+    const denied = await client.callTool({
+      name: 'create_project_git_copy',
+      arguments: args,
+    });
+    expect(denied.isError).toBe(true);
+    expect(JSON.stringify(denied)).toContain('READ_ONLY');
+    expect(cloneConnection).not.toHaveBeenCalled();
+    activate();
+    const created = await client.callTool({
+      name: 'create_project_git_copy',
+      arguments: args,
+    });
+    expect(created.isError).not.toBe(true);
+    expect(created.structuredContent).toMatchObject({
+      id: 'created',
+      ownerThreadId: 'agent',
+      activeFolderChanged: false,
+    });
+    expect(cloneConnection).toHaveBeenCalledWith(
+      'p',
+      gitConnectionId,
+      { branch: 'main', agentThreadId: 'agent' },
+      expect.any(Function),
+    );
+    await client.callTool({ name: 'create_project_git_copy', arguments: args });
+    expect(cloneConnection).toHaveBeenCalledTimes(1);
   });
 
   it('exposes controlled preparation as a real MCP object schema and validates operation fields server-side', async () => {

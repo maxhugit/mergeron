@@ -81,8 +81,10 @@ describe('ThreadsService', () => {
     policyForCwd: vi.fn(),
     policyForThread: vi.fn(),
     assertExecutionLocation: vi.fn(),
+    assertCopyOwnership: vi.fn(),
     recordExecutionContext: vi.fn(),
   };
+  const cachedPermissionProfile = vi.fn();
   const mockKnowledge = { contextForConversation: vi.fn() };
   const mockActiveFolders = { resolveAgent: vi.fn() };
   const mockProjectTools = { context: vi.fn() };
@@ -140,12 +142,17 @@ describe('ThreadsService', () => {
     mockOverview.listOverview.mockReset();
     Object.values(mockMetadata).forEach((mock) => mock.mockReset());
     Object.values(mockWorkspaceOverrides).forEach((mock) => mock.mockReset());
+    Object.assign(mockResumeRegistry, {
+      readCachedPermissionProfile: cachedPermissionProfile,
+    });
+    cachedPermissionProfile.mockReset();
     mockProjectConnections.configForCwd.mockReset();
     mockProjectConnections.configForCwd.mockResolvedValue(null);
     mockProjectConnections.policyForCwd.mockReset();
     mockProjectConnections.policyForCwd.mockResolvedValue(null);
     mockProjectConnections.policyForThread.mockReset();
     mockProjectConnections.assertExecutionLocation.mockReset();
+    mockProjectConnections.assertCopyOwnership.mockReset();
     mockProjectConnections.policyForThread.mockImplementation(
       (_threadId: string, cwd: string) =>
         mockProjectConnections.policyForCwd(cwd) as unknown,
@@ -485,6 +492,94 @@ describe('ThreadsService', () => {
 
     expect(mockOverview.listOverview).toHaveBeenCalledWith({ limit: 10 });
   });
+
+  it('reapplies the conversation copy boundary on each turn and cannot escalate to full access', async () => {
+    const copyPermissions = {
+      writable: 'managed-own',
+      readOnly: 'managed-read',
+      baseProfile: ':workspace',
+    };
+    mockProjectConnections.policyForCwd.mockResolvedValue({
+      projectId: 'p',
+      readOnly: false,
+      copyPermissions,
+    });
+    cachedPermissionProfile.mockReturnValue({
+      activePermissionProfile: { id: 'managed-own' },
+    });
+    mockCodex.request.mockResolvedValue({ turn: { id: 'isolated-turn' } });
+    await service.startTurn({
+      threadId: 't1',
+      input: [],
+      sandboxPolicy: { type: 'dangerFullAccess' },
+      approvalPolicy: 'on-request',
+    });
+    expect(mockCodex.request).toHaveBeenCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        permissions: 'managed-own',
+        approvalPolicy: 'never',
+      }),
+    );
+    expect(mockCodex.request.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'sandboxPolicy',
+    );
+    expect(mockProjectConnections.assertCopyOwnership).toHaveBeenCalled();
+    mockCodex.request.mockClear();
+    cachedPermissionProfile.mockReturnValue({});
+    await expect(
+      service.startTurn({ threadId: 't1', input: [] }),
+    ).rejects.toThrow('GIT_COPY_ISOLATION_UNAVAILABLE');
+    expect(mockCodex.request).not.toHaveBeenCalledWith(
+      'turn/start',
+      expect.anything(),
+    );
+  });
+
+  it.each([
+    { type: 'dangerFullAccess' },
+    { type: 'readOnly', networkAccess: false },
+  ] as const)(
+    'records only acknowledged maximum isolation before admitting a named turn (%j)',
+    async (sandboxPolicy) => {
+      const copyPermissions = {
+        writable: 'managed-own',
+        readOnly: 'managed-read',
+        baseProfile: ':workspace',
+        writableCopyPath: '/workspaces/p/sources/.external/git/own',
+        readOnlyRoots: ['/workspaces/p/sources/.external'],
+      };
+      mockProjectConnections.policyForCwd.mockResolvedValue({
+        projectId: 'p',
+        readOnly: false,
+        copyPermissions,
+      });
+      cachedPermissionProfile.mockReturnValue({
+        activePermissionProfile: { id: 'managed-own' },
+      });
+      const recordIsolation = vi.fn(),
+        clearIsolation = vi.fn();
+      const startTurn = vi.fn((send: () => Promise<unknown>) => send());
+      Object.assign(service, {
+        gitMutations: { recordIsolation, clearIsolation, startTurn },
+      });
+      mockCodex.request.mockResolvedValue({ turn: { id: 'isolated-turn' } });
+      await service.startTurn({ threadId: 't1', input: [], sandboxPolicy });
+      expect(recordIsolation).toHaveBeenCalledWith('t1', copyPermissions);
+      expect(recordIsolation.mock.invocationCallOrder[0]).toBeLessThan(
+        startTurn.mock.invocationCallOrder[0],
+      );
+      expect(startTurn).toHaveBeenCalledWith(expect.any(Function), 't1');
+      cachedPermissionProfile.mockReturnValue({});
+      recordIsolation.mockClear();
+      startTurn.mockClear();
+      await expect(
+        service.startTurn({ threadId: 't1', input: [] }),
+      ).rejects.toThrow('GIT_COPY_ISOLATION_UNAVAILABLE');
+      expect(recordIsolation).not.toHaveBeenCalled();
+      expect(startTurn).not.toHaveBeenCalled();
+    },
+  );
 
   it('should call turn/start', async () => {
     mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });

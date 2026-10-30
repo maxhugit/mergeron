@@ -59,6 +59,7 @@ docker run -d --name "$app" --read-only --network none --cap-drop ALL \
   --mount "type=bind,src=$fixture/run,dst=/run/mergeron-manager" \
   --mount "type=bind,src=$script_dir/managed-cli-http-probe.cjs,dst=/ci/managed-cli-http-probe.cjs,readonly" \
   --mount "type=bind,src=$script_dir/managed-cli-ui-probe.cjs,dst=/ci/managed-cli-ui-probe.cjs,readonly" \
+  --mount "type=bind,src=$script_dir/smoke-test-git-copy-isolation.py,dst=/ci/smoke-test-git-copy-isolation.py,readonly" \
   --label io.mergeron.managed=true --label "io.mergeron.stack=$stack" \
   --label io.mergeron.component=application \
   -e NODE_ENV=test -e PORT=8172 -e WEBUI_API_KEY=isolated-cli-fixture-only \
@@ -83,6 +84,7 @@ docker exec "$app" node /ci/managed-cli-http-probe.cjs
 docker restart "$app" >/dev/null
 wait_for_app
 docker exec "$app" node /ci/managed-cli-http-probe.cjs persisted
+docker exec "$app" python3 /ci/smoke-test-git-copy-isolation.py /home/codex/.codex/webui/cli/releases/0.164.0-mergeron.1/codex
 docker exec "$app" node /ci/managed-cli-ui-probe.cjs
 cp -r "$fixture/workspace/.managed-cli-ui" "$fixture/ui"
 docker cp -L "$app:/home/codex/.codex/webui/cli/releases/0.164.0-mergeron.1/codex" "$fixture/codex"

@@ -65,7 +65,9 @@ export class AgentGitCopyCleanupService {
     )
       throw new ConflictException('GIT_COPY_IN_USE');
     const workspaces = this.db.select().from(projectWorkspaces).all();
-    const workspace = workspaces.find((row) => row.id === copy.localWorkspaceId);
+    const workspace = workspaces.find(
+      (row) => row.id === copy.localWorkspaceId,
+    );
     const primary = workspaces.find(
       (row) => row.projectId === copy.projectId && row.primary,
     );
@@ -91,10 +93,12 @@ export class AgentGitCopyCleanupService {
       path.dirname(target),
       target,
     ]) {
-      const entry = await lstat(candidate).catch((error: NodeJS.ErrnoException) => {
-        if (error.code === 'ENOENT') return null;
-        throw error;
-      });
+      const entry = await lstat(candidate).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null;
+          throw error;
+        },
+      );
       if (!entry) break;
       if (
         !entry.isDirectory() ||
@@ -130,7 +134,11 @@ export class AgentGitCopyCleanupService {
         .all()
         .filter((row) => row.threadId !== threadId)
         .map((row) => row.workspacePath),
-      ...this.db.select().from(simpleChatThreads).all().map((row) => row.cwd),
+      ...this.db
+        .select()
+        .from(simpleChatThreads)
+        .all()
+        .map((row) => row.cwd),
       ...folders.map((row) => {
         const base =
           workspaces.find(
