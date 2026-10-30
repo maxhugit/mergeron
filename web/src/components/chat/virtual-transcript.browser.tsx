@@ -133,6 +133,35 @@ test('retains the hidden scroll box and restores a historical sentence after hid
   expect(distance()).toBeGreaterThan(500);
 });
 
+test('does not replace measured row heights with zero while a retained view has no layout', async () => {
+  const id = `browser:${++threadSequence}`;
+  const view = render(
+    <div style={{ display: 'contents' }}>
+      <Fixture id={id} />
+    </div>,
+  );
+  const index = await readHistory();
+  const before = y(index);
+  view.rerender(
+    <div style={{ display: 'none' }}>
+      <Fixture id={id} active={false} />
+    </div>,
+  );
+  // ResizeObserver reports zero boxes while React retains this DOM subtree.
+  // Wait for actual frames, rather than assuming the hide/reveal is synchronous.
+  await finishGesture();
+  expect(scroller().clientHeight).toBe(0);
+  view.rerender(
+    <div style={{ display: 'contents' }}>
+      <Fixture id={id} extra={700} />
+    </div>,
+  );
+  await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
+  await finishGesture();
+  expect(Math.abs(y(index) - before)).toBeLessThan(2);
+  expect(distance()).toBeGreaterThan(500);
+});
+
 test('corrects only the residual when several measured rows change in the same commit', async () => {
   const id = `browser:${++threadSequence}`;
   const view = render(<Fixture id={id} />);

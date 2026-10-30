@@ -309,6 +309,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Docker Buildx
+        id: app-builder
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GitHub Container Registry
@@ -371,6 +372,23 @@ jobs:
 
       - name: Verify filtered test profile in the actual Linux agent sandbox
         run: bash scripts/smoke-test-agent-profile.sh "mergeron:quality-${{ github.sha }}" "mergeron:project-mcp-${{ github.sha }}"
+
+      - name: Release completed build fixtures before image scanning
+        env:
+          BUILDER_NAME: ${{ steps.app-builder.outputs.name }}
+          MCP_IMAGE: mergeron:project-mcp-${{ github.sha }}
+        run: |
+          df -h /var/lib/docker
+          df -i /var/lib/docker
+          docker system df
+          # Only this job's completed fixtures and isolated Buildx cache.
+          # The registry cache has already been exported; keep the app image
+          # for every remaining smoke test and vulnerability scan.
+          docker image rm "$MCP_IMAGE" webui-ssh-fixture
+          test -n "$BUILDER_NAME"
+          docker buildx prune --builder "$BUILDER_NAME" --all --force
+          df -h /var/lib/docker
+          df -i /var/lib/docker
 
       - name: Scan production image dependencies
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

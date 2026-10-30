@@ -98,6 +98,16 @@ export function VirtualTranscript({
       entry: ResizeObserverEntry | undefined,
       instance: Parameters<typeof measureElement>[2],
     ) => {
+      // A retained subtree remains connected while display:none removes its
+      // layout. ResizeObserver still delivers zero boxes before Activity's
+      // cleanup, or while its render is deferred. These are not new row sizes.
+      if (!node.getClientRects().length) {
+        const index = instance.indexFromElement(node);
+        return (
+          instance.itemSizeCache.get(instance.options.getItemKey(index)) ??
+          instance.options.estimateSize(index)
+        );
+      }
       if (entry) owner.rowResized();
       return measureElement(node, entry, instance);
     },
