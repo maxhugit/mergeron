@@ -5,6 +5,8 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import contract from '../../runtime/preview-profile.cjs';
 import archives from '../../runtime/preview-archive.cjs';
 import { relayReadiness } from './preview-health.mjs';
+import storage from '../../runtime/preview-storage.cjs';
+const { previewStorage, cacheEnvironment, readStorageObservation } = storage;
 
 const label = 'io.mergeron.preview';
 const digest = /^.+@sha256:[a-f0-9]{64}$/;
@@ -105,6 +107,7 @@ export class PreviewManager {
       maxLifetimeMinutes: 240,
       synchronization: 'filtered-copy',
       data: 'ephemeral',
+      storage: previewStorage,
     };
   }
   async recover() {
@@ -310,7 +313,7 @@ export class PreviewManager {
     const options = {
       type: 'tmpfs',
       device: 'tmpfs',
-      o: `size=${suffix === 'source' ? 1024 : suffix === 'data' ? 128 : suffix.startsWith('control-') ? 16 : 64}m,nosuid,nodev,uid=11002,gid=11002,mode=0700`,
+      o: `size=${suffix === 'source' ? previewStorage.workspaceMb : suffix === 'cache' ? previewStorage.cacheMb : suffix === 'temporary' ? previewStorage.temporaryMb : suffix === 'data' ? previewStorage.dataMb : suffix.startsWith('control-') ? 16 : 64}m,nr_inodes=${previewStorage.inodesPerVolume},nosuid,nodev,uid=11002,gid=11002,mode=${suffix === 'temporary' ? '1777' : '0700'}`,
     };
     const v = await this.docker.request('/volumes/create', {
       method: 'POST',
@@ -557,7 +560,7 @@ export class PreviewManager {
         const declared = Object.keys(image.Config?.Volumes ?? {});
         const covered =
           key === profile.runtime
-            ? ['/workspace', '/data', '/tmp']
+            ? ['/workspace', '/data', '/tmp', '/cache']
             : [...(approved.tmpfs ?? ['/data']), '/tmp'];
         if (declared.some((p) => !covered.includes(p)))
           fail('PREVIEW_IMAGE_VOLUMES_REQUIRE_CONFIGURATION');
@@ -600,6 +603,9 @@ export class PreviewManager {
       }
       r.sourceVolume = await this.volume(r, 'source');
       r.dataVolume = await this.volume(r, 'data');
+      r.cacheVolume = await this.volume(r, 'cache');
+      r.temporaryVolume = await this.volume(r, 'temporary');
+      r.storageLimits = previewStorage;
       this.save(r);
       // Keep the bounded tmpfs source volume mounted between atomic sync jobs.
       // No host directory, root initializer or unbounded local data volume.
@@ -622,9 +628,23 @@ export class PreviewManager {
               Target: '/data',
               ReadOnly: true,
             },
+            {
+              Type: 'volume',
+              Source: r.cacheVolume,
+              Target: '/cache',
+              ReadOnly: true,
+            },
+            {
+              Type: 'volume',
+              Source: r.temporaryVolume,
+              Target: '/temporary',
+              ReadOnly: true,
+            },
           ],
         },
       });
+      r.storageObserverId = keeper;
+      this.save(r);
       await this.docker.startContainer(keeper);
       await this.apply(r, r.runId, input.sourceSha);
       const proxy = await this.add(
@@ -681,7 +701,7 @@ export class PreviewManager {
         {
           Entrypoint: ['/bin/sh', '-c'],
           Cmd: [
-            'set -eu\n' +
+            'set -eu\numask 077\nmkdir -p "$HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$COREPACK_HOME" "$PNPM_HOME" "$npm_config_cache" "$npm_config_store_dir" "$npm_config_devdir"\n' +
               [profile.install, profile.build, profile.start]
                 .filter((s) => s.trim())
                 .join('\n'),
@@ -690,7 +710,7 @@ export class PreviewManager {
             '/workspace' +
             (profile.directory === '.' ? '' : '/' + profile.directory),
           Env: [
-            'HOME=/tmp',
+            ...Object.entries(cacheEnvironment).map(([k, v]) => `${k}=${v}`),
             'HTTP_PROXY=http://egress:3129',
             'HTTPS_PROXY=http://egress:3129',
             'http_proxy=http://egress:3129',
@@ -711,10 +731,14 @@ export class PreviewManager {
             Mounts: [
               { Type: 'volume', Source: r.sourceVolume, Target: '/workspace' },
               { Type: 'volume', Source: r.dataVolume, Target: '/data' },
+              { Type: 'volume', Source: r.cacheVolume, Target: '/cache' },
+              { Type: 'volume', Source: r.temporaryVolume, Target: '/tmp' },
             ],
-            Tmpfs: {
-              '/tmp': 'rw,nosuid,nodev,size=256m,mode=1777',
-            },
+            Tmpfs: Object.fromEntries(
+              Object.entries(this.base(internal).Tmpfs).filter(
+                ([p]) => p !== '/tmp',
+              ),
+            ),
           },
         },
         [internal],
@@ -817,7 +841,9 @@ export class PreviewManager {
       const runtime = await this.owned(r.runtimeId, r, 'preview-app');
       if (!runtime.State?.Running) {
         r.state = 'failed';
-        r.error = 'PREVIEW_PROCESS_EXITED';
+        r.error = runtime.State?.OOMKilled
+          ? 'PREVIEW_MEMORY_LIMIT'
+          : 'PREVIEW_PROCESS_EXITED';
         this.save(r);
       }
     }
@@ -833,15 +859,13 @@ export class PreviewManager {
             ).State?.Health,
           )
         : { ready: false, httpStatus: null };
+    await this.observeStorage(r);
     return {
       runId: r.runId,
       previewId: r.previewId,
       projectId: r.projectId,
       agentId: r.agentId,
       state: r.state,
-      // A stopped journal entry is history, not a retained Docker runtime.
-      // Only advertise cleanup after every owned resource was reconciled and
-      // successfully removed (or independently confirmed already absent).
       cleanupComplete:
         r.state === 'stopped' &&
         r.objects.length === 0 &&
@@ -856,11 +880,28 @@ export class PreviewManager {
       requiresRestart: r.requiresRestart ?? false,
       ready: health.ready === true,
       httpStatus: health.httpStatus,
+      storage: storage.safeStorageStatus({
+        limits: r.storageLimits,
+        observation: r.storageObservation,
+      }),
       url:
         health.ready && r.publicHost
           ? 'https://' + r.publicHost + r.path
           : null,
     };
+  }
+  async observeStorage(r) {
+    if (r.storageObserverId && r.state !== 'stopped') {
+      try {
+        await this.owned(r.storageObserverId, r, 'preview-volume');
+        const observation = readStorageObservation(
+          await this.docker.containerLogs(r.storageObserverId),
+        );
+        if (observation) r.storageObservation = observation;
+      } catch {
+        /* Diagnostic unavailability must not fabricate a healthy measurement. */
+      }
+    }
   }
   async transport(runId) {
     const status = await this.status(runId, false),
@@ -961,6 +1002,7 @@ export class PreviewManager {
     this.busy = true;
     try {
       await this.reconcile(r);
+      await this.observeStorage(r);
       await this.cleanup(r);
       r.state = 'stopped';
       this.save(r);

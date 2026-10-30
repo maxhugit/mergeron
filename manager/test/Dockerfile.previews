@@ -1,6 +1,6 @@
 ARG MANAGER_IMAGE=mergeron-manager:quality
 FROM ${MANAGER_IMAGE}
-COPY runtime/preview-profile.cjs runtime/preview-archive.cjs runtime/preview-gateway.cjs /opt/runtime/
+COPY runtime/preview-profile.cjs runtime/preview-archive.cjs runtime/preview-gateway.cjs runtime/preview-storage.cjs /opt/runtime/
 COPY deployment/browser/public-proxy.mjs /opt/deployment/browser/public-proxy.mjs
 COPY manager/src /opt/mergeron-manager/src
 COPY manager/test/preview-runtime.integration.mjs /opt/mergeron-manager/test/preview-runtime.integration.mjs

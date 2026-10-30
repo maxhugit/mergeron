@@ -7,6 +7,17 @@ import { AgentPreviewDialog } from './agent-preview-dialog';
 import { ProjectPreviewSettings } from '../projects/project-preview-settings';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+import type { PreviewStorageLimits } from '../../../../runtime/preview-storage.cjs';
+// Synthetic wire response, not a Node/CommonJS runtime imported into a browser.
+const storageLimits: PreviewStorageLimits = {
+  backend: 'tmpfs',
+  memoryCharged: true,
+  workspaceMb: 2048,
+  cacheMb: 1024,
+  temporaryMb: 256,
+  dataMb: 128,
+  inodesPerVolume: 262144,
+};
 const data = vi.hoisted(() => ({
   administrator: true,
   calls: [] as string[],
@@ -43,6 +54,7 @@ vi.mock('@/lib/projects-api', () => ({
         },
         capabilities: {
           enabled: true,
+          storage: storageLimits,
           domain: 'preview.example.org',
           runtimes: [
             { id: 'node', description: 'Node SDK' },
@@ -64,6 +76,7 @@ vi.mock('@/lib/projects-api', () => ({
         lastSyncedAt: Date.now(),
         updateMode: 'hot',
         requiresRestart: false,
+        storage: { limits: storageLimits, observation: null },
       },
     };
   },
@@ -157,6 +170,10 @@ for (const width of [1440, 390])
       .element(page.getByRole('button', { name: 'Ouvrir l’aperçu' }))
       .toBeVisible();
     const dialog = screen.getByRole('dialog');
+    expect(
+      screen.getByRole('region', { name: 'Stockage du runtime' }),
+    ).toBeVisible();
+    expect(screen.getByText(/Les caches sont dans \/cache/)).toBeVisible();
     expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
     const bounds = dialog.getBoundingClientRect();
     expect(bounds.left).toBeGreaterThanOrEqual(0);
