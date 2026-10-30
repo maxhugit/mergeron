@@ -1054,6 +1054,119 @@ describe('remote branch retrieval', () => {
     expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(oldLocal);
   });
 
+  it('integrates a fetched tip into the active branch even when that branch already exists locally', async () => {
+    const body = await prepare();
+    await git(['branch', 'dev']);
+    const old = (await git(['rev-parse', 'dev'])).stdout.trim();
+    const calls = fixtureTransport();
+    const result = await asPerson(() =>
+      actions.integrateBranch('p', copyId, {
+        ...body,
+        confirmation: 'INTEGRATE_REMOTE_BRANCH',
+      }),
+    );
+    expect(calls()).toBe(1);
+    expect(result).toMatchObject({ branch: 'main', sha: body.revision });
+    expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
+      'main',
+    );
+    expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(old);
+    expect(await readFile(path.join(cwd, 'remote-only.txt'), 'utf8')).toBe(
+      'remote branch content\n',
+    );
+    expect((await git(['status', '--porcelain'])).stdout).toBe('');
+  });
+  it.each([false, true])(
+    'integrates divergent remote history or preserves local files on conflict (%s)',
+    async (conflict) => {
+      const body = await prepare();
+      const remote = path.join(root, 'remote');
+      await writeFile(path.join(remote, 'README.md'), 'remote\n');
+      await exec('git', ['-C', remote, 'add', '.']);
+      await exec('git', ['-C', remote, 'commit', '-m', 'remote edit']);
+      body.revision = (
+        await exec('git', ['-C', remote, 'rev-parse', 'HEAD'])
+      ).stdout.trim();
+      await git(['config', 'user.name', 'Test']);
+      await git(['config', 'user.email', 'test@example.invalid']);
+      await writeFile(
+        path.join(cwd, conflict ? 'README.md' : 'other.md'),
+        'local\n',
+      );
+      await git(['add', '.']);
+      await git(['commit', '-m', 'local edit']);
+      const before = await service.snapshot('p', copyId);
+      body.fingerprint = before.fingerprint;
+      const index = await readFile(path.join(cwd, '.git/index'));
+      fixtureTransport();
+      const integrate = () =>
+        asPerson(() =>
+          actions.integrateBranch('p', copyId, {
+            ...body,
+            confirmation: 'INTEGRATE_REMOTE_BRANCH',
+          }),
+        );
+      if (conflict) {
+        await expect(integrate()).rejects.toThrow('GIT_LOCAL_MERGE_CONFLICT');
+        expect((await service.snapshot('p', copyId)).head).toBe(before.head);
+        expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+        expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+          'local\n',
+        );
+        expect((await service.mergeStatus('p', copyId)).mergeHead).toBeNull();
+      } else {
+        await integrate();
+        expect((await git(['show', '-s', '--format=%P'])).stdout.trim()).toBe(
+          `${before.head} ${body.revision}`,
+        );
+        expect((await git(['show', '-s', '--format=%ae'])).stdout.trim()).toBe(
+          connectedPerson.email,
+        );
+        expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+          'remote\n',
+        );
+        expect(await readFile(path.join(cwd, 'other.md'), 'utf8')).toBe(
+          'local\n',
+        );
+      }
+    },
+  );
+  it('refuses dirty copies and missing confirmation before downloading and never adopts a changed state', async () => {
+    const body = await prepare();
+    const calls = fixtureTransport();
+    await writeFile(path.join(cwd, 'untracked.txt'), 'keep\n');
+    body.fingerprint = (await service.snapshot('p', copyId)).fingerprint;
+    await expect(
+      actions.integrateBranch('p', copyId, {
+        ...body,
+        confirmation: 'INTEGRATE_REMOTE_BRANCH',
+      }),
+    ).rejects.toThrow('GIT_WORKTREE_DIRTY');
+    expect(calls()).toBe(0);
+    await expect(actions.integrateBranch('p', copyId, body)).rejects.toThrow(
+      'GIT_INVALID_INPUT',
+    );
+    await rm(path.join(cwd, 'untracked.txt'));
+    body.fingerprint = (await service.snapshot('p', copyId)).fingerprint;
+    const fetchBranch = actions.retrieveBranch.bind(
+      actions,
+    ) as WorkspaceGitActionsService['retrieveBranch'];
+    vi.spyOn(actions, 'retrieveBranch').mockImplementation(async (...args) => {
+      const result = await fetchBranch(...args);
+      await writeFile(path.join(cwd, 'untracked.txt'), 'concurrent edit\n');
+      return result;
+    });
+    await expect(
+      actions.integrateBranch('p', copyId, {
+        ...body,
+        confirmation: 'INTEGRATE_REMOTE_BRANCH',
+      }),
+    ).rejects.toThrow('GIT_WORKTREE_DIRTY');
+    expect(await readFile(path.join(cwd, 'untracked.txt'), 'utf8')).toBe(
+      'concurrent edit\n',
+    );
+  });
+
   it('never overwrites an existing local branch, including one created during download', async () => {
     const body = await prepare();
     const head = (await git(['rev-parse', 'HEAD'])).stdout.trim();

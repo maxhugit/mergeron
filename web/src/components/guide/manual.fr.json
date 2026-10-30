@@ -1238,6 +1238,16 @@
             ]
           },
           {
+            "title": "Mettre à jour la copie locale depuis GitHub",
+            "steps": [
+              "Ouvrez l’onglet Synchronisation du dépôt puis Intégrer les commits….",
+              "Vérifiez la copie et la branche locales affichées comme destination. L’action intègre dans la branche active ; elle ne change pas de branche.",
+              "Choisissez la branche source sur GitHub, vérifiez sa révision puis confirmez avec Récupérer et intégrer.",
+              "Attendez le message de réussite : les fichiers et les informations Git de la copie sont actualisés."
+            ],
+            "warning": "La copie doit être en écriture et sans modifications en attente. Une fusion peut créer un commit local avec votre identité. En cas de conflit, la branche, l’index et les fichiers locaux restent inchangés ; les références distantes récupérées peuvent être actualisées. Aucun commit n’est envoyé vers GitHub. Si la copie ou la révision distante change pendant la confirmation, actualisez et vérifiez à nouveau."
+          },
+          {
             "title": "Publier une branche",
             "steps": [
               "Vérifiez les commits locaux et la branche choisie.",

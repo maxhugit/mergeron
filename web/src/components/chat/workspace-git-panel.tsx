@@ -1,3 +1,4 @@
+import { GitIntegrateBranch } from './git-integrate-branch';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -949,7 +950,7 @@ function RepositoryPanel({
                 {copy
                   ? `${copy.name} · ${snapshot.data?.branch ?? t('gitDetached')}`
                   : t('gitNoCopy')}{' '}
-                → GitHub
+                ↔ GitHub
               </p>
               <p className="text-muted-foreground">
                 {snapshot.data && !snapshot.error && snapshot.data.upstream
@@ -975,14 +976,28 @@ function RepositoryPanel({
                   actionScope="push"
                 />
               )}
-              <div>
-                <Button size="sm" variant="outline" disabled>
-                  {t('gitIntegrate')}
-                </Button>
-                <p className="mt-1 text-muted-foreground">
-                  {t('gitIntegrateUnavailable')}
-                </p>
-              </div>
+              {copy && snapshot.data && !snapshot.error ? (
+                <GitIntegrateBranch
+                  key={`integrate:${copy.id}`}
+                  projectId={projectId}
+                  resourceId={resource.id}
+                  copyId={copy.id}
+                  copyName={copy.name}
+                  address={resource.address}
+                  snapshot={snapshot.data}
+                  readOnly={!writable}
+                  agentThreadId={agentThreadId}
+                />
+              ) : (
+                <div className="space-y-1">
+                  <Button size="sm" variant="outline" disabled>
+                    {t('gitIntegrate')}
+                  </Button>
+                  <p className="text-muted-foreground">
+                    {t('gitRetrieveNeedsCopy')}
+                  </p>
+                </div>
+              )}
             </section>
           ) : (
             <p className="p-3 text-xs">{t('gitDisabledHelp')}</p>
