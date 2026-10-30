@@ -40,6 +40,7 @@ import contract, {
   type PreviewProfile,
 } from '../../runtime/preview-profile.cjs';
 import { PreviewManagerClient } from './preview-manager-client';
+import storage from '../../runtime/preview-storage.cjs';
 import { previewSnapshot, previewSourceFingerprint } from './preview-snapshot';
 import { IdentityService } from '../auth/identity.service';
 import {
@@ -665,6 +666,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         ready: observed.ready === true,
         httpStatus:
           typeof observed.httpStatus === 'number' ? observed.httpStatus : null,
+        storage: storage.safeStorageStatus(observed.storage),
         cleanup:
           observed.state === 'stopped' && observed.cleanupComplete === true
             ? {
@@ -852,6 +854,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
               cpus: profile.cpus,
               lifetimeMinutes: profile.lifetimeMinutes,
               maxServices: 3,
+              storage: storage.safeStorageLimits(capabilities?.storage),
             }
           : null,
       },
@@ -881,6 +884,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
             url,
             ready: status.preview.ready === true && instanceCurrent,
             httpStatus: status.preview.httpStatus,
+            storage: status.preview.storage,
             expiresAt:
               typeof status.preview.expiresAt === 'number' &&
               Number.isFinite(status.preview.expiresAt)

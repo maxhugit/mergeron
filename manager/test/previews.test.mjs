@@ -8,6 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { PreviewManager, previewCatalog } from '../src/previews.mjs';
 import http from 'node:http';
 import archives from '../../runtime/preview-archive.cjs';
+import storage from '../../runtime/preview-storage.cjs';
 
 const roots = [];
 afterEach(() => {
@@ -114,7 +115,12 @@ class Docker {
     assert.ok(Buffer.isBuffer(buffer));
     assert.ok(['/workspace', '/control'].includes(destination));
   }
-  async containerLogs() {
+  async containerLogs(id) {
+    if (
+      this.containers.get(id)?.Config.Labels['io.mergeron.component'] ===
+      'preview-volume'
+    )
+      return this.storageLog ?? '';
     return 'application output';
   }
   async createNetwork(spec) {
@@ -310,6 +316,22 @@ test('starts a generic source snapshot with no host mounts, published ports, roo
   assert.ok(runtime.Config.Env.includes('NODE_USE_ENV_PROXY=1'));
   assert.ok(runtime.Config.Env.includes('HTTP_PROXY=http://egress:3129'));
   assert.ok(runtime.Config.Env.includes('HTTPS_PROXY=http://egress:3129'));
+  for (const [key, value] of Object.entries(storage.cacheEnvironment))
+    assert.ok(runtime.Config.Env.includes(`${key}=${value}`));
+  assert.equal(
+    runtime.Config.HostConfig.Mounts.find((m) => m.Target === '/cache').Type,
+    'volume',
+  );
+  assert.equal(
+    runtime.Config.HostConfig.Mounts.find((m) => m.Target === '/tmp').Type,
+    'volume',
+  );
+  assert.equal(runtime.Config.HostConfig.Tmpfs['/tmp'], undefined);
+  const keeper = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-volume',
+  );
+  assert.ok(keeper.Config.HostConfig.Mounts.every((m) => m.ReadOnly));
+  assert.equal(keeper.Config.HostConfig.NetworkMode, 'none');
   assert.equal(
     Object.keys(runtime.Config.NetworkingConfig.EndpointsConfig).length,
     1,
@@ -330,7 +352,46 @@ test('starts a generic source snapshot with no host mounts, published ports, roo
   );
   const volume = [...f.docker.volumes.values()][0];
   assert.equal(volume.Options.type, 'tmpfs');
-  assert.match(volume.Options.o, /size=1024m/);
+  assert.match(volume.Options.o, /size=2048m,nr_inodes=262144/);
+  assert.deepEqual(result.storage.limits, storage.previewStorage);
+});
+
+test('storage evidence is sampled from our read-only helper, survives stop, and is not taken from app logs', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  f.docker.storageLog = JSON.stringify({
+    version: 1,
+    checkedAt: Date.now(),
+    mounts: storage.storageMounts.map((m) => ({
+      role: m.role,
+      totalBytes: 1024,
+      availableBytes: m.role === 'cache' ? 0 : 1024,
+      totalInodes: 100,
+      availableInodes: 90,
+      extra: 'must-not-escape',
+    })),
+  });
+  const live = await f.manager.status(f.input.runId);
+  assert.equal(live.storage.observation.mounts[1].cause, 'space_exhausted');
+  assert.equal(JSON.stringify(live).includes('must-not-escape'), false);
+  const stopped = await f.manager.stop(f.input.runId);
+  assert.deepEqual(stopped.storage.observation, live.storage.observation);
+  assert.equal(stopped.cleanupComplete, true);
+  assert.equal(f.docker.volumes.size, 0);
+});
+
+test('a runtime OOM is distinguished from storage exhaustion', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  const runtime = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-app',
+  );
+  runtime.State.Running = false;
+  runtime.State.OOMKilled = true;
+  assert.equal(
+    (await f.manager.status(f.input.runId)).error,
+    'PREVIEW_MEMORY_LIMIT',
+  );
 });
 test('idempotent start cannot create a second copy, and changed input is rejected', async () => {
   const f = await fixture();

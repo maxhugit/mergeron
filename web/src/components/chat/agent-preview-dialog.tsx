@@ -11,6 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
+import type { PreviewStorageStatus } from '../../../../runtime/preview-storage.cjs';
+import { PreviewStorageSummary } from '../projects/preview-storage-summary';
 
 export interface AgentPreview {
   state: string;
@@ -22,6 +24,7 @@ export interface AgentPreview {
   updateMode: string;
   requiresRestart: boolean;
   ready: boolean;
+  storage?: PreviewStorageStatus | null;
 }
 export function AgentPreviewDialog({
   projectId,
@@ -109,6 +112,7 @@ export function AgentPreviewDialog({
             <p className="break-all text-xs text-muted-foreground">
               {t('source')}: {preview.sourcePath}
             </p>
+            {preview.storage && <PreviewStorageSummary {...preview.storage} />}
             {preview.url && (
               <code className="block break-all rounded border p-2 text-xs">
                 {preview.url}

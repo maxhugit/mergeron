@@ -19,6 +19,7 @@ import { ProjectPreviewsService } from './project-previews.service';
 import type { PreviewManagerClient } from './preview-manager-client';
 import { PreviewGateway } from '../../runtime/preview-gateway.cjs';
 import fs from 'node:fs/promises';
+import storage from '../../runtime/preview-storage.cjs';
 vi.mock('node:fs/promises', () => ({
   default: {
     mkdir: vi.fn(() => Promise.resolve()),
@@ -104,6 +105,7 @@ function setup(role: 'administrator' | 'standard' = 'administrator') {
         enabled: true,
         domain: 'preview.example.org',
         runtimes: [{ id: 'node' }],
+        storage: storage.previewStorage,
       });
     },
   );
@@ -230,6 +232,7 @@ describe('project-scoped generic preview service', () => {
       projectAuthorized: true,
       required: false,
       recipeRevision: stored.revision,
+      limits: { storage: storage.previewStorage },
     });
     expect(discovery.management.requiresExplicitHumanRequest).toBe(false);
   });
@@ -346,6 +349,11 @@ describe('project-scoped generic preview service', () => {
         ...live,
         ready,
         httpStatus: ready ? 200 : 503,
+        storage: {
+          limits: storage.previewStorage,
+          observation: null,
+          secret: 'must-not-escape',
+        },
         url: `https://${String(live.runId)}.preview.example.org/`,
       });
     });
@@ -377,9 +385,11 @@ describe('project-scoped generic preview service', () => {
     expect(running).toMatchObject({
       preview: {
         ready: true,
+        storage: { limits: storage.previewStorage, observation: null },
         url: `https://${String(live.runId)}.preview.example.org/`,
       },
     });
+    expect(JSON.stringify(running)).not.toContain('must-not-escape');
     f.run(() =>
       f.service.saveSettings('p', {
         expectedRevision: f.rows.get(projectPreviewProfiles)!.revision,

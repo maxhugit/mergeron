@@ -188,6 +188,10 @@ function websocket(url, headers) {
   });
 }
 const server = `const http=require('node:http'),fs=require('node:fs'),crypto=require('node:crypto');
+if (process.env.COREPACK_HOME !== '/cache/corepack' || process.env.npm_config_store_dir !== '/cache/pnpm-store') throw Error('cache routing');
+// A real allocation beyond the former 256 MiB ceiling, not a sparse truncate.
+const cacheProbe=fs.openSync('/cache/storage-regression','wx');
+try { const block=Buffer.alloc(1024*1024,1); for(let i=0;i<270;i++) fs.writeSync(cacheProbe,block); } finally { fs.closeSync(cacheProbe); }
 const s=http.createServer(async(req,res)=>{if(req.url==='/probe-private'){let reachable=false;try{await fetch('http://${controllerIp}:8173/',{signal:AbortSignal.timeout(1000)});reachable=true;}catch{}res.end(JSON.stringify({reachable}));return;}if(req.url==='/plant-link'){fs.mkdirSync('/tmp/isolated-target',{recursive:true});fs.writeFileSync('/tmp/isolated-target/file.txt','keep');fs.symlinkSync('/tmp/isolated-target','nested');res.end('planted');return;}if(req.url==='/verify-link'){res.end(fs.readFileSync('/tmp/isolated-target/file.txt'));return;}res.setHeader('content-type','text/html');res.setHeader('x-test-cookie',req.headers.cookie||'');res.setHeader('x-test-auth',req.headers.authorization||'');res.end(fs.readFileSync('index.html'));});
 s.on('upgrade',(req,socket)=>{const accept=crypto.createHash('sha1').update(req.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write('HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Accept: '+accept+'\\r\\n\\r\\n');});s.listen(Number(process.env.PORT),'0.0.0.0');`;
 try {
@@ -276,7 +280,15 @@ try {
   try {
     for (let n = 0; n < 30; n++) {
       verifiedReady = await manager.status(input.runId);
-      if (verifiedReady.ready) break;
+      if (
+        verifiedReady.ready &&
+        verifiedReady.storage?.observation?.mounts.some(
+          (m) =>
+            m.role === 'cache' &&
+            m.totalBytes - m.availableBytes >= 270 * 1024 ** 2,
+        )
+      )
+        break;
       await sleep(200);
     }
   } finally {
@@ -284,6 +296,19 @@ try {
   }
   assert.equal(verifiedReady.ready, true);
   assert.equal(verifiedReady.httpStatus, 200);
+  assert.equal(verifiedReady.storage.limits.backend, 'tmpfs');
+  assert.ok(verifiedReady.storage.observation, 'real runtime storage metadata');
+  const measuredCache = verifiedReady.storage.observation.mounts.find(
+    (m) => m.role === 'cache',
+  );
+  assert.ok(
+    measuredCache.totalBytes - measuredCache.availableBytes >= 270 * 1024 ** 2,
+  );
+  assert.equal(measuredCache.cause, null);
+  assert.ok(measuredCache.availableInodes > 0);
+  results.push(
+    'Real cache allocation beyond 256 MiB, bounded tmpfs and inode diagnostics',
+  );
   assert.equal(
     verifiedReady.url,
     'https://' + input.runId + '.preview.example.test/',

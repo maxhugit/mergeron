@@ -5,6 +5,8 @@ import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { projectsApi } from '@/lib/projects-api';
 import type { PreviewProfile } from '../../../../runtime/preview-profile.cjs';
+import type { PreviewStorageLimits } from '../../../../runtime/preview-storage.cjs';
+import { PreviewStorageSummary } from './preview-storage-summary';
 
 interface Settings {
   profile: PreviewProfile;
@@ -13,6 +15,7 @@ interface Settings {
     enabled: boolean;
     domain: string | null;
     runtimes: { id: string; description: string }[];
+    storage?: PreviewStorageLimits;
   };
   viewer: { enabled: boolean };
 }
@@ -104,6 +107,9 @@ function Editor({
         />
         {t('enable')}
       </label>
+      {data.capabilities.storage && (
+        <PreviewStorageSummary limits={data.capabilities.storage} />
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

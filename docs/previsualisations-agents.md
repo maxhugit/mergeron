@@ -121,6 +121,41 @@ dépendance publique, pas seulement un serveur sans dépendances.
 
 ## Définir le profil du projet
 
+### Stockage et mémoire du runtime
+
+Le précontrôle du terminal de l’agent ne mesure pas le stockage du runtime de
+prévisualisation. Celui-ci dispose de volumes **tmpfs éphémères bornés** :
+`/workspace` (sources, dépendances et compilation : 2048 Mio), `/cache`
+(1024 Mio), `/tmp` (256 Mio) et `/data` (128 Mio). Chaque volume est limité à
+262144 inodes. Il ne s’agit pas de volumes disque illimités ni d’un quota par
+utilisateur ; leur contenu compte aussi dans la limite mémoire du processus.
+
+Les caches Corepack, pnpm, npm, node-gyp et XDG ainsi que le dossier personnel
+jetable sont dirigés vers `/cache`, jamais vers les sources ni vers `/tmp`.
+Les anciens runtimes doivent être recréés pour recevoir ces montages. Le
+Manager ne relève pas automatiquement les plafonds de RAM des projets : une
+installation importante comme Mergeron peut nécessiter 4096 Mio pour les
+fichiers tmpfs **et** les processus d’installation/compilation. L’administrateur
+ajuste ce plafond après mesure ; l’agent ne peut pas le relever par MCP.
+
+Les capacités exposent ces limites et `preview.storage` expose la dernière
+mesure du runtime, également visible dans l’interface. Une sonde du Manager,
+sans réseau et avec des montages en lecture seule, relève l’espace et les
+inodes sans parcourir les fichiers. Ces mesures restent disponibles après la
+sortie de l’application, puis dans l’historique après un arrêt normal.
+`space_exhausted` signifie que les octets disponibles du volume sont épuisés ;
+`inodes_exhausted` signifie que son nombre d’inodes est épuisé. Un système de
+fichiers qui ne fournit pas de compte d’inodes est indiqué comme inconnu, pas
+comme plein. `PREVIEW_MEMORY_LIMIT` signale séparément un arrêt OOM confirmé
+par Docker. Une mesure absente ne prouve jamais que le stockage est sain.
+
+Un `ENOSPC` n’implique donc pas forcément que le disque Unraid est plein.
+Comparer le chemin de l’erreur aux mesures `/cache`, `/tmp`, `/workspace` et
+`/data`. Les limites tmpfs sont connues, mais `statfs` n’identifie pas à lui seul
+un éventuel `EDQUOT` d’un autre stockage : ne pas confondre un quota signalé
+par une application avec une saturation d’octets ou d’inodes mesurée. Ne pas
+nettoyer les caches ou ressources d’autres agents pour résoudre cet échec.
+
 ### Déléguer la préparation aux agents
 
 Activer « Autoriser les environnements de test pour ce projet », puis
