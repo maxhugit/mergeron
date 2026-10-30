@@ -361,10 +361,43 @@ test.each([
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Tools for a' })).toBeVisible(),
     );
-    await commands.scrollTranscript(-650);
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Linux WebKit animates native wheel input. A fixed delay can snapshot a
+    // moving viewport, so the subsequent hide correctly saves a later reading
+    // point and the test falsely reports drift. Arm before sending input and
+    // wait for the browser's scrollend, then allow measurements to commit.
+    let scrollTimeout: number | undefined;
+    let wheelStarted = false;
+    let finishScroll!: () => void;
+    const scrollFinished = new Promise<void>((resolve) => {
+      finishScroll = resolve;
+    });
+    const onWheel = () => {
+      wheelStarted = true;
+    };
+    const onScrollEnd = () => {
+      if (wheelStarted) finishScroll();
+    };
+    scroll.addEventListener('wheel', onWheel);
+    scroll.addEventListener('scrollend', onScrollEnd);
+    try {
+      await commands.scrollTranscript(-650);
+      await Promise.race([
+        scrollFinished,
+        new Promise<never>((_, reject) => {
+          scrollTimeout = window.setTimeout(
+            () =>
+              reject(new Error('Native transcript scrolling did not finish')),
+            5000,
+          );
+        }),
+      ]);
+    } finally {
+      window.clearTimeout(scrollTimeout);
+      scroll.removeEventListener('wheel', onWheel);
+      scroll.removeEventListener('scrollend', onScrollEnd);
+    }
     await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => resolve()),
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
     const before = scroll.scrollTop;
     expect(before).toBeGreaterThan(0);
