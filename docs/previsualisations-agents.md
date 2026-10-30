@@ -251,6 +251,16 @@ par défaut, configurable entre 5 et 240 minutes. Arrêter ou recréer une insta
 supprime ses données temporaires, jamais les sources, les livrables, leurs
 versions ou les sauvegardes du Manager.
 
+L’opération MCP `project_preview_manage` / `stop` supprime donc l’instance
+Docker (conteneurs, réseaux privés et volumes temporaires). Après nettoyage
+confirmé, le résultat contient `preview.cleanup.runtimeResourcesRemoved: true`.
+L’agent peut alors annoncer « environnement de test supprimé », en précisant
+que les sources, la configuration de lancement et l’historique sont conservés.
+L’entrée `stopped` est une trace de suivi, pas un conteneur encore présent.
+Si le Manager est indisponible, ancien ou si le nettoyage échoue, ce résultat
+n’est pas confirmé et l’agent ne doit pas prétendre que les ressources sont
+supprimées. Aucun effacement définitif de recette ou d’historique n’est ajouté.
+
 L’export accepte jusqu’à 50 Mio de fichiers réguliers, 16 Mio par fichier et
 15 000 entrées. Il refuse les liens symboliques, liens physiques et fichiers
 spéciaux. Les dossiers Git, caches, dépendances, sorties de compilation et

@@ -436,7 +436,11 @@ try {
   console.log(JSON.stringify({ ok: true, checks: results }, null, 2));
 } finally {
   await gateway?.close();
-  for (const r of manager.records.values()) await manager.stop(r.runId);
+  for (const r of manager.records.values()) {
+    const stopped = await manager.stop(r.runId);
+    assert.equal(stopped.state, 'stopped');
+    assert.equal(stopped.cleanupComplete, true);
+  }
   if (dummy) {
     const c = await docker.inspectContainer(dummy);
     assert.equal(c.Config.Labels['io.mergeron.preview-test'], stack);

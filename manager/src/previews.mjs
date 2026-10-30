@@ -839,6 +839,14 @@ export class PreviewManager {
       projectId: r.projectId,
       agentId: r.agentId,
       state: r.state,
+      // A stopped journal entry is history, not a retained Docker runtime.
+      // Only advertise cleanup after every owned resource was reconciled and
+      // successfully removed (or independently confirmed already absent).
+      cleanupComplete:
+        r.state === 'stopped' &&
+        r.objects.length === 0 &&
+        r.networks.length === 0 &&
+        r.volumes.length === 0,
       error: r.error ?? null,
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
