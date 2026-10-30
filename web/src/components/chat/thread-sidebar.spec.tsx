@@ -288,3 +288,33 @@ it('ignores stale active lifecycle cached for an unsubscribed branch member', as
   unmount();
   client.clear();
 });
+
+
+it.each(['overview', 'workspaceDetail'] as const)(
+  'requests a stable creation order for %s',
+  async (view) => {
+    useLayoutStore.getState().setSidebarView(
+      view === 'overview'
+        ? { type: 'overview' }
+        : { type: 'workspaceDetail', cwd: '/workspace' },
+    );
+    transport.overview.mockResolvedValue({ data: { data: [], nextCursor: null } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { unmount } = renderHook(() => ThreadSidebar(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    try {
+      await waitFor(() => expect(transport.overview).toHaveBeenCalled());
+      for (const [options] of transport.overview.mock.calls) {
+        expect(options.query.sortKey).toBe('created_at');
+      }
+    } finally {
+      unmount();
+      client.clear();
+    }
+  },
+);
