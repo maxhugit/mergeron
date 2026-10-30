@@ -32,7 +32,9 @@ it('advertises retargeting and its remote preconditions to native MCP clients', 
     await client.connect(clientTransport);
     const { tools } = await client.listTools();
     expect(tools[0].inputSchema.properties).toMatchObject({
-      operation: { enum: expect.arrayContaining(['retarget_pull_request']) },
+      operation: {
+        enum: ['push', 'create_pull_request', 'retarget_pull_request'],
+      },
       number: { type: 'integer' },
       base: { type: 'string' },
       expectedBase: { type: 'string' },
