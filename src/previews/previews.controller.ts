@@ -27,16 +27,37 @@ export class PreviewsController {
   @Post('agents/:threadId/preview/start') start(
     @Param('projectId') p: string,
     @Param('threadId') t: string,
-    @Body() input: { requestId?: unknown },
+    @Body() input: { requestId?: unknown; lifetimeMinutes?: unknown },
   ) {
-    return this.previews.start(p, t, input.requestId);
+    return this.previews.start(
+      p,
+      t,
+      input.requestId,
+      false,
+      () => {},
+      input.lifetimeMinutes,
+    );
   }
   @Post('agents/:threadId/preview/refresh') refresh(
     @Param('projectId') p: string,
     @Param('threadId') t: string,
-    @Body() input: { requestId?: unknown },
+    @Body() input: { requestId?: unknown; lifetimeMinutes?: unknown },
   ) {
-    return this.previews.start(p, t, input.requestId, true);
+    return this.previews.start(
+      p,
+      t,
+      input.requestId,
+      true,
+      () => {},
+      input.lifetimeMinutes,
+    );
+  }
+  @Put('agents/:threadId/preview/lifetime') lifetime(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+    @Body() input: { requestId?: unknown; lifetimeMinutes?: unknown },
+  ) {
+    return this.previews.setLifetime(p, t, input);
   }
   @Post('agents/:threadId/preview/stop') stop(
     @Param('projectId') p: string,

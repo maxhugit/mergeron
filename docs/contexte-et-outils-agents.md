@@ -103,7 +103,9 @@ Sur demande humaine explicite, `publish_project_git` permet :
   HTTPS configurée, sans forçage ; les changements non commités ne sont pas inclus ;
 - `create_pull_request` : créer une PR GitHub **après** publication du même
   commit, avec `base`, `title` et `draft` obligatoires, `description` facultative.
-  Une PR correspondante déjà ouverte est renvoyée sans second POST.
+  Une PR correspondante déjà ouverte est renvoyée sans second POST ;
+- `retarget_pull_request` : modifier uniquement la branche cible d’une PR GitHub
+  ouverte du même dépôt, avec état local et distant observés.
 
 `prepare_project_git` complète ce circuit **sans rendre `.git` modifiable dans
 le terminal**. Il exige les mêmes droits administrateur, tour modifiable,
@@ -137,6 +139,36 @@ Ce texte est journalisé, pas accepté comme preuve automatique de consentement.
 Le serveur exige un tour modifiable, un administrateur hors simulation, une
 connexion/copie en lecture-écriture et une copie propre à l’agent. Il revérifie
 les droits et l’état avant l’envoi. Il n’extrait jamais les secrets dans le prompt.
+
+Pour modifier la branche cible d’une PR existante, utiliser
+`publish_project_git` avec `operation: "retarget_pull_request"`. Fournir `number`,
+`base` (nouvelle cible), `expectedBase` (ancienne cible) et
+`expectedPullRequestHead` (SHA distant), observés dans `read_project_git`
+avec `operation: "pull_requests"`. Les préconditions locales habituelles
+`copyId`, `expectedBranch`, `expectedHead` et `fingerprint` restent requises ;
+la branche courante de cette copie peut différer de celle de la PR.
+
+Le serveur vérifie la PR ouverte, son dépôt source et cible, son SHA et sa cible
+observés, puis ne transmet que `{ "base": "..." }` au point d’API GitHub fixe.
+Il refuse les PR de forks, les états périmés et les métadonnées de création
+(`title`, `description`, `draft`). L’opération n’effectue ni push, ni fusion, ni
+changement des fichiers locaux. Les requêtes confirmées sont journalisées et
+idempotentes. Après une réponse incertaine, consulter à nouveau le distant avant
+toute nouvelle demande ; aucune seconde écriture automatique n’est effectuée.
+Relire ensuite la PR et ses checks : changer la cible ne prouve pas que la CI a
+démarré. Dans ce projet, toute PR doit cibler `main`.
+
+La connexion MCP interne fournit à Codex un réglage ciblé
+`mcp_servers.mergeron_internal.tools.publish_project_git.approval_mode = "approve"`.
+Une demande humaine de publication ne nécessite donc pas une seconde confirmation
+technique pour autoriser cet outil MCP. Ce réglage ne concerne que
+`publish_project_git` : il ne modifie ni la politique globale d’approbation, ni les
+outils des autres serveurs, ni la confirmation des actions du navigateur local.
+L’outil reste déclaré comme une écriture vers un service externe ; la demande
+humaine explicite et les contrôles serveur décrits ci-dessus restent requis.
+La configuration est appliquée au prochain échange après déploiement et
+rechargement de la connexion interne ; une confirmation déjà en attente n’est pas
+acceptée automatiquement.
 
 Les publications utilisent le circuit sécurisé existant : configuration Git
 temporaire isolée pour le push, SHA immuable, TLS vérifié, redirections refusées

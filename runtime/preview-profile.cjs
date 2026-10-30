@@ -136,7 +136,13 @@ function profile(value) {
     env: environment(value.env),
     memoryMb: integer(value.memoryMb, 128, 8192, 1024),
     cpus: integer(value.cpus, 1, 4, 1),
-    lifetimeMinutes: integer(value.lifetimeMinutes, 5, 240, 60),
+    // Preserve historical minute values when reading stored profiles.
+    lifetimeMinutes:
+      value.lifetimeMinutes === null
+        ? null
+        : LIFETIME_MINUTES.includes(value.lifetimeMinutes)
+          ? value.lifetimeMinutes
+          : integer(value.lifetimeMinutes, 5, 240, 300),
     services: parsedServices,
   };
   if (Buffer.byteLength(JSON.stringify(result)) > 96 * 1024) invalid();
@@ -217,7 +223,14 @@ function agentProfile(policy, input) {
     lifetimeMinutes: approved.lifetimeMinutes,
   });
 }
+const LIFETIME_MINUTES = Object.freeze([60, 180, 300, 600, 1440, null]);
+function lifetime(value) {
+  if (!LIFETIME_MINUTES.includes(value)) invalid();
+  return value;
+}
 module.exports = {
+  LIFETIME_MINUTES,
+  lifetime,
   ID,
   RUN_ID,
   profile,

@@ -22,6 +22,9 @@ const data = vi.hoisted(() => ({
   administrator: true,
   calls: [] as string[],
   state: 'running',
+  lifetimeMinutes: 300 as number | null,
+  defaultLifetimeMinutes: 300 as number | null,
+  bodies: [] as { path: string; value: unknown }[],
   ready: true,
   environment: { TEST_KEY: '[stored]' },
 }));
@@ -29,7 +32,13 @@ vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: data.administrator }),
 }));
 vi.mock('@/lib/projects-api', () => ({
-  projectsApi: async (path: string) => {
+  projectsApi: async (path: string, init?: RequestInit) => {
+    if (init?.body) {
+      const body = JSON.parse(String(init.body));
+      data.bodies.push({ path, value: body });
+      if (path.endsWith('/lifetime'))
+        data.lifetimeMinutes = body.lifetimeMinutes;
+    }
     data.calls.push(path);
     if (path.endsWith('/test-environment'))
       return {
@@ -50,7 +59,7 @@ vi.mock('@/lib/projects-api', () => ({
           services: [],
           memoryMb: 1024,
           cpus: 1,
-          lifetimeMinutes: 60,
+          lifetimeMinutes: 300,
         },
         capabilities: {
           enabled: true,
@@ -66,18 +75,27 @@ vi.mock('@/lib/projects-api', () => ({
     if (path.endsWith('/logs'))
       return { text: '<script>This is untrusted application output</script>' };
     return {
-      preview: {
-        state: data.state,
-        ready: data.ready,
-        url: 'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
-        sourcePath: '/workspaces/project/sources/.external/agent-working-copy',
-        error: null,
-        expiresAt: Date.now() + 3600000,
-        lastSyncedAt: Date.now(),
-        updateMode: 'hot',
-        requiresRestart: false,
-        storage: { limits: storageLimits, observation: null },
-      },
+      defaultLifetimeMinutes: data.defaultLifetimeMinutes,
+      preview:
+        data.state === 'absent'
+          ? null
+          : {
+              state: data.state,
+              ready: data.ready,
+              url: 'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
+              sourcePath:
+                '/workspaces/project/sources/.external/agent-working-copy',
+              error: null,
+              expiresAt:
+                data.lifetimeMinutes === null
+                  ? null
+                  : Date.now() + data.lifetimeMinutes * 60000,
+              lifetimeMinutes: data.lifetimeMinutes,
+              lastSyncedAt: Date.now(),
+              updateMode: 'hot',
+              requiresRestart: false,
+              storage: { limits: storageLimits, observation: null },
+            },
     };
   },
 }));
@@ -87,6 +105,9 @@ beforeEach(async () => {
   await i18n.changeLanguage('fr');
   data.administrator = true;
   data.calls = [];
+  data.bodies = [];
+  data.lifetimeMinutes = 300;
+  data.defaultLifetimeMinutes = 300;
   data.state = 'running';
   data.ready = true;
   client = new QueryClient({
@@ -237,6 +258,12 @@ test('standard project members have viewing controls but no execution buttons', 
   await expect
     .element(page.getByRole('button', { name: 'Ouvrir l’aperçu' }))
     .toBeVisible();
+  expect(
+    screen.queryByRole('combobox', { name: 'Durée de disponibilité' }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Appliquer la durée' }),
+  ).toBeNull();
   expect(screen.queryByRole('button', { name: 'Arrêter' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Recréer' })).toBeNull();
   expect(
@@ -335,5 +362,82 @@ test('mobile preview controls also fit with wider system fallback font metrics',
   expect(document.body.scrollWidth).toBeLessThanOrEqual(390);
   await page.screenshot({
     path: '../../../.vitest-screenshots/preview-fallback-mobile.png',
+  });
+});
+
+test('duration defaults to five hours and an active preview can switch to never without recreation', async () => {
+  render(
+    <QueryClientProvider client={client}>
+      <AgentPreviewDialog
+        projectId="project"
+        threadId="agent"
+        open
+        onOpenChange={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  const select = await screen.findByRole('combobox', {
+    name: 'Durée de disponibilité',
+  });
+  const address = await screen.findByRole('textbox', {
+    name: 'Adresse de l’environnement de test',
+  });
+  const stableUrl = (address as HTMLInputElement).value;
+  expect(stableUrl).toBe(
+    'https://22222222-2222-4222-8222-222222222222.preview.example.org/',
+  );
+  expect((select as HTMLSelectElement).value).toBe('300');
+  expect(
+    [...select.querySelectorAll('option')].map((option) => option.value),
+  ).toEqual(['60', '180', '300', '600', '1440', 'never']);
+  fireEvent.change(select, { target: { value: 'never' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Appliquer la durée' }));
+  await expect.poll(() => data.bodies.length).toBe(1);
+  expect(data.bodies[0]).toEqual({
+    path: '/project/agents/agent/preview/lifetime',
+    value: { lifetimeMinutes: null, requestId: expect.any(String) },
+  });
+  await expect
+    .element(page.getByText('Arrêt automatique: Jamais'))
+    .toBeVisible();
+  expect(address).toHaveValue(stableUrl);
+  expect(screen.getByRole('button', { name: 'Copier l’URL' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Ouvrir l’aperçu' })).toBeVisible();
+  expect(data.calls.some((path) => /\/(start|refresh|stop)$/.test(path))).toBe(
+    false,
+  );
+});
+
+test('the initial launch preserves an administrator’s configured unlimited default', async () => {
+  data.state = 'absent';
+  data.defaultLifetimeMinutes = null;
+  render(
+    <QueryClientProvider client={client}>
+      <AgentPreviewDialog
+        projectId="project"
+        threadId="agent"
+        open
+        onOpenChange={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  await expect
+    .element(page.getByRole('button', { name: 'Démarrer', exact: true }))
+    .toBeVisible();
+  await expect
+    .poll(
+      () =>
+        (
+          screen.getByRole('combobox', {
+            name: 'Durée de disponibilité',
+          }) as HTMLSelectElement
+        ).value,
+    )
+    .toBe('never');
+  fireEvent.click(screen.getByRole('button', { name: 'Démarrer' }));
+  await expect.poll(() => data.bodies.length).toBe(1);
+  expect(data.bodies[0]).toMatchObject({
+    path: '/project/agents/agent/preview/start',
+    value: { lifetimeMinutes: null },
   });
 });

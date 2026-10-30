@@ -371,9 +371,15 @@ export class ProjectConnectionToolsService {
     assertWrite();
     if (
       publish.operation === 'push' &&
-      ['base', 'title', 'description', 'draft'].some((k) =>
-        Object.hasOwn(raw, k),
-      )
+      [
+        'base',
+        'title',
+        'description',
+        'draft',
+        'number',
+        'expectedBase',
+        'expectedPullRequestHead',
+      ].some((k) => Object.hasOwn(raw, k))
     )
       throw new BadRequestException('Invalid push fields');
     if (
@@ -381,6 +387,24 @@ export class ProjectConnectionToolsService {
       (!publish.base || !publish.title || publish.draft === undefined)
     )
       throw new BadRequestException('Pull request fields are required');
+    if (
+      publish.operation === 'create_pull_request' &&
+      ['number', 'expectedBase', 'expectedPullRequestHead'].some((k) =>
+        Object.hasOwn(raw, k),
+      )
+    )
+      throw new BadRequestException('Invalid pull request creation fields');
+    if (
+      publish.operation === 'retarget_pull_request' &&
+      (!publish.number ||
+        !publish.base ||
+        !publish.expectedBase ||
+        !publish.expectedPullRequestHead ||
+        ['title', 'description', 'draft'].some((k) => Object.hasOwn(raw, k)))
+    )
+      throw new BadRequestException(
+        'Pull request retarget fields are required',
+      );
     const key = and(
       eq(projectAgentToolRequests.projectId, projectId),
       eq(projectAgentToolRequests.threadId, threadId),
@@ -506,12 +530,26 @@ export class ProjectConnectionToolsService {
                 remoteBody,
                 publisher,
               )
-            : await this.actions.createPullRequest(
-                projectId,
-                remote.copyId,
-                remoteBody,
-                publisher,
-              );
+            : remote.operation === 'retarget_pull_request'
+              ? await this.actions.retargetPullRequest(
+                  projectId,
+                  remote.copyId,
+                  {
+                    ...body,
+                    confirmation: 'RETARGET_PULL_REQUEST',
+                    number: remote.number,
+                    base: remote.base,
+                    expectedBase: remote.expectedBase,
+                    expectedPullRequestHead: remote.expectedPullRequestHead,
+                  },
+                  publisher,
+                )
+              : await this.actions.createPullRequest(
+                  projectId,
+                  remote.copyId,
+                  remoteBody,
+                  publisher,
+                );
       }
     } catch (error) {
       // A gate refusal happens before dispatch. Preserve the stable requestId
@@ -543,6 +581,14 @@ export class ProjectConnectionToolsService {
           connectionId: connection.id,
           copyId: publish.copyId,
           head: publish.expectedHead,
+          ...(!preparing && publish.operation === 'retarget_pull_request'
+            ? {
+                number: publish.number,
+                base: publish.base,
+                expectedBase: publish.expectedBase,
+                expectedPullRequestHead: publish.expectedPullRequestHead,
+              }
+            : {}),
         },
         actorPersonId: access.identity.personId,
         actorName: access.identity.name ?? 'Agent',
