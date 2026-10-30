@@ -3,6 +3,7 @@ import { afterEach, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
 import { act, cleanup, render } from '@testing-library/react';
 import { VirtualTranscript } from './virtual-transcript';
+import { RetainedSurface } from '@/components/retained-surface';
 import { forgetTranscriptBookmarks } from '@/lib/transcript-anchor';
 import '@/index.css';
 import '@/i18n';
@@ -159,6 +160,35 @@ test('does not replace measured row heights with zero while a retained view has 
   await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
   await finishGesture();
   expect(Math.abs(y(index) - before)).toBeLessThan(2);
+  expect(distance()).toBeGreaterThan(500);
+});
+
+test('snapshots the visible reading point when Activity hides before native scroll dispatch', async () => {
+  const id = `browser:${++threadSequence}`;
+  const fixture = (active: boolean, extra = 0) => (
+    <RetainedSurface active={active}>
+      <Fixture id={id} active={active} extra={extra} />
+    </RetainedSurface>
+  );
+  const view = render(fixture(true));
+  const index = await readHistory();
+  const original = scroller();
+  original.focus({ preventScroll: true });
+  const target = document.querySelector<HTMLElement>(
+    `[data-sentence="${index - 2}"]`,
+  )!;
+  // Native navigation updates layout synchronously, before its scroll event.
+  // Hide in that same task, while the owner still records the former point.
+  target.scrollIntoView({ block: 'start' });
+  const before = y(index - 2);
+  view.rerender(fixture(false));
+  await finishGesture();
+  view.rerender(fixture(false, 700));
+  view.rerender(fixture(true, 700));
+  expect(scroller()).toBe(original);
+  await expect.poll(() => Math.abs(y(index - 2) - before)).toBeLessThan(2);
+  await finishGesture();
+  expect(Math.abs(y(index - 2) - before)).toBeLessThan(2);
   expect(distance()).toBeGreaterThan(500);
 });
 
