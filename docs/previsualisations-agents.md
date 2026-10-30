@@ -125,16 +125,16 @@ dépendance publique, pas seulement un serveur sans dépendances.
 
 Le précontrôle du terminal de l’agent ne mesure pas le stockage du runtime de
 prévisualisation. Celui-ci dispose de volumes **tmpfs éphémères bornés** :
-`/workspace` (sources, dépendances et compilation : 2048 Mio), `/cache`
-(1024 Mio), `/tmp` (256 Mio) et `/data` (128 Mio). Chaque volume est limité à
-262144 inodes. Il ne s’agit pas de volumes disque illimités ni d’un quota par
+`/workspace` (sources, dépendances et compilation : 4096 Mio), `/cache`
+(2048 Mio), `/tmp` (512 Mio) et `/data` (256 Mio). Chaque volume est limité à
+524288 inodes. Il ne s’agit pas de volumes disque illimités ni d’un quota par
 utilisateur ; leur contenu compte aussi dans la limite mémoire du processus.
 
 Les caches Corepack, pnpm, npm, node-gyp et XDG ainsi que le dossier personnel
 jetable sont dirigés vers `/cache`, jamais vers les sources ni vers `/tmp`.
 Les anciens runtimes doivent être recréés pour recevoir ces montages. Le
 Manager ne relève pas automatiquement les plafonds de RAM des projets : une
-installation importante comme Mergeron peut nécessiter 4096 Mio pour les
+installation importante comme Mergeron peut nécessiter jusqu’à 8192 Mio pour les
 fichiers tmpfs **et** les processus d’installation/compilation. L’administrateur
 ajuste ce plafond après mesure ; l’agent ne peut pas le relever par MCP.
 

@@ -261,7 +261,7 @@ function Editor({
           <input
             type="number"
             min={128}
-            max={4096}
+            max={8192}
             className="rounded border bg-background p-2"
             value={profile.memoryMb}
             onChange={(e) => field('memoryMb', Number(e.target.value))}

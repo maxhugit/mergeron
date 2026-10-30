@@ -11,6 +11,18 @@ test('preview profiles are disabled by default', () => {
   assert.equal(p.directory, '.');
   assert.equal(p.port, 3000);
   assert.equal(p.lifetimeMinutes, 60);
+  assert.equal(p.memoryMb, 1024);
+});
+
+test('an administrator may approve 8 GiB without changing other project defaults', () => {
+  const p = contract.profile({ memoryMb: 8192 });
+  assert.equal(p.memoryMb, 8192);
+  assert.equal(p.cpus, 1);
+  assert.equal(p.lifetimeMinutes, 60);
+  assert.throws(
+    () => contract.agentRecipe({ start: 'node server.js', memoryMb: 8192 }),
+    /PREVIEW_INVALID_CONFIGURATION/,
+  );
 });
 
 test('delegated recipes cannot enable projects, raise caps or inherit manual secrets', () => {
@@ -208,7 +220,7 @@ test('safe settings redact all application and service environment values', () =
 
 test('limits fail closed, including the total request body size', () => {
   for (const values of [
-    { memoryMb: 4097 },
+    { memoryMb: 8193 },
     { cpus: 5 },
     { port: 80 },
     { lifetimeMinutes: 241 },

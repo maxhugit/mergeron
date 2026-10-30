@@ -2,11 +2,11 @@
 const previewStorage = Object.freeze({
   backend: 'tmpfs',
   memoryCharged: true,
-  workspaceMb: 2048,
-  cacheMb: 1024,
-  temporaryMb: 256,
-  dataMb: 128,
-  inodesPerVolume: 262144,
+  workspaceMb: 4096,
+  cacheMb: 2048,
+  temporaryMb: 512,
+  dataMb: 256,
+  inodesPerVolume: 524288,
 });
 
 const storageMounts = Object.freeze([
