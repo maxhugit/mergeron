@@ -5,6 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
 vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/lib/file-watch-leases', () => ({
+  acquireFileWatch: () => () => {},
+}));
+vi.mock('@/socket', () => ({
+  getSocket: () => ({ on: () => {}, off: () => {} }),
+}));
 vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => <div>Arborescence locale</div>,
 }));
@@ -164,6 +170,12 @@ test.each([390, 1100])(
       await page.getByRole('tab', { name: /Modifications/ }).click();
       const commit = await screen.findByRole('button', { name: 'Commit…' });
       expect(commit).toBeDisabled();
+      expect(
+        screen.getByRole('region', { name: 'Modifications à préparer (1)' }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole('region', { name: 'Prêtes pour le commit (0)' }),
+      ).toBeVisible();
       await page.getByRole('tab', { name: /Modifications/ }).click();
       await page.getByRole('button', { name: 'Préparer', exact: true }).click();
       await screen.findByRole('dialog');
@@ -172,6 +184,16 @@ test.each([390, 1100])(
         .getByRole('button', { name: 'Confirmer la préparation', exact: true })
         .click();
       await expect.poll(() => commit.hasAttribute('disabled')).toBe(false);
+      expect(
+        await screen.findByRole('region', {
+          name: 'Modifications à préparer (0)',
+        }),
+      ).toBeVisible();
+      expect(
+        await screen.findByRole('region', {
+          name: 'Prêtes pour le commit (1)',
+        }),
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Commit…' }).click();
       await page
         .getByRole('textbox', { name: 'Message du commit' })
@@ -194,6 +216,12 @@ test.each([390, 1100])(
       await page.getByRole('button', { name: 'Confirmer le commit' }).click();
       await expect.poll(() => server.committed).toBe(true);
       await expect.poll(() => screen.queryByRole('dialog')).toBeNull();
+      expect(
+        screen.getByRole('region', { name: 'Modifications à préparer (0)' }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole('region', { name: 'Prêtes pour le commit (0)' }),
+      ).toBeVisible();
       await page
         .getByRole('tab', { name: 'Synchronisation', exact: true })
         .click();

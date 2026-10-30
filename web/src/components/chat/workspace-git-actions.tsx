@@ -223,11 +223,6 @@ export function GitCopyActions({
           </Button>
         )}
       </div>
-      {actionScope !== 'push' && (
-        <p className="text-xs text-muted-foreground">
-          {t('gitActionStagedHelp')}
-        </p>
-      )}
       {result && (
         <p role="status" className="text-xs text-primary">
           {t('gitActionSuccess', { sha: result })}

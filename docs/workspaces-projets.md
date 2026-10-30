@@ -152,7 +152,14 @@ branche ne crée pas une seconde copie. Les actions de création, attribution,
 libération ou suppression gardent leurs confirmations et leurs blocages quand
 la copie est utilisée ; aucun travail non publié n’est supprimé implicitement.
 
-Le panneau sépare **Local**, **Distant · GitHub** et **Synchronisation**.
+Le panneau sépare **Local**, **GitHub** et **Synchronisation**.
+Dans l’onglet **Modifications**, deux zones partagent la hauteur disponible :
+les modifications à préparer en haut et les fichiers prévus dans le commit en
+bas. Chacune dispose de son propre défilement ; les titres, le bouton
+**Préparer la sélection** et l’action **Commit…** restent accessibles.
+Un fichier partiellement préparé apparaît dans les deux listes, avec une
+comparaison propre à chaque version. Retirer un fichier du commit ne supprime
+pas ses modifications locales.
 Dans Local, préparer les fichiers puis vérifier l’index avant de confirmer le
 commit ; l’auteur vient de la personne connectée, pas d’un champ libre.
 Publier les commits est une action distincte dans Synchronisation. L’état

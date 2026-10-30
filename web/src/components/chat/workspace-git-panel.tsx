@@ -456,12 +456,12 @@ function RepositoryPanel({
   return (
     <section
       aria-label={resource.name}
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
       <Tabs
         value={scope}
         onValueChange={setScope}
-        className="flex min-w-0 shrink-0 flex-col gap-0"
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-0 overflow-hidden"
       >
         <div className="flex min-w-0 shrink-0 items-center border-b">
           <TabsList className="flex h-auto min-w-0 flex-1 flex-wrap rounded-none bg-transparent p-1">
@@ -506,7 +506,7 @@ function RepositoryPanel({
           value="local"
           forceMount
           hidden={scope !== 'local'}
-          className="flex min-w-0 flex-col data-[state=inactive]:hidden"
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
           <div
             className={
@@ -563,7 +563,7 @@ function RepositoryPanel({
             <Tabs
               value={tab}
               onValueChange={setTab}
-              className="flex min-h-[180px] min-w-0 shrink-0 flex-col gap-0"
+              className="flex min-h-0 min-w-0 flex-1 flex-col gap-0"
             >
               <TabsList className="flex h-auto w-full shrink-0 flex-wrap rounded-none border-b bg-transparent p-1">
                 {['files', 'changes', 'branches', 'commits'].map((id) => (
@@ -750,18 +750,20 @@ function RepositoryPanel({
               </TabsContent>
               <TabsContent
                 value="changes"
-                className="min-h-0 flex-1 overflow-auto p-2"
+                className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden p-2"
               >
                 {copy && writable && snapshot.data && !snapshot.error && (
-                  <GitCopyActions
-                    key={copy.id}
-                    projectId={projectId}
-                    agentThreadId={agentThreadId}
-                    copyId={copy.id}
-                    snapshot={snapshot.data}
-                    address={resource.address}
-                    actionScope="commit"
-                  />
+                  <div className="shrink-0">
+                    <GitCopyActions
+                      key={copy.id}
+                      projectId={projectId}
+                      agentThreadId={agentThreadId}
+                      copyId={copy.id}
+                      snapshot={snapshot.data}
+                      address={resource.address}
+                      actionScope="commit"
+                    />
+                  </div>
                 )}
                 {copy && snapshot.data && !snapshot.error ? (
                   <Changes
@@ -1182,6 +1184,7 @@ function Changes({
   return (
     <GitStageChanges
       view="all"
+      layout="split"
       key={`${copy.id}:${agentThreadId ?? ''}`}
       projectId={projectId}
       copyId={copy.id}

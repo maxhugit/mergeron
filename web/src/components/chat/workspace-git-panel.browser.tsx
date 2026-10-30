@@ -6,11 +6,18 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
 vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/lib/file-watch-leases', () => ({
+  acquireFileWatch: () => () => {},
+}));
+vi.mock('@/socket', () => ({
+  getSocket: () => ({ on: () => {}, off: () => {} }),
+}));
 vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => <div>Arborescence locale</div>,
 }));
@@ -21,6 +28,10 @@ import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 import { locationInventoryFixture } from '@/test/project-locations-fixture';
 import type { GitInventory } from '@/lib/workspace-git-api';
+
+const localFixture = vi.hoisted(() => ({
+  changes: null as GitSnapshot['changes'] | null,
+}));
 
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({
@@ -72,7 +83,7 @@ vi.mock('@/lib/projects-api', () => ({
         ahead: 2,
         behind: 1,
         upstream: 'origin/main',
-        changes: [
+        changes: localFixture.changes ?? [
           {
             path: 'src/components/un-fichier-avec-un-nom-extrêmement-long.tsx',
             status: ' M',
@@ -148,7 +159,134 @@ vi.mock('@/lib/projects-api', () => ({
     throw new Error('Unexpected fixture request');
   },
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localFixture.changes = null;
+});
+
+test.each([
+  [280, 650],
+  [440, 850],
+  [700, 520],
+])(
+  'keeps two independently scrolling change lists bounded at %ipx by %ipx',
+  async (width, height) => {
+    await page.viewport(width + 40, height + 40);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    localFixture.changes = [
+      { path: 'src/mixed.ts', status: 'MM' },
+      ...Array.from({ length: 40 }, (_, index) => ({
+        path: `src/unprepared-${index}.ts`,
+        status: ' M',
+      })),
+      ...Array.from({ length: 40 }, (_, index) => ({
+        path: `src/prepared-${index}.ts`,
+        status: 'M ',
+      })),
+    ];
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const onDiff = vi.fn();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <div
+          data-git-split-fixture
+          className="dark flex flex-col bg-background text-foreground"
+          style={{ width, height }}
+        >
+          <WorkspaceGitPanel
+            projectId="p"
+            resourceId="git"
+            cwd="/original"
+            onSelect={() => {}}
+            onFile={() => {}}
+            onGitDiff={onDiff}
+            onActiveWorkspaceChange={() => {}}
+            activeWorkspacePending={false}
+          >
+            <div>Local</div>
+          </WorkspaceGitPanel>
+        </div>
+      </QueryClientProvider>,
+    );
+    try {
+      await page.getByRole('tab', { name: /Modifications/ }).click();
+      const upper = await screen.findByRole('region', {
+        name: 'Modifications à préparer (41)',
+      });
+      const lower = screen.getByRole('region', {
+        name: 'Prêtes pour le commit (41)',
+      });
+      const upperList = within(upper).getByRole('list');
+      const lowerList = within(lower).getByRole('list');
+      const toolbar = screen.getByRole('button', {
+        name: 'Commit…',
+      });
+      const stageSelected = within(upper).getByRole('button', {
+        name: 'Préparer la sélection',
+      });
+      expect(
+        screen.queryByText(i18n.t('gitActionStagedHelp', { ns: 'workspaces' })),
+      ).toBeNull();
+      expect(upperList.scrollHeight).toBeGreaterThan(upperList.clientHeight);
+      expect(lowerList.scrollHeight).toBeGreaterThan(lowerList.clientHeight);
+      expect(upperList.clientHeight).toBeGreaterThan(20);
+      expect(lowerList.clientHeight).toBeGreaterThan(20);
+      const upperBounds = upper.getBoundingClientRect();
+      const lowerBounds = lower.getBoundingClientRect();
+      const toolbarTop = toolbar.getBoundingClientRect().top;
+      expect(
+        Math.abs(upperBounds.height - lowerBounds.height),
+      ).toBeLessThanOrEqual(1);
+      expect(upperBounds.bottom).toBeLessThan(lowerBounds.top);
+      expect(lowerBounds.bottom).toBeLessThanOrEqual(height);
+      fireEvent.click(
+        within(upperList).getByRole('button', { name: /mixed.ts/ }),
+      );
+      fireEvent.click(
+        within(lowerList).getByRole('button', { name: /mixed.ts/ }),
+      );
+      expect(
+        onDiff.mock.calls.map(([target]) => [target.path, target.staged]),
+      ).toEqual([
+        ['src/mixed.ts', false],
+        ['src/mixed.ts', true],
+      ]);
+      upperList.scrollTop = upperList.scrollHeight;
+      await new Promise(requestAnimationFrame);
+      expect(upperList.scrollTop).toBeGreaterThan(0);
+      expect(lowerList.scrollTop).toBe(0);
+      expect(upper.getBoundingClientRect().top).toBe(upperBounds.top);
+      expect(lower.getBoundingClientRect().top).toBe(lowerBounds.top);
+      expect(toolbar.getBoundingClientRect().top).toBe(toolbarTop);
+      expect(stageSelected.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        upperBounds.bottom,
+      );
+      upperList.scrollTop = 0;
+      lowerList.scrollTop = lowerList.scrollHeight;
+      await new Promise(requestAnimationFrame);
+      expect(upperList.scrollTop).toBe(0);
+      expect(lowerList.scrollTop).toBeGreaterThan(0);
+      expect(lower.getBoundingClientRect().bottom).toBe(lowerBounds.bottom);
+      const fixture = document.querySelector<HTMLElement>(
+        '[data-git-split-fixture]',
+      )!;
+      expect(fixture.scrollHeight).toBeLessThanOrEqual(height);
+      expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+        width + 40,
+      );
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-split-changes-${width}-${height}.png`,
+      });
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);
 test.each([330, 600])(
   'local branch confirmation fits at %ipx',
   async (width) => {
@@ -304,7 +442,7 @@ test.each([260, 330, 600])(
         expect(bounds.right).toBeLessThanOrEqual(width);
         expect(bounds.bottom).toBeLessThan(850);
       }
-      await page.getByRole('tab', { name: 'Distant · GitHub' }).click();
+      await page.getByRole('tab', { name: 'GitHub', exact: true }).click();
       await page.getByRole('button', { name: /#12/ }).click();
       await screen.findByText('En cours');
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
@@ -368,7 +506,7 @@ test.each([260, 330, 600])(
       await page.screenshot({
         path: `../../../.vitest-screenshots/git-sync-${width}.png`,
       });
-      await page.getByRole('tab', { name: 'Distant · GitHub' }).click();
+      await page.getByRole('tab', { name: 'GitHub', exact: true }).click();
       await page.screenshot({
         path: `../../../.vitest-screenshots/git-panel-${width}.png`,
       });
