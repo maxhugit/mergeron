@@ -212,6 +212,12 @@ administrateur définit le runtime, le sous-dossier relatif, les commandes
 d’installation et de compilation, la commande de démarrage, le port interne,
 la page initiale et le mode de synchronisation.
 
+Les phases installation, compilation et démarrage s’exécutent dans cet ordre.
+Si une phase termine avec un code non nul, les suivantes ne sont pas lancées,
+y compris lorsque la commande utilise une chaîne `commande1 && commande2`.
+Les variables exportées et les changements de dossier restent conservés entre
+les phases ; leurs commandes doivent signaler correctement leurs erreurs.
+
 Pour un projet Vite, le lancement peut être
 `npm run dev -- --host 0.0.0.0 --port 5173 --strictPort`, avec le port 5173 dans
 le profil. Le Manager ajoute uniquement le nom exact de l’instance aux hôtes
@@ -314,6 +320,12 @@ spéciaux. Les dossiers Git, caches, dépendances, sorties de compilation et
 fichiers sensibles usuels sont exclus. Les parcours de synchronisation utilisent
 des descripteurs de dossiers sans suivi de liens, y compris si l’application de
 test essaie de remplacer un dossier par un lien pendant son exécution.
+
+Le dossier de sortie `logs/` à la racine reste exclu. Un module de code imbriqué
+tel que `src/logs/` conserve uniquement ses fichiers de langage source (par
+exemple `.ts`, `.js` ou `.py`). Ses journaux, fichiers JSON/NDJSON, textes,
+archives, bases et secrets ne sont pas copiés. Cette exception ne désactive
+aucune exclusion des identifiants, dépendances, liens ou fichiers sensibles.
 
 Le runtime n’a pas de réseau sortant direct. Un proxy dédié autorise des domaines
 publics approuvés, vérifie et épingle leurs adresses DNS et refuse les réseaux
