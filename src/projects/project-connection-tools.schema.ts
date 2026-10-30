@@ -18,11 +18,14 @@ export const readProjectGitInput = z.strictObject({
     'branches',
     'files',
     'pull_requests',
+    'pull_request',
     'checks',
     'local_status',
     'local_diff',
     'local_staged_diff',
     'local_commits',
+    'local_merge_status',
+    'local_conflict',
   ]),
   copyId: id.optional(),
   path: z.string().max(2048).optional(),
@@ -32,7 +35,12 @@ export const readProjectGitInput = z.strictObject({
 export const publishProjectGitInput = z.strictObject({
   connectionId: id,
   copyId: id,
-  operation: z.enum(['push', 'create_pull_request', 'retarget_pull_request']),
+  operation: z.enum([
+    'push',
+    'create_pull_request',
+    'retarget_pull_request',
+    'update_pull_request',
+  ]),
   requestId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
   userRequest: z.string().trim().min(1).max(2000),
   expectedHead: revision,
@@ -43,6 +51,7 @@ export const publishProjectGitInput = z.strictObject({
   description: z.string().max(10000).optional(),
   draft: z.boolean().optional(),
   number: z.number().int().min(1).max(999999999).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
   expectedBase: z.string().min(1).max(200).optional(),
   expectedPullRequestHead: revision.optional(),
 });
@@ -67,6 +76,11 @@ export const prepareProjectGitInput = z.strictObject({
     'unstage',
     'commit',
     'create_branch',
+    'fetch_branch',
+    'switch_branch',
+    'start_merge',
+    'continue_merge',
+    'abort_merge',
   ]),
   paths: paths.optional(),
   reviewFingerprint: z
@@ -75,6 +89,8 @@ export const prepareProjectGitInput = z.strictObject({
     .optional(),
   message: z.string().trim().min(1).max(4000).optional(),
   name: z.string().min(1).max(200).optional(),
+  revision: revision.optional(),
+  startRef: z.string().min(1).max(240).optional(),
 });
 export const prepareProjectGitOperationInput = z.discriminatedUnion(
   'operation',
@@ -100,6 +116,32 @@ export const prepareProjectGitOperationInput = z.discriminatedUnion(
       ...localContext,
       operation: z.literal('create_branch'),
       name: z.string().min(1).max(200),
+      startRef: z.string().min(1).max(240).optional(),
+      revision: revision.optional(),
+    }),
+    ...(['fetch_branch', 'switch_branch'] as const).map((operation) =>
+      z.strictObject({
+        ...localContext,
+        operation: z.literal(operation),
+        name: z.string().min(1).max(200),
+        revision,
+      }),
+    ),
+    z.strictObject({
+      ...localContext,
+      operation: z.literal('start_merge'),
+      revision,
+    }),
+    z.strictObject({
+      ...localContext,
+      operation: z.literal('continue_merge'),
+      revision,
+      message: z.string().trim().min(1).max(4000),
+    }),
+    z.strictObject({
+      ...localContext,
+      operation: z.literal('abort_merge'),
+      revision,
     }),
   ],
 );

@@ -289,6 +289,20 @@ describe('native internal MCP over HTTP', () => {
       } as unknown as WorkspaceGitService,
       {
         push: pushConnection,
+        retrieveBranch: (
+          _p: string,
+          _c: string,
+          body: { revision: string },
+          publisher: { threadId: string; assertActive: () => void },
+          tracking: boolean,
+        ) => {
+          publisher.assertActive();
+          return Promise.resolve({
+            sha: body.revision,
+            owner: publisher.threadId,
+            tracking,
+          });
+        },
         stageReview: () =>
           Promise.resolve({
             reviewFingerprint: 'c'.repeat(64),
@@ -518,6 +532,54 @@ describe('native internal MCP over HTTP', () => {
     expect(
       (await client.callTool({ name: 'prepare_project_git', arguments: args }))
         .isError,
+    ).toBe(true);
+  });
+
+  it('exposes branch synchronization through MCP without permitting arbitrary Git arguments', async () => {
+    const { client } = await connect();
+    activate();
+    const args = {
+      connectionId: gitConnectionId,
+      copyId: 'own',
+      operation: 'fetch_branch',
+      name: 'main',
+      revision: gitHead,
+      requestId: 'fetch-1',
+      userRequest: 'Fetch main to resolve this PR.',
+      expectedHead: gitHead,
+      expectedBranch: 'feature/test',
+      fingerprint: gitFingerprint,
+    };
+    const result = await client.callTool({
+      name: 'prepare_project_git',
+      arguments: args,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      operation: 'fetch_branch',
+      data: { sha: gitHead, owner: 'agent', tracking: true },
+    });
+    for (const extra of [
+      { force: true },
+      { address: 'https://evil.invalid/repo' },
+      { command: 'fetch --all' },
+    ])
+      expect(
+        (
+          await client.callTool({
+            name: 'prepare_project_git',
+            arguments: { ...args, requestId: 'bad-fetch', ...extra },
+          })
+        ).isError,
+      ).toBe(true);
+    service.revoke('agent');
+    expect(
+      (
+        await client.callTool({
+          name: 'prepare_project_git',
+          arguments: { ...args, requestId: 'revoked-fetch' },
+        })
+      ).isError,
     ).toBe(true);
   });
 

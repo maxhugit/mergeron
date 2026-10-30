@@ -45,10 +45,13 @@ describe('project connection agent tools', () => {
     remoteBranches: vi.fn(),
     remoteFiles: vi.fn(),
     pullRequests: vi.fn(),
+    pullRequest: vi.fn(),
     checks: vi.fn(),
     diff: vi.fn(),
     stagedDiff: vi.fn(),
     commits: vi.fn(),
+    mergeStatus: vi.fn(),
+    conflictFile: vi.fn(),
   };
   const createCopy =
     vi.fn<
@@ -62,12 +65,17 @@ describe('project connection agent tools', () => {
   const actions = {
     push: vi.fn(),
     createPullRequest: vi.fn(),
+    updatePullRequest: vi.fn(),
     retargetPullRequest: vi.fn(),
     stageReview: vi.fn(),
     stage: vi.fn(),
     unstage: vi.fn(),
     commit: vi.fn(),
     createBranch: vi.fn(),
+    retrieveBranch: vi.fn(),
+    localBranchAction: vi.fn(),
+    startMerge: vi.fn(),
+    abortMerge: vi.fn(),
   };
   const as = <T>(person: string, run: () => T) =>
     accessContext.run(
@@ -308,6 +316,149 @@ describe('project connection agent tools', () => {
       'PROJECT_CONNECTION_UNAVAILABLE',
     );
     expect(own).toEqual([]);
+  });
+
+  it.each([
+    [
+      'fetch_branch',
+      'retrieveBranch',
+      { name: 'main', revision: 'c'.repeat(40) },
+    ],
+    [
+      'switch_branch',
+      'localBranchAction',
+      { name: 'work', revision: 'c'.repeat(40) },
+    ],
+    ['start_merge', 'startMerge', { revision: 'c'.repeat(40) }],
+    [
+      'continue_merge',
+      'commit',
+      { revision: 'c'.repeat(40), message: 'Resolve conflicts' },
+    ],
+    ['abort_merge', 'abortMerge', { revision: 'c'.repeat(40) }],
+  ] as const)(
+    'binds %s to the caller, observed copy and stable request',
+    async (operation, method, fields) => {
+      const args = {
+        ...publish(),
+        tool: 'prepare_project_git',
+        operation,
+        ...fields,
+      };
+      actions[method].mockResolvedValue({ confirmed: true });
+      await expect(call(args)).resolves.toMatchObject({
+        data: { confirmed: true },
+      });
+      await call(args);
+      expect(actions[method]).toHaveBeenCalledTimes(1);
+      const invocation = actions[method].mock.calls[0];
+      expect(invocation.slice(0, 2)).toEqual(['p', 'own']);
+      expect(invocation[2]).toMatchObject({
+        agentThreadId: 'agent',
+        fingerprint: state.fingerprint,
+      });
+      expect(invocation[3]).toMatchObject({
+        threadId: 'agent',
+        assertActive: expect.any(Function),
+      });
+      if (operation === 'fetch_branch') expect(invocation[4]).toBe(true);
+      if (operation === 'continue_merge')
+        expect(invocation[2]).toMatchObject({ mergeRevision: fields.revision });
+    },
+  );
+  it('inspects conflicts only on its owned copy and rejects arbitrary commands and remote URLs', async () => {
+    git.mergeStatus.mockResolvedValue({
+      mergeHead: 'c'.repeat(40),
+      conflicts: [],
+    });
+    const args = {
+      tool: 'read_project_git',
+      connectionId,
+      copyId: 'own',
+      operation: 'local_merge_status',
+    };
+    await expect(call(args)).resolves.toMatchObject({
+      data: { mergeHead: 'c'.repeat(40) },
+    });
+    await expect(call({ ...args, copyId: 'foreign' })).rejects.toThrow(
+      'GIT_COPY_OWNED',
+    );
+    for (const extra of [
+      { address: 'https://evil.invalid/repo' },
+      { command: 'fetch --all' },
+      { force: true },
+    ])
+      await expect(
+        call({
+          ...publish(),
+          tool: 'prepare_project_git',
+          operation: 'fetch_branch',
+          name: 'main',
+          revision: 'c'.repeat(40),
+          ...extra,
+        }),
+      ).rejects.toThrow();
+    expect(actions.retrieveBranch).not.toHaveBeenCalled();
+  });
+
+  it('edits only explicitly supplied PR metadata with the observed update timestamp', async () => {
+    const args = publish({
+      operation: 'update_pull_request',
+      number: 271,
+      title: 'Updated title',
+      description: 'Updated description',
+      expectedUpdatedAt: '2026-10-30T12:00:00Z',
+    });
+    actions.updatePullRequest.mockResolvedValue({ updated: true });
+    await expect(call(args)).resolves.toMatchObject({
+      data: { updated: true },
+    });
+    expect(actions.updatePullRequest).toHaveBeenCalledWith(
+      'p',
+      'own',
+      expect.objectContaining({
+        number: 271,
+        title: 'Updated title',
+        expectedUpdatedAt: args.expectedUpdatedAt,
+      }),
+      expect.objectContaining({ threadId: 'agent' }),
+    );
+    await expect(
+      call({ ...args, requestId: 'bad-update', expectedUpdatedAt: undefined }),
+    ).rejects.toThrow();
+    for (const extra of [
+      { base: 'main' },
+      { draft: false },
+      { expectedBase: 'main' },
+      { expectedPullRequestHead: 'c'.repeat(40) },
+    ])
+      await expect(
+        call({ ...args, requestId: 'bad-update-fields', ...extra }),
+      ).rejects.toThrow();
+    expect(actions.updatePullRequest).toHaveBeenCalledOnce();
+  });
+
+  it('creates a separate branch from an observed fetched reference instead of silently using HEAD', async () => {
+    actions.createBranch.mockResolvedValue({ branch: 'new-work' });
+    await call({
+      ...publish(),
+      tool: 'prepare_project_git',
+      operation: 'create_branch',
+      name: 'new-work',
+      startRef: 'refs/remotes/mergeron/main',
+      revision: 'c'.repeat(40),
+    });
+    expect(actions.createBranch).toHaveBeenCalledWith(
+      'p',
+      'own',
+      expect.objectContaining({
+        name: 'new-work',
+        startRef: 'refs/remotes/mergeron/main',
+        startRevision: 'c'.repeat(40),
+        checkout: true,
+      }),
+      expect.objectContaining({ threadId: 'agent' }),
+    );
   });
 
   it('allows the same requestId to retry a definitive gate refusal, but not an uncertain dispatched outcome', async () => {
@@ -717,6 +868,7 @@ describe('project connection agent tools', () => {
       { description: 'ignored?' },
       { number: 0 },
       { expectedPullRequestHead: 'invalid' },
+      { expectedUpdatedAt: '2026-10-30T12:00:00Z' },
     ])
       await expect(call({ ...input, ...extra })).rejects.toThrow();
     expect(actions.retargetPullRequest).not.toHaveBeenCalled();
