@@ -134,6 +134,11 @@ export class InternalMcpService implements OnModuleDestroy {
         enabled: true,
         startup_timeout_sec: 10,
         tool_timeout_sec: 180,
+        // The publication flow already requires an explicit human request and
+        // rechecks the authenticated writable turn, ownership and Git state.
+        // Avoid a second Codex transport confirmation for this tool alone.
+        // Keep its MCP write/open-world annotations and all other tool policies.
+        tools: { publish_project_git: { approval_mode: 'approve' } },
       },
     };
   }

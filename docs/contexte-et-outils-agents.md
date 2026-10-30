@@ -138,6 +138,18 @@ Le serveur exige un tour modifiable, un administrateur hors simulation, une
 connexion/copie en lecture-écriture et une copie propre à l’agent. Il revérifie
 les droits et l’état avant l’envoi. Il n’extrait jamais les secrets dans le prompt.
 
+La connexion MCP interne fournit à Codex un réglage ciblé
+`mcp_servers.mergeron_internal.tools.publish_project_git.approval_mode = "approve"`.
+Une demande humaine de publication ne nécessite donc pas une seconde confirmation
+technique pour autoriser cet outil MCP. Ce réglage ne concerne que
+`publish_project_git` : il ne modifie ni la politique globale d’approbation, ni les
+outils des autres serveurs, ni la confirmation des actions du navigateur local.
+L’outil reste déclaré comme une écriture vers un service externe ; la demande
+humaine explicite et les contrôles serveur décrits ci-dessus restent requis.
+La configuration est appliquée au prochain échange après déploiement et
+rechargement de la connexion interne ; une confirmation déjà en attente n’est pas
+acceptée automatiquement.
+
 Les publications utilisent le circuit sécurisé existant : configuration Git
 temporaire isolée pour le push, SHA immuable, TLS vérifié, redirections refusées
 et API GitHub fixe pour les PR. L’outil de publication n’effectue aucun stage,
