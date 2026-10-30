@@ -31,7 +31,7 @@ l’agent reste responsable de l’interprétation de la demande.
 L’entrée **MCP interne** des réglages globaux ouvre
 `/settings?section=internalMcp`. Réservée aux administrateurs, elle présente :
 
-- recherche parmi les méthodes métier, Git et navigateur local ;
+- recherche parmi les méthodes métier, Git, prévisualisation et navigateur local ;
 - paramètres, types, champs obligatoires et contraintes ;
 - schémas JSON complets des entrées et des résultats ;
 - exemples d’appels, protocole, limites, erreurs et instructions de sécurité.
@@ -218,6 +218,30 @@ sans créer de conversation ni demander d’inférence. Il exige la confirmation
 règles administrées, l’écoute loopback, Chromium sandboxé et le refus par le proxy
 d’un domaine non autorisé. Un échec doit bloquer la livraison, pas activer un
 contournement.
+
+## Prévisualisations web déléguées aux agents
+
+L’administrateur doit d’abord activer le service sur le serveur et autoriser les
+environnements de test pour le projet. L’autorisation peut déléguer à l’agent la
+préparation et le cycle de vie de sa propre recette, dans les runtimes et limites
+approuvés. Cette capacité s’applique à tous les projets compatibles, pas seulement
+au dépôt Mergeron. Elle n’accorde ni Docker dans le terminal ni accès aux comptes
+ou données de production.
+
+Le résumé `previewEnvironment` du contexte indique la disponibilité actuelle.
+Utiliser `project_preview_read` pour relire l’état, les capacités et les révisions,
+`project_preview_prepare` pour enregistrer une recette bornée sans la lancer,
+puis `project_preview_manage` pour démarrer, synchroniser, recréer ou arrêter
+l’instance de l’agent. Conserver les `requestId` et révisions attendues ; une
+capacité annoncée ne permet pas de contourner l’autorisation du projet ou du tour.
+
+L’agent ne donne l’URL utilisable qu’après `preview.ready: true` et une URL non
+nulle. Le clic humain autorise le navigateur sur l’origine de l’instance : ce
+n’est pas une URL publique de partage. L’arrêt supprime les conteneurs, réseaux
+et volumes jetables ; `preview.cleanup.runtimeResourcesRemoved: true` confirme
+ce nettoyage. La recette, les sources du projet et l’historique restent conservés.
+Voir le [guide complet](previsualisations-agents.md) pour le domaine wildcard,
+le proxy Node/Corepack, la délégation et les limites de synchronisation.
 
 ## Architecture technique
 

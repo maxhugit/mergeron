@@ -58,6 +58,9 @@ mergeron-environment-check --cwd /workspaces/mon-projet
 Le contrôle vérifie une écriture temporaire dans le dossier existant, les caches,
 les versions locales de npm/Corepack/pnpm, la disponibilité d’en-têtes Node
 compatibles et, si un proxy est configuré, son DNS et son port TCP.
+Il appelle aussi réellement `os.networkInterfaces()` : la sonde
+`node.network-interfaces` détecte notamment un refus `uv_interface_addresses`,
+qui peut empêcher Fastify de démarrer malgré une écoute TCP fonctionnelle.
 Il n’exécute aucun script du projet, ne lit aucun jeton Git, n’installe rien et
 interdit les téléchargements de gestionnaires pendant les sondes de version.
 Ces sondes se déroulent dans un répertoire temporaire hors du projet afin de
@@ -81,6 +84,23 @@ Le contrôle ne s’exécute pas automatiquement côté serveur : les consignes
 communes par défaut demandent à l’agent de l’exécuter avant ces travaux. Les
 consignes personnalisées de l’administrateur ne sont pas écrasées ; y ajouter
 la commande si nécessaire.
+
+Un refus de `networkInterfaces()` par le filtre du CLI n’est pas corrigé par
+une fausse liste d’interfaces ou un patch Fastify. Le [runtime Codex géré et
+protégé](operations/managed-codex-runtime.md) fournit la capacité ciblée
+`netlink-route-query-v1`, avec provenance vérifiée et installation par le
+Manager. Les nouvelles sessions doivent utiliser le runtime installé ; vérifier
+à nouveau depuis le terminal de l’agent, sans désactiver les autres protections.
+
+La disponibilité directe de npm/Corepack, les droits des caches et la présence
+hors réseau de la version `packageManager` du projet sont des résultats distincts.
+Un échec du dernier ne signifie pas que npm ou Corepack sont absents.
+
+Le terminal de l’agent et le runtime de [prévisualisation](previsualisations-agents.md)
+sont également distincts : un précontrôle vert ne valide pas les images approuvées,
+le proxy ou l’installation des dépendances dans cette seconde instance. Pour
+créer cet environnement, utiliser les outils MCP dédiés, pas un socket Docker
+ou un conteneur privilégié dans le terminal.
 
 ## Réseau et résultat
 

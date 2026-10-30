@@ -70,3 +70,16 @@ uniquement après validation des sources et analyse de vulnérabilités. Pour
 bénéficier de cette fonctionnalité, mettre à jour **le Manager et l’application**.
 Le Manager lui-même reste mis à jour par l’hôte ; il n’essaye pas de se remplacer
 pendant sa propre transaction.
+
+## Délais et résultat incertain
+
+Les appels du backend au Manager pour préparer, appliquer ou récupérer une mise
+à jour disposent d’un budget total de 30 secondes, distinct de la durée complète
+de la transaction en arrière-plan. Les erreurs de transport sont structurées :
+Manager indisponible (503), délai dépassé (504) ou réponse invalide (502), sans
+exposer le message brut ou les secrets. Ce ne sont plus des erreurs 500 génériques.
+
+Un délai dépassé après envoi ne prouve pas que l’opération a été refusée. Consulter
+le suivi et l’état courant avant toute nouvelle demande ; aucune mutation n’est
+automatiquement rejouée. La sauvegarde peut prendre bien plus longtemps que
+30 secondes : son suivi par étapes n’est pas un chronomètre prévisionnel.

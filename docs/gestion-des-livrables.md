@@ -22,8 +22,10 @@ ses sous-tâches ; un clic ouvre la tâche dans une fenêtre de détail sans qui
 le livrable. D’autres tâches et conversations du projet peuvent aussi rester
 associées à la fiche.
 
-À chaque message suivant dans une conversation liée, le modèle reçoit le brief,
-les critères et le dossier de travail, en complément des connaissances partagées.
+À chaque message suivant dans une conversation liée, le modèle reçoit le dossier
+actif et les identifiants/titres des éléments liés, en complément des connaissances
+partagées. Il consulte le brief et les critères via le [MCP interne](contexte-et-outils-agents.md)
+à la demande, sans réinjecter toutes les descriptions à chaque échange.
 Le bouton **Confier à un agent**, réservé aux administrateurs comme les
 autres exécutions serveur, crée et ouvre une conversation liée directement au
 livrable, sans tâche ni sous-tâche obligatoire et sans tâche cachée automatique.
@@ -41,7 +43,7 @@ production, sa validation, le responsable hérité de la tâche principale et sa
 dernière modification. La fiche détaillée est organisée en cinq onglets :
 
 - **Aperçu** : description, critères, état et synthèse ;
-- **Documents** : ajout, remplacement, aperçu, téléchargement, suppression
+- **Documents** : ajout, remplacement, renommage, aperçu, téléchargement, suppression
   logique, restauration et historique propre à chaque document ;
 - **Validation** : préparation des fichiers, soumission et décision sur une
   version ;
@@ -84,6 +86,20 @@ par exemple `Présentation/Qualité PLM.pptx` dans l'explorateur, sans
 avec conservation des liens par alias et sans modification de l'historique.
 Une collision conserve les deux fichiers et signale le déplacement bloqué dans
 les logs ; aucun écrasement automatique n'est effectué.
+
+Le menu d’un document est commun à la liste du livrable et à l’explorateur de
+Mergeron : aperçu, téléchargement, historique, renommage, nouvelle version,
+création d’une version depuis le fichier courant, pièce jointe au chat et
+suppression, selon les droits et l’état du livrable. Dans l’explorateur, ouvrir
+le menu par « … » ou clic droit ; le clic principal n’ouvre plus ce menu.
+
+Les ajouts, renommages et suppressions réalisés **via cet explorateur** dans le
+dossier du livrable passent par le service documentaire pour garder la fiche,
+les versions, les liens et les protections cohérents. Renommer conserve
+l’identifiant et l’historique ; cela ne renomme pas les instantanés immuables.
+Un livrable finalisé ou archivé, une collision ou une édition Office active
+peuvent bloquer la mutation. Une modification directe sur disque ne vaut pas
+enregistrement d’une version : utiliser l’action dédiée pour la conserver.
 
 La soumission historique héritée crée une copie séparée dans
 `/workspaces/.mergeron-system/<id-projet>/history/deliverables/<id-livrable>/<id-version>/`,
