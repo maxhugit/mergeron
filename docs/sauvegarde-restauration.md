@@ -14,8 +14,8 @@ Sauvegarder régulièrement :
 - `STATE_ROOT/ssh` dans une archive chiffrée ;
 - `STATE_ROOT/backend-token.txt` et `backend-token-nginx.txt` ;
 - `STATE_ROOT/openai-api-key.txt` dans un coffre à secrets ;
-- le fichier `.env` de production, hors du dépôt public ;
-- les données OnlyOffice ou HA-MCP si elles doivent aussi être reconstruites.
+- le fichier privé `manager.env` et la définition de lancement du Manager ;
+- les données des services facultatifs, avec leurs propres outils de sauvegarde.
 
 Les images Docker, journaux et caches peuvent être recréés. Sauvegarder aussi
 les dossiers hôtes exposés via `/appdata`, avec l’outil de sauvegarde de votre
@@ -131,26 +131,32 @@ Une copie brute pendant une écriture peut être incohérente.
 Procédure prudente :
 
 ```bash
-cd /srv/mergeron
-docker compose --env-file .env -f compose.yml stop mergeron-ui
+docker stop mergeron-ui
 # lancer ici la sauvegarde de STATE_ROOT
-docker compose --env-file .env -f compose.yml start mergeron-ui
+docker start mergeron-ui
 ```
 
 ## Restauration après perte du serveur
 
 1. réinstaller Docker et le reverse proxy choisi, ainsi que le fournisseur
    d’identité si vous en utilisez un ;
-2. cloner ce dépôt et préparer `mergeron/images.env` ;
-3. restaurer `STATE_ROOT` aux chemins indiqués dans `.env` ;
+2. préparer la définition du Manager et son fichier privé `manager.env` ;
+3. restaurer la racine persistante aux mêmes chemins hôtes ;
 4. restaurer les permissions des secrets et des clés SSH ;
 5. recréer le réseau externe portant le nom enregistré dans
    `MERGERON_PROXY_NETWORK` et restaurer la route du proxy HTTPS ;
-6. démarrer les trois services ;
+6. démarrer le Manager selon le [guide](installation.md), avec les images et
+   réglages sauvegardés, pour recréer les dépendances manquantes ;
 7. exécuter la liste de tests du guide d’installation.
 
+L’empreinte d’adoption peut contenir des identifiants Docker propres à l’hôte
+perdu. Une différence bloque la gestion automatique : arrêter la procédure
+et faire vérifier le plan de reprise par l’administrateur, sans effacer
+`adoption.json` pour contourner ce contrôle. Une installation neuve ne vaut
+pas validation automatique d’une restauration.
+
 Si aucune sauvegarde n’existe, recréer les secrets et recommencer les connexions
-OpenAI, MCP, GitHub et SSH. Les anciennes conversations et préférences seront
+aux services externes utilisés. Les conversations et préférences seront
 alors perdues.
 
 ## Test de restauration

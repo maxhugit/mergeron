@@ -60,7 +60,4 @@ Une fusion dans `main` construit l’image GHCR. Tester de préférence le tag
 immuable `sha-<commit>` avant de modifier l’image utilisée sur serveur.
 
 Toute modification de `deployment/` doit être répercutée dans
-`docs/installation-docker.md` et les adaptations facultatives concernées.
-
-Ne pas fusionner automatiquement la branche du projet d’origine. Reprendre
-manuellement les corrections pertinentes après étude de leur impact.
+`docs/installation.md`, `docs/variables-manager.md` et les adaptations facultatives concernées.
