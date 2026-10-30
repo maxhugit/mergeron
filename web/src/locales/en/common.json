@@ -1029,7 +1029,7 @@
   "thinking": "Thinking",
   "thinkinga7311e3e": "Thinking...",
   "thisAppIdCannotBeEditedThroughTheCuratedConfigPath": "This app id cannot be edited through the curated config path.",
-  "thisCannotBeUndoneFilesAlreadyWrittenToTheWorkspaceAreNotReverted": "This cannot be undone. Files already written to the workspace are not reverted.",
+  "thisCannotBeUndoneFilesAlreadyWrittenToTheWorkspaceAreNotReverted": "This cannot be undone. Deleting a work agent also removes its managed Git copy, including unpublished changes and local commits. The remote repository and other project files are not changed. Deleting only a message version preserves the agent’s copy.",
   "thisChangeOnlyTakesEffectAfterCodexRestartsUseRestartCodexInTheModelCatalogSectionBelow": "This change only takes effect after Codex restarts. Use “Restart Codex” in the model catalog section below.",
   "thisChangesWhoReviewsPermissionRequestsAutomaticReviewOrAGuardianSubagentCanApp4f7053df": "This changes who reviews permission requests. Automatic review or a guardian subagent can approve or deny operations without the prompt first routing to you when policy allows.",
   "thisClearsOnlyThisReviewerOverrideFutureApprovalRoutingWillInheritFromTheNextCo4dc19380": "This clears only this reviewer override. Future approval routing will inherit from the next configured layer, or the built-in user default.",

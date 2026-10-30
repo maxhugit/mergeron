@@ -17,6 +17,7 @@ import { PendingApprovalsService } from '../pending-approvals/pending-approvals.
 import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
 import { ThreadResumeRegistryService } from './thread-resume-registry.service';
 import { ThreadHistoryService } from './thread-history.service';
+import { AgentGitCopyCleanupService } from './agent-git-copy-cleanup.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import {
   isDescendantRejectedError,
@@ -48,6 +49,7 @@ export class ThreadsDeletionService {
     private readonly deletionRegistry: ThreadDeletionRegistryService,
     private readonly history: ThreadHistoryService,
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
+    private readonly gitCopyCleanup: AgentGitCopyCleanupService,
   ) {}
 
   /** Builds the exact cascade set the frontend must show before confirmation. */
@@ -356,7 +358,7 @@ export class ThreadsDeletionService {
       ),
     );
 
-    const cleanupFailure = this.reapLocalThread(threadId, expectedSet);
+    const cleanupFailure = await this.reapLocalThread(threadId, expectedSet);
     if (cleanupFailure) return cleanupFailure;
     // The observer normally evicts on `thread/deleted`, but a thread that was
     // already gone app-server side never emits one, so drop it explicitly here
@@ -366,11 +368,13 @@ export class ThreadsDeletionService {
     return null;
   }
 
-  private reapLocalThread(
+  private async reapLocalThread(
     threadId: string,
     expectedSet: Set<string>,
-  ): ThreadDeleteFailureDto | null {
+  ): Promise<ThreadDeleteFailureDto | null> {
     try {
+      // Ownership depends on branch edges; clean copies before reaping topology.
+      await this.gitCopyCleanup.cleanup(threadId);
       this.branches.clearActiveMemberForDeletedThread(threadId);
       this.branchMutations.reapDeletedThread(threadId, expectedSet);
       this.db
