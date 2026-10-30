@@ -12,11 +12,11 @@ import type { PreviewStorageLimits } from '../../../../runtime/preview-storage.c
 const storageLimits: PreviewStorageLimits = {
   backend: 'tmpfs',
   memoryCharged: true,
-  workspaceMb: 2048,
-  cacheMb: 1024,
-  temporaryMb: 256,
-  dataMb: 128,
-  inodesPerVolume: 262144,
+  workspaceMb: 4096,
+  cacheMb: 2048,
+  temporaryMb: 512,
+  dataMb: 256,
+  inodesPerVolume: 524288,
 };
 const data = vi.hoisted(() => ({
   administrator: true,
@@ -142,6 +142,9 @@ for (const width of [1440, 390])
     expect(
       screen.getByLabelText('Mémoire maximale de l’application (Mio)'),
     ).toHaveValue(1024);
+    expect(
+      screen.getByLabelText('Mémoire maximale de l’application (Mio)'),
+    ).toHaveAttribute('max', '8192');
     expect(document.body.scrollWidth).toBeLessThanOrEqual(width);
     await page.screenshot({
       path: `../../../.vitest-screenshots/preview-delegation-${width}.png`,

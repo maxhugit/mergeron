@@ -134,7 +134,7 @@ function profile(value) {
     port: integer(value.port, 1024, 65535, 3000),
     path,
     env: environment(value.env),
-    memoryMb: integer(value.memoryMb, 128, 4096, 1024),
+    memoryMb: integer(value.memoryMb, 128, 8192, 1024),
     cpus: integer(value.cpus, 1, 4, 1),
     lifetimeMinutes: integer(value.lifetimeMinutes, 5, 240, 60),
     services: parsedServices,

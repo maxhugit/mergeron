@@ -352,7 +352,7 @@ test('starts a generic source snapshot with no host mounts, published ports, roo
   );
   const volume = [...f.docker.volumes.values()][0];
   assert.equal(volume.Options.type, 'tmpfs');
-  assert.match(volume.Options.o, /size=2048m,nr_inodes=262144/);
+  assert.match(volume.Options.o, /size=4096m,nr_inodes=524288/);
   assert.deepEqual(result.storage.limits, storage.previewStorage);
 });
 
