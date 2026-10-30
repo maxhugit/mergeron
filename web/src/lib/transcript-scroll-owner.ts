@@ -70,6 +70,11 @@ export class TranscriptScrollOwner {
     this.offset = saved?.offset ?? 0;
   }
 
+  /** Library measurement writes must not cancel a native animated gesture. */
+  get inputInProgress(): boolean {
+    return this.userIntent;
+  }
+
   /** Binds the stable scroller. Ref cleanup only saves state; it does not navigate. */
   bind(element: HTMLDivElement | null): void {
     if (!element && this.element) this.save();

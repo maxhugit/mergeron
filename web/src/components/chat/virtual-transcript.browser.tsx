@@ -279,6 +279,26 @@ test('large native scrolling mounts the new range while remaining in history', a
   ).not.toBeNull();
 });
 
+test('a large browser-animated scroll is not interrupted by row measurement', async () => {
+  const id = `browser:${++threadSequence}`;
+  render(<Fixture id={id} />);
+  await expect.poll(distance).toBeLessThan(2);
+  await finishGesture();
+  // Linux WebKit animates wheel input. Explicit native smooth scrolling also
+  // exercises that path on platforms whose wheel input moves immediately.
+  scroller().focus({ preventScroll: true });
+  scroller().scrollBy({ top: -3500, behavior: 'smooth' });
+  await expect.poll(distance, { timeout: 3000 }).toBeGreaterThan(3000);
+  await finishGesture();
+  expect(distance()).toBeGreaterThan(3000);
+  const viewport = scroller().getBoundingClientRect();
+  expect(
+    document
+      .elementFromPoint(viewport.left + 20, viewport.top + 200)
+      ?.closest('[data-transcript-row]'),
+  ).not.toBeNull();
+});
+
 test('a browser-only width resize preserves a historical reading point', async () => {
   const id = `browser:${++threadSequence}`;
   const view = render(<Fixture id={id} />);
