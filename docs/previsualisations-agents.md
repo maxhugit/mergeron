@@ -19,6 +19,15 @@ ne donnent pas accès au nouveau runtime. Les service workers persistants sont
 refusés sur ces origines ; les Web Workers applicatifs et WebSocket restent
 disponibles. Aucune identité Mergeron ou Authentik n’est transmise au projet.
 
+Dans la conversation, ouvrir la fenêtre **Environnement de test** avec l’icône
+correspondante. Dès que le contrôle HTTP confirme que l’application est prête,
+son adresse apparaît en haut de la fenêtre, avec **Ouvrir l’aperçu** et
+**Copier l’URL**. La copie contient l’adresse stable, jamais le ticket personnel
+temporaire ; elle ne donne pas accès à une personne non autorisée. Si le
+presse-papiers est indisponible, le champ en lecture seule reste sélectionnable.
+Pendant l’installation, après un arrêt ou si le dernier contrôle d’état échoue,
+la fenêtre ne présente pas une ancienne adresse comme un aperçu prêt.
+
 Le service reste désactivé par défaut. Il convient aux projets capables de
 démarrer dans une image Linux autorisée, avec un port HTTP principal. Le profil
 du projet définit ses commandes et ses services ; aucun lancement n’est codé
