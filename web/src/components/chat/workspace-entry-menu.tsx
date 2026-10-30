@@ -2,6 +2,7 @@ import { DropdownMenu } from 'radix-ui';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Ref } from 'react';
+import { useSurfaceOpen } from '@/hooks/use-surface-open';
 
 export function WorkspaceEntryMenu({
   label,
@@ -23,8 +24,9 @@ export function WorkspaceEntryMenu({
     action?: string;
   }>;
 }) {
+  const visibility = useSurfaceOpen({});
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root {...visibility}>
       <DropdownMenu.Trigger asChild>
         <Button
           ref={triggerRef}

@@ -214,10 +214,15 @@ permanently append-only or that several pages form an atomic snapshot. The
 pinned protocol rejects rollback for paginated threads; pruning retained rows
 for other external history rewrites requires explicit deletion evidence.
 
-Rooms follow the viewed transcript: selection leaves the old room, route exit
-leaves the current one, and reconnect rejoins only the final desired set rather
-than buffered navigation history. Backend restart inventory ids do not create
-background browser runtimes. Background running badges come from the overview;
+Normally rooms follow the viewed transcript: selection leaves the old room and
+route exit leaves the current one. The optional project-scoped fast-navigation
+mode also retains the rooms of up to five recently visited agent views. Room
+acknowledgements are scoped to the current connection, thread epoch and room
+lease; late acknowledgements cannot restore an abandoned subscription. Disconnect
+and engine unavailability/restart clear confirmations. Reconnect rejoins and
+passively repairs the final desired set, rather than buffered navigation history.
+This does not start agents or take new writer ownership. Backend restart inventory
+ids do not create background browser runtimes. Background running badges come from the overview;
 stale cached lifecycle cannot override it. Global attention supplies requests
 without joining a transcript room or reattaching upstream execution.
 
@@ -235,6 +240,7 @@ runtimes. Selected, running, pending-interaction, history-loading and pending
 policy-confirmation state remains protected. Cached running state may remain
 conservatively retained after leaving its room. Eviction invalidates outstanding
 reads, so a late response cannot recreate the discarded runtime.
+Views retained by the project LRU are also protected until that view is evicted.
 
 ## Execution inventory and child replacement
 

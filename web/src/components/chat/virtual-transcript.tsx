@@ -98,6 +98,16 @@ export function VirtualTranscript({
       entry: ResizeObserverEntry | undefined,
       instance: Parameters<typeof measureElement>[2],
     ) => {
+      // A retained subtree remains connected while display:none removes its
+      // layout. ResizeObserver still delivers zero boxes before Activity's
+      // cleanup, or while its render is deferred. These are not new row sizes.
+      if (!node.getClientRects().length) {
+        const index = instance.indexFromElement(node);
+        return (
+          instance.itemSizeCache.get(instance.options.getItemKey(index)) ??
+          instance.options.estimateSize(index)
+        );
+      }
       if (entry) owner.rowResized();
       return measureElement(node, entry, instance);
     },
@@ -142,6 +152,32 @@ export function VirtualTranscript({
       if (!instance.isScrolling) queueMicrotask(() => owner.endInput());
     },
   });
+
+  useLayoutEffect(() => {
+    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+      item,
+      _delta,
+      instance,
+    ) => {
+      // Native wheel scrolling is animated by Linux WebKit. An absolute
+      // measurement compensation would cancel that animation halfway through
+      // its gesture. The owner already suspends its own corrections during
+      // input; the adapter must honour the same boundary.
+      if (owner.inputInProgress) return false;
+      const offset =
+        (instance.scrollOffset ?? element?.scrollTop ?? 0) +
+        instance.scrollAdjustments;
+      // Preserve the pinned adapter's default policy outside input: first
+      // measurements above the fold, later resizes wholly above it unless
+      // moving backwards. Do not change cold-open or passive resize anchoring.
+      return !instance.itemSizeCache.has(item.key)
+        ? item.start < offset
+        : item.end <= offset && instance.scrollDirection !== 'backward';
+    };
+    return () => {
+      virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+    };
+  }, [virtualizer, owner, element]);
 
   // Ordering is deliberate: useVirtualizer registered its own layout effects above.
   // Every content commit participates, even when the row keys and count are unchanged.

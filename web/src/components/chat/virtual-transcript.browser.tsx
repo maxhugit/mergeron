@@ -133,6 +133,35 @@ test('retains the hidden scroll box and restores a historical sentence after hid
   expect(distance()).toBeGreaterThan(500);
 });
 
+test('does not replace measured row heights with zero while a retained view has no layout', async () => {
+  const id = `browser:${++threadSequence}`;
+  const view = render(
+    <div style={{ display: 'contents' }}>
+      <Fixture id={id} />
+    </div>,
+  );
+  const index = await readHistory();
+  const before = y(index);
+  view.rerender(
+    <div style={{ display: 'none' }}>
+      <Fixture id={id} active={false} />
+    </div>,
+  );
+  // ResizeObserver reports zero boxes while React retains this DOM subtree.
+  // Wait for actual frames, rather than assuming the hide/reveal is synchronous.
+  await finishGesture();
+  expect(scroller().clientHeight).toBe(0);
+  view.rerender(
+    <div style={{ display: 'contents' }}>
+      <Fixture id={id} extra={700} />
+    </div>,
+  );
+  await expect.poll(() => Math.abs(y(index) - before)).toBeLessThan(2);
+  await finishGesture();
+  expect(Math.abs(y(index) - before)).toBeLessThan(2);
+  expect(distance()).toBeGreaterThan(500);
+});
+
 test('corrects only the residual when several measured rows change in the same commit', async () => {
   const id = `browser:${++threadSequence}`;
   const view = render(<Fixture id={id} />);
@@ -265,6 +294,30 @@ test('large native scrolling mounts the new range while remaining in history', a
   render(<Fixture id={id} />);
   await expect.poll(distance).toBeLessThan(2);
   await commands.scrollTranscript(-3500);
+  // wheel() only dispatches input; WebKit on Linux can still be animating a
+  // large gesture after the short scroll-end grace used by the other cases.
+  // Keep the full-distance requirement and wait for the real browser to reach it.
+  await expect.poll(distance).toBeGreaterThan(3000);
+  await finishGesture();
+  expect(distance()).toBeGreaterThan(3000);
+  const viewport = scroller().getBoundingClientRect();
+  expect(
+    document
+      .elementFromPoint(viewport.left + 20, viewport.top + 200)
+      ?.closest('[data-transcript-row]'),
+  ).not.toBeNull();
+});
+
+test('a large browser-animated scroll is not interrupted by row measurement', async () => {
+  const id = `browser:${++threadSequence}`;
+  render(<Fixture id={id} />);
+  await expect.poll(distance).toBeLessThan(2);
+  await finishGesture();
+  // Linux WebKit animates wheel input. Explicit native smooth scrolling also
+  // exercises that path on platforms whose wheel input moves immediately.
+  scroller().focus({ preventScroll: true });
+  scroller().scrollBy({ top: -3500, behavior: 'smooth' });
+  await expect.poll(distance, { timeout: 3000 }).toBeGreaterThan(3000);
   await finishGesture();
   expect(distance()).toBeGreaterThan(3000);
   const viewport = scroller().getBoundingClientRect();
@@ -344,7 +397,9 @@ test('rows fill the surface rather than a centred column, and dissolve under the
     '[data-transcript-column]',
   )!;
   expect(column.getBoundingClientRect().width).toBeCloseTo(
-    scroller().getBoundingClientRect().width,
+    // Linux reserves a classic scrollbar gutter; rows must fill the usable
+    // content box, not paint beneath that gutter. macOS overlays its scrollbar.
+    scroller().clientWidth,
     0,
   );
 

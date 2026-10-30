@@ -70,6 +70,11 @@ export class TranscriptScrollOwner {
     this.offset = saved?.offset ?? 0;
   }
 
+  /** Library measurement writes must not cancel a native animated gesture. */
+  get inputInProgress(): boolean {
+    return this.userIntent;
+  }
+
   /** Binds the stable scroller. Ref cleanup only saves state; it does not navigate. */
   bind(element: HTMLDivElement | null): void {
     if (!element && this.element) this.save();
@@ -145,6 +150,9 @@ export class TranscriptScrollOwner {
       this.restore = true;
     }
     this.lastSignal = options.signal;
+    // An Activity-hidden view has zero layout geometry. Measuring it would
+    // discard valid row sizes and drift the saved reading point on reactivation.
+    if (!this.active) return;
     this.checkGeometry();
     this.correct();
   }
@@ -156,6 +164,7 @@ export class TranscriptScrollOwner {
     const width =
       element.querySelector<HTMLElement>('[data-transcript-column]')
         ?.clientWidth ?? element.clientWidth;
+    if (!width || !element.clientHeight) return false;
     const changed = this.width !== 0 && width !== this.width;
     if (changed) {
       if (!this.pending && !this.following) this.pending = this.anchor;
@@ -171,6 +180,7 @@ export class TranscriptScrollOwner {
 
   /** Handles real viewport/font events without waiting for an unrelated React render. */
   geometryChanged(fonts = false): void {
+    if (!this.active || !this.element?.clientHeight) return;
     if (!this.pending && !this.following) this.pending = this.anchor;
     if (fonts) this.virtualizer?.measure();
     if (this.checkGeometry() && this.following) this.restore = true;

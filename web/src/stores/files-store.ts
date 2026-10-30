@@ -67,3 +67,20 @@ const createFilesStore = () =>
 /** Conversation explorers must not replace the global operations browser. */
 export const useFilesStore = createFilesStore();
 export const useGlobalFilesStore = createFilesStore();
+
+const agentBrowsers = new Map<string, ReturnType<typeof createFilesStore>>();
+export function getAgentFilesStore(threadId: string) {
+  let store = agentBrowsers.get(threadId);
+  if (!store) {
+    store = createFilesStore();
+    agentBrowsers.set(threadId, store);
+  }
+  return store;
+}
+export function retainAgentFilesStores(threadIds: readonly string[]) {
+  for (const id of agentBrowsers.keys())
+    if (!threadIds.includes(id)) agentBrowsers.delete(id);
+}
+export function allFilesStores() {
+  return [useFilesStore, useGlobalFilesStore, ...agentBrowsers.values()];
+}

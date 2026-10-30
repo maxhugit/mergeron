@@ -3,11 +3,31 @@ import { ContextMenu as ContextMenuPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 import { ChevronRightIcon, CheckIcon } from "lucide-react"
+import { SurfaceActivityContext } from "@/lib/surface-activity"
 
 function ContextMenu({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
-  return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />
+  const active = React.useContext(SurfaceActivityContext)
+  const [open, setOpen] = React.useState(false)
+  const [incarnation, setIncarnation] = React.useState(0)
+  // Radix context menus have no controlled `open` prop. Remount only an open
+  // menu on withdrawal, not every file row, so it cannot outlive its agent.
+  if (!active && open) {
+    setOpen(false)
+    setIncarnation((value) => value + 1)
+  }
+  return (
+    <ContextMenuPrimitive.Root
+      key={incarnation}
+      data-slot="context-menu"
+      {...props}
+      onOpenChange={(next) => {
+        setOpen(next)
+        props.onOpenChange?.(next)
+      }}
+    />
+  )
 }
 
 function ContextMenuTrigger({

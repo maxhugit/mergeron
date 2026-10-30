@@ -3,12 +3,14 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { useEffect, useRef, useState } from 'react';
 import { useChatAttachments } from './use-chat-attachments';
 import { insertBrowserAnnotation } from '@/lib/browser-annotations';
+import { useComposerDraftStore } from '@/stores/composer-draft-store';
 vi.mock('@/auth-token', () => ({
   getAuthorizationHeader: () => undefined,
   clearApiToken: vi.fn(),
 }));
 const fetchMock = vi.fn();
 beforeEach(() => {
+  useComposerDraftStore.setState({ drafts: {}, forgotten: new Set() });
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockResolvedValue({
