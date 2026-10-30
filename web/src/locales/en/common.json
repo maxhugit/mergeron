@@ -719,6 +719,7 @@
   "effectiveWindowReportedByCodexItCanBeSmallerThanModelContextWindowInConfigTomlWc14c05a8": "Effective window reported by Codex. It can be smaller than model_context_window in config.toml, which is capped by the model.",
   "email": "Email",
   "emptyArchive": "Empty archive",
+  "folderContents": "Folder contents",
   "emptyDirectory": "Empty directory",
   "emptySheet": "Empty sheet",
   "enabled": "Enabled",

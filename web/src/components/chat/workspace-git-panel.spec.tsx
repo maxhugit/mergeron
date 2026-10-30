@@ -631,14 +631,14 @@ it('separates local history from live GitHub branches and never activates a copy
   inventory.copies = [copy];
   show();
   await screen.findByTestId('git-files');
-  expect(screen.queryByRole('tab', { name: 'PR / checks' })).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'PR' })).toBeNull();
   tab('Commits');
   expect(await screen.findByText('Local change')).toBeVisible();
   tab('GitHub');
-  expect(await screen.findByRole('tab', { name: 'PR / checks' })).toBeVisible();
+  expect(await screen.findByRole('tab', { name: 'PR' })).toBeVisible();
   expect(screen.queryByText(/Données consultées sur GitHub/)).toBeNull();
   expect(screen.getByText('Local change')).not.toBeVisible();
-  tab('Branches publiées');
+  tab('Branches');
   expect(await screen.findByText('only-on-github')).toBeVisible();
   expect(onActive).not.toHaveBeenCalled();
   expect(useFilesStore.getState().rootDir).toBe('/copy');
