@@ -1,5 +1,5 @@
 /** Real Chromium/WebKit layout verifies the production virtualizer and scroll owner together. */
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, beforeAll, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
 import { act, cleanup, render } from '@testing-library/react';
 import { VirtualTranscript } from './virtual-transcript';
@@ -11,7 +11,13 @@ import {
   readingAnchorDelta,
 } from '@/lib/transcript-anchor';
 import '@/index.css';
-import '@/i18n';
+import { i18nReady } from '@/i18n';
+
+// Geometry assertions must start after the translated surface can mount,
+// including a cold browser run with asynchronously loaded locale catalogs.
+beforeAll(async () => {
+  await i18nReady;
+});
 
 declare module 'vitest/browser' {
   interface BrowserCommands {
