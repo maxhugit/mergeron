@@ -1,4 +1,4 @@
-import { useState, useImperativeHandle, type Ref } from 'react';
+import { useId, useState, useImperativeHandle, type Ref } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ export function GitStageChanges({
   writable,
   onDiff,
   view = 'all',
+  layout = 'flow',
   ref,
 }: {
   projectId: string;
@@ -45,10 +46,13 @@ export function GitStageChanges({
   writable: boolean;
   onDiff: (path: string, staged: boolean) => void;
   view?: 'all' | 'prepared' | 'actions';
+  layout?: 'flow' | 'split';
   ref?: Ref<GitStageHandle>;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
+  const listsId = useId();
+  const split = layout === 'split' && view === 'all';
   const [review, setReview] = useState<{
     data: Review;
     paths: string[];
@@ -123,102 +127,160 @@ export function GitStageChanges({
     },
   }));
   return (
-    <div className="space-y-4 text-xs">
+    <div
+      className={
+        split
+          ? 'flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden text-xs'
+          : 'space-y-4 text-xs'
+      }
+    >
       {view === 'prepared' && !staged.length && (
         <p>{t('gitNoPreparedFiles')}</p>
       )}
-      {view === 'all' && !snapshot.changes.length && <p>{t('gitClean')}</p>}
-      {[
-        [t('gitUnprepared'), unstaged, false],
-        [t('gitPrepared'), staged, true],
-      ]
-        .filter(
-          ([, , prepared]) =>
-            view === 'all' || (view === 'prepared' && prepared),
-        )
-        .map(([title, items, prepared]) => {
-          const changes = items as GitSnapshot['changes'];
-          return (
-            <section key={String(title)} className="space-y-2">
-              <h4 className="font-medium">
-                {String(title)} ({changes.length})
-              </h4>
-              {changes.map((change) => (
-                <div
-                  key={change.path}
-                  className="flex min-w-0 items-center gap-1"
+      {view === 'all' && !snapshot.changes.length && !split && (
+        <p>{t('gitClean')}</p>
+      )}
+      {view !== 'actions' && (
+        <div
+          className={
+            split
+              ? 'grid min-h-0 min-w-0 flex-1 grid-rows-2 gap-2'
+              : 'space-y-4'
+          }
+        >
+          {[
+            {
+              id: 'unprepared',
+              title: t('gitUnprepared'),
+              changes: unstaged,
+              prepared: false,
+            },
+            {
+              id: 'prepared',
+              title: t('gitPrepared'),
+              changes: staged,
+              prepared: true,
+            },
+          ]
+            .filter(({ prepared }) => view === 'all' || prepared)
+            .map(({ id, title, changes, prepared }) => (
+              <section
+                key={id}
+                aria-labelledby={`${listsId}-${id}`}
+                className={
+                  split
+                    ? 'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border'
+                    : 'space-y-2'
+                }
+              >
+                <h4
+                  id={`${listsId}-${id}`}
+                  className={
+                    split
+                      ? 'shrink-0 border-b px-2 py-2 font-medium'
+                      : 'font-medium'
+                  }
                 >
-                  {!prepared && writable && (
-                    <input
-                      type="checkbox"
-                      aria-label={t('gitSelectFile', { path: change.path })}
-                      checked={selected.includes(change.path)}
-                      disabled={busy}
-                      onChange={(event) =>
-                        setSelection(
-                          event.target.checked
-                            ? [...selected, change.path]
-                            : selected.filter((p) => p !== change.path),
-                        )
-                      }
-                    />
+                  {title} ({changes.length})
+                </h4>
+                <ul
+                  aria-labelledby={`${listsId}-${id}`}
+                  tabIndex={split ? 0 : undefined}
+                  className={
+                    split
+                      ? 'min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+                      : 'space-y-1'
+                  }
+                >
+                  {split && changes.length === 0 && (
+                    <li className="p-2 text-muted-foreground">
+                      {t(
+                        prepared
+                          ? 'gitNoPreparedFiles'
+                          : 'gitNoUnpreparedFiles',
+                      )}
+                    </li>
                   )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-auto min-w-0 flex-1 justify-start gap-2 py-2 text-xs"
-                    title={change.path}
-                    onClick={() => onDiff(change.path, Boolean(prepared))}
-                  >
-                    <code className="shrink-0 whitespace-pre text-primary">
-                      {change.status}
-                    </code>
-                    <span className="truncate">{change.path}</span>
-                  </Button>
-                  {writable && (
+                  {changes.map((change) => (
+                    <li
+                      key={change.path}
+                      className="flex min-w-0 items-center gap-1"
+                    >
+                      {!prepared && writable && (
+                        <input
+                          type="checkbox"
+                          aria-label={t('gitSelectFile', { path: change.path })}
+                          checked={selected.includes(change.path)}
+                          disabled={busy}
+                          onChange={(event) =>
+                            setSelection(
+                              event.target.checked
+                                ? [...selected, change.path]
+                                : selected.filter((p) => p !== change.path),
+                            )
+                          }
+                        />
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-auto min-w-0 flex-1 justify-start gap-2 py-2 text-xs"
+                        title={change.path}
+                        onClick={() => onDiff(change.path, Boolean(prepared))}
+                      >
+                        <code className="shrink-0 whitespace-pre text-primary">
+                          {change.status}
+                        </code>
+                        <span className="truncate">{change.path}</span>
+                      </Button>
+                      {writable && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            action.mutate({
+                              operation: prepared ? 'unstage' : 'review',
+                              paths: [change.path],
+                            })
+                          }
+                        >
+                          {t(prepared ? 'gitUnstage' : 'gitStage')}
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {!prepared && changes.length > 0 && writable && (
+                  <div className={split ? 'shrink-0 border-t p-2' : undefined}>
                     <Button
                       size="sm"
-                      variant="outline"
-                      disabled={busy}
+                      disabled={
+                        busy ||
+                        !selected.some((p) => changes.some((c) => c.path === p))
+                      }
                       onClick={() =>
                         action.mutate({
-                          operation: prepared ? 'unstage' : 'review',
-                          paths: [change.path],
+                          operation: 'review',
+                          paths: selected.filter((p) =>
+                            changes.some((c) => c.path === p),
+                          ),
                         })
                       }
                     >
-                      {t(prepared ? 'gitUnstage' : 'gitStage')}
+                      {t('gitStageSelected')}
                     </Button>
-                  )}
-                </div>
-              ))}
-              {!prepared && changes.length > 0 && writable && (
-                <Button
-                  size="sm"
-                  disabled={
-                    busy ||
-                    !selected.some((p) => changes.some((c) => c.path === p))
-                  }
-                  onClick={() =>
-                    action.mutate({
-                      operation: 'review',
-                      paths: selected.filter((p) =>
-                        changes.some((c) => c.path === p),
-                      ),
-                    })
-                  }
-                >
-                  {t('gitStageSelected')}
-                </Button>
-              )}
-            </section>
-          );
-        })}
+                  </div>
+                )}
+              </section>
+            ))}
+        </div>
+      )}
       {view !== 'actions' && (
-        <p className="text-muted-foreground">{t('gitStageHelp')}</p>
+        <p className="shrink-0 text-muted-foreground">{t('gitStageHelp')}</p>
       )}
       {error && (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="shrink-0 text-destructive">
           {error}
         </p>
       )}

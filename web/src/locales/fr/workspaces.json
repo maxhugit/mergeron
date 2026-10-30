@@ -76,6 +76,7 @@
   "gitRemoteEmpty": "Ce dépôt ou ce dossier est vide.",
   "gitRemoteNoPreview": "Aperçu indisponible : fichier binaire, lien symbolique ou fichier dépassant 128 Kio.",
   "gitUnprepared": "Modifications à préparer",
+  "gitNoUnpreparedFiles": "Aucune modification à préparer.",
   "gitPrepared": "Prêtes pour le commit",
   "gitSelectFile": "Sélectionner {{path}}",
   "gitStage": "Préparer",
