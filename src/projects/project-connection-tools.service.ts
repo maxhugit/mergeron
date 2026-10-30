@@ -284,13 +284,18 @@ export class ProjectConnectionToolsService {
         'connectionId',
         'operation',
         ...(local ? ['copyId'] : []),
-        ...(['files', 'local_diff', 'local_staged_diff'].includes(
-          read.operation,
-        )
+        ...([
+          'files',
+          'local_diff',
+          'local_staged_diff',
+          'local_conflict',
+        ].includes(read.operation)
           ? ['path']
           : []),
         ...(read.operation === 'files' ? ['ref'] : []),
-        ...(read.operation === 'checks' ? ['number'] : []),
+        ...(['checks', 'pull_request'].includes(read.operation)
+          ? ['number']
+          : []),
       ];
       if (Object.keys(raw).some((k) => !allowed.includes(k)))
         throw new BadRequestException('Invalid operation fields');
@@ -313,6 +318,15 @@ export class ProjectConnectionToolsService {
         case 'pull_requests':
           data = await this.git.pullRequests(projectId, connection.id);
           break;
+        case 'pull_request':
+          if (!read.number)
+            throw new BadRequestException('A pull request number is required');
+          data = await this.git.pullRequest(
+            projectId,
+            connection.id,
+            String(read.number),
+          );
+          break;
         case 'checks':
           if (!read.number)
             throw new BadRequestException('A pull request number is required');
@@ -321,6 +335,16 @@ export class ProjectConnectionToolsService {
             connection.id,
             String(read.number),
           );
+          break;
+        case 'local_conflict':
+          data = await this.git.conflictFile(
+            projectId,
+            read.copyId!,
+            read.path,
+          );
+          break;
+        case 'local_merge_status':
+          data = await this.git.mergeStatus(projectId, read.copyId!);
           break;
         case 'local_status':
           data = await this.git.snapshot(projectId, read.copyId!);
@@ -371,9 +395,14 @@ export class ProjectConnectionToolsService {
     assertWrite();
     if (
       publish.operation === 'push' &&
-      ['base', 'title', 'description', 'draft'].some((k) =>
-        Object.hasOwn(raw, k),
-      )
+      [
+        'base',
+        'title',
+        'description',
+        'draft',
+        'number',
+        'expectedUpdatedAt',
+      ].some((k) => Object.hasOwn(raw, k))
     )
       throw new BadRequestException('Invalid push fields');
     if (
@@ -381,6 +410,21 @@ export class ProjectConnectionToolsService {
       (!publish.base || !publish.title || publish.draft === undefined)
     )
       throw new BadRequestException('Pull request fields are required');
+    if (
+      publish.operation === 'update_pull_request' &&
+      (!publish.number ||
+        !publish.title ||
+        publish.description === undefined ||
+        !publish.expectedUpdatedAt ||
+        publish.base !== undefined ||
+        publish.draft !== undefined)
+    )
+      throw new BadRequestException('Pull request update fields are required');
+    if (
+      publish.operation === 'create_pull_request' &&
+      (publish.number !== undefined || publish.expectedUpdatedAt !== undefined)
+    )
+      throw new BadRequestException('Invalid pull request creation fields');
     const key = and(
       eq(projectAgentToolRequests.projectId, projectId),
       eq(projectAgentToolRequests.threadId, threadId),
@@ -470,8 +514,64 @@ export class ProjectConnectionToolsService {
               publisher,
             );
             break;
+          case 'fetch_branch':
+            data = await this.actions.retrieveBranch(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                name: local.name,
+                revision: local.revision,
+                confirmation: 'RETRIEVE_REMOTE_BRANCH',
+              },
+              publisher,
+              true,
+            );
+            break;
+          case 'switch_branch':
+            data = await this.actions.localBranchAction(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                action: 'switch',
+                name: local.name,
+                revision: local.revision,
+                confirmation: 'LOCAL_BRANCH_ACTION',
+              },
+              publisher,
+            );
+            break;
+          case 'start_merge':
+            data = await this.actions.startMerge(
+              projectId,
+              local.copyId,
+              { ...body, revision: local.revision },
+              publisher,
+            );
+            break;
+          case 'continue_merge':
+            data = await this.actions.commit(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                mergeRevision: local.revision,
+                message: local.message,
+              },
+              publisher,
+            );
+            break;
+          case 'abort_merge':
+            data = await this.actions.abortMerge(
+              projectId,
+              local.copyId,
+              { ...body, revision: local.revision },
+              publisher,
+            );
+            break;
           case 'create_branch':
-            // Switch only from a clean worktree, at the observed HEAD. No reset,
+            // Switch only from a clean worktree, at an observed revision. No reset,
             // arbitrary start ref, fetch, force, stash or file restoration.
             data = await this.actions.createBranch(
               projectId,
@@ -479,8 +579,8 @@ export class ProjectConnectionToolsService {
               {
                 ...body,
                 name: local.name,
-                startRef: 'HEAD',
-                startRevision: local.expectedHead,
+                startRef: local.startRef ?? 'HEAD',
+                startRevision: local.revision ?? local.expectedHead,
                 checkout: true,
                 confirmation: 'CREATE_LOCAL_BRANCH',
               },
@@ -497,6 +597,8 @@ export class ProjectConnectionToolsService {
           description: remote.description ?? '',
           draft: remote.draft,
           confirmation: 'CREATE_PULL_REQUEST',
+          number: remote.number,
+          expectedUpdatedAt: remote.expectedUpdatedAt,
         };
         data =
           remote.operation === 'push'
@@ -506,12 +608,19 @@ export class ProjectConnectionToolsService {
                 remoteBody,
                 publisher,
               )
-            : await this.actions.createPullRequest(
-                projectId,
-                remote.copyId,
-                remoteBody,
-                publisher,
-              );
+            : remote.operation === 'update_pull_request'
+              ? await this.actions.updatePullRequest(
+                  projectId,
+                  remote.copyId,
+                  remoteBody,
+                  publisher,
+                )
+              : await this.actions.createPullRequest(
+                  projectId,
+                  remote.copyId,
+                  remoteBody,
+                  publisher,
+                );
       }
     } catch (error) {
       // A gate refusal happens before dispatch. Preserve the stable requestId

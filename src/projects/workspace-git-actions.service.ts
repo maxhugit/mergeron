@@ -95,6 +95,7 @@ export class WorkspaceGitActionsService {
       projectId,
       copyId,
       body.fingerprint,
+      true,
     );
     if (
       !Array.isArray(body.paths) ||
@@ -102,8 +103,6 @@ export class WorkspaceGitActionsService {
       body.paths.length > 100
     )
       throw new BadRequestException('GIT_FILES_REQUIRED');
-    if ((await this.git.git(cwd, ['ls-files', '--unmerged'])).trim())
-      throw new ConflictException('GIT_IN_PROGRESS');
     const records: {
       path: string;
       mode: string;
@@ -492,6 +491,8 @@ export class WorkspaceGitActionsService {
     projectId: string,
     copyId: string,
     body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
+    tracking = false,
   ) {
     requireExecutionAccess();
     this.body(body);
@@ -506,7 +507,8 @@ export class WorkspaceGitActionsService {
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
     const name = body.name;
-    return this.gate.mutate(async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { source, cwd, state } = await this.copyState(
         projectId,
@@ -540,7 +542,20 @@ export class WorkspaceGitActionsService {
       } catch {
         throw new BadRequestException('GIT_BRANCH_NAME_INVALID');
       }
-      const ref = `refs/heads/${name}`;
+      const ref = tracking
+        ? `refs/remotes/mergeron/${name}`
+        : `refs/heads/${name}`;
+      const old = tracking
+        ? (
+            await this.git.git(
+              cwd,
+              ['rev-parse', '--verify', '--quiet', ref],
+              {},
+              15000,
+              [0, 1],
+            )
+          ).trim()
+        : '';
       const checkAbsent = async () => {
         if (
           (
@@ -564,7 +579,8 @@ export class WorkspaceGitActionsService {
           )
             .trim()
             .split('\n')
-            .includes(ref)
+            .includes(ref) &&
+          !tracking
         )
           throw new ConflictException('GIT_BRANCH_EXISTS');
       };
@@ -591,6 +607,19 @@ export class WorkspaceGitActionsService {
           MERGERON_GIT_TOKEN:
             source.secret?.token || source.secret?.password || '',
         };
+        preparer?.assertActive();
+        const before = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+        );
+        if (
+          before.source.resource.address !== body.address ||
+          (before.source.secret?.token ||
+            before.source.secret?.password ||
+            '') !== env.MERGERON_GIT_TOKEN
+        )
+          throw new ConflictException('GIT_STALE');
         await this.git.git(
           folder,
           [
@@ -642,6 +671,7 @@ export class WorkspaceGitActionsService {
         )
           throw new ConflictException('GIT_STALE');
         await checkAbsent();
+        preparer?.assertActive();
         // Git's create transaction refuses existing branch tips atomically, including
         // a branch created concurrently after the last UI/server inspection.
         await this.git.git(
@@ -650,14 +680,16 @@ export class WorkspaceGitActionsService {
           {},
           15000,
           [0],
-          Buffer.from(`option no-deref\ncreate ${ref} ${sha}\n`),
+          Buffer.from(
+            `option no-deref\n${tracking ? `update ${ref} ${sha} ${old || '0'.repeat(sha.length)}` : `create ${ref} ${sha}`}\n`,
+          ),
         );
         this.audit(projectId, copyId, 'git_remote_branch_retrieved', {
           branch: name,
           sha,
           activeBranch: state.branch,
         });
-        return { branch: name, sha, activeBranch: state.branch };
+        return { branch: name, ref, sha, activeBranch: state.branch };
       } finally {
         await rm(folder, { recursive: true, force: true });
       }
@@ -668,6 +700,7 @@ export class WorkspaceGitActionsService {
     projectId: string,
     copyId: string,
     body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
   ) {
     requireExecutionAccess();
     this.body(body);
@@ -681,7 +714,8 @@ export class WorkspaceGitActionsService {
       typeof body.revision !== 'string'
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
-    return this.gate.mutate(async () => {
+    const copy = { projectId, copyId };
+    return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
         projectId,
@@ -762,7 +796,11 @@ export class WorkspaceGitActionsService {
           sha: target.revision,
           mergedInto: state.branch,
         });
-        return { branch: state.branch, sha: state.head, deleted: target.name };
+        return {
+          branch: state.branch,
+          sha: state.head,
+          deleted: target.name,
+        };
       }
       let revision = target.revision;
       if (body.action === 'merge') {
@@ -851,6 +889,7 @@ export class WorkspaceGitActionsService {
         }
       }
       await clean();
+      preparer?.assertActive();
       await this.git.git(
         cwd,
         body.action === 'switch'
@@ -869,10 +908,208 @@ export class WorkspaceGitActionsService {
     });
   }
 
+  /** Start from a clean worktree; conflicts are a confirmed, inspectable result. */
+  async startMerge(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
+  ) {
+    this.body(body);
+    if (
+      typeof body.revision !== 'string' ||
+      !/^[a-f0-9]{40,64}$/.test(body.revision)
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    return this.localPreparation(
+      { projectId, copyId },
+      preparer,
+      body,
+      async () => {
+        this.assertCopyAgent(projectId, copyId, body);
+        const { cwd, state } = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+        );
+        if (
+          state.changes.length ||
+          (
+            await this.git.git(cwd, [
+              'status',
+              '--porcelain=v1',
+              '--untracked-files=all',
+              '--ignore-submodules=none',
+            ])
+          ).trim()
+        )
+          throw new ConflictException('GIT_WORKTREE_DIRTY');
+        const target = body.revision as string;
+        if (
+          (
+            await this.git.git(cwd, [
+              'rev-parse',
+              '--verify',
+              `${target}^{commit}`,
+            ])
+          ).trim() !== target
+        )
+          throw new ConflictException('GIT_STALE');
+        if (
+          (
+            await this.git.git(
+              cwd,
+              [
+                'config',
+                '--name-only',
+                '--get-regexp',
+                '^merge\\..*\\.driver$',
+              ],
+              {},
+              15000,
+              [0, 1],
+            )
+          ).trim()
+        )
+          throw new ConflictException('GIT_CUSTOM_MERGE_DRIVER');
+        // ort can replace ignored files even with --no-overwrite-ignore.
+        // Check incoming tracked paths against ignored files/directories explicitly.
+        const ignored = (
+          await this.git.git(cwd, [
+            'ls-files',
+            '--others',
+            '--ignored',
+            '--exclude-standard',
+            '--directory',
+            '-z',
+          ])
+        )
+          .split('\0')
+          .filter(Boolean)
+          .map((entry) => entry.replace(/\/$/, ''));
+        if (ignored.length) {
+          const incoming = (
+            await this.git.git(cwd, [
+              'ls-tree',
+              '-r',
+              '-z',
+              '--name-only',
+              target,
+            ])
+          )
+            .split('\0')
+            .filter(Boolean);
+          if (
+            incoming.some((name) =>
+              ignored.some(
+                (entry) =>
+                  name === entry ||
+                  name.startsWith(entry + '/') ||
+                  entry.startsWith(name + '/'),
+              ),
+            )
+          )
+            throw new ConflictException('GIT_WORKTREE_DIRTY');
+        }
+        await this.copyState(projectId, copyId, body.fingerprint);
+        const { authorName, authorEmail } = this.commitIdentity();
+        preparer?.assertActive();
+        await this.git.git(
+          cwd,
+          [
+            '-c',
+            'merge.autoStash=false',
+            '-c',
+            'rerere.enabled=false',
+            '-c',
+            'merge.verifySignatures=false',
+            '-c',
+            'submodule.recurse=false',
+            'merge',
+            '--no-commit',
+            '--no-ff',
+            '--no-edit',
+            '--no-overwrite-ignore',
+            '--strategy=ort',
+            target,
+          ],
+          {
+            GIT_AUTHOR_NAME: authorName,
+            GIT_AUTHOR_EMAIL: authorEmail,
+            GIT_COMMITTER_NAME: authorName,
+            GIT_COMMITTER_EMAIL: authorEmail,
+          },
+          60000,
+          [0, 1],
+        );
+        const result = await this.git.mergeStatus(projectId, copyId);
+        if (result.mergeHead !== target && result.mergeHead !== null)
+          throw new ConflictException('GIT_MERGE_STATE_UNSUPPORTED');
+        if (
+          !result.mergeHead &&
+          (
+            await this.git.git(
+              cwd,
+              ['merge-base', state.head, target],
+              {},
+              15000,
+              [0, 1],
+            )
+          ).trim() !== target
+        )
+          throw new ConflictException('GIT_OPERATION_FAILED');
+        this.audit(projectId, copyId, 'git_merge_started', {
+          target,
+          conflicts: result.conflicts.length,
+        });
+        return result;
+      },
+    );
+  }
+
+  /** Explicitly discards edits made since the clean merge start; never abort another sequencer. */
+  async abortMerge(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
+  ) {
+    this.body(body);
+    return this.localPreparation(
+      { projectId, copyId },
+      preparer,
+      body,
+      async () => {
+        this.assertCopyAgent(projectId, copyId, body);
+        const { cwd } = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+          true,
+        );
+        const state = await this.git.mergeStatus(projectId, copyId);
+        if (!state.mergeHead || state.mergeHead !== body.revision)
+          throw new ConflictException('GIT_STALE');
+        preparer?.assertActive();
+        await this.git.git(cwd, [
+          '-c',
+          'merge.autoStash=false',
+          'merge',
+          '--abort',
+        ]);
+        this.audit(projectId, copyId, 'git_merge_aborted', {
+          target: state.mergeHead,
+        });
+        return this.git.mergeStatus(projectId, copyId);
+      },
+    );
+  }
+
   private async copyState(
     projectId: string,
     copyId: string,
     fingerprint: unknown,
+    allowMerge = false,
   ) {
     requireExecutionAccess();
     const copy = this.copies.list(projectId).find((item) => item.id === copyId);
@@ -896,7 +1133,7 @@ export class WorkspaceGitActionsService {
       throw new ConflictException('GIT_BRANCH_REQUIRED');
     }
     for (const entry of [
-      'MERGE_HEAD',
+      ...(allowMerge ? [] : ['MERGE_HEAD']),
       'CHERRY_PICK_HEAD',
       'REVERT_HEAD',
       'rebase-merge',
@@ -910,14 +1147,7 @@ export class WorkspaceGitActionsService {
     return { copy, source, cwd, state, branch: state.branch };
   }
 
-  async commit(
-    projectId: string,
-    copyId: string,
-    body: Record<string, unknown>,
-    preparer?: AgentGitPreparer,
-  ) {
-    requireExecutionAccess();
-    this.body(body);
+  private commitIdentity() {
     const access = currentAccess();
     const person =
       access?.identity.kind === 'person' && access.identity.personId
@@ -939,6 +1169,18 @@ export class WorkspaceGitActionsService {
       )
     )
       throw new BadRequestException('GIT_IDENTITY_REQUIRED');
+    return { authorName, authorEmail };
+  }
+
+  async commit(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
+  ) {
+    requireExecutionAccess();
+    this.body(body);
+    const { authorName, authorEmail } = this.commitIdentity();
     const copy = { projectId, copyId };
     return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
@@ -946,9 +1188,20 @@ export class WorkspaceGitActionsService {
         projectId,
         copyId,
         body.fingerprint,
+        body.mergeRevision !== undefined,
       );
+      const merge =
+        body.mergeRevision === undefined
+          ? null
+          : await this.git.mergeStatus(projectId, copyId);
+      if (
+        merge &&
+        (merge.mergeHead !== body.mergeRevision || merge.conflicts.length)
+      )
+        throw new ConflictException('GIT_MERGE_UNRESOLVED');
       const message = this.text(body.message, 4000);
       if (
+        !merge &&
         !state.changes.some(
           (item) => item.status[0] !== ' ' && item.status[0] !== '?',
         )
@@ -983,6 +1236,7 @@ export class WorkspaceGitActionsService {
               'commit-tree',
               tree,
               ...(state.head ? ['-p', state.head] : []),
+              ...(merge?.mergeHead ? ['-p', merge.mergeHead] : []),
               '-m',
               message,
             ],
@@ -996,7 +1250,13 @@ export class WorkspaceGitActionsService {
           branch
         )
           throw new ConflictException('GIT_STALE');
-        await this.copyState(projectId, copyId, body.fingerprint);
+        await this.copyState(projectId, copyId, body.fingerprint, !!merge);
+        if (
+          merge &&
+          (await this.git.mergeStatus(projectId, copyId)).mergeHead !==
+            merge.mergeHead
+        )
+          throw new ConflictException('GIT_STALE');
         preparer?.assertActive();
         await this.git.git(cwd, [
           'update-ref',
@@ -1006,7 +1266,12 @@ export class WorkspaceGitActionsService {
           sha,
           state.head || '0'.repeat(sha.length),
         ]);
-        this.audit(projectId, copyId, 'git_commit', { branch, sha });
+        if (merge) await this.git.git(cwd, ['merge', '--quit']);
+        this.audit(projectId, copyId, 'git_commit', {
+          branch,
+          sha,
+          ...(merge ? { mergeHead: merge.mergeHead } : {}),
+        });
         return { sha, branch };
       } finally {
         await rm(folder, { recursive: true, force: true });
@@ -1183,6 +1448,105 @@ export class WorkspaceGitActionsService {
         await rm(folder, { recursive: true, force: true });
       }
     });
+  }
+
+  /** Edit only the title and description of an observed PR of this exact copy branch. */
+  async updatePullRequest(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    publisher?: AgentGitPublisher,
+  ) {
+    this.body(body);
+    const title = this.text(body.title, 256);
+    if (
+      typeof body.description !== 'string' ||
+      body.description.length > 10000 ||
+      !Number.isSafeInteger(body.number) ||
+      Number(body.number) < 1 ||
+      Number(body.number) > 999999999 ||
+      typeof body.expectedUpdatedAt !== 'string' ||
+      !Number.isFinite(Date.parse(body.expectedUpdatedAt))
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    return this.remotePublication(
+      { projectId, copyId },
+      publisher,
+      body,
+      async () => {
+        this.assertCopyAgent(projectId, copyId, body);
+        const { copy, source, state, branch } = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+        );
+        if (
+          body.address !== source.resource.address ||
+          body.head !== state.head
+        )
+          throw new ConflictException('GIT_STALE');
+        const repo = this.git.github(projectId, copy.sourceResourceId);
+        if (!repo?.token)
+          throw new ForbiddenException('GIT_GITHUB_TOKEN_REQUIRED');
+        const observed = await this.git.pullRequest(
+          projectId,
+          copy.sourceResourceId,
+          String(body.number),
+        );
+        if (
+          !observed.sameRepository ||
+          observed.branch !== branch ||
+          observed.head !== state.head ||
+          observed.state !== 'open' ||
+          observed.updatedAt !== body.expectedUpdatedAt
+        )
+          throw new ConflictException('GIT_STALE');
+        const current = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+        );
+        if (
+          current.source.resource.address !== body.address ||
+          this.git.github(projectId, copy.sourceResourceId)?.token !==
+            repo.token
+        )
+          throw new ConflictException('GIT_STALE');
+        publisher?.assertActive();
+        let response: Response;
+        try {
+          response = await fetch(
+            `https://api.github.com/repos/${repo.owner}/${repo.repo}/pulls/${body.number as number}`,
+            {
+              method: 'PATCH',
+              redirect: 'error',
+              signal: AbortSignal.timeout(20000),
+              headers: {
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                Authorization: `Bearer ${repo.token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ title, body: body.description }),
+            },
+          );
+        } catch {
+          throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+        }
+        if (!response.ok)
+          throw new ConflictException(
+            response.status >= 500
+              ? 'GIT_OUTCOME_UNKNOWN'
+              : 'GIT_PR_UPDATE_FAILED',
+          );
+        this.audit(projectId, copyId, 'git_pr_updated', {
+          number: body.number,
+          branch,
+          head: state.head,
+        });
+        return { number: body.number, url: observed.url, updated: true };
+      },
+    );
   }
 
   async createPullRequest(
@@ -1511,19 +1875,25 @@ export class WorkspaceGitActionsService {
         entityId,
         action,
         label:
-          action === 'git_stage'
-            ? 'Préparation de fichiers pour un commit'
-            : action === 'git_unstage'
-              ? 'Retrait de fichiers du prochain commit'
-              : action === 'git_commit'
-                ? 'Commit Git'
-                : action === 'git_push'
-                  ? 'Push Git'
-                  : action === 'git_branch_created'
-                    ? 'Création de branche Git locale'
-                    : action === 'git_pr_created'
-                      ? 'Création de pull request'
-                      : 'Fusion de pull request',
+          (
+            {
+              git_stage: 'Préparation de fichiers pour un commit',
+              git_unstage: 'Retrait de fichiers du prochain commit',
+              git_commit: 'Commit Git',
+              git_push: 'Push Git',
+              git_branch_created: 'Création de branche Git locale',
+              git_remote_branch_retrieved:
+                'Récupération de branche Git distante',
+              git_local_switch: 'Changement de branche Git locale',
+              git_local_merge: 'Fusion de branches Git locales',
+              git_local_delete: 'Suppression de branche Git locale',
+              git_merge_started: 'Préparation de fusion Git locale',
+              git_merge_aborted: 'Annulation de fusion Git locale',
+              git_pr_created: 'Création de pull request',
+              git_pr_updated: 'Modification de pull request',
+              git_pr_merged: 'Fusion de pull request',
+            } as Record<string, string>
+          )[action] ?? 'Opération Git',
         details,
         actorPersonId: identity?.personId ?? null,
         actorName: identity?.name ?? 'Système',
