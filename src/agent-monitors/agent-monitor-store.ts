@@ -415,6 +415,61 @@ export class AgentMonitorStore {
     );
   }
 
+  /** Hand the conversation back to its person without disabling its schedule. */
+  yieldToForeground(runId: string, now = Date.now()) {
+    return this.db.transaction(
+      () => {
+        const run = this.readRun(runId);
+        if (!run?.activeThreadId) return;
+        const monitor = this.monitorForRun(runId);
+        if (!monitor) return;
+        // A foreground input can steer the very same native turn. Once it does,
+        // this reservation must not cancel that turn or accept its late report.
+        this.db
+          .update(runs)
+          .set({
+            status: 'deferred',
+            activeThreadId: null,
+            finishedAt: now,
+            reason: 'MONITOR_USER_TAKEOVER',
+            disposition: 'continue',
+          })
+          .where(eq(runs.id, runId))
+          .run();
+        // Speaking is not a pause/resume command. Preserve explicit pauses and
+        // genuine attention states, and never replenish the authorized limits.
+        if (monitor.status === 'active') {
+          const status =
+            monitor.expiresAt <= now
+              ? 'expired'
+              : monitor.runCount >= monitor.maxRuns
+                ? 'exhausted'
+                : 'active';
+          this.db
+            .update(monitors)
+            .set({
+              status,
+              nextRunAt:
+                status === 'active'
+                  ? now +
+                    Math.max(
+                      MONITOR_LIMITS.minimumIntervalMs,
+                      monitor.intervalMs ?? 0,
+                    )
+                  : null,
+              lastReason: 'MONITOR_USER_TAKEOVER',
+              updatedAt: now,
+            })
+            .where(eq(monitors.id, monitor.id))
+            .run();
+        }
+        this.prune(monitor.id);
+        return this.readRun(runId);
+      },
+      { behavior: 'immediate' },
+    );
+  }
+
   active() {
     return this.db
       .select()
@@ -422,6 +477,129 @@ export class AgentMonitorStore {
       .where(isNotNull(runs.activeThreadId))
       .limit(100)
       .all();
+  }
+
+  readRun(id: string) {
+    return this.db.select().from(runs).where(eq(runs.id, id)).get();
+  }
+
+  monitorForRun(id: string) {
+    const run = this.readRun(id);
+    return run
+      ? this.db
+          .select()
+          .from(monitors)
+          .where(eq(monitors.id, run.monitorId))
+          .get()
+      : undefined;
+  }
+
+  markAttention(projectId: string, id: string, reason: string) {
+    return this.db
+      .update(monitors)
+      .set({
+        status: 'needs_attention',
+        nextRunAt: null,
+        lastReason: reason,
+        updatedAt: Date.now(),
+      })
+      .where(and(eq(monitors.id, id), eq(monitors.projectId, projectId)))
+      .returning()
+      .get();
+  }
+
+  report(
+    runId: string,
+    turnId: string,
+    result: string,
+    disposition: 'continue' | 'complete' | 'attention',
+  ) {
+    return this.db
+      .update(runs)
+      .set({ result: result.slice(0, 6000), disposition })
+      .where(
+        and(
+          eq(runs.id, runId),
+          eq(runs.turnId, turnId),
+          eq(runs.status, 'running'),
+        ),
+      )
+      .returning()
+      .get();
+  }
+
+  attention(runId: string, reason: string, graceUntil?: number) {
+    const run = this.readRun(runId);
+    if (!run?.activeThreadId) return;
+    this.db.transaction(
+      () => {
+        this.db
+          .update(runs)
+          .set({
+            reason,
+            disposition: 'attention',
+            ...(graceUntil ? { leaseUntil: graceUntil } : {}),
+          })
+          .where(eq(runs.id, runId))
+          .run();
+        this.db
+          .update(monitors)
+          .set({
+            status: 'needs_attention',
+            nextRunAt: null,
+            lastReason: reason,
+            updatedAt: Date.now(),
+          })
+          .where(eq(monitors.id, run.monitorId))
+          .run();
+      },
+      { behavior: 'immediate' },
+    );
+  }
+
+  /** Keep the reservation until native idleness is established or a human takes over. */
+  quarantine(runId: string, reason: string, now = Date.now()) {
+    const run = this.readRun(runId);
+    if (!run?.activeThreadId || run.status === 'claimed') return;
+    this.db.transaction(
+      () => {
+        this.db
+          .update(runs)
+          .set({ status: 'uncertain', reason, disposition: 'attention' })
+          .where(eq(runs.id, runId))
+          .run();
+        this.db
+          .update(monitors)
+          .set({
+            status: 'needs_attention',
+            nextRunAt: null,
+            lastReason: reason,
+            updatedAt: now,
+          })
+          .where(eq(monitors.id, run.monitorId))
+          .run();
+      },
+      { behavior: 'immediate' },
+    );
+  }
+
+  releaseQuarantine(runId: string, now = Date.now()) {
+    return this.db
+      .update(runs)
+      .set({ activeThreadId: null, finishedAt: now })
+      .where(and(eq(runs.id, runId), eq(runs.status, 'uncertain')))
+      .returning()
+      .get();
+  }
+
+  stop(projectId: string, id: string, now = Date.now()) {
+    this.get(projectId, id);
+    return this.db
+      .update(monitors)
+      .set({ status: 'completed', nextRunAt: null, updatedAt: now })
+      .where(eq(monitors.id, id))
+      .returning()
+      .get();
   }
 
   finish(
@@ -500,38 +678,7 @@ export class AgentMonitorStore {
     for (const run of this.active().filter((item) => item.leaseUntil <= now)) {
       if (run.status === 'claimed')
         this.defer(run.id, 'MONITOR_CLAIM_EXPIRED', now);
-      else
-        this.db.transaction(
-          () => {
-            const changed = this.db
-              .update(runs)
-              .set({
-                status: 'uncertain',
-                activeThreadId: null,
-                finishedAt: now,
-                reason: 'MONITOR_OUTCOME_UNCERTAIN',
-              })
-              .where(
-                and(
-                  eq(runs.id, run.id),
-                  inArray(runs.status, ['dispatching', 'running']),
-                ),
-              )
-              .run();
-            if (changed.changes)
-              this.db
-                .update(monitors)
-                .set({
-                  status: 'needs_attention',
-                  nextRunAt: null,
-                  lastReason: 'MONITOR_OUTCOME_UNCERTAIN',
-                  updatedAt: now,
-                })
-                .where(eq(monitors.id, run.monitorId))
-                .run();
-          },
-          { behavior: 'immediate' },
-        );
+      else this.quarantine(run.id, 'MONITOR_OUTCOME_UNCERTAIN', now);
     }
   }
 

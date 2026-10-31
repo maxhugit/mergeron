@@ -48,6 +48,8 @@ import { WorkspaceResourcesService } from '../projects/workspace-resources.servi
 import type { WorkspaceCopiesService } from '../projects/workspace-copies.service';
 import type { WorkspaceGitService } from '../projects/workspace-git.service';
 import type { WorkspaceGitActionsService } from '../projects/workspace-git-actions.service';
+import { AgentMonitorStore } from '../agent-monitors/agent-monitor-store';
+import { AgentMonitorsService } from '../agent-monitors/agent-monitors.service';
 
 describe('native internal MCP over HTTP', () => {
   let database: TestDatabase;
@@ -56,6 +58,7 @@ describe('native internal MCP over HTTP', () => {
   let identities: IdentityService;
   let deliverables: DeliverablesService;
   let tools: ProjectAgentToolsService;
+  let monitorStore: AgentMonitorStore;
   let localBrowser: LocalBrowserService;
   let gitConnectionId: string;
   const gitHead = 'a'.repeat(40),
@@ -321,13 +324,22 @@ describe('native internal MCP over HTTP', () => {
         return Promise.resolve({ sha: gitHead, branch: 'feature/test' });
       },
     );
+    monitorStore = new AgentMonitorStore(database.db);
+    const monitorTools = new AgentMonitorsService(
+      database.db,
+      identities,
+      monitorStore,
+      null as never,
+    );
     tools = new ProjectAgentToolsService(database.db, deliverables, {
       get: (token: string) =>
         token === 'INTERNAL_MCP_THREAD_RENAMER'
           ? { setThreadName }
           : token === 'PROJECT_CONNECTION_AGENT_TOOLS'
             ? connections
-            : domain,
+            : token === 'AGENT_MONITOR_TOOLS'
+              ? monitorTools
+              : domain,
     } as unknown as ModuleRef);
     localBrowser = new LocalBrowserService();
     service = new InternalMcpService(
@@ -984,10 +996,11 @@ describe('native internal MCP over HTTP', () => {
     expect(await service.connection('p', 'new-agent')).toEqual(pending);
   });
 
-  it('preapproves only publication in the native transport without disguising its write access', async () => {
+  it('preapproves only scoped publication and monitor reports without disguising their metadata/write access', async () => {
     const { client, connection } = await connect();
     expect(connection.config.tools).toEqual({
       publish_project_git: { approval_mode: 'approve' },
+      agent_monitor_report: { approval_mode: 'approve' },
     });
     expect(connection.config).not.toHaveProperty('default_tools_approval_mode');
     const catalog = await client.listTools();
@@ -1000,6 +1013,106 @@ describe('native internal MCP over HTTP', () => {
     });
     expect(connection.config.tools).not.toHaveProperty('local_browser_action');
     expect(connection.config.tools).not.toHaveProperty('prepare_project_git');
+    expect(connection.config.tools).not.toHaveProperty('agent_monitor_manage');
+    expect(
+      catalog.tools.find((tool) => tool.name === 'agent_monitor_report')
+        ?.annotations?.readOnlyHint,
+    ).toBe(false);
+  });
+
+  it('exposes bounded monitoring through the native read-only lease without granting filesystem or Git writes', async () => {
+    const { client } = await connect();
+    activate('admin', false);
+    const args = {
+      operation: 'create',
+      requestId: 'monitor-1',
+      name: 'Read checks',
+      instructions: 'Read checks without publishing.',
+      userRequest: 'Watch this PR.',
+      runAt: Date.now(),
+      intervalMs: 60_000,
+      expiresAt: Date.now() + 3_600_000,
+    };
+    const created = await client.callTool({
+      name: 'agent_monitor_manage',
+      arguments: args,
+    });
+    expect(created.isError).not.toBe(true);
+    const monitor = monitorStore.list('p')[0];
+    expect(monitor).toMatchObject({
+      threadId: 'agent',
+      personId: 'admin',
+      accessMode: 'readOnly',
+      status: 'active',
+    });
+    for (const injected of [
+      { threadId: 'other' },
+      { personId: 'reader' },
+      { projectId: 'other' },
+      { accessMode: 'workspaceWrite' },
+    ])
+      expect(
+        (
+          await client.callTool({
+            name: 'agent_monitor_manage',
+            arguments: { ...args, ...injected },
+          })
+        ).isError,
+      ).toBe(true);
+    const claim = monitorStore.claim('p', monitor.id)!;
+    monitorStore.beginDispatch(claim.run.id);
+    monitorStore.bind(claim.run.id, 'turn-1');
+    const current = await client.callTool({
+      name: 'agent_monitor_read',
+      arguments: { operation: 'current' },
+    });
+    expect(current.structuredContent).toMatchObject({
+      run: { id: claim.run.id, turnId: 'turn-1' },
+    });
+    expect(
+      (
+        await client.callTool({
+          name: 'agent_monitor_manage',
+          arguments: { ...args, requestId: 'clone' },
+        })
+      ).isError,
+    ).toBe(true);
+    expect(
+      (
+        await client.callTool({
+          name: 'agent_monitor_report',
+          arguments: {
+            summary: 'Checks still running.',
+            disposition: 'continue',
+          },
+        })
+      ).isError,
+    ).not.toBe(true);
+    expect(monitorStore.readRun(claim.run.id)?.result).toBe(
+      'Checks still running.',
+    );
+    expect(
+      (
+        await client.callTool({
+          name: 'create_project_git_copy',
+          arguments: {
+            connectionId: gitConnectionId,
+            requestId: 'still-readonly',
+            branch: 'main',
+          },
+        })
+      ).isError,
+    ).toBe(true);
+    service.revoke('agent');
+    expect(
+      (
+        await client.callTool({
+          name: 'agent_monitor_report',
+          arguments: { summary: 'Late', disposition: 'complete' },
+        })
+      ).isError,
+    ).toBe(true);
+    expect(monitorStore.readRun(claim.run.id)?.disposition).toBe('continue');
   });
 
   it('protects the technical catalog with administrator authorization', () => {

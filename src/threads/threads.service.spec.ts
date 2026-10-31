@@ -17,6 +17,8 @@ import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { CodexRpcError } from '../codex/codex-errors';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
+import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
+import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 
 /** Branch state as the local-only service reports it for an untracked thread. */
 function localBranchState(threadId: string) {
@@ -89,6 +91,8 @@ describe('ThreadsService', () => {
   const mockActiveFolders = { resolveAgent: vi.fn() };
   const mockProjectTools = { context: vi.fn() };
   const mockAgentDefaults = { forNewAgent: vi.fn() };
+  const mockInternalMcp = { prepare: vi.fn(), revoke: vi.fn() };
+  const mockSettings = { readSecurityPolicy: vi.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -97,6 +101,8 @@ describe('ThreadsService', () => {
         { provide: ProjectKnowledgeService, useValue: mockKnowledge },
         { provide: ProjectAgentToolsService, useValue: mockProjectTools },
         { provide: ProjectAgentDefaultsService, useValue: mockAgentDefaults },
+        { provide: InternalMcpService, useValue: mockInternalMcp },
+        { provide: ThreadSettingsObserverService, useValue: mockSettings },
         ThreadsService,
         { provide: CodexService, useValue: mockCodex },
         { provide: ThreadResumeRegistryService, useValue: mockResumeRegistry },
@@ -126,6 +132,11 @@ describe('ThreadsService', () => {
 
     service = module.get(ThreadsService);
     mockCodex.request.mockReset();
+    mockInternalMcp.prepare.mockReset().mockReturnValue(null);
+    mockInternalMcp.revoke.mockReset();
+    mockSettings.readSecurityPolicy
+      .mockReset()
+      .mockReturnValue({ sandboxPolicy: null });
     mockAgentDefaults.forNewAgent.mockReset().mockResolvedValue({});
     mockKnowledge.contextForConversation.mockReset();
     mockProjectTools.context.mockReset();
@@ -1222,5 +1233,103 @@ describe('ThreadsService', () => {
     ).rejects.toMatchObject({
       errorCode: ErrorCode.threads.invalidForkOptions,
     });
+  });
+
+  it('rechecks background admission after asynchronous preparation and yields to foreground input', async () => {
+    let release!: () => void;
+    let yielded = false;
+    service.onForegroundInput(() => {
+      yielded = true;
+    });
+    mockKnowledge.contextForConversation.mockImplementationOnce(
+      () =>
+        new Promise<null>((resolve) => {
+          release = () => resolve(null);
+        }),
+    );
+    mockCodex.request.mockResolvedValue({ turn: { id: 'human' } });
+    const beforeSend = vi.fn();
+    const scheduled = service
+      .startTurn(
+        { threadId: 't', input: [] },
+        {
+          assertIdle: () => {
+            if (yielded) throw new Error('MONITOR_AGENT_BUSY');
+          },
+          beforeSend,
+        },
+      )
+      .catch((error: Error) => error);
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await service.startTurn({ threadId: 't', input: [] });
+    release();
+    expect(await scheduled).toMatchObject({ message: 'MONITOR_AGENT_BUSY' });
+    expect(beforeSend).not.toHaveBeenCalled();
+    expect(mockCodex.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies observers for both human starts and steering, without letting an observer block the person', async () => {
+    const listener = vi.fn(() => {
+      throw new Error('Observer unavailable');
+    });
+    const unsubscribe = service.onForegroundInput(listener);
+    mockCodex.request.mockResolvedValue({ turn: { id: 'human' } });
+    await service.startTurn({ threadId: 't', input: [] });
+    await service.steerTurn({
+      threadId: 't',
+      expectedTurnId: 'human',
+      input: [],
+    });
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    await service.startTurn({ threadId: 't', input: [] });
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('counts a background dispatch only immediately before the native send', async () => {
+    const order: string[] = [];
+    mockCodex.request.mockImplementation(async () => {
+      await Promise.resolve();
+      order.push('send');
+      return { turn: { id: 'background' } };
+    });
+    await service.startTurn(
+      { threadId: 't', input: [] },
+      {
+        assertIdle: vi.fn(),
+        beforeSend: () => {
+          order.push('admitted');
+        },
+      },
+    );
+    expect(order).toEqual(['admitted', 'send']);
+  });
+
+  it('refreshes project tools under the person’s identity after steering a monitor without upgrading its policy', async () => {
+    service.onForegroundInput(() => true);
+    mockActiveFolders.resolveAgent.mockReturnValue('/project');
+    mockProjectConnections.policyForThread.mockResolvedValue({
+      projectId: 'p',
+      readOnly: false,
+    });
+    mockSettings.readSecurityPolicy.mockReturnValue({
+      sandboxPolicy: { type: 'readOnly' },
+    });
+    const lease = { bind: vi.fn(), abort: vi.fn() };
+    mockInternalMcp.prepare.mockReturnValue(lease);
+    mockCodex.request.mockResolvedValue({ turnId: 'now-human' });
+    await service.steerTurn({
+      threadId: 't',
+      expectedTurnId: 'now-human',
+      input: [],
+    });
+    expect(mockInternalMcp.prepare).toHaveBeenCalledWith('t', 'p', false);
+    expect(lease.bind).toHaveBeenCalledWith('now-human');
+    expect(lease.abort).not.toHaveBeenCalled();
+    mockCodex.request.mockRejectedValueOnce(new Error('Stale turn'));
+    await expect(
+      service.steerTurn({ threadId: 't', expectedTurnId: 'stale', input: [] }),
+    ).rejects.toThrow('Stale turn');
+    expect(lease.abort).toHaveBeenCalledTimes(1);
   });
 });

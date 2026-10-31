@@ -138,7 +138,12 @@ export class InternalMcpService implements OnModuleDestroy {
         // rechecks the authenticated writable turn, ownership and Git state.
         // Avoid a second Codex transport confirmation for this tool alone.
         // Keep its MCP write/open-world annotations and all other tool policies.
-        tools: { publish_project_git: { approval_mode: 'approve' } },
+        tools: {
+          publish_project_git: { approval_mode: 'approve' },
+          // Only the server-bound check's result can be updated. This never
+          // approves a command, file mutation or another scheduled execution.
+          agent_monitor_report: { approval_mode: 'approve' },
+        },
       },
     };
   }
@@ -230,8 +235,18 @@ export class InternalMcpService implements OnModuleDestroy {
         lease.access.identities.requireAdministrator(identity);
       }
       this.tools.assertProject(cap.threadId, cap.projectId);
-      // Renaming is conversation metadata, independent of filesystem access.
-      if (!readOnly && name !== 'rename_agent' && !lease.writes)
+      // Scoped conversation metadata is independent of filesystem access.
+      // Monitor creation remains read-only; only a human can resume or enlarge
+      // the grant, and unattended turns can report but never create monitors.
+      if (
+        !readOnly &&
+        ![
+          'rename_agent',
+          'agent_monitor_manage',
+          'agent_monitor_report',
+        ].includes(name) &&
+        !lease.writes
+      )
         throw new Error('READ_ONLY');
     };
     check();
@@ -285,6 +300,7 @@ export class InternalMcpService implements OnModuleDestroy {
               cap.threadId!,
               { ...args, tool: name },
               check,
+              lease!.turnId,
             );
           });
         } finally {

@@ -106,6 +106,54 @@ beforeEach(() => {
 afterEach(() => database.sqlite.close());
 
 describe('durable agent monitor store', () => {
+  it.each(['claimed', 'dispatching', 'running'] as const)(
+    'yields %s work to a human without pausing, resetting limits or accepting a late completion',
+    (phase) => {
+      const monitor = create({ intervalMs: 120_000 });
+      const { run } = store.claim('p', monitor.id, NOW)!;
+      if (phase !== 'claimed') store.beginDispatch(run.id, NOW);
+      if (phase === 'running') store.bind(run.id, 'turn');
+      store.yieldToForeground(run.id, NOW + 1_000);
+      expect(store.get('p', monitor.id)).toMatchObject({
+        status: 'active',
+        nextRunAt: NOW + 121_000,
+        runCount: phase === 'claimed' ? 0 : 1,
+        maxRuns: 20,
+        lastReason: 'MONITOR_USER_TAKEOVER',
+      });
+      expect(store.active()).toEqual([]);
+      expect(store.readRun(run.id)).toMatchObject({
+        status: 'deferred',
+        reason: 'MONITOR_USER_TAKEOVER',
+      });
+      expect(
+        store.finish(run.id, phase === 'running' ? 'turn' : null, {
+          success: true,
+          result: 'Late answer now belongs to the human conversation.',
+          disposition: 'complete',
+        }),
+      ).toBeNull();
+      expect(store.claim('p', monitor.id, NOW + 121_000)).not.toBeNull();
+    },
+  );
+
+  it('does not turn a human message into an implicit resume or replenish an exhausted budget', () => {
+    const { monitor, run } = start();
+    store.setPaused('p', monitor.id, true, NOW);
+    store.yieldToForeground(run.id, NOW + 1000);
+    expect(store.get('p', monitor.id)).toMatchObject({
+      status: 'paused',
+      nextRunAt: null,
+    });
+    const limited = start({ requestId: 'limited', maxRuns: 1 });
+    store.yieldToForeground(limited.run.id, NOW + 1000);
+    expect(store.get('p', limited.monitor.id)).toMatchObject({
+      status: 'exhausted',
+      runCount: 1,
+      nextRunAt: null,
+    });
+  });
+
   it('defaults to read-only, persists bounded scheduling and deduplicates retries even after the scheduled time', () => {
     const input = definition();
     const item = create();
