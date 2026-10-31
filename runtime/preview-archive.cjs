@@ -1,6 +1,7 @@
 'use strict';
 // Deliberately narrow USTAR: no PAX, sparse files, links, devices or extensions.
 const crypto = require('node:crypto');
+const { setImmediate: yieldLoop } = require('node:timers/promises');
 const decoder = new TextDecoder('utf-8', { fatal: true });
 function fail() {
   throw new Error('PREVIEW_UNSAFE_ARCHIVE');
@@ -28,7 +29,7 @@ function number(b) {
   if (!Number.isSafeInteger(n) || n < 0) fail();
   return n;
 }
-function entries(archive) {
+function* parseEntries(archive) {
   if (
     !Buffer.isBuffer(archive) ||
     archive.length > 64 * 1024 ** 2 ||
@@ -43,11 +44,13 @@ function entries(archive) {
   while (offset + 512 <= archive.length) {
     const header = archive.subarray(offset, offset + 512);
     if (header.every((v) => v === 0)) {
-      if (
-        !archive.subarray(offset).every((v) => v === 0) ||
-        archive.length - offset < 1024
-      )
-        fail();
+      if (archive.length - offset < 1024) fail();
+      // Padding is untrusted too: a near-limit zero tail must not monopolize
+      // the cooperative caller, and every byte must still be validated.
+      for (let at = offset; at < archive.length; at += 64 * 1024) {
+        if (!archive.subarray(at, at + 64 * 1024).every((v) => v === 0)) fail();
+        yield;
+      }
       ended = true;
       break;
     }
@@ -101,9 +104,28 @@ function entries(archive) {
       });
     }
     offset += 512 + Math.ceil(size / 512) * 512;
+    yield;
   }
   if (!ended || !result.some((v) => v.type === 'file')) fail();
   return result;
+}
+function entries(archive) {
+  const parsing = parseEntries(archive);
+  while (true) {
+    const next = parsing.next();
+    if (next.done) return next.value;
+  }
+}
+// Identical validation, but bound work per HTTP-loop turn for Manager callers.
+// The synchronous API remains available inside the isolated transfer helper.
+async function entriesAsync(archive) {
+  const parsing = parseEntries(archive);
+  let batch = 0;
+  while (true) {
+    const next = parsing.next();
+    if (next.done) return next.value;
+    if (++batch % 32 === 0) await yieldLoop();
+  }
 }
 function jsonArchive(value, name = 'spec.json') {
   if (!['spec.json', 'ready'].includes(name)) fail();
@@ -136,4 +158,4 @@ function jsonArchive(value, name = 'spec.json') {
     Buffer.alloc(((512 - (data.length % 512)) % 512) + 1024),
   ]);
 }
-module.exports = { entries, safeName, jsonArchive };
+module.exports = { entries, entriesAsync, safeName, jsonArchive };

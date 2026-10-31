@@ -351,6 +351,88 @@ test('browser preparation is parallel but moving tags remain gated by quality', 
   assert.match(job(publish, 'promote'), /scripts\/promote-image-pair\.sh/);
 });
 
+test('published browser smoke pulls the scanned digest before inspecting an empty daemon', () => {
+  const step = job(publish, 'browser-build').split(
+    '      - name: Verify browser runtime and absence of build package managers\n',
+  )[1];
+  assert.ok(step);
+  assert.match(
+    step,
+    /IMAGE_REF: ghcr\.io\/maxhugit\/mergeron-browser@\$\{\{ steps\.build\.outputs\.digest \}\}/,
+  );
+  const script = step.split('        run: |\n')[1].replace(/^          /gm, '');
+  const ref = 'ghcr.io/maxhugit/mergeron-browser@sha256:' + 'a'.repeat(64);
+  const labels = JSON.stringify({
+    'io.mergeron.version': '0.5.0',
+    'org.opencontainers.image.revision': 'b'.repeat(40),
+    'io.mergeron.channel': 'edge',
+    'org.opencontainers.image.created': '2026-10-31T00:00:00Z',
+  });
+  const run = (source, overrides = {}) =>
+    spawnSync(
+      'bash',
+      [
+        '-e',
+        '-c',
+        `
+    loaded=0
+    export loaded
+    docker() {
+      printf '%s\\n' "docker $*" >&2
+      case "$1" in
+        pull)
+          test "$2" = "$IMAGE_REF" || return 90
+          test "$PULL_FAILURE" = 0 || return 91
+          loaded=1; export loaded ;;
+        image)
+          test "$2" = inspect && test "$3" = "$IMAGE_REF" || return 92
+          test "$loaded" = 1 || return 93
+          printf '%s\\n' "$LABELS" ;;
+        run) test "$loaded" = 1 || return 94 ;;
+        *) return 95 ;;
+      esac
+    }
+    export -f docker
+    ${source}
+  `,
+      ],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          IMAGE_REF: ref,
+          LABELS: labels,
+          PULL_FAILURE: '0',
+          ...overrides,
+        },
+        encoding: 'utf8',
+      },
+    );
+  const success = run(script);
+  assert.equal(success.status, 0, success.stderr);
+  const calls = success.stderr.trim().split('\n');
+  assert.equal(calls[0], `docker pull ${ref}`);
+  assert.equal(
+    calls[1],
+    `docker image inspect ${ref} --format {{json .Config.Labels}}`,
+  );
+  assert.match(
+    calls[2],
+    /docker run --rm --network none --read-only --cap-drop ALL/,
+  );
+  assert.ok(calls[2].includes(`--entrypoint node ${ref} `));
+  // Reproduce the former post-merge failure, not just the YAML's spelling.
+  assert.notEqual(
+    run(script.replace('docker pull "$IMAGE_REF"', ':')).status,
+    0,
+  );
+  for (const overrides of [{ PULL_FAILURE: '1' }, { LABELS: '{}' }]) {
+    const rejected = run(script, overrides);
+    assert.notEqual(rejected.status, 0);
+    assert.doesNotMatch(rejected.stderr, /docker run/);
+  }
+});
+
 test('CLI installation and actual sandbox validation gate both PRs and promotion by immutable image digests', () => {
   const cli = job(quality, 'cli-runtime');
   assert.match(cli, /needs: \[image, manager-image\]/);

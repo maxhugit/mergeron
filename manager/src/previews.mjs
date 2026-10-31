@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { setImmediate as yieldLoop } from 'node:timers/promises';
 import contract from '../../runtime/preview-profile.cjs';
 import archives from '../../runtime/preview-archive.cjs';
 import { relayReadiness } from './preview-health.mjs';
@@ -349,11 +350,11 @@ export class PreviewManager {
     r.objects = r.objects.filter((c) => c.id !== item.id);
     this.save(r);
   }
-  snapshot(r, snapshotId, sha) {
+  async snapshot(r, snapshotId, sha) {
     if (!contract.RUN_ID.test(snapshotId) || !/^[a-f0-9]{64}$/.test(sha))
       fail('PREVIEW_INVALID_REQUEST');
     let root = this.configuration.hostStatePath;
-    if (fs.realpathSync(root) !== path.resolve(root))
+    if ((await fs.promises.realpath(root)) !== path.resolve(root))
       fail('PREVIEW_UNSAFE_SNAPSHOT');
     for (const part of [
       'workspace',
@@ -363,32 +364,50 @@ export class PreviewManager {
       snapshotId,
     ]) {
       root = path.join(root, part);
-      const st = fs.lstatSync(root);
+      const st = await fs.promises.lstat(root);
       if (!st.isDirectory() || st.isSymbolicLink())
         fail('PREVIEW_UNSAFE_SNAPSHOT');
     }
-    const fd = fs.openSync(
+    const file = await fs.promises.open(
       path.join(root, 'source.tar'),
       fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
     );
     let archive;
+    const hash = createHash('sha256');
     try {
-      const st = fs.fstatSync(fd);
+      const st = await file.stat();
       if (!st.isFile() || st.nlink !== 1 || st.size > 64 * 1024 ** 2)
         fail('PREVIEW_UNSAFE_SNAPSHOT');
-      archive = fs.readFileSync(fd);
+      // Read/hash bounded slices, never a synchronous near-limit archive on
+      // the HTTP event loop. An open descriptor retains O_NOFOLLOW semantics.
+      archive = Buffer.alloc(st.size);
+      let offset = 0;
+      while (offset < archive.length) {
+        const { bytesRead } = await file.read(
+          archive,
+          offset,
+          Math.min(1024 ** 2, archive.length - offset),
+          offset,
+        );
+        if (!bytesRead) fail('PREVIEW_STALE_SNAPSHOT');
+        hash.update(archive.subarray(offset, offset + bytesRead));
+        offset += bytesRead;
+        await yieldLoop();
+      }
+      if ((await file.stat()).size !== st.size) fail('PREVIEW_STALE_SNAPSHOT');
     } finally {
-      fs.closeSync(fd);
+      await file.close();
     }
-    if (createHash('sha256').update(archive).digest('hex') !== sha)
-      fail('PREVIEW_STALE_SNAPSHOT');
+    if (hash.digest('hex') !== sha) fail('PREVIEW_STALE_SNAPSHOT');
     return {
       archive,
-      entries: archives.entries(archive).filter((v) => v.type === 'file'),
+      entries: (await archives.entriesAsync(archive)).filter(
+        (v) => v.type === 'file',
+      ),
     };
   }
   async apply(r, snapshotId, sha) {
-    const { archive, entries } = this.snapshot(r, snapshotId, sha);
+    const { archive, entries } = await this.snapshot(r, snapshotId, sha);
     const input = await this.volume(
       r,
       'input-' + randomBytes(4).toString('hex'),
@@ -582,7 +601,7 @@ export class PreviewManager {
           fail('PREVIEW_IMAGE_VOLUMES_REQUIRE_CONFIGURATION');
       }
       // Validate the source before creating any Docker resources.
-      this.snapshot(r, r.runId, input.sourceSha);
+      await this.snapshot(r, r.runId, input.sourceSha);
       const internal = this.prefix(r) + '-private',
         external = this.prefix(r) + '-egress';
       for (const [name, isolated] of [

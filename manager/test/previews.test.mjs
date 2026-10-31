@@ -612,6 +612,80 @@ test('archive parser rejects traversal, links and corrupt checksums', async () =
   assert.throws(() => archives.entries(broken), /PREVIEW_UNSAFE_ARCHIVE/);
 });
 
+test('async snapshot validation preserves the buffer, digest and link protections before creating resources', async () => {
+  const f = await fixture();
+  const snapshot = () =>
+    f.manager.snapshot(
+      { projectId: 'project' },
+      f.input.runId,
+      f.input.sourceSha,
+    );
+  const result = await snapshot();
+  assert.ok(Buffer.isBuffer(result.archive));
+  assert.deepEqual(result.archive, f.snapshot.tar);
+  assert.deepEqual(
+    result.entries,
+    archives.entries(f.snapshot.tar).filter((e) => e.type === 'file'),
+  );
+  await assert.rejects(
+    f.manager.snapshot({ projectId: 'project' }, f.input.runId, '0'.repeat(64)),
+    /PREVIEW_STALE_SNAPSHOT/,
+  );
+  const name = path.join(
+    f.root,
+    'workspace',
+    '.mergeron-system',
+    'project',
+    'previews',
+    f.input.runId,
+    'source.tar',
+  );
+  const broken = Buffer.from(f.snapshot.tar);
+  broken[0] ^= 1;
+  fs.writeFileSync(name, broken);
+  await assert.rejects(
+    f.manager.snapshot(
+      { projectId: 'project' },
+      f.input.runId,
+      createHash('sha256').update(broken).digest('hex'),
+    ),
+    /PREVIEW_UNSAFE_ARCHIVE/,
+  );
+  const original = name + '.original';
+  fs.renameSync(name, original);
+  fs.symlinkSync(original, name);
+  await assert.rejects(snapshot());
+  fs.unlinkSync(name);
+  fs.linkSync(original, name);
+  await assert.rejects(snapshot(), /PREVIEW_UNSAFE_SNAPSHOT/);
+  assert.equal(f.docker.created.length, 0);
+  assert.equal(f.docker.volumes.size, 0);
+});
+
+test('start and synchronization await rejected snapshots before creating any Docker resource', async () => {
+  const f = await fixture();
+  await assert.rejects(
+    f.manager.start({ ...f.input, sourceSha: '0'.repeat(64) }),
+    /PREVIEW_STALE_SNAPSHOT/,
+  );
+  assert.equal(f.docker.created.length, 0);
+  assert.equal(f.docker.networks.size, 0);
+  assert.equal(f.docker.volumes.size, 0);
+  const valid = await fixture();
+  await valid.manager.start(valid.input);
+  const resources = valid.docker.created.length;
+  const next = valid.exportSource();
+  await assert.rejects(
+    valid.manager.sync({
+      runId: valid.input.runId,
+      snapshotId: next.snapshotId,
+      sourceSha: '0'.repeat(64),
+    }),
+    /PREVIEW_STALE_SNAPSHOT/,
+  );
+  assert.equal(valid.docker.created.length, resources);
+});
+
 test('lifetime changes persist without recreating resources; unlimited still uses finite access grants', async () => {
   const f = await fixture();
   const initial = await f.manager.start(f.input);
