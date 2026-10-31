@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useRequestResponse } from '@/hooks/use-request-response';
 import type { UserInputQuestion, UserInputRequest } from '@/types/approval';
+import { useComposerDraftStore } from '@/stores/composer-draft-store';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -63,12 +64,18 @@ export function UserInputCard({ request }: Props) {
   );
 
   const isPending = request.status === 'pending';
+  // A retired RPC cannot accept a response, but its question can still be
+  // answered as a normal message without inventing a submission or approval.
+  const canReplyAsMessage =
+    (request.status === 'resolved' || request.status === 'failed') &&
+    request.questions.every((question) => !question.isSecret);
+  const editable = isPending || canReplyAsMessage;
   const answers = useMemo(
     () => buildAnswers(request.questions, draft),
     [draft, request.questions],
   );
   const canSubmit =
-    isPending && isComplete(request.questions, draft) && !submitting;
+    editable && isComplete(request.questions, draft) && !submitting;
 
   const setSingle = (qId: string, value: string) => {
     setDraft((prev) => ({
@@ -98,7 +105,24 @@ export function UserInputCard({ request }: Props) {
   };
 
   const handleSubmit = () => {
-    if (canSubmit) send({ answers });
+    if (!canSubmit) return;
+    if (canReplyAsMessage) {
+      const reply = request.questions
+        .map(
+          (question) =>
+            `${question.question}\n${answers[question.id].answers.join('\n')}`,
+        )
+        .join('\n\n');
+      useComposerDraftStore
+        .getState()
+        .setText(request.threadId, (text) =>
+          text === reply || text.endsWith(`\n\n${reply}`)
+            ? text
+            : text
+              ? `${text}\n\n${reply}`
+              : reply,
+        );
+    } else send({ answers });
   };
 
   return (
@@ -162,7 +186,7 @@ export function UserInputCard({ request }: Props) {
                         name={`${request.requestId}-${question.id}`}
                         className="mt-0.5 h-3.5 w-3.5 accent-primary"
                         checked={d.selected.includes(opt.label)}
-                        disabled={!isPending || submitting}
+                        disabled={!editable || submitting}
                         onChange={() => {
                           if (useCheckboxes) toggle(question.id, opt.label);
                           else setSingle(question.id, opt.label);
@@ -186,7 +210,7 @@ export function UserInputCard({ request }: Props) {
                 <Input
                   type={question.isSecret ? 'password' : 'text'}
                   value={d.text}
-                  disabled={!isPending || submitting}
+                  disabled={!editable || submitting}
                   placeholder={
                     question.isOther ? t('otherAnswer') : t('answer')
                   }
@@ -197,11 +221,16 @@ export function UserInputCard({ request }: Props) {
           );
         })}
 
-        {isPending && (
+        {canReplyAsMessage && (
+          <p className="text-xs text-muted-foreground">
+            {t('retiredQuestionReplyHint')}
+          </p>
+        )}
+        {editable && (
           <div className="flex justify-end pt-1">
             <Button size="sm" disabled={!canSubmit} onClick={handleSubmit}>
               {submitting && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-              {t('submit')}
+              {t(canReplyAsMessage ? 'prepareQuestionReply' : 'submit')}
             </Button>
           </div>
         )}

@@ -157,3 +157,33 @@ it('does not hide pending questions attached to a tool', () => {
   expect(screen.getByRole('button', { name: 'Answer question' })).toBeVisible();
   expect(screen.getByText('technical log output')).toBeVisible();
 });
+
+it('keeps a retired question visible when its technical item would be hidden', () => {
+  useAgentDisplayStore.getState().record('a', 'hidden');
+  useTimelineStore.setState({
+    userInputRequests: {
+      q: {
+        requestId: 'q',
+        kind: 'userInput',
+        threadId: 'a',
+        turnId: 'turn',
+        itemId: 'cmd',
+        status: 'pending',
+        questions: [],
+      },
+    },
+  });
+  mount([command]);
+  act(() =>
+    useTimelineStore.setState({
+      userInputRequests: {
+        q: {
+          ...useTimelineStore.getState().userInputRequests.q,
+          status: 'resolved',
+        },
+      },
+    }),
+  );
+  expect(screen.getByRole('button', { name: 'Answer question' })).toBeVisible();
+  expect(document.querySelectorAll('details')).toHaveLength(0);
+});
