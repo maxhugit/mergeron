@@ -556,6 +556,32 @@ test('trusted fixture exports only approved evidence readable by a different run
   assert.doesNotMatch(smoke, /--privileged|--cap-add/);
 });
 
+test('the isolated real CLI checks the actual dictation service before passing the runtime gate', () => {
+  const fixture = read('scripts/smoke-test-managed-cli.sh');
+  const probe = read('scripts/cli-dictation-native-probe.cjs');
+  assert.match(fixture, /--network none/);
+  assert.match(fixture, /cli-dictation-native-probe\.cjs,dst=.*readonly/);
+  assert.match(
+    fixture,
+    /docker exec "\$app" node \/ci\/cli-dictation-native-probe\.cjs/,
+  );
+  assert.match(
+    probe,
+    /require\('\/app\/dist\/simple-chat\/codex-audio\.service'\)/,
+  );
+  assert.match(
+    probe,
+    /account\/read.*return \{ account: \{ type: 'chatgpt' \} \}/,
+  );
+  assert.match(probe, /requires_openai_auth = false/);
+  assert.match(probe, /old-text-control/);
+  assert.match(probe, /corrected-audio/);
+  assert.match(probe, /assert\.equal\(\s*calls\.length,\s*0/);
+  assert.match(probe, /assert\.equal\(\s*calls\.length,\s*1/);
+  assert.match(probe, /await childDone/);
+  assert.doesNotMatch(probe, /process\.env\.OPENAI_API_KEY/);
+});
+
 test('browser identity does not invalidate dependencies and cleanup', () => {
   const dockerfile = read('deployment/browser/Dockerfile');
   assert.ok(

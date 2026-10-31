@@ -58,7 +58,14 @@ export async function startCliDictation(
   let closed = false;
   let id: string | undefined;
   let deleted = false;
+  // Codex WebRTC requires audio output even for dictation. Never play it:
+  // only the microphone's user transcript may be inserted into the draft.
+  const silenceRemoteTrack = (event: RTCTrackEvent) => {
+    event.track.enabled = false;
+  };
+  pc.addEventListener('track', silenceRemoteTrack);
   const releaseMedia = () => {
+    pc.removeEventListener('track', silenceRemoteTrack);
     stream.getTracks().forEach((track) => track.stop());
     pc.close();
   };

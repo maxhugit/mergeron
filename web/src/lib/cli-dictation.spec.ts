@@ -93,6 +93,18 @@ it('cancels media and the owned session when navigating away', async () => {
   ).toHaveLength(1);
 });
 
+it('disables remote assistant audio without muting microphone speech', async () => {
+  const { track } = setup();
+  const handle = await startCliDictation(new AbortController().signal);
+  const remote = { enabled: true };
+  Peer.instances[0].dispatchEvent(
+    Object.assign(new Event('track'), { track: remote }),
+  );
+  expect(remote.enabled).toBe(false);
+  expect(track.enabled).toBe(true);
+  await handle.cancel();
+});
+
 it('cleans up a late start response even if the view was closed while negotiating', async () => {
   const { track, fetchMock } = setup();
   let release!: (value: unknown) => void;
