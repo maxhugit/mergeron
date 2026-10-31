@@ -13,6 +13,7 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
+  | { id: string; kind: 'preview'; projectId: string; threadId: string }
   | {
       id: string;
       kind: 'browser';
@@ -73,6 +74,7 @@ interface WorkspaceState {
   contexts: Record<string, WorkspaceContext>;
   fileViews: Record<string, FileViewState>;
   openFile: (context: string, path: string, line?: number | null) => void;
+  openPreview: (context: string, projectId: string, threadId: string) => void;
   openBrowser: (context: string, mode?: 'local' | 'isolated') => void;
   setBrowserLayout: (
     context: string,
@@ -118,6 +120,31 @@ function clearActiveReveal(state: WorkspaceState, context: string) {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   contexts: {},
   fileViews: {},
+  openPreview: (context, projectId, threadId) =>
+    set((state) => {
+      const current = state.contexts[context] ?? EMPTY_WORKSPACE;
+      const id = 'preview';
+      return {
+        contexts: {
+          ...state.contexts,
+          [context]: {
+            ...current,
+            tabs: current.tabs.some((tab) => tab.id === id)
+              ? current.tabs.map((tab) =>
+                  tab.id === id
+                    ? { id, kind: 'preview' as const, projectId, threadId }
+                    : tab,
+                )
+              : [
+                  ...current.tabs,
+                  { id, kind: 'preview' as const, projectId, threadId },
+                ],
+            activeId: id,
+          },
+        },
+        fileViews: clearActiveReveal(state, context),
+      };
+    }),
   setBrowserLayout: (context, layout) =>
     set((state) => ({
       contexts: {

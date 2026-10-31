@@ -8,6 +8,7 @@ import archives from '../../runtime/preview-archive.cjs';
 import { relayReadiness } from './preview-health.mjs';
 import { previewCommand } from './preview-command.mjs';
 import storage from '../../runtime/preview-storage.cjs';
+import { PreviewInspector } from './preview-inspector.mjs';
 const { previewStorage, cacheEnvironment, readStorageObservation } = storage;
 
 const label = 'io.mergeron.preview';
@@ -85,6 +86,7 @@ export class PreviewManager {
     }
     this.busy = false;
     this.records = new Map();
+    this.inspector = new PreviewInspector(this);
     this.location =
       configuration.previewJournal ??
       path.join(
@@ -1038,6 +1040,7 @@ export class PreviewManager {
       await this.removeVolume(r, name);
   }
   async cleanup(r) {
+    this.inspector.closeRun(r.runId);
     for (const c of [...r.objects].reverse()) await this.removeObject(r, c);
     for (const name of [...r.volumes]) await this.removeVolume(r, name);
     for (const name of [...r.networks].reverse()) {

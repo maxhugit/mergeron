@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Put, Post, Param, Body, Query } from '@nestjs/common';
 import { ProjectPreviewsService } from './project-previews.service';
 @Controller('projects/:projectId')
 export class PreviewsController {
@@ -37,6 +37,26 @@ export class PreviewsController {
       () => {},
       input.lifetimeMinutes,
     );
+  }
+  @Get('agents/:threadId/preview/containers') containers(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+  ) {
+    return this.previews.inspectRuntime(p, t, 'containers');
+  }
+  @Get('agents/:threadId/preview/container-logs') containerLogs(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+    @Query('component') component: string,
+  ) {
+    return this.previews.inspectRuntime(p, t, 'container-logs', { component });
+  }
+  @Post('agents/:threadId/preview/terminal') terminal(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+    @Body() input: Record<string, unknown>,
+  ) {
+    return this.previews.inspectRuntime(p, t, 'terminal', input);
   }
   @Post('agents/:threadId/preview/refresh') refresh(
     @Param('projectId') p: string,

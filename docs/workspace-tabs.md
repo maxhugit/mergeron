@@ -4,7 +4,12 @@
 
 A conversation route owns one centre column: a compact title, a nonwrapping view
 selector, and one full-size active surface. Conversation is pinned and cannot be
-closed. Files and terminals are sibling views. A full-height explorer sits to the
+closed. Files, terminals and the test environment are sibling views. Opening
+the test-environment action reselects one preview tab per conversation rather
+than displaying a dialog or duplicating the view. Closing the tab does not stop
+the runtime. Its queries run only while visible; leaving its container terminal
+closes that temporary PTY connection, without affecting workspace terminals.
+A full-height explorer sits to the
 right on desktop. Its divider previews a proposed width and commits only on
 pointer release; Escape and pointer cancellation retain the previous width.
 Preview and commit share the 45%-of-container limit. A click without movement

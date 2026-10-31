@@ -207,7 +207,7 @@ jobs:
         if: matrix.part == 'frontend'
         run: |
           pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
-          pnpm --dir web exec vitest run --project browser src/components/chat/agent-preview.browser.tsx src/components/account/push-notification-settings.browser.tsx
+          pnpm --dir web exec vitest run --project browser src/components/chat/agent-preview.browser.tsx src/components/chat/agent-preview-panel.browser.tsx src/components/account/push-notification-settings.browser.tsx
 
       - name: Test session recovery in Chromium and WebKit
         if: matrix.part == 'frontend'
