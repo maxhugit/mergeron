@@ -141,9 +141,9 @@ export function ModelSelector() {
         type="button"
         variant="ghost"
         size="sm"
-        className="h-7 cursor-default gap-1 rounded-lg px-2 text-xs"
+        className="h-7 cursor-default gap-1 rounded-lg px-2 text-xs hover:bg-transparent"
         title={t('modelAdminOnly')}
-        aria-label={`${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
+        aria-label={`${displayModel}${displayEffort ? ` · ${displayEffort}` : ''} — ${t('modelAdminOnly')}`}
         aria-readonly="true"
       >
         <Bot className="h-3.5 w-3.5" />
@@ -157,6 +157,7 @@ export function ModelSelector() {
     );
   }
   const handleModelSelect = (model: ModelDto) => {
+    if (!isAdministrator) return;
     if (selectedThreadId) {
       preferences.save({ model: model.model });
       return;
@@ -174,6 +175,7 @@ export function ModelSelector() {
   };
 
   const handleEffortSelect = (effort: ReasoningEffort) => {
+    if (!isAdministrator) return;
     if (selectedThreadId) {
       preferences.save({ effort });
       return;

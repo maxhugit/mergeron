@@ -123,4 +123,57 @@ describe('log storage and retention', () => {
   ])('rejects malformed policy %j', (value) => {
     expect(() => validateLogRetention(value)).toThrow();
   });
+  it('archives an existing oversized audit file intact, then expires it only by the configured age', async () => {
+    const original = 'x'.repeat(2 * 1024 * 1024);
+    await writeFile(join(root, 'codex-jsonrpc.jsonl'), original);
+    const policy = {
+      ...DEFAULT_LOG_RETENTION,
+      codex: { enabled: true, maxFiles: 5, maxAgeDays: 5, maxFileMiB: 1 },
+    };
+    configureLogRetention(policy);
+    const stream = createCodexAuditStream(root);
+    stream.end('next entry\n');
+    await finished(stream);
+    const archive = (await logStorageInventory(root)).find(
+      (file) => !file.active,
+    )!;
+    expect(archive.bytes).toBe(original.length);
+    expect(await readFile(join(root, archive.name), 'utf8')).toBe(original);
+    await pruneLogArchives(policy, root, archive.modifiedAt + 4 * 86400000);
+    expect(await readdir(root)).toContain(archive.name);
+    await pruneLogArchives(policy, root, archive.modifiedAt + 6 * 86400000);
+    expect(await readdir(root)).toEqual(['codex-jsonrpc.jsonl']);
+    expect(await readFile(join(root, 'codex-jsonrpc.jsonl'), 'utf8')).toBe(
+      'next entry\n',
+    );
+  });
+  it('bounds audit archives by count while preserving the active log', async () => {
+    const names = [
+      'codex-jsonrpc.1-11111111-1111-1111-1111-111111111111.jsonl',
+      'codex-jsonrpc.2-22222222-2222-2222-2222-222222222222.jsonl',
+      'codex-jsonrpc.3-33333333-3333-3333-3333-333333333333.jsonl',
+    ];
+    const now = Date.now();
+    for (const [index, name] of names.entries()) {
+      await writeFile(join(root, name), name);
+      await utimes(
+        join(root, name),
+        new Date(now + index * 1000),
+        new Date(now + index * 1000),
+      );
+    }
+    await writeFile(join(root, 'codex-jsonrpc.jsonl'), 'active');
+    await writeFile(join(root, 'unknown.jsonl'), 'protected');
+    await pruneLogArchives(
+      {
+        ...DEFAULT_LOG_RETENTION,
+        codex: { enabled: true, maxFiles: 1, maxAgeDays: 5, maxFileMiB: 1 },
+      },
+      root,
+      now + 3000,
+    );
+    expect((await readdir(root)).sort()).toEqual(
+      [names[2], 'codex-jsonrpc.jsonl', 'unknown.jsonl'].sort(),
+    );
+  });
 });
