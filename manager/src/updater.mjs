@@ -5,6 +5,7 @@ import {
   chmod,
   chown,
   lchown,
+  lutimes,
   lstat,
   mkdir,
   open,
@@ -27,6 +28,13 @@ import {
   readBackupSize,
 } from './backup-size.mjs';
 import { agentVisualSandbox } from './agent-visual-sandbox.mjs';
+import {
+  BACKUP_ARCHIVE_FORMAT,
+  BACKUP_ARCHIVE_NAME,
+  archiveDescriptor,
+  createBackupArchive,
+  extractBackupArchive,
+} from './backup-archive.mjs';
 import {
   persistentEntries as dataEntries,
   environmentBackupPolicy,
@@ -171,6 +179,7 @@ export async function copyPersistentTree(
   if (info.isSocket()) return;
   if (info.isSymbolicLink()) {
     await symlink(await readlink(source), destination);
+    await lutimes(destination, info.atime, info.mtime);
     await lchown(destination, info.uid, info.gid);
     return;
   }
@@ -248,7 +257,7 @@ async function treeSize(path, selection = null) {
   if (value.isDirectory()) {
     if (selection && excludesBackupDirectory(selection.policy, selection.path))
       return 0;
-    let total = 0;
+    let total = 1024;
     for (const name of await readdir(path))
       total += await treeSize(
         join(path, name),
@@ -256,7 +265,7 @@ async function treeSize(path, selection = null) {
       );
     return total;
   }
-  return value.isFile() ? value.size : 0;
+  return value.isFile() ? value.size + 1024 : 1024;
 }
 
 export async function restorePersistentEntry(
@@ -264,7 +273,7 @@ export async function restorePersistentEntry(
   base,
   id,
   name,
-  { allowMissing = false } = {},
+  { allowMissing = false, backupRoot = join(base, 'backup') } = {},
 ) {
   const source = join(stateRoot, name);
   // Linux requires write permission on a directory when changing its parent.
@@ -280,12 +289,12 @@ export async function restorePersistentEntry(
   );
   const quarantined = join(base, 'quarantine', name);
   await mkdir(dirname(quarantined), { recursive: true, mode: 0o700 });
-  const saved = await exists(join(base, 'backup', name));
+  const saved = await exists(join(backupRoot, name));
   if (!saved && !allowMissing) throw new Error('updateJournalInvalid');
   if (!(await exists(retained))) {
     if (saved && !(await exists(restore))) {
       const temporary = `${restore}.partial-${randomUUID()}`;
-      await copyPersistentTree(join(base, 'backup', name), temporary);
+      await copyPersistentTree(join(backupRoot, name), temporary);
       await durableRename(temporary, restore);
     }
     if (await exists(source)) await durableRename(source, retained);
@@ -423,8 +432,12 @@ export class TransactionalUpdater {
         }
       }
       let policy = null;
+      let archive = null;
       try {
-        if (operation) policy = recordedBackupPolicy(operation);
+        if (operation) {
+          archive = archiveDescriptor(operation);
+          policy = recordedBackupPolicy(operation);
+        }
       } catch {
         /* Unknown policies stay protected. */
       }
@@ -436,15 +449,36 @@ export class TransactionalUpdater {
       const blocked =
         this.busy || (this.current && !terminal.has(this.current.status));
       const measurable = valid && terminal.has(operation.status) && !blocked;
+      const archivePath = join(directory, 'backup', BACKUP_ARCHIVE_NAME);
+      const compressed = archive
+        ? await lstat(archivePath).catch(() => null)
+        : null;
+      const archivePresent =
+        compressed?.isFile() &&
+        !compressed.isSymbolicLink() &&
+        compressed.nlink === 1 &&
+        compressed.size === archive.bytes;
       const measured = measurable
-        ? this.backupSize(id, join(directory, 'backup'), backup)
+        ? archive
+          ? archivePresent
+            ? { bytes: compressed.size, status: 'ready' }
+            : null
+          : this.backupSize(id, join(directory, 'backup'), backup)
         : null;
       const sizeBytes = measured?.bytes ?? null;
       backups.push({
         id,
         backupPolicy: valid ? policy : null,
-        path: hostDirectory ? join(hostDirectory, id, 'backup') : null,
-        managerPath: join(directory, 'backup'),
+        path: hostDirectory
+          ? join(
+              hostDirectory,
+              id,
+              'backup',
+              ...(archive ? [BACKUP_ARCHIVE_NAME] : []),
+            )
+          : null,
+        managerPath: archive ? archivePath : join(directory, 'backup'),
+        format: archive ? BACKUP_ARCHIVE_FORMAT : 'directory',
         sizeBytes,
         sizeStatus: measured?.status ?? 'unavailable',
         createdAt:
@@ -456,7 +490,10 @@ export class TransactionalUpdater {
             ? operation.status
             : 'unknown',
         current: this.current?.id === id,
-        restorable: valid && operation.backupComplete === true,
+        restorable:
+          valid &&
+          operation.backupComplete === true &&
+          (!archive || archivePresent),
         canDelete: Boolean(!blocked && valid && terminal.has(operation.status)),
         protectionReason: blocked
           ? 'managerBackupOperationProtected'
@@ -592,6 +629,7 @@ export class TransactionalUpdater {
       throw new Error('managerBackupInvalid');
     const path = join(directory, 'backup');
     recordedBackupPolicy(operation);
+    archiveDescriptor(operation);
     const backup = await lstat(path).catch(() => null);
     if (backup && (!backup.isDirectory() || backup.isSymbolicLink()))
       throw new Error('managerBackupInvalid');
@@ -852,6 +890,9 @@ export class TransactionalUpdater {
       backupPolicy,
       ...(backupMode !== undefined ? { backupMode } : {}),
       backupScope,
+      backupFormat: withoutDataBackup(backupPolicy)
+        ? null
+        : BACKUP_ARCHIVE_FORMAT,
       images,
       containers,
       cliProtection: cliProtectionFingerprint(this.configuration),
@@ -1053,6 +1094,7 @@ export class TransactionalUpdater {
         await this.save('backingUp');
         const backup = join(this.directory, this.current.id, 'backup');
         await mkdir(backup, { recursive: true, mode: 0o700 });
+        const roots = [];
         for (const name of entries) {
           if (!(await exists(join(this.configuration.hostStatePath, name)))) {
             // Only optional minimal leaves may legitimately be absent.
@@ -1069,17 +1111,16 @@ export class TransactionalUpdater {
             this.current.backupMissing.push(name);
             continue;
           }
-          await mkdir(dirname(join(backup, name)), {
-            recursive: true,
-            mode: 0o700,
-          });
-          await copyPersistentTree(
-            join(this.configuration.hostStatePath, name),
-            join(backup, name),
-            1,
-            { policy: plan.backupPolicy, path: name },
-          );
+          roots.push(name);
         }
+        const temporary = join(backup, `${BACKUP_ARCHIVE_NAME}.partial`);
+        this.current.backupArchive = await createBackupArchive({
+          root: this.configuration.hostStatePath,
+          path: temporary,
+          roots,
+          policy: plan.backupPolicy,
+        });
+        await durableRename(temporary, join(backup, BACKUP_ARCHIVE_NAME));
         this.current.backupComplete = true;
       }
       await this.save('replacing');
@@ -1265,10 +1306,14 @@ export class TransactionalUpdater {
     return digest(entries) === digest([...backupEntries(MINIMAL), ...home]);
   }
 
-  async restoreMinimalEntry(storageBase, name) {
+  async restoreMinimalEntry(
+    storageBase,
+    name,
+    backupRoot = join(storageBase, 'backup'),
+  ) {
     const parent = dirname(name);
     const allowMissing = this.current.backupMissing?.includes(name) === true;
-    const saved = await exists(join(storageBase, 'backup', name));
+    const saved = await exists(join(backupRoot, name));
     if (!saved && !allowMissing) throw new Error('updateJournalInvalid');
     if (saved && allowMissing) throw new Error('updateJournalInvalid');
     if (
@@ -1317,7 +1362,7 @@ export class TransactionalUpdater {
           storageBase,
           this.current.id,
           name,
-          { allowMissing },
+          { allowMissing, backupRoot },
         );
       } finally {
         await directory.chmod(original.mode);
@@ -1334,6 +1379,52 @@ export class TransactionalUpdater {
       await this.commit();
       return;
     }
+    if (this.current.backupComplete) {
+      for (const path of [
+        join(this.directory, this.current.id),
+        join(this.directory, this.current.id, 'backup'),
+      ]) {
+        const info = await lstat(path);
+        if (!info.isDirectory() || info.isSymbolicLink())
+          throw new Error('updateJournalInvalid');
+      }
+    }
+    const archive = archiveDescriptor(this.current);
+    if (!archive || !this.current.backupComplete) return this.rollbackFrom();
+    const policy = recordedBackupPolicy(this.current);
+    const entries =
+      policy === MINIMAL ? this.current.backupScope : backupEntries(policy);
+    if (
+      !Array.isArray(entries) ||
+      (policy === MINIMAL && !this.validMinimalScope(entries))
+    )
+      throw new Error('updateJournalInvalid');
+    const roots = entries.filter(
+      (name) =>
+        !(policy === MINIMAL && this.current.backupMissing.includes(name)),
+    );
+    const base = join(this.directory, this.current.id);
+    const destination = join(base, 'restore-input');
+    // A crashed extraction is never trusted/reused. Remove only this fixed,
+    // private transaction subtree, not live data, archives or quarantine.
+    if (await exists(destination)) await removeDiscardedBackupTree(destination);
+    try {
+      await extractBackupArchive({
+        path: join(base, 'backup', BACKUP_ARCHIVE_NAME),
+        destination,
+        descriptor: archive,
+        roots,
+      });
+      await this.rollbackFrom(destination);
+    } finally {
+      if (await exists(destination))
+        await removeDiscardedBackupTree(destination);
+    }
+  }
+
+  async rollbackFrom(
+    backupRoot = join(this.directory, this.current.id, 'backup'),
+  ) {
     const policy = recordedBackupPolicy(this.current);
     const entries = !this.current.backupComplete
       ? []
@@ -1350,9 +1441,7 @@ export class TransactionalUpdater {
     // A missing/corrupt saved entry is not the same as a file absent before
     // backup. Refuse it before stopping or removing any healthy candidate.
     for (const name of entries) {
-      const saved = await exists(
-        join(this.directory, this.current.id, 'backup', name),
-      );
+      const saved = await exists(join(backupRoot, name));
       const expected = !(
         policy === MINIMAL && this.current.backupMissing.includes(name)
       );
@@ -1408,13 +1497,14 @@ export class TransactionalUpdater {
         if (this.current.restored.includes(name) && policy !== MINIMAL)
           continue;
         if (policy === MINIMAL)
-          await this.restoreMinimalEntry(storageBase, name);
+          await this.restoreMinimalEntry(storageBase, name, backupRoot);
         else
           await restorePersistentEntry(
             this.configuration.hostStatePath,
             storageBase,
             this.current.id,
             name,
+            { backupRoot },
           );
         if (!this.current.restored.includes(name))
           this.current.restored.push(name);
@@ -1467,6 +1557,7 @@ export class TransactionalUpdater {
       )
         throw new Error('updateJournalInvalid');
       recordedBackupPolicy(this.current);
+      archiveDescriptor(this.current);
       if (terminal.has(this.current.status)) return;
       try {
         await this.rollback();

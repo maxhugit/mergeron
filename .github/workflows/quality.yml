@@ -64,6 +64,8 @@ jobs:
             pnpm install --frozen-lockfile
             # Backend socket integration tests import the browser client types.
             pnpm --dir web install --frozen-lockfile
+            npm --prefix manager ci --ignore-scripts --no-audit --no-fund
+            npm --prefix manager run build:archive
           else
             pnpm --dir web install --frozen-lockfile
           fi

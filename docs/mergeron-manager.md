@@ -19,6 +19,12 @@ un ancien Manager. Le remplacement du Manager lui-même reste une opération hô
 
 ## Chemin et espace disque des sauvegardes
 
+Les nouvelles sauvegardes sont des archives `backup/backup.tar.gz`, compressées
+en flux et vérifiées avant remplacement des conteneurs. La liste montre le
+chemin et la taille compressée du fichier, sans parcours récursif. Les politiques
+complète/minimale/aucune et la rétention ne changent pas. Voir le
+[format, les contrôles de restauration et la compatibilité](sauvegarde-restauration.md#format-des-nouvelles-sauvegardes).
+
 L’onglet Sauvegarde permet de régler le nombre de copies à conserver : **10 par
 défaut**, de 1 à 1 000. Le réglage est conservé dans l’état privé du Manager et
 isolé par stack/environnement. Il nécessite une application et un Manager à jour.
@@ -43,7 +49,7 @@ Ces métadonnées nécessitent un Manager à jour, pas seulement une nouvelle im
 de l’application. Le chemin hôte n’est affiché qu’après vérification du montage ;
 sinon, le chemin interne au Manager est indiqué sans inventer de chemin serveur.
 
-La taille allouée est calculée en arrière-plan pour les sauvegardes de transactions
+Pour les sauvegardes historiques **en répertoires**, la taille allouée est calculée en arrière-plan pour les sauvegardes de transactions
 terminées, dans une file unique. Le parcours lit les répertoires en flux et marque
 une pause tous les 64 éléments : cette statistique administrative reste de basse
 priorité et cède la place à une mise à jour ou une suppression. Elle ne suit pas

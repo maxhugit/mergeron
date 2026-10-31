@@ -12,13 +12,19 @@ import {
   link,
   chmod,
   chown,
+  rename,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TransactionalUpdater, copyPersistentTree } from '../src/updater.mjs';
+import {
+  extractBackupArchive,
+  BACKUP_ARCHIVE_NAME,
+} from '../src/backup-archive.mjs';
 import { scopeManifest } from '../src/inventory.mjs';
 import {
   recordedBackupPolicy,
+  backupEntries,
   rollbackConfirmation,
 } from '../src/backup-policy.mjs';
 
@@ -196,6 +202,42 @@ async function begin(updater) {
   await updater.task;
 }
 
+async function inspectBackup(t, updater) {
+  const destination = await mkdtemp(join(tmpdir(), 'manager-inspect-'));
+  await rm(destination, { recursive: true });
+  t.after(() => rm(destination, { recursive: true, force: true }));
+  const policy = recordedBackupPolicy(updater.current);
+  const roots = (
+    policy === 'minimal-v1'
+      ? updater.current.backupScope
+      : backupEntries(policy)
+  ).filter((name) => !updater.current.backupMissing.includes(name));
+  await extractBackupArchive({
+    path: join(
+      updater.directory,
+      updater.current.id,
+      'backup',
+      BACKUP_ARCHIVE_NAME,
+    ),
+    destination,
+    descriptor: updater.current.backupArchive,
+    roots,
+  });
+  return destination;
+}
+
+// Manufacture a historical directory layout to keep its compatibility, size
+// cache and deletion regressions exercised, while new transactions use archives.
+async function legacyBackup(t, updater) {
+  const content = await inspectBackup(t, updater);
+  const backup = join(updater.directory, updater.current.id, 'backup');
+  await rm(backup, { recursive: true });
+  await rename(content, backup);
+  delete updater.current.backupArchive;
+  await updater.save(updater.current.phase, updater.current.status);
+  return backup;
+}
+
 for (const environment of ['production', 'development']) {
   for (const backupMode of ['full', 'minimal', 'none']) {
     test(`${environment} explicitly selects ${backupMode}, recovers after restart and preserves excluded data`, async (t) => {
@@ -233,7 +275,19 @@ for (const environment of ['production', 'development']) {
       await updater.task;
       assert.equal(updater.current.status, 'succeeded');
       assert.equal(updater.current.backupComplete, backupMode !== 'none');
-      const backup = join(options.directory, updater.current.id, 'backup');
+      if (backupMode === 'none')
+        assert.equal(updater.current.backupArchive, undefined);
+      else {
+        assert.equal(updater.current.backupArchive.format, 'tar-gzip-v1');
+        await assert.rejects(
+          lstat(join(options.directory, updater.current.id, 'backup', 'home')),
+          { code: 'ENOENT' },
+        );
+      }
+      const backup =
+        backupMode === 'none'
+          ? join(options.directory, updater.current.id, 'backup')
+          : await inspectBackup(t, updater);
       if (backupMode !== 'none') {
         assert.equal(
           await readFile(
@@ -404,7 +458,7 @@ test('a missing saved database blocks minimal rollback without deleting current 
     join(
       updater.directory,
       updater.current.id,
-      'backup/home/.codex/codex-webui.sqlite',
+      `backup/${BACKUP_ARCHIVE_NAME}`,
     ),
   );
   const callsBefore = docker.calls.length;
@@ -423,6 +477,79 @@ test('a missing saved database blocks minimal rollback without deleting current 
       .slice(callsBefore)
       .some(([action]) => ['stop', 'remove'].includes(action)),
   );
+});
+
+test('a corrupt compressed backup blocks rollback before touching healthy services or live data', async (t) => {
+  const { updater, root, docker } = await fixture(t);
+  await begin(updater);
+  const path = join(
+    updater.directory,
+    updater.current.id,
+    'backup',
+    BACKUP_ARCHIVE_NAME,
+  );
+  const bytes = await readFile(path);
+  bytes[0] ^= 1;
+  await writeFile(path, bytes);
+  await writeFile(join(root, 'home/database'), 'current-data');
+  const before = docker.calls.length;
+  await updater.requestRollback({
+    operationId: updater.current.id,
+    confirmation: 'ROLLBACK_WITH_DATA_RESTORE',
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'recoveryRequired');
+  assert.equal(updater.current.error, 'updateBackupArchiveCorrupt');
+  assert.equal(
+    await readFile(join(root, 'home/database'), 'utf8'),
+    'current-data',
+  );
+  assert.ok(
+    !docker.calls
+      .slice(before)
+      .some(([action]) => ['stop', 'remove'].includes(action)),
+  );
+  await assert.rejects(
+    lstat(join(updater.directory, updater.current.id, 'restore-input')),
+    { code: 'ENOENT' },
+  );
+});
+
+test('compressed backups report exact file size without recursive statistics and reject unknown formats', async (t) => {
+  const { updater } = await fixture(t);
+  await begin(updater);
+  updater.measureBackupSize = () =>
+    assert.fail('compressed size must be obtained without scanning');
+  const list = await updater.listBackups();
+  assert.equal(list.sizesCalculating, false);
+  assert.equal(list.backups[0].format, 'tar-gzip-v1');
+  assert.equal(list.totalSizeBytes, updater.current.backupArchive.bytes);
+  updater.current.backupArchive.format = 'unknown';
+  const unsafe = await updater.listBackups();
+  assert.equal(unsafe.backups[0].canDelete, false);
+  assert.equal(unsafe.backups[0].restorable, false);
+});
+
+test('recovery discards a crashed extraction, restores the archive and removes scratch without removing the archive', async (t) => {
+  const { updater, root, options } = await fixture(t);
+  await begin(updater);
+  const base = join(updater.directory, updater.current.id);
+  await mkdir(join(base, 'restore-input/home'), { recursive: true });
+  await writeFile(
+    join(base, 'restore-input/home/database'),
+    'untrusted-partial',
+  );
+  await chmod(join(base, 'restore-input/home'), 0o500);
+  await writeFile(join(root, 'home/database'), 'migrated');
+  updater.current.committed = false;
+  updater.current.status = 'running';
+  await updater.save('rollingBack');
+  const recovered = new TransactionalUpdater(options);
+  await recovered.recover();
+  assert.equal(recovered.current.status, 'rolledBack');
+  assert.equal(await readFile(join(root, 'home/database'), 'utf8'), 'original');
+  await assert.rejects(lstat(join(base, 'restore-input')), { code: 'ENOENT' });
+  assert.ok((await lstat(join(base, 'backup', BACKUP_ARCHIVE_NAME))).isFile());
 });
 
 test(
@@ -957,7 +1084,7 @@ test('production backs up essential state, never regenerable trees, and restores
     await writeFile(join(root, name), name, { mode: 0o600 });
   }
   await begin(updater);
-  const backup = join(updater.directory, updater.current.id, 'backup');
+  const backup = await inspectBackup(t, updater);
   assert.equal(updater.current.backupPolicy, 'production-essential-v1');
   for (const name of keep)
     assert.equal(await readFile(join(backup, name), 'utf8'), name);
@@ -1000,7 +1127,7 @@ test('recovery of a historical full backup still restores logs and caches under 
   const { root, updater, options } = await fixture(t);
   await writeFile(join(root, 'logs/previous.log'), 'old-log');
   await begin(updater);
-  const backup = join(updater.directory, updater.current.id, 'backup');
+  const backup = await legacyBackup(t, updater);
   await copyPersistentTree(join(root, 'logs'), join(backup, 'logs'));
   await mkdir(join(backup, 'home/.cache'));
   await writeFile(join(backup, 'home/.cache/historical'), 'old-cache');
@@ -1153,7 +1280,7 @@ test('lists dated backups without transaction secrets and deletes only the selec
   assert.equal(list.backups.length, 2);
   assert.equal(
     list.backups[0].path,
-    join(options.directory, list.backups[0].id, 'backup'),
+    join(options.directory, list.backups[0].id, 'backup', BACKUP_ARCHIVE_NAME),
   );
   assert.ok(
     list.backups.every(
@@ -1194,7 +1321,7 @@ test('deletes read-only backup directories without following links or changing l
   const { root, updater, options } = await fixture(t);
   await begin(updater);
   const id = updater.current.id;
-  const backup = join(options.directory, id, 'backup');
+  const backup = await legacyBackup(t, updater);
   await link(join(root, 'home/database'), join(backup, 'home/live-hardlink'));
   await symlink(join(root, 'home'), join(backup, 'home/live-directory'));
   const original = await lstat(join(root, 'home/database'));
@@ -1220,7 +1347,7 @@ test('deletes read-only backup directories without following links or changing l
 test('measures allocated backup blocks without following links or counting hardlinks twice', async (t) => {
   const { root, updater, options } = await fixture(t);
   await begin(updater);
-  const directory = join(options.directory, updater.current.id, 'backup');
+  const directory = await legacyBackup(t, updater);
   const sparse = join(directory, 'sparse');
   await writeFile(sparse, '');
   await truncate(sparse, 32 * 1024 * 1024);
@@ -1242,12 +1369,13 @@ test('does not invent a server path when the host mount cannot be verified', asy
   updater.configuration.hostStatePath = '/unavailable-host-state';
   const result = await updater.listBackups();
   assert.equal(result.backups[0].path, null);
-  assert.ok(result.backups[0].managerPath.endsWith('/backup'));
+  assert.ok(result.backups[0].managerPath.endsWith('/backup/backup.tar.gz'));
 });
 
 test('finishes slow size scans in background without blocking or restarting on repeated lists', async (t) => {
   const { updater } = await fixture(t);
   await begin(updater);
+  await legacyBackup(t, updater);
   let finish;
   let calls = 0;
   updater.measureBackupSize = () => {
@@ -1274,7 +1402,9 @@ test('finishes slow size scans in background without blocking or restarting on r
 test('a failed size scan does not starve the following backups', async (t) => {
   const { updater } = await fixture(t);
   await begin(updater);
+  await legacyBackup(t, updater);
   await begin(updater);
+  await legacyBackup(t, updater);
   let calls = 0;
   updater.measureBackupSize = async () => {
     if (++calls === 1) throw new Error('read denied');
@@ -1299,6 +1429,7 @@ test('a failed size scan does not starve the following backups', async (t) => {
 test('completed sizes survive a Manager restart without scanning backup contents or changing journals', async (t) => {
   const { updater, options } = await fixture(t);
   await begin(updater);
+  await legacyBackup(t, updater);
   const journal = join(options.directory, 'transaction.json');
   const before = await readFile(journal, 'utf8');
   updater.measureBackupSize = async () => 12345;
@@ -1321,6 +1452,7 @@ test('completed sizes survive a Manager restart without scanning backup contents
 test('invalid cached metadata is ignored and regenerated from the exact backup', async (t) => {
   const { updater, options } = await fixture(t);
   await begin(updater);
+  await legacyBackup(t, updater);
   const path = join(options.directory, updater.current.id, 'backup-size.json');
   await writeFile(
     path,
@@ -1341,6 +1473,7 @@ test('invalid cached metadata is ignored and regenerated from the exact backup',
 test('size queue yields to an update and retries later without caching partial results', async (t) => {
   const { updater, options } = await fixture(t);
   await begin(updater);
+  await legacyBackup(t, updater);
   let entered;
   let resume;
   const scanning = new Promise((resolve) => {

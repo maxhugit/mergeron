@@ -32,6 +32,60 @@ Une base restaurée sans ces fichiers peut référencer des documents inexistant
 
 ## Politique des mises à jour du Manager
 
+### Format des nouvelles sauvegardes
+
+Lorsqu’une mise à jour inclut une sauvegarde, le Manager crée désormais une
+archive standard **tar + gzip** :
+`STATE_ROOT/manager-state/updates/<transaction>/backup/backup.tar.gz`.
+Le choix du périmètre ci-dessous ne change pas. **Aucune sauvegarde** ne crée
+toujours ni archive ni inventaire récursif des données.
+
+La compression utilise le niveau rapide de gzip et fonctionne en flux : aucun
+chargement complet en RAM ni copie non compressée intermédiaire des données.
+L’archive est écrite dans un fichier temporaire exclusif, synchronisée sur disque,
+avec des synchronisations intermédiaires bornant les écritures sales en mémoire,
+relue pour vérifier son SHA-256, puis publiée par renommage durable. La transaction
+n’annonce la sauvegarde complète qu’après ces étapes, avant de remplacer les
+conteneurs. Un échec laisse les données actives intactes et remet les anciens
+conteneurs en marche.
+
+L’archive conserve les chemins Unicode, les permissions Unix ordinaires, les
+UID/GID, les dates et les liens, sans suivre les liens symboliques. Les fichiers
+spéciaux non pris en charge sont refusés et les sockets transitoires ignorés,
+comme précédemment. La taille affichée est celle du fichier **compressé**, pas
+une estimation de son contenu décompressé. Le gain dépend des données : des
+documents déjà compressés peuvent peu diminuer, voire légèrement grossir.
+
+La compression n’est pas un chiffrement. L’archive reste privée (`0600`) sous
+un dossier du Manager réservé (`0700`) ; elle peut contenir des secrets.
+La rétention et les confirmations de suppression restent inchangées.
+
+### Restauration et compatibilité
+
+Le journal enregistre le format `tar-gzip-v1`, les tailles, le nombre d’entrées
+et le SHA-256. Avant de toucher aux données actives ou aux conteneurs sains, la
+restauration décompresse dans un espace privé temporaire, vérifie le flux complet,
+ses limites et son empreinte, puis contrôle le périmètre enregistré. Elle refuse
+notamment les chemins absolus ou traversants, les doublons, les écritures sous
+un lien symbolique et les types de fichiers interdits.
+
+Le mécanisme existant de préparation durable, de remplacement et de quarantaine
+s’applique ensuite aux éléments validés. Une reprise après interruption recrée
+l’entrée temporaire depuis l’archive ; une extraction partielle n’est jamais
+acceptée comme une sauvegarde complète. Le temporaire est supprimé ensuite.
+L’espace libre est vérifié sans supposer un taux de compression favorable :
+une restauration doit pouvoir accueillir les fichiers décompressés et leur
+préparation. Les protections Linux restent actives, sans nouveau privilège.
+
+Les anciennes sauvegardes en répertoires restent lisibles et restaurables ; elles
+ne sont ni converties ni réécrites automatiquement. Leur éventuelle suppression
+suit toujours la rétention configurée, pas une migration de format. Un journal
+qui annonce un format inconnu bloque la restauration, sans repli implicite vers
+un répertoire. Utiliser un Manager prenant en charge ce format pour restaurer
+une nouvelle archive, y compris lors d’un retour à une ancienne application.
+
+### Choix du périmètre
+
 Dans **Serveur → Mise à jour**, le champ **Sauvegarde avant cette mise à jour**
 propose trois options en Dev comme en production. Le choix concerne la pile
 ouverte, jamais l’autre environnement. Il s’applique aussi à une mise à jour
