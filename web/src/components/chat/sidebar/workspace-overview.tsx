@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import {
   Popover,
   PopoverContent,
@@ -52,6 +53,8 @@ function ThreadSkeleton() {
 }
 
 interface Props {
+  onToggleProjectCache?: (projectId: string) => void;
+  projectCachePending?: boolean;
   projectsHeader: React.ReactNode;
   workspaceGroups: WorkspaceGroup[];
   collapsedGroups: Set<string>;
@@ -85,6 +88,8 @@ interface Props {
 }
 
 export function WorkspaceOverview({
+  onToggleProjectCache,
+  projectCachePending = false,
   projectsHeader,
   workspaceGroups,
   collapsedGroups,
@@ -212,24 +217,10 @@ export function WorkspaceOverview({
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="w-56 p-1">
-                    {group.projectId && (
-                      <Button
-                        variant="ghost"
-                        className="h-auto min-h-8 w-full justify-start gap-2 whitespace-normal px-2 text-left text-xs"
-                        onClick={() => {
-                          toggleProjectCache(group.projectId!);
-                          setOpenMenu(null);
-                        }}
-                      >
-                        <Gauge className="h-3.5 w-3.5 shrink-0" />
-                        {tw(
-                          cachedProjectId === group.projectId
-                            ? 'agentCacheDisable'
-                            : 'agentCacheEnable',
-                        )}
-                      </Button>
-                    )}
+                  <PopoverContent
+                    align="end"
+                    className="w-max min-w-56 max-w-[calc(100vw-1rem)] p-1"
+                  >
                     <Button
                       variant="ghost"
                       className="h-8 w-full justify-start gap-2 px-2 text-xs"
@@ -311,6 +302,30 @@ export function WorkspaceOverview({
                         <Download className="h-3.5 w-3.5" />
                         {t('projectArchiveExport')}
                       </Button>
+                    )}
+                    {group.projectId && (
+                      <>
+                        <Separator className="my-1" />
+                        <Button
+                          variant="ghost"
+                          disabled={projectCachePending}
+                          className="h-8 w-full justify-start gap-2 whitespace-nowrap px-2 text-left text-xs"
+                          onClick={() => {
+                            (onToggleProjectCache ?? toggleProjectCache)(
+                              group.projectId!,
+                            );
+                            setOpenMenu(null);
+                          }}
+                        >
+                          <Gauge className="h-3.5 w-3.5 shrink-0" />
+                          {tw(
+                            cachedProjectId === group.projectId
+                              ? 'agentCacheDisable'
+                              : 'agentCacheEnable',
+                          )}
+                        </Button>
+                        <Separator className="my-1" />
+                      </>
                     )}
                     <Button
                       variant="ghost"

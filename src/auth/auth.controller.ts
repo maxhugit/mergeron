@@ -115,7 +115,12 @@ export class AuthController {
   @Get('me')
   @Header('Cache-Control', 'no-store')
   me(@Req() request: IdentityRequest) {
-    return request.platformIdentity ?? this.identities.resolve(request.headers);
+    const identity =
+      request.platformIdentity ?? this.identities.resolve(request.headers);
+    return {
+      ...identity,
+      fastNavigationProjectId: this.identities.navigationProject(identity),
+    };
   }
 
   @Post('impersonation')
@@ -174,7 +179,12 @@ export class AuthController {
   @Patch('preferences')
   preferences(
     @Req() request: IdentityRequest,
-    @Body() body: { theme?: unknown; language?: unknown },
+    @Body()
+    body: {
+      theme?: unknown;
+      language?: unknown;
+      fastNavigationProjectId?: unknown;
+    },
   ) {
     const identity =
       request.platformIdentity ?? this.identities.resolve(request.headers);

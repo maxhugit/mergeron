@@ -22,6 +22,7 @@ import { currentAccess } from './access-context';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   people,
+  personNavigationPreferences,
   projects,
   projectWorkspaces,
   projectResources,
@@ -379,7 +380,11 @@ export class IdentityService {
 
   updatePreferences(
     identity: PlatformIdentity,
-    input: { theme?: unknown; language?: unknown },
+    input: {
+      theme?: unknown;
+      language?: unknown;
+      fastNavigationProjectId?: unknown;
+    },
   ) {
     this.requireActive(identity);
     if (!identity.personId)
@@ -404,6 +409,28 @@ export class IdentityService {
         !/^[a-z]{2,3}$/.test(input.language))
     )
       throw new BadRequestException('Unsupported language');
+    const hasNavigation = Object.hasOwn(input, 'fastNavigationProjectId');
+    const projectId = input.fastNavigationProjectId;
+    if (hasNavigation) {
+      if (
+        projectId !== null &&
+        (typeof projectId !== 'string' ||
+          !projectId.trim() ||
+          projectId.length > 128)
+      )
+        throw new BadRequestException('Invalid navigation project');
+      if (typeof projectId === 'string') {
+        this.requireProject(identity, projectId);
+        if (
+          !this.db
+            .select({ id: projects.id })
+            .from(projects)
+            .where(eq(projects.id, projectId))
+            .get()
+        )
+          throw new BadRequestException('Unavailable navigation project');
+      }
+    }
     const updates = {
       ...(typeof input.theme === 'string' ? { theme: input.theme } : {}),
       ...(typeof input.language === 'string'
@@ -411,17 +438,52 @@ export class IdentityService {
         : {}),
       updatedAt: Date.now(),
     };
-    this.db
-      .update(people)
-      .set(updates)
-      .where(eq(people.id, identity.personId))
-      .run();
+    this.db.transaction(() => {
+      this.db
+        .update(people)
+        .set(updates)
+        .where(eq(people.id, identity.personId!))
+        .run();
+      if (hasNavigation) {
+        const value = {
+          personId: identity.personId!,
+          fastNavigationProjectId: projectId as string | null,
+        };
+        this.db
+          .insert(personNavigationPreferences)
+          .values(value)
+          .onConflictDoUpdate({
+            target: personNavigationPreferences.personId,
+            set: { fastNavigationProjectId: value.fastNavigationProjectId },
+          })
+          .run();
+      }
+    });
     const person = this.db
       .select()
       .from(people)
       .where(eq(people.id, identity.personId))
       .get();
-    return { theme: person!.theme, language: person!.language };
+    return {
+      theme: person!.theme,
+      language: person!.language,
+      ...(hasNavigation
+        ? { fastNavigationProjectId: this.navigationProject(identity) }
+        : {}),
+    };
+  }
+
+  navigationProject(identity: PlatformIdentity): string | null {
+    if (identity.kind !== 'person' || !identity.personId || !identity.active)
+      return null;
+    const projectId = this.db
+      .select()
+      .from(personNavigationPreferences)
+      .where(eq(personNavigationPreferences.personId, identity.personId))
+      .get()?.fastNavigationProjectId;
+    return projectId && this.canReadProject(identity, projectId)
+      ? projectId
+      : null;
   }
 
   requireActive(identity: PlatformIdentity) {

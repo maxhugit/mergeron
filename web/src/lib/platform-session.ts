@@ -20,6 +20,7 @@ export interface PlatformSession {
   email?: string;
   theme?: string;
   language?: string;
+  fastNavigationProjectId?: string | null;
   impersonation?: {
     sessionId: string;
     administratorId: string;

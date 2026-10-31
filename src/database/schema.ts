@@ -561,6 +561,20 @@ export const people = sqliteTable('people', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+/** Personal navigation choices, never included in shared people/project exports. */
+export const personNavigationPreferences = sqliteTable(
+  'person_navigation_preferences',
+  {
+    personId: text('person_id')
+      .primaryKey()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    fastNavigationProjectId: text('fast_navigation_project_id').references(
+      () => projects.id,
+      { onDelete: 'set null' },
+    ),
+  },
+);
+
 /** Local credentials are optional and kept separate from the person profile. */
 export const localAuthCredentials = sqliteTable(
   'local_auth_credentials',

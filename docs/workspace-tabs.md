@@ -33,8 +33,19 @@ retain data, view descriptors, and semantic reading bookmarks.
 
 The project context menu can opt one project into fast navigation. The speed
 indicator beside its name identifies the active project; enabling another project
-replaces it. This preference is tab-local, deliberately not stored on disk or
-shared across users. Reloading or closing the tab resets it.
+replaces it. The one-line action sits immediately before Delete project, between
+separators. The choice is saved on the connected person’s profile through
+`PATCH /api/auth/preferences` (`fastNavigationProjectId`, null to disable), then
+restored by `GET /api/auth/me`. Reloads and other devices signed into the same
+account restore it; different people have independent choices. Service sessions
+without a person profile cannot save this preference.
+
+The dedicated `person_navigation_preferences` table is excluded from shared
+people/project exports. Writes verify project access; reads do not activate an
+inaccessible project, and deletion clears its reference. The client applies only
+an acknowledged save for the same verified identity. Errors retain the previous
+choice without retries. Only the choice is durable: cached views and drafts stay
+in tab memory; no history or credential is persisted by this preference.
 
 `AgentWorkspaceHost`, outside the route outlet, retains up to five recently
 visited agent workspaces from that project in an LRU. It never preloads the entire
@@ -74,7 +85,7 @@ identity or the remembered desktop width. The left navigation is unchanged.
 | `terminal-store`                                | Shared metadata, typed operations, creation-free discovery and presented-only recovery                             |
 | `terminal-view-store` / `TerminalHost`          | Local retained attachments and the currently visible presentation rectangle                                        |
 | `timeline-store` and its action modules         | Conversation-scoped history, opening, submission, execution and pending decisions                                  |
-| `agent-view-cache-store` / `AgentWorkspaceHost` | Tab-local project opt-in and bounded recent-view retention                                                         |
+| `agent-view-cache-store` / `AgentWorkspaceHost` | Profile-backed project choice; memory-only bounded recent-view retention                                           |
 | `composer-draft-store`                          | Memory-only text and attachment references keyed by conversation; independent of view eviction                     |
 | `transcript-anchor`                             | In-memory reading bookmarks independent of runtime-cache eviction                                                  |
 
