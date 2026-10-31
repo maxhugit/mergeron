@@ -11,6 +11,19 @@ import { Button } from '@/components/ui/button';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({ isAdministrator: true }),
+}));
+vi.mock('@/hooks/use-thread-execution-preferences', () => ({
+  useThreadExecutionPreferences: () => ({
+    preferences: undefined,
+    busy: false,
+    error: false,
+    save: vi.fn(),
+    retry: vi.fn(),
+  }),
+}));
+
 vi.mock('@/hooks/use-active-model', () => ({
   useActiveModel: () => ({
     models: [],

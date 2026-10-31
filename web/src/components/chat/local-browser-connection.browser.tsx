@@ -12,6 +12,7 @@ import { page } from 'vitest/browser';
 import { LocalBrowserSidebar } from './local-browser-sidebar';
 import { WorkspaceControls } from './workspace-controls';
 import { useChatAttachments } from '@/hooks/use-chat-attachments';
+import { useComposerDraftStore } from '@/stores/composer-draft-store';
 import { i18nReady } from '@/i18n';
 import i18n from '@/i18n';
 import '@/index.css';
@@ -84,6 +85,7 @@ export function Fixture() {
 }
 
 beforeEach(async () => {
+  useComposerDraftStore.setState({ drafts: {}, forgotten: new Set() });
   await i18nReady;
   await i18n.changeLanguage('en');
   mocks.annotation = false;

@@ -17,6 +17,8 @@ import { useCurrentProject } from '@/hooks/use-current-project';
 import { catalogCopy } from '@/lib/catalog-copy';
 import { useModelStore, type ReasoningEffort } from '@/stores/model-store';
 import { useTimelineStore } from '@/stores/timeline-store';
+import { useThreadExecutionPreferences } from '@/hooks/use-thread-execution-preferences';
+import { usePlatformSession } from '@/lib/platform-session';
 import { OptionRow } from './option-row';
 
 /**
@@ -47,12 +49,20 @@ function modelLabel(model: ModelDto): string {
 
 /** Displays model picker and reasoning effort selector. */
 export function ModelSelector() {
-  const { t } = useTranslation();
-  const effortOverride = useModelStore((s) => s.effortOverride);
+  const { t } = useTranslation(['common', 'workspaces'], {
+    nsMode: 'fallback',
+  });
+  const { isAdministrator } = usePlatformSession();
   const setModelOverride = useModelStore((s) => s.setModelOverride);
   const setEffortOverride = useModelStore((s) => s.setEffortOverride);
   const setServiceTierOverride = useModelStore((s) => s.setServiceTierOverride);
   const selectedThreadId = useTimelineStore((s) => s.threadId);
+  const preferences = useThreadExecutionPreferences(selectedThreadId);
+  const effortOverride = useModelStore((s) =>
+    selectedThreadId
+      ? s.preferencesByThread[selectedThreadId]?.effort
+      : s.effortOverride,
+  );
   const observedEffort = useModelStore((s) =>
     selectedThreadId ? s.observedEffortByThread[selectedThreadId] : null,
   );
@@ -73,7 +83,7 @@ export function ModelSelector() {
   // this thread, which is how Plan mode's imposed effort becomes visible.
   const activeEffort =
     effortOverride ??
-    observedEffort ??
+    (preferences.preferences?.effort === null ? null : observedEffort) ??
     activeModel?.defaultReasoningEffort ??
     null;
 
@@ -82,6 +92,19 @@ export function ModelSelector() {
     : (activeModelId ?? t('default'));
   const displayEffort = activeEffort ?? '';
 
+  if (preferences.error && !preferences.preferences) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        title={t('agentSettingsLoadFailed')}
+        aria-label={t('agentSettingsLoadFailed')}
+        onClick={preferences.retry}
+      >
+        {t('tryAgain')}
+      </Button>
+    );
+  }
   if (project) {
     const allModels = [...models, ...hiddenModels];
     const configuredModel = allModels.find(
@@ -107,14 +130,37 @@ export function ModelSelector() {
         <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
           {projectModel}
         </span>
-        <span className="text-muted-foreground">
-          · {projectEffort}
-        </span>
+        <span className="text-muted-foreground">· {projectEffort}</span>
       </Button>
     );
   }
 
+  if (!isAdministrator) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-7 cursor-default gap-1 rounded-lg px-2 text-xs"
+        title={t('modelAdminOnly')}
+        aria-label={`${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
+        aria-readonly="true"
+      >
+        <Bot className="h-3.5 w-3.5" />
+        <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
+          {displayModel}
+        </span>
+        {displayEffort && (
+          <span className="text-muted-foreground">· {displayEffort}</span>
+        )}
+      </Button>
+    );
+  }
   const handleModelSelect = (model: ModelDto) => {
+    if (selectedThreadId) {
+      preferences.save({ model: model.model });
+      return;
+    }
     if (model.model === configModel) {
       setModelOverride(null);
     } else {
@@ -128,6 +174,10 @@ export function ModelSelector() {
   };
 
   const handleEffortSelect = (effort: ReasoningEffort) => {
+    if (selectedThreadId) {
+      preferences.save({ effort });
+      return;
+    }
     if (effort === activeModel?.defaultReasoningEffort) {
       setEffortOverride(null);
     } else {
@@ -143,6 +193,7 @@ export function ModelSelector() {
           size="sm"
           className="h-7 gap-1 rounded-lg px-2 text-xs"
           title={`${t('modelReasoningEffort')} : ${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
+          disabled={preferences.busy && !preferences.error}
           aria-label={`${t('modelReasoningEffort')} : ${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
         >
           <Bot className="h-3.5 w-3.5" />
@@ -150,9 +201,7 @@ export function ModelSelector() {
             {displayModel}
           </span>
           {displayEffort && (
-            <span className="text-muted-foreground">
-              · {displayEffort}
-            </span>
+            <span className="text-muted-foreground">· {displayEffort}</span>
           )}
           <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[640px]/composer:block" />
         </Button>
@@ -163,6 +212,12 @@ export function ModelSelector() {
         side="top"
         className="w-80 space-y-3 p-3 text-sm"
       >
+        {preferences.error && (
+          <p role="alert" className="text-xs text-destructive">
+            {t('agentSettingsLoadFailed', { ns: 'workspaces' })}
+            <button onClick={preferences.retry}>{t('tryAgain')}</button>
+          </p>
+        )}
         {/* Model list */}
         <div className="space-y-1">
           <div className="text-xs font-medium text-muted-foreground">

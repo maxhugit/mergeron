@@ -12,6 +12,15 @@ const state = vi.hoisted(() => ({
       },
 }));
 vi.mock('@/hooks/use-active-model', () => ({ useActiveModel: () => state }));
+vi.mock('@/hooks/use-thread-execution-preferences', () => ({
+  useThreadExecutionPreferences: () => ({
+    preferences: undefined,
+    busy: false,
+    error: false,
+    save: vi.fn(),
+    retry: vi.fn(),
+  }),
+}));
 afterEach(() => {
   cleanup();
   useModelStore.getState().clearOverrides();

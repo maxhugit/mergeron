@@ -144,6 +144,9 @@ jobs:
           src/threads/project-connection-runtime.service.spec.ts
           src/threads/thread-history.service.spec.ts
           src/threads/threads.service.spec.ts
+          src/threads/thread-execution-preferences.spec.ts
+          src/threads/thread-security-policy.controller.spec.ts
+          src/threads/thread-settings-observer.service.spec.ts
           src/settings/agent-instructions.service.spec.ts
           src/settings/settings.service.spec.ts
           src/codex/catalog/catalog-admission.service.spec.ts

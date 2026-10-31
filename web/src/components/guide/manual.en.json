@@ -381,7 +381,7 @@
             "actions": [
               {
                 "label": "Model and reasoning",
-                "effect": "Choose an available model and reasoning effort. Higher effort does not grant permissions and may increase duration and usage."
+                "effect": "An administrator can choose the model and effort; project-defined values take precedence. Higher effort does not grant permissions and may increase duration and usage."
               },
               {
                 "label": "Permissions and approvals",
@@ -391,6 +391,13 @@
                 "label": "Capabilities",
                 "effect": "Review session options, available integrations and technical-detail display."
               }
+            ]
+          },
+          {
+            "title": "Settings saved on the agent",
+            "paragraphs": [
+              "Chosen model, effort, speed, approval and sandbox settings survive reloads and restarts on this agent. They are shared by its authorized users, not personal preferences. Other agents retain their own choices.",
+              "Changes apply to subsequent requests without changing running work. Permissions are saved only after engine confirmation. Saved and Current are distinct: the next request reapplies the saved choice subject to project, Git copy and document protections. A failed save requires an explicit selection again."
             ]
           },
           {

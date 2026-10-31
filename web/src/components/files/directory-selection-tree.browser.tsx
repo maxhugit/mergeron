@@ -7,7 +7,7 @@ import { page, userEvent } from 'vitest/browser';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DirectorySelectionTree } from './directory-selection-tree';
 import '@/index.css';
-import '@/i18n';
+import i18n, { i18nReady } from '@/i18n';
 
 const api = vi.hoisted(() => ({
   entries: [] as Array<{ path: string; name: string; type: 'directory' }>,
@@ -50,7 +50,9 @@ export function Picker() {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18nReady;
+  await i18n.changeLanguage('en');
   api.entries = [];
   api.create.mockReset();
   api.create.mockImplementation(({ body }: { body: { path: string } }) => {

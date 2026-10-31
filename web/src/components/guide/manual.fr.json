@@ -408,7 +408,7 @@
             "actions": [
               {
                 "label": "Modèle et raisonnement",
-                "effect": "Choisir un modèle disponible et son effort de raisonnement. Un effort plus élevé n’est pas une autorisation supplémentaire et peut augmenter durée et consommation."
+                "effect": "Un administrateur peut choisir le modèle et l’effort ; dans un projet, les valeurs définies par celui-ci sont prioritaires. Un effort plus élevé n’ajoute pas de permissions et peut augmenter durée et consommation."
               },
               {
                 "label": "Permissions et approbations",
@@ -418,6 +418,13 @@
                 "label": "Capacités",
                 "effect": "Consulter les options de la session, les intégrations disponibles et l’affichage des détails techniques."
               }
+            ]
+          },
+          {
+            "title": "Réglages mémorisés sur l’agent",
+            "paragraphs": [
+              "Le modèle, l’effort, la vitesse, les approbations et le bac à sable choisis sont conservés sur cet agent après rechargement ou redémarrage. Ces choix sont communs à ses utilisateurs autorisés, pas personnels. Les autres agents gardent leurs propres réglages.",
+              "Les changements s’appliquent aux prochaines demandes, sans modifier le travail en cours. Les permissions ne sont enregistrées qu’après confirmation du moteur. Le menu distingue Enregistré et Actuel : le prochain envoi réapplique le choix enregistré, sous réserve des protections du projet, des copies Git et des documents. Un échec d’enregistrement demande une nouvelle sélection explicite."
             ]
           },
           {

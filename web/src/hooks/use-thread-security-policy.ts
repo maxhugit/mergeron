@@ -19,7 +19,8 @@
  * timers gave one selection two competing deadlines.
  */
 import { useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { executionPreferenceKey } from '@/lib/thread-execution-preferences';
 import { threadSecurityPolicyPatchSecurityPolicyMutation } from '@/generated/api/@tanstack/react-query.gen';
 import type {
   PatchThreadSecurityPolicyDto,
@@ -67,6 +68,7 @@ export function useThreadSecurityPolicy(
   const clearPolicy = useThreadPolicyStore((s) => s.clearPolicy);
 
   const patch = useMutation(threadSecurityPolicyPatchSecurityPolicyMutation());
+  const client = useQueryClient();
 
   // One read on first sight of a conversation. After that the live path is
   // `thread/settings/updated`, the only event reporting a change made anywhere
@@ -103,7 +105,12 @@ export function useThreadSecurityPolicy(
     apply: (body) => {
       if (!threadId) return;
       void applyThreadPolicy(threadId, body, () =>
-        patch.mutateAsync({ path: { threadId }, body }),
+        patch.mutateAsync({ path: { threadId }, body }).then(async (result) => {
+          await client.invalidateQueries({
+            queryKey: executionPreferenceKey(threadId),
+          });
+          return result;
+        }),
       );
     },
   };

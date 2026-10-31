@@ -19,6 +19,7 @@ import { ProjectAgentToolsService } from '../project-knowledge/project-agent-too
 import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
 import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
+import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
 
 /** Branch state as the local-only service reports it for an untracked thread. */
 function localBranchState(threadId: string) {
@@ -93,6 +94,7 @@ describe('ThreadsService', () => {
   const mockAgentDefaults = { forNewAgent: vi.fn() };
   const mockInternalMcp = { prepare: vi.fn(), revoke: vi.fn() };
   const mockSettings = { readSecurityPolicy: vi.fn() };
+  const mockPreferences = { forTurn: vi.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -103,6 +105,10 @@ describe('ThreadsService', () => {
         { provide: ProjectAgentDefaultsService, useValue: mockAgentDefaults },
         { provide: InternalMcpService, useValue: mockInternalMcp },
         { provide: ThreadSettingsObserverService, useValue: mockSettings },
+        {
+          provide: ThreadExecutionPreferencesService,
+          useValue: mockPreferences,
+        },
         ThreadsService,
         { provide: CodexService, useValue: mockCodex },
         { provide: ThreadResumeRegistryService, useValue: mockResumeRegistry },
@@ -131,6 +137,7 @@ describe('ThreadsService', () => {
     }).compile();
 
     service = module.get(ThreadsService);
+    mockPreferences.forTurn.mockReset().mockReturnValue({});
     mockCodex.request.mockReset();
     mockInternalMcp.prepare.mockReset().mockReturnValue(null);
     mockInternalMcp.revoke.mockReset();
@@ -196,6 +203,70 @@ describe('ThreadsService', () => {
     expect(mockMetadata.publishStartedThread).toHaveBeenCalledWith(
       response.thread,
     );
+  });
+
+  it('restores durable agent choices for the next turn without changing an already-running request', async () => {
+    mockPreferences.forTurn.mockReturnValue({
+      model: 'saved-model',
+      effort: 'high',
+      serviceTier: null,
+      approvalPolicy: 'never',
+      sandboxPolicy: { type: 'dangerFullAccess' },
+    });
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+    await service.startTurn({ threadId: 't1', input: [] });
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        model: 'saved-model',
+        effort: 'high',
+        serviceTier: null,
+        approvalPolicy: 'never',
+        sandboxPolicy: { type: 'dangerFullAccess' },
+      }),
+    );
+    mockPreferences.forTurn.mockReturnValue({ effort: 'low' });
+    expect(mockCodex.request).toHaveBeenCalledTimes(1);
+    await service.startTurn({ threadId: 't1', input: [], effort: 'medium' });
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'turn/start',
+      expect.objectContaining({ effort: 'medium' }),
+    );
+  });
+
+  it('keeps project model and read-only restrictions above saved agent choices', async () => {
+    mockPreferences.forTurn.mockReturnValue({
+      model: 'saved-model',
+      effort: 'high',
+      sandboxPolicy: { type: 'dangerFullAccess' },
+    });
+    mockProjectConnections.policyForCwd.mockResolvedValue({
+      projectId: 'p',
+      config: {},
+      readOnly: true,
+      model: 'project-model',
+      reasoningEffort: 'low',
+    });
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+    await service.startTurn({ threadId: 't1', input: [] });
+    expect(mockCodex.request).toHaveBeenLastCalledWith(
+      'turn/start',
+      expect.objectContaining({
+        model: 'project-model',
+        effort: 'low',
+        sandboxPolicy: { type: 'readOnly', networkAccess: false },
+      }),
+    );
+  });
+
+  it('does not dispatch any RPC if permission persistence is unconfirmed or failed', async () => {
+    mockPreferences.forTurn.mockImplementation(() => {
+      throw new Error('Agent permissions awaiting confirmation');
+    });
+    await expect(
+      service.startTurn({ threadId: 't1', input: [] }),
+    ).rejects.toThrow('awaiting confirmation');
+    expect(mockCodex.request).not.toHaveBeenCalled();
   });
 
   it('merges global starting defaults with project tools without rewriting explicit approvals or affecting existing turns', async () => {
