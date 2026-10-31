@@ -1,19 +1,28 @@
-/** Tab-local opt-in: one project, at most five recently visited agent views. */
+/** Profile-backed project choice; retained agent views are memory-only. */
 import { create } from 'zustand';
 
 export const MAX_CACHED_AGENT_VIEWS = 5;
 interface AgentViewCacheState {
+  owner: string | null;
   projectId: string | null;
   /** Most recently visited last. No transcript or credential is persisted. */
   threadIds: string[];
   toggleProject: (projectId: string) => void;
+  restorePreference: (owner: string | null, projectId: string | null) => void;
   visit: (projectId: string, threadId: string) => void;
   forget: (threadIds: readonly string[]) => void;
   clear: () => void;
 }
 export const useAgentViewCacheStore = create<AgentViewCacheState>((set) => ({
+  owner: null,
   projectId: null,
   threadIds: [],
+  restorePreference: (owner, projectId) =>
+    set((state) =>
+      state.owner === owner && state.projectId === projectId
+        ? state
+        : { owner, projectId, threadIds: [] },
+    ),
   toggleProject: (projectId) =>
     set((state) => ({
       projectId: state.projectId === projectId ? null : projectId,
@@ -34,5 +43,5 @@ export const useAgentViewCacheStore = create<AgentViewCacheState>((set) => ({
     set((state) => ({
       threadIds: state.threadIds.filter((id) => !ids.includes(id)),
     })),
-  clear: () => set({ projectId: null, threadIds: [] }),
+  clear: () => set({ owner: null, projectId: null, threadIds: [] }),
 }));

@@ -63,6 +63,7 @@ import { ForkGoalDialog } from './sidebar/fork-goal-dialog';
 import { CreateProjectDialog } from './sidebar/create-project-dialog';
 import { ProjectArchiveExportDialog } from '@/components/projects/project-archive-transfer';
 import { usePlatformSession } from '@/lib/platform-session';
+import { useProjectNavigationPreference } from '@/hooks/use-project-navigation-preference';
 import { useForkWithGoal } from '@/hooks/use-fork-with-goal';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
@@ -129,6 +130,7 @@ function useActiveView():
 
 export function ThreadSidebar() {
   const session = usePlatformSession();
+  const navigationPreference = useProjectNavigationPreference();
   const [exportProjectId, setExportProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
   const activeView = useActiveView();
@@ -1104,6 +1106,10 @@ export function ThreadSidebar() {
           {sidebarView.type !== 'overview' && projectsHeader}
           {sidebarView.type === 'overview' ? (
             <WorkspaceOverview
+              onToggleProjectCache={navigationPreference.toggle}
+              projectCachePending={
+                navigationPreference.pending || !navigationPreference.available
+              }
               projectsHeader={projectsHeader}
               workspaceGroups={workspaceGroups}
               collapsedGroups={collapsedGroups}

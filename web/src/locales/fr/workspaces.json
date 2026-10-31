@@ -1,6 +1,7 @@
 {
   "agentCacheEnable": "Activer la navigation rapide pour ce projet",
   "agentCacheDisable": "Désactiver la navigation rapide",
+  "agentCacheSaveError": "Impossible d’enregistrer la navigation rapide. Votre choix précédent est conservé ; réessayez.",
   "agentCacheActive": "Navigation rapide active",
   "agentCacheActiveHelp": "Ce projet conserve jusqu’à 5 vues d’agents récentes dans cet onglet, avec suivi en temps réel. Un seul projet à la fois ; aucun historique n’est enregistré sur le disque.",
   "gitCreateRemotePrHelp": "Crée une pull request à partir de cette branche déjà publiée sur GitHub, quel que soit l’outil utilisé pour la publier. Aucune copie locale ni nouveau push ne sont nécessaires. Aucun merge ni déploiement n’est lancé.",

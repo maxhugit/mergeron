@@ -1,6 +1,7 @@
 {
   "agentCacheEnable": "Enable fast navigation for this project",
   "agentCacheDisable": "Disable fast navigation",
+  "agentCacheSaveError": "Unable to save fast navigation. Your previous choice is kept; try again.",
   "agentCacheActive": "Fast navigation enabled",
   "agentCacheActiveHelp": "This project keeps up to 5 recent agent views in this tab, with live updates. One project at a time; no history is stored on disk.",
   "gitCreateRemotePrHelp": "Creates a pull request from this branch already published on GitHub, regardless of which tool published it. No local copy or new push is required. No merge or deployment is performed.",
