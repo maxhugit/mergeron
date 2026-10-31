@@ -4,7 +4,9 @@ import { clearApiToken, getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import {
   acceptVerifiedSession,
+  hasVerifiedSession,
   pauseSession,
+  sessionVerificationGeneration,
   useSessionPaused,
 } from './session-recovery';
 
@@ -71,8 +73,13 @@ export class AuthIdentityChangedError extends AuthResourceError {
 export function shouldRetryPlatformSession(
   failureCount: number,
   error: Error,
+  previouslyVerified = false,
 ): boolean {
   if (failureCount >= SESSION_RETRY_DELAYS_MS.length) return false;
+  // A proxy can briefly ask for login while its session store restarts. Recheck
+  // only the identity GET, with the gate closed, before asking the user to log
+  // in again. Never retry a backend 401/403, accept cache, or replay a mutation.
+  if (error instanceof AuthRedirectError) return previouslyVerified;
   if (error instanceof AuthResourceError)
     return error.status === 408 || error.status === 429 || error.status >= 500;
   return true;
@@ -114,6 +121,7 @@ export async function readAuthResource<T>(
   try {
     const response = await fetch(withBasePath(`/api/auth/${path}`), {
       credentials: 'same-origin',
+      cache: 'no-store',
       redirect: 'manual',
       signal: controller.signal,
       headers: authorization ? { Authorization: authorization } : {},
@@ -146,8 +154,13 @@ export function usePlatformSession() {
   const query = useQuery({
     queryKey: platformSessionKey,
     queryFn: async ({ signal }) => {
+      const verification = sessionVerificationGeneration();
       try {
         const identity = await readAuthResource<PlatformSession>('me', signal);
+        if (verification !== sessionVerificationGeneration())
+          throw new Error(
+            'Session verification was superseded; recheck identity',
+          );
         if (!acceptVerifiedSession(identity) && identity.active)
           throw new AuthIdentityChangedError();
         return identity;
@@ -162,7 +175,8 @@ export function usePlatformSession() {
     refetchIntervalInBackground: false,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
-    retry: shouldRetryPlatformSession,
+    retry: (attempt, error) =>
+      shouldRetryPlatformSession(attempt, error, hasVerifiedSession()),
     retryDelay: (attemptIndex) =>
       SESSION_RETRY_DELAYS_MS[
         Math.min(attemptIndex, SESSION_RETRY_DELAYS_MS.length - 1)

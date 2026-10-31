@@ -54,7 +54,15 @@ class AuthentikIngressConfigurationTest(unittest.TestCase):
             "auth_request_set $auth_cookie $upstream_http_set_cookie;",
             self.nginx,
         )
-        self.assertIn("add_header Set-Cookie $auth_cookie always;", self.nginx)
+        self.assertIn("add_header Set-Cookie $validated_auth_cookie always;", self.nginx)
+        self.assertIn("auth_request_set $auth_status $upstream_status;", self.nginx)
+        self.assertIn("~^2[0-9][0-9]$ $auth_cookie;", self.nginx)
+
+    def test_failed_authentication_never_erases_a_potentially_valid_cookie(self) -> None:
+        signin = self.nginx.split("location @goauthentik_proxy_signin {", 1)[1].split("\n        }", 1)[0]
+        self.assertNotIn("Set-Cookie", signin)
+        self.assertIn('add_header Cache-Control "no-store" always;', signin)
+        self.assertNotIn("add_header Set-Cookie $auth_cookie always;", self.nginx)
 
     def test_application_identity_comes_from_authentik_subrequest(self) -> None:
         self.assertIn(

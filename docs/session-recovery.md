@@ -1,5 +1,84 @@
 # Connexion après une longue inactivité
 
+## Incidents intermittents en Dev — diagnostic du 31 octobre 2026
+
+La durée du fournisseur Authentik Dev a été relue : `hours=12`, avec une
+durée effective de cookie de 43 201 secondes pour une nouvelle session proxy.
+La configuration Nginx réellement chargée (`/tmp/nginx.conf`, et non le fichier
+par défaut de l'image) conserve le contrôle Authentik unique et les redirections
+relatives. Allonger encore la durée ne corrige donc pas les interruptions.
+
+Les journaux consultés montrent plusieurs événements distincts :
+
+- des redirections de `/api/auth/me` vers la connexion ;
+- des erreurs `500` du contrôle Authentik au moment du redémarrage de ce service ;
+- des redémarrages de plusieurs services de l'hôte pendant la même période.
+
+L'interface a également été observée passant de « Session à renouveler » à la
+conversation connectée sans nouvelle authentification effectuée par le diagnostic.
+Ces éléments ne prouvent pas que chaque incident signalé a la même cause. Les
+journaux conservés ne permettent notamment pas de reconstituer tous les cookies
+ou toutes les sessions avant les redémarrages ; ils ne doivent pas être collectés
+pour ce diagnostic.
+
+Deux défauts reproductibles sont corrigés :
+
+1. Le modèle Nginx retransmettait les `Set-Cookie` d'un contrôle d'authentification
+   refusé. Dans Authentik 2026.5.7, `getClaimsFromSession` tente de supprimer le
+   cookie lorsque la lecture du stockage de sessions renvoie une erreur, pas
+   seulement à l'expiration. Selon l'erreur et l'état du stockage, cela peut
+   transformer une interruption en perte du cookie navigateur. Le modèle ne
+   transmet désormais le cookie de renouvellement du sous-appel que si ce
+   dernier réussit en `2xx`. **Un cookie conservé n'autorise rien** : chaque
+   nouvelle requête protégée doit toujours être acceptée par Authentik. Les
+   réponses des vraies routes de connexion et de déconnexion restent inchangées.
+   Une session réellement supprimée du stockage ne peut pas être restaurée par
+   ce correctif et nécessite toujours une nouvelle connexion.
+2. Une ancienne réponse API `401` ou redirigée, arrivée après la reprise, pouvait
+   refermer la barrière et effacer le nouveau jeton. Les réponses d'une génération
+   antérieure sont maintenant écartées **avant** de traiter leur refus. Inversement,
+   une réponse d'identité demandée avant la fermeture ne peut pas rouvrir la
+   barrière : une nouvelle vérification est obligatoire.
+
+Pour un onglet ayant déjà vérifié son identité, une redirection du proxy déclenche
+au maximum trois nouvelles lectures d'identité, après 500, 1 500 et 3 000 ms.
+La barrière reste fermée et la vue indique la vérification pendant cet essai.
+Seule une réponse fraîche confirmant le même compte, rôle et contexte de test
+de droits permet la reprise. Si le refus persiste, le renouvellement interactif
+reste nécessaire. Les vrais `401`/`403` du backend ne deviennent pas des erreurs
+transitoires. Les requêtes d'identité utilisent explicitement `cache: no-store`.
+Aucune mutation ni aucun message n'est mis en attente ou rejoué.
+
+Références du comportement amont vérifié :
+[lecture des claims Authentik 2026.5.7](https://github.com/goauthentik/authentik/blob/version/2026.5.7/internal/outpost/proxyv2/application/auth.go),
+[stockage PostgreSQL](https://github.com/goauthentik/authentik/blob/version/2026.5.7/internal/outpost/proxyv2/postgresstore/postgresstore.go).
+
+### Vérifier et installer ce correctif
+
+`python3 scripts/test-session-ingress.py` exerce le vrai modèle dans un conteneur
+Nginx jetable, sans réseau, port publié, volume hôte ni donnée réelle. Un faux
+outpost simule les refus `401`/`403` et une indisponibilité `503`, avec suppression
+de cookie. Le test vérifie le refus d'accès, la conservation du cookie, une
+nouvelle autorisation après rétablissement et la déconnexion explicite. Il est
+inclus dans `scripts/smoke-test-ingress.sh` exécuté en CI. Cette simulation ne
+redémarre pas Authentik et ne prétend pas reproduire chaque panne de sa base.
+
+Les tests du client couvrent les redirections réelles du navigateur, la reprise
+bornée, l'expiration persistante, un changement d'identité, les réponses obsolètes,
+les écritures bloquées ainsi que la conservation du brouillon et de la lecture
+dans Chromium et WebKit. Ils ne remplacent pas une observation prolongée de
+l'installation réelle.
+
+Une mise à jour de l'application seule **ne suffit pas** pour une installation
+qui conserve un modèle ingress privé. Reporter la nouvelle `map`,
+`auth_request_set $auth_status`, le filtrage du `Set-Cookie` et le `no-store` de
+la redirection dans ce modèle, sans écraser ses upstreams, domaines ou secrets.
+Régénérer le fichier avec l'allowlist habituelle d'`envsubst`, valider exactement
+ce fichier avec `nginx -t -c`, puis recharger gracieusement le seul ingress visé.
+Conserver un exemplaire de retour arrière hors du dossier surveillé. Vérifier
+ensuite le refus anonyme et le parcours connecté. La durée SSO, les révocations,
+les secrets et la politique d'accès ne sont pas modifiés par ce correctif.
+
 ## Diagnostic du 25 octobre 2026 — environnement development
 
 L’écran « Accès indisponible / Impossible de vérifier votre identité » ne prouve
@@ -92,8 +171,9 @@ restent actives même si l’espace de travail est masqué après une erreur. Le
 
 Une erreur de transport, un renouvellement SSO et un vrai refus d’accès sont
 présentés séparément, en français et en anglais. Une identité active en cache ne
-permet **pas** de contourner une vérification échouée. Les refus `401`/`403` ne
-sont pas réessayés comme des erreurs transitoires. Aucune écriture ni aucun
+permet **pas** de contourner une vérification échouée. Les refus `401`/`403` du
+backend ne sont pas réessayés comme des erreurs transitoires ; les redirections
+du proxy bénéficient seulement de la reprise bornée décrite plus haut. Aucune écriture ni aucun
 message n’est rejoué automatiquement.
 
 La route Traefik **development uniquement** a été corrigée le 25 octobre à

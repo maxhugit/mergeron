@@ -13,7 +13,7 @@ import {
   shouldRetryPlatformSession,
   usePlatformSession,
 } from './platform-session';
-import { installSessionRecovery } from './session-recovery';
+import { installSessionRecovery, pauseSession } from './session-recovery';
 
 let disposeRecovery: () => void;
 beforeEach(() => {
@@ -174,6 +174,146 @@ describe('platform session recovery', () => {
       shouldRetryPlatformSession(0, new AuthResourceError('Forbidden', 403)),
     ).toBe(false);
   });
+
+  it('only rechecks a proxy redirect when this tab already verified its owner', () => {
+    expect(shouldRetryPlatformSession(0, new AuthRedirectError())).toBe(false);
+    expect(shouldRetryPlatformSession(0, new AuthRedirectError(), true)).toBe(
+      true,
+    );
+    expect(shouldRetryPlatformSession(3, new AuthRedirectError(), true)).toBe(
+      false,
+    );
+    for (const status of [401, 403, 409])
+      expect(
+        shouldRetryPlatformSession(
+          0,
+          new AuthResourceError('Denied', status),
+          true,
+        ),
+      ).toBe(false);
+  });
+
+  it('requires a new identity response when an in-flight verification predates the pause', async () => {
+    vi.useFakeTimers();
+    const identity = {
+      kind: 'person',
+      personId: 'original',
+      active: true,
+      role: 'standard',
+      name: 'Person',
+    };
+    const response = () =>
+      new Response(JSON.stringify(identity), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const client = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity } },
+    });
+    client.setQueryData(platformSessionKey, identity);
+    const network = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => response());
+    const hook = renderHook(() => usePlatformSession(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
+    });
+    await act(async () => {
+      await hook.result.current.refetch();
+    });
+    let finish!: (value: Response) => void;
+    network.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    let pending: ReturnType<typeof hook.result.current.refetch> | undefined;
+    act(() => {
+      pending = hook.result.current.refetch();
+    });
+    act(() => {
+      pauseSession();
+    });
+    await act(async () => {
+      finish(response());
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(hook.result.current.paused).toBe(true);
+    expect(network).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+      await pending;
+    });
+    expect(network).toHaveBeenCalledTimes(3);
+    expect(hook.result.current.paused).toBe(false);
+    hook.unmount();
+    client.clear();
+  });
+
+  it.each(['original', 'changed', 'expired'])(
+    'bounds proxy recovery and only resumes the freshly verified original owner: %s',
+    async (result) => {
+      vi.useFakeTimers();
+      const identity = {
+        kind: 'person',
+        personId: 'original',
+        active: true,
+        role: 'standard',
+        name: 'Person',
+      };
+      const response = (value: unknown) =>
+        new Response(JSON.stringify(value), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      const client = new QueryClient({
+        defaultOptions: { queries: { gcTime: Infinity } },
+      });
+      client.setQueryData(platformSessionKey, identity);
+      const network = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () => response(identity));
+      const hook = renderHook(() => usePlatformSession(), {
+        wrapper: ({ children }: { children: ReactNode }) =>
+          createElement(QueryClientProvider, { client }, children),
+      });
+      await act(async () => {
+        await hook.result.current.refetch();
+      });
+      expect(hook.result.current.paused).toBe(false);
+      network.mockClear();
+      const redirect = { type: 'opaqueredirect', status: 0 } as Response;
+      network
+        .mockResolvedValueOnce(redirect)
+        .mockImplementation(async () =>
+          result === 'expired'
+            ? redirect
+            : response({ ...identity, personId: result }),
+        );
+      let pending: ReturnType<typeof hook.result.current.refetch> | undefined;
+      await act(async () => {
+        pending = hook.result.current.refetch();
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      // Cached data grants no access during retry; a brief outage is not yet
+      // presented as a confirmed expiration requiring interactive login.
+      expect(hook.result.current.paused).toBe(true);
+      expect(hook.result.current.isError).toBe(false);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6_000);
+        await pending;
+      });
+      expect(network).toHaveBeenCalledTimes(result === 'expired' ? 4 : 2);
+      expect(hook.result.current.paused).toBe(result !== 'original');
+      expect(hook.result.current.isSuccess).toBe(result === 'original');
+      if (result === 'changed')
+        expect(hook.result.current.error?.name).toBe(
+          'AuthIdentityChangedError',
+        );
+      if (result === 'expired')
+        expect(hook.result.current.error).toBeInstanceOf(AuthRedirectError);
+      hook.unmount();
+      client.clear();
+    },
+  );
 
   it('retries temporary HTTP failures', () => {
     expect(

@@ -20,6 +20,9 @@ export function sessionOwner(session: PlatformSession): string {
 }
 
 export const isSessionPaused = () => paused;
+/** Presence of a prior verification is not authorization; the gate stays shut. */
+export const hasVerifiedSession = () => owner !== null;
+export const sessionVerificationGeneration = () => generation;
 export function pauseSession() {
   if (paused) return;
   paused = true;
@@ -87,6 +90,9 @@ export function installSessionRecovery() {
       ...init,
       redirect: 'manual',
     });
+    // A refusal from a request sent before renewal must not erase the new
+    // credential or pause the freshly verified session again.
+    if (startedIn !== generation) throw aborted();
     if (
       response.status === 401 ||
       response.type === 'opaqueredirect' ||
@@ -96,8 +102,6 @@ export function installSessionRecovery() {
       window.dispatchEvent(new Event('codex-webui:auth-expired'));
       throw aborted();
     }
-    // An old response must not refresh a view after identity verification failed.
-    if (startedIn !== generation) throw aborted();
     return response;
   };
   const wake = () => {

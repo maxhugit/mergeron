@@ -17,6 +17,16 @@ http {
         '' close;
     }
 
+    # Authentik may clear a session cookie when its session store is temporarily
+    # unavailable, not only when the session has expired. Never destroy the
+    # browser's cookie on a failed subrequest; it must still pass a fresh check
+    # before any protected request is allowed. Explicit login/logout responses
+    # under /outpost.goauthentik.io retain their normal Set-Cookie headers.
+    map $auth_status $validated_auth_cookie {
+        default "";
+        ~^2[0-9][0-9]$ $auth_cookie;
+    }
+
     server {
         listen 8080;
         # Preserve the browser's public scheme/host/port behind any reverse proxy.
@@ -75,7 +85,7 @@ http {
 
         location @goauthentik_proxy_signin {
             internal;
-            add_header Set-Cookie $auth_cookie always;
+            add_header Cache-Control "no-store" always;
             return 302 /outpost.goauthentik.io/start?rd=https://$http_host$request_uri;
         }
 
@@ -131,7 +141,8 @@ http {
             auth_request_set $identity_uid $upstream_http_x_authentik_uid;
             auth_request_set $identity_email $upstream_http_x_authentik_email;
             auth_request_set $auth_cookie $upstream_http_set_cookie;
-            add_header Set-Cookie $auth_cookie always;
+            auth_request_set $auth_status $upstream_status;
+            add_header Set-Cookie $validated_auth_cookie always;
             error_page 401 = @goauthentik_proxy_signin;
             proxy_pass $mergeron_backend;
             proxy_http_version 1.1;
