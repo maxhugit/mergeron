@@ -562,6 +562,24 @@ it('returns 403 on real settings routes for standard users and 200 for administr
   ).toBe(200);
 });
 
+it.each(['GET', 'PATCH'] as const)(
+  'reserves the persisted backup preference %s to administrators',
+  async (method) => {
+    for (const [email, expected] of [
+      ['standard@example.com', 403],
+      ['administrator@example.com', 200],
+    ] as const) {
+      const response = await app.inject({
+        method,
+        url: '/api/settings/general.updateBackupMode',
+        headers: proxyHeaders(email),
+        ...(method === 'PATCH' ? { payload: { value: 'minimal' } } : {}),
+      });
+      expect(response.statusCode).toBe(expected);
+    }
+  },
+);
+
 it('restricts common instruction reads and writes to administrators', async () => {
   for (const method of ['GET', 'PATCH'] as const) {
     for (const role of ['standard', 'administrator']) {

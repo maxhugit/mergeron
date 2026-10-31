@@ -13,6 +13,7 @@ import { ServerVersionCard } from './server-version-card';
 const EXCLUDED_RUNTIME_SETTINGS = [
   ...ONLYOFFICE_SETTING_KEYS,
   'general.logRetention',
+  'general.updateBackupMode',
 ] as const;
 
 export function GeneralSettings() {
