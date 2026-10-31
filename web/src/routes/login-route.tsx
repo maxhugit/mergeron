@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { readAuthResource, type PlatformSession } from '@/lib/platform-session';
 import { acceptVerifiedSession } from '@/lib/session-recovery';
 import { notifySessionRenewed, renewalReturnPath } from '@/lib/session-renewal';
+import { InitialSetupGate } from '@/components/initial-admin-setup';
 
 interface AuthMethods {
   localEnabled: boolean;
@@ -20,6 +21,14 @@ interface AuthMethods {
 }
 
 export function LoginRoute() {
+  return (
+    <InitialSetupGate>
+      <LoginRouteContent />
+    </InitialSetupGate>
+  );
+}
+
+function LoginRouteContent() {
   const navigate = useNavigate();
   const { t } = useTranslation('authentication');
   const { redirect, manual, renew } = useSearch({ from: '/login' });

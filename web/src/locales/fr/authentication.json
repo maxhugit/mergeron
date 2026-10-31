@@ -1,4 +1,32 @@
 {
+  "setup": {
+    "title": "Configurer votre plateforme",
+    "loading": "Vérification de la première configuration…",
+    "loadError": "Impossible de vérifier l’état de l’installation. Aucun accès n’a été ouvert.",
+    "retry": "Réessayer",
+    "activationStep": "Étape 1 sur 2 — Confirmer l’accès au serveur",
+    "accountStep": "Étape 2 sur 2 — Créer le premier administrateur",
+    "activationHelp": "Depuis la console de votre serveur, exécutez cette commande pour obtenir votre code d’activation :",
+    "codeHelp": "Ce code est valable 15 minutes, ne sert qu’une fois et ne doit pas être partagé. Relancer la commande invalide le précédent code et toute configuration non terminée.",
+    "code": "Code d’activation",
+    "verify": "Valider le code",
+    "codeError": "Code invalide, expiré ou temporairement bloqué. Vérifiez le code ; après plusieurs échecs, attendez une minute ou générez-en un nouveau depuis le serveur.",
+    "accountHelp": "Créez votre compte local. Votre mot de passe doit comporter au moins 12 caractères. Le nom d’utilisateur accepte 3 à 64 lettres, chiffres, points, tirets et tirets bas. Aucun service e-mail ni SSO n’est nécessaire à cette étape.",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "email": "Adresse e-mail",
+    "username": "Identifiant",
+    "password": "Mot de passe",
+    "passwordConfirmation": "Confirmer le mot de passe",
+    "passwordMismatch": "Les deux mots de passe ne correspondent pas.",
+    "create": "Créer l’administrateur",
+    "createError": "Création impossible. Vérifiez les champs et la validité de votre session. Si une interruption a fermé l’initialisation sans créer le compte, reprenez depuis la console avec --retry-interrupted.",
+    "restart": "Revérifier la configuration",
+    "doneTitle": "Votre administrateur est créé",
+    "done": "La première configuration est maintenant fermée. Connectez-vous avec le compte que vous venez de créer.",
+    "nextSteps": "Vous pourrez ensuite configurer Codex, le SSO facultatif et les autres paramètres depuis l’administration.",
+    "signIn": "Se connecter"
+  },
   "peopleTable": {
     "presence": "Présence",
     "connectedSince": "En ligne depuis"

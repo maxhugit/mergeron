@@ -1594,6 +1594,13 @@
         ],
         "sections": [
           {
+            "title": "First administrator on a new installation",
+            "paragraphs": [
+              "After Manager installation, the first visit shows Set up your platform. Run the displayed command in the server console to obtain a single-use code valid for 15 minutes, then enter your details and password in the assistant. No JSON file or email service is required.",
+              "After creation, sign in normally and configure other settings. Existing installations remain closed even if an administrator is deleted or disabled. An interrupted initialization with no accounts can be explicitly recovered from the host with --retry-interrupted. Never share the code in a chat or support ticket."
+            ]
+          },
+          {
             "title": "Use the list",
             "steps": [
               "Open Administration → People as an administrator.",

@@ -22,13 +22,15 @@ Voir les [droits des projets](droits-acces-projets.md).
 
 ### Initialisation et récupération administrateur
 
-Le premier compte local se crée depuis l’hôte selon
-[l’étape dédiée du guide](installation.md#4-créer-le-premier-administrateur).
-L’outil livré `scripts/provision-person.cjs` réutilise les validations du serveur
-et crée atomiquement la fiche et son compte. Il ne crée ni mot de passe par
-défaut ni page publique d’inscription.
+Pour une installation neuve préparée par le Manager, le premier compte local se
+crée dans l’[assistant Web](installation.md#4-créer-le-premier-administrateur),
+après validation d’un code à usage unique obtenu dans la console du serveur.
+Aucun fichier JSON utilisateur ni mot de passe par défaut n’est nécessaire.
+L’assistant se ferme après création et ne se rouvre pas quand un compte est
+supprimé ou désactivé. Les installations existantes ne sont pas réinitialisées.
 
-En cas de récupération, un administrateur de l’hôte peut utiliser ce même outil
+En cas de récupération, un administrateur de l’hôte peut utiliser l’outil privilégié
+`scripts/provision-person.cjs`, qui conserve les validations et l’atomicité,
 avec un fichier JSON privé, après sauvegarde de la base. Ne pas placer le mot
 de passe dans un argument de commande, un journal ou Git. Une fiche ou une
 liaison déjà utilisée n’est pas écrasée pour contourner un conflit.

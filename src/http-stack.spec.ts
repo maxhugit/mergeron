@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ApiKeyGuard } from './auth/api-key.guard';
 import { AuthService } from './auth/auth.service';
+import { setStaticHtmlSecurityHeaders } from './static-html-security';
 import { io } from '../web/node_modules/socket.io-client/build/cjs/index.js';
 
 @UseGuards(ApiKeyGuard)
@@ -75,7 +76,10 @@ describe('NestJS/Fastify HTTP stack compatibility', () => {
         ServeStaticModule.forRoot({
           rootPath: root,
           exclude: ['/api/(.*)'],
-          serveStaticOptions: { fallthrough: true },
+          serveStaticOptions: {
+            fallthrough: true,
+            setHeaders: setStaticHtmlSecurityHeaders,
+          },
         }),
       ],
       controllers: [HttpStackController],
@@ -118,16 +122,31 @@ describe('NestJS/Fastify HTTP stack compatibility', () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
-  it.each(['/', '/projects/example'])('serves the SPA at %s', async (url) => {
-    const response = await app.inject({ url });
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toBe('<html>WebUI</html>');
-  });
+  it.each(['/', '/index.html', '/login', '/projects/example'])(
+    'serves the protected SPA HTML at %s using Fastify replies',
+    async (url) => {
+      const response = await app.inject({ url });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe('<html>WebUI</html>');
+      expect(response.headers['content-security-policy']).toBe(
+        "frame-ancestors 'none'",
+      );
+      expect(response.headers['x-frame-options']).toBe('DENY');
+      expect(response.headers['referrer-policy']).toBe('no-referrer');
+      // A request after the HTML callback must still succeed on the same server.
+      expect(
+        (await app.inject({ url: '/api/probe', headers })).statusCode,
+      ).toBe(200);
+    },
+  );
 
   it('serves assets and Swagger with the updated static plugin', async () => {
-    expect((await app.inject({ url: '/asset.js' })).body).toBe(
-      'window.webui = true;',
-    );
+    const asset = await app.inject({ url: '/asset.js' });
+    expect(asset.statusCode).toBe(200);
+    expect(asset.body).toBe('window.webui = true;');
+    expect(asset.headers).not.toHaveProperty('content-security-policy');
+    expect(asset.headers).not.toHaveProperty('x-frame-options');
+    expect(asset.headers).not.toHaveProperty('referrer-policy');
     expect((await app.inject({ url: '/api/docs/' })).statusCode).toBe(200);
     expect(
       (await app.inject({ url: '/api/docs/swagger-ui-init.js' })).statusCode,
@@ -147,6 +166,9 @@ describe('NestJS/Fastify HTTP stack compatibility', () => {
     const response = await app.inject({ url: '/api/probe', headers });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: 'ok' });
+    expect(response.headers).not.toHaveProperty('content-security-policy');
+    expect(response.headers).not.toHaveProperty('x-frame-options');
+    expect(response.headers).not.toHaveProperty('referrer-policy');
   });
 
   it('preserves folder upload paths and file contents', async () => {

@@ -2,6 +2,9 @@
 
 ## Installer et exploiter sur Docker
 
+Le [premier administrateur et ses contrôles techniques](initial-admin-setup.md)
+se configurent dans l’assistant Web, sans fichier de compte à préparer.
+
 1. [Installer Mergeron avec le Manager](installation.md)
 2. [Variables du Manager : défauts, rôle et utilisation](variables-manager.md)
 3. [Raccordement réseau et SSO facultatif](installation-portable.md)

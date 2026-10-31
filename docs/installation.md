@@ -106,40 +106,53 @@ le passage.
 
 ## 4. Créer le premier administrateur
 
-**La version actuelle n’a pas de formulaire public de première inscription.**
-Le compte initial se crée depuis l’hôte avec l’outil livré dans l’application.
-Garder l’accès HTTPS restreint pendant cette étape.
+Les nouvelles installations disposent d’un **assistant Web de première
+configuration**. Aucun fichier de coordonnées ou de mot de passe n’est à préparer.
+Utiliser un Manager et une application qui incluent tous deux ce parcours ; mettre
+à jour seulement l’application d’une ancienne installation ne l’active pas.
 
-Créer un fichier privé `/srv/mergeron/premier-admin.json`, lisible seulement par
-l’administrateur de l’hôte. Remplacer les coordonnées et choisir un mot de passe
-unique d’au moins 12 caractères. Ceci est une structure, pas un compte fourni :
-
-```json
-{
-  "reference": "ADM-001",
-  "firstName": "Prénom",
-  "lastName": "Nom",
-  "email": "admin@example.com",
-  "phone": "+33600000000",
-  "role": "administrator",
-  "active": true,
-  "localAccount": {
-    "username": "administrateur",
-    "password": "REMPLACER_PAR_VOTRE_MOT_DE_PASSE_UNIQUE"
-  }
-}
-```
+Configurer d’abord le proxy HTTPS vers `mergeron-ingress:8080`, puis ouvrir
+l’adresse déclarée dans `MERGERON_WEBUI_URL`. La page « Configurer votre plateforme »
+demande de prouver l’accès au serveur avec la commande suivante, exécutée sur
+l’hôte Docker, pas dans une conversation d’agent :
 
 ```sh
-chmod 600 /srv/mergeron/premier-admin.json
-docker exec -i mergeron-ui node /app/scripts/provision-person.cjs \
-  < /srv/mergeron/premier-admin.json
+docker exec -it mergeron-ui node /app/scripts/setup-admin.cjs
 ```
 
-L’outil n’affiche pas le mot de passe. Après connexion réussie, retirer le fichier
-privé contenant ce mot de passe ; ne jamais le versionner ou le joindre à un ticket.
-Les comptes suivants se gèrent dans **Paramètres → Personnes**. Voir aussi
-l’[authentification et la récupération](configuration-integrations.md#initialisation-et-récupération-administrateur).
+Adapter le nom du conteneur si la pile utilise un autre préfixe. La commande
+affiche seulement dans cette console un code aléatoire valable **15 minutes**.
+Coller ce code dans la page, puis renseigner prénom, nom, e-mail, identifiant et
+mot de passe avec confirmation. Le mot de passe exige au moins 12 caractères ;
+l’identifiant accepte de 3 à 64 lettres, chiffres, points, tirets et tirets bas.
+Aucun service e-mail ni SSO n’est nécessaire pour ce premier compte local.
+
+Après validation, le compte administrateur est créé et l’assistant est fermé.
+Se connecter normalement avec ce compte ; les comptes suivants se gèrent dans
+**Paramètres → Personnes**. Un premier visiteur sans code ne peut pas s’inscrire.
+
+Le code ne doit figurer ni dans une URL, ni dans un ticket ou un journal. La
+commande ne l’enregistre pas dans les journaux de l’application. La relancer
+invalide les codes et sessions d’initialisation précédents. Après dix codes
+incorrects, attendre une minute ou générer un nouveau code depuis la console.
+
+L’assistant n’est jamais activé sur simple absence d’administrateur : une
+installation existante, une restauration ou un compte désactivé ne le rouvrent
+pas. Une erreur de base ou d’autorisation ne donne pas accès. La suppression du
+fichier d’autorisation interne ne constitue pas une méthode de récupération.
+Si une interruption ferme l’assistant **sans avoir créé aucun compte ni projet**,
+la reprise volontaire depuis l’hôte est :
+
+```sh
+docker exec -it mergeron-ui node /app/scripts/setup-admin.cjs --retry-interrupted
+```
+
+Cette option refuse une installation déjà initialisée ou contenant des personnes
+ou projets. Pour les comptes d’une installation existante, conserver la procédure
+de [récupération administrateur](configuration-integrations.md#initialisation-et-récupération-administrateur),
+qui utilise l’outil privilégié `scripts/provision-person.cjs`, sans réouvrir
+l’inscription publique. Les [contrats techniques](initial-admin-setup.md) détaillent
+les contrôles, le stockage et les limites de restauration.
 
 ## 5. Ouvrir et vérifier Mergeron
 

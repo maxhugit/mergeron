@@ -37,6 +37,7 @@ import { TurnErrorsModule } from './turn-errors/turn-errors.module';
 import { PreviewsModule } from './previews/previews.module';
 import { PushModule } from './push/push.module';
 import { AgentMonitorsModule } from './agent-monitors/agent-monitors.module';
+import { setStaticHtmlSecurityHeaders } from './static-html-security';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -81,6 +82,14 @@ const PINO_REDACT = {
     'apiKey',
     'password',
     'passwordHash',
+    'csrfToken',
+    'passwordConfirmation',
+    '*.csrfToken',
+    '*.passwordConfirmation',
+    'req.body.code',
+    'req.body.csrfToken',
+    'req.body.password',
+    'req.body.passwordConfirmation',
     'clientSecret',
     '*.token',
     '*.accessToken',
@@ -135,6 +144,7 @@ const PINO_REDACT = {
       exclude: ['/api/(.*)'],
       serveStaticOptions: {
         fallthrough: true,
+        setHeaders: setStaticHtmlSecurityHeaders,
       },
     }),
     AuthModule,

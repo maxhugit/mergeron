@@ -9,6 +9,7 @@ import {
   createInstallPlan,
   readInstallConfiguration,
 } from '../src/installer.mjs';
+import { stat } from 'node:fs/promises';
 import { scopeManifest } from '../src/inventory.mjs';
 
 const sourceManifest = JSON.parse(
@@ -119,6 +120,90 @@ class FixtureDocker {
     inspection.State = { Running: true, Status: 'running' };
   }
 }
+
+test('arms first-administrator setup only on a genuinely fresh installation and never overwrites its closed marker', async (t) => {
+  const directory = await mkdtemp(
+    join(tmpdir(), 'mergeron-initial-admin-install-'),
+  );
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const configuration = await fixtureConfiguration(directory),
+    docker = new FixtureDocker();
+  const plan = await createInstallPlan(manifest, docker, configuration);
+  await applyInstallPlan({
+    manifest,
+    docker,
+    configuration,
+    expectedFingerprint: plan.fingerprint,
+    confirmation: 'INSTALL',
+  });
+  const marker = join(directory, 'home', '.codex', 'webui-initial-admin.json');
+  const value = JSON.parse(await readFile(marker, 'utf8'));
+  assert.equal(value.state, 'armed');
+  assert.match(value.installationId, /^[0-9a-f-]{36}$/);
+  assert.equal((await stat(marker)).mode & 0o777, 0o600);
+  await writeFile(marker, JSON.stringify({ ...value, state: 'closed' }));
+  const next = await createInstallPlan(manifest, docker, configuration);
+  await applyInstallPlan({
+    manifest,
+    docker,
+    configuration,
+    expectedFingerprint: next.fingerprint,
+    confirmation: 'INSTALL',
+  });
+  assert.equal(JSON.parse(await readFile(marker, 'utf8')).state, 'closed');
+});
+
+for (const preexisting of [
+  'home/.codex/old-database.sqlite',
+  'workspace/old-project/file',
+  'backend-token.txt',
+  'manager-state/adoption.json',
+])
+  test(`never arms setup when previous installation state exists: ${preexisting}`, async (t) => {
+    const directory = await mkdtemp(
+      join(tmpdir(), 'mergeron-initial-admin-existing-'),
+    );
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const configuration = await fixtureConfiguration(directory),
+      docker = new FixtureDocker();
+    const target = join(directory, preexisting);
+    await mkdir(join(target, '..'), { recursive: true });
+    await writeFile(target, 'existing-state');
+    const plan = await createInstallPlan(manifest, docker, configuration);
+    await applyInstallPlan({
+      manifest,
+      docker,
+      configuration,
+      expectedFingerprint: plan.fingerprint,
+      confirmation: 'INSTALL',
+    });
+    await assert.rejects(
+      readFile(join(directory, 'home/.codex/webui-initial-admin.json')),
+      { code: 'ENOENT' },
+    );
+  });
+
+test('refuses HTTP for first-administrator setup before writing application state', async (t) => {
+  const directory = await mkdtemp(
+    join(tmpdir(), 'mergeron-initial-admin-https-'),
+  );
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const configuration = await fixtureConfiguration(directory),
+    docker = new FixtureDocker();
+  configuration.publicUrl = 'http://mergeron.example.test';
+  const plan = await createInstallPlan(manifest, docker, configuration);
+  await assert.rejects(
+    applyInstallPlan({
+      manifest,
+      docker,
+      configuration,
+      expectedFingerprint: plan.fingerprint,
+      confirmation: 'INSTALL',
+    }),
+    /RequiresHttps/,
+  );
+  assert.equal(docker.calls.length, 0);
+});
 
 async function fixtureConfiguration(directory) {
   const defaults = join(directory, 'defaults');
