@@ -9,6 +9,16 @@ export function useTerminalSocketEvents() {
   useEffect(() => {
     const socket = getSocket();
 
+    // Configuration is read-only. A cancelled read on the old connection must
+    // be refreshed here, never by replaying terminal actions or queued input.
+    const handleConnect = () => {
+      const store = useTerminalStore.getState();
+      // Do not introduce terminal requests for users/views that never read it
+      // (in particular non-administrators: terminal events remain admin-only).
+      if (store.configRequested || store.configLoaded)
+        void store.refreshConfig();
+    };
+
     const handleMetadata = (event: { terminal: TerminalMetadata }) => {
       const store = useTerminalStore.getState();
       // Attach emits metadata before its snapshot can fail. Only successful
@@ -60,11 +70,14 @@ export function useTerminalSocketEvents() {
     socket.on('terminal.metadata', handleMetadata);
     socket.on('terminal.exit', handleExit);
     socket.on('terminal.error', handleError);
+    socket.on('connect', handleConnect);
+    if (socket.connected) handleConnect();
 
     return () => {
       socket.off('terminal.metadata', handleMetadata);
       socket.off('terminal.exit', handleExit);
       socket.off('terminal.error', handleError);
+      socket.off('connect', handleConnect);
     };
   }, []);
 }

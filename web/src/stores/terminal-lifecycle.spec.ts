@@ -10,22 +10,25 @@ const transport = vi.hoisted(() => ({
   emit: vi.fn(),
 }));
 vi.mock('@/socket', () => ({
-  getSocket: () => ({
-    emit: transport.emit,
-    sendBuffer: [],
-    connected: true,
-    id: 'test-socket',
-    timeout: () => ({
-      emit: (
-        event: string,
-        payload: unknown,
-        done: (error: null, response: TerminalAck) => void,
-      ) => {
-        transport.emit(event, payload);
-        done(null, transport.response);
-      },
-    }),
-  }),
+  getSocket: (() => {
+    const socket = {
+      emit: transport.emit,
+      sendBuffer: [],
+      connected: true,
+      id: 'test-socket',
+      timeout: () => ({
+        emit: (
+          event: string,
+          payload: unknown,
+          done: (error: null, response: TerminalAck) => void,
+        ) => {
+          transport.emit(event, payload);
+          done(null, transport.response);
+        },
+      }),
+    };
+    return () => socket;
+  })(),
 }));
 vi.mock('@/stores/snackbar-store', () => ({ showSnackbar: vi.fn() }));
 const original = useTerminalStore.getState();

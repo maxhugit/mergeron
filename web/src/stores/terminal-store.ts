@@ -4,6 +4,10 @@ import { getSocket } from '@/socket';
 import { showSnackbar } from '@/stores/snackbar-store';
 import i18n from '@/i18n';
 import { emitTerminalAck, saveTerminalOutput } from '@/lib/terminal-transport';
+import {
+  isSessionPaused,
+  sessionVerificationGeneration,
+} from '@/lib/session-recovery';
 import { useTerminalViewStore } from './terminal-view-store';
 import { useWorkspaceStore } from './workspace-store';
 import type {
@@ -20,6 +24,7 @@ interface TerminalState {
   terminals: Record<string, TerminalMetadata>;
   closing: Record<string, boolean>;
   configLoaded: boolean;
+  configRequested: boolean;
   fetchConfig: () => Promise<TerminalConfig>;
   refreshConfig: () => Promise<TerminalConfig>;
   ensureContext: (contextKey: string) => Promise<void>;
@@ -73,6 +78,28 @@ const lostCodes = new Set([
   'terminal.not_found',
   'terminal.recovery_limit',
 ]);
+
+/** Read results belong to one verified connection, not the next socket/identity. */
+function terminalConnectionScope(contextKey?: string): () => boolean {
+  const socket = getSocket();
+  const connectionId = socket.id;
+  const verification = sessionVerificationGeneration();
+  const epoch = contextKey === undefined ? undefined : contextEpoch(contextKey);
+  return () =>
+    !isSessionPaused() &&
+    sessionVerificationGeneration() === verification &&
+    socket.connected &&
+    socket.id === connectionId &&
+    getSocket() === socket &&
+    (contextKey === undefined || contextEpoch(contextKey) === epoch);
+}
+
+/** Connect listeners retry these reads; mutations still use their original error path. */
+const interruptedRead = (response: TerminalAck) =>
+  !response.ok &&
+  ['terminal.disconnected', 'terminal.superseded'].includes(
+    response.errorCode ?? '',
+  );
 
 /** Deduplicates snapshot reads per socket connection, without turning attachment into creation. */
 function attach(
@@ -169,12 +196,17 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   terminals: {},
   closing: {},
   configLoaded: false,
+  configRequested: false,
 
   /** Reads runtime limits without interpreting configuration failure as terminal loss. */
   fetchConfig: async () =>
     get().configLoaded ? get().config : get().refreshConfig(),
   refreshConfig: async () => {
+    set({ configRequested: true });
+    const currentRead = terminalConnectionScope();
+    if (!currentRead()) return get().config;
     const response = await emitTerminalAck('terminal.config', {});
+    if (!currentRead() || interruptedRead(response)) return get().config;
     if (response.ok && response.config)
       set({ config: response.config, configLoaded: true });
     else
@@ -192,19 +224,21 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
    */
   ensureContext: (contextKey) => {
     const epoch = contextEpoch(contextKey);
+    const currentRead = terminalConnectionScope(contextKey);
+    if (!currentRead()) return Promise.resolve();
     const key = JSON.stringify([contextKey, getSocket().id, epoch]);
     const existing = discovery.get(key);
     if (existing) return existing;
     const pending = (async () => {
       const terminals = await get().listContext(contextKey);
-      if (!terminals || contextEpoch(contextKey) !== epoch) return;
+      if (!terminals || !currentRead()) return;
       for (const terminal of terminals) {
-        if (contextEpoch(contextKey) !== epoch) return;
+        if (!currentRead()) return;
         const response = await get().reconnectTerminal(contextKey, terminal.id);
         if (
           !response.ok ||
           !response.terminal ||
-          contextEpoch(contextKey) !== epoch ||
+          !currentRead() ||
           get().closing[terminal.id] ||
           get().terminals[terminal.id]?.status === 'closed'
         )
@@ -213,7 +247,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
         if (contextKey.startsWith('thread:'))
           useWorkspaceStore.getState().adoptTerminal(contextKey, terminal.id);
       }
-      if (contextEpoch(contextKey) !== epoch) return;
+      if (!currentRead()) return;
       set((state) => ({
         contexts: {
           ...state.contexts,
@@ -230,23 +264,38 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   /** Lists metadata without overwriting local tabs from a potentially stale inventory snapshot. */
   listContext: async (contextKey) => {
+    const currentRead = terminalConnectionScope(contextKey);
+    if (!currentRead()) return null;
     const response = await emitTerminalAck('terminal.list', { contextKey });
+    if (!currentRead() || interruptedRead(response)) return null;
     if (!response.ok || !response.terminals) {
       showSnackbar(response.error ?? i18n.t('failedToListTerminals'), 'error');
       return null;
     }
-    if (response.config) set({ config: response.config, configLoaded: true });
+    if (response.config)
+      set({
+        config: response.config,
+        configLoaded: true,
+        configRequested: true,
+      });
     return response.terminals;
   },
 
   /** A user New action requests an additional terminal after current discovery settles. */
   createTerminal: async (contextKey, cwd) => {
     const epoch = contextEpoch(contextKey);
+    const currentConnection = terminalConnectionScope(contextKey);
     const pending = discovery.get(
       JSON.stringify([contextKey, getSocket().id, epoch]),
     );
     if (pending) await pending;
     if (contextEpoch(contextKey) !== epoch) return null;
+    // An explicit New action may wait for discovery, but must not cross its
+    // connection/identity boundary and create a shell after reconnect instead.
+    if (pending && !currentConnection()) {
+      showSnackbar(i18n.t('terminalConnectionIsOffline'), 'error');
+      return null;
+    }
     const response = await emitTerminalAck('terminal.open', {
       contextKey,
       cwd,

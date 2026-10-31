@@ -1798,6 +1798,13 @@
         ],
         "sections": [
           {
+            "title": "Terminal reload and reconnection",
+            "paragraphs": [
+              "Opening a conversation discovers existing sessions without creating a shell. If the connection changes during that read, the obsolete response is ignored without a red alert; discovery resumes after reconnection. Previously requested terminal configuration is also refreshed.",
+              "This recovery never replays input or commands. If New terminal is waiting for discovery when the connection changes, creation is cancelled: repeat the action after reconnecting. Access refusals, invalid responses and genuine timeouts remain visible; terminal access remains administrator-only."
+            ]
+          },
+          {
             "title": "Start with read-only diagnostics",
             "steps": [
               "Note the affected function, time and error without copying secrets.",

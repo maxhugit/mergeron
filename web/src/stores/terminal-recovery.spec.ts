@@ -16,26 +16,29 @@ const wire = vi.hoisted(() => ({
   ) => done(null, { ok: true }),
 }));
 vi.mock('@/socket', () => ({
-  getSocket: () => ({
-    get connected() {
-      return wire.connected;
-    },
-    get id() {
-      return wire.id;
-    },
-    emit: wire.emit,
-    sendBuffer: [],
-    timeout: () => ({
-      emit: (
-        event: string,
-        payload: Record<string, unknown>,
-        done: (error: Error | null, response?: TerminalAck) => void,
-      ) => {
-        wire.emit(event, payload);
-        wire.respond(event, payload, done);
+  getSocket: (() => {
+    const socket = {
+      get connected() {
+        return wire.connected;
       },
-    }),
-  }),
+      get id() {
+        return wire.id;
+      },
+      emit: wire.emit,
+      sendBuffer: [],
+      timeout: () => ({
+        emit: (
+          event: string,
+          payload: Record<string, unknown>,
+          done: (error: Error | null, response?: TerminalAck) => void,
+        ) => {
+          wire.emit(event, payload);
+          wire.respond(event, payload, done);
+        },
+      }),
+    };
+    return () => socket;
+  })(),
 }));
 vi.mock('@/stores/snackbar-store', () => ({ showSnackbar: vi.fn() }));
 
@@ -101,9 +104,11 @@ it('adopts running and exited sessions once without selecting them or sending a 
   expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
     3,
   );
-  const active = useWorkspaceStore.getState().contexts['thread:a'].tabs.find(
-    (tab) => tab.id === useWorkspaceStore.getState().contexts['thread:a'].activeId,
-  );
+  const active = useWorkspaceStore
+    .getState()
+    .contexts[
+      'thread:a'
+    ].tabs.find((tab) => tab.id === useWorkspaceStore.getState().contexts['thread:a'].activeId);
   expect(active).toMatchObject({ kind: 'file', path: '/workspace/file.ts' });
   expect(useTerminalStore.getState().terminals.exited.status).toBe('exited');
   expect(
