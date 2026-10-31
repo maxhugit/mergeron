@@ -9,10 +9,12 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { page } from 'vitest/browser';
 import { AuthenticatedLayout } from './authenticated-layout';
 import { installSessionRecovery } from '@/lib/session-recovery';
 import { platformSessionKey } from '@/lib/platform-session';
 import i18n, { i18nReady } from '@/i18n';
+import '@/index.css';
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
@@ -80,6 +82,82 @@ afterEach(() => {
   dispose?.();
   vi.restoreAllMocks();
 });
+
+test.each([390, 1180])(
+  'does not intercept touch scrolling or reload the workspace at %ipx',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('en');
+    const matchMedia = window.matchMedia.bind(window);
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) =>
+      query === '(pointer: coarse)'
+        ? ({ matches: true } as MediaQueryList)
+        : matchMedia(query),
+    );
+    vi.spyOn(window, 'fetch').mockImplementation(async (input) => {
+      const path = input instanceof Request ? input.url : String(input);
+      return new Response(
+        JSON.stringify(
+          path.endsWith('/me')
+            ? {
+                active: true,
+                kind: 'person',
+                personId: 'original',
+                name: 'Person',
+                role: 'administrator',
+              }
+            : { maxIdleSubscriptions: 30 },
+        ),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      const input = await screen.findByRole('textbox', {
+        name: 'Unsent message',
+      });
+      const target = screen.getByText('Retained conversation');
+      const href = window.location.href;
+      // Desktop WebKit has no constructible Touch; dispatch the same bubbling
+      // touch payload to real DOM listeners without depending on that constructor.
+      const touch = (type: string, clientY?: number) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, 'touches', {
+          value: clientY === undefined ? [] : [{ clientX: 20, clientY }],
+        });
+        return fireEvent(target, event);
+      };
+      for (const draft of ['', 'Keep this draft']) {
+        fireEvent.change(input, { target: { value: draft } });
+        touch('touchstart', 20);
+        expect(touch('touchmove', 250)).toBe(true);
+        expect(screen.queryByRole('status')).toBeNull();
+        touch('touchend');
+        expect(screen.getByRole('textbox')).toBe(input);
+        expect(input).toHaveValue(draft);
+        expect(window.location.href).toBe(href);
+      }
+      expect(
+        getComputedStyle(document.documentElement).overscrollBehaviorY,
+      ).toBe('none');
+      expect(getComputedStyle(document.body).overscrollBehaviorY).toBe('none');
+      await page.screenshot({
+        path: `../../.vitest-screenshots/no-pull-to-refresh-${width}.png`,
+      });
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);
 
 test('keeps the page, exact draft element and scroll position through a real session-hook failure and recovery', async () => {
   await i18nReady;
