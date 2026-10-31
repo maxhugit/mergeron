@@ -227,6 +227,8 @@ it.each([
   '/logs/export',
   '/logs/storage',
   '/logs/retention',
+  '/logs/retention/application',
+  '/logs/retention/codex',
   '/database/status',
   '/plugins',
   '/simple-chat/api-key',

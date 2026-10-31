@@ -84,4 +84,12 @@ export class LogRetentionService implements OnModuleInit, OnModuleDestroy {
       this.running = false;
     }
   }
+
+  /** Merge only the selected fixed family, never a client-supplied path. */
+  updateFamily(family: string, value: unknown) {
+    requireExecutionAccess();
+    if (family !== 'application' && family !== 'codex')
+      throw new BadRequestException('Unknown log family');
+    return this.update({ ...this.policy(), [family]: value });
+  }
 }
