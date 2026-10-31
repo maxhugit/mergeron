@@ -1,6 +1,13 @@
-import { useId, useState, useImperativeHandle, type Ref } from 'react';
+import {
+  useId,
+  useState,
+  useImperativeHandle,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { ListPlus, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,6 +44,7 @@ export function GitStageChanges({
   onDiff,
   view = 'all',
   layout = 'flow',
+  preparedActions,
   ref,
 }: {
   projectId: string;
@@ -47,6 +55,7 @@ export function GitStageChanges({
   onDiff: (path: string, staged: boolean) => void;
   view?: 'all' | 'prepared' | 'actions';
   layout?: 'flow' | 'split';
+  preparedActions?: (busy: boolean) => ReactNode;
   ref?: Ref<GitStageHandle>;
 }) {
   const { t } = useTranslation('workspaces');
@@ -115,6 +124,9 @@ export function GitStageChanges({
     (c) => ![' ', '?'].includes(c.status[0]),
   );
   const selected = selection ?? unstaged.map((c) => c.path);
+  const selectedPaths = selected.filter((path) =>
+    unstaged.some((change) => change.path === path),
+  );
   const busy = action.isPending;
   useImperativeHandle(ref, () => ({
     review: (path) => {
@@ -173,16 +185,50 @@ export function GitStageChanges({
                     : 'space-y-2'
                 }
               >
-                <h4
-                  id={`${listsId}-${id}`}
+                <div
                   className={
                     split
-                      ? 'shrink-0 border-b px-2 py-2 font-medium'
-                      : 'font-medium'
+                      ? 'flex min-w-0 shrink-0 items-center justify-between gap-2 border-b px-2 py-1'
+                      : 'flex min-w-0 items-center justify-between gap-2'
                   }
                 >
-                  {title} ({changes.length})
-                </h4>
+                  <h4
+                    id={`${listsId}-${id}`}
+                    className="min-w-0 truncate font-medium"
+                    title={`${title} (${changes.length})`}
+                  >
+                    {title} ({changes.length})
+                  </h4>
+                  {prepared ? (
+                    preparedActions?.(busy)
+                  ) : writable ? (
+                    <Button
+                      size="icon"
+                      className="size-7 shrink-0"
+                      aria-label={t('gitStageSelected')}
+                      title={t('gitStageSelected')}
+                      aria-busy={busy}
+                      disabled={
+                        busy || !snapshot.fingerprint || !selectedPaths.length
+                      }
+                      onClick={() =>
+                        action.mutate({
+                          operation: 'review',
+                          paths: selectedPaths,
+                        })
+                      }
+                    >
+                      {busy ? (
+                        <LoaderCircle
+                          className="size-4 animate-spin"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <ListPlus className="size-4" aria-hidden="true" />
+                      )}
+                    </Button>
+                  ) : null}
+                </div>
                 <ul
                   aria-labelledby={`${listsId}-${id}`}
                   tabIndex={split ? 0 : undefined}
@@ -251,33 +297,9 @@ export function GitStageChanges({
                     </li>
                   ))}
                 </ul>
-                {!prepared && changes.length > 0 && writable && (
-                  <div className={split ? 'shrink-0 border-t p-2' : undefined}>
-                    <Button
-                      size="sm"
-                      disabled={
-                        busy ||
-                        !selected.some((p) => changes.some((c) => c.path === p))
-                      }
-                      onClick={() =>
-                        action.mutate({
-                          operation: 'review',
-                          paths: selected.filter((p) =>
-                            changes.some((c) => c.path === p),
-                          ),
-                        })
-                      }
-                    >
-                      {t('gitStageSelected')}
-                    </Button>
-                  </div>
-                )}
               </section>
             ))}
         </div>
-      )}
-      {view !== 'actions' && (
-        <p className="shrink-0 text-muted-foreground">{t('gitStageHelp')}</p>
       )}
       {error && (
         <p role="alert" className="shrink-0 text-destructive">

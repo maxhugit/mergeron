@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { GitCommitHorizontal, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -69,6 +70,8 @@ export function GitCopyActions({
   actionScope = 'all',
   agentThreadId,
   resourceId,
+  iconOnly = false,
+  disabled = false,
 }: {
   projectId: string;
   copyId: string;
@@ -77,6 +80,8 @@ export function GitCopyActions({
   actionScope?: 'all' | 'commit' | 'push';
   agentThreadId?: string;
   resourceId?: string;
+  iconOnly?: boolean;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const client = useQueryClient();
@@ -186,13 +191,19 @@ export function GitCopyActions({
   const stale =
     mode === 'commit' && preview.data?.fingerprint !== reviewed?.fingerprint;
   return (
-    <div className="space-y-2">
+    <div className={iconOnly ? 'shrink-0 space-y-2' : 'space-y-2'}>
       <div className="flex flex-wrap gap-2">
         {actionScope !== 'push' && (
           <Button
-            size="sm"
-            variant="outline"
+            size={iconOnly ? 'icon' : 'sm'}
+            className={iconOnly ? 'size-7 shrink-0' : undefined}
+            variant={iconOnly ? 'default' : 'outline'}
+            aria-label={t('gitActionCommit')}
+            title={t('gitActionCommit')}
+            aria-busy={action.isPending}
             disabled={
+              disabled ||
+              action.isPending ||
               !snapshot.fingerprint ||
               !snapshot.branch ||
               !snapshot.changes.some(
@@ -204,7 +215,18 @@ export function GitCopyActions({
               open('commit');
             }}
           >
-            {t('gitActionCommit')}
+            {iconOnly ? (
+              action.isPending ? (
+                <LoaderCircle
+                  className="size-4 animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <GitCommitHorizontal className="size-4" aria-hidden="true" />
+              )
+            ) : (
+              t('gitActionCommit')
+            )}
           </Button>
         )}
         {actionScope !== 'commit' && (
@@ -212,7 +234,11 @@ export function GitCopyActions({
             size="sm"
             variant="outline"
             disabled={
-              !snapshot.fingerprint || !snapshot.branch || !snapshot.head
+              disabled ||
+              action.isPending ||
+              !snapshot.fingerprint ||
+              !snapshot.branch ||
+              !snapshot.head
             }
             onClick={(event) => {
               trigger.current = event.currentTarget;

@@ -88,7 +88,6 @@
   "gitStageSelected": "Prepare selection",
   "gitStageConfirm": "Confirm preparation",
   "gitStageReviewHelp": "Review the content to prepare. This does not commit or send anything to GitHub. Preparation is rejected if a file changes meanwhile. External Git filters are not executed.",
-  "gitStageHelp": "Prepare the files to include, then use Commit… to create a local commit. Removing a file from the commit preserves its working changes. Push afterwards from Synchronization.",
   "gitStageError": "Cannot prepare changes: refresh and review the files again. An active agent, concurrent edit, conflict or unsupported file may block the operation.",
   "gitStageDeletion": "This file deletion will be recorded in the next commit.",
   "gitStageBinary": "Binary file: the entire content will be prepared without a text preview.",

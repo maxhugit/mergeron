@@ -88,7 +88,6 @@
   "gitStageSelected": "Préparer la sélection",
   "gitStageConfirm": "Confirmer la préparation",
   "gitStageReviewHelp": "Vérifiez le contenu qui sera préparé. Aucun commit ni envoi vers GitHub à cette étape. Si un fichier change entre-temps, la préparation sera refusée. Les filtres Git externes ne sont pas exécutés.",
-  "gitStageHelp": "Préparez les fichiers à inclure, puis utilisez Commit… pour créer un commit local. Retirer du commit conserve les modifications dans vos fichiers. Le push se fait ensuite dans Synchronisation.",
   "gitStageError": "Préparation impossible : actualisez et vérifiez de nouveau les fichiers. Un agent actif, une modification concurrente, un conflit ou un fichier non pris en charge peut bloquer l’opération.",
   "gitStageDeletion": "La suppression de ce fichier sera enregistrée dans le prochain commit.",
   "gitStageBinary": "Fichier binaire : son contenu complet sera préparé, sans aperçu texte.",

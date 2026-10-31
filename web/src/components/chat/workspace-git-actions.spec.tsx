@@ -118,6 +118,33 @@ it('allows an explicit first staged commit but disables push before HEAD exists'
   expect(screen.getByRole('button', { name: 'Commit…' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Push…' })).toBeDisabled();
 });
+it('keeps an accessible icon-only commit trigger disabled until staged changes are available', () => {
+  const control = (state: GitSnapshot, disabled = false) => (
+    <GitCopyActions
+      projectId="p"
+      copyId="copy"
+      snapshot={state}
+      address={null}
+      actionScope="commit"
+      iconOnly
+      disabled={disabled}
+    />
+  );
+  const view = render(control({ ...snapshot, changes: [] }), { wrapper });
+  const button = screen.getByRole('button', { name: 'Commit…' });
+  expect(button).toHaveAttribute('title', 'Commit…');
+  expect(button.textContent).toBe('');
+  expect(button).toBeDisabled();
+  view.rerender(control(snapshot));
+  expect(button).toBeEnabled();
+  view.rerender(control(snapshot, true));
+  expect(button).toBeDisabled();
+  view.rerender(control({ ...snapshot, branch: null }));
+  expect(button).toBeDisabled();
+  view.rerender(control({ ...snapshot, fingerprint: undefined }));
+  expect(button).toBeDisabled();
+  expect(posts()).toHaveLength(0);
+});
 it('requires staged review, identity and explicit commit confirmation', async () => {
   showCopy();
   fireEvent.click(screen.getByRole('button', { name: 'Commit…' }));

@@ -636,6 +636,11 @@ it('separates local history from live GitHub branches and never activates a copy
   expect(await screen.findByText('Local change')).toBeVisible();
   tab('GitHub');
   expect(await screen.findByRole('tab', { name: 'PR' })).toBeVisible();
+  expect(
+    within(screen.getByRole('tabpanel', { name: 'GitHub' }))
+      .getAllByRole('tab')
+      .map((element) => element.textContent),
+  ).toEqual(['Fichiers', 'Branches', 'PR', 'Merges']);
   expect(screen.queryByText(/Données consultées sur GitHub/)).toBeNull();
   expect(screen.getByText('Local change')).not.toBeVisible();
   tab('Branches');

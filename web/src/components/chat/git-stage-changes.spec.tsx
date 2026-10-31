@@ -78,7 +78,7 @@ const bodies = () =>
     body: JSON.parse(options.body as string),
   }));
 
-it('keeps separate labelled lists and a selection action outside the scrolling list', () => {
+it('keeps the icon selection action in its labelled header, outside the scrolling list', () => {
   show(true, 'all', 'split');
   const unprepared = screen.getByRole('region', {
     name: 'Modifications à préparer (2)',
@@ -104,6 +104,13 @@ it('keeps separate labelled lists and a selection action outside the scrolling l
     name: 'Préparer la sélection',
   });
   expect(pendingList.contains(select)).toBe(false);
+  expect(select.parentElement).toContainElement(
+    within(unprepared).getByRole('heading'),
+  );
+  expect(select).toHaveAttribute('title', 'Préparer la sélection');
+  expect(select.textContent).toBe('');
+  expect(select).toBeEnabled();
+  expect(screen.queryByText(/Préparez les fichiers à inclure/)).toBeNull();
 });
 
 it('keeps both empty sections present with explicit empty states', () => {
@@ -131,11 +138,75 @@ it('keeps both empty sections present with explicit empty states', () => {
   ).toBeVisible();
   expect(screen.getAllByRole('list')).toHaveLength(2);
   expect(
-    screen.queryByRole('button', { name: 'Préparer la sélection' }),
-  ).toBeNull();
+    screen.getByRole('button', { name: 'Préparer la sélection' }),
+  ).toBeDisabled();
   expect(
     screen.queryByRole('button', { name: 'Retirer du commit' }),
   ).toBeNull();
+});
+
+it('disables the header action without a selected file or a current index fingerprint', () => {
+  const view = show();
+  for (const checkbox of screen.getAllByRole('checkbox'))
+    fireEvent.click(checkbox);
+  expect(
+    screen.getByRole('button', { name: 'Préparer la sélection' }),
+  ).toBeDisabled();
+  expect(api).not.toHaveBeenCalled();
+  view.unmount();
+  render(
+    <QueryClientProvider client={client}>
+      <GitStageChanges
+        projectId="p"
+        copyId="copy"
+        snapshot={{ ...snapshot, fingerprint: undefined }}
+        writable
+        layout="split"
+        onDiff={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Préparer la sélection' }),
+  ).toBeDisabled();
+});
+
+it('disables both header actions while the selected file review is pending', async () => {
+  let finish!: (value: object) => void;
+  api.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(
+    <QueryClientProvider client={client}>
+      <GitStageChanges
+        projectId="p"
+        copyId="copy"
+        snapshot={snapshot}
+        writable
+        layout="split"
+        preparedActions={(busy) => <button disabled={busy}>Commit…</button>}
+        onDiff={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  const select = screen.getByRole('button', { name: 'Préparer la sélection' });
+  const commit = screen.getByRole('button', { name: 'Commit…' });
+  expect(commit.parentElement).toContainElement(
+    within(
+      screen.getByRole('region', { name: 'Prêtes pour le commit (1)' }),
+    ).getByRole('heading'),
+  );
+  fireEvent.click(select);
+  await waitFor(() => expect(select).toBeDisabled());
+  expect(select).toHaveAttribute('aria-busy', 'true');
+  expect(commit).toBeDisabled();
+  finish({ reviewFingerprint: 'reviewed-content', files: [] });
+  await screen.findByRole('dialog');
+  await waitFor(() => expect(select).toBeEnabled());
+  expect(commit).toBeEnabled();
 });
 
 it('compares the correct side of a partly staged file in each split section', () => {
