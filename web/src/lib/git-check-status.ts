@@ -4,6 +4,7 @@ export type MergeCheckState =
   | 'passed'
   | 'failed'
   | 'running'
+  | 'waiting'
   | 'unknown'
   | 'none';
 
@@ -15,22 +16,25 @@ const failures = new Set([
   'action_required',
   'stale',
 ]);
-const running = new Set([
-  'pending',
-  'queued',
-  'requested',
-  'waiting',
-  'in_progress',
-]);
+const waiting = new Set(['pending', 'queued', 'requested', 'waiting']);
 
 /** Missing, truncated or unfamiliar results must never become a green badge. */
 export function mergeCheckState(
-  checks: Pick<GitMergeChecks, 'items' | 'limited'>,
+  checks: Pick<GitMergeChecks, 'items' | 'limited' | 'workflows'>,
 ): MergeCheckState {
-  const statuses = checks.items.map((item) => item.status);
+  const statuses = [
+    ...checks.items.map((item) => item.status),
+    ...(checks.workflows?.items.map((item) => item.status) ?? []),
+  ];
   if (statuses.some((status) => failures.has(status))) return 'failed';
-  if (statuses.some((status) => running.has(status))) return 'running';
-  if (checks.limited) return 'unknown';
+  if (statuses.includes('in_progress')) return 'running';
+  if (statuses.some((status) => waiting.has(status))) return 'waiting';
+  if (
+    checks.limited ||
+    checks.workflows?.limited ||
+    checks.workflows?.available === false
+  )
+    return 'unknown';
   if (!statuses.length) return 'none';
   if (
     statuses.includes('success') &&
@@ -47,5 +51,9 @@ export function checkTone(status: string) {
     return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
   if (failures.has(status) || status === 'failed')
     return 'bg-destructive/10 text-destructive';
+  if (status === 'running' || status === 'in_progress')
+    return 'bg-violet-500/10 text-violet-700 dark:text-violet-300';
+  if (status === 'waiting' || waiting.has(status))
+    return 'bg-amber-500/10 text-amber-800 dark:text-amber-300';
   return 'bg-muted text-muted-foreground';
 }

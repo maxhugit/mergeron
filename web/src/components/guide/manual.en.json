@@ -1272,6 +1272,15 @@
               "Enter the title, description and draft option, then confirm. If the branch changed after opening the dialog, refresh the preparation; an existing open PR is reused."
             ],
             "warning": "Creation requires an authorized GitHub connection. Opening a PR does not merge the branch or publish local changes that have not been pushed."
+          },
+          {
+            "title": "Follow-up after merge",
+            "paragraphs": [
+              "In GitHub → Merges, the Git merge has already happened. The large icon tracks its checks and publication: green for success, red for failure, violet while running and orange while waiting. Unknown states or missing checks remain grey.",
+              "Actions runs are tracked even before their jobs exist. If GitHub confirms a wait in a concurrency group, the dependency is displayed with a link; its PR number is only added when its merge commit matches exactly.",
+              "Checks refresh every 30 seconds. This view is read-only: it does not trigger merges, publication or deployment."
+            ],
+            "warning": "Missing Actions access or incomplete information is never displayed as success. If GitHub does not confirm a dependency, the interface says so without guessing. For a private repository, check the connection’s Actions read permission."
           }
         ],
         "related": ["git-remote", "git-branches", "server-update"]

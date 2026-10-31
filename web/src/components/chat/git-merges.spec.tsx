@@ -53,6 +53,147 @@ function show() {
   );
 }
 
+it('shows a strong waiting indicator and the verified PR dependency before any job exists', async () => {
+  api.mockImplementation((url: string) =>
+    Promise.resolve(
+      url.endsWith('/merges')
+        ? merges
+        : {
+            ...checks,
+            items: [],
+            workflows: {
+              available: true,
+              limited: false,
+              items: [
+                {
+                  id: 293,
+                  name: 'Publication Mergeron',
+                  status: 'pending',
+                  url: 'https://github.com/example/demo/actions/runs/293',
+                  waitReason: 'concurrency',
+                  groups: ['mergeron-refs/heads/main'],
+                  blockers: [
+                    {
+                      id: 292,
+                      name: 'Publication précédente',
+                      status: 'in_progress',
+                      pullRequest: 292,
+                      url: 'https://github.com/example/demo/actions/runs/292',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+    ),
+  );
+  const view = show();
+  expect(await screen.findByText('Attend la fin de :')).toBeInTheDocument();
+  expect(
+    screen.getByRole('link', { name: /PR #292/ }),
+  ).toHaveAttribute('href', 'https://github.com/example/demo/actions/runs/292');
+  const indicator = view.container.querySelector(
+    '[data-merge-state="waiting"]',
+  )!;
+  expect(indicator).toHaveTextContent('En attente');
+  expect(indicator.querySelector('svg')).toHaveClass('h-7', 'w-7');
+  expect(indicator.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  expect(screen.queryByText(/Aucun check signalé/)).not.toBeInTheDocument();
+  expect(screen.queryByText('Checks réussis')).not.toBeInTheDocument();
+});
+
+it('keeps an unknown dependency honest and never calls it a verified PR blocker', async () => {
+  api.mockImplementation((url: string) =>
+    Promise.resolve(
+      url.endsWith('/merges')
+        ? merges
+        : {
+            ...checks,
+            items: [],
+            workflows: {
+              available: true,
+              limited: false,
+              items: [
+                {
+                  id: 293,
+                  name: 'Publication',
+                  status: 'queued',
+                  url: 'https://github.com/example/demo/actions/runs/293',
+                  waitReason: 'unknown',
+                  queueLimited: true,
+                },
+              ],
+            },
+          },
+    ),
+  );
+  show();
+  expect(
+    await screen.findByText(/GitHub n’a pas confirmé/),
+  ).toBeInTheDocument();
+  expect(screen.queryByText('Attend la fin de :')).not.toBeInTheDocument();
+});
+
+it('does not keep a green result when Actions observation is unavailable', async () => {
+  api.mockImplementation((url: string) =>
+    Promise.resolve(
+      url.endsWith('/merges')
+        ? merges
+        : {
+            ...checks,
+            items: [{ ...checks.items[0], status: 'success' }],
+            workflows: { available: false, limited: false, items: [] },
+          },
+    ),
+  );
+  const view = show();
+  expect(
+    await screen.findByText(/État des exécutions indisponible/),
+  ).toBeInTheDocument();
+  expect(
+    view.container.querySelector('[data-merge-state="unknown"]'),
+  ).not.toBeNull();
+  expect(screen.queryByText('Checks réussis')).not.toBeInTheDocument();
+});
+
+it.each([
+  ['pending', 'waiting', 'En attente'],
+  ['in_progress', 'running', 'En cours'],
+  ['failure', 'failed', 'Checks en échec'],
+  ['success', 'passed', 'Checks réussis'],
+] as const)(
+  'updates the strong indicator from Actions state %s',
+  async (status, state, label) => {
+    api.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.endsWith('/merges')
+          ? merges
+          : {
+              ...checks,
+              items: [],
+              workflows: {
+                available: true,
+                limited: false,
+                items: [
+                  {
+                    id: 1,
+                    name: 'Publish',
+                    status,
+                    url: 'https://github.com/example/demo/actions/runs/1',
+                  },
+                ],
+              },
+            },
+      ),
+    );
+    const view = show();
+    await screen.findByText('Publish');
+    expect(
+      view.container.querySelector(`[data-merge-state="${state}"]`),
+    ).toHaveTextContent(label);
+  },
+);
+
 it('shows merge jobs and updates their result when the repository is refreshed', async () => {
   show();
   expect(

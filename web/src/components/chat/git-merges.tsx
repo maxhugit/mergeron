@@ -1,13 +1,64 @@
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, GitMerge, Loader2 } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  Clock3,
+  ExternalLink,
+  GitMerge,
+  Loader2,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { checkTone, mergeCheckState } from '@/lib/git-check-status';
+import {
+  checkTone,
+  mergeCheckState,
+  type MergeCheckState,
+} from '@/lib/git-check-status';
 import {
   gitGet,
   type GitMerges,
   type GitMergeChecks,
 } from '@/lib/workspace-git-api';
+
+const stateIcons = {
+  passed: CircleCheck,
+  failed: CircleX,
+  running: Loader2,
+  waiting: Clock3,
+  unknown: CircleHelp,
+  none: CircleHelp,
+};
+
+/** State is expressed by shape and text as well as semantic colour. */
+export function GitMergeIndicator({
+  state,
+  label,
+}: {
+  state: MergeCheckState;
+  label: string;
+}) {
+  const Icon = stateIcons[state];
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className="flex min-w-0 items-center gap-3 py-1"
+      data-merge-state={state}
+    >
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${checkTone(state)}`}
+      >
+        <Icon
+          className={`h-7 w-7 ${state === 'running' ? 'animate-spin motion-reduce:animate-none' : ''}`}
+          aria-hidden="true"
+        />
+      </span>
+      <span className="min-w-0 break-words text-sm font-semibold">{label}</span>
+    </div>
+  );
+}
 
 export function GitMerges({
   projectId,
@@ -104,6 +155,7 @@ function MergedPullRequest({
     passed: t('gitMergeChecksPassed'),
     failed: t('gitMergeChecksFailed'),
     running: t('gitCheckInProgress'),
+    waiting: t('gitCheckWaiting'),
     unknown: t('gitCheckUnknown'),
     none: t('gitNoChecks'),
   };
@@ -167,13 +219,10 @@ function MergedPullRequest({
       ) : (
         query.data && (
           <>
-            <p role="status">
-              <span
-                className={`inline-block rounded px-2 py-1 font-medium ${checkTone(state)}`}
-              >
-                {states[state]}
-              </span>
-            </p>
+            <GitMergeIndicator state={state} label={states[state]} />
+            {query.data.workflows && (
+              <WorkflowRuns workflows={query.data.workflows} />
+            )}
             <p className="break-all font-mono text-muted-foreground">
               {t('gitMergeCommit', { sha: query.data.head.slice(0, 7) })}
             </p>
@@ -222,5 +271,110 @@ function MergedPullRequest({
         )
       )}
     </article>
+  );
+}
+
+function WorkflowRuns({
+  workflows,
+}: {
+  workflows: NonNullable<GitMergeChecks['workflows']>;
+}) {
+  const { t } = useTranslation('workspaces');
+  const statusLabel = (status: string) => {
+    const key: Record<string, string> = {
+      pending: 'gitCheckPending',
+      queued: 'gitCheckQueued',
+      waiting: 'gitCheckWaiting',
+      requested: 'gitCheckRequested',
+      in_progress: 'gitCheckInProgress',
+      success: 'gitCheckSuccess',
+      failure: 'gitCheckFailure',
+      error: 'gitCheckError',
+      cancelled: 'gitCheckCancelled',
+      timed_out: 'gitCheckTimedOut',
+      action_required: 'gitCheckActionRequired',
+      skipped: 'gitCheckSkipped',
+      neutral: 'gitCheckNeutral',
+      stale: 'gitCheckStale',
+    };
+    return t(key[status] ?? 'gitCheckUnknown');
+  };
+  return (
+    <div className="min-w-0 space-y-2">
+      {!workflows.available && (
+        <p className="text-muted-foreground">{t('gitWorkflowUnavailable')}</p>
+      )}
+      {workflows.items.length > 0 && (
+        <h4 className="font-medium">{t('gitWorkflows')}</h4>
+      )}
+      <ul className="min-w-0 space-y-3">
+        {workflows.items.map((run) => (
+          <li key={run.id} className="min-w-0 space-y-1 rounded border p-2">
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <a
+                href={run.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-w-0 break-words text-primary underline [overflow-wrap:anywhere]"
+              >
+                {run.name || t('gitWorkflowRun', { id: run.id })}
+              </a>
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 ${checkTone(run.status)}`}
+              >
+                {statusLabel(run.status)}
+              </span>
+            </div>
+            {run.waitReason === 'concurrency' && (
+              <p className="break-words text-muted-foreground [overflow-wrap:anywhere]">
+                {t('gitWorkflowConcurrency', {
+                  groups: run.groups?.join(', '),
+                })}
+              </p>
+            )}
+            {run.blockers?.length ? (
+              <>
+                <p className="font-medium">{t('gitWorkflowBlockedBy')}</p>
+                <ul className="min-w-0 space-y-1">
+                  {run.blockers.map((blocker) => (
+                    <li key={blocker.id} className="min-w-0">
+                      <a
+                        href={blocker.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="break-words text-primary underline [overflow-wrap:anywhere]"
+                      >
+                        {blocker.pullRequest
+                          ? t('gitWorkflowBlockerPr', {
+                              number: blocker.pullRequest,
+                            })
+                          : t('gitWorkflowRun', { id: blocker.id })}
+                        {' · '}
+                        {blocker.name}
+                        {blocker.jobName ? ` · ${blocker.jobName}` : ''}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              run.waitReason && (
+                <p className="text-muted-foreground">
+                  {t('gitWorkflowWaitUnknown')}
+                </p>
+              )
+            )}
+            {run.queueLimited && (
+              <p className="text-muted-foreground">
+                {t('gitWorkflowQueueLimited')}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+      {workflows.limited && (
+        <p className="text-muted-foreground">{t('gitWorkflowLimited')}</p>
+      )}
+    </div>
   );
 }

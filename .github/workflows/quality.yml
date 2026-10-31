@@ -153,6 +153,8 @@ jobs:
           src/projects/project-agent-creation.spec.ts
           src/projects/workspace-copies.service.spec.ts
           src/projects/workspace-git.service.spec.ts
+          src/projects/workspace-git-merges.service.spec.ts
+          src/projects/github-workflow-observation.spec.ts
           src/projects/workspace-git-limits.spec.ts
           src/projects/project-connection-tools.service.spec.ts
           src/threads/git-mutation-gate.service.spec.ts
@@ -217,6 +219,7 @@ jobs:
           src/components/chat/workspace-tree.browser.tsx
           src/components/files/file-actions-menu.browser.tsx
           src/components/terminal/terminal-read-recovery.browser.tsx
+          src/components/chat/git-merges.browser.tsx
 
       - name: Preserve preview interface screenshots
         if: always() && matrix.part == 'frontend'

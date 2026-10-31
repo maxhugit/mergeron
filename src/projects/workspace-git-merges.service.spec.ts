@@ -5,10 +5,7 @@ import type { WorkspaceCopiesService } from './workspace-copies.service';
 
 const resolve = vi.fn();
 const copies = { list: vi.fn() };
-const service = new WorkspaceGitService(
-  copies as unknown as WorkspaceCopiesService,
-  { resolveForTransfer: resolve } as unknown as WorkspaceResourcesService,
-);
+let service: WorkspaceGitService;
 const sha = 'b'.repeat(40);
 const response = (value: unknown) => ({
   ok: true,
@@ -23,6 +20,10 @@ const mergedPr = (number: number, mergedAt: string | null) => ({
   html_url: 'javascript:alert(1)',
 });
 beforeEach(() => {
+  service = new WorkspaceGitService(
+    copies as unknown as WorkspaceCopiesService,
+    { resolveForTransfer: resolve } as unknown as WorkspaceResourcesService,
+  );
   vi.clearAllMocks();
   resolve.mockReturnValue({
     resource: {
@@ -104,7 +105,7 @@ it('reads the merge SHA rather than the old PR head and combines jobs and status
     url: `https://github.com/example/demo/commit/${sha}/checks`,
     items: [{ status: 'failure' }, { status: 'queued' }, { status: 'pending' }],
   });
-  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(fetch).toHaveBeenCalledTimes(4);
 });
 
 it.each([
@@ -130,6 +131,58 @@ it('validates identifiers before contacting GitHub', async () => {
     service.mergeChecks('project', 'connection', '../secret'),
   ).rejects.toThrow('Invalid pull request');
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('coalesces Actions polling and isolates the cache across credentials', async () => {
+  const fetch = vi.fn().mockImplementation((url: string) =>
+    Promise.resolve(
+      response(
+        url.endsWith('/pulls/12')
+          ? { merged: true, merge_commit_sha: sha }
+          : url.includes('/check-runs?')
+            ? { total_count: 0, check_runs: [] }
+            : url.includes('/status?')
+              ? { total_count: 0, statuses: [] }
+              : {
+                  total_count: 1,
+                  workflow_runs: [
+                    {
+                      id: 1,
+                      name: 'Publish',
+                      head_sha: sha,
+                      status: 'in_progress',
+                      conclusion: null,
+                    },
+                  ],
+                },
+      ),
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  const results = await Promise.all([
+    service.mergeChecks('p', 'c', '12'),
+    service.mergeChecks('p', 'c', '12'),
+  ]);
+  expect(results[0].workflows).toMatchObject({
+    available: true,
+    items: [{ status: 'in_progress' }],
+  });
+  expect(
+    fetch.mock.calls.filter(([url]) => String(url).includes('/actions/runs?')),
+  ).toHaveLength(1);
+  resolve.mockReturnValue({
+    resource: {
+      enabled: true,
+      type: 'git',
+      address: 'https://github.com/example/demo.git',
+    },
+    secret: { token: 'other-token' },
+  });
+  await service.mergeChecks('p', 'c', '12');
+  expect(
+    fetch.mock.calls.filter(([url]) => String(url).includes('/actions/runs?')),
+  ).toHaveLength(2);
+  expect(JSON.stringify(results)).not.toContain('private-token');
 });
 
 it('signals a truncated history even when all 30 recently closed PRs were not merged', async () => {
