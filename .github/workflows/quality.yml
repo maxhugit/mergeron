@@ -1,8 +1,8 @@
 name: Validate pull request
 
 on:
+  # Validate stacked PRs against their prerequisite branch as well as main.
   pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       validate_image:
@@ -131,6 +131,8 @@ jobs:
           src/database/database.service.spec.ts
           src/database/pending-request-migration.spec.ts
           src/database/project-locations-migration.spec.ts
+          src/database/migration-order.spec.ts
+          src/agent-monitors
           src/http-stack.spec.ts
           src/archive
           src/browser
