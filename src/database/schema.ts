@@ -1495,6 +1495,111 @@ export const projectAgentThreads = sqliteTable(
   ],
 );
 
+/** Server-owned wakeups: a schedule is not an execution or an access grant. */
+export const agentMonitors = sqliteTable(
+  'agent_monitors',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => projectAgentThreads.threadId, { onDelete: 'cascade' }),
+    personId: text('person_id')
+      .notNull()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    name: text('name').notNull(),
+    instructions: text('instructions').notNull(),
+    intervalMs: integer('interval_ms'),
+    nextRunAt: integer('next_run_at'),
+    expiresAt: integer('expires_at').notNull(),
+    maxRuns: integer('max_runs').notNull(),
+    maxRunMs: integer('max_run_ms').notNull(),
+    runCount: integer('run_count').notNull().default(0),
+    accessMode: text('access_mode')
+      .$type<'readOnly' | 'workspaceWrite'>()
+      .notNull()
+      .default('readOnly'),
+    status: text('status')
+      .$type<
+        | 'active'
+        | 'paused'
+        | 'completed'
+        | 'expired'
+        | 'exhausted'
+        | 'needs_attention'
+      >()
+      .notNull()
+      .default('active'),
+    lastReason: text('last_reason'),
+    lastResultDigest: text('last_result_digest'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_agent_monitors_request').on(
+      table.threadId,
+      table.requestId,
+    ),
+    index('idx_agent_monitors_due').on(table.status, table.nextRunAt),
+    index('idx_agent_monitors_project').on(table.projectId, table.updatedAt),
+    check(
+      'agent_monitor_limits',
+      sql`${table.maxRuns} BETWEEN 1 AND 100 AND ${table.maxRunMs} BETWEEN 30000 AND 1800000 AND ${table.runCount} >= 0`,
+    ),
+    check(
+      'agent_monitor_interval',
+      sql`${table.intervalMs} IS NULL OR ${table.intervalMs} BETWEEN 60000 AND 2592000000`,
+    ),
+  ],
+);
+
+/** The nullable reservation serializes wakeups across processes and monitors. */
+export const agentMonitorRuns = sqliteTable(
+  'agent_monitor_runs',
+  {
+    id: text('id').primaryKey(),
+    monitorId: text('monitor_id')
+      .notNull()
+      .references(() => agentMonitors.id, { onDelete: 'cascade' }),
+    activeThreadId: text('active_thread_id'),
+    turnId: text('turn_id'),
+    status: text('status')
+      .$type<
+        | 'claimed'
+        | 'dispatching'
+        | 'running'
+        | 'completed'
+        | 'failed'
+        | 'deferred'
+        | 'uncertain'
+      >()
+      .notNull(),
+    scheduledAt: integer('scheduled_at').notNull(),
+    claimedAt: integer('claimed_at').notNull(),
+    leaseUntil: integer('lease_until').notNull(),
+    finishedAt: integer('finished_at'),
+    result: text('result').notNull().default(''),
+    reason: text('reason'),
+    disposition: text('disposition')
+      .$type<'continue' | 'complete' | 'attention'>()
+      .notNull()
+      .default('continue'),
+    changed: integer('changed', { mode: 'boolean' }).notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex('idx_agent_monitor_active_thread').on(table.activeThreadId),
+    index('idx_agent_monitor_runs_history').on(
+      table.monitorId,
+      table.claimedAt,
+    ),
+    index('idx_agent_monitor_runs_lease').on(table.status, table.leaseUntil),
+  ],
+);
+
 /** Lightweight OpenAI API conversations, separate from Codex work threads. */
 export const simpleChatThreads = sqliteTable(
   'simple_chat_threads',

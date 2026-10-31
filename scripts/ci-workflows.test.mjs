@@ -19,6 +19,12 @@ const job = (workflow, name) => {
   return match[1];
 };
 
+test('stacked PRs receive the full validation without a main-only trigger filter', () => {
+  assert.match(quality, /^  pull_request:\s*\n  workflow_dispatch:/m);
+  assert.match(quality, /^          src\/agent-monitors$/m);
+  assert.match(quality, /^          src\/database\/migration-order.spec.ts$/m);
+});
+
 test('all independent image checks run concurrently, including UI/docs-only PRs', () => {
   for (const name of ['image', 'manager-image', 'browser-image']) {
     const block = job(quality, name);
