@@ -143,6 +143,9 @@ export class InternalMcpService implements OnModuleDestroy {
           // Only the server-bound check's result can be updated. This never
           // approves a command, file mutation or another scheduled execution.
           agent_monitor_report: { approval_mode: 'approve' },
+          // Scheduling only continues the assigned task, with server-captured
+          // rights and tighter limits. It cannot start a second live plan.
+          agent_monitor_manage: { approval_mode: 'approve' },
         },
       },
     };
@@ -236,8 +239,8 @@ export class InternalMcpService implements OnModuleDestroy {
       }
       this.tools.assertProject(cap.threadId, cap.projectId);
       // Scoped conversation metadata is independent of filesystem access.
-      // Monitor creation remains read-only; only a human can resume or enlarge
-      // the grant, and unattended turns can report but never create monitors.
+      // Monitor creation cannot exceed the active turn's observed rights;
+      // unattended checks can report/continue but never clone their schedule.
       if (
         !readOnly &&
         ![
@@ -301,6 +304,7 @@ export class InternalMcpService implements OnModuleDestroy {
               { ...args, tool: name },
               check,
               lease!.turnId,
+              lease!.writes,
             );
           });
         } finally {

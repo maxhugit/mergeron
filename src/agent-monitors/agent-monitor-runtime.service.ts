@@ -118,6 +118,16 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
     return identity;
   }
 
+  accessForSchedule(threadId: string): 'readOnly' | 'workspaceWrite' {
+    const policy = this.settings.readSecurityPolicy(threadId);
+    if (!policy.observed || !policy.sandboxPolicy || !policy.approvalPolicy)
+      throw new ConflictException('MONITOR_POLICY_UNKNOWN');
+    const type = policy.sandboxPolicy.type;
+    if (type !== 'readOnly' && type !== 'workspaceWrite')
+      throw new ForbiddenException('MONITOR_POLICY_EXCEEDS_GRANT');
+    return type;
+  }
+
   async verifyIdleForResume(monitor: AgentMonitor) {
     if (!this.manager.getClient())
       throw new ConflictException('MONITOR_ENGINE_UNAVAILABLE');

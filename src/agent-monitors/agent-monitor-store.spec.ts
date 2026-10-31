@@ -106,6 +106,32 @@ beforeEach(() => {
 afterEach(() => database.sqlite.close());
 
 describe('durable agent monitor store', () => {
+  it('bounds self-scheduled work to one live plan, preserves idempotency and cannot reset it with another request ID', () => {
+    const automatic = (overrides: Partial<CreateAgentMonitor> = {}) =>
+      store.create('p', 't', 'admin', definition(overrides), NOW, {
+        agentScheduled: true,
+      });
+    for (const overrides of [
+      { maxRuns: 21 },
+      { maxRunMs: 300_001 },
+      { expiresAt: NOW + 86_400_001 },
+    ])
+      expect(() => automatic(overrides)).toThrow('MONITOR_AGENT_LIMIT');
+    const item = automatic();
+    expect(automatic().id).toBe(item.id);
+    expect(() => automatic({ requestId: 'clone' })).toThrow(
+      'MONITOR_THREAD_CAPACITY',
+    );
+    store.setPaused('p', item.id, true, NOW);
+    expect(() => automatic({ requestId: 'bypass-pause' })).toThrow(
+      'MONITOR_THREAD_CAPACITY',
+    );
+    expect(store.get('p', item.id)).toMatchObject({
+      status: 'paused',
+      runCount: 0,
+      maxRuns: 20,
+    });
+  });
   it.each(['claimed', 'dispatching', 'running'] as const)(
     'yields %s work to a human without pausing, resetting limits or accepting a late completion',
     (phase) => {

@@ -171,6 +171,27 @@ afterEach(async () => {
 });
 
 describe('persistent authenticated monitor runtime', () => {
+  it('captures only observed bounded policies for an agent-created check', () => {
+    expect(runtime.accessForSchedule('t')).toBe('readOnly');
+    settings.readSecurityPolicy.mockReturnValue({
+      observed: true,
+      sandboxPolicy: { type: 'workspaceWrite' },
+      approvalPolicy: 'on-request',
+    });
+    expect(runtime.accessForSchedule('t')).toBe('workspaceWrite');
+    settings.readSecurityPolicy.mockReturnValue({
+      observed: true,
+      sandboxPolicy: { type: 'dangerFullAccess' },
+      approvalPolicy: 'never',
+    });
+    expect(() => runtime.accessForSchedule('t')).toThrow(
+      'MONITOR_POLICY_EXCEEDS_GRANT',
+    );
+    settings.readSecurityPolicy.mockReturnValue({ observed: false });
+    expect(() => runtime.accessForSchedule('t')).toThrow(
+      'MONITOR_POLICY_UNKNOWN',
+    );
+  });
   it('reuses the existing thread without overriding its security or opening another conversation', async () => {
     const monitor = create();
     await runtime.tick();

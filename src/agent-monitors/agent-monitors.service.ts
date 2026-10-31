@@ -108,6 +108,7 @@ export class AgentMonitorsService {
     turnId: string,
     input: Record<string, unknown>,
     assertActive: () => void,
+    canWrite = false,
   ) {
     assertActive();
     const access = currentAccess();
@@ -187,11 +188,23 @@ export class AgentMonitorsService {
       const { operation, userRequest, ...definition } = parsed.data;
       void operation;
       void userRequest;
+      const observed = this.runtime.accessForSchedule(threadId);
+      assertActive();
       return {
-        monitor: this.store.create(projectId, threadId, actor.personId!, {
-          ...definition,
-          accessMode: 'readOnly',
-        }),
+        monitor: this.store.create(
+          projectId,
+          threadId,
+          actor.personId!,
+          {
+            ...definition,
+            accessMode:
+              canWrite && observed === 'workspaceWrite'
+                ? 'workspaceWrite'
+                : 'readOnly',
+          },
+          Date.now(),
+          { agentScheduled: true },
+        ),
       };
     }
     owned(parsed.data.monitorId);

@@ -62,6 +62,7 @@ export class AgentMonitorStore {
     personId: string,
     input: CreateAgentMonitor,
     now = Date.now(),
+    options: { agentScheduled?: boolean } = {},
   ): AgentMonitor {
     const requestId = text(input.requestId, 128);
     if (!/^[\w-]+$/.test(requestId))
@@ -124,6 +125,33 @@ export class AgentMonitorStore {
           if (existing.fingerprint !== fingerprint)
             throw new ConflictException('MONITOR_REQUEST_CONFLICT');
           return existing;
+        }
+        if (options.agentScheduled) {
+          if (
+            definition.maxRuns > MONITOR_LIMITS.maximumAgentRuns ||
+            definition.maxRunMs > MONITOR_LIMITS.maximumAgentRunMs ||
+            definition.expiresAt > now + MONITOR_LIMITS.maximumAgentLifetimeMs
+          )
+            throw new BadRequestException('MONITOR_AGENT_LIMIT');
+          // Automatic continuation reuses one bounded plan; an agent must not
+          // multiply schedules or reset a live plan with new request IDs.
+          if (
+            this.db
+              .select({ id: monitors.id })
+              .from(monitors)
+              .where(
+                and(
+                  eq(monitors.threadId, threadId),
+                  inArray(monitors.status, [
+                    'active',
+                    'paused',
+                    'needs_attention',
+                  ]),
+                ),
+              )
+              .get()
+          )
+            throw new ConflictException('MONITOR_THREAD_CAPACITY');
         }
         if (
           definition.runAt < now - MONITOR_LIMITS.minimumIntervalMs ||

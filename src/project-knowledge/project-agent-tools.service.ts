@@ -182,6 +182,7 @@ export class ProjectAgentToolsService {
     value: unknown,
     assertActive: () => void = () => {},
     turnId?: string,
+    canWrite = false,
   ) {
     assertActive();
     const scope = this.scope(threadId);
@@ -199,7 +200,14 @@ export class ProjectAgentToolsService {
         throw new ForbiddenException('MONITOR_AUTHENTICATED_TURN_REQUIRED');
       return this.modules
         .get<AgentMonitorsService>('AGENT_MONITOR_TOOLS', { strict: false })
-        .tool(scope.project.id, threadId, turnId, input, assertActive);
+        .tool(
+          scope.project.id,
+          threadId,
+          turnId,
+          input,
+          assertActive,
+          canWrite,
+        );
     }
     if (
       input.tool === 'project_preview_prepare' ||
