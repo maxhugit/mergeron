@@ -74,6 +74,23 @@ test('reviewed Git replacement receives responsive browser coverage without bypa
   assert.match(quality, /^          src\/internal-mcp$/m);
 });
 
+test('mobile viewport geometry is checked in both engines without replacing the other browser suites', () => {
+  assert.match(
+    quality,
+    /name: Test mobile viewport layout in Chromium and WebKit\n        if: matrix.part == 'frontend'/,
+  );
+  assert.ok(quality.includes('src/lib/mobile-viewport.browser.tsx'));
+  assert.ok(
+    quality.includes('src/components/chat/compact-composer.browser.tsx'),
+  );
+  assert.ok(
+    quality.includes('name: Test session recovery in Chromium and WebKit'),
+  );
+  assert.ok(
+    quality.includes('name: Test retained agent views in Chromium and WebKit'),
+  );
+});
+
 test('all independent image checks run concurrently, including UI/docs-only PRs', () => {
   for (const name of ['image', 'manager-image', 'browser-image']) {
     const block = job(quality, name);

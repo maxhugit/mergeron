@@ -111,6 +111,18 @@ body {
   overscroll-behavior: none;
 }
 
+:root {
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+}
+
+html.keyboard-open {
+  /* The home-indicator inset belongs to the screen, not the keyboard edge. */
+  --app-safe-bottom: 0px;
+}
+
 /*
  * `--app-vh` and `--app-vtop` mirror the visual viewport. Fixed positioning
  * keeps iOS from scrolling the document itself when a textarea receives focus;
@@ -119,18 +131,64 @@ body {
 #root {
   position: fixed;
   inset: 0 0 auto;
+  height: 100%;
   height: 100dvh;
   overflow: hidden;
   /* The composer owns the bottom safe area. Keeping it here too reserves the
      iPhone home-indicator inset twice and leaves a visible empty band. */
-  padding-top: env(safe-area-inset-top);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  padding-top: var(--app-safe-top);
+  padding-left: var(--app-safe-left);
+  padding-right: var(--app-safe-right);
 }
 
-/* Only the software keyboard needs the visual viewport's measured rectangle.
- * Without a keyboard, `100dvh` includes the installed PWA's bottom safe area;
- * the fixed containing block used by `bottom: 0` can stop above that area. */
+/* Installed iOS apps have a different fixed containing block from Safari.
+   Anchor to document coordinates and the measured viewport, not a fixed
+   100dvh box which can stop a status-bar's height above the physical bottom.
+   Never add screen.height or a guessed iPhone/status-bar pixel correction. */
+html.ios-standalone #root {
+  position: absolute;
+  isolation: isolate;
+  top: var(--app-vtop, 0px);
+  height: var(--app-vh, 100dvh);
+}
+
+/* A real opaque fixed strip lets iOS sample the app's status-bar colour.
+   Pseudo-elements and a translucent in-flow header do not reliably do so.
+   It only paints the safe area; it never adds a second content inset. */
+#app-status-bar {
+  display: none;
+}
+
+html.ios-standalone #app-status-bar {
+  display: block;
+  position: fixed;
+  inset: 0 0 auto;
+  height: max(1px, var(--app-safe-top));
+  z-index: 40;
+  pointer-events: none;
+  background: var(--card);
+}
+
+html.ios-standalone .glass-bar {
+  background: var(--card);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* The canvas fills the viewport; only the bottom controls reserve the home
+   indicator once. With a keyboard, keep just the ordinary control spacing. */
+.app-composer {
+  padding-bottom: var(--app-safe-bottom);
+}
+
+@media (min-width: 640px) {
+  .app-composer {
+    padding-bottom: max(0.75rem, var(--app-safe-bottom));
+  }
+}
+
+/* Safari/other browsers keep their dynamic CSS viewport outside the keyboard.
+ * Installed iOS apps use the measured rectangle above in both states. */
 html.keyboard-open #root {
   top: var(--app-vtop, 0px);
   bottom: auto;
@@ -148,10 +206,16 @@ html.keyboard-open #root {
   min-height: 0;
   gap: 0;
   overflow: hidden;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
+  padding-top: var(--app-safe-top);
+  padding-bottom: var(--app-safe-bottom);
+  padding-left: var(--app-safe-left);
+  padding-right: var(--app-safe-right);
+}
+
+html.ios-standalone [data-slot='sheet-content'].mobile-sidebar-sheet {
+  position: absolute;
+  top: var(--app-vtop, 0px);
+  height: var(--app-vh, 100dvh);
 }
 
 html.keyboard-open [data-slot='sheet-content'].mobile-sidebar-sheet {
