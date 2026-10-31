@@ -1,6 +1,7 @@
 /**
- * Mirrors the visual viewport into `--app-vh` and `--app-vtop`, the size and
- * position every full-height surface in the app is anchored to.
+ * Mirrors keyboard geometry into `--app-vh` and `--app-vtop`.
+ * Installed iOS apps otherwise use the native CSS layout viewport and let iOS
+ * reserve safe areas, rather than freezing a possibly stale JS rectangle.
  *
  * `100dvh` tracks retractable browser chrome but not the software keyboard on
  * iOS, where the keyboard neither resizes the layout viewport nor honours
@@ -84,6 +85,25 @@ export function installMobileViewportFixes(): () => void {
     /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const displayMode = window.matchMedia?.('(display-mode: standalone)');
+  const viewportMeta = document.querySelector<HTMLMetaElement>(
+    'meta[name="viewport"]',
+  );
+  const originalViewport = viewportMeta?.getAttribute('content');
+  // The installed iOS web view, like an ordinary document, owns its safe areas.
+  // Keep Safari/Android's author policy intact; do not disable user zoom or
+  // inject a guessed screen height. This runs before the first React render.
+  const nativeViewport = originalViewport
+    ?.split(',')
+    .map((part) => part.trim())
+    .filter((part) => !/^(viewport-fit|interactive-widget)\s*=/i.test(part))
+    .join(', ');
+  const applyViewportPolicy = (installedIos: boolean) => {
+    if (!viewportMeta || originalViewport == null) return;
+    const content = installedIos ? nativeViewport! : originalViewport;
+    if (viewportMeta.getAttribute('content') !== content) {
+      viewportMeta.setAttribute('content', content);
+    }
+  };
   let appliedHeight: string | null = null;
   let appliedTop: string | null = null;
   let restingHeight = 0;
@@ -102,14 +122,14 @@ export function installMobileViewportFixes(): () => void {
     // offset as well as its height or the composer appears at the top of the
     // screen, outside the portion left visible above the keyboard.
     if (viewport && viewport.scale !== 1) return;
-    root.classList.toggle(
-      'ios-standalone',
+    const installedIos =
       ios &&
-        Boolean(
-          displayMode?.matches ||
-          (navigator as Navigator & { standalone?: boolean }).standalone,
-        ),
-    );
+      Boolean(
+        displayMode?.matches ||
+        (navigator as Navigator & { standalone?: boolean }).standalone,
+      );
+    applyViewportPolicy(installedIos);
+    root.classList.toggle('ios-standalone', installedIos);
     const visualHeight = viewport?.height || 0;
     const layoutHeight = Math.max(
       window.innerHeight || 0,
@@ -190,6 +210,7 @@ export function installMobileViewportFixes(): () => void {
     window.visualViewport?.removeEventListener('scroll', sync);
     root.classList.remove('keyboard-open');
     root.classList.remove('ios-standalone');
+    applyViewportPolicy(false);
     timers.forEach((timer) => window.clearTimeout(timer));
   };
 }

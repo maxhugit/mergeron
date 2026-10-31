@@ -141,32 +141,22 @@ html.keyboard-open {
   padding-right: var(--app-safe-right);
 }
 
-/* Installed iOS apps have a different fixed containing block from Safari.
-   Anchor to document coordinates and the measured viewport, not a fixed
-   100dvh box which can stop a status-bar's height above the physical bottom.
-   Never add screen.height or a guessed iPhone/status-bar pixel correction. */
+/* Installed iOS apps use the ordinary, automatically inset viewport (no
+   viewport-fit=cover). iOS already protects the status bar, notch and home
+   indicator. Applying env() again would reserve those areas a second time.
+   A resting app must not be pinned to stale innerHeight/visualViewport data. */
+html.ios-standalone {
+  --app-safe-top: 0px;
+  --app-safe-right: 0px;
+  --app-safe-bottom: 0px;
+  --app-safe-left: 0px;
+}
+
 html.ios-standalone #root {
   position: absolute;
   isolation: isolate;
-  top: var(--app-vtop, 0px);
-  height: var(--app-vh, 100dvh);
-}
-
-/* A real opaque fixed strip lets iOS sample the app's status-bar colour.
-   Pseudo-elements and a translucent in-flow header do not reliably do so.
-   It only paints the safe area; it never adds a second content inset. */
-#app-status-bar {
-  display: none;
-}
-
-html.ios-standalone #app-status-bar {
-  display: block;
-  position: fixed;
-  inset: 0 0 auto;
-  height: max(1px, var(--app-safe-top));
-  z-index: 40;
-  pointer-events: none;
-  background: var(--card);
+  top: 0;
+  height: 100%;
 }
 
 html.ios-standalone .glass-bar {
@@ -187,8 +177,8 @@ html.ios-standalone .glass-bar {
   }
 }
 
-/* Safari/other browsers keep their dynamic CSS viewport outside the keyboard.
- * Installed iOS apps use the measured rectangle above in both states. */
+/* JavaScript geometry is only needed while a software keyboard occludes the
+ * native layout. Dismissing it restores CSS sizing even if focus remains. */
 html.keyboard-open #root {
   top: var(--app-vtop, 0px);
   bottom: auto;
@@ -214,8 +204,8 @@ html.keyboard-open #root {
 
 html.ios-standalone [data-slot='sheet-content'].mobile-sidebar-sheet {
   position: absolute;
-  top: var(--app-vtop, 0px);
-  height: var(--app-vh, 100dvh);
+  top: 0;
+  height: 100%;
 }
 
 html.keyboard-open [data-slot='sheet-content'].mobile-sidebar-sheet {

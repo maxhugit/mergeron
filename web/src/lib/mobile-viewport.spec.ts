@@ -73,6 +73,7 @@ describe('installMobileViewportFixes', () => {
     delete (navigator as Navigator & { standalone?: boolean }).standalone;
     Reflect.deleteProperty(navigator, 'maxTouchPoints');
     document.documentElement.removeAttribute('style');
+    document.querySelector('meta[data-test-viewport]')?.remove();
     useUserAgent(CHROME_ANDROID);
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -83,6 +84,32 @@ describe('installMobileViewportFixes', () => {
   function install(): void {
     cleanups.push(installMobileViewportFixes());
   }
+
+  it('uses automatic iOS safe areas only in the installed app, preserving and restoring the author viewport', () => {
+    useUserAgent('Mozilla/5.0 (iPhone)');
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.dataset.testViewport = '';
+    const original =
+      'width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content';
+    meta.content = original;
+    document.head.append(meta);
+    const media = Object.assign(new EventTarget(), { matches: false });
+    vi.stubGlobal('matchMedia', () => media);
+    useViewport(844);
+    install();
+    expect(meta.content).toBe(original);
+    media.matches = true;
+    media.dispatchEvent(new Event('change'));
+    expect(meta.content).toBe('width=device-width, initial-scale=1.0');
+    media.matches = false;
+    media.dispatchEvent(new Event('change'));
+    expect(meta.content).toBe(original);
+    media.matches = true;
+    media.dispatchEvent(new Event('change'));
+    cleanups.splice(0).forEach((cleanup) => cleanup());
+    expect(meta.content).toBe(original);
+  });
 
   it.each([
     'Mozilla/5.0 (iPhone; CPU iPhone OS 17_7 like Mac OS X)',
