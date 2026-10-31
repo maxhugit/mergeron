@@ -137,6 +137,7 @@ docker run --name "$fixture_name" --rm --network none --read-only \
   --security-opt no-new-privileges:true --memory 512m --cpus 0.25 --pids-limit 64 \
   -e TMPDIR=/fixture -v "$fixture_volume:/fixture" \
   --mount "type=bind,src=$(pwd)/manager/test/updater.test.mjs,dst=/opt/mergeron-manager/test/updater.test.mjs,readonly" \
+  --mount "type=bind,src=$(pwd)/manager/test/backup-archive.test.mjs,dst=/opt/mergeron-manager/test/backup-archive.test.mjs,readonly" \
   --entrypoint /nodejs/bin/node "$image" --test \
-  --test-name-pattern='compressed|recovery discards a crashed extraction|minimal recovery restores private directory ownership' \
-  test/updater.test.mjs
+  --test-name-pattern='^(a corrupt compressed backup|compressed backups report|recovery discards a crashed extraction|minimal recovery restores private directory ownership|preserves fractional timestamps)' \
+  test/updater.test.mjs test/backup-archive.test.mjs

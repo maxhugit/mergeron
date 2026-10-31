@@ -12,6 +12,7 @@ import {
   link,
   chmod,
   utimes,
+  lutimes,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -48,6 +49,7 @@ test(
     await chmod(join(f.source, name), 0o640);
     const date = new Date('2026-01-02T03:04:05.123Z');
     await utimes(join(f.source, name), date, date);
+    const originalMtime = (await lstat(join(f.source, name))).mtimeMs;
     await link(join(f.source, name), join(f.source, 'home/hardlink'));
     await symlink('/not-followed', join(f.source, 'home/symlink'));
     await writeFile(join(f.source, 'home/plain.txt'), 'standard-reader');
@@ -82,7 +84,9 @@ test(
     const restored = await lstat(join(f.destination, name));
     assert.equal(restored.mode & 0o777, 0o640);
     assert.equal(restored.uid, (await lstat(join(f.source, name))).uid);
-    assert.equal(restored.mtimeMs, date.getTime());
+    // Compare with what the source filesystem actually stored, not the Date
+    // requested from utimes (Linux/libuv may already have rounded that value).
+    assert.equal(restored.mtimeMs, originalMtime);
     assert.equal(
       restored.ino,
       (await lstat(join(f.destination, 'home/hardlink'))).ino,
@@ -93,6 +97,57 @@ test(
     );
   },
 );
+
+test('preserves fractional timestamps on files, directories and symlinks without Date truncation', async (t) => {
+  const f = await fixture(t);
+  const times = [
+    '1767323045.123456',
+    '0.000123',
+    '946684800.999999',
+    '2147483648.000001',
+    '-123456789.123456',
+  ];
+  const originals = new Map();
+  for (const [index, value] of times.entries()) {
+    const name = `entry-${index}`;
+    const path = join(f.source, name);
+    if (index === 1) await mkdir(path);
+    else if (index === 2) await symlink('/not-followed', path);
+    else await writeFile(path, 'timestamp fixture');
+    const atime = String(Number(value) + 17.000111);
+    if (index === 2) await lutimes(path, atime, value);
+    else await utimes(path, atime, value);
+    originals.set(name, await lstat(path, { bigint: true }));
+  }
+  const descriptor = await createBackupArchive({
+    root: f.source,
+    path: f.path,
+    roots: [...originals.keys()],
+    policy: 'full-v1',
+  });
+  await extractBackupArchive({
+    path: f.path,
+    destination: f.destination,
+    descriptor,
+    roots: [...originals.keys()],
+  });
+  for (const [name, original] of originals) {
+    const restored = await lstat(join(f.destination, name), { bigint: true });
+    for (const field of ['atimeNs', 'mtimeNs']) {
+      // Linux's utimes interface has microsecond precision; assert its exact
+      // stored value, not a millisecond tolerance that could hide this bug.
+      if (process.platform === 'linux')
+        assert.equal(restored[field], original[field], `${name} ${field}`);
+      else {
+        const delta = restored[field] - original[field];
+        assert.ok(
+          delta > -1000n && delta < 1000n,
+          `${name} ${field}: ${delta} ns`,
+        );
+      }
+    }
+  }
+});
 
 test('minimal leaves preserve shared ancestors without including sibling secrets or directories', async (t) => {
   const f = await fixture(t);

@@ -11,9 +11,6 @@ import {
   lchown,
   lutimes,
   link,
-  chmod,
-  chown,
-  utimes,
   statfs,
 } from 'node:fs/promises';
 import { dirname, join, isAbsolute } from 'node:path';
@@ -305,25 +302,35 @@ export async function createBackupArchive({ root, path, roots, policy }) {
   }
 }
 
+function timestamp(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || Math.abs(seconds) > 8.64e12) invalid();
+  // PAX contains fractional seconds. Date's integer milliseconds would discard
+  // them. Linux/libuv utimes truncates to microseconds: aim at the middle of
+  // that microsecond so floating-point error cannot drop another microsecond.
+  const restored =
+    process.platform === 'linux'
+      ? (Math.round(seconds * 1e6) + Math.sign(seconds) * 0.5) / 1e6
+      : seconds;
+  // A numeric string also preserves pre-epoch timestamps; Node interprets a
+  // negative number (unlike a Date or numeric string) as the current time.
+  return String(restored);
+}
+
 function metadata(value) {
   const mode = value.mode;
   const uid = Number(value.pax?.uid ?? value.uid);
   const gid = Number(value.pax?.gid ?? value.gid);
-  const mtime = new Date(
-    Number(value.pax?.mtime ?? value.mtime.getTime() / 1000) * 1000,
-  );
-  const atime = new Date(
-    Number(value.pax?.['MERGERON.atime'] ?? mtime.getTime() / 1000) * 1000,
-  );
+  const originalMtime = value.pax?.mtime ?? value.mtime.getTime() / 1000;
+  const mtime = timestamp(originalMtime);
+  const atime = timestamp(value.pax?.['MERGERON.atime'] ?? originalMtime);
   if (
     !integer(mode) ||
     mode > 0o7777 ||
     !integer(uid) ||
     uid > 0xfffffffe ||
     !integer(gid) ||
-    gid > 0xfffffffe ||
-    !Number.isFinite(mtime.getTime()) ||
-    !Number.isFinite(atime.getTime())
+    gid > 0xfffffffe
   )
     invalid();
   return { mode, uid, gid, mtime, atime };
