@@ -421,6 +421,13 @@
             ]
           },
           {
+            "title": "Réglages mémorisés sur l’agent",
+            "paragraphs": [
+              "Le modèle, l’effort, la vitesse, les approbations et le bac à sable choisis sont conservés sur cet agent après rechargement ou redémarrage. Ces choix sont communs à ses utilisateurs autorisés, pas personnels. Les autres agents gardent leurs propres réglages.",
+              "Les changements s’appliquent aux prochaines demandes, sans modifier le travail en cours. Les permissions ne sont enregistrées qu’après confirmation du moteur. Le menu distingue Enregistré et Actuel : le prochain envoi réapplique le choix enregistré, sous réserve des protections du projet, des copies Git et des documents. Un échec d’enregistrement demande une nouvelle sélection explicite."
+            ]
+          },
+          {
             "title": "Mode compact et commandes rapides",
             "paragraphs": [
               "Quand le champ est étroit, le modèle et l’effort restent visibles. Les permissions et capacités sont représentées par leurs icônes ; leur survol ou leur nom accessible permet de retrouver leur fonction, sans modifier leur valeur.",

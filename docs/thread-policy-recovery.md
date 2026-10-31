@@ -80,6 +80,52 @@ a pending selection from it. This closes the earlier gap: `thread/shellCommand`
 runs outside the sandbox by design and could never have validated model-tool
 policy enforcement.
 
+## Durable agent execution preferences
+
+Execution preferences are shared **per agent**, never per person. They use the
+existing application `settings` table, under `thread-execution-preferences:<id>`;
+no schema migration or native rollout modification is needed. Deleting an agent
+removes its entry; closing a view or restarting Core does not.
+
+`GET /api/threads/:threadId/execution-preferences` requires thread access and
+returns a monotonically increasing `revision`, optional `model`, `effort`,
+`serviceTier`, confirmed `security`, and transient `securitySaveState`
+(`pending`, `failed`, or null). Reading never resumes or mutates Core.
+`PATCH` requires thread access, administrator execution rights and a mutable
+agent. It accepts only `model`, `effort`, and `serviceTier`; null explicitly
+resets a choice. Effort accepts the pinned eight levels. Model/tier IDs must be
+nonempty strings of at most 200 characters. Selecting a model clears previous
+effort/tier choices unless explicitly included in the same patch. Catalog and
+Core support still determine which choices can actually execute.
+
+Security cannot be written through that generic endpoint. The existing
+`security-policy` PATCH records a pending explicit selection before its RPC,
+then requires **both** successful RPC acknowledgement and matching effective
+observation before saving. Either can arrive first. Matching includes all
+granular approval flags and sandbox leaves, with implicit cwd and root ordering
+normalized. A matching pre-existing observation supports an explicit no-op.
+Passive observations alone never create preferences. Rejection, supersession,
+generation changes, or an eight-second deadline cannot save an unconfirmed
+choice. While pending or after a failed confirmation/storage write, dispatch
+fails closed until the administrator reviews and selects again. Pending/failed
+status is process-local; a restart retains only the last successfully saved
+choice, never the unconfirmed replacement.
+
+At the next `turn/start`, saved choices supply defaults before explicit request
+parameters. Existing project model/effort, read-only locations, managed Git copy
+profiles, document publication and MCP gates are then applied unchanged and
+remain authoritative. A running turn is not rewritten. Mergeron's composer
+does not replay its cached model/effort/tier into `turn/start`: the server reads
+the latest shared choices at dispatch, including another client's changes.
+
+The UI reads on entry/focus and every 30 seconds (one second while security is
+pending), with query invalidation on settings notifications. It serializes
+explicit model mutations, blocks sending during a local save, rejects older
+revisions and discarded-agent responses, and never auto-writes on mount.
+« Saved » is distinct from the engine's last-observed « Current » policy.
+Existing agents are initialized only by explicit selections, not by migrating
+potentially stale browser overrides or copying somebody's settings to all agents.
+
 ## Persisted item coverage
 
 `GET /api/threads/:threadId/turns/:turnId/items` returns:

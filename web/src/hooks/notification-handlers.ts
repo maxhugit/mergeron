@@ -100,6 +100,9 @@ const handleThreadSettingsUpdated: Handler = (params, ctx) => {
   const threadId = params.threadId as string | undefined;
   if (!threadId) return;
   void ctx.queryClient.invalidateQueries({
+    queryKey: ['agent-execution-preferences', threadId],
+  });
+  void ctx.queryClient.invalidateQueries({
     queryKey: threadCommandsReadCollaborationModeQueryKey({
       path: { threadId },
     }),

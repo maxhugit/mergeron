@@ -1,5 +1,6 @@
 /** Observes thread settings that app-server only exposes through notifications. */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
 import type {
   CollaborationMode,
@@ -51,7 +52,11 @@ export class ThreadSettingsObserverService {
    */
   private readonly displacedEffort = new Map<string, DisplacedEffort>();
 
-  constructor(private readonly codexManager: CodexProcessManager) {
+  constructor(
+    private readonly codexManager: CodexProcessManager,
+    @Optional()
+    private readonly preferences?: ThreadExecutionPreferencesService,
+  ) {
     this.codexManager.addListener(
       'notification',
       (notification: ServerNotification) => {
@@ -61,6 +66,7 @@ export class ThreadSettingsObserverService {
     this.codexManager.addLifecycleListener((event) => {
       if (event.type === 'appServerReady') {
         this.cache.clear();
+        this.preferences?.clearPending();
         this.logger.debug(
           `Cleared observed thread settings for generation=${event.generation}`,
         );
@@ -127,6 +133,7 @@ export class ThreadSettingsObserverService {
 
   /** Drops all state for a thread that no longer exists. */
   forget(threadId: string): void {
+    this.preferences?.forget(threadId);
     this.cache.delete(threadId);
     this.displacedEffort.delete(threadId);
   }
@@ -241,6 +248,10 @@ export class ThreadSettingsObserverService {
         serviceTier: this.cache.get(threadId)?.settings.serviceTier,
       },
     });
+    this.preferences?.observeSecurity(
+      threadId,
+      this.readSecurityPolicy(threadId),
+    );
     // Something outside this client — the TUI, the desktop app, another tab —
     // can leave the effort-dictating mode without going through us. Once the
     // thread is no longer in such a mode there is nothing left to restore, and

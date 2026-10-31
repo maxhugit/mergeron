@@ -1,5 +1,9 @@
 {
   "modelAdminOnly": "Only administrators can change the model and reasoning effort.",
+  "agentSettingsSaved": "Saved",
+  "agentSettingsRemembered": "Saved on this agent: {{sandbox}} · {{approval}}. Used for future requests, subject to project protections.",
+  "agentSettingsSaveFailed": "Unable to save this agent’s settings. Review the saved values and explicitly try again.",
+  "agentSettingsLoadFailed": "Unable to read this agent’s saved settings. Retry before sending a request.",
   "agentCacheEnable": "Enable fast navigation for this project",
   "agentCacheDisable": "Disable fast navigation",
   "agentCacheSaveError": "Unable to save fast navigation. Your previous choice is kept; try again.",
