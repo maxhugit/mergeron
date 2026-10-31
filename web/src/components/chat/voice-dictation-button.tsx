@@ -5,10 +5,15 @@ import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { showSnackbar } from '@/stores/snackbar-store';
 import { dictationWave } from '@/lib/dictation-audio';
+import {
+  dictationBackend,
+  startCliDictation,
+  type CliDictation,
+} from '@/lib/cli-dictation';
 
 const MAX_RECORDING_MS = 2 * 60 * 1_000;
 
-type State = 'idle' | 'recording' | 'transcribing';
+type State = 'idle' | 'connecting' | 'recording' | 'transcribing';
 
 function recordingMimeType(): string | undefined {
   const candidates = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'];
@@ -16,9 +21,11 @@ function recordingMimeType(): string | undefined {
 }
 
 export function VoiceDictationButton({
+  active = true,
   disabled = false,
   onTranscript,
 }: {
+  active?: boolean;
   disabled?: boolean;
   onTranscript: (text: string) => void;
 }) {
@@ -27,6 +34,8 @@ export function VoiceDictationButton({
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const cliRef = useRef<CliDictation | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const releaseStream = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -36,23 +45,32 @@ export function VoiceDictationButton({
     recorderRef.current = null;
   };
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      void cliRef.current?.cancel();
+      cliRef.current = null;
       if (recorderRef.current?.state === 'recording') {
         recorderRef.current.onstop = null;
         recorderRef.current.stop();
       }
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      recorderRef.current = null;
+      chunksRef.current = [];
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    },
-    [],
-  );
+      timerRef.current = null;
+      setState('idle');
+    };
+  }, [active]);
 
-  const transcribe = async (blob: Blob) => {
+  const transcribe = async (blob: Blob, signal: AbortSignal) => {
+    if (signal.aborted) return;
     setState('transcribing');
     try {
       const form = new FormData();
       const wave = await dictationWave(blob);
+      if (signal.aborted) return;
       form.append('file', wave, 'dictation.wav');
       const authorization = getAuthorizationHeader();
       const response = await fetch(
@@ -61,6 +79,7 @@ export function VoiceDictationButton({
           method: 'POST',
           headers: authorization ? { Authorization: authorization } : {},
           body: form,
+          signal,
         },
       );
       const payload = (await response.json().catch(() => ({}))) as {
@@ -73,43 +92,95 @@ export function VoiceDictationButton({
             `Transcription impossible (HTTP ${response.status})`,
         );
       }
-      onTranscript(payload.text);
+      if (!signal.aborted) onTranscript(payload.text);
     } catch (error) {
-      showSnackbar(
-        error instanceof Error ? error.message : 'Transcription impossible.',
-        'error',
-      );
+      if (!signal.aborted)
+        showSnackbar(
+          error instanceof Error ? error.message : 'Transcription impossible.',
+          'error',
+        );
     } finally {
-      setState('idle');
+      if (!signal.aborted) setState('idle');
     }
   };
 
   const stop = () => {
+    if (cliRef.current) {
+      const cli = cliRef.current;
+      cliRef.current = null;
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+      setState('transcribing');
+      const signal = abortRef.current?.signal;
+      void cli
+        .finish()
+        .then((text) => {
+          if (!signal?.aborted) onTranscript(text);
+        })
+        .catch((error) => {
+          if (!signal?.aborted)
+            showSnackbar(
+              error instanceof Error
+                ? error.message
+                : 'Transcription impossible.',
+              'error',
+            );
+        })
+        .finally(() => {
+          if (!signal?.aborted) setState('idle');
+        });
+      return;
+    }
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
   };
 
   const start = async () => {
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       showSnackbar(
         'La dictée vocale n’est pas prise en charge par ce navigateur.',
         'error',
       );
       return;
     }
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setState('connecting');
     try {
+      const backend = await dictationBackend();
+      if (controller.signal.aborted) return;
+      if (backend === 'codex') {
+        const cli = await startCliDictation(controller.signal);
+        if (controller.signal.aborted) {
+          await cli.cancel();
+          return;
+        }
+        cliRef.current = cli;
+        setState('recording');
+        timerRef.current = window.setTimeout(stop, MAX_RECORDING_MS);
+        return;
+      }
+      if (!window.MediaRecorder)
+        throw new Error(
+          'L’enregistrement audio n’est pas pris en charge par ce navigateur.',
+        );
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (controller.signal.aborted) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const mimeType = recordingMimeType();
+      streamRef.current = stream;
       const recorder = new MediaRecorder(
         stream,
         mimeType ? { mimeType } : undefined,
       );
-      streamRef.current = stream;
       recorderRef.current = recorder;
       chunksRef.current = [];
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunksRef.current.push(event.data);
       };
       recorder.onerror = () => {
+        if (controller.signal.aborted) return;
         releaseStream();
         setState('idle');
         showSnackbar('L’enregistrement audio a échoué.', 'error');
@@ -120,17 +191,20 @@ export function VoiceDictationButton({
         });
         chunksRef.current = [];
         releaseStream();
-        if (blob.size) void transcribe(blob);
+        if (blob.size) void transcribe(blob, controller.signal);
         else setState('idle');
       };
       recorder.start(250);
       setState('recording');
       timerRef.current = window.setTimeout(stop, MAX_RECORDING_MS);
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted) return;
       releaseStream();
       setState('idle');
       showSnackbar(
-        'L’accès au microphone a été refusé ou est indisponible.',
+        error instanceof Error && error.name !== 'NotAllowedError'
+          ? error.message
+          : 'L’accès au microphone a été refusé ou est indisponible.',
         'error',
       );
     }
@@ -142,14 +216,19 @@ export function VoiceDictationButton({
       size="icon"
       variant={state === 'recording' ? 'destructive' : 'ghost'}
       className="h-7 w-7 rounded-lg"
-      disabled={disabled || state === 'transcribing'}
+      disabled={
+        !active ||
+        disabled ||
+        state === 'transcribing' ||
+        state === 'connecting'
+      }
       onClick={state === 'recording' ? stop : () => void start()}
       aria-label={
         state === 'recording' ? 'Arrêter la dictée' : 'Démarrer la dictée'
       }
       title={state === 'recording' ? 'Arrêter la dictée' : 'Démarrer la dictée'}
     >
-      {state === 'transcribing' ? (
+      {state === 'transcribing' || state === 'connecting' ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : state === 'recording' ? (
         <Square className="h-3.5 w-3.5 fill-current" />

@@ -334,6 +334,8 @@ it('reserves agent and automation execution for administrators while allowing si
     '/projects/p/agents',
     '/projects/p/agents/t',
     '/projects/p/resources/r/automations',
+    '/simple-chat/audio-sessions',
+    '/simple-chat/audio-sessions/session-id/finish',
   ]) {
     expect(() => guard.canActivate(http(path, 'POST').context)).toThrow(
       'Administrator access',
