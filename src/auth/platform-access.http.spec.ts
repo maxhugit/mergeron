@@ -153,7 +153,13 @@ beforeEach(async () => {
       IdentityService,
       {
         provide: ImageUpdateService,
-        useValue: { status: () => ({ installed: { version: '0.1.0' } }) },
+        useValue: {
+          status: () => ({ installed: { version: '0.1.0' } }),
+          installedChanges: () => ({
+            revision: 'a'.repeat(40),
+            items: ['Installed change'],
+          }),
+        },
       },
       ProjectKnowledgeService,
       KnowledgeProposalsService,
@@ -448,6 +454,20 @@ it('returns 403 on real settings routes for standard users and 200 for administr
       })
     ).statusCode,
   ).toBe(200);
+  for (const [email, expected] of [
+    ['standard@example.com', 403],
+    ['administrator@example.com', 200],
+  ] as const) {
+    expect(
+      (
+        await server.inject({
+          method: 'GET',
+          url: '/api/settings/release/installed-changes',
+          headers: proxyHeaders(email),
+        })
+      ).statusCode,
+    ).toBe(expected);
+  }
   expect(
     (
       await server.inject({

@@ -1,4 +1,9 @@
 {
+  "installedImprovementsTitle": "Améliorations déjà installées",
+  "installedImprovementsDescription": "Dernier changement intégré à cette image précise. Ce n’est ni la liste des mises à jour disponibles, ni l’historique complet des versions.",
+  "installedImprovementsLink": "Consulter la révision installée et son historique",
+  "installedChangesUnavailable": "Le résumé de la révision installée n’a pas pu être récupéré. Son historique reste accessible par le lien ci-dessous.",
+  "componentPlatformUnknown": "Impossible de vérifier l’image propre à la plateforme du serveur. Vérifiez la version du Manager et l’accès filtré aux métadonnées du registre. Aucune mise à jour n’est proposée sur la seule différence du catalogue Docker.",
   "managerBackupMode": "Sauvegarde avant cette mise à jour",
   "managerFastSelectedBackupHelp": "Réutilisation des images locales vérifiées par empreinte. Ce réglage ne change pas le choix de sauvegarde ci-dessus ni les contrôles de santé.",
   "managerFullBackup": "Complète",

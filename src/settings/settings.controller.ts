@@ -53,6 +53,15 @@ export class SettingsController {
     return this.imageUpdates.status(refresh === 'true');
   }
 
+  @Get('release/installed-changes')
+  @ApiOperation({
+    summary:
+      'Read the last change of the exact installed image, independently of available updates',
+  })
+  installedChanges() {
+    return this.imageUpdates.installedChanges();
+  }
+
   @Get('manager/image-updates')
   @ApiOperation({
     summary:

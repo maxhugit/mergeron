@@ -53,13 +53,46 @@ L’ancienne image locale est conservée pour le retour arrière.
 Le Manager expose en lecture seule `GET /v1/images/updates`, avec
 `?refresh=true` pour ignorer le cache de cinq minutes. Les requêtes concurrentes
 sont regroupées. Chaque composant échoue indépendamment. La découverte utilise
-`GET /distribution/{name}/json` de Docker, et compare `Descriptor.digest` aux
-`RepoDigests` locaux du même dépôt. La liste des plateformes doit comprendre
-l’OS, l’architecture et la variante de l’image installée.
+`GET /distribution/{name}/json` de Docker. Une empreinte de catalogue identique
+peut confirmer l’état courant, mais une différence seule n’est pas une mise à
+jour : une autre architecture ou une attestation peut avoir changé. Le Manager
+fournit l’identité de configuration installée et sa plateforme. Le backend lit
+ensuite les manifestes du **digest immuable détecté**, sélectionne sans ambiguïté
+l’OS/architecture/variante et compare l’identité de configuration de cette
+plateforme à celle de l’image installée. Les SHA-256 des manifestes sont vérifiés.
+Une vraie reconstruction reste détectée même si le numéro de version est identique.
 
 Le backend expose ce résultat par l’API d’administration
 `GET /api/settings/manager/image-updates`. Le socket Docker n’est jamais exposé
 au navigateur et aucun identifiant de registre n’est retourné.
+
+Le Manager garde `--network none` : la lecture des métadonnées publiques passe
+par le backend et son proxy filtré, sans couches d’image, blob de configuration,
+helper Docker ni commande dans un conteneur. Seuls les dépôts officiels des quatre
+composants sont admis, avec délais/tailles bornés et sans redirection HTTP. Un
+ancien Manager qui ne fournit pas l’identité de plateforme, un proxy bloquant
+les métadonnées ou une variante ambiguë donnent un état **inconnu**, sans bouton
+de mise à jour sur une simple différence de catalogue. Mettre à jour ensemble
+le Manager et l’application pour activer la comparaison complète.
+
+Les nouvelles installations Squid autorisent précisément `auth.docker.io` et
+`registry-1.docker.io`, en plus de GHCR et GitHub. Sur une configuration persistante
+existante, l’opérateur doit ajouter ces deux hôtes à `allowed_domains`, puis
+valider et recharger Squid. Ne pas ouvrir `.docker.io` en entier ni modifier les
+refus des réseaux privés/TLS. Cette PR n’effectue aucune migration réseau implicite.
+
+## Améliorations disponibles et installées
+
+**Mise à jour** conserve les notes stables ou la comparaison des révisions qui
+restent à installer. **Version actuelle → Améliorations déjà installées** lit
+le dernier commit de la révision embarquée dans l’image, avec son lien vers
+l’historique. Ce résumé demeure accessible après une installation ou un
+rafraîchissement ; ce n’est pas le journal exhaustif d’une transaction passée.
+La route administrée `GET /api/settings/release/installed-changes` ne prend pas
+de révision fournie par le client et vérifie le SHA retourné par GitHub. Une
+indisponibilité des notes ne change jamais la détection des images. Pour les
+images tierces, les liens éditeur restent explicitement distincts d’un résumé
+des différences : aucun historique de sécurité ou d’améliorations n’est inventé.
 
 L’interface prépare le plan existant avec
 `images: { [componentId]: "repository@sha256:…" }`, puis transmet le fingerprint
