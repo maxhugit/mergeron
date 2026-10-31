@@ -51,7 +51,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { isSupportedLocale } from '@/locales';
-import { MobileRefresh } from '@/components/mobile-refresh';
 import { ImpersonationBanner } from '@/components/impersonation-controls';
 import { installBrowserWorkspaceSessions } from '@/lib/browser-workspace-sessions';
 import { useWorkspaceStore } from '@/stores/workspace-store';
@@ -407,7 +406,6 @@ function AuthenticatedWorkspace({
 
   return (
     <TooltipProvider>
-      <MobileRefresh />
       <div className="flex h-full overflow-hidden bg-background">
         {/* Desktop: inline sidebar with collapse animation */}
         {isDesktop && (

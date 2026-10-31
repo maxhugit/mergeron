@@ -5,6 +5,7 @@ import { ChatHeader } from './chat-header';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { simpleChatThreadsQueryKey } from '@/lib/simple-chat-api';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 
 let pathname = '/simple-chat';
 let search: { thread?: string; section?: string } = {};
@@ -16,7 +17,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 vi.mock('@/hooks/use-breakpoint', () => ({
-  useBreakpoint: () => 'desktop',
+  useBreakpoint: vi.fn(() => 'desktop'),
   useIsMobile: () => false,
 }));
 
@@ -58,12 +59,24 @@ function renderHeader(simpleChatTitle?: string) {
 
 describe('ChatHeader', () => {
   beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop');
     pathname = '/simple-chat';
     search = {};
     useTimelineStore
       .getState()
       .setActiveThread('thread-123', '/workspaces/demo', 'Titre conservé');
   });
+
+  it.each(['mobile', 'tablet', 'desktop'] as const)(
+    'keeps the explicit refresh button available on %s',
+    (breakpoint) => {
+      vi.mocked(useBreakpoint).mockReturnValue(breakpoint);
+      renderHeader();
+      expect(
+        screen.getByRole('button', { name: 'Refresh the app' }),
+      ).toBeEnabled();
+    },
+  );
 
   it('shows the selected Simple Chat title in the global header', () => {
     search = { thread: 'simple-123' };
