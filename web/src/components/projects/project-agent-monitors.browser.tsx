@@ -115,9 +115,11 @@ test.each([390, 1280])(
     await vi.waitFor(() => expect(create).toBeEnabled());
     fireEvent.click(create);
     const dialog = screen.getByRole('dialog');
-    await vi.waitFor(() =>
-      expect(Number(getComputedStyle(dialog).opacity)).toBe(1),
-    );
+    // Test the settled layout, not the compositor's scheduling under parallel
+    // Linux/WebKit pages. Finish this finite entrance animation natively before
+    // capturing, without disabling animations globally or relaxing assertions.
+    for (const animation of dialog.getAnimations()) animation.finish();
+    expect(Number(getComputedStyle(dialog).opacity)).toBe(1);
     expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
     expect(
       screen.getByRole('combobox', { name: 'Agent du projet' }),
