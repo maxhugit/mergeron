@@ -7,6 +7,11 @@ import { useEffect } from 'react';
 import { clearApiToken, getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import {
+  recordSessionDiagnostic,
+  type SessionDiagnosticReason,
+  type SessionDiagnosticEntry,
+} from './session-diagnostics';
+import {
   acceptVerifiedSession,
   hasVerifiedSession,
   pauseSession,
@@ -77,6 +82,28 @@ export class AuthIdentityChangedError extends AuthResourceError {
   }
 }
 
+function diagnosticReason(error: unknown): SessionDiagnosticReason {
+  if (error instanceof AuthRedirectError) return 'proxy_redirect';
+  if (error instanceof AuthIdentityChangedError) return 'identity_changed';
+  if (error instanceof AuthResourceError) {
+    if (error.status === 401) return 'unauthorized';
+    if (error.status === 403) return 'forbidden';
+    if (error.status === 408) return 'timeout';
+    if (error.status === 429) return 'rate_limited';
+    if (error.status >= 500) return 'server_unavailable';
+    return 'invalid_response';
+  }
+  if (
+    error instanceof Error &&
+    ['TimeoutError', 'AbortError'].includes(error.name)
+  )
+    return 'timeout';
+  if (error instanceof SyntaxError || error instanceof AuthResponseError)
+    return 'invalid_response';
+  return 'transport';
+}
+class AuthResponseError extends Error {}
+
 export function shouldRetryPlatformSession(
   failureCount: number,
   error: Error,
@@ -144,7 +171,7 @@ export async function readAuthResource<T>(
         response.status,
       );
     if (!response.headers.get('content-type')?.includes('application/json'))
-      throw new Error('Identity endpoint did not return JSON');
+      throw new AuthResponseError('Identity endpoint did not return JSON');
     // Await the body before clearing the deadline (a resumed connection may hang here too).
     return (await response.json()) as T;
   } catch (error) {
@@ -171,7 +198,10 @@ function retainSessionRecovery(client: QueryClient) {
       client
         .getQueryCache()
         .find({ queryKey: platformSessionKey, exact: true });
-    const verify = (required = false) => {
+    const verify = (
+      required = false,
+      trigger?: SessionDiagnosticEntry['trigger'],
+    ) => {
       if (document.visibilityState !== 'visible' || !navigator.onLine) return;
       const current = query();
       if (!current) return;
@@ -188,12 +218,17 @@ function retainSessionRecovery(client: QueryClient) {
       const superseded = required && requestedGeneration !== generation;
       lastRequest = now;
       requestedGeneration = generation;
+      if (trigger) recordSessionDiagnostic('wake', { trigger, generation });
       void client.refetchQueries(
         { queryKey: platformSessionKey, exact: true, type: 'active' },
         { cancelRefetch: superseded },
       );
     };
-    const recover = () => verify(isSessionPaused());
+    const recover = (event: Event) =>
+      verify(
+        isSessionPaused(),
+        event.type as 'focus' | 'pageshow' | 'online' | 'visibilitychange',
+      );
     const paused = (event: Event) => {
       if ((event as CustomEvent<{ reason?: string }>).detail?.reason === 'wake')
         verify(true);
@@ -201,18 +236,19 @@ function retainSessionRecovery(client: QueryClient) {
     const expired = () => {
       clearApiToken();
       pauseSession();
-      verify(true);
+      verify(true, 'api_refusal');
     };
     const poll = window.setInterval(() => {
       const state = query()?.state;
       if (!state || state.fetchStatus === 'fetching') return;
       // Confirmed denials and identity changes never become restart polling.
       if (state.error) {
-        if (isSessionTransportError(state.error)) verify(true);
+        if (isSessionTransportError(state.error)) verify(true, 'poll');
         return;
       }
-      if (Date.now() - state.dataUpdatedAt >= SESSION_CHECK_INTERVAL_MS)
-        verify(isSessionPaused());
+      if (Date.now() - state.dataUpdatedAt >= SESSION_CHECK_INTERVAL_MS) {
+        verify(isSessionPaused(), 'poll');
+      }
     }, SESSION_RECOVERY_INTERVAL_MS);
     for (const name of ['pageshow', 'online', 'focus'])
       window.addEventListener(name, recover);
@@ -248,16 +284,51 @@ export function usePlatformSession() {
     queryKey: platformSessionKey,
     queryFn: async ({ signal }) => {
       const verification = sessionVerificationGeneration();
+      const started = performance.now();
+      recordSessionDiagnostic('check_started', {
+        generation: verification,
+        online: navigator.onLine,
+      });
       try {
         const identity = await readAuthResource<PlatformSession>('me', signal);
-        if (verification !== sessionVerificationGeneration())
+        if (verification !== sessionVerificationGeneration()) {
+          recordSessionDiagnostic('response_discarded', {
+            reason: 'superseded',
+            generation: verification,
+          });
           throw new Error(
             'Session verification was superseded; recheck identity',
           );
+        }
         if (!acceptVerifiedSession(identity) && identity.active)
           throw new AuthIdentityChangedError();
+        if (identity.active)
+          recordSessionDiagnostic('check_succeeded', {
+            generation: verification,
+            durationMs: performance.now() - started,
+            status: 200,
+          });
         return identity;
       } catch (error) {
+        recordSessionDiagnostic(
+          signal.aborted ? 'check_cancelled' : 'check_failed',
+          {
+            reason:
+              error instanceof AuthIdentityChangedError
+                ? 'identity_changed'
+                : signal.aborted ||
+                    verification !== sessionVerificationGeneration()
+                  ? 'superseded'
+                  : diagnosticReason(error),
+            generation: verification,
+            durationMs: performance.now() - started,
+            ...(error instanceof AuthResourceError &&
+            !(error instanceof AuthRedirectError) &&
+            !(error instanceof AuthIdentityChangedError)
+              ? { status: error.status }
+              : {}),
+          },
+        );
         if (!signal.aborted) pauseSession();
         throw error;
       }
@@ -267,8 +338,24 @@ export function usePlatformSession() {
     refetchInterval: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
-    retry: (attempt, error) =>
-      shouldRetryPlatformSession(attempt, error, hasVerifiedSession()),
+    retry: (attempt, error) => {
+      const retry = shouldRetryPlatformSession(
+        attempt,
+        error,
+        hasVerifiedSession(),
+      );
+      if (retry)
+        recordSessionDiagnostic('retry_scheduled', {
+          reason: diagnosticReason(error),
+          attempt: attempt + 1,
+          delayMs:
+            SESSION_RETRY_DELAYS_MS[
+              Math.min(attempt, SESSION_RETRY_DELAYS_MS.length - 1)
+            ],
+          generation: sessionVerificationGeneration(),
+        });
+      return retry;
+    },
     retryDelay: (attemptIndex) =>
       SESSION_RETRY_DELAYS_MS[
         Math.min(attemptIndex, SESSION_RETRY_DELAYS_MS.length - 1)

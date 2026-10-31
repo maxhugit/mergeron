@@ -10,6 +10,24 @@ import { playwright } from '@vitest/browser-playwright';
 import type { BrowserCommand } from 'vitest/node';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { sessionStackFixtures } from './test/session-stack';
+
+const sessionStack = sessionStackFixtures();
+const sessionStackControl: BrowserCommand<
+  [
+    action:
+      | 'create'
+      | 'restore'
+      | 'dispose'
+      | 'status'
+      | 'backend'
+      | 'auth'
+      | 'proxy'
+      | 'expired'
+      | 'forbidden',
+    id?: string,
+  ]
+> = async (_context, action, id) => sessionStack.control(action, id);
 
 /** Chromium's actual manifest fetch, not a fetch() approximation. */
 const authenticatedManifest: BrowserCommand<[]> = async (context) => {
@@ -105,6 +123,10 @@ export default mergeConfig(
       {
         name: 'test-auth-proxy-redirect',
         configureServer(server) {
+          server.middlewares.use(sessionStack.middleware);
+          server.httpServer?.once('close', () => {
+            void sessionStack.dispose();
+          });
           // A manifest protected like Authentik: only the document sets the
           // session cookie. Missing crossorigin credentials returns login HTML.
           server.middlewares.use((request, response, next) => {
@@ -198,6 +220,7 @@ export default mergeConfig(
                 scrollTranscript,
                 holdTranscriptPointer,
                 explorerDivider,
+                sessionStackControl,
               },
               // Failure screenshots default to a `__screenshots__` folder beside
               // each test file, which scatters build output through `src/` and

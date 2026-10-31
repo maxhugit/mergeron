@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getApiToken, setApiToken } from '@/auth-token';
 import { withBasePath } from '@/base-path';
+import { recordSessionDiagnostic } from './session-diagnostics';
 
 const MESSAGE = 'mergeron:session-renewed';
 export const renewalReturnPath = '/login?renew=true';
@@ -34,6 +35,7 @@ export function useSessionRenewal(recheck: () => void) {
         return;
       if (typeof event.data.token === 'string') setApiToken(event.data.token);
       // The message is only a hint. /auth/me must verify the original identity.
+      recordSessionDiagnostic('renewal_hint');
       recheckRef.current();
     };
     window.addEventListener('message', completed);
@@ -56,6 +58,9 @@ export function useSessionRenewal(recheck: () => void) {
       'popup,width=560,height=720',
     );
     setPopupBlocked(!popup.current);
+    recordSessionDiagnostic(
+      popup.current ? 'renewal_opened' : 'renewal_blocked',
+    );
     clearInterval(timer.current);
     if (!popup.current) return;
     // Cookies are shared even if the IdP's COOP severs window.opener. Bounded

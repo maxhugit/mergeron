@@ -32,6 +32,29 @@ test('monitor management receives real Chromium and WebKit interface coverage', 
   );
 });
 
+test('session recovery keeps browser outage coverage and the isolated real ingress test', () => {
+  assert.ok(quality.includes('src/routes/authenticated-layout.browser.tsx'));
+  assert.ok(quality.includes('src/lib/platform-session.browser.tsx'));
+  assert.ok(
+    read('scripts/smoke-test-ingress.sh').includes(
+      'python3 scripts/test-session-ingress.py',
+    ),
+  );
+  const fixture = read('scripts/test-session-ingress.py');
+  for (const safeguard of [
+    '"--network", "none"',
+    '"--read-only"',
+    '"--cap-drop", "ALL"',
+    '"--user", "101:101"',
+  ])
+    assert.ok(fixture.includes(safeguard));
+  assert.ok(fixture.includes('for part in backend auth front; do'));
+  assert.doesNotMatch(
+    fixture,
+    /--privileged|--publish|docker\.sock|docker system prune/,
+  );
+});
+
 test('reviewed Git replacement receives responsive browser coverage without bypassing checks', () => {
   assert.match(
     quality,

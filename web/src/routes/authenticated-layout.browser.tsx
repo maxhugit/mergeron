@@ -9,7 +9,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { page } from 'vitest/browser';
+import { page, commands } from 'vitest/browser';
 import { AuthenticatedLayout } from './authenticated-layout';
 import {
   installSessionRecovery,
@@ -18,6 +18,34 @@ import {
 import { platformSessionKey } from '@/lib/platform-session';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+import {
+  clearSessionDiagnostics,
+  exportSessionDiagnostics,
+  getSessionDiagnostics,
+} from '@/lib/session-diagnostics';
+
+declare module 'vitest/browser' {
+  interface BrowserCommands {
+    sessionStackControl: (
+      action:
+        | 'create'
+        | 'restore'
+        | 'dispose'
+        | 'status'
+        | 'backend'
+        | 'auth'
+        | 'proxy'
+        | 'expired'
+        | 'forbidden',
+      id?: string,
+    ) => Promise<{
+      id: string;
+      prefix: string;
+      mutations: number;
+      listenersClosed?: boolean;
+    }>;
+  }
+}
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
@@ -84,7 +112,197 @@ afterEach(() => {
   cleanup();
   dispose?.();
   vi.restoreAllMocks();
+  clearSessionDiagnostics();
 });
+
+// Unlike fetch doubles above, these cases use actual loopback HTTP upstreams.
+// The test command closes/reopens their listeners; no real service is touched.
+test.each([
+  ['backend', 390],
+  ['auth', 390],
+  ['proxy', 390],
+  ['backend', 1180],
+] as const)(
+  'recovers from a real %s listener outage at %ipx without replay or lost draft',
+  async (fault, width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    const fixture = await commands.sessionStackControl('create');
+    const actualFetch = window.fetch.bind(window);
+    vi.spyOn(window, 'fetch').mockImplementation((input, init) => {
+      const path = new URL(
+        input instanceof Request ? input.url : String(input),
+        window.location.href,
+      ).pathname;
+      return actualFetch(
+        path.startsWith('/api/') ? fixture.prefix + path : input,
+        init,
+      );
+    });
+    dispose = installSessionRecovery();
+    const client = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      const input = await screen.findByRole('textbox', {
+        name: 'Unsent message',
+      });
+      fireEvent.change(input, { target: { value: 'PRIVATE_UNSENT_DRAFT' } });
+      const scroll = screen.getByTestId('retained-scroll');
+      scroll.scrollTop = 320;
+      const href = window.location.href;
+      clearSessionDiagnostics();
+      await commands.sessionStackControl(fault, fixture.id);
+      act(() => {
+        void client.refetchQueries({ queryKey: platformSessionKey });
+      });
+      await waitFor(() =>
+        expect(
+          getSessionDiagnostics().some(
+            (entry) => entry.reason === 'server_unavailable',
+          ),
+        ).toBe(true),
+      );
+      expect(isSessionPaused()).toBe(true);
+      expect(screen.queryByRole('textbox')).toBeNull();
+      await expect(
+        fetch('/api/projects', {
+          method: 'POST',
+          body: 'PRIVATE_UNSENT_DRAFT',
+        }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      // Expand evidence while still locked; download needs no protected API call.
+      fireEvent.click(screen.getByText('Diagnostic de connexion'));
+      expect(
+        screen.getByRole('button', { name: 'Télécharger le diagnostic' }),
+      ).toBeVisible();
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      const engine = navigator.userAgent.includes('Chrome')
+        ? 'chromium'
+        : 'webkit';
+      await page.screenshot({
+        path: `../../.vitest-screenshots/session-outage-${fault}-${engine}-${width}.png`,
+      });
+      const checking = getSessionDiagnostics().filter(
+        (entry) => entry.event === 'check_started',
+      ).length;
+      await commands.sessionStackControl('restore', fixture.id);
+      // No manual refetch, focus or pageshow: the existing bounded recovery owns it.
+      await waitFor(() => expect(screen.getByRole('textbox')).toBe(input), {
+        timeout: 10000,
+      });
+      expect(input).toHaveValue('PRIVATE_UNSENT_DRAFT');
+      expect(scroll.scrollTop).toBe(320);
+      expect(window.location.href).toBe(href);
+      expect(
+        getSessionDiagnostics().filter(
+          (entry) => entry.event === 'check_started',
+        ).length,
+      ).toBeGreaterThan(checking);
+      expect(
+        getSessionDiagnostics().some((entry) => entry.event === 'resumed'),
+      ).toBe(true);
+      const report = exportSessionDiagnostics();
+      expect(report).not.toContain('PRIVATE_UNSENT_DRAFT');
+      expect(report).not.toContain('SESSION_FIXTURE_PERSON');
+      expect(
+        (await commands.sessionStackControl('status', fixture.id)).mutations,
+      ).toBe(0);
+    } finally {
+      view.unmount();
+      client.clear();
+      expect(
+        (await commands.sessionStackControl('dispose', fixture.id))
+          .listenersClosed,
+      ).toBe(true);
+    }
+  },
+  20000,
+);
+
+test.each(['expired', 'forbidden'] as const)(
+  'never treats a persistent real %s denial as a server restart',
+  async (fault) => {
+    await page.viewport(390, 900);
+    await i18nReady;
+    await i18n.changeLanguage('en');
+    const fixture = await commands.sessionStackControl('create');
+    const actualFetch = window.fetch.bind(window);
+    vi.spyOn(window, 'fetch').mockImplementation((input, init) => {
+      const path = new URL(
+        input instanceof Request ? input.url : String(input),
+        window.location.href,
+      ).pathname;
+      return actualFetch(
+        path.startsWith('/api/') ? fixture.prefix + path : input,
+        init,
+      );
+    });
+    dispose = installSessionRecovery();
+    const client = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      await screen.findByRole('textbox', { name: 'Unsent message' });
+      clearSessionDiagnostics();
+      await commands.sessionStackControl(fault, fixture.id);
+      await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible());
+      expect(isSessionPaused()).toBe(true);
+      expect(screen.queryByRole('textbox')).toBeNull();
+      const reason = fault === 'expired' ? 'proxy_redirect' : 'forbidden';
+      expect(
+        getSessionDiagnostics().some((entry) => entry.reason === reason),
+      ).toBe(true);
+      expect(
+        getSessionDiagnostics().some((entry) => entry.event === 'resumed'),
+      ).toBe(false);
+      if (fault === 'forbidden')
+        expect(
+          getSessionDiagnostics().some(
+            (entry) => entry.event === 'retry_scheduled',
+          ),
+        ).toBe(false);
+      else {
+        const retries = getSessionDiagnostics().filter(
+          (entry) => entry.event === 'retry_scheduled',
+        );
+        expect(retries.slice(0, 3).map((entry) => entry.attempt)).toEqual([
+          1, 2, 3,
+        ]);
+        expect(
+          retries.every((entry) => entry.attempt! >= 1 && entry.attempt! <= 3),
+        ).toBe(true);
+        // WebKit may focus the window when the locked dialog opens. That is a
+        // new verification, not an unbounded retry chain; its cause stays visible.
+        if (retries.length > 3)
+          expect(
+            getSessionDiagnostics().some(
+              (entry) => entry.event === 'wake' && entry.trigger === 'focus',
+            ),
+          ).toBe(true);
+      }
+      expect(
+        (await commands.sessionStackControl('status', fixture.id)).mutations,
+      ).toBe(0);
+    } finally {
+      view.unmount();
+      client.clear();
+      expect(
+        (await commands.sessionStackControl('dispose', fixture.id))
+          .listenersClosed,
+      ).toBe(true);
+    }
+  },
+  20000,
+);
 
 test.each([390, 1180])(
   'keeps ordinary input focus distinct from window return at %ipx',

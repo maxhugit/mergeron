@@ -55,6 +55,8 @@ import { ImpersonationBanner } from '@/components/impersonation-controls';
 import { installBrowserWorkspaceSessions } from '@/lib/browser-workspace-sessions';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { AgentWorkspaceHost } from '@/components/chat/agent-workspace-host';
+import { SessionDiagnostics } from '@/components/session-diagnostics';
+import { recordSessionDiagnostic } from '@/lib/session-diagnostics';
 
 /**
  * Bound on retained per-conversation state.
@@ -167,6 +169,9 @@ function SessionRecovery({
         <LoaderCircle aria-hidden="true" className="size-5 animate-spin" />
         <h1 className="font-medium text-foreground">{t('access.verifying')}</h1>
         <p className="max-w-md">{t('access.retained')}</p>
+        <div className="w-full max-w-xl">
+          <SessionDiagnostics />
+        </div>
       </main>
     );
   const heading = (
@@ -225,7 +230,10 @@ function SessionRecovery({
         )}
       <button
         className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
-        onClick={() => void session.refetch()}
+        onClick={() => {
+          recordSessionDiagnostic('manual_retry');
+          void session.refetch();
+        }}
       >
         {t('access.retry')}
       </button>
@@ -246,6 +254,7 @@ function SessionRecovery({
         </button>
       )}
       {renewal.popupBlocked && <p role="alert">{t('access.popupBlocked')}</p>}
+      <SessionDiagnostics />
     </main>
   );
   if (!retained) return content;

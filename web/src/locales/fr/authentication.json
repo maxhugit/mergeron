@@ -1,4 +1,44 @@
 {
+  "diagnostics": {
+    "title": "Diagnostic de connexion",
+    "help": "Les 100 derniers événements de cet onglet, uniquement en mémoire jusqu’au rechargement. Sans identité, cookie, jeton, URL ni contenu de conversation. Une erreur HTTP ne désigne pas le composant serveur responsable. Aucun envoi automatique. Accessible à nouveau dans la page Journaux après la reprise.",
+    "empty": "Aucun événement enregistré.",
+    "download": "Télécharger le diagnostic",
+    "clear": "Effacer ce diagnostic",
+    "events": {
+      "paused": "Actions suspendues",
+      "resumed": "Session vérifiée et reprise",
+      "checkStarted": "Vérification d’identité démarrée",
+      "checkSucceeded": "Vérification d’identité réussie",
+      "checkFailed": "Échec de vérification ou d’accès",
+      "checkCancelled": "Vérification annulée",
+      "retryScheduled": "Nouvelle lecture programmée",
+      "responseDiscarded": "Réponse obsolète écartée",
+      "requestBlocked": "Requête bloquée localement, non mise en attente",
+      "wake": "Déclencheur de vérification",
+      "offline": "Navigateur signalé hors ligne",
+      "online": "Navigateur signalé en ligne",
+      "manualRetry": "Vérification manuelle demandée",
+      "renewalOpened": "Fenêtre de connexion demandée",
+      "renewalBlocked": "Fenêtre de connexion bloquée",
+      "renewalHint": "Signal de connexion reçu ; vérification fraîche nécessaire"
+    },
+    "reasons": {
+      "verification": "Vérification fraîche requise",
+      "wake": "Retour dans l’onglet",
+      "proxyRedirect": "Redirection de connexion ; expiration non prouvée",
+      "unauthorized": "Authentification refusée",
+      "forbidden": "Accès interdit",
+      "timeout": "Délai de vérification dépassé",
+      "rateLimited": "Trop de requêtes",
+      "serverUnavailable": "Serveur HTTP indisponible",
+      "transport": "Échec réseau ou de transport",
+      "invalidResponse": "Réponse inattendue",
+      "identityChanged": "Identité ou droits modifiés",
+      "inactive": "Compte inactif ou non associé",
+      "superseded": "Génération de vérification obsolète"
+    }
+  },
   "setup": {
     "title": "Configurer votre plateforme",
     "loading": "Vérification de la première configuration…",

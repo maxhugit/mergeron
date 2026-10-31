@@ -2,11 +2,13 @@
 import { useSyncExternalStore } from 'react';
 import { withBasePath } from '@/base-path';
 import type { PlatformSession } from './platform-session';
+import { recordSessionDiagnostic } from './session-diagnostics';
 
 let paused = false;
 let generation = 0;
 let owner: string | null = null;
 let verifiedAt = 0;
+let pausedAt = 0;
 const listeners = new Set<() => void>();
 
 export function sessionOwner(session: PlatformSession): string {
@@ -27,6 +29,8 @@ export function pauseSession(reason: 'verification' | 'wake' = 'verification') {
   if (paused) return;
   paused = true;
   generation++;
+  pausedAt = Date.now();
+  recordSessionDiagnostic('paused', { reason, generation });
   for (const listener of listeners) listener();
   window.dispatchEvent(
     new CustomEvent('codex-webui:session-paused', { detail: { reason } }),
@@ -37,11 +41,20 @@ export function pauseSession(reason: 'verification' | 'wake' = 'verification') {
 export function acceptVerifiedSession(session: PlatformSession): boolean {
   const nextOwner = sessionOwner(session);
   if (!session.active || (owner !== null && owner !== nextOwner)) {
+    recordSessionDiagnostic('check_failed', {
+      reason: !session.active ? 'inactive' : 'identity_changed',
+      generation,
+    });
     pauseSession();
     return false;
   }
   owner = nextOwner;
   verifiedAt = Date.now();
+  if (paused)
+    recordSessionDiagnostic('resumed', {
+      generation,
+      durationMs: verifiedAt - pausedAt,
+    });
   paused = false;
   for (const listener of listeners) listener();
   return true;
@@ -88,7 +101,10 @@ export function installSessionRecovery() {
       return originalFetch(input, { ...init, redirect: 'manual' });
     const aborted = () =>
       new DOMException('Session verification required', 'AbortError');
-    if (paused) throw aborted();
+    if (paused) {
+      recordSessionDiagnostic('request_blocked', { generation });
+      throw aborted();
+    }
     const startedIn = generation;
     // Do not forward API credentials to an external login redirect.
     const response = await originalFetch(input, {
@@ -97,12 +113,24 @@ export function installSessionRecovery() {
     });
     // A refusal from a request sent before renewal must not erase the new
     // credential or pause the freshly verified session again.
-    if (startedIn !== generation) throw aborted();
+    if (startedIn !== generation) {
+      recordSessionDiagnostic('response_discarded', {
+        reason: 'superseded',
+        generation,
+      });
+      throw aborted();
+    }
     if (
       response.status === 401 ||
       response.type === 'opaqueredirect' ||
       (response.status >= 300 && response.status < 400)
     ) {
+      recordSessionDiagnostic('check_failed', {
+        reason: response.status === 401 ? 'unauthorized' : 'proxy_redirect',
+        status: response.status,
+        trigger: 'api_refusal',
+        generation,
+      });
       pauseSession();
       window.dispatchEvent(new Event('codex-webui:auth-expired'));
       throw aborted();
@@ -113,24 +141,37 @@ export function installSessionRecovery() {
     // A capture listener on window also sees focus on every descendant input.
     // Those are ordinary in-page interactions, not a return to this tab.
     if (event.type === 'focus' && event.target !== event.currentTarget) return;
+    if (event.type === 'online') recordSessionDiagnostic('online');
     if (
       document.visibilityState === 'visible' &&
       owner !== null &&
       Date.now() - verifiedAt >= 30_000
-    )
+    ) {
+      recordSessionDiagnostic('wake', {
+        trigger: event.type as
+          | 'focus'
+          | 'pageshow'
+          | 'online'
+          | 'visibilitychange',
+        generation,
+      });
       pauseSession('wake');
+    }
   };
+  const offline = () => recordSessionDiagnostic('offline');
   const expired = () => pauseSession();
   for (const name of ['focus', 'pageshow', 'online'])
     window.addEventListener(name, wake, true);
   document.addEventListener('visibilitychange', wake, true);
   window.addEventListener('codex-webui:auth-expired', expired, true);
+  window.addEventListener('offline', offline);
   return () => {
     window.fetch = originalFetch;
     for (const name of ['focus', 'pageshow', 'online'])
       window.removeEventListener(name, wake, true);
     document.removeEventListener('visibilitychange', wake, true);
     window.removeEventListener('codex-webui:auth-expired', expired, true);
+    window.removeEventListener('offline', offline);
     owner = null;
     verifiedAt = 0;
     paused = false;
