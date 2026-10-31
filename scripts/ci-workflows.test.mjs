@@ -25,6 +25,13 @@ test('stacked PRs receive the full validation without a main-only trigger filter
   assert.match(quality, /^          src\/database\/migration-order.spec.ts$/m);
 });
 
+test('monitor management receives real Chromium and WebKit interface coverage', () => {
+  assert.match(
+    quality,
+    /^          src\/components\/projects\/project-agent-monitors.browser.tsx$/m,
+  );
+});
+
 test('all independent image checks run concurrently, including UI/docs-only PRs', () => {
   for (const name of ['image', 'manager-image', 'browser-image']) {
     const block = job(quality, name);

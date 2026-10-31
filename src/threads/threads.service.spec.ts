@@ -1305,6 +1305,30 @@ describe('ThreadsService', () => {
     expect(order).toEqual(['admitted', 'send']);
   });
 
+  it('does not name an empty conversation after the internal scheduled-check prompt', async () => {
+    mockMetadata.getHeldThread.mockReturnValue({
+      id: 't',
+      name: '',
+      preview: '',
+    });
+    mockCodex.request.mockResolvedValue({ turn: { id: 'scheduled' } });
+    await service.startTurn(
+      {
+        threadId: 't',
+        input: [
+          {
+            type: 'text',
+            text: '<mergeron_agent_monitor>internal context</mergeron_agent_monitor>',
+            text_elements: [],
+          },
+        ],
+      },
+      { assertIdle: vi.fn(), beforeSend: vi.fn() },
+    );
+    expect(mockCodex.request).toHaveBeenCalledTimes(1);
+    expect(mockCodex.request.mock.calls[0][0]).toBe('turn/start');
+  });
+
   it('refreshes project tools under the person’s identity after steering a monitor without upgrading its policy', async () => {
     service.onForegroundInput(() => true);
     mockActiveFolders.resolveAgent.mockReturnValue('/project');

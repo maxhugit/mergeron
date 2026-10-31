@@ -20,6 +20,7 @@ import { ThreadExecutionInventoryService } from '../threads/thread-execution-inv
 import { ThreadSettingsObserverService } from '../threads/thread-settings-observer.service';
 import { AgentMonitorRuntime } from './agent-monitor-runtime.service';
 import { AgentMonitorStore } from './agent-monitor-store';
+import { PushService } from '../push/push.service';
 
 const NOW = 1_800_000_000_000;
 let database: TestDatabase;
@@ -42,6 +43,7 @@ const codex = { request: vi.fn() };
 const pending = { listPending: vi.fn() };
 const settings = { readSecurityPolicy: vi.fn() };
 const mcp = { revoke: vi.fn() };
+const push = { enqueue: vi.fn<PushService['enqueue']>() };
 const threads = {
   readThread: vi.fn(),
   resumeThread: vi.fn(),
@@ -77,7 +79,7 @@ const complete = (turnId = current().turnId!, status = 'completed') =>
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
-  for (const object of [manager, codex, pending, settings, mcp, threads])
+  for (const object of [manager, codex, pending, settings, mcp, threads, push])
     for (const mock of Object.values(object)) mock.mockReset();
   database = createTestDatabase();
   database.db
@@ -162,6 +164,7 @@ beforeEach(() => {
     { has: () => busy } as ThreadExecutionInventoryService,
     pending as unknown as PendingApprovalsService,
     mcp as unknown as InternalMcpService,
+    push as unknown as PushService,
   );
 });
 afterEach(async () => {
@@ -191,6 +194,38 @@ describe('persistent authenticated monitor runtime', () => {
     expect(() => runtime.accessForSchedule('t')).toThrow(
       'MONITOR_POLICY_UNKNOWN',
     );
+  });
+  it('notifies only a different summary or terminal/attention outcome without sending private text', async () => {
+    const monitor = create();
+    for (const [index, disposition] of [
+      'continue',
+      'continue',
+      'complete',
+    ].entries()) {
+      vi.setSystemTime(NOW + index * 60_000);
+      await runtime.tick();
+      const run = current();
+      store.report(
+        run.id,
+        run.turnId!,
+        'Identical private summary.',
+        disposition as 'continue' | 'complete',
+      );
+      complete();
+    }
+    expect(store.get('p', monitor.id).status).toBe('completed');
+    expect(push.enqueue).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(push.enqueue.mock.calls)).not.toContain(
+      'private summary',
+    );
+    expect(
+      push.enqueue.mock.calls.every(
+        ([kind, threadId, event]) =>
+          kind === 'completed' &&
+          threadId === 't' &&
+          event.startsWith('monitor:'),
+      ),
+    ).toBe(true);
   });
   it('reuses the existing thread without overriding its security or opening another conversation', async () => {
     const monitor = create();

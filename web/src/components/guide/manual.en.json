@@ -1465,7 +1465,68 @@
             "warning": "An automation may need approval like manual agent work. Failure does not guarantee earlier actions were undone. Imported automations are disabled for safety."
           }
         ],
-        "related": ["agent-approvals", "project-archive"]
+        "related": ["agent-approvals", "project-archive", "agent-monitors"]
+      },
+      {
+        "id": "agent-monitors",
+        "title": "Monitor with an existing agent",
+        "summary": "Schedule persistent checks without blocking the conversation or creating additional agents.",
+        "keywords": [
+          "monitor",
+          "monitoring",
+          "wakeup",
+          "checks",
+          "recurrence",
+          "MCP",
+          "notification"
+        ],
+        "sections": [
+          {
+            "title": "Create bounded monitoring",
+            "steps": [
+              "Using your own administrator account, open Automations → Agent monitors → New monitor. Choose an existing project agent and describe exactly what it should check and which actions are actually authorized.",
+              "Choose the first check, then a recurring interval or a one-off check. The minimum interval is one minute after the previous check finishes, with no burst of missed checks.",
+              "Set expiry (at most 30 days), maximum checks (1–100) and maximum duration per check (30 seconds to 30 minutes). A dispatched check uses an attempt even if you subsequently take over the conversation.",
+              "Keep Read-only unless your request explicitly authorizes workspace writes. The conversation’s effective policy must remain compatible: the scheduler never changes it and rejects full access.",
+              "The agent can schedule a check itself through MCP when useful to continue the task you assigned: no additional scheduling request or form interaction is required. The server binds it to the conversation and your identity, with at most the current turn’s effective rights and no full-access policy.",
+              "An agent-created plan is limited to 20 checks over 24 hours, 5 minutes per check and one unfinished plan per conversation. It must inspect the existing plan instead of duplicating it. During a check it can continue that plan, never chain new plans or increase its limits."
+            ],
+            "warning": "Limits bound calls and duration, not guaranteed monetary spending. Monitoring is not a new authorization to push, publish or merge. Human approvals are never answered automatically. Never put secrets in the instructions."
+          },
+          {
+            "title": "Keep talking and inspect checks",
+            "paragraphs": [
+              "You can talk to the agent normally. The check yields the conversation and future checks wait until it is free; this alone does not pause monitoring. The previous check’s timeout cannot interrupt your conversation.",
+              "Mergeron retains schedules when you close the browser. The service and engine must be running; an interruption never triggers a burst of missed checks. At most two checks run simultaneously across the instance.",
+              "Inspect status, next check, expiry and usage. History contains the last 100 attempts and their summaries. Response-ready notifications follow your preferences: a different summary, a completed objective or required attention triggers one, not an identical summary on every check."
+            ],
+            "actions": [
+              {
+                "label": "Pause",
+                "effect": "Suspends future checks without interrupting accepted work. Talking to the agent does not resume an explicit pause."
+              },
+              {
+                "label": "Resume after verification",
+                "effect": "Checks the original identity, access, limits and actual idleness before rescheduling. Uncertain delivery is never replayed automatically: first inspect the conversation and its effects."
+              },
+              {
+                "label": "Stop future checks",
+                "effect": "Finishes scheduling without interrupting the current turn or undoing its actions. The agent can also report that the requested objective is complete."
+              },
+              {
+                "label": "Delete",
+                "effect": "Removes the monitor and its history after confirmation, only when no check or uncertain delivery remains reserved. It does not delete the agent or undo past effects."
+              }
+            ],
+            "warning": "An approval request, revoked access, incompatible permissions or uncertain outcome needs your attention. Talking does not bypass these blocks or the original limits."
+          }
+        ],
+        "related": [
+          "automation-schedule",
+          "agent-approvals",
+          "agent-project-tools",
+          "desktop"
+        ]
       }
     ]
   },

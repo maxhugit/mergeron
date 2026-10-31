@@ -20,5 +20,6 @@ import { PushTransportService } from './push-transport.service';
   ],
   controllers: [PushController],
   providers: [PushService, PushTransportService],
+  exports: [PushService],
 })
 export class PushModule {}
