@@ -36,6 +36,20 @@ officiel ; le proxy public-only interdit toujours les destinations privées.
 Le chemin secret Playwright ne doit apparaître ni dans les diagnostics publics
 ni dans Git. Voir [le guide d’exploitation](docs/navigateur-annote.md).
 
+## Métadonnées des mises à jour
+
+Le Manager conserve son réseau `none` et son accès Docker local. Son inventaire
+ne considère pas une différence de catalogue OCI multi-plateforme comme une
+preuve de mise à jour. Le backend vérifie les manifestes immuables pour la
+plateforme installée, via le proxy filtré : seuls les dépôts officiels Mergeron,
+NGINX et Squid sont interrogés. Le modèle Squid ajoute uniquement
+`auth.docker.io` et `registry-1.docker.io` pour les métadonnées publiques Docker
+Hub ; les refus des réseaux privés, TLS et les autres restrictions subsistent.
+Pas de téléchargement de couches/configuration d’image, de lancement de helper,
+de redirection HTTP, de socket Docker applicatif ou d’identifiant fourni par
+l’utilisateur. Les SHA-256 des manifestes sont vérifiés, les tailles et délais
+bornés. Une erreur laisse l’état inconnu et bloque la proposition d’installation.
+
 ## Reprise de session
 
 La reprise après inactivité ne recharge pas l’onglet de travail et ne réutilise

@@ -37,6 +37,12 @@ L’image du **Manager** se choisit dans `docker run` ou le formulaire hôte, pa
 dans une variable. Les mises à jour des dépendances passent ensuite par le
 [plan et la confirmation dans Mergeron](container-updates.md).
 
+La comparaison des images ne nécessite pas de nouvelle variable ni de réseau
+Manager : il conserve `--network none`. Le backend utilise le proxy sortant
+existant. Une ancienne configuration Squid doit autoriser précisément
+`auth.docker.io` et `registry-1.docker.io` pour les manifestes NGINX/Squid ; aucune
+réécriture automatique de ce fichier persistant n’est effectuée.
+
 ## Services facultatifs
 
 | Variable                           | Défaut du code                                                                                                | Fonction et utilisation                                                                                                                                                                                                                                                               |

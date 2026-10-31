@@ -1,13 +1,20 @@
 /** Administrator-facing bridge to the local Mergeron Manager Unix socket. */
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import http from 'node:http';
+import {
+  RegistryImageIdentityService,
+  type ImagePlatform,
+} from './registry-image-identity.service';
 
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 @Injectable()
 export class ManagerStatusService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @Optional() private readonly registry?: RegistryImageIdentityService,
+  ) {}
 
   private socketPath(): string {
     return (
@@ -148,10 +155,56 @@ export class ManagerStatusService {
     });
   }
 
-  imageUpdates(refresh = false) {
-    return this.requestManager(
+  async imageUpdates(refresh = false) {
+    const result = await this.requestManager(
       `/v1/images/updates${refresh ? '?refresh=true' : ''}`,
     );
+    if (!Array.isArray(result.components)) return result;
+    return {
+      ...result,
+      components: await Promise.all(
+        result.components.map(async (item: Record<string, unknown>) => {
+          // Support older Managers conservatively: an index-only difference is not
+          // proof of a different runnable image. Never hide a real registry error.
+          if (!item.platformCheckRequired && !item.updateAvailable) return item;
+          if (
+            item.checkError &&
+            item.checkError !== 'platformIdentityUnavailable'
+          )
+            return item;
+          try {
+            if (
+              !this.registry ||
+              typeof item.installedImageId !== 'string' ||
+              !/^sha256:[a-f0-9]{64}$/.test(item.installedImageId)
+            )
+              throw new Error('Missing platform identity');
+            const imageId = await this.registry.imageId(
+              String(item.id),
+              String(item.targetImage),
+              String(item.targetDigest),
+              item.platform as ImagePlatform,
+            );
+            const updateAvailable = imageId !== item.installedImageId;
+            return {
+              ...item,
+              targetImageId: imageId,
+              platformCheckRequired: false,
+              updateAvailable,
+              versionStatus: updateAvailable ? 'update_available' : 'current',
+              checkError: null,
+            };
+          } catch {
+            return {
+              ...item,
+              updateAvailable: false,
+              versionStatus: 'unknown',
+              checkError: 'platformIdentityUnavailable',
+            };
+          }
+        }),
+      ),
+    };
   }
 
   backupRetention() {

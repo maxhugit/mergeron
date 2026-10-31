@@ -37,6 +37,54 @@ export class ImageUpdateService {
     string,
     { items: string[]; truncated: boolean }
   >();
+  private installedChangeCache = new Map<string, string>();
+
+  /** Exact installed revision, independent of moving tags or newer releases. */
+  async installedChanges() {
+    const installed = await this.releases.installedBuild();
+    const revision = installed.revision;
+    if (!revision || !revisionPattern.test(revision))
+      return {
+        revision,
+        items: [],
+        url: null,
+        checkError: 'installedChangesUnavailable',
+      };
+    const url = `https://github.com/maxhugit/mergeron/commit/${revision}`;
+    try {
+      let title = this.installedChangeCache.get(revision);
+      if (!title) {
+        const response = await this.fetchJson(
+          `https://api.github.com/repos/maxhugit/mergeron/commits/${revision}`,
+        );
+        const value = object(response.value);
+        if (value.sha !== revision) throw new Error('Commit identity mismatch');
+        const message = object(value.commit).message;
+        if (typeof message !== 'string') throw new Error('Commit unavailable');
+        const lines = message
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+        title = (
+          /^Merge pull request /.test(lines[0] ?? '') ? lines[1] : lines[0]
+        )
+          ?.replace(/\p{Cc}/gu, ' ')
+          .slice(0, 600);
+        if (!title) throw new Error('Commit unavailable');
+        if (this.installedChangeCache.size >= 20)
+          this.installedChangeCache.clear();
+        this.installedChangeCache.set(revision, title);
+      }
+      return { revision, items: [title], url, checkError: null };
+    } catch {
+      return {
+        revision,
+        items: [],
+        url,
+        checkError: 'installedChangesUnavailable',
+      };
+    }
+  }
 
   constructor(
     private readonly releases: ServerReleaseService,
@@ -51,6 +99,7 @@ export class ImageUpdateService {
     const { stdout } = await execute(
       'curl',
       [
+        '--disable',
         '--silent',
         '--show-error',
         '--fail',

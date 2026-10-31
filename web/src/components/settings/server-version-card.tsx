@@ -17,6 +17,7 @@ import {
 } from './server-release-api';
 import { ManagerUpdateControls } from './manager-update-controls';
 import { ManagerBackups } from './manager-backups';
+import { InstalledImageChanges } from './installed-image-changes';
 import {
   componentUpdatesKey,
   requestComponentUpdates,
@@ -227,6 +228,10 @@ export function ServerVersionCard({
               {t('lastChecked')}:{' '}
               {new Date(data.checkedAt).toLocaleString(i18n.language)}
             </p>
+            <InstalledImageChanges
+              revision={data.installed.revision}
+              enabled={view === 'all' || view === 'current'}
+            />
           </>
         )}
       </div>

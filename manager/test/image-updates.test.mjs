@@ -23,6 +23,7 @@ function fixture() {
       Config: { Image: `${repos[id]}@${old}` },
     }),
     inspectImage: async (id) => ({
+      Id: old,
       RepoDigests: [`${repos[id]}@${old}`],
       Os: 'linux',
       Architecture: 'amd64',
@@ -50,13 +51,19 @@ function fixture() {
   };
   return { service: new ImageUpdates(options), options, docker, calls };
 }
-test('discovers all four components read-only and pins available digests', async () => {
+test('discovers all four components read-only but never calls an index change an update', async () => {
   const { service, calls } = fixture();
   const result = await service.status();
   assert.equal(result.components.length, 4);
   assert.ok(
     result.components.every(
-      (c) => c.updateAvailable && c.targetDigest === next,
+      (c) =>
+        !c.updateAvailable &&
+        c.platformCheckRequired &&
+        c.versionStatus === 'unknown' &&
+        c.targetDigest === next &&
+        c.installedImageId === old &&
+        c.platform.architecture === 'amd64',
     ),
   );
   assert.deepEqual(
@@ -100,7 +107,7 @@ test('an unavailable registry is unknown, never current, and does not fail other
   const result = await service.status();
   assert.equal(result.components[1].checkError, 'registryUnavailable');
   assert.equal(result.components[1].versionStatus, 'unknown');
-  assert.equal(result.components[0].updateAvailable, true);
+  assert.equal(result.components[0].platformCheckRequired, true);
   assert.ok(!JSON.stringify(result).includes('secret'));
 });
 test('missing local digests and unsupported platforms cannot offer an update', async () => {

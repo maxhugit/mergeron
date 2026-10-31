@@ -56,3 +56,40 @@ it('requests a confirmed update of exactly the selected component, using its dig
   view.unmount();
   fixture.dispose();
 });
+
+it('does not offer an installation when the platform comparison is unavailable', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      json({
+        checkedAt: '',
+        components: [
+          {
+            id: 'ingress',
+            displayName: 'Nginx',
+            targetImage: 'nginx:stable',
+            targetDigest: `sha256:${'b'.repeat(64)}`,
+            updateAvailable: false,
+            checkError: 'platformIdentityUnavailable',
+            versionStatus: 'unknown',
+          },
+        ],
+      }),
+    ),
+  );
+  const fixture = catalogFixture();
+  await i18n.changeLanguage('fr');
+  const update = vi.fn();
+  const view = fixture.render(
+    <ManagerImageUpdates disabled={false} onUpdate={update} />,
+  );
+  expect(
+    await screen.findByText(/Impossible de vérifier l’image propre/),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Mettre à jour Nginx…' }),
+  ).toBeDisabled();
+  expect(update).not.toHaveBeenCalled();
+  view.unmount();
+  fixture.dispose();
+});

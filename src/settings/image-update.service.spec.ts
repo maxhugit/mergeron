@@ -286,3 +286,82 @@ it.skipIf(process.env.MERGERON_REGISTRY_SMOKE !== '1')(
   },
   90_000,
 );
+
+describe('installed image changes', () => {
+  function installedFixture() {
+    const installedBuild = vi.fn().mockResolvedValue({ revision: from });
+    class Installed extends ImageUpdateService {
+      reads: string[] = [];
+      fail = false;
+      wrongRevision = false;
+      protected override fetchJson(url: string) {
+        this.reads.push(url);
+        if (this.fail)
+          return Promise.reject(new Error('private GitHub response'));
+        return Promise.resolve({
+          raw: '',
+          value: {
+            sha: this.wrongRevision ? to : url.split('/').at(-1),
+            commit: {
+              message:
+                'Merge pull request #123 from fix/issue\n\nCorrige la détection.',
+            },
+          },
+        });
+      }
+    }
+    return {
+      installedBuild,
+      service: new Installed(
+        { installedBuild } as unknown as ServerReleaseService,
+        {} as ManagerStatusService,
+      ),
+    };
+  }
+  it('keeps exact installed changes available even after the update is complete, with immutable caching', async () => {
+    const { service, installedBuild } = installedFixture();
+    expect(await service.installedChanges()).toEqual({
+      revision: from,
+      items: ['Corrige la détection.'],
+      url: `https://github.com/maxhugit/mergeron/commit/${from}`,
+      checkError: null,
+    });
+    await service.installedChanges();
+    expect(service.reads).toHaveLength(1);
+    installedBuild.mockResolvedValue({ revision: to });
+    expect(await service.installedChanges()).toMatchObject({
+      revision: to,
+      items: ['Corrige la détection.'],
+    });
+    expect(service.reads.at(-1)).toBe(
+      `https://api.github.com/repos/maxhugit/mergeron/commits/${to}`,
+    );
+  });
+  it('keeps the installed history link when descriptions are unavailable, without exposing errors', async () => {
+    const { service } = installedFixture();
+    service.fail = true;
+    expect(await service.installedChanges()).toEqual({
+      revision: from,
+      items: [],
+      url: `https://github.com/maxhugit/mergeron/commit/${from}`,
+      checkError: 'installedChangesUnavailable',
+    });
+  });
+  it('does not display descriptions belonging to a different revision', async () => {
+    const { service } = installedFixture();
+    service.wrongRevision = true;
+    expect(await service.installedChanges()).toMatchObject({
+      items: [],
+      checkError: 'installedChangesUnavailable',
+    });
+  });
+  it('never constructs a URL from an unknown or invalid installed revision', async () => {
+    const { service, installedBuild } = installedFixture();
+    installedBuild.mockResolvedValue({ revision: 'https://private.invalid' });
+    expect(await service.installedChanges()).toMatchObject({
+      url: null,
+      items: [],
+    });
+    expect(service.reads).toHaveLength(0);
+  });
+});

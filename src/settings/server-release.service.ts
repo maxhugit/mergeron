@@ -109,7 +109,7 @@ export class ServerReleaseService {
     );
   }
 
-  private async installed(): Promise<MergeronBuildInfo> {
+  async installedBuild(): Promise<MergeronBuildInfo> {
     let file: Partial<MergeronBuildInfo> = {};
     try {
       file = JSON.parse(
@@ -136,6 +136,7 @@ export class ServerReleaseService {
     const { stdout } = await execute(
       'curl',
       [
+        '--disable',
         '--silent',
         '--show-error',
         '--fail',
@@ -209,7 +210,7 @@ export class ServerReleaseService {
   }
 
   async status(force = false) {
-    const installed = await this.installed();
+    const installed = await this.installedBuild();
     const checkedAt = new Date().toISOString();
     try {
       const published = await this.published(force);

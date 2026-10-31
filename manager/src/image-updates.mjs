@@ -51,6 +51,9 @@ export class ImageUpdates {
           displayName: component.displayName,
           installedImage: current?.image ?? null,
           installedDigest: null,
+          installedImageId: null,
+          platform: null,
+          platformCheckRequired: false,
           targetImage: null,
           targetDigest: null,
           updateAvailable: false,
@@ -67,6 +70,16 @@ export class ImageUpdates {
             current.containerId,
           );
           const local = await this.docker.inspectImage(inspect.Image);
+          result.installedImageId = digestPattern.test(
+            local.Id ?? inspect.Image,
+          )
+            ? (local.Id ?? inspect.Image)
+            : null;
+          result.platform = {
+            os: local.Os,
+            architecture: local.Architecture,
+            ...(local.Variant ? { variant: local.Variant } : {}),
+          };
           const expected = sources[component.id];
           // Custom registries and arbitrary labels must not turn discovery into an SSRF proxy.
           if (
@@ -140,10 +153,17 @@ export class ImageUpdates {
               );
             throw new Error('installedDigestUnavailable');
           }
-          result.updateAvailable = result.installedDigest !== digest;
-          result.versionStatus = result.updateAvailable
-            ? 'update_available'
+          // An OCI index can change only attestations or another platform.
+          // The network-isolated Manager cannot resolve its child manifest:
+          // the application bridge verifies metadata for this exact platform.
+          // Until that evidence exists, never call an index change an upgrade.
+          result.platformCheckRequired = result.installedDigest !== digest;
+          result.versionStatus = result.platformCheckRequired
+            ? 'unknown'
             : 'current';
+          result.checkError = result.platformCheckRequired
+            ? 'platformIdentityUnavailable'
+            : null;
         } catch (error) {
           // Do not return registry responses, credentials or arbitrary Docker diagnostics.
           result.checkError = [
