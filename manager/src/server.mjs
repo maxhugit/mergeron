@@ -9,6 +9,7 @@ import { TransactionalUpdater } from './updater.mjs';
 import { environmentBackupPolicy } from './backup-policy.mjs';
 import { PreviewManager } from './previews.mjs';
 import { ManagedCodexCli } from './codex-cli.mjs';
+import { startHealthDiagnostics } from './health-diagnostics.mjs';
 import {
   confirmAdoption,
   evaluateAdoption,
@@ -75,6 +76,7 @@ const updater = new TransactionalUpdater({
   adoptionPath,
   directory: `${dirname(adoptionPath)}/updates`,
 });
+startHealthDiagnostics();
 let ready = false;
 
 let snapshot = unavailableInventory(

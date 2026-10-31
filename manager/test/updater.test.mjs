@@ -1296,6 +1296,80 @@ test('a failed size scan does not starve the following backups', async (t) => {
   assert.equal(result.totalSizeBytes, null);
 });
 
+test('completed sizes survive a Manager restart without scanning backup contents or changing journals', async (t) => {
+  const { updater, options } = await fixture(t);
+  await begin(updater);
+  const journal = join(options.directory, 'transaction.json');
+  const before = await readFile(journal, 'utf8');
+  updater.measureBackupSize = async () => 12345;
+  await updater.listBackups();
+  await updater.backupSizeTask;
+  const restarted = new TransactionalUpdater(options);
+  await restarted.recover();
+  let scans = 0;
+  restarted.measureBackupSize = async () => {
+    scans++;
+    assert.fail('a completed backup must not be rescanned after a restart');
+  };
+  await restarted.listBackups();
+  await restarted.backupSizeTask;
+  assert.equal((await restarted.listBackups()).totalSizeBytes, 12345);
+  assert.equal(scans, 0);
+  assert.equal(await readFile(journal, 'utf8'), before);
+});
+
+test('invalid cached metadata is ignored and regenerated from the exact backup', async (t) => {
+  const { updater, options } = await fixture(t);
+  await begin(updater);
+  const path = join(options.directory, updater.current.id, 'backup-size.json');
+  await writeFile(
+    path,
+    JSON.stringify({ schema: 1, stack: 'other', bytes: 999 }),
+  );
+  let scans = 0;
+  updater.measureBackupSize = async () => {
+    scans++;
+    return 512;
+  };
+  await updater.listBackups();
+  await updater.backupSizeTask;
+  assert.equal(scans, 1);
+  assert.equal((await updater.listBackups()).totalSizeBytes, 512);
+  assert.equal(JSON.parse(await readFile(path, 'utf8')).stack, manifest.stack);
+});
+
+test('size queue yields to an update and retries later without caching partial results', async (t) => {
+  const { updater, options } = await fixture(t);
+  await begin(updater);
+  let entered;
+  let resume;
+  const scanning = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise((resolve) => {
+    resume = resolve;
+  });
+  updater.measureBackupSize = async (_, { check }) => {
+    entered();
+    await gate;
+    check();
+    return 123;
+  };
+  await updater.listBackups();
+  await scanning;
+  updater.busy = true;
+  resume();
+  await updater.backupSizeTask;
+  const path = join(options.directory, updater.current.id, 'backup-size.json');
+  await assert.rejects(lstat(path), { code: 'ENOENT' });
+  assert.equal((await updater.listBackups()).totalSizeBytes, null);
+  updater.busy = false;
+  updater.measureBackupSize = async () => 456;
+  await updater.listBackups();
+  await updater.backupSizeTask;
+  assert.equal((await updater.listBackups()).totalSizeBytes, 456);
+});
+
 test('deleting the latest backup preserves quarantine and disables rollback durably', async (t) => {
   const { updater, options } = await fixture(t);
   await begin(updater);
