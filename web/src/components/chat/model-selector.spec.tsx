@@ -35,8 +35,16 @@ vi.mock('@/hooks/use-active-model', () => {
     ],
   };
   return {
-    useActiveModel: () => ({
-      models: [
+    useActiveModel: () => {
+      const threadId = useTimelineStore.getState().threadId;
+      const selected =
+        (threadId
+          ? useModelStore.getState().preferencesByThread[threadId]?.model
+          : null) ||
+        state.project?.agentModel ||
+        useModelStore.getState().modelOverride ||
+        'base';
+      const models = [
         base,
         {
           ...base,
@@ -45,12 +53,15 @@ vi.mock('@/hooks/use-active-model', () => {
           displayName: 'Alternative model',
           isDefault: false,
         },
-      ],
-      hiddenModels: [],
-      activeModelId: 'base',
-      activeModel: base,
-      configModel: 'base',
-    }),
+      ];
+      return {
+        models,
+        hiddenModels: [],
+        activeModelId: selected,
+        activeModel: models.find((model) => model.model === selected),
+        configModel: 'base',
+      };
+    },
   };
 });
 const clients: QueryClient[] = [];
@@ -106,14 +117,73 @@ it('withdraws an open picker after losing administrator status', () => {
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(screen.getByRole('button')).toHaveAttribute('aria-readonly', 'true');
 });
-it('preserves project-enforced model settings even for administrators', () => {
-  state.admin = true;
+it('keeps the project model read-only for non-administrators', () => {
   state.project = { agentModel: 'other', agentReasoningEffort: 'high' };
   mount();
-  const badge = screen.getByRole('button', { name: /Defined by project/ });
+  const badge = screen.getByRole('button', { name: /Only administrators/ });
   fireEvent.click(badge);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(useModelStore.getState().modelOverride).toBeNull();
+});
+
+it('lets an administrator change project agent choices, reload them and return to project defaults without changing another agent', async () => {
+  state.admin = true;
+  state.project = { agentModel: 'base', agentReasoningEffort: 'high' };
+  useTimelineStore.setState({ threadId: 'agent-a' });
+  let saved: AgentExecutionPreferences = { revision: 0 };
+  useModelStore.getState().recordPreferences('agent-b', {
+    revision: 1,
+    model: 'base',
+    effort: 'high',
+  });
+  const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') {
+      const patch = JSON.parse(init.body as string);
+      saved = {
+        ...saved,
+        ...('model' in patch ? { effort: null, serviceTier: null } : {}),
+        ...patch,
+        revision: saved.revision + 1,
+      };
+    }
+    return { ok: true, json: async () => ({ ...saved }) };
+  });
+  vi.stubGlobal('fetch', fetch);
+  const view = mount();
+  await waitFor(() => expect(screen.getByRole('button')).toBeEnabled());
+  expect(screen.getByRole('button')).toHaveTextContent('high');
+  fireEvent.click(screen.getByRole('button'));
+  fireEvent.click(screen.getByText('Alternative model'));
+  await waitFor(() =>
+    expect(useModelStore.getState().preferencesByThread['agent-a']?.model).toBe(
+      'other',
+    ),
+  );
+  const trigger = screen.getByRole('button', {
+    name: /Model & Reasoning Effort|Model.*Alternative model/,
+  });
+  expect(trigger).toHaveTextContent('medium');
+  fireEvent.click(screen.getByRole('button', { name: 'high' }));
+  await waitFor(() => expect(saved.effort).toBe('high'));
+  view.unmount();
+  useModelStore.getState().forgetObservedThreadEffort('agent-a');
+  const reloaded = mount();
+  await waitFor(() =>
+    expect(screen.getByRole('button')).toHaveTextContent('Alternative model'),
+  );
+  expect(screen.getByRole('button')).toHaveTextContent('high');
+  fireEvent.click(screen.getByRole('button'));
+  fireEvent.click(screen.getByRole('button', { name: /Defined by project/ }));
+  await waitFor(() => expect(saved.model).toBeNull());
+  expect(useModelStore.getState().preferencesByThread['agent-b']).toMatchObject(
+    { model: 'base', effort: 'high' },
+  );
+  expect(
+    fetch.mock.calls.every(
+      ([url]) => url === '/api/threads/agent-a/execution-preferences',
+    ),
+  ).toBe(true);
+  reloaded.unmount();
 });
 
 it('lets an administrator save choices on the selected agent without writing legacy overrides', async () => {

@@ -61,9 +61,11 @@ export function useActiveModel(): ActiveModel {
   )?.model;
   const all = modelsData?.data ?? [];
   const models = all.filter((m) => !m.hidden);
-  // The server enforces the project's model before any per-turn override.
+  // A durable administrator choice on this agent replaces the project default.
+  // Unbound/global overrides still cannot replace a project's model.
   // An unset server model also means the catalog default, not "no model".
   const activeModelId =
+    (threadId ? modelOverride : null) ||
     project?.agentModel ||
     modelOverride ||
     configModel ||

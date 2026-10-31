@@ -1187,7 +1187,7 @@
   "apiKeyConfigured": "API key configured",
   "byName": "By {{name}}",
   "chooseTheExecutionEngineUsedBySimpleChatConversations": "Choose the execution engine used by Simple Chat conversations.",
-  "chooseTheModelAndReasoningEffortUsedByAgentsAndTaskManagerAiInThisProject": "Choose the model and reasoning effort used by agents and task manager AI in this project.",
+  "chooseTheModelAndReasoningEffortUsedByAgentsAndTaskManagerAiInThisProject": "Choose the default model and reasoning effort for agents and task manager AI. An administrator can save a different choice on an individual agent.",
   "definedByProject": "Defined by project",
   "fromThisInterface": " from this interface",
   "informationAboutTheIdentityCurrentlyConnected": "Information about the identity currently connected.",

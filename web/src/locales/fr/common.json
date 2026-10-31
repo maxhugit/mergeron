@@ -1187,7 +1187,7 @@
   "apiKeyConfigured": "Clé API configurée",
   "byName": "Par {{name}}",
   "chooseTheExecutionEngineUsedBySimpleChatConversations": "Choisissez le moteur utilisé par les conversations simples.",
-  "chooseTheModelAndReasoningEffortUsedByAgentsAndTaskManagerAiInThisProject": "Choisissez le modèle et le niveau de raisonnement utilisés par les agents et l’IA du gestionnaire de tâches de ce projet.",
+  "chooseTheModelAndReasoningEffortUsedByAgentsAndTaskManagerAiInThisProject": "Choisissez le modèle et le niveau de raisonnement par défaut des agents et de l’IA du gestionnaire de tâches. Un administrateur peut enregistrer un choix différent sur un agent.",
   "definedByProject": "Défini par le projet",
   "fromThisInterface": " depuis cette interface",
   "informationAboutTheIdentityCurrentlyConnected": "Informations sur l’identité actuellement connectée.",

@@ -219,7 +219,7 @@ jobs:
 
       - name: Test mobile viewport layout in Chromium and WebKit
         if: matrix.part == 'frontend'
-        run: pnpm --dir web exec vitest run --project browser src/lib/mobile-viewport.browser.tsx src/components/chat/compact-composer.browser.tsx src/components/chat/security-policy-badge.browser.tsx
+        run: pnpm --dir web exec vitest run --project browser src/lib/mobile-viewport.browser.tsx src/components/chat/compact-composer.browser.tsx src/components/chat/security-policy-badge.browser.tsx src/components/chat/model-selector.browser.tsx
 
       - name: Test retained agent views in Chromium and WebKit
         if: matrix.part == 'frontend'
