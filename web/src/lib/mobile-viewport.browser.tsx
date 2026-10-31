@@ -98,7 +98,7 @@ test.each([
     expect(viewportMeta!.content).toBe('width=device-width, initial-scale=1.0');
     const footer = frame!.querySelector('footer')!;
     expect(footer.getBoundingClientRect().bottom).toBe(height);
-    const expectedInset = width >= 640 ? 12 : 0;
+    const expectedInset = width >= 640 ? 12 : 8;
     expect(parseFloat(getComputedStyle(footer).paddingBottom)).toBe(
       expectedInset,
     );
@@ -121,6 +121,9 @@ test('keeps Safari/desktop layout unchanged outside standalone mode', async () =
     false,
   );
   expect(getComputedStyle(frame!).position).toBe('fixed');
+  expect(getComputedStyle(frame!.querySelector('footer')!).paddingBottom).toBe(
+    '0px',
+  );
   expect(viewportMeta!.content).toContain('viewport-fit=cover');
   expect(
     getComputedStyle(frame!.querySelector('header')!).backdropFilter,
@@ -178,6 +181,22 @@ test('restores full height after keyboard dismissal even when focus stays in the
   );
   expect(frame!.getBoundingClientRect().top).toBe(0);
   expect(frame!.getBoundingClientRect().height).toBe(844);
+  expect(getComputedStyle(frame!.querySelector('footer')!).paddingBottom).toBe(
+    '8px',
+  );
+});
+
+test('leaves a small visible gap beneath the rounded composer without moving the header or shrinking the viewport', async () => {
+  await page.viewport(390, 844);
+  fixture(true, 844, 59, 34);
+  const footer = frame!.querySelector('footer')!;
+  const card = footer.firstElementChild!;
+  expect(frame!.getBoundingClientRect().height).toBe(844);
+  expect(frame!.querySelector('header')!.getBoundingClientRect().top).toBe(0);
+  expect(footer.getBoundingClientRect().bottom).toBe(844);
+  expect(card.getBoundingClientRect().bottom).toBe(836);
+  const control = footer.querySelector('button')!;
+  expect(control.getBoundingClientRect().bottom).toBeLessThanOrEqual(836);
 });
 
 test('sizes portalled navigation to the same rectangle and reserves bottom safety only once', async () => {
