@@ -288,7 +288,7 @@
   "gitActionConfirmMerge": "Fusionner la pull request n°{{number}} ?",
   "gitActionMergeHelp": "Crée un commit de fusion sur la branche cible de la PR. Les checks et les révisions sont revérifiés côté serveur. Les protections GitHub s’appliquent. La copie locale n’est pas mise à jour et aucune branche n’est supprimée.",
   "gitTabMerges": "Merges",
-  "gitMergesHelp": "La fusion Git est déjà effectuée. Suivez ici ses vérifications et sa publication : réussi, en échec, en cours ou en attente. Actualisation toutes les 30 secondes.",
+  "gitMergesHelp": "La fusion Git est déjà effectuée. Suivez ici ses vérifications et sa publication : réussi, en échec, annulé, en cours ou en attente. Actualisation toutes les 30 secondes.",
   "gitWorkflows": "Exécutions GitHub Actions",
   "gitWorkflowUnavailable": "État des exécutions indisponible : accès GitHub Actions ou connexion à vérifier. La réussite n’est pas confirmée.",
   "gitWorkflowConcurrency": "En attente dans le groupe : {{groups}}",
