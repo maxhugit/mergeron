@@ -1827,6 +1827,13 @@
         ],
         "sections": [
           {
+            "title": "Rechargement et reconnexion du terminal",
+            "paragraphs": [
+              "L’ouverture d’une conversation recherche les sessions existantes sans créer de shell. Si la connexion change pendant cette lecture, l’ancienne réponse est ignorée sans alerte rouge ; la recherche reprend après reconnexion. Une configuration du terminal déjà demandée est également relue.",
+              "Cette reprise ne rejoue ni saisie ni commande. Si « Nouveau terminal » attend une recherche et que la connexion change, la création est annulée : refaites l’action après reconnexion. Les refus d’accès, réponses invalides et vrais délais d’attente restent signalés ; le terminal reste réservé aux administrateurs."
+            ]
+          },
+          {
             "title": "Commencer par les outils de lecture",
             "steps": [
               "Notez la fonction concernée, l’heure et le message d’erreur sans copier de secret.",
