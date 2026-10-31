@@ -15,6 +15,7 @@ vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => <div>Arborescence locale</div>,
 }));
 import { locationInventoryFixture } from '@/test/project-locations-fixture';
+import { waitForDialogClose } from '@/test/wait-for-dialog-close';
 import type { GitInventory } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
@@ -165,27 +166,6 @@ test.each([390, 1100])(
         </div>
       </QueryClientProvider>,
     );
-    const waitForDialogClose = async (dialog: HTMLElement) => {
-      // Data invalidation can finish before the exit animation and portal
-      // cleanup. Wait for the actual user-visible completion, not an enabled
-      // button behind an aria-hidden modal. No animation events are fabricated.
-      await expect
-        .poll(
-          () => ({
-            connected: dialog.isConnected,
-            pageHidden: view.container.hasAttribute('aria-hidden'),
-            pointerLocked: document.body.style.pointerEvents === 'none',
-            scrollLocked: document.body.hasAttribute('data-scroll-locked'),
-          }),
-          { timeout: 5000 },
-        )
-        .toEqual({
-          connected: false,
-          pageHidden: false,
-          pointerLocked: false,
-          scrollLocked: false,
-        });
-    };
     try {
       await screen.findByRole('tab', { name: /Modifications/ });
       await page.getByRole('tab', { name: /Modifications/ }).click();
@@ -222,7 +202,7 @@ test.each([390, 1100])(
         .getByRole('button', { name: 'Confirmer la préparation', exact: true })
         .click();
       await expect.poll(() => commit.hasAttribute('disabled')).toBe(false);
-      await waitForDialogClose(stageConfirmation);
+      await waitForDialogClose(stageConfirmation, view.container);
       expect(
         screen.getByRole('region', {
           name: 'Modifications à préparer (0)',
@@ -259,7 +239,7 @@ test.each([390, 1100])(
       });
       await page.getByRole('button', { name: 'Confirmer le commit' }).click();
       await expect.poll(() => server.committed).toBe(true);
-      await waitForDialogClose(commitConfirmation);
+      await waitForDialogClose(commitConfirmation, view.container);
       expect(
         screen.getByRole('region', { name: 'Modifications à préparer (0)' }),
       ).toBeVisible();
@@ -277,7 +257,7 @@ test.each([390, 1100])(
       const confirmation = await screen.findByRole('dialog');
       expect(confirmation).toHaveTextContent('eeeeeee');
       await page.getByRole('button', { name: 'Confirmer le push' }).click();
-      await waitForDialogClose(confirmation);
+      await waitForDialogClose(confirmation, view.container);
       const syncRegion = await screen.findByRole('region', {
         name: 'Synchronisation',
       });
