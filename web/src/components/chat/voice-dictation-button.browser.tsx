@@ -22,6 +22,14 @@ afterEach(async () => {
 });
 
 test('negotiates real local WebRTC peers without a microphone or account, then adds the explicit final text', async () => {
+  const peers: RTCPeerConnection[] = [];
+  class ObservedPeer extends RTCPeerConnection {
+    constructor(configuration?: RTCConfiguration) {
+      super(configuration);
+      peers.push(this);
+    }
+  }
+  vi.stubGlobal('RTCPeerConnection', ObservedPeer);
   context = new AudioContext();
   const stream = context.createMediaStreamDestination().stream;
   const track = stream.getAudioTracks()[0];
@@ -33,6 +41,8 @@ test('negotiates real local WebRTC peers without a microphone or account, then a
       remote = new RTCPeerConnection({ iceServers: [] });
       const { sdp } = JSON.parse(options!.body as string);
       await remote.setRemoteDescription({ type: 'offer', sdp });
+      // Negotiate a real return audio track too. Dictation must not play it.
+      remote.addTrack(track, stream);
       await remote.setLocalDescription(await remote.createAnswer());
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(
@@ -86,11 +96,21 @@ test('negotiates real local WebRTC peers without a microphone or account, then a
     { name: 'Arrêter la dictée' },
     { timeout: 20000 },
   );
+  const receivedAudio = peers[0]
+    .getReceivers()
+    .find((item) => item.track.kind === 'audio')?.track;
+  expect(receivedAudio).toBeDefined();
+  expect(receivedAudio?.enabled).toBe(false);
+  expect(track.enabled).toBe(true);
+  expect(document.querySelector('audio,video')).toBeNull();
   expect(screen.getByRole('textbox', { name: 'Brouillon' })).toHaveValue('');
   for (const width of [1100, 390]) {
     await page.viewport(width, 800);
     expect(stop).toBeVisible();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/cli-dictation-${width}.png`,
+    });
   }
   fireEvent.click(stop);
   await waitFor(() =>

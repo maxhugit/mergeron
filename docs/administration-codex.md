@@ -29,6 +29,16 @@ sa propre authentification ; aucun jeton n’est extrait ni transmis au navigate
 L’audio circule ensuite sur WebRTC, pas dans `appendAudio` ni dans un fichier
 uploadé au serveur Mergeron. La connexion média du navigateur reste nécessaire.
 
+Le transport WebRTC natif du CLI 0.164.0 choisit le protocole v1 par défaut :
+il exige `outputModality: "audio"`. Demander `"text"` échoue localement avec
+`text realtime output modality requires realtime v2` avant toute connexion
+vocale ; le protocole v2 n’est pas utilisable sur ce transport. Mergeron négocie
+donc la modalité audio, désactive les pistes audio distantes et ne les attache
+à aucun lecteur. Seule la transcription utilisateur est conservée. Ce refus de
+configuration n’est ni un refus du microphone ni une preuve d’accès vocal refusé
+sur le compte. Le diagnostic distingue cette incompatibilité d’une erreur
+technique non classée, sans afficher le message natif brut.
+
 Le transport vocal WebSocket du CLI exige une authentification par clé API,
 même lorsque le compte CLI est connecté à ChatGPT. Il n’est donc pas utilisé
 pour simuler une dictée sur abonnement. Un ancien client qui envoie encore un
@@ -64,6 +74,15 @@ de stabilisation ; relire la transcription, notamment pour un long enregistremen
 En cas d’incompatibilité, coupure, silence ou expiration, une erreur explicite
 est retournée sans appel de secours à l’API. La validation réelle avec le compte
 de l’installation reste nécessaire avant de considérer ce chemin comme fiable.
+
+La CI isolée vérifie séparément le précontrôle natif avec le CLI réellement
+installé par le Manager et le service Mergeron compilé. L’ancien paramètre
+`"text"` doit être refusé avant HTTP ; le paramètre corrigé doit atteindre un
+sentinel HTTP en boucle locale. Ce faux service refuse volontairement l’appel,
+et la vérification du compte est simulée : aucun compte, clé, média ou service
+OpenAI n’est utilisé. Ce test de compatibilité ne prouve pas l’accès vocal réel
+du compte. Les tests Chromium/WebKit négocient deux pairs locaux avec de l’audio
+synthétique, sans ouvrir le microphone physique ni jouer la voix distante.
 
 ## Affichage des détails techniques par agent
 

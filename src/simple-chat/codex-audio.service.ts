@@ -189,11 +189,22 @@ export class CodexAudioService implements OnModuleDestroy {
         );
       } else if (note.method === 'thread/realtime/error') {
         const needsKey = note.params.message.includes('requires API key auth');
+        const incompatible = [
+          'text realtime output modality requires realtime v2',
+          'AVAS realtime calls require realtime v1 or v3',
+          'AVAS realtime calls require conversational realtime',
+        ].some((reason) => note.params.message.includes(reason));
         fail(
-          needsKey ? 'api-key-required' : 'upstream-error',
-          needsKey
-            ? 'ce transport vocal du CLI exige une clé API et ne peut pas utiliser la connexion ChatGPT.'
-            : 'le service vocal du compte a refusé ou interrompu la connexion WebRTC.',
+          incompatible
+            ? 'protocol-incompatible'
+            : needsKey
+              ? 'api-key-required'
+              : 'upstream-error',
+          incompatible
+            ? 'la configuration vocale est incompatible avec le transport WebRTC du CLI ; mettez Mergeron à jour.'
+            : needsKey
+              ? 'ce transport vocal du CLI exige une clé API et ne peut pas utiliser la connexion ChatGPT.'
+              : 'la session vocale du CLI a été interrompue par une erreur technique.',
         );
       } else if (note.method === 'thread/realtime/closed')
         fail(
@@ -308,7 +319,9 @@ export class CodexAudioService implements OnModuleDestroy {
       phase = 'webrtc';
       await client.request('thread/realtime/start', {
         threadId,
-        outputModality: 'text',
+        // Native WebRTC defaults to v1 and rejects text-only output (v2-only).
+        // Negotiate audio, but never play assistant audio or return its transcript.
+        outputModality: 'audio',
         includeStartupContext: false,
         clientManagedHandoffs: true,
         flushTranscriptTailOnSessionEnd: false,

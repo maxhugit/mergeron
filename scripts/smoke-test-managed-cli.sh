@@ -59,6 +59,7 @@ docker run -d --name "$app" --read-only --network none --cap-drop ALL \
   --mount "type=bind,src=$fixture/run,dst=/run/mergeron-manager" \
   --mount "type=bind,src=$script_dir/managed-cli-http-probe.cjs,dst=/ci/managed-cli-http-probe.cjs,readonly" \
   --mount "type=bind,src=$script_dir/managed-cli-ui-probe.cjs,dst=/ci/managed-cli-ui-probe.cjs,readonly" \
+  --mount "type=bind,src=$script_dir/cli-dictation-native-probe.cjs,dst=/ci/cli-dictation-native-probe.cjs,readonly" \
   --mount "type=bind,src=$script_dir/smoke-test-git-copy-isolation.py,dst=/ci/smoke-test-git-copy-isolation.py,readonly" \
   --label io.mergeron.managed=true --label "io.mergeron.stack=$stack" \
   --label io.mergeron.component=application \
@@ -81,6 +82,7 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 docker exec "$app" node /ci/managed-cli-http-probe.cjs
+docker exec "$app" node /ci/cli-dictation-native-probe.cjs /home/codex/.codex/webui/cli/releases/0.164.0-mergeron.1/codex
 docker restart "$app" >/dev/null
 wait_for_app
 docker exec "$app" node /ci/managed-cli-http-probe.cjs persisted

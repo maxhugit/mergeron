@@ -18,7 +18,7 @@ function setup(autoAnswer = true) {
       (method: string, params?: unknown, timeoutMs?: number) => Promise<unknown>
     >;
   };
-  client.request = vi.fn((method: string) => {
+  client.request = vi.fn((method: string, params?: unknown) => {
     if (method === 'account/read')
       return Promise.resolve({ account: { type: 'chatgpt' } });
     if (method === 'config/read')
@@ -27,13 +27,28 @@ function setup(autoAnswer = true) {
       });
     if (method === 'thread/start')
       return Promise.resolve({ thread: { id: 'voice-only' } });
-    if (method === 'thread/realtime/start' && autoAnswer)
+    if (method === 'thread/realtime/start' && autoAnswer) {
+      const start = params as {
+        transport?: { type: string };
+        outputModality?: string;
+      };
+      // Native 0.164.0 validation: WebRTC defaults to v1. Text output is
+      // v2-only, while v2 is forbidden for WebRTC. A generic RPC-OK mock hid it.
       queueMicrotask(() =>
         client.emit('notification', {
-          method: 'thread/realtime/sdp',
-          params: { threadId: 'voice-only', sdp: answer },
+          method:
+            start.transport?.type === 'webrtc' &&
+            start.outputModality === 'text'
+              ? 'thread/realtime/error'
+              : 'thread/realtime/sdp',
+          params: {
+            threadId: 'voice-only',
+            sdp: answer,
+            message: 'text realtime output modality requires realtime v2',
+          },
         }),
       );
+    }
     return Promise.resolve({});
   });
   const admission = new CatalogAdmissionService();
@@ -58,7 +73,7 @@ it('negotiates WebRTC with the CLI, never websocket or PCM upload; returns only 
     )?.[1],
   ).toMatchObject({
     transport: { type: 'webrtc', sdp: offer },
-    outputModality: 'text',
+    outputModality: 'audio',
     clientManagedHandoffs: true,
     flushTranscriptTailOnSessionEnd: false,
   });
@@ -193,6 +208,51 @@ it('reports API-key-only voice incompatibility without using keys, leaking error
   }
   expect(JSON.stringify(logger.mock.calls)).not.toContain('PRIVATE_TOKEN');
   expect(client.listenerCount('notification')).toBe(0);
+});
+
+it.each([
+  'text realtime output modality requires realtime v2',
+  'AVAS realtime calls require realtime v1 or v3',
+  'AVAS realtime calls require conversational realtime',
+])(
+  'reports native protocol incompatibility without blaming the account: %s',
+  async (message) => {
+    const { service, client, admission } = setup(false);
+    const logger = vi.spyOn(
+      (service as unknown as { logger: { warn: (...args: unknown[]) => void } })
+        .logger,
+      'warn',
+    );
+    const pending = service.start(offer);
+    const rejected = expect(pending).rejects.toThrow(
+      /configuration vocale est incompatible/,
+    );
+    await flush();
+    client.emit('notification', {
+      method: 'thread/realtime/error',
+      params: { threadId: 'voice-only', message: message + ' PRIVATE_DETAIL' },
+    });
+    await rejected;
+    expect(logger).toHaveBeenCalledWith(
+      { phase: 'webrtc', reason: 'protocol-incompatible' },
+      'CLI dictation failed',
+    );
+    expect(JSON.stringify(logger.mock.calls)).not.toContain('PRIVATE_DETAIL');
+    expect(admission.pending()).toHaveLength(0);
+    expect(client.listenerCount('notification')).toBe(0);
+  },
+);
+
+it('does not call an unknown technical error a refusal by the account or microphone', async () => {
+  const { service, client } = setup(false);
+  const pending = service.start(offer);
+  const rejected = expect(pending).rejects.toThrow(/erreur technique/);
+  await flush();
+  client.emit('notification', {
+    method: 'thread/realtime/error',
+    params: { threadId: 'voice-only', message: 'PRIVATE_UPSTREAM_DETAIL' },
+  });
+  await rejected;
 });
 
 it('refuses concurrent sessions, binds stop to the authenticated owner, and keeps another owner from closing it', async () => {
