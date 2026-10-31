@@ -234,7 +234,7 @@ describe('ThreadsService', () => {
     );
   });
 
-  it('keeps project model and read-only restrictions above saved agent choices', async () => {
+  it('applies saved administrator model choices while preserving project read-only restrictions', async () => {
     mockPreferences.forTurn.mockReturnValue({
       model: 'saved-model',
       effort: 'high',
@@ -252,12 +252,41 @@ describe('ThreadsService', () => {
     expect(mockCodex.request).toHaveBeenLastCalledWith(
       'turn/start',
       expect.objectContaining({
-        model: 'project-model',
-        effort: 'low',
+        model: 'saved-model',
+        effort: 'high',
         sandboxPolicy: { type: 'readOnly', networkAccess: false },
       }),
     );
   });
+
+  it.each([
+    [{ model: 'saved-model', effort: null }, 'saved-model', null],
+    [{ model: 'saved-model' }, 'saved-model', null],
+    [{ effort: 'high' }, 'project-model', 'high'],
+    [{ model: null, effort: null, serviceTier: null }, 'project-model', 'low'],
+  ])(
+    'resolves only persisted administrator model choices above project defaults: %j',
+    async (saved, model, effort) => {
+      mockPreferences.forTurn.mockReturnValue(saved);
+      mockProjectConnections.policyForCwd.mockResolvedValue({
+        projectId: 'p',
+        config: {},
+        model: 'project-model',
+        reasoningEffort: 'low',
+      });
+      mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+      await service.startTurn({
+        threadId: 't1',
+        input: [],
+        model: 'request-model',
+        effort: 'medium',
+      });
+      expect(mockCodex.request).toHaveBeenLastCalledWith(
+        'turn/start',
+        expect.objectContaining({ model, effort }),
+      );
+    },
+  );
 
   it('does not dispatch any RPC if permission persistence is unconfirmed or failed', async () => {
     mockPreferences.forTurn.mockImplementation(() => {

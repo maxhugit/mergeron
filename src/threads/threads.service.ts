@@ -597,7 +597,8 @@ export class ThreadsService {
   ): Promise<v2.TurnStartResponse> {
     requireExecutionAccess();
     this.deletionRegistry.assertMutable(params.threadId);
-    params = { ...this.preferences?.forTurn(params.threadId), ...params };
+    const agentPreferences = this.preferences?.forTurn(params.threadId) ?? {};
+    params = { ...agentPreferences, ...params };
     const beforeTurn = this.metadata.getHeldThread(params.threadId);
     const shouldAutoName = Boolean(
       !background &&
@@ -698,9 +699,20 @@ export class ThreadsService {
           }
         : {}),
       ...(workspaceCwd ? { cwd: workspaceCwd } : {}),
-      ...(projectPolicy?.model ? { model: projectPolicy.model } : {}),
-      ...(projectPolicy?.reasoningEffort
-        ? { effort: projectPolicy.reasoningEffort }
+      // Only durable administrator choices may replace project defaults.
+      // Request-supplied values still cannot bypass a project model/effort.
+      ...(projectPolicy && (agentPreferences.model || projectPolicy.model)
+        ? { model: agentPreferences.model || projectPolicy.model }
+        : {}),
+      ...(projectPolicy &&
+      (agentPreferences.model ||
+        agentPreferences.effort ||
+        projectPolicy.reasoningEffort)
+        ? {
+            effort:
+              agentPreferences.effort ??
+              (agentPreferences.model ? null : projectPolicy.reasoningEffort),
+          }
         : {}),
     };
     // The deliverable cwd is intentionally read-only in the outer namespace.

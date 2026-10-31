@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useActiveModel } from './use-active-model';
 import { useModelStore } from '@/stores/model-store';
+import { useTimelineStore } from '@/stores/timeline-store';
 const project = vi.hoisted(() =>
   vi.fn<() => { agentModel: string | null } | undefined>(),
 );
@@ -34,6 +35,7 @@ afterEach(() => {
   cleanup();
   project.mockReset();
   useModelStore.getState().clearOverrides();
+  useTimelineStore.setState({ threadId: null });
 });
 function mount(configModel: string | null, models = [standard, fast]) {
   const client = new QueryClient({
@@ -53,12 +55,28 @@ function mount(configModel: string | null, models = [standard, fast]) {
   };
 }
 it('resolves the project model before global overrides, including its hidden speed catalog', () => {
+  useTimelineStore.setState({ threadId: null });
   project.mockReturnValue({ agentModel: 'project' });
   useModelStore.getState().setModelOverride('server');
   const { result } = mount('server');
   expect(result.current.activeModelId).toBe('project');
   expect(result.current.activeModel?.serviceTiers).toEqual(fast.serviceTiers);
   expect(useModelStore.getState().serviceTierOverride).toBeUndefined();
+});
+it('resolves a saved administrator agent model before the project without leaking to another agent', () => {
+  project.mockReturnValue({ agentModel: 'project' });
+  useModelStore
+    .getState()
+    .recordPreferences('a', { revision: 1, model: 'server' });
+  useTimelineStore.setState({ threadId: 'a' });
+  const { result, rerender } = mount('server');
+  expect(result.current.activeModelId).toBe('server');
+  useTimelineStore.setState({ threadId: 'b' });
+  rerender();
+  expect(result.current.activeModelId).toBe('project');
+  useModelStore.getState().recordPreferences('b', { revision: 1, model: null });
+  rerender();
+  expect(result.current.activeModelId).toBe('project');
 });
 it('uses the catalog default when no model is explicitly configured', () => {
   const { result } = mount(null);

@@ -83,7 +83,10 @@ export function ModelSelector() {
   // this thread, which is how Plan mode's imposed effort becomes visible.
   const activeEffort =
     effortOverride ??
-    (preferences.preferences?.effort === null ? null : observedEffort) ??
+    (preferences.preferences?.model ? null : project?.agentReasoningEffort) ??
+    (preferences.preferences?.effort === null || preferences.preferences?.model
+      ? null
+      : observedEffort) ??
     activeModel?.defaultReasoningEffort ??
     null;
 
@@ -105,36 +108,6 @@ export function ModelSelector() {
       </Button>
     );
   }
-  if (project) {
-    const allModels = [...models, ...hiddenModels];
-    const configuredModel = allModels.find(
-      (model) => model.model === project.agentModel,
-    );
-    const projectModel = project.agentModel
-      ? configuredModel
-        ? modelLabel(configuredModel)
-        : project.agentModel
-      : t('serverDefault');
-    const projectEffort = project.agentReasoningEffort || t('modelDefault');
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-7 cursor-default gap-1 rounded-lg px-2 text-xs hover:bg-transparent"
-        title={`${t('definedByProject')} : ${projectModel} · ${projectEffort}`}
-        aria-label={`${t('definedByProject')} : ${projectModel} · ${projectEffort}`}
-        aria-readonly="true"
-      >
-        <Bot className="h-3.5 w-3.5" />
-        <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
-          {projectModel}
-        </span>
-        <span className="text-muted-foreground">· {projectEffort}</span>
-      </Button>
-    );
-  }
-
   if (!isAdministrator) {
     return (
       <Button
@@ -213,7 +186,29 @@ export function ModelSelector() {
         align="start"
         side="top"
         className="w-80 space-y-3 p-3 text-sm"
+        style={{ background: 'var(--popover)' }}
       >
+        <p className="text-xs text-muted-foreground">
+          {t('appliesToThisConversationFromTheNextMessage')}
+        </p>
+        {project?.agentModel && selectedThreadId && (
+          <OptionRow
+            label={t('definedByProject')}
+            description={`${[...models, ...hiddenModels].find((model) => model.model === project.agentModel)?.displayName || project.agentModel || t('serverDefault')} · ${project.agentReasoningEffort || t('modelDefault')}`}
+            active={
+              !preferences.preferences?.model &&
+              !preferences.preferences?.effort
+            }
+            onSelect={() => {
+              if (isAdministrator)
+                preferences.save({
+                  model: null,
+                  effort: null,
+                  serviceTier: null,
+                });
+            }}
+          />
+        )}
         {preferences.error && (
           <p role="alert" className="text-xs text-destructive">
             {t('agentSettingsLoadFailed', { ns: 'workspaces' })}

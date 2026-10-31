@@ -112,6 +112,20 @@ autorisés en écriture. Seul un choix explicite dans le contrôle de sécurité
 demande une modification, toujours soumise aux refus du serveur ; les racines
 déjà observées sont conservées, sans ajout automatique de copies voisines.
 
+Le sélecteur de modèle et d’effort de la conversation est modifiable uniquement
+par les administrateurs, y compris pour un agent rattaché à un projet. Le choix
+est mémorisé sur cet agent, partagé entre ses utilisateurs et appliqué au
+prochain message ; il ne change ni les autres agents ni un tour en cours.
+Le modèle choisi réinitialise l’effort et la vitesse sur leurs valeurs par
+défaut, sans hériter de l’effort d’un autre modèle. Lorsqu’un modèle est défini
+sur le projet, **Défini par le projet** rétablit l’héritage de ses réglages.
+Sans choix propre à l’agent, les
+réglages du projet continuent de primer sur les valeurs du navigateur ; seules
+les préférences enregistrées par l’API réservée aux administrateurs peuvent
+les remplacer. Les utilisateurs non administrateurs voient les valeurs
+effectives en lecture seule. Ce choix n’altère aucune protection de fichiers,
+de publication, de MCP ou de bac à sable décrite ici.
+
 Les approbations sont indépendantes de cette frontière : le contrôle de sécurité
 de l’agent propose **Sur demande**, **Ne jamais autoriser** (refus des opérations
 qui exigent une approbation), et **Toujours autoriser**. Ce dernier choix exige
