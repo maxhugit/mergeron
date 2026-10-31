@@ -16,6 +16,7 @@ import type {
   ThreadSecurityPolicyDto,
 } from './dto/thread-security-policy.dto';
 import { validateThreadSecurityPolicy } from './thread-security-policy.validation';
+import { boundedApprovalPolicy } from './agent-approval-policy';
 
 export const EXECUTION_PREFERENCE_PREFIX = 'thread-execution-preferences:';
 const EFFORTS = new Set([
@@ -37,6 +38,8 @@ export interface ExecutionPreferences {
 }
 interface Selection {
   patch: PatchThreadSecurityPolicyDto;
+  expected: PatchThreadSecurityPolicyDto;
+  expectedProfileId?: string;
   cwd: string;
   deadline: number;
   accepted: boolean;
@@ -87,19 +90,30 @@ function matches(
   selection: Selection,
   observed: Pick<
     ThreadSecurityPolicyDto,
-    'observed' | 'approvalPolicy' | 'sandboxPolicy'
+    | 'observed'
+    | 'approvalPolicy'
+    | 'sandboxPolicy'
+    | 'activePermissionProfileId'
   >,
 ) {
-  const patch = selection.patch;
+  const patch = selection.expected;
   return (
     observed.observed &&
+    (selection.expectedProfileId === undefined ||
+      observed.activePermissionProfileId === selection.expectedProfileId) &&
     (patch.approvalPolicy === undefined ||
       isDeepStrictEqual(patch.approvalPolicy, observed.approvalPolicy)) &&
     (patch.sandboxPolicy === undefined ||
-      isDeepStrictEqual(
-        sandbox(patch.sandboxPolicy, selection.cwd),
-        sandbox(observed.sandboxPolicy, selection.cwd),
-      ))
+      (selection.expectedProfileId !== undefined
+        ? patch.sandboxPolicy.type === observed.sandboxPolicy?.type &&
+          'networkAccess' in patch.sandboxPolicy &&
+          'networkAccess' in observed.sandboxPolicy &&
+          patch.sandboxPolicy.networkAccess ===
+            observed.sandboxPolicy.networkAccess
+        : isDeepStrictEqual(
+            sandbox(patch.sandboxPolicy, selection.cwd),
+            sandbox(observed.sandboxPolicy, selection.cwd),
+          )))
   );
 }
 @Injectable()
@@ -193,18 +207,33 @@ export class ThreadExecutionPreferencesService {
         'Agent permissions could not be saved; review and select them again',
       );
     const value = this.stored(threadId);
+    const { approvalMode, ...security } = value.security ?? {};
     return {
       ...('model' in value ? { model: value.model } : {}),
       ...('effort' in value ? { effort: value.effort } : {}),
       ...('serviceTier' in value ? { serviceTier: value.serviceTier } : {}),
-      ...value.security,
+      ...security,
+      ...(approvalMode === 'automatic'
+        ? { approvalPolicy: boundedApprovalPolicy('on-request') }
+        : {}),
     };
+  }
+  /** Only an explicitly confirmed choice is authority for automatic decisions. */
+  automaticApprovals(threadId: string): boolean {
+    this.expire(threadId);
+    return (
+      !this.pending.has(threadId) &&
+      !this.failures.has(threadId) &&
+      this.stored(threadId).security?.approvalMode === 'automatic'
+    );
   }
   beginSecurity(
     threadId: string,
     patch: PatchThreadSecurityPolicyDto,
     cwd: string,
     observed: ThreadSecurityPolicyDto,
+    expected: PatchThreadSecurityPolicyDto = patch,
+    expectedProfileId?: string,
   ) {
     if (JSON.stringify(patch).length > 32768)
       throw new BadRequestException('Agent permissions are too large to save');
@@ -213,6 +242,8 @@ export class ThreadExecutionPreferencesService {
       throw new BadRequestException('Too many pending agent settings');
     const entry: Selection = {
       patch,
+      expected,
+      expectedProfileId,
       cwd,
       deadline: Date.now() + 8000,
       accepted: false,
@@ -245,7 +276,17 @@ export class ThreadExecutionPreferencesService {
     try {
       const before = this.stored(threadId);
       this.write(threadId, {
-        security: { ...before.security, ...entry.patch },
+        security: {
+          ...before.security,
+          ...entry.patch,
+          // Choosing any native policy explicitly exits automatic mode unless
+          // the same selection deliberately opts into it.
+          ...(entry.patch.approvalPolicy !== undefined &&
+          before.security?.approvalMode === 'automatic' &&
+          entry.patch.approvalMode === undefined
+            ? { approvalMode: 'manual' }
+            : {}),
+        },
       });
       this.pending.delete(threadId);
     } catch {

@@ -11,6 +11,8 @@ import type { ProjectSummary } from '@/lib/projects-api';
 import type { ThreadSecurityPolicyView } from '@/hooks/use-thread-security-policy';
 
 const mock = vi.hoisted(() => ({
+  approvalMode: 'manual' as 'manual' | 'automatic',
+  approvalPolicy: 'never' as unknown,
   available: true,
   stale: false,
   pending: null as ThreadSecurityPolicyView['pending'],
@@ -43,7 +45,8 @@ vi.mock('@/hooks/use-thread-security-policy', () => ({
   useThreadSecurityPolicy: () => ({
     observed: {
       observed: true,
-      approvalPolicy: 'never',
+      approvalPolicy: mock.approvalPolicy,
+      approvalMode: mock.approvalMode,
       sandboxPolicy: mock.sandbox,
     },
     apply: mock.apply,
@@ -78,6 +81,8 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 beforeEach(() => {
+  mock.approvalMode = 'manual';
+  mock.approvalPolicy = 'never';
   mock.apply.mockReset();
   mock.savedSandbox = undefined;
   mock.available = true;
@@ -98,6 +103,49 @@ beforeEach(() => {
     excludeTmpdirEnvVar: true,
     excludeSlashTmp: false,
   };
+});
+
+it('requires confirmation before enabling automatic approval and sends the agent-scoped mode', () => {
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'alwaysAllow' }));
+  expect(screen.getByRole('alertdialog')).toHaveTextContent(
+    'alwaysAllowConfirmation',
+  );
+  expect(mock.apply).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
+  expect(mock.apply).toHaveBeenCalledExactlyOnceWith({
+    approvalPolicy: 'on-request',
+    approvalMode: 'automatic',
+  });
+});
+
+it('cancels automatic approval without changing the current policy', () => {
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'alwaysAllow' }));
+  fireEvent.click(screen.getByRole('button', { name: 'cancel' }));
+  expect(mock.apply).not.toHaveBeenCalled();
+});
+
+it('shows automatic mode distinctly and allows returning to manual decisions', () => {
+  mock.approvalMode = 'automatic';
+  mock.approvalPolicy = {
+    granular: {
+      sandbox_approval: false,
+      rules: false,
+      skill_approval: false,
+      request_permissions: false,
+      mcp_elicitations: true,
+    },
+  };
+  open();
+  expect(
+    screen.getByRole('button', { name: /alwaysAllowcurrent/ }),
+  ).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'onRequest' }));
+  expect(mock.apply).toHaveBeenCalledExactlyOnceWith({
+    approvalPolicy: 'on-request',
+    approvalMode: 'manual',
+  });
 });
 afterEach(cleanup);
 function open(readOnly = false) {

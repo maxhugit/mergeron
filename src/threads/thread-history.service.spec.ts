@@ -1,6 +1,7 @@
 import { CodexService } from '../codex/codex.service';
 import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
 import { CodexRpcError } from '../codex/codex-errors';
+import { boundedApprovalPolicy } from './agent-approval-policy';
 import {
   InProgressTurnHistoryError,
   ThreadHistoryService,
@@ -13,6 +14,55 @@ describe('ThreadHistoryService', () => {
   beforeEach(() => {
     mockCodex.request.mockReset();
     service = new ThreadHistoryService(mockCodex as unknown as CodexService);
+  });
+
+  it('restores the agent approval choice and read-only copy profile when reopening an existing conversation', async () => {
+    const connections = {
+      generation: () => 1,
+      assertGeneration: vi.fn(),
+      assertExecutionLocation: vi.fn(),
+      record: vi.fn(),
+      forResume: vi.fn().mockResolvedValue({
+        config: {},
+        readOnly: false,
+        executionCwd: '/copy',
+        copyPermissions: { writable: 'own', readOnly: 'own-read' },
+      }),
+    };
+    service = new ThreadHistoryService(
+      mockCodex as never,
+      connections as never,
+      {
+        read: vi.fn().mockReturnValue({
+          security: {
+            approvalPolicy: 'on-request',
+            approvalMode: 'automatic',
+            sandboxPolicy: { type: 'readOnly', networkAccess: false },
+          },
+        }),
+      } as never,
+    );
+    mockCodex.request.mockResolvedValue({
+      thread: { id: 'old', turns: [], historyMode: 'paginated' },
+      activePermissionProfile: { id: 'own-read' },
+      initialTurnsPage: { data: [], nextCursor: null, backwardsCursor: null },
+    });
+    await service.resumeMetadataFirst({
+      threadId: 'old',
+      initialTurnsLimit: 1,
+      itemsView: 'summary',
+    });
+    expect(mockCodex.request).toHaveBeenCalledWith(
+      'thread/resume',
+      expect.objectContaining({
+        permissions: 'own-read',
+        approvalPolicy: boundedApprovalPolicy('on-request'),
+      }),
+    );
+    expect(mockCodex.request.mock.calls[0][1]).not.toHaveProperty('sandbox');
+    expect(mockCodex.request.mock.calls[0][1]).not.toHaveProperty(
+      'approvalMode',
+    );
   });
 
   it('applies current project restrictions when resuming a stored conversation', async () => {

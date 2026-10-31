@@ -98,8 +98,8 @@ Le serveur impose ce profil aux démarrages, reprises et tours suivants, vérifi
 l’accusé de réception du moteur, puis revalide la propriété avant l’exécution.
 Il fournit uniquement les racines natives du dossier courant et, le cas échéant,
 du brouillon documentaire de ce tour. Les mises à jour de politique et les
-escalades qui retireraient la protection sont refusées ; les conversations
-protégées utilisent `approvalPolicy=never`. Les intégrations MCP et leurs
+escalades qui retireraient la protection sont refusées, quelle que soit la
+politique d’approbation choisie. Les intégrations MCP et leurs
 contrôles d’accès restent distincts.
 
 L’ouverture d’une conversation, le passage d’un agent à l’autre (y compris
@@ -111,6 +111,38 @@ copies d’autres agents : elle ne constitue jamais une liste de dossiers
 autorisés en écriture. Seul un choix explicite dans le contrôle de sécurité
 demande une modification, toujours soumise aux refus du serveur ; les racines
 déjà observées sont conservées, sans ajout automatique de copies voisines.
+
+Les approbations sont indépendantes de cette frontière : le contrôle de sécurité
+de l’agent propose **Sur demande**, **Ne jamais autoriser** (refus des opérations
+qui exigent une approbation), et **Toujours autoriser**. Ce dernier choix exige
+une confirmation, est partagé par les utilisateurs de cet agent et s’applique
+à partir du prochain message, pas au tour déjà lancé. Il accepte automatiquement
+les approbations d’outils MCP autorisés par le projet. Les actions de ces outils
+peuvent modifier ou supprimer les données auxquelles ils ont accès. Les questions,
+formulaires à remplir, authentifications et validations de publication Mergeron
+restent distincts : aucune réponse n’est inventée.
+
+Techniquement, `PATCH /api/threads/:id/security-policy` accepte
+`approvalMode: "manual" | "automatic"`, avec `approvalPolicy: "on-request"`
+pour le mode automatique. Le choix est conservé dans les préférences SQLite de
+l’agent après l’accusé de réception **et** l’observation du réglage attendu.
+Pour les projets, le moteur reçoit une politique granulaire : les approbations
+MCP sont possibles, mais les escalades du bac à sable, règles privilégiées,
+scripts de skills et extensions de permissions restent refusées. Les actions
+déjà autorisées dans le bac à sable continuent sans demande. « Toujours »
+n’est donc ni un profil d’accès complet ni une désactivation des protections.
+
+Le serveur capture le mode au début de chaque tour. Il accepte uniquement les
+formulaires d’approbation d’outil reconnus du moteur (`codex_approval_kind =
+mcp_tool_call`, schéma vide), jamais une question générique ou une connexion.
+Chaque décision utilise la même identité immuable, l’enregistrement avant envoi
+et le transport propriétaire que les décisions humaines, avec l’attribution
+`automatic:agent-policy`. Aucun accord n’est enregistré globalement chez Codex.
+Une livraison ambiguë n’est pas rejouée ; un redémarrage invalide l’autorité du
+tour précédent. Le passage lecture seule / écriture sélectionne les profils
+natifs du serveur (`permissions`), sans transmettre une projection legacy qui
+ferait perdre les interdictions d’écriture sur les copies voisines. Le profil
+effectivement observé doit correspondre avant de sauvegarder le choix.
 
 Cette frontière nécessite les profils natifs du runtime Codex géré actuel
 (0.164.0-mergeron.1). Un ancien moteur sans accusé de réception échoue avant le

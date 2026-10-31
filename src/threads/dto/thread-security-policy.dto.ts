@@ -7,6 +7,13 @@ import { APPROVALS_REVIEWER_VALUES } from '../../codex/dto/v2/openapi.schema';
 
 /** Explicit policy leaves supported by the pinned thread/settings/update RPC. */
 export class PatchThreadSecurityPolicyDto {
+  @ApiPropertyOptional({
+    enum: ['manual', 'automatic'],
+    description:
+      'Agent-scoped MCP tool approval handling. Never grants additional filesystem permissions or answers user questions.',
+  })
+  approvalMode?: 'manual' | 'automatic';
+
   @ApiPropertyOptional(approvalPolicySchema())
   approvalPolicy?: v2.AskForApproval;
 
@@ -16,6 +23,12 @@ export class PatchThreadSecurityPolicyDto {
 
 /** Last observed next-turn policy, never inferred from global configuration. */
 export class ThreadSecurityPolicyDto {
+  @ApiPropertyOptional({ type: String, nullable: true })
+  activePermissionProfileId?: string | null;
+
+  @ApiPropertyOptional({ enum: ['manual', 'automatic'] })
+  approvalMode?: 'manual' | 'automatic';
+
   @ApiProperty()
   observed!: boolean;
 

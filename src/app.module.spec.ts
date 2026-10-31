@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module';
+import { AuthService } from './auth/auth.service';
+import { IdentityService } from './auth/identity.service';
 import { CodexProcessManager } from './codex/codex-process-manager.service';
 import { PendingApprovalsService } from './pending-approvals/pending-approvals.service';
 import { ThreadsGateway } from './threads/threads.gateway';
@@ -23,16 +25,21 @@ describe('AppModule', () => {
   // migrations against the developer's own database.
   let dbDir: string;
   let previousDbPath: string | undefined;
+  let previousApiKey: string | undefined;
 
   beforeAll(() => {
     dbDir = mkdtempSync(join(tmpdir(), 'codex-webui-appmodule-'));
     previousDbPath = process.env.WEBUI_DB_PATH;
     process.env.WEBUI_DB_PATH = join(dbDir, 'test.sqlite');
+    previousApiKey = process.env.WEBUI_API_KEY;
+    process.env.WEBUI_API_KEY = 'test-only-module-graph-not-a-real-key';
   });
 
   afterAll(() => {
     if (previousDbPath === undefined) delete process.env.WEBUI_DB_PATH;
     else process.env.WEBUI_DB_PATH = previousDbPath;
+    if (previousApiKey === undefined) delete process.env.WEBUI_API_KEY;
+    else process.env.WEBUI_API_KEY = previousApiKey;
     rmSync(dbDir, { recursive: true, force: true });
   });
 
@@ -48,6 +55,15 @@ describe('AppModule', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(CodexProcessManager)
       .useValue(transport.manager)
+      .overrideProvider(AuthService)
+      .useValue({ authenticateToken: () => Promise.resolve({ ok: true }) })
+      .overrideProvider(IdentityService)
+      .useValue({
+        resolve: () => ({ active: true, role: 'administrator' }),
+        requireActive: () => undefined,
+        requireThread: () => undefined,
+        canReadThread: () => true,
+      })
       .compile();
     try {
       const service = moduleRef.get(PendingApprovalsService);
@@ -68,6 +84,15 @@ describe('AppModule', () => {
         emit: vi.fn(),
       } as unknown as ThreadsGateway['server'];
       gateway.afterInit();
+      const socket = {
+        id: 'canary-admin',
+        handshake: { headers: {}, auth: { token: 'fixture' } },
+        join: () => undefined,
+        emit: () => undefined,
+        disconnect: () => undefined,
+      };
+      await gateway.handleConnection(socket as never);
+      gateway.handleSubscribe(socket as never, { threadId: 't1' });
       transport.notify(fixture.started);
       expect(snapshots).toEqual([
         { type: 'fileChange', changes: fixture.changes },

@@ -1,5 +1,13 @@
 /** Persists immutable human requests and binds decisions to their ingress owner. */
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
+import { ThreadExecutionPreferencesService } from '../threads/thread-execution-preferences.service';
+import { automaticToolApproval } from './automatic-tool-approval';
 import { Subject } from 'rxjs';
 import { and, eq, inArray } from 'drizzle-orm';
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
@@ -51,12 +59,19 @@ export class PendingApprovalsService implements OnModuleInit {
   private readonly context = new PendingApprovalContext();
   private readonly owners = new Map<string, OwnedServerRequest>();
   private initialized = false;
+  /** Capture the selected mode once per turn: editing a running agent is not consent. */
+  private readonly automaticTurns = new Map<
+    string,
+    { turnId: string; automatic: boolean }
+  >();
 
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     private readonly codexManager: CodexProcessManager,
     private readonly deletionRegistry: ThreadDeletionRegistryService,
     private readonly catalogAdmission: CatalogAdmissionService,
+    @Optional()
+    private readonly preferences?: ThreadExecutionPreferencesService,
   ) {
     this.codexManager.setServerRequestHandler((owned) => {
       if (!this.initialized) return false;
@@ -76,8 +91,10 @@ export class PendingApprovalsService implements OnModuleInit {
       if (
         event.type === 'appServerRestarting' ||
         event.type === 'appServerUnavailable'
-      )
+      ) {
+        this.automaticTurns.clear();
         this.expireGeneration(event.generation, 'app-server restarted');
+      }
     });
   }
 
@@ -96,6 +113,28 @@ export class PendingApprovalsService implements OnModuleInit {
 
   /** Captures file subjects before gateway delivery; RPC retirement belongs to ingress. */
   observeNotification(notification: ServerNotification): void {
+    if (notification.method === 'turn/started') {
+      const { threadId, turn } = notification.params;
+      if (this.automaticTurns.get(threadId)?.turnId !== turn.id) {
+        let automatic = false;
+        try {
+          automatic = this.preferences?.automaticApprovals(threadId) === true;
+        } catch {
+          this.logger.warn(
+            { threadId },
+            'Automatic approval choice unavailable; human review required',
+          );
+        }
+        this.automaticTurns.set(threadId, {
+          turnId: turn.id,
+          automatic,
+        });
+      }
+    } else if (notification.method === 'turn/completed') {
+      const { threadId, turn } = notification.params;
+      if (this.automaticTurns.get(threadId)?.turnId === turn.id)
+        this.automaticTurns.delete(threadId);
+    }
     this.context.observe(notification, this.codexManager.getGeneration());
   }
 
@@ -147,6 +186,37 @@ export class PendingApprovalsService implements OnModuleInit {
         `File approval subject unavailable: instance=${owned.instanceId}`,
       );
     const dto = projectPendingRequest(row, this.context);
+    const turnMode = this.automaticTurns.get(row.threadId);
+    if (
+      !this.deletionRegistry.isDeleting(row.threadId) &&
+      turnMode?.automatic &&
+      row.turnId &&
+      turnMode.turnId === row.turnId
+    ) {
+      const automatic = automaticToolApproval(row.method, params);
+      if (automatic) {
+        // Reuse the same immutable identity, durable-before-send transaction,
+        // catalog gate and connection-bound response path as a human decision.
+        try {
+          return this.respondToRequest(
+            row.requestId,
+            row.instanceId,
+            automatic,
+            'automatic:agent-policy',
+          );
+        } catch {
+          // Never retry an ambiguously delivered automatic decision. A still
+          // pending request remains visible for explicit human resolution.
+          const current = this.db
+            .select()
+            .from(pendingServerRequests)
+            .where(eq(pendingServerRequests.instanceId, row.instanceId))
+            .get()!;
+          if (current.status !== 'pending')
+            return projectPendingRequest(current, this.context);
+        }
+      }
+    }
     // Deletion withholds delivery, not ownership: an aborted delete must leave
     // the request answerable. The gateway replays it when the guard is released.
     if (!this.deletionRegistry.isDeleting(row.threadId)) this.changed.next();

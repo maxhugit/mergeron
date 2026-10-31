@@ -248,6 +248,8 @@ describe('ThreadSettingsObserverService', () => {
       serviceTier: 'old-tier',
     });
     expect(service.readSecurityPolicy('t1')).toEqual({
+      approvalMode: 'manual',
+      activePermissionProfileId: null,
       observed: true,
       source: 'notification',
       approvalPolicy: 'never',

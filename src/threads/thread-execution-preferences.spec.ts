@@ -18,6 +18,7 @@ import { ThreadExecutionPreferencesService } from './thread-execution-preference
 import { ThreadSecurityPolicyController } from './thread-security-policy.controller';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import type { v2 } from '../codex/codex-schema';
+import { boundedApprovalPolicy } from './agent-approval-policy';
 
 let storage: TestDatabase;
 let service: ThreadExecutionPreferencesService;
@@ -236,7 +237,7 @@ it('wires the policy controller and engine observer to durable storage without s
       observer.recordThreadSettings('a', {
         ...policy,
         collaborationMode: null,
-      } as v2.ThreadSettings);
+      } as unknown as v2.ThreadSettings);
       expect(service.read('a').security).toBeUndefined();
       return {};
     }),
@@ -261,6 +262,41 @@ it('wires the policy controller and engine observer to durable storage without s
   expect(service.read('a').security).toEqual(policy);
   observer.forget('a');
   expect(service.read('a').revision).toBe(0);
+});
+
+it('confirms and persists automatic approvals only with the bounded native profile, and restores manual mode explicitly', () => {
+  const native = { approvalPolicy: boundedApprovalPolicy('on-request') };
+  const patch = {
+    approvalPolicy: 'on-request',
+    approvalMode: 'automatic',
+  } as const;
+  service
+    .beginSecurity('a', patch, '/cwd', observed({}), native, 'own')
+    .accept();
+  service.observeSecurity('a', {
+    ...observed(native),
+    activePermissionProfileId: 'foreign',
+  });
+  expect(service.automaticApprovals('a')).toBe(false);
+  service.observeSecurity('a', {
+    ...observed(native),
+    activePermissionProfileId: 'own',
+  });
+  const restarted = new ThreadExecutionPreferencesService(storage.db);
+  expect(restarted.automaticApprovals('a')).toBe(true);
+  expect(restarted.automaticApprovals('b')).toBe(false);
+  expect(restarted.forTurn('a')).toEqual(native);
+  expect(restarted.forTurn('a')).not.toHaveProperty('approvalMode');
+  restarted
+    .beginSecurity(
+      'a',
+      { approvalPolicy: 'never' },
+      '/cwd',
+      observed({ approvalPolicy: 'never' }),
+    )
+    .accept();
+  expect(restarted.automaticApprovals('a')).toBe(false);
+  expect(restarted.forTurn('a')).toEqual({ approvalPolicy: 'never' });
 });
 
 it('requires thread access for reads and administrator rights plus mutability for writes', () => {

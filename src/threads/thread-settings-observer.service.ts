@@ -27,7 +27,7 @@ type SettingsSeed = Pick<
   | 'approvalPolicy'
   | 'approvalsReviewer'
   | 'sandbox'
->;
+> & { activePermissionProfile?: v2.ThreadSettings['activePermissionProfile'] };
 
 /**
  * Effort displaced by entering a preset that dictates its own (Plan forces
@@ -173,6 +173,7 @@ export class ThreadSettingsObserverService {
         approvalPolicy: response.approvalPolicy,
         approvalsReviewer: response.approvalsReviewer,
         sandboxPolicy: response.sandbox,
+        activePermissionProfile: response.activePermissionProfile,
       },
     });
   }
@@ -182,6 +183,9 @@ export class ThreadSettingsObserverService {
     const cached = this.cache.get(threadId);
     const settings = cached?.settings;
     return {
+      approvalMode:
+        this.preferences?.read(threadId).security?.approvalMode ?? 'manual',
+      activePermissionProfileId: settings?.activePermissionProfile?.id ?? null,
       observed:
         settings?.approvalPolicy !== undefined &&
         settings.sandboxPolicy !== undefined,

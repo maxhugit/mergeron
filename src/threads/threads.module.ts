@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
+import { ThreadExecutionPreferencesModule } from './thread-execution-preferences.module';
 import { ThreadExecutionPreferencesController } from './thread-execution-preferences.controller';
 import { PreviewsModule } from '../previews/previews.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -48,6 +48,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
 
 @Module({
   imports: [
+    ThreadExecutionPreferencesModule,
     PreviewsModule,
     SettingsModule,
     InternalMcpModule,
@@ -75,7 +76,6 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     WorkspacesManagementController,
   ],
   providers: [
-    ThreadExecutionPreferencesService,
     ProjectConnectionRuntimeService,
     GitMutationGateService,
     ProjectAgentDefaultsService,

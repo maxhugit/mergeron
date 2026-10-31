@@ -119,9 +119,24 @@ function sandbox(value: unknown): v2.SandboxPolicy {
 export function validateThreadSecurityPolicy(
   value: unknown,
 ): PatchThreadSecurityPolicyDto {
-  const body = record(value, ['approvalPolicy', 'sandboxPolicy'], 'body');
+  const body = record(
+    value,
+    ['approvalPolicy', 'sandboxPolicy', 'approvalMode'],
+    'body',
+  );
   if (Object.keys(body).length === 0) invalid('body');
+  if (
+    'approvalMode' in body &&
+    body.approvalMode !== 'manual' &&
+    body.approvalMode !== 'automatic'
+  )
+    invalid('approvalMode');
+  if (body.approvalMode === 'automatic' && body.approvalPolicy !== 'on-request')
+    invalid('approvalMode');
   return {
+    ...('approvalMode' in body && {
+      approvalMode: body.approvalMode as 'manual' | 'automatic',
+    }),
     ...('approvalPolicy' in body && {
       approvalPolicy: approval(body.approvalPolicy),
     }),

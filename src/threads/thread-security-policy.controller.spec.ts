@@ -1,5 +1,6 @@
 import type { v2 } from '../codex/codex-schema';
 import { ThreadSecurityPolicyController } from './thread-security-policy.controller';
+import { boundedApprovalPolicy } from './agent-approval-policy';
 
 describe('ThreadSecurityPolicyController', () => {
   const codex = { request: vi.fn() };
@@ -38,7 +39,7 @@ describe('ThreadSecurityPolicyController', () => {
       threadId: 't1',
       ...patch,
     });
-    expect(observer.readSecurityPolicy).not.toHaveBeenCalled();
+    expect(observer.readSecurityPolicy).toHaveBeenCalledWith('t1');
   });
 
   it.each([
@@ -47,6 +48,10 @@ describe('ThreadSecurityPolicyController', () => {
     { approvalPolicy: 'never', sandbox: 'read-only' },
     { approvalPolicy: null },
     { approvalPolicy: 'on-failure' },
+    { approvalPolicy: 'always' },
+    { approvalMode: 'always' },
+    { approvalMode: 'automatic' },
+    { approvalMode: 'automatic', approvalPolicy: 'never' },
     { sandboxPolicy: { type: 'readOnly', networkAcess: false } },
     { sandboxPolicy: { type: 'dangerFullAccess', networkAccess: true } },
     { approvalPolicy: { granular: { rules: true } } },
@@ -121,15 +126,28 @@ describe('ThreadSecurityPolicyController', () => {
     expect(codex.request).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses policy changes that would disable the managed copy boundary, including queued continuations', async () => {
+  it('changes approvals while preserving the native copy boundary and blocking full access', async () => {
+    observer.readSecurityPolicy.mockReturnValue({
+      observed: true,
+      activePermissionProfileId: 'own',
+      sandboxPolicy: {
+        type: 'workspaceWrite',
+        writableRoots: [],
+        networkAccess: false,
+      },
+    });
     const guarded = new ThreadSecurityPolicyController(
       codex as never,
       observer as never,
       deletion as never,
       {
-        policyForThread: vi
-          .fn()
-          .mockResolvedValue({ copyPermissions: { writable: 'own' } }),
+        policyForThread: vi.fn().mockResolvedValue({
+          copyPermissions: {
+            writable: 'own',
+            readOnly: 'own-read',
+            baseProfile: ':workspace',
+          },
+        }),
       } as never,
     );
     await expect(
@@ -137,16 +155,69 @@ describe('ThreadSecurityPolicyController', () => {
         sandboxPolicy: { type: 'dangerFullAccess' },
       }),
     ).rejects.toThrow('GIT_COPY_ISOLATION_REQUIRED');
-    await expect(
-      guarded.patchSecurityPolicy('t1', { approvalPolicy: 'on-request' }),
-    ).rejects.toThrow('GIT_COPY_ISOLATION_REQUIRED');
     expect(codex.request).not.toHaveBeenCalledWith(
       'thread/settings/update',
       expect.anything(),
     );
+    await guarded.patchSecurityPolicy('t1', { approvalPolicy: 'on-request' });
+    expect(codex.request).toHaveBeenLastCalledWith('thread/settings/update', {
+      threadId: 't1',
+      permissions: 'own',
+      approvalPolicy: boundedApprovalPolicy('on-request'),
+    });
     await expect(
       guarded.patchSecurityPolicy('t1', { approvalPolicy: 'never' }),
     ).resolves.toEqual({ status: 'accepted' });
+  });
+
+  it('switches read/write using owned profiles, never a legacy sandbox policy or extra roots', async () => {
+    observer.readSecurityPolicy.mockReturnValue({
+      observed: true,
+      activePermissionProfileId: 'own-read',
+      sandboxPolicy: { type: 'readOnly', networkAccess: false },
+    });
+    const guarded = new ThreadSecurityPolicyController(
+      codex as never,
+      observer as never,
+      deletion as never,
+      {
+        policyForThread: vi.fn().mockResolvedValue({
+          copyPermissions: {
+            writable: 'own',
+            readOnly: 'own-read',
+            baseProfile: ':workspace',
+          },
+        }),
+      } as never,
+    );
+    const workspace = {
+      type: 'workspaceWrite',
+      writableRoots: [],
+      networkAccess: false,
+      excludeTmpdirEnvVar: false,
+      excludeSlashTmp: false,
+    } as const;
+    await guarded.patchSecurityPolicy('t1', {
+      sandboxPolicy: { ...workspace, writableRoots: [] },
+    });
+    expect(codex.request).toHaveBeenLastCalledWith('thread/settings/update', {
+      threadId: 't1',
+      permissions: 'own',
+    });
+    await guarded.patchSecurityPolicy('t1', {
+      sandboxPolicy: { type: 'readOnly', networkAccess: false },
+    });
+    expect(codex.request).toHaveBeenLastCalledWith('thread/settings/update', {
+      threadId: 't1',
+      permissions: 'own-read',
+    });
+    for (const patch of [
+      { ...workspace, writableRoots: ['/foreign'] },
+      { ...workspace, networkAccess: true },
+    ])
+      await expect(
+        guarded.patchSecurityPolicy('t1', { sandboxPolicy: patch }),
+      ).rejects.toThrow('GIT_COPY_ISOLATION_REQUIRED');
   });
 
   it('propagates upstream rejection without falling back to global config', async () => {

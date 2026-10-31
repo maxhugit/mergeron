@@ -600,7 +600,15 @@ describe('ThreadsService', () => {
       'turn/start',
       expect.objectContaining({
         permissions: 'managed-own',
-        approvalPolicy: 'never',
+        approvalPolicy: {
+          granular: {
+            sandbox_approval: false,
+            rules: false,
+            skill_approval: false,
+            request_permissions: false,
+            mcp_elicitations: true,
+          },
+        },
       }),
     );
     expect(mockCodex.request.mock.calls.at(-1)?.[1]).not.toHaveProperty(
