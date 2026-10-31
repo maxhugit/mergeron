@@ -21,6 +21,8 @@ import {
   projectAgentThreads,
   conversationOwners,
   conversationBranchEdges,
+  agentMonitors,
+  agentMonitorRuns,
 } from '../database/schema';
 import {
   IdentityService,
@@ -98,12 +100,30 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
       if (
         note.method === 'turn/completed' &&
         note.params.turn.status === 'completed'
-      )
+      ) {
+        const scheduled = this.db
+          .select({ reason: agentMonitorRuns.reason })
+          .from(agentMonitorRuns)
+          .innerJoin(
+            agentMonitors,
+            eq(agentMonitorRuns.monitorId, agentMonitors.id),
+          )
+          .where(
+            and(
+              eq(agentMonitorRuns.turnId, note.params.turn.id),
+              eq(agentMonitors.threadId, note.params.threadId),
+            ),
+          )
+          .get();
+        // Monitor summaries have their own change-sensitive notification path.
+        // A steered turn belongs to the person again and must keep normal push.
+        if (scheduled && scheduled.reason !== 'MONITOR_USER_TAKEOVER') return;
         this.enqueue(
           'completed',
           note.params.threadId,
           `turn:${note.params.threadId}:${note.params.turn.id}`,
         );
+      }
     } catch {
       this.logger.warn(
         'Unable to queue a push event. No conversation content was logged.',

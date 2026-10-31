@@ -2,7 +2,13 @@
  * Handles thread and turn operations by delegating to Codex app-server.
  */
 import { assertCopyPermissionProfile } from '../projects/agent-copy-permissions';
-import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import {
   canReadThread,
   currentAccess,
@@ -83,9 +89,40 @@ type ThreadForkParamsWithGoalCarry = v2.ThreadForkParams & {
   excludeTurns: true;
 };
 
+/** Background callers must recheck authorization and idleness at the send boundary. */
+export interface BackgroundTurnGuard {
+  assertIdle: () => void;
+  beforeSend: () => void;
+}
+
 @Injectable()
 export class ThreadsService {
   private readonly logger = new Logger(ThreadsService.name);
+  private readonly starts = new Map<string, Set<symbol>>();
+  private readonly foregroundListeners = new Set<
+    (threadId: string) => boolean | void
+  >();
+
+  onForegroundInput(
+    listener: (threadId: string) => boolean | void,
+  ): () => void {
+    this.foregroundListeners.add(listener);
+    return () => this.foregroundListeners.delete(listener);
+  }
+
+  private foregroundInput(threadId: string) {
+    let transferred = false;
+    for (const listener of this.foregroundListeners) {
+      try {
+        transferred = listener(threadId) === true || transferred;
+      } catch {
+        this.logger.warn(
+          'A background observer could not yield; foreground input remains available.',
+        );
+      }
+    }
+    return transferred;
+  }
 
   constructor(
     private readonly codex: CodexService,
@@ -511,7 +548,39 @@ export class ThreadsService {
    * @param params - Turn start parameters (threadId, input, model overrides, etc.)
    * @returns The created turn
    */
-  async startTurn(params: v2.TurnStartParams): Promise<v2.TurnStartResponse> {
+  async startTurn(
+    params: v2.TurnStartParams,
+    background?: BackgroundTurnGuard,
+  ): Promise<v2.TurnStartResponse> {
+    requireExecutionAccess();
+    if (!background) this.foregroundInput(params.threadId);
+    const token = Symbol();
+    const starts = this.starts.get(params.threadId) ?? new Set<symbol>();
+    starts.add(token);
+    this.starts.set(params.threadId, starts);
+    const guard = background
+      ? {
+          assertIdle: () => {
+            if (starts.size !== 1)
+              throw new ConflictException('MONITOR_AGENT_BUSY');
+            background.assertIdle();
+          },
+          beforeSend: background.beforeSend,
+        }
+      : undefined;
+    try {
+      guard?.assertIdle();
+      return await this.startPreparedTurn(params, guard);
+    } finally {
+      starts.delete(token);
+      if (!starts.size) this.starts.delete(params.threadId);
+    }
+  }
+
+  private async startPreparedTurn(
+    params: v2.TurnStartParams,
+    background?: BackgroundTurnGuard,
+  ): Promise<v2.TurnStartResponse> {
     requireExecutionAccess();
     this.deletionRegistry.assertMutable(params.threadId);
     const beforeTurn = this.metadata.getHeldThread(params.threadId);
@@ -563,6 +632,13 @@ export class ThreadsService {
       params.threadId,
       beforeTurn?.name,
     );
+    // Do not revoke a foreground MCP lease after an intervening human request.
+    try {
+      background?.assertIdle();
+    } catch (error) {
+      publication?.abort();
+      throw error;
+    }
     const mcpLease = projectPolicy
       ? this.internalMcp?.prepare(
           params.threadId,
@@ -656,6 +732,7 @@ export class ThreadsService {
         params.threadId,
       );
     const send = () => {
+      background?.assertIdle();
       this.connections?.assertOpen();
       this.projectConnections.assertExecutionLocation(
         projectPolicy,
@@ -668,6 +745,7 @@ export class ThreadsService {
         );
       if (connectionState)
         this.connections?.assertGeneration(connectionState.generation);
+      background?.beforeSend();
       return this.codex.request<v2.TurnStartResponse>(
         'turn/start',
         effectiveParams,
@@ -811,8 +889,39 @@ export class ThreadsService {
    */
   async steerTurn(params: v2.TurnSteerParams): Promise<v2.TurnSteerResponse> {
     requireExecutionAccess();
+    const transferred = this.foregroundInput(params.threadId);
     this.deletionRegistry.assertMutable(params.threadId);
-    return this.codex.request<v2.TurnSteerResponse>('turn/steer', params);
+    // A monitor's revoked lease must not disable the person's project tools.
+    // Refresh it under the current human identity, without granting more rights
+    // than the actual thread policy, and never revive the monitor's old lease.
+    const policy = transferred
+      ? await this.projectConnections.policyForThread(
+          params.threadId,
+          this.activeFolders.resolveAgent(params.threadId),
+        )
+      : null;
+    const sandbox = this.settingsObserver?.readSecurityPolicy(
+      params.threadId,
+    ).sandboxPolicy;
+    const lease = policy
+      ? this.internalMcp?.prepare(
+          params.threadId,
+          policy.projectId,
+          !policy.readOnly &&
+            (sandbox?.type === 'workspaceWrite' ||
+              sandbox?.type === 'dangerFullAccess'),
+        )
+      : null;
+    lease?.bind(params.expectedTurnId);
+    try {
+      return await this.codex.request<v2.TurnSteerResponse>(
+        'turn/steer',
+        params,
+      );
+    } catch (error) {
+      lease?.abort();
+      throw error;
+    }
   }
 
   /**

@@ -106,6 +106,80 @@ beforeEach(() => {
 afterEach(() => database.sqlite.close());
 
 describe('durable agent monitor store', () => {
+  it('bounds self-scheduled work to one live plan, preserves idempotency and cannot reset it with another request ID', () => {
+    const automatic = (overrides: Partial<CreateAgentMonitor> = {}) =>
+      store.create('p', 't', 'admin', definition(overrides), NOW, {
+        agentScheduled: true,
+      });
+    for (const overrides of [
+      { maxRuns: 21 },
+      { maxRunMs: 300_001 },
+      { expiresAt: NOW + 86_400_001 },
+    ])
+      expect(() => automatic(overrides)).toThrow('MONITOR_AGENT_LIMIT');
+    const item = automatic();
+    expect(automatic().id).toBe(item.id);
+    expect(() => automatic({ requestId: 'clone' })).toThrow(
+      'MONITOR_THREAD_CAPACITY',
+    );
+    store.setPaused('p', item.id, true, NOW);
+    expect(() => automatic({ requestId: 'bypass-pause' })).toThrow(
+      'MONITOR_THREAD_CAPACITY',
+    );
+    expect(store.get('p', item.id)).toMatchObject({
+      status: 'paused',
+      runCount: 0,
+      maxRuns: 20,
+    });
+  });
+  it.each(['claimed', 'dispatching', 'running'] as const)(
+    'yields %s work to a human without pausing, resetting limits or accepting a late completion',
+    (phase) => {
+      const monitor = create({ intervalMs: 120_000 });
+      const { run } = store.claim('p', monitor.id, NOW)!;
+      if (phase !== 'claimed') store.beginDispatch(run.id, NOW);
+      if (phase === 'running') store.bind(run.id, 'turn');
+      store.yieldToForeground(run.id, NOW + 1_000);
+      expect(store.get('p', monitor.id)).toMatchObject({
+        status: 'active',
+        nextRunAt: NOW + 121_000,
+        runCount: phase === 'claimed' ? 0 : 1,
+        maxRuns: 20,
+        lastReason: 'MONITOR_USER_TAKEOVER',
+      });
+      expect(store.active()).toEqual([]);
+      expect(store.readRun(run.id)).toMatchObject({
+        status: 'deferred',
+        reason: 'MONITOR_USER_TAKEOVER',
+      });
+      expect(
+        store.finish(run.id, phase === 'running' ? 'turn' : null, {
+          success: true,
+          result: 'Late answer now belongs to the human conversation.',
+          disposition: 'complete',
+        }),
+      ).toBeNull();
+      expect(store.claim('p', monitor.id, NOW + 121_000)).not.toBeNull();
+    },
+  );
+
+  it('does not turn a human message into an implicit resume or replenish an exhausted budget', () => {
+    const { monitor, run } = start();
+    store.setPaused('p', monitor.id, true, NOW);
+    store.yieldToForeground(run.id, NOW + 1000);
+    expect(store.get('p', monitor.id)).toMatchObject({
+      status: 'paused',
+      nextRunAt: null,
+    });
+    const limited = start({ requestId: 'limited', maxRuns: 1 });
+    store.yieldToForeground(limited.run.id, NOW + 1000);
+    expect(store.get('p', limited.monitor.id)).toMatchObject({
+      status: 'exhausted',
+      runCount: 1,
+      nextRunAt: null,
+    });
+  });
+
   it('defaults to read-only, persists bounded scheduling and deduplicates retries even after the scheduled time', () => {
     const input = definition();
     const item = create();

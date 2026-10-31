@@ -28,6 +28,7 @@ import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletio
 import { PushTransportService } from './push-transport.service';
 import { PushService } from './push.service';
 import { validatePushEndpoint, validateSubscription } from './push-validation';
+import { AgentMonitorStore } from '../agent-monitors/agent-monitor-store';
 
 let database: TestDatabase;
 let identities: IdentityService;
@@ -148,6 +149,27 @@ function attention(
     .run();
   requests.next({ instanceId, threadId: 't1', method, status: 'pending' });
 }
+it('keeps routine monitor checks quiet but restores normal notification after human steering', () => {
+  service.subscribe(admin, input());
+  const store = new AgentMonitorStore(database.db);
+  const now = Date.now();
+  const monitor = store.create('p', 't1', 'admin', {
+    requestId: 'monitor',
+    name: 'Watch',
+    instructions: 'Read checks.',
+    runAt: now,
+    intervalMs: 60_000,
+    expiresAt: now + 3_600_000,
+  });
+  const claim = store.claim('p', monitor.id)!;
+  store.beginDispatch(claim.run.id);
+  store.bind(claim.run.id, 'automatic');
+  complete('automatic');
+  expect(rows()).toEqual([]);
+  store.yieldToForeground(claim.run.id);
+  complete('automatic');
+  expect(rows()).toHaveLength(1);
+});
 it('persists one scoped device, returns no capabilities, and cannot steal or manage another person’s device', () => {
   const value = input();
   const device = service.subscribe(member, value);

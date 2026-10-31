@@ -6,6 +6,9 @@ export const MONITOR_LIMITS = {
   maximumActivePerProject: 20,
   maximumConcurrentRuns: 2,
   historyLimit: 100,
+  maximumAgentRuns: 20,
+  maximumAgentLifetimeMs: 24 * 60 * 60_000,
+  maximumAgentRunMs: 300_000,
 } as const;
 
 export interface CreateAgentMonitor {

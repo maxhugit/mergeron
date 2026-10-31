@@ -36,6 +36,7 @@ import { TurnDiffModule } from './turn-diff/turn-diff.module';
 import { TurnErrorsModule } from './turn-errors/turn-errors.module';
 import { PreviewsModule } from './previews/previews.module';
 import { PushModule } from './push/push.module';
+import { AgentMonitorsModule } from './agent-monitors/agent-monitors.module';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -93,6 +94,7 @@ const PINO_REDACT = {
 
 @Module({
   imports: [
+    AgentMonitorsModule,
     BrowserModule,
     ConfigModule.forRoot({ isGlobal: true }),
     LoggerModule.forRoot({

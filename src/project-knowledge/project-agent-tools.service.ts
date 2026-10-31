@@ -27,6 +27,7 @@ import type { ProjectsService } from '../projects/projects.service';
 import type { ProjectConnectionToolsService } from '../projects/project-connection-tools.service';
 import { projectConnectionTools } from '../projects/project-connection-tools.schema';
 import type { ProjectPreviewsService } from '../previews/project-previews.service';
+import type { AgentMonitorsService } from '../agent-monitors/agent-monitors.service';
 
 /** Business tools, not filesystem mutations. The caller never selects a project. */
 @Injectable()
@@ -180,12 +181,34 @@ export class ProjectAgentToolsService {
     threadId: string,
     value: unknown,
     assertActive: () => void = () => {},
+    turnId?: string,
+    canWrite = false,
   ) {
     assertActive();
     const scope = this.scope(threadId);
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new BadRequestException('Invalid tool request');
     const input = value as Record<string, unknown>;
+    if (
+      [
+        'agent_monitor_read',
+        'agent_monitor_manage',
+        'agent_monitor_report',
+      ].includes(String(input.tool))
+    ) {
+      if (!turnId)
+        throw new ForbiddenException('MONITOR_AUTHENTICATED_TURN_REQUIRED');
+      return this.modules
+        .get<AgentMonitorsService>('AGENT_MONITOR_TOOLS', { strict: false })
+        .tool(
+          scope.project.id,
+          threadId,
+          turnId,
+          input,
+          assertActive,
+          canWrite,
+        );
+    }
     if (
       input.tool === 'project_preview_prepare' ||
       input.tool === 'project_preview_read' ||
