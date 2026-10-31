@@ -176,8 +176,22 @@ test.each([390, 1100])(
       expect(
         screen.getByRole('region', { name: 'Prêtes pour le commit (0)' }),
       ).toBeVisible();
+      expect(
+        within(
+          screen.getByRole('region', { name: 'Prêtes pour le commit (0)' }),
+        ).getByRole('button', { name: 'Commit…' }),
+      ).toBe(commit);
+      const prepare = screen.getByRole('button', {
+        name: 'Préparer la sélection',
+      });
+      expect(prepare).toBeEnabled();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-compact-unprepared-${width}.png`,
+      });
       await page.getByRole('tab', { name: /Modifications/ }).click();
-      await page.getByRole('button', { name: 'Préparer', exact: true }).click();
+      await page
+        .getByRole('button', { name: 'Préparer la sélection', exact: true })
+        .click();
       await screen.findByRole('dialog');
       expect(server.posts).toHaveLength(1);
       await page
@@ -194,6 +208,10 @@ test.each([390, 1100])(
           name: 'Prêtes pour le commit (1)',
         }),
       ).toBeVisible();
+      expect(prepare).toBeDisabled();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/git-compact-prepared-${width}.png`,
+      });
       await page.getByRole('button', { name: 'Commit…' }).click();
       await page
         .getByRole('textbox', { name: 'Message du commit' })
@@ -222,6 +240,8 @@ test.each([390, 1100])(
       expect(
         screen.getByRole('region', { name: 'Prêtes pour le commit (0)' }),
       ).toBeVisible();
+      expect(commit).toBeDisabled();
+      expect(prepare).toBeDisabled();
       await page
         .getByRole('tab', { name: 'Synchronisation', exact: true })
         .click();

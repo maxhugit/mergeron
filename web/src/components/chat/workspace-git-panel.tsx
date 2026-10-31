@@ -25,6 +25,7 @@ import { GitMerges } from './git-merges';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
 import { GitStageChanges, type GitStageHandle } from './git-stage-changes';
+import { GitRestoreGithubAction } from './git-restore-dialog';
 import { GitCopyReservation } from './git-copy-reservation';
 import { GitInspectionError } from './git-inspection-error';
 import { GitCreateBranch } from './git-create-branch';
@@ -655,6 +656,16 @@ function RepositoryPanel({
                                 },
                               ]
                             : []),
+                          ...(change.status !== '??'
+                            ? [
+                                {
+                                  label: t('gitRestoreFiles'),
+                                  disabled: !writable || !snapshot.data?.head,
+                                  onSelect: () =>
+                                    fileStage.current?.restore(relative),
+                                },
+                              ]
+                            : []),
                         ],
                       };
                     }}
@@ -727,6 +738,12 @@ function RepositoryPanel({
                                   },
                                 ]
                               : []),
+                            {
+                              label: t('gitRestoreFiles'),
+                              disabled: !writable || !snapshot.data?.head,
+                              onSelect: () =>
+                                fileStage.current?.restore(change.path),
+                            },
                           ]}
                         />
                       </div>
@@ -765,19 +782,6 @@ function RepositoryPanel({
                 value="changes"
                 className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden p-2"
               >
-                {copy && writable && snapshot.data && !snapshot.error && (
-                  <div className="shrink-0">
-                    <GitCopyActions
-                      key={copy.id}
-                      projectId={projectId}
-                      agentThreadId={agentThreadId}
-                      copyId={copy.id}
-                      snapshot={snapshot.data}
-                      address={resource.address}
-                      actionScope="commit"
-                    />
-                  </div>
-                )}
                 {copy && snapshot.data && !snapshot.error ? (
                   <Changes
                     projectId={projectId}
@@ -786,6 +790,7 @@ function RepositoryPanel({
                     onGitDiff={onGitDiff}
                     agentThreadId={agentThreadId}
                     writable={writable}
+                    address={resource.address}
                   />
                 ) : (
                   <p className="p-1 text-xs">
@@ -889,11 +894,11 @@ function RepositoryPanel({
                 <TabsTrigger value="files" className="px-2 py-1 text-xs">
                   {t('gitTabFiles')}
                 </TabsTrigger>
-                <TabsTrigger value="prs" className="px-2 py-1 text-xs">
-                  {t('gitTabPrs')}
-                </TabsTrigger>
                 <TabsTrigger value="published" className="px-2 py-1 text-xs">
                   {t('gitPublishedBranches')}
+                </TabsTrigger>
+                <TabsTrigger value="prs" className="px-2 py-1 text-xs">
+                  {t('gitTabPrs')}
                 </TabsTrigger>
                 <TabsTrigger value="merges" className="px-2 py-1 text-xs">
                   {t('gitTabMerges')}
@@ -985,17 +990,28 @@ function RepositoryPanel({
                 />
               )}
               {copy && snapshot.data && !snapshot.error ? (
-                <GitIntegrateBranch
-                  key={`integrate:${copy.id}`}
-                  projectId={projectId}
-                  resourceId={resource.id}
-                  copyId={copy.id}
-                  copyName={copy.name}
-                  address={resource.address}
-                  snapshot={snapshot.data}
-                  readOnly={!writable}
-                  agentThreadId={agentThreadId}
-                />
+                <>
+                  <GitIntegrateBranch
+                    key={`integrate:${copy.id}`}
+                    projectId={projectId}
+                    resourceId={resource.id}
+                    copyId={copy.id}
+                    copyName={copy.name}
+                    address={resource.address}
+                    snapshot={snapshot.data}
+                    readOnly={!writable}
+                    agentThreadId={agentThreadId}
+                  />
+                  <GitRestoreGithubAction
+                    projectId={projectId}
+                    resourceId={resource.id}
+                    copyId={copy.id}
+                    snapshot={snapshot.data}
+                    address={resource.address}
+                    agentThreadId={agentThreadId}
+                    writable={writable}
+                  />
+                </>
               ) : (
                 <div className="space-y-1">
                   <Button size="sm" variant="outline" disabled>
@@ -1206,6 +1222,7 @@ function Changes({
   onGitDiff,
   agentThreadId,
   writable,
+  address,
 }: {
   projectId: string;
   copy: ProjectWorkspaceCopySummary;
@@ -1213,6 +1230,7 @@ function Changes({
   onGitDiff?: (target: GitDiffTarget) => void;
   agentThreadId?: string;
   writable: boolean;
+  address: string | null;
 }) {
   return (
     <GitStageChanges
@@ -1224,6 +1242,22 @@ function Changes({
       snapshot={snapshot}
       agentThreadId={agentThreadId}
       writable={writable}
+      preparedActions={
+        writable
+          ? (busy) => (
+              <GitCopyActions
+                projectId={projectId}
+                agentThreadId={agentThreadId}
+                copyId={copy.id}
+                snapshot={snapshot}
+                address={address}
+                actionScope="commit"
+                iconOnly
+                disabled={busy}
+              />
+            )
+          : undefined
+      }
       onDiff={(path, staged) =>
         onGitDiff?.({
           projectId,

@@ -17,6 +17,7 @@ import {
   projectActivity,
   projectAgentThreads,
   projectAgentToolRequests,
+  agentMonitorRuns,
 } from '../database/schema';
 import { ProjectLocationsService } from './project-locations.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
@@ -391,6 +392,16 @@ export class ProjectConnectionToolsService {
         throw new ForbiddenException('GIT_READ_ONLY');
       if (ownCopy(publish.copyId).accessMode !== 'read_write')
         throw new ForbiddenException('GIT_READ_ONLY');
+      if (
+        preparing &&
+        publish.operation.startsWith('restore_') &&
+        this.db
+          .select()
+          .from(agentMonitorRuns)
+          .where(eq(agentMonitorRuns.activeThreadId, threadId))
+          .get()
+      )
+        throw new ForbiddenException('GIT_RESTORE_HUMAN_REQUIRED');
     };
     assertWrite();
     if (
@@ -500,6 +511,41 @@ export class ProjectConnectionToolsService {
       if (preparing) {
         const local = prepareProjectGitOperationInput.parse(raw);
         switch (local.operation) {
+          case 'restore_files_review':
+          case 'restore_github_review':
+            data = await this.actions.restoreReview(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                target:
+                  local.operation === 'restore_files_review'
+                    ? 'head'
+                    : 'github',
+                ...('paths' in local
+                  ? { paths: local.paths }
+                  : { name: local.name, revision: local.revision }),
+              },
+              publisher,
+            );
+            break;
+          case 'restore_files':
+          case 'restore_github':
+            data = await this.actions.restore(
+              projectId,
+              local.copyId,
+              {
+                ...body,
+                target: local.operation === 'restore_files' ? 'head' : 'github',
+                ...('paths' in local
+                  ? { paths: local.paths }
+                  : { name: local.name, revision: local.revision }),
+                confirmation: local.confirmation,
+                reviewFingerprint: local.reviewFingerprint,
+              },
+              publisher,
+            );
+            break;
           case 'stage_review':
             data = await this.actions.stageReview(projectId, local.copyId, {
               ...body,

@@ -7,6 +7,31 @@ import type { WorkspaceGitService } from './workspace-git.service';
 import type { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import type { WorkspaceCopiesService } from './workspace-copies.service';
 
+it.each(['restoreReview', 'restore'] as const)(
+  'routes %s through the protected copy action service',
+  async (method) => {
+    const action = vi.fn();
+    const controller = new WorkspaceGitController(
+      {} as WorkspaceGitService,
+      { [method]: action } as unknown as WorkspaceGitActionsService,
+      {} as WorkspaceCopiesService,
+    );
+    const body = { target: 'head', paths: ['README.md'] };
+    await controller[method]('p', 'copy', body);
+    expect(action).toHaveBeenCalledWith('p', 'copy', body);
+    const handler = Object.getOwnPropertyDescriptor(
+      WorkspaceGitController.prototype,
+      method,
+    )!.value as object;
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(
+      `copies/:copyId/${method === 'restoreReview' ? 'restore-review' : 'restore'}`,
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.POST,
+    );
+  },
+);
+
 it('routes remote PR creation by connection, independently of a local copy', async () => {
   const createRemotePullRequest = vi.fn();
   const controller = new WorkspaceGitController(

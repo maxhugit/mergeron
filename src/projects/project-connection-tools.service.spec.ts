@@ -17,6 +17,8 @@ import {
   projectAgentToolRequests,
   projectConnections,
   projectActivity,
+  agentMonitors,
+  agentMonitorRuns,
 } from '../database/schema';
 import { ProjectLocationsService } from './project-locations.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
@@ -76,6 +78,8 @@ describe('project connection agent tools', () => {
     localBranchAction: vi.fn(),
     startMerge: vi.fn(),
     abortMerge: vi.fn(),
+    restoreReview: vi.fn(),
+    restore: vi.fn(),
   };
   const as = <T>(person: string, run: () => T) =>
     accessContext.run(
@@ -105,6 +109,48 @@ describe('project connection agent tools', () => {
       paths: ['README.md'],
       ...extra,
     });
+
+  it('blocks restoration during a scheduled check and rejects unconfirmed destructive tool inputs', async () => {
+    const args = prepare({
+      operation: 'restore_files',
+      reviewFingerprint: 'd'.repeat(64),
+      confirmation: 'RESTORE_LOCAL_FILES',
+    });
+    await expect(call({ ...args, confirmation: undefined })).rejects.toThrow();
+    database.db
+      .insert(agentMonitors)
+      .values({
+        id: 'm',
+        projectId: 'p',
+        threadId: 'agent',
+        personId: 'admin',
+        requestId: 'monitor',
+        fingerprint: 'f',
+        name: 'Monitor',
+        instructions: 'Read',
+        maxRuns: 2,
+        maxRunMs: 30000,
+        expiresAt: Date.now() + 60000,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(agentMonitorRuns)
+      .values({
+        id: 'run',
+        monitorId: 'm',
+        activeThreadId: 'agent',
+        status: 'running',
+        scheduledAt: 1,
+        claimedAt: 1,
+        leaseUntil: Date.now() + 30000,
+      })
+      .run();
+    await expect(call(args)).rejects.toThrow('GIT_RESTORE_HUMAN_REQUIRED');
+    expect(actions.restore).not.toHaveBeenCalled();
+    expect(actions.restoreReview).not.toHaveBeenCalled();
+  });
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -336,6 +382,31 @@ describe('project connection agent tools', () => {
       { revision: 'c'.repeat(40), message: 'Resolve conflicts' },
     ],
     ['abort_merge', 'abortMerge', { revision: 'c'.repeat(40) }],
+    ['restore_files_review', 'restoreReview', { paths: ['README.md'] }],
+    [
+      'restore_files',
+      'restore',
+      {
+        paths: ['README.md'],
+        reviewFingerprint: 'd'.repeat(64),
+        confirmation: 'RESTORE_LOCAL_FILES',
+      },
+    ],
+    [
+      'restore_github_review',
+      'restoreReview',
+      { name: 'main', revision: 'c'.repeat(40) },
+    ],
+    [
+      'restore_github',
+      'restore',
+      {
+        name: 'main',
+        revision: 'c'.repeat(40),
+        reviewFingerprint: 'd'.repeat(64),
+        confirmation: 'RESTORE_GITHUB_STATE',
+      },
+    ],
   ] as const)(
     'binds %s to the caller, observed copy and stable request',
     async (operation, method, fields) => {

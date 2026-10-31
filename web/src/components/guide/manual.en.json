@@ -1134,7 +1134,17 @@
         "id": "git-local",
         "title": "Read changes and create a commit",
         "summary": "Understand the local copy, diffs and files staged for a commit.",
-        "keywords": ["Git", "diff", "commit", "index", "staged", "graph"],
+        "keywords": [
+          "Git",
+          "diff",
+          "commit",
+          "index",
+          "staged",
+          "graph",
+          "discard",
+          "restore",
+          "recovery"
+        ],
         "sections": [
           {
             "title": "Read the repository",
@@ -1151,10 +1161,20 @@
               "Check the selected copy and review diffs of modified files.",
               "Stage the intended changes from the file menu and confirm the reviewed content.",
               "Open Changes: new, modified and deleted files are grouped into unstaged changes and staged changes for the commit. The counter includes every affected file. Each group opens its own diff: working file or staged index. The list refreshes after writes and agent actions, without automatically staging or publishing files.",
-              "Use Commit, review its scope and enter a descriptive message.",
+              "The icons at the right of the section headers stage the selection and open Commit. They are disabled without a selection, without staged files or during an incompatible operation. Review the scope and enter a descriptive message.",
               "Confirm and find the commit in history. Publish separately if needed."
             ],
             "warning": "A commit does not save unstaged files or publish to GitHub. Actions can be refused for a copy owned by a running agent, read-only access or unknown state."
+          },
+          {
+            "title": "Discard a file’s local changes",
+            "steps": [
+              "In Local → Files, open the modified file’s menu and select Discard changes…; the action is also available in Changes.",
+              "Review the paths and last local commit. Both the working file and its staged state will return to that commit, not to a newer version on GitHub.",
+              "Acknowledge replacement and confirm. A staged addition absent from that commit is removed from the copy.",
+              "Keep the displayed mergeron-backup/… branch name. It remains visible in Branches and preserves earlier commits and files. If changes required a recovery commit, its second parent preserves the staged index. Nothing is pushed."
+            ],
+            "warning": "Unstage preserves the modified content; Discard changes replaces it. New files that are still untracked are not deleted by this action. Agents have restore_files_review followed by restore_files on their own writable copy, only on explicit human request and never during scheduled monitoring. Stale reviews are rejected. If the outcome is uncertain, inspect the copy and recovery branch without retrying automatically."
           }
         ],
         "related": ["git-branches", "git-remote", "git-pr"]
@@ -1212,7 +1232,7 @@
           {
             "title": "Read the remote",
             "paragraphs": [
-              "Remote · GitHub shows files, published branches and PR/checks. It is not the agent’s local working copy. Use Information in the context menu to inspect connection details.",
+              "GitHub offers Files, Branches, PR and Merges tabs, in that order. It is not the agent’s local working copy. Use Information in the context menu to inspect connection details.",
               "Retrieval and synchronization are explicit actions. Read the dialog: fetching references, preparing a local branch and integrating commits are different operations."
             ]
           },
@@ -1225,6 +1245,16 @@
               "Wait for the success message: the copy’s files and Git information are refreshed."
             ],
             "warning": "The copy must be writable and have no pending changes. A merge may create a local commit using your identity. Conflicts leave the local branch, index and files unchanged; fetched remote references may be updated. Nothing is pushed to GitHub. If the copy or remote revision changes during confirmation, refresh and review again."
+          },
+          {
+            "title": "Replace local state with a GitHub state",
+            "steps": [
+              "Open Synchronization → Replace local state from GitHub… on a writable copy that already has a commit.",
+              "Explicitly choose the source branch, then review the state to restore. The GitHub commit is fetched and pinned in the review; preparation does not replace files.",
+              "Check the local destination branch, target revision, affected files and local commits absent from the target. This replaces tracked state; it is not a merge.",
+              "Acknowledge and confirm replacement. The local branch keeps its name, but its tip, index and tracked files adopt the selected state. A local mergeron-backup/… branch preserves the old state; no push is sent."
+            ],
+            "warning": "Untracked and ignored files stay on disk; a collision with the target blocks replacement. Symbolic links, submodules, partial indexes and changes exceeding safety limits are refused. Agents use restore_github_review then restore_github with the unchanged revision and review, on explicit human request. Their rights, copy and active turn are rechecked. A scheduled check cannot trigger restoration. Do not publish a recovery branch without permission. For an uncertain outcome, retain it and inspect the copy."
           },
           {
             "title": "Publish a branch",

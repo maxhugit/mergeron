@@ -330,7 +330,10 @@ export class InternalMcpService implements OnModuleDestroy {
           outputSchema: tool.output,
           annotations: {
             readOnlyHint: tool.readOnly,
-            destructiveHint: tool.name === 'local_browser_action',
+            destructiveHint: [
+              'local_browser_action',
+              'prepare_project_git',
+            ].includes(tool.name),
             idempotentHint: tool.name !== 'local_browser_action',
             openWorldHint:
               tool.name.startsWith('local_browser_') ||
@@ -338,6 +341,7 @@ export class InternalMcpService implements OnModuleDestroy {
                 'read_project_git',
                 'create_project_git_copy',
                 'publish_project_git',
+                'prepare_project_git',
               ].includes(tool.name),
           },
         },

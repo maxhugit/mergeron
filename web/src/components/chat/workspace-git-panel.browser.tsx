@@ -227,6 +227,27 @@ test.each([
       const stageSelected = within(upper).getByRole('button', {
         name: 'Préparer la sélection',
       });
+      const upperHeader = within(upper).getByRole('heading').parentElement!;
+      const lowerHeader = within(lower).getByRole('heading').parentElement!;
+      expect(upperHeader).toContainElement(stageSelected);
+      expect(lowerHeader).toContainElement(toolbar);
+      expect(stageSelected.textContent).toBe('');
+      expect(toolbar.textContent).toBe('');
+      expect(stageSelected).toBeEnabled();
+      expect(toolbar).toBeEnabled();
+      expect(screen.queryByText(/Préparez les fichiers à inclure/)).toBeNull();
+      for (const [header, button] of [
+        [upperHeader, stageSelected],
+        [lowerHeader, toolbar],
+      ]) {
+        const headerBounds = header.getBoundingClientRect();
+        const buttonBounds = button.getBoundingClientRect();
+        expect(
+          Math.abs(headerBounds.right - buttonBounds.right),
+        ).toBeLessThanOrEqual(9);
+        expect(buttonBounds.top).toBeGreaterThanOrEqual(headerBounds.top);
+        expect(buttonBounds.bottom).toBeLessThanOrEqual(headerBounds.bottom);
+      }
       expect(
         screen.queryByText(i18n.t('gitActionStagedHelp', { ns: 'workspaces' })),
       ).toBeNull();
@@ -443,6 +464,11 @@ test.each([260, 330, 600])(
         expect(bounds.bottom).toBeLessThan(850);
       }
       await page.getByRole('tab', { name: 'GitHub', exact: true }).click();
+      expect(
+        within(screen.getByRole('tabpanel', { name: 'GitHub' }))
+          .getAllByRole('tab')
+          .map((element) => element.textContent),
+      ).toEqual(['Fichiers', 'Branches', 'PR', 'Merges']);
       await page.getByRole('button', { name: /#12/ }).click();
       await screen.findByText('En cours');
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
