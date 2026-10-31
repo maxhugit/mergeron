@@ -163,9 +163,16 @@ illimitée ni une garantie de latence sur un autre stockage. La courte phase
 snapshots ne comporte que quatre sondes de santé : son maximum observé est plus
 informatif qu’un percentile.
 
-La lecture, l’empreinte et la validation synchrones des gros snapshots restent
-le point de vigilance observé. Ces essais ne justifient pas de relever les
-quotas ni d’assouplir la sonde. Les tests bloquent la validation si la santé ou
+Des exécutions CI ultérieures ont dépassé les deux secondes pendant la lecture
+et la validation synchrones des gros snapshots. Le Manager lit et calcule
+désormais l’empreinte par tranches de 1 Mio avec rendu de la main à la boucle
+HTTP ; le même validateur USTAR reprend la main toutes les 32 étapes (entrées
+ou blocs de remplissage de 64 Kio). Son API synchrone reste utilisée dans les
+helpers isolés. Les contrôles de chemins, liens, empreintes, types et tailles
+ne changent pas ; les deux appelants attendent la validation complète avant de
+créer des ressources Docker. Le tableau ci-dessus est la mesure historique,
+pas une mesure de cette correction. Les quotas et l’échéance de deux secondes
+sont inchangés. Les tests bloquent la validation si la santé ou
 l’état ne répondent pas dans l’échéance, ou si les compteurs cgroup disponibles
 signalent une limite mémoire atteinte ou un OOM. Ils ne remplacent pas un
 diagnostic corrélé aux opérations et aux compteurs sur une instance réelle.

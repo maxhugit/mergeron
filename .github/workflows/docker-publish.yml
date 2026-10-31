@@ -78,7 +78,11 @@ jobs:
       - name: Verify browser runtime and absence of build package managers
         env:
           IMAGE_REF: ghcr.io/maxhugit/mergeron-browser@${{ steps.build.outputs.digest }}
-        run: bash scripts/smoke-test-browser-image.sh "$IMAGE_REF"
+        run: |
+          # Buildx pushes to the registry; Trivy does not load the Docker daemon.
+          # Inspect and execute exactly the scanned immutable candidate.
+          docker pull "$IMAGE_REF"
+          bash scripts/smoke-test-browser-image.sh "$IMAGE_REF"
 
   browser-publish:
     needs: [quality, browser-build]
