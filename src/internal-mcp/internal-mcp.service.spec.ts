@@ -66,6 +66,7 @@ describe('native internal MCP over HTTP', () => {
   const gitHead = 'a'.repeat(40),
     gitFingerprint = 'b'.repeat(64);
   const pushConnection = vi.fn();
+  const restoreConnection = vi.fn();
   let ownCopies: Array<Record<string, unknown>>;
   const cloneConnection = vi.fn();
   let notify: (note: ServerNotification) => void;
@@ -82,6 +83,7 @@ describe('native internal MCP over HTTP', () => {
   beforeEach(async () => {
     setThreadName.mockClear();
     pushConnection.mockReset();
+    restoreConnection.mockReset();
     monitorAccess.mockReset().mockReturnValue('readOnly');
     database = createTestDatabase();
     root = await fs.realpath(
@@ -295,6 +297,12 @@ describe('native internal MCP over HTTP', () => {
       } as unknown as WorkspaceGitService,
       {
         push: pushConnection,
+        restore: restoreConnection,
+        restoreReview: () =>
+          Promise.resolve({
+            reviewFingerprint: 'c'.repeat(64),
+            paths: ['README.md'],
+          }),
         retrieveBranch: (
           _p: string,
           _c: string,
@@ -394,6 +402,82 @@ describe('native internal MCP over HTTP', () => {
     title: 'Presentation',
     userRequest: 'User requested this task.',
   };
+
+  it.each(['restore_files', 'restore_github'] as const)(
+    'exposes %s to writable native agents but blocks read-only turns and replays',
+    async (operation) => {
+      const { client } = await connect();
+      restoreConnection.mockImplementation(
+        (
+          _p: string,
+          _c: string,
+          _body: unknown,
+          capability: { assertActive: () => void },
+        ) => {
+          capability.assertActive();
+          return Promise.resolve({
+            restored: true,
+            backupBranch: 'mergeron-backup/test',
+          });
+        },
+      );
+      const args = {
+        connectionId: gitConnectionId,
+        copyId: 'own',
+        operation,
+        requestId: 'restore-01',
+        userRequest:
+          'Replace the selected local state after reviewing its impact.',
+        expectedHead: gitHead,
+        expectedBranch: 'feature/test',
+        fingerprint: gitFingerprint,
+        reviewFingerprint: 'c'.repeat(64),
+        ...(operation === 'restore_files'
+          ? { paths: ['README.md'], confirmation: 'RESTORE_LOCAL_FILES' }
+          : {
+              name: 'main',
+              revision: gitHead,
+              confirmation: 'RESTORE_GITHUB_STATE',
+            }),
+      };
+      activate('admin', false);
+      expect(
+        (
+          await client.callTool({
+            name: 'prepare_project_git',
+            arguments: args,
+          })
+        ).isError,
+      ).toBe(true);
+      expect(restoreConnection).not.toHaveBeenCalled();
+      activate();
+      const catalog = await client.listTools();
+      expect(
+        catalog.tools.find((tool) => tool.name === 'prepare_project_git')
+          ?.annotations,
+      ).toMatchObject({
+        destructiveHint: true,
+        readOnlyHint: false,
+        openWorldHint: true,
+      });
+      expect(
+        (
+          await client.callTool({
+            name: 'prepare_project_git',
+            arguments: args,
+          })
+        ).structuredContent,
+      ).toMatchObject({
+        data: { restored: true, backupBranch: 'mergeron-backup/test' },
+      });
+      await client.callTool({ name: 'prepare_project_git', arguments: args });
+      expect(restoreConnection).toHaveBeenCalledTimes(1);
+      expect(restoreConnection.mock.calls[0][2]).toMatchObject({
+        agentThreadId: 'agent',
+        target: operation === 'restore_files' ? 'head' : 'github',
+      });
+    },
+  );
 
   it('discovers and uses only configured project connections through native MCP, with active-turn write enforcement', async () => {
     const { client } = await connect();

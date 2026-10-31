@@ -31,6 +31,7 @@ import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { gitCredentialHelper } from './git-credentials';
+import { planGitRestore, backupGitRestore } from './git-restore-plan';
 import {
   WorkspaceGitService,
   gitStateFingerprint,
@@ -394,6 +395,244 @@ export class WorkspaceGitActionsService {
       this.audit(projectId, copyId, 'git_unstage', { paths: [...names] });
       return { prepared: false };
     });
+  }
+
+  private restoreInput(body: Record<string, unknown>, applying: boolean) {
+    this.body(body);
+    if (!['head', 'github'].includes(String(body.target)))
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    if (body.target === 'head') {
+      if (
+        !Array.isArray(body.paths) ||
+        !body.paths.length ||
+        body.paths.length > 100 ||
+        body.paths.some((name) => typeof name !== 'string')
+      )
+        throw new BadRequestException('GIT_FILES_REQUIRED');
+    } else if (
+      typeof body.name !== 'string' ||
+      !body.name ||
+      body.name.length > 200 ||
+      body.name.startsWith('-') ||
+      typeof body.revision !== 'string' ||
+      !/^[a-f0-9]{40,64}$/.test(body.revision)
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    if (
+      applying &&
+      (body.confirmation !==
+        (body.target === 'head'
+          ? 'RESTORE_LOCAL_FILES'
+          : 'RESTORE_GITHUB_STATE') ||
+        typeof body.reviewFingerprint !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(body.reviewFingerprint))
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+  }
+
+  /** A pinned GitHub fetch is preparation only: never an implicit pull/reset. */
+  async restoreReview(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
+  ) {
+    this.restoreInput(body, false);
+    if (body.target === 'github') {
+      const { copy } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      if (!this.git.github(projectId, copy.sourceResourceId))
+        throw new BadRequestException('GIT_RESTORE_GITHUB_REQUIRED');
+      await this.retrieveBranch(
+        projectId,
+        copyId,
+        { ...body, confirmation: 'RETRIEVE_REMOTE_BRANCH' },
+        preparer,
+        true,
+      );
+    }
+    return this.localPreparation(
+      { projectId, copyId },
+      preparer,
+      body,
+      async () => {
+        this.assertCopyAgent(projectId, copyId, body);
+        const { cwd, state } = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+        );
+        if (!state.head) throw new ConflictException('GIT_NO_COMMIT');
+        const revision =
+          body.target === 'head' ? state.head : (body.revision as string);
+        const plan = await planGitRestore(
+          this.git,
+          cwd,
+          state,
+          revision,
+          body.target === 'head' ? (body.paths as string[]) : undefined,
+        );
+        preparer?.assertActive();
+        return {
+          target: body.target,
+          branch: state.branch,
+          head: state.head,
+          revision,
+          reviewFingerprint: plan.reviewFingerprint,
+          paths: plan.affected.slice(0, 200),
+          fileCount: plan.affected.length,
+          limited: plan.affected.length > 200,
+          localCommits: plan.localCommits,
+          preservedUntracked: plan.preservedUntracked,
+        };
+      },
+    );
+  }
+
+  /** The only force-like local operation: explicit reviewed replacement, durable
+   * recovery branch first, no clean, no remote write, no arbitrary revision. */
+  async restore(
+    projectId: string,
+    copyId: string,
+    body: Record<string, unknown>,
+    preparer?: AgentGitPreparer,
+  ) {
+    this.restoreInput(body, true);
+    return this.localPreparation(
+      { projectId, copyId },
+      preparer,
+      body,
+      async () => {
+        this.assertCopyAgent(projectId, copyId, body);
+        const { copy, cwd, source, state } = await this.copyState(
+          projectId,
+          copyId,
+          body.fingerprint,
+        );
+        if (!state.head) throw new ConflictException('GIT_NO_COMMIT');
+        const revision =
+          body.target === 'head' ? state.head : (body.revision as string);
+        if (body.target === 'github') {
+          if (
+            source.resource.address !== body.address ||
+            !this.git.github(projectId, copy.sourceResourceId)
+          )
+            throw new ConflictException('GIT_STALE');
+          const branches = await this.git.remoteBranches(
+            projectId,
+            copy.sourceResourceId,
+          );
+          if (
+            !branches.items.some(
+              (branch) =>
+                branch.name === body.name && branch.revision === revision,
+            )
+          )
+            throw new ConflictException('GIT_STALE');
+        }
+        const inspect = async () => {
+          this.assertCopyAgent(projectId, copyId, body);
+          const fresh = await this.copyState(
+            projectId,
+            copyId,
+            body.fingerprint,
+          );
+          if (
+            fresh.cwd !== cwd ||
+            fresh.source.resource.address !== source.resource.address
+          )
+            throw new ConflictException('GIT_STALE');
+          const plan = await planGitRestore(
+            this.git,
+            cwd,
+            fresh.state,
+            revision,
+            body.target === 'head' ? (body.paths as string[]) : undefined,
+          );
+          if (plan.reviewFingerprint !== body.reviewFingerprint)
+            throw new ConflictException('GIT_STALE');
+          preparer?.assertActive();
+          return plan;
+        };
+        const plan = await inspect();
+        const backup = await backupGitRestore(
+          this.git,
+          cwd,
+          state,
+          plan.records,
+          async () => {
+            await inspect();
+          },
+        ).catch((error: unknown) => {
+          if (
+            error instanceof ForbiddenException ||
+            (error instanceof ConflictException &&
+              error.message === 'GIT_STALE')
+          )
+            throw error;
+          throw new ConflictException('GIT_RESTORE_BACKUP_FAILED');
+        });
+        this.audit(projectId, copyId, 'git_restore_backup', {
+          backupBranch: backup.branch,
+          sha: backup.revision,
+          previousHead: state.head,
+          target: body.target,
+          revision,
+        });
+        await inspect();
+        try {
+          await this.git.git(
+            cwd,
+            body.target === 'head'
+              ? [
+                  'restore',
+                  `--source=${state.head}`,
+                  '--staged',
+                  '--worktree',
+                  '--',
+                  ...plan.paths.map((name) => `:(literal)${name}`),
+                ]
+              : ['reset', '--no-recurse-submodules', '--hard', revision],
+          );
+          const after = await this.git.snapshot(projectId, copyId);
+          if (
+            after.branch !== state.branch ||
+            after.head !== (body.target === 'head' ? state.head : revision) ||
+            after.changes.some(
+              (change) =>
+                change.status !== '??' &&
+                (body.target === 'github' || plan.paths.includes(change.path)),
+            )
+          )
+            throw new ConflictException('GIT_RESTORE_INCOMPLETE');
+          this.audit(projectId, copyId, 'git_restored', {
+            backupBranch: backup.branch,
+            target: body.target,
+            revision,
+            paths: body.target === 'head' ? plan.paths : undefined,
+          });
+        } catch {
+          // Git can have partially written files. Never retry or label this as a
+          // clean failure; keep the recovery branch and return it to UI/MCP.
+          return {
+            restored: false,
+            reason: 'GIT_RESTORE_INCOMPLETE',
+            backupBranch: backup.branch,
+            backupRevision: backup.revision,
+          };
+        }
+        return {
+          restored: true,
+          branch: state.branch,
+          sha: revision,
+          backupBranch: backup.branch,
+          backupRevision: backup.revision,
+        };
+      },
+    );
   }
 
   async createBranch(

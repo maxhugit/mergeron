@@ -81,6 +81,10 @@ export const prepareProjectGitInput = z.strictObject({
     'start_merge',
     'continue_merge',
     'abort_merge',
+    'restore_files_review',
+    'restore_files',
+    'restore_github_review',
+    'restore_github',
   ]),
   paths: paths.optional(),
   reviewFingerprint: z
@@ -91,6 +95,9 @@ export const prepareProjectGitInput = z.strictObject({
   name: z.string().min(1).max(200).optional(),
   revision: revision.optional(),
   startRef: z.string().min(1).max(240).optional(),
+  confirmation: z
+    .enum(['RESTORE_LOCAL_FILES', 'RESTORE_GITHUB_STATE'])
+    .optional(),
 });
 export const prepareProjectGitOperationInput = z.discriminatedUnion(
   'operation',
@@ -142,6 +149,32 @@ export const prepareProjectGitOperationInput = z.discriminatedUnion(
       ...localContext,
       operation: z.literal('abort_merge'),
       revision,
+    }),
+    z.strictObject({
+      ...localContext,
+      operation: z.literal('restore_files_review'),
+      paths,
+    }),
+    z.strictObject({
+      ...localContext,
+      operation: z.literal('restore_files'),
+      paths,
+      reviewFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal('RESTORE_LOCAL_FILES'),
+    }),
+    z.strictObject({
+      ...localContext,
+      operation: z.literal('restore_github_review'),
+      name: z.string().min(1).max(200),
+      revision,
+    }),
+    z.strictObject({
+      ...localContext,
+      operation: z.literal('restore_github'),
+      name: z.string().min(1).max(200),
+      revision,
+      reviewFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal('RESTORE_GITHUB_STATE'),
     }),
   ],
 );

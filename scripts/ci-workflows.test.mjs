@@ -32,6 +32,25 @@ test('monitor management receives real Chromium and WebKit interface coverage', 
   );
 });
 
+test('reviewed Git replacement receives responsive browser coverage without bypassing checks', () => {
+  assert.match(
+    quality,
+    /name: Test reviewed Git restoration in Chromium and WebKit\n        if: matrix.part == 'frontend'/,
+  );
+  for (const file of [
+    'git-restore-dialog',
+    'workspace-git-panel',
+    'git-complete-workflow',
+  ]) {
+    assert.ok(quality.includes(`src/components/chat/${file}.browser.tsx`));
+  }
+  assert.match(
+    quality,
+    /^          src\/projects\/workspace-git.service.spec.ts$/m,
+  );
+  assert.match(quality, /^          src\/internal-mcp$/m);
+});
+
 test('all independent image checks run concurrently, including UI/docs-only PRs', () => {
   for (const name of ['image', 'manager-image', 'browser-image']) {
     const block = job(quality, name);

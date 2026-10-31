@@ -53,6 +53,10 @@ export function ActionError({ error }: { error: Error | null }) {
     GIT_NETWORK_UNAVAILABLE: t('gitPushNetworkUnavailable'),
     GIT_TLS_ERROR: t('gitPushTlsError'),
     GIT_OUTPUT_LIMIT_EXCEEDED: t('gitInspectionOutputLimit'),
+    GIT_RESTORE_UNSAFE: t('gitRestoreUnsafe'),
+    GIT_RESTORE_COLLISION: t('gitRestoreCollision'),
+    GIT_RESTORE_GITHUB_REQUIRED: t('gitRestoreGithubRequired'),
+    GIT_RESTORE_BACKUP_FAILED: t('gitRestoreBackupFailed'),
     GIT_COMMAND_TIMEOUT: t('gitInspectionTimeout'),
   };
   return error ? (

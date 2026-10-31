@@ -36,6 +36,24 @@ export class WorkspaceGitController {
     return this.actions.unstage(projectId, copyId, body);
   }
 
+  @Post('copies/:copyId/restore-review')
+  restoreReview(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.restoreReview(projectId, copyId, body);
+  }
+
+  @Post('copies/:copyId/restore')
+  restore(
+    @Param('projectId') projectId: string,
+    @Param('copyId') copyId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.actions.restore(projectId, copyId, body);
+  }
+
   @Post('copies/:copyId/release-owner')
   releaseOwner(
     @Param('projectId') projectId: string,

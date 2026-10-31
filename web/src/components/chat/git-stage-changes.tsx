@@ -7,7 +7,8 @@ import {
 } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ListPlus, LoaderCircle } from 'lucide-react';
+import { ListPlus, LoaderCircle, Undo2 } from 'lucide-react';
+import { GitRestoreDialog } from './git-restore-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -33,6 +34,7 @@ interface Review {
 export interface GitStageHandle {
   review: (path: string) => void;
   unstage: (path: string) => void;
+  restore: (path: string) => void;
 }
 
 export function GitStageChanges({
@@ -69,6 +71,7 @@ export function GitStageChanges({
   } | null>(null);
   const [error, setError] = useState('');
   const [selection, setSelection] = useState<string[] | null>(null);
+  const [restorePaths, setRestorePaths] = useState<string[] | null>(null);
   const request = <T,>(operation: string, body: object) =>
     projectsApi<T>(
       gitPath(projectId, `copies/${encodeURIComponent(copyId)}/${operation}`),
@@ -129,6 +132,17 @@ export function GitStageChanges({
   );
   const busy = action.isPending;
   useImperativeHandle(ref, () => ({
+    restore: (path) => {
+      if (
+        writable &&
+        !busy &&
+        snapshot.head &&
+        snapshot.changes.some(
+          (change) => change.path === path && change.status !== '??',
+        )
+      )
+        setRestorePaths([path]);
+    },
     review: (path) => {
       if (writable && !busy && unstaged.some((change) => change.path === path))
         action.mutate({ operation: 'review', paths: [path] });
@@ -294,6 +308,23 @@ export function GitStageChanges({
                           {t(prepared ? 'gitUnstage' : 'gitStage')}
                         </Button>
                       )}
+                      {writable && change.status !== '??' && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7 shrink-0"
+                          aria-label={t('gitRestoreFiles')}
+                          title={t('gitRestoreFileLabel', {
+                            path: change.path,
+                          })}
+                          disabled={
+                            busy || !snapshot.head || !snapshot.fingerprint
+                          }
+                          onClick={() => setRestorePaths([change.path])}
+                        >
+                          <Undo2 className="size-4" aria-hidden="true" />
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -305,6 +336,17 @@ export function GitStageChanges({
         <p role="alert" className="shrink-0 text-destructive">
           {error}
         </p>
+      )}
+      {restorePaths && (
+        <GitRestoreDialog
+          projectId={projectId}
+          copyId={copyId}
+          snapshot={snapshot}
+          agentThreadId={agentThreadId}
+          target="head"
+          paths={restorePaths}
+          onClose={() => setRestorePaths(null)}
+        />
       )}
       <Dialog
         open={Boolean(review)}

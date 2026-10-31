@@ -25,6 +25,7 @@ import { GitMerges } from './git-merges';
 import { GitCopyActions, GitMergeAction } from './workspace-git-actions';
 import { GitCopyDelete } from './git-copy-delete';
 import { GitStageChanges, type GitStageHandle } from './git-stage-changes';
+import { GitRestoreGithubAction } from './git-restore-dialog';
 import { GitCopyReservation } from './git-copy-reservation';
 import { GitInspectionError } from './git-inspection-error';
 import { GitCreateBranch } from './git-create-branch';
@@ -655,6 +656,16 @@ function RepositoryPanel({
                                 },
                               ]
                             : []),
+                          ...(change.status !== '??'
+                            ? [
+                                {
+                                  label: t('gitRestoreFiles'),
+                                  disabled: !writable || !snapshot.data?.head,
+                                  onSelect: () =>
+                                    fileStage.current?.restore(relative),
+                                },
+                              ]
+                            : []),
                         ],
                       };
                     }}
@@ -727,6 +738,12 @@ function RepositoryPanel({
                                   },
                                 ]
                               : []),
+                            {
+                              label: t('gitRestoreFiles'),
+                              disabled: !writable || !snapshot.data?.head,
+                              onSelect: () =>
+                                fileStage.current?.restore(change.path),
+                            },
                           ]}
                         />
                       </div>
@@ -973,17 +990,28 @@ function RepositoryPanel({
                 />
               )}
               {copy && snapshot.data && !snapshot.error ? (
-                <GitIntegrateBranch
-                  key={`integrate:${copy.id}`}
-                  projectId={projectId}
-                  resourceId={resource.id}
-                  copyId={copy.id}
-                  copyName={copy.name}
-                  address={resource.address}
-                  snapshot={snapshot.data}
-                  readOnly={!writable}
-                  agentThreadId={agentThreadId}
-                />
+                <>
+                  <GitIntegrateBranch
+                    key={`integrate:${copy.id}`}
+                    projectId={projectId}
+                    resourceId={resource.id}
+                    copyId={copy.id}
+                    copyName={copy.name}
+                    address={resource.address}
+                    snapshot={snapshot.data}
+                    readOnly={!writable}
+                    agentThreadId={agentThreadId}
+                  />
+                  <GitRestoreGithubAction
+                    projectId={projectId}
+                    resourceId={resource.id}
+                    copyId={copy.id}
+                    snapshot={snapshot.data}
+                    address={resource.address}
+                    agentThreadId={agentThreadId}
+                    writable={writable}
+                  />
+                </>
               ) : (
                 <div className="space-y-1">
                   <Button size="sm" variant="outline" disabled>

@@ -989,6 +989,166 @@ describe('remote branch retrieval', () => {
     );
     return () => calls;
   };
+  it('replaces tracked local state from a pinned GitHub tip while keeping raw recovery, local history and untracked files', async () => {
+    const input = await prepare();
+    await writeFile(path.join(cwd, 'other.md'), 'local commit\n');
+    await git(['add', 'other.md']);
+    await git([
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'commit',
+      '-m',
+      'local only',
+    ]);
+    const oldHead = (await service.snapshot('p', copyId)).head;
+    await writeFile(path.join(cwd, 'README.md'), 'prepared work\n');
+    await git(['add', 'README.md']);
+    await writeFile(path.join(cwd, 'README.md'), 'working work\n');
+    await writeFile(path.join(cwd, 'untracked.txt'), 'keep untracked\n');
+    await writeFile(path.join(cwd, '.git/info/exclude'), 'ignored-cache.tmp\n');
+    await writeFile(path.join(cwd, 'ignored-cache.tmp'), 'keep ignored\n');
+    input.fingerprint = (await service.snapshot('p', copyId)).fingerprint;
+    fixtureTransport();
+    vi.spyOn(service, 'remoteBranches').mockResolvedValue({
+      supported: true,
+      items: [{ name: 'dev', revision: input.revision, protected: false }],
+      limited: false,
+      inspectedAt: 1,
+    });
+    const body = { ...input, target: 'github' };
+    const review = await asPerson(() =>
+      actions.restoreReview('p', copyId, body),
+    );
+    expect(review.localCommits).toBe(1);
+    expect((await service.snapshot('p', copyId)).head).toBe(oldHead);
+    const result = await asPerson(() =>
+      actions.restore('p', copyId, {
+        ...body,
+        reviewFingerprint: review.reviewFingerprint,
+        confirmation: 'RESTORE_GITHUB_STATE',
+      }),
+    );
+    expect(result.restored).toBe(true);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'initial\n',
+    );
+    expect(await readFile(path.join(cwd, 'remote-only.txt'), 'utf8')).toBe(
+      'remote branch content\n',
+    );
+    expect(await readFile(path.join(cwd, 'untracked.txt'), 'utf8')).toBe(
+      'keep untracked\n',
+    );
+    expect(await readFile(path.join(cwd, 'ignored-cache.tmp'), 'utf8')).toBe(
+      'keep ignored\n',
+    );
+    expect(await service.snapshot('p', copyId)).toMatchObject({
+      branch: 'main',
+      head: input.revision,
+      changes: [{ path: 'untracked.txt', status: '??' }],
+    });
+    expect(
+      (await git(['rev-parse', `${result.backupBranch}^1`])).stdout.trim(),
+    ).toBe(oldHead);
+    expect(
+      (await git(['show', `${result.backupBranch}:README.md`])).stdout,
+    ).toBe('working work\n');
+    expect(
+      (await git(['show', `${result.backupBranch}^2:README.md`])).stdout,
+    ).toBe('prepared work\n');
+  }, 30000);
+
+  it('refuses a GitHub replacement when an untracked file would be overwritten or the remote tip changed', async () => {
+    const input = await prepare();
+    fixtureTransport();
+    await writeFile(path.join(cwd, 'remote-only.txt'), 'precious\n');
+    const body = { ...input, target: 'github' };
+    await expect(
+      asPerson(() => actions.restoreReview('p', copyId, body)),
+    ).rejects.toThrow('GIT_RESTORE_COLLISION');
+    expect(await readFile(path.join(cwd, 'remote-only.txt'), 'utf8')).toBe(
+      'precious\n',
+    );
+    await rm(path.join(cwd, 'remote-only.txt'));
+    const review = await asPerson(() =>
+      actions.restoreReview('p', copyId, body),
+    );
+    vi.spyOn(service, 'remoteBranches').mockResolvedValue({
+      supported: true,
+      items: [],
+      limited: false,
+      inspectedAt: 1,
+    });
+    await expect(
+      asPerson(() =>
+        actions.restore('p', copyId, {
+          ...body,
+          reviewFingerprint: review.reviewFingerprint,
+          confirmation: 'RESTORE_GITHUB_STATE',
+        }),
+      ),
+    ).rejects.toThrow('GIT_STALE');
+    expect(
+      (await git(['for-each-ref', 'refs/heads/mergeron-backup/'])).stdout,
+    ).toBe('');
+  }, 30000);
+
+  it('returns a recovery branch instead of replaying or hiding a partial reset failure', async () => {
+    const input = await prepare();
+    fixtureTransport();
+    const body = { ...input, target: 'github' };
+    const review = await asPerson(() =>
+      actions.restoreReview('p', copyId, body),
+    );
+    vi.spyOn(service, 'remoteBranches').mockResolvedValue({
+      supported: true,
+      items: [{ name: 'dev', revision: input.revision, protected: false }],
+      limited: false,
+      inspectedAt: 1,
+    });
+    const original = WorkspaceGitService.prototype.git.bind(
+      service,
+    ) as WorkspaceGitService['git'];
+    vi.spyOn(service, 'git').mockImplementation((dir, args, ...rest) => {
+      if (args[0] === 'reset' && args.includes('--hard'))
+        throw new Error('private failure');
+      return original(dir, args, ...rest);
+    });
+    const result = await asPerson(() =>
+      actions.restore('p', copyId, {
+        ...body,
+        reviewFingerprint: review.reviewFingerprint,
+        confirmation: 'RESTORE_GITHUB_STATE',
+      }),
+    );
+    expect(result).toMatchObject({
+      restored: false,
+      reason: 'GIT_RESTORE_INCOMPLETE',
+      backupBranch: expect.stringMatching(/^mergeron-backup\//),
+    });
+    expect(JSON.stringify(result)).not.toContain('private failure');
+    expect((await git(['rev-parse', result.backupBranch])).stdout.trim()).toBe(
+      result.backupRevision,
+    );
+  }, 30000);
+  it('refuses a collision with an ignored file instead of cleaning or overwriting it', async () => {
+    const input = await prepare();
+    fixtureTransport();
+    await writeFile(path.join(cwd, '.git/info/exclude'), 'remote-only.txt\n');
+    await writeFile(path.join(cwd, 'remote-only.txt'), 'precious ignored\n');
+    await expect(
+      asPerson(() =>
+        actions.restoreReview('p', copyId, { ...input, target: 'github' }),
+      ),
+    ).rejects.toThrow('GIT_RESTORE_COLLISION');
+    expect(await readFile(path.join(cwd, 'remote-only.txt'), 'utf8')).toBe(
+      'precious ignored\n',
+    );
+    expect(
+      (await git(['for-each-ref', 'refs/heads/mergeron-backup/'])).stdout,
+    ).toBe('');
+  }, 30000);
   it('downloads missing objects without relying on origin or touching local work, index, HEAD or remote refs', async () => {
     const body = await prepare();
     await git(['remote', 'remove', 'origin']);
@@ -2967,6 +3127,184 @@ describe('agent merge conflict workflow', () => {
     await expect(start(revision)).rejects.toThrow('GIT_IN_PROGRESS');
     expect((await service.snapshot('p', copyId)).head).toBe(before.head);
     expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe('main\n');
+  });
+});
+
+describe('confirmed file restoration', () => {
+  beforeEach(() =>
+    resources.update('p', 'remote', {
+      accessMode: 'read_write',
+      address: 'https://github.com/example/demo.git',
+    }),
+  );
+  const reviewFiles = async (paths = ['README.md']) => {
+    const state = await service.snapshot('p', copyId);
+    const body = { target: 'head', paths, fingerprint: state.fingerprint };
+    const review = await asPerson(() =>
+      actions.restoreReview('p', copyId, body),
+    );
+    return {
+      ...body,
+      reviewFingerprint: review.reviewFingerprint,
+      confirmation: 'RESTORE_LOCAL_FILES',
+    };
+  };
+  it('allows the owning active agent through the authenticated gate but refuses another owner', async () => {
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'restore-agent',
+        projectId: 'p',
+        workspacePath: cwd,
+        title: 'Restore',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    claimAgentCopy(database.db, 'p', 'restore-agent', copyId);
+    await writeFile(path.join(cwd, 'README.md'), 'agent requested undo\n');
+    active = ['restore-agent'];
+    const state = await service.snapshot('p', copyId);
+    const body = {
+      target: 'head',
+      paths: ['README.md'],
+      fingerprint: state.fingerprint,
+      agentThreadId: 'restore-agent',
+    };
+    const capability = { threadId: 'restore-agent', assertActive: vi.fn() };
+    const review = await asPerson(() =>
+      actions.restoreReview('p', copyId, body, capability),
+    );
+    const input = {
+      ...body,
+      reviewFingerprint: review.reviewFingerprint,
+      confirmation: 'RESTORE_LOCAL_FILES',
+    };
+    await expect(
+      asPerson(() =>
+        actions.restore(
+          'p',
+          copyId,
+          { ...input, agentThreadId: 'another-agent' },
+          capability,
+        ),
+      ),
+    ).rejects.toThrow('GIT_COPY_OWNED');
+    const result = await asPerson(() =>
+      actions.restore('p', copyId, input, capability),
+    );
+    expect(result.restored).toBe(true);
+    expect(capability.assertActive).toHaveBeenCalled();
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'initial\n',
+    );
+  }, 30000);
+  it('never starts replacement if a durable recovery branch cannot be created', async () => {
+    await writeFile(path.join(cwd, 'README.md'), 'must survive\n');
+    const input = await reviewFiles();
+    const original = service.git.bind(service) as WorkspaceGitService['git'];
+    vi.spyOn(service, 'git').mockImplementation((dir, args, ...rest) => {
+      if (args[0] === 'update-ref') throw new Error('private disk failure');
+      return original(dir, args, ...rest);
+    });
+    await expect(
+      asPerson(() => actions.restore('p', copyId, input)),
+    ).rejects.toThrow('GIT_RESTORE_BACKUP_FAILED');
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'must survive\n',
+    );
+  }, 30000);
+  it('restores a partly staged file to HEAD, preserves other edits, and backs up both raw working bytes and staged content', async () => {
+    await git(['config', 'commit.gpgsign', 'true']);
+    await git(['config', 'gpg.program', '/nonexistent-do-not-execute']);
+    await writeFile(path.join(cwd, 'README.md'), 'prepared\n');
+    await git(['add', 'README.md']);
+    const raw = Buffer.from([0, 255, 1, 13, 10]);
+    await writeFile(path.join(cwd, 'README.md'), raw);
+    const expected = (
+      await git(['hash-object', '--no-filters', 'README.md'])
+    ).stdout.trim();
+    await writeFile(path.join(cwd, 'other.md'), 'keep other work\n');
+    const input = await reviewFiles();
+    const before = await service.snapshot('p', copyId);
+    const result = await asPerson(() => actions.restore('p', copyId, input));
+    expect(result.restored).toBe(true);
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'initial\n',
+    );
+    expect(await readFile(path.join(cwd, 'other.md'), 'utf8')).toBe(
+      'keep other work\n',
+    );
+    expect((await service.snapshot('p', copyId)).head).toBe(before.head);
+    expect(
+      (
+        await git(['rev-parse', `${result.backupBranch}:README.md`])
+      ).stdout.trim(),
+    ).toBe(expected);
+    expect(
+      (await git(['show', `${result.backupBranch}^2:README.md`])).stdout,
+    ).toBe('prepared\n');
+    expect((await service.snapshot('p', copyId)).changes).toEqual([
+      { path: 'other.md', status: ' M' },
+    ]);
+  }, 30000);
+  it('removes a staged addition absent from HEAD only after preview and keeps its bytes in recovery', async () => {
+    await writeFile(path.join(cwd, 'new.txt'), 'recover me\n');
+    await git(['add', 'new.txt']);
+    const result = await asPerson(async () =>
+      actions.restore('p', copyId, await reviewFiles(['new.txt'])),
+    );
+    expect(result.restored).toBe(true);
+    await expect(readFile(path.join(cwd, 'new.txt'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect((await git(['show', `${result.backupBranch}:new.txt`])).stdout).toBe(
+      'recover me\n',
+    );
+  }, 30000);
+  it('refuses stale working bytes even though HEAD and index did not change', async () => {
+    await writeFile(path.join(cwd, 'README.md'), 'reviewed\n');
+    const input = await reviewFiles();
+    await writeFile(path.join(cwd, 'README.md'), 'newer precious edit\n');
+    await expect(
+      asPerson(() => actions.restore('p', copyId, input)),
+    ).rejects.toThrow('GIT_STALE');
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'newer precious edit\n',
+    );
+    expect(
+      (await git(['for-each-ref', 'refs/heads/mergeron-backup/'])).stdout,
+    ).toBe('');
+  });
+  it('refuses missing confirmation, read-only copies, busy agents and symlinks without overwriting anything', async () => {
+    await writeFile(path.join(cwd, 'README.md'), 'keep\n');
+    const input = await reviewFiles();
+    await expect(
+      asPerson(() =>
+        actions.restore('p', copyId, { ...input, confirmation: undefined }),
+      ),
+    ).rejects.toThrow('GIT_INVALID_INPUT');
+    resources.update('p', 'remote', { accessMode: 'read_only' });
+    await expect(
+      asPerson(() => actions.restore('p', copyId, input)),
+    ).rejects.toThrow('GIT_READ_ONLY');
+    resources.update('p', 'remote', { accessMode: 'read_write' });
+    active = ['other-agent'];
+    await expect(
+      asPerson(() => actions.restore('p', copyId, input)),
+    ).rejects.toThrow('GIT_BUSY');
+    active = [];
+    await rm(path.join(cwd, 'README.md'));
+    await symlink(
+      path.join(root, 'remote/README.md'),
+      path.join(cwd, 'README.md'),
+    );
+    await expect(
+      asPerson(() => actions.restoreReview('p', copyId, input)),
+    ).rejects.toThrow('GIT_RESTORE_UNSAFE');
+    expect(await readFile(path.join(root, 'remote/README.md'), 'utf8')).toBe(
+      'initial\n',
+    );
   });
 });
 

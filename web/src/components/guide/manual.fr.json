@@ -1148,7 +1148,17 @@
         "id": "git-local",
         "title": "Lire les changements et créer un commit",
         "summary": "Comprendre la copie locale, les différences et les fichiers préparés pour un commit.",
-        "keywords": ["Git", "diff", "commit", "index", "staged", "graphe"],
+        "keywords": [
+          "Git",
+          "diff",
+          "commit",
+          "index",
+          "staged",
+          "graphe",
+          "annuler",
+          "restaurer",
+          "sauvegarde"
+        ],
         "sections": [
           {
             "title": "Lire le dépôt",
@@ -1165,10 +1175,20 @@
               "Vérifiez la copie sélectionnée et consultez les différences des fichiers modifiés.",
               "Dans le menu du fichier, préparez les modifications voulues et confirmez le contenu présenté.",
               "Ouvrez Modifications : les fichiers nouveaux, modifiés et supprimés sont regroupés entre changements non préparés et préparés pour le commit. Le compteur inclut tous les fichiers concernés. Chaque groupe ouvre la différence correspondante : fichier de travail ou index préparé. La liste s’actualise après les écritures et les actions de l’agent, sans préparer ni publier automatiquement les fichiers.",
-              "Utilisez Commit, relisez le périmètre et donnez un message décrivant le changement.",
+              "Les icônes à droite des en-têtes préparent la sélection et ouvrent Commit. Elles sont grisées sans sélection, sans fichier préparé ou pendant une opération incompatible. Relisez le périmètre et donnez un message décrivant le changement.",
               "Après confirmation, vérifiez le nouveau commit dans l’historique. Publiez séparément si nécessaire."
             ],
             "warning": "Un commit ne sauvegarde pas les fichiers non inclus dans l’index et ne publie rien sur GitHub. Les actions peuvent être refusées si la copie est occupée par un agent, en lecture seule ou dans un état inconnu."
+          },
+          {
+            "title": "Annuler les modifications d’un fichier",
+            "steps": [
+              "Dans Local → Fichiers, ouvrez le menu du fichier modifié et choisissez Annuler les modifications… ; cette action est aussi disponible dans Modifications.",
+              "Examinez les chemins et le dernier commit local affichés. Le fichier de travail et sa préparation seront rétablis à ce commit, pas à une nouvelle version sur GitHub.",
+              "Cochez la confirmation de remplacement, puis confirmez. Un ajout déjà préparé, mais absent de ce commit, est retiré de la copie.",
+              "Conservez le nom de la branche mergeron-backup/… affichée. Elle reste visible dans Branches et conserve les anciens commits et les fichiers. Si une sauvegarde des modifications a été nécessaire, son second parent conserve l’index préparé. Aucun push n’est effectué."
+            ],
+            "warning": "Retirer du commit conserve le contenu modifié ; Annuler les modifications le remplace. Les nouveaux fichiers encore non versionnés ne sont pas supprimés par cette action. Les agents disposent des opérations MCP restore_files_review puis restore_files sur leur propre copie en écriture, uniquement sur demande humaine explicite et jamais pendant une surveillance. Un aperçu devenu périmé est refusé. Si le résultat est incertain, inspectez la copie et la sauvegarde sans relancer automatiquement."
           }
         ],
         "related": ["git-branches", "git-remote", "git-pr"]
@@ -1233,7 +1253,7 @@
           {
             "title": "Lire le distant",
             "paragraphs": [
-              "La vue Distant · GitHub permet de consulter fichiers, branches publiées et PR/checks. Elle ne remplace pas la copie locale utilisée par l’agent. Le menu Informations permet de retrouver les coordonnées de la connexion.",
+              "La vue GitHub propose les onglets Fichiers, Branches, PR et Merges, dans cet ordre. Elle ne remplace pas la copie locale utilisée par l’agent. Le menu Informations permet de retrouver les coordonnées de la connexion.",
               "Les actions de récupération et de synchronisation sont explicites. Relisez le dialogue : récupérer des références, préparer une branche locale et intégrer des commits ne sont pas la même opération."
             ]
           },
@@ -1246,6 +1266,16 @@
               "Attendez le message de réussite : les fichiers et les informations Git de la copie sont actualisés."
             ],
             "warning": "La copie doit être en écriture et sans modifications en attente. Une fusion peut créer un commit local avec votre identité. En cas de conflit, la branche, l’index et les fichiers locaux restent inchangés ; les références distantes récupérées peuvent être actualisées. Aucun commit n’est envoyé vers GitHub. Si la copie ou la révision distante change pendant la confirmation, actualisez et vérifiez à nouveau."
+          },
+          {
+            "title": "Remplacer l’état local par celui de GitHub",
+            "steps": [
+              "Ouvrez Synchronisation → Remplacer l’état local depuis GitHub… sur une copie en écriture disposant déjà d’un commit.",
+              "Choisissez explicitement la branche source, puis examinez l’état à restaurer. Le commit GitHub est récupéré et figé dans l’aperçu ; cette préparation ne remplace aucun fichier.",
+              "Vérifiez la branche locale qui sera remplacée, la révision cible, les fichiers concernés et le nombre de commits locaux absents de la cible. Cette action remplace l’état suivi : ce n’est pas une fusion.",
+              "Cochez et confirmez le remplacement. La branche locale conserve son nom, mais son dernier commit, l’index et les fichiers suivis reprennent l’état choisi. Une branche locale mergeron-backup/… conserve l’ancien état ; aucun push n’est envoyé."
+            ],
+            "warning": "Les fichiers non versionnés et ignorés restent sur disque ; une collision avec la cible bloque l’opération. Les liens symboliques, sous-modules, index partiels et modifications dépassant les limites de sécurité sont refusés. Les agents utilisent restore_github_review puis restore_github, avec la révision et l’aperçu inchangés, sur demande humaine explicite. Leurs droits, leur copie et leur tour actif sont revérifiés. Une surveillance ne peut pas déclencher cette restauration. Ne publiez pas une branche de sauvegarde sans autorisation. En cas de résultat incertain, conservez-la et inspectez la copie."
           },
           {
             "title": "Publier une branche",
