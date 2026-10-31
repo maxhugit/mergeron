@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { VoiceDictationButton } from '@/components/chat/voice-dictation-button';
+import { ComposerActionGroup } from '@/components/chat/composer-action-group';
 import { SimpleChatModelSelector } from '@/components/chat/simple-chat-model-selector';
 import { useSimpleChatActivityStore } from '@/stores/simple-chat-activity-store';
 
@@ -416,7 +417,7 @@ export function SimpleChatRoute() {
                   <span className="hidden sm:inline">Isolé</span>
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <ComposerActionGroup>
                 <VoiceDictationButton
                   disabled={sending || status?.configured === false}
                   onTranscript={(text) =>
@@ -440,7 +441,7 @@ export function SimpleChatRoute() {
                     <Send className="h-4 w-4" />
                   )}
                 </Button>
-              </div>
+              </ComposerActionGroup>
             </div>
           </div>
         </form>

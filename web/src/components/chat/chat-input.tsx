@@ -50,6 +50,7 @@ import { CapabilitiesMenu } from './capabilities-menu';
 import { AttachmentChips } from './attachment-chips';
 import { MentionPopover } from './mention-popover';
 import { VoiceDictationButton } from './voice-dictation-button';
+import { ComposerActionGroup } from './composer-action-group';
 
 /** Imperative handle exposed via ref for external input manipulation. */
 export interface ChatInputHandle {
@@ -573,7 +574,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
               />
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <ComposerActionGroup>
               <TokenUsageRing />
               <VoiceDictationButton
                 active={active}
@@ -619,7 +620,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   <Send className="h-3.5 w-3.5" />
                 </Button>
               )}
-            </div>
+            </ComposerActionGroup>
           </div>
         </div>
       </div>
