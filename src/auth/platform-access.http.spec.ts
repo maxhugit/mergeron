@@ -622,6 +622,110 @@ it('persists appearance preferences on the connected person profile', async () =
   expect(invalidLocale.statusCode).toBe(400);
 });
 
+it('keeps navigation on the connected profile across requests, independently of other people', async () => {
+  const save = (
+    payload: Record<string, unknown>,
+    email = 'standard@example.com',
+  ) =>
+    app.inject({
+      method: 'PATCH',
+      url: '/api/auth/preferences',
+      headers: proxyHeaders(email),
+      payload,
+    });
+  const me = (email = 'standard@example.com') =>
+    app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: proxyHeaders(email),
+    });
+  expect(
+    (await me()).json<{ fastNavigationProjectId: string | null }>()
+      .fastNavigationProjectId,
+  ).toBeNull();
+  expect(
+    (
+      await save({
+        fastNavigationProjectId: 'member-project',
+        personId: 'administrator',
+      })
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (await me()).json<{ fastNavigationProjectId: string | null }>()
+      .fastNavigationProjectId,
+  ).toBe('member-project');
+  expect(
+    (await me('administrator@example.com')).json<{
+      fastNavigationProjectId: string | null;
+    }>().fastNavigationProjectId,
+  ).toBeNull();
+  await save({ theme: 'nord' });
+  expect(
+    (await me()).json<{ fastNavigationProjectId: string | null }>()
+      .fastNavigationProjectId,
+  ).toBe('member-project');
+  const fresh = new IdentityService(database.db);
+  expect(fresh.navigationProject(fresh.resolvePerson('standard'))).toBe(
+    'member-project',
+  );
+  expect((await save({ fastNavigationProjectId: null })).statusCode).toBe(200);
+  expect(
+    (await me()).json<{ fastNavigationProjectId: string | null }>()
+      .fastNavigationProjectId,
+  ).toBeNull();
+});
+
+it('validates navigation without granting project access', async () => {
+  const save = (projectId: unknown, email = 'standard@example.com') =>
+    app.inject({
+      method: 'PATCH',
+      url: '/api/auth/preferences',
+      headers: proxyHeaders(email),
+      payload: { fastNavigationProjectId: projectId },
+    });
+  for (const invalid of ['', 12, {}, 'a'.repeat(129)])
+    expect((await save(invalid)).statusCode).toBe(400);
+  expect((await save('outside-project')).statusCode).toBe(403);
+  expect((await save('missing', 'administrator@example.com')).statusCode).toBe(
+    400,
+  );
+  await save('member-project');
+  database.sqlite
+    .prepare('DELETE FROM project_participants WHERE person_id=?')
+    .run('standard');
+  expect(
+    (
+      await app.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: proxyHeaders(),
+      })
+    ).json<{ fastNavigationProjectId: string | null }>()
+      .fastNavigationProjectId,
+  ).toBeNull();
+  expect((await save('member-project')).statusCode).toBe(403);
+});
+
+it('clears deleted navigation projects through the real migration foreign key', async () => {
+  await app.inject({
+    method: 'PATCH',
+    url: '/api/auth/preferences',
+    headers: proxyHeaders('administrator@example.com'),
+    payload: { fastNavigationProjectId: 'outside-project' },
+  });
+  database.sqlite
+    .prepare('DELETE FROM projects WHERE id=?')
+    .run('outside-project');
+  expect(
+    database.sqlite
+      .prepare(
+        'SELECT fast_navigation_project_id FROM person_navigation_preferences WHERE person_id=?',
+      )
+      .get('administrator'),
+  ).toMatchObject({ fast_navigation_project_id: null });
+});
+
 it('persists sidebar order only for items belonging to the same project', async () => {
   database.db
     .insert(projectResources)

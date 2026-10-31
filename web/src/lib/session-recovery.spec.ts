@@ -107,6 +107,26 @@ it('closes the gate on idle return before other focus handlers can submit a muta
   expect(isSessionPaused()).toBe(true);
 });
 
+it('does not mistake a descendant focus event for returning to the window', () => {
+  vi.useFakeTimers();
+  acceptVerifiedSession(identity);
+  vi.advanceTimersByTime(31_000);
+  const input = document.createElement('input');
+  document.body.append(input);
+  const paused = vi.fn();
+  window.addEventListener('codex-webui:session-paused', paused);
+  try {
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    expect(isSessionPaused()).toBe(false);
+    expect(paused).not.toHaveBeenCalled();
+    expect(network).not.toHaveBeenCalled();
+  } finally {
+    window.removeEventListener('codex-webui:session-paused', paused);
+    input.remove();
+  }
+});
+
 it.each([401, 302])(
   'treats HTTP %s as a session failure without following a redirect',
   async (status) => {

@@ -106,7 +106,7 @@
               "La sixième vue remplace la moins récemment consultée. Ses petits brouillons et références de pièces jointes restent séparés par agent dans la mémoire de l’onglet, même si la vue complète doit ensuite être rechargée. Rien n’est envoyé automatiquement.",
               "Après une déconnexion ou un redémarrage du moteur, Mergeron vérifie et rattrape l’état des conversations. Le cache ne contourne ni la vérification de l’identité ni les contrôles d’accès."
             ],
-            "warning": "Ce réglage et les données conservées sont propres à cet onglet : ils sont perdus au rechargement ou à sa fermeture. Ce n’est ni une sauvegarde ni un mode hors ligne. Les autres projets gardent la navigation habituelle."
+            "warning": "Le projet choisi est mémorisé dans votre profil et reste actif après rechargement, y compris sur vos autres appareils. Ce choix est indépendant pour chaque personne. Seul le choix est enregistré : les vues et brouillons restent en mémoire dans l’onglet et sont perdus à sa fermeture. Un échec de l’enregistrement conserve le choix précédent et affiche une erreur. Ce n’est ni une sauvegarde ni un mode hors ligne. Les autres projets gardent la navigation habituelle."
           },
           {
             "title": "Reprendre après une inactivité",
@@ -408,7 +408,7 @@
             "actions": [
               {
                 "label": "Modèle et raisonnement",
-                "effect": "Choisir un modèle disponible et son effort de raisonnement. Un effort plus élevé n’est pas une autorisation supplémentaire et peut augmenter durée et consommation."
+                "effect": "Seuls les administrateurs peuvent choisir le modèle et l’effort de raisonnement. Les autres personnes consultent ces valeurs sans les modifier. Dans un projet, les valeurs restent définies par ses paramètres. Un effort plus élevé n’est pas une autorisation supplémentaire et peut augmenter durée et consommation."
               },
               {
                 "label": "Permissions et approbations",

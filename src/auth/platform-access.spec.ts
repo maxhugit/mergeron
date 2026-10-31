@@ -178,6 +178,34 @@ it('refuses unknown and disabled accounts without bootstrapping an administrator
   );
 });
 
+it.each([
+  '/threads',
+  '/threads/t/turns',
+  '/threads/t/resume',
+  '/projects/p/agent-settings',
+])(
+  'keeps model/effort changes administrator-only on %s, including forged roles',
+  (path) => {
+    const body = {
+      model: 'unauthorized-model',
+      effort: 'ultra',
+      agentModel: 'unauthorized-model',
+      role: 'administrator',
+    };
+    expect(() =>
+      guard.canActivate(http(path, 'POST', { body }).context),
+    ).toThrow('Administrator access');
+    expect(
+      guard.canActivate(
+        http(path, 'POST', {
+          body,
+          headers: headers('admin-subject', 'admin@example.com'),
+        }).context,
+      ),
+    ).toBe(true);
+  },
+);
+
 it('never grants the first administrator login from an email match alone', () => {
   database.db
     .update(people)
@@ -227,6 +255,8 @@ it.each([
   '/logs/export',
   '/logs/storage',
   '/logs/retention',
+  '/logs/retention/application',
+  '/logs/retention/codex',
   '/database/status',
   '/plugins',
   '/simple-chat/api-key',

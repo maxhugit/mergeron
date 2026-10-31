@@ -153,27 +153,46 @@ function SessionRecovery({
   }
   if (session.isPending && !retained)
     return <div className="p-6">{t('access.verifying')}</div>;
+  // A normal wake-up check is not an expired session. The protected Activity
+  // remains hidden and API/socket writes remain gated, but no renewal dialog,
+  // focus trap or login action is introduced while the fresh probe is pending.
+  if (checking)
+    return (
+      <main
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        className="flex h-full min-h-0 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground"
+      >
+        <LoaderCircle aria-hidden="true" className="size-5 animate-spin" />
+        <h1 className="font-medium text-foreground">{t('access.verifying')}</h1>
+        <p className="max-w-md">{t('access.retained')}</p>
+      </main>
+    );
+  const heading = (
+    <h1 className="text-xl font-semibold">
+      {(reconnecting || checking) && (
+        <LoaderCircle
+          aria-hidden="true"
+          className="mr-2 inline size-5 animate-spin"
+        />
+      )}
+      {t(
+        changed
+          ? 'access.identityChanged'
+          : checking
+            ? 'access.verifying'
+            : reconnecting
+              ? 'access.reconnecting'
+              : proxyExpired
+                ? 'access.sessionExpired'
+                : 'access.unavailable',
+      )}
+    </h1>
+  );
   const content = (
     <main className="mx-auto max-w-xl space-y-4 p-6">
-      <h1 className="text-xl font-semibold">
-        {(reconnecting || checking) && (
-          <LoaderCircle
-            aria-hidden="true"
-            className="mr-2 inline size-5 animate-spin"
-          />
-        )}
-        {t(
-          changed
-            ? 'access.identityChanged'
-            : checking
-              ? 'access.verifying'
-              : reconnecting
-                ? 'access.reconnecting'
-                : proxyExpired
-                  ? 'access.sessionExpired'
-                  : 'access.unavailable',
-        )}
-      </h1>
+      {retained ? <DialogTitle asChild>{heading}</DialogTitle> : heading}
       <p>
         {t(
           changed
@@ -239,9 +258,6 @@ function SessionRecovery({
         onInteractOutside={(e) => e.preventDefault()}
         className="sm:max-w-xl"
       >
-        <DialogTitle className="sr-only">
-          {t('access.sessionExpired')}
-        </DialogTitle>
         <DialogDescription className="sr-only">
           {t('access.retained')}
         </DialogDescription>

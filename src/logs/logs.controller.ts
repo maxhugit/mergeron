@@ -1,5 +1,13 @@
 /** REST controller for structured logs and sanitized diagnostics export. */
-import { Body, Controller, Get, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { LogRetentionService } from './log-retention.service';
 import {
   ApiBearerAuth,
@@ -39,6 +47,11 @@ export class LogsController {
   @Put('retention')
   retentionPolicy(@Body() body: unknown) {
     return this.retention.update(body);
+  }
+
+  @Patch('retention/:family')
+  retentionFamily(@Param('family') family: string, @Body() body: unknown) {
+    return this.retention.updateFamily(family, body);
   }
 
   /** Reads paginated structured application logs. */

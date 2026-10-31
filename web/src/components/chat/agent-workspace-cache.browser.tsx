@@ -467,6 +467,47 @@ test.each([[390, 1], ...Array.from({ length: 20 }, (_, n) => [1180, n + 1])])(
   },
 );
 
+test.each([390, 1262])(
+  'keeps the French navigation action on one line between separators before deletion at %ipx',
+  async (width) => {
+    await page.viewport(width, 913);
+    await i18n.changeLanguage('fr');
+    document.documentElement.classList.toggle('dark', width === 1262);
+    render(
+      <QueryClientProvider client={client}>
+        <Fixture />
+      </QueryClientProvider>,
+    );
+    fireEvent.contextMenu(await screen.findByText('Projet interface'));
+    const navigation = await screen.findByRole('button', {
+      name: 'Activer la navigation rapide pour ce projet',
+    });
+    expect(getComputedStyle(navigation).whiteSpace).toBe('nowrap');
+    expect(navigation.scrollWidth).toBeLessThanOrEqual(navigation.clientWidth);
+    expect(navigation.getBoundingClientRect().height).toBe(32);
+    expect(navigation.previousElementSibling).toHaveAttribute(
+      'data-slot',
+      'separator',
+    );
+    expect(navigation.nextElementSibling).toHaveAttribute(
+      'data-slot',
+      'separator',
+    );
+    expect(navigation.nextElementSibling?.nextElementSibling).toBe(
+      screen.getByRole('button', { name: 'Supprimer le projet' }),
+    );
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    const engine = navigator.userAgent.includes('Chrome')
+      ? 'chromium'
+      : 'webkit';
+    await page
+      .getByRole('dialog')
+      .screenshot({
+        path: `../../../.vitest-screenshots/project-navigation-menu-${engine}-${width}.png`,
+      });
+  },
+);
+
 test('bounds retained views, keeps evicted drafts, switches the opted project and scopes sends', async () => {
   await page.viewport(1180, 900);
   const a = await start();

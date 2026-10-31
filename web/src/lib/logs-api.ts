@@ -45,6 +45,15 @@ export function saveLogRetention(policy: LogRetentionPolicy) {
     body: JSON.stringify(policy),
   });
 }
+export function saveLogRetentionRule<Family extends keyof LogRetentionPolicy>(
+  family: Family,
+  rule: LogRetentionPolicy[Family],
+) {
+  return storageRequest<{ policy: LogRetentionPolicy }>(`retention/${family}`, {
+    method: 'PATCH',
+    body: JSON.stringify(rule),
+  });
+}
 
 export interface LogEntry {
   timestamp: string;

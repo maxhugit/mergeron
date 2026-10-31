@@ -449,6 +449,13 @@
       "when": 1793440724076,
       "tag": "0063_agent_monitors",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1793446000000,
+      "tag": "0064_person_navigation_preferences",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
@@ -10,9 +10,9 @@ import { catalogFixture, json } from './catalog/catalog.testing';
 import { GeneralSettings } from './general-settings';
 
 vi.mock('./server-version-card', () => ({ ServerVersionCard: () => null }));
-const saveLogRetention = vi.hoisted(() => vi.fn());
+const saveLogRetentionRule = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/logs-api', () => ({
-  saveLogRetention,
+  saveLogRetentionRule,
 }));
 
 const policy: LogStorage['policy'] = {
@@ -22,7 +22,7 @@ const policy: LogStorage['policy'] = {
 let fixture: ReturnType<typeof catalogFixture>;
 beforeEach(() => {
   fixture = catalogFixture();
-  saveLogRetention.mockReset().mockResolvedValue({ policy });
+  saveLogRetentionRule.mockReset().mockResolvedValue({ policy });
 });
 afterEach(() => fixture.dispose());
 
@@ -73,12 +73,12 @@ it('excludes retention from the server form and its batched saves without changi
   });
 });
 
-it('uses French common button labels and saves the current policy unchanged from the Logs dialog', async () => {
+it('uses French labels and saves only the selected current rule from the Logs dialog', async () => {
   const i18n = createInstance();
   await i18n.init({
     lng: 'fr',
     fallbackLng: false,
-    defaultNS: 'logs',
+    defaultNS: 'common',
     ns: ['logs', 'common'],
     resources: { fr: { logs: frLogs, common: frCommon } },
   });
@@ -91,8 +91,30 @@ it('uses French common button labels and saves the current policy unchanged from
       />
     </I18nextProvider>,
   );
-  expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument();
+  fireEvent.pointerDown(
+    screen.getByRole('button', { name: 'Actions · Application' }),
+    { button: 0, ctrlKey: false },
+  );
+  fireEvent.click(
+    await screen.findByRole('menuitem', { name: 'Paramétrer la rétention' }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Journaux · Application',
+  });
+  expect(
+    within(dialog).getByRole('button', { name: 'Annuler' }),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-  await waitFor(() => expect(saveLogRetention).toHaveBeenCalledWith(policy));
-  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  await waitFor(() =>
+    expect(saveLogRetentionRule).toHaveBeenCalledWith(
+      'application',
+      policy.application,
+    ),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Journaux · Application' }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(close).not.toHaveBeenCalled();
 });
