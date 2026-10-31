@@ -139,6 +139,32 @@ it('discards a response started before the session was paused, even after recove
   await expect(response).rejects.toMatchObject({ name: 'AbortError' });
 });
 
+it.each([401, 302])(
+  'does not let an old HTTP %s invalidate a renewed session',
+  async (status) => {
+    acceptVerifiedSession(identity);
+    let finish!: (response: Response) => void;
+    network.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const oldRequest = fetch('/api/projects');
+    pauseSession();
+    acceptVerifiedSession(identity);
+    const expired = vi.fn();
+    window.addEventListener('codex-webui:auth-expired', expired);
+    try {
+      finish(new Response('', { status }));
+      await expect(oldRequest).rejects.toMatchObject({ name: 'AbortError' });
+      expect(expired).not.toHaveBeenCalled();
+      expect(isSessionPaused()).toBe(false);
+    } finally {
+      window.removeEventListener('codex-webui:auth-expired', expired);
+    }
+  },
+);
+
 it('does not interfere with external or static resources', async () => {
   await fetch('https://example.test/api/resource');
   await fetch('/assets/file.js');

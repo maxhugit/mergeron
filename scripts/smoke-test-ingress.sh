@@ -23,3 +23,4 @@ for template in deployment/config/nginx.conf.template deployment/config/nginx.na
      done' \
     < "$template"
 done
+python3 scripts/test-session-ingress.py

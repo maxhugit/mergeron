@@ -135,3 +135,85 @@ test('keeps the page, exact draft element and scroll position through a real ses
   view.unmount();
   client.clear();
 });
+
+test('automatically recovers a transient real proxy redirect without navigation, cached authorization or replay', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('en');
+  const identity = {
+    active: true,
+    kind: 'person',
+    personId: 'original',
+    name: 'Person',
+    role: 'administrator',
+  };
+  const actualFetch = window.fetch.bind(window);
+  let interrupt = false;
+  let redirected = false;
+  let release: (() => void) | undefined;
+  const identityResponse = () =>
+    new Response(JSON.stringify(identity), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  const network = vi
+    .spyOn(window, 'fetch')
+    .mockImplementation(async (input, init) => {
+      const path = input instanceof Request ? input.url : String(input);
+      if (path.endsWith('/me') && interrupt) {
+        if (!redirected) {
+          redirected = true;
+          // Exercise the browser's actual opaque redirect, never contact the IdP.
+          return actualFetch('/api/auth/__test_proxy_redirect', init);
+        }
+        return new Promise<Response>((resolve) => {
+          release = () => resolve(identityResponse());
+        });
+      }
+      return path.endsWith('/me') ? identityResponse() : new Response('{}');
+    });
+  dispose = installSessionRecovery();
+  const client = new QueryClient();
+  const view = render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedLayout />
+    </QueryClientProvider>,
+  );
+  const input = await screen.findByRole('textbox', { name: 'Unsent message' });
+  fireEvent.change(input, {
+    target: { value: 'Keep the draft and original identity' },
+  });
+  const scroll = screen.getByTestId('retained-scroll');
+  scroll.scrollTop = 320;
+  const href = window.location.href;
+  interrupt = true;
+  let checking: Promise<void> | undefined;
+  act(() => {
+    checking = client.refetchQueries({ queryKey: platformSessionKey });
+  });
+  await waitFor(() => expect(release).toBeTypeOf('function'));
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(screen.getByRole('heading', { name: /verifying/i })).toBeVisible();
+  expect(screen.queryByRole('textbox')).toBeNull();
+  const calls = network.mock.calls.length;
+  await expect(
+    fetch('/api/projects', { method: 'POST', body: '{}' }),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(network).toHaveBeenCalledTimes(calls);
+  interrupt = false;
+  await act(async () => {
+    release?.();
+    await checking;
+  });
+  await waitFor(() => expect(screen.getByRole('textbox')).toBe(input));
+  expect((input as HTMLTextAreaElement).value).toBe(
+    'Keep the draft and original identity',
+  );
+  expect(scroll.scrollTop).toBe(320);
+  expect(window.location.href).toBe(href);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  // Only identity GETs during recovery, no queued mutation after it.
+  expect(
+    network.mock.calls.filter(([, init]) => init?.method === 'POST'),
+  ).toHaveLength(0);
+  view.unmount();
+  client.clear();
+});
