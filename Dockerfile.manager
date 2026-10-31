@@ -28,7 +28,11 @@ RUN node /scripts/package-codex-runtime.cjs /bundle /reviewed.patch
 FROM node:22-bookworm-slim AS manager-files
 
 WORKDIR /opt/mergeron-manager
-COPY manager/package.json manager/stack-manifest.json ./
+COPY manager/package.json manager/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY manager/scripts/bundle-archive.mjs ./scripts/bundle-archive.mjs
+RUN npm run build:archive
+COPY manager/stack-manifest.json ./
 COPY manager/src ./src
 COPY runtime/preview-profile.cjs runtime/preview-archive.cjs runtime/preview-storage.cjs /opt/runtime/
 COPY deployment/browser/public-proxy.mjs /opt/deployment/browser/public-proxy.mjs
@@ -70,7 +74,11 @@ ENV NODE_ENV=production \
     MERGERON_MANAGER_HOST_STATE=/host-state
 
 WORKDIR /opt/mergeron-manager
-COPY --from=manager-files --chown=0:0 /opt/mergeron-manager ./
+COPY --from=manager-files --chown=0:0 /opt/mergeron-manager/src ./src
+COPY --from=manager-files --chown=0:0 /opt/mergeron-manager/vendor ./vendor
+COPY --from=manager-files --chown=0:0 /opt/mergeron-manager/codex-runtime ./codex-runtime
+COPY --from=manager-files --chown=0:0 /opt/mergeron-manager/default-config ./default-config
+COPY --from=manager-files --chown=0:0 /opt/mergeron-manager/package.json /opt/mergeron-manager/package-lock.json /opt/mergeron-manager/stack-manifest.json /opt/mergeron-manager/seccomp-bwrap.json ./
 COPY --from=manager-files --chown=0:0 /opt/runtime /opt/runtime
 COPY --from=manager-files --chown=0:0 /opt/deployment /opt/deployment
 COPY --from=manager-files --chown=0:0 /runtime/ /

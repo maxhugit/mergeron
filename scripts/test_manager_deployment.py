@@ -148,6 +148,10 @@ class ManagerDeploymentTest(unittest.TestCase):
         self.assertIn("CLI_RESULT: ${{ needs.cli-runtime.result }}", self.quality_workflow)
 
     def test_manager_runtime_is_distroless_and_contains_no_npm_tree(self) -> None:
+        final = self.dockerfile.split('FROM gcr.io/distroless/', 1)[1]
+        self.assertNotIn('COPY --from=manager-files --chown=0:0 /opt/mergeron-manager ./', final)
+        self.assertIn('/opt/mergeron-manager/vendor ./vendor', final)
+        self.assertNotIn('node_modules', final)
         self.assertIn("FROM gcr.io/distroless/nodejs22-debian13@sha256:", self.dockerfile)
         self.assertIn(
             'ENTRYPOINT ["/nodejs/bin/node", "src/server.mjs"]',

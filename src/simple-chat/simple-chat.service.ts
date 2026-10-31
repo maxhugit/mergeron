@@ -582,6 +582,36 @@ export class SimpleChatService {
     return this.getKeyStatus();
   }
 
+  startAudioSession(sdp: unknown) {
+    requireExecutionAccess();
+    if (this.getAudioBackend() !== 'codex' || !this.audio)
+      throw BusinessException.badRequest(
+        ErrorCode.simpleChat.audioInvalid,
+        'Le moteur de dictée CLI n’est pas sélectionné ou disponible.',
+      );
+    return this.audio.start(sdp);
+  }
+
+  finishAudioSession(id: string) {
+    requireExecutionAccess();
+    if (!this.audio)
+      throw BusinessException.badRequest(
+        ErrorCode.simpleChat.audioInvalid,
+        'Session vocale indisponible.',
+      );
+    return this.audio.finish(id);
+  }
+
+  cancelAudioSession(id: string) {
+    requireExecutionAccess();
+    if (!this.audio)
+      throw BusinessException.badRequest(
+        ErrorCode.simpleChat.audioInvalid,
+        'Session vocale indisponible.',
+      );
+    return this.audio.cancel(id);
+  }
+
   async transcribeAudio(input: {
     bytes: Buffer;
     filename: string;

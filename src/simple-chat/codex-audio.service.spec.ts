@@ -4,24 +4,15 @@ import { CodexAudioService } from './codex-audio.service';
 import type { CodexService } from '../codex/codex.service';
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
 import { serializeCodexAuditEntry } from '../codex/codex-jsonrpc-client';
+import { accessContext } from '../auth/access-context';
 
-function wav() {
-  const b = Buffer.alloc(46);
-  b.write('RIFF');
-  b.writeUInt32LE(38, 4);
-  b.write('WAVEfmt ', 8);
-  b.writeUInt32LE(16, 16);
-  b.writeUInt16LE(1, 20);
-  b.writeUInt16LE(1, 22);
-  b.writeUInt32LE(24000, 24);
-  b.writeUInt32LE(48000, 28);
-  b.writeUInt16LE(2, 32);
-  b.writeUInt16LE(16, 34);
-  b.write('data', 36);
-  b.writeUInt32LE(2, 40);
-  return b;
+const offer =
+  'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n';
+const answer = 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n';
+async function flush() {
+  for (let n = 0; n < 40; n++) await Promise.resolve();
 }
-function setup() {
+function setup(autoAnswer = true) {
   const client = new EventEmitter() as EventEmitter & {
     request: Mock<
       (method: string, params?: unknown, timeoutMs?: number) => Promise<unknown>
@@ -36,6 +27,13 @@ function setup() {
       });
     if (method === 'thread/start')
       return Promise.resolve({ thread: { id: 'voice-only' } });
+    if (method === 'thread/realtime/start' && autoAnswer)
+      queueMicrotask(() =>
+        client.emit('notification', {
+          method: 'thread/realtime/sdp',
+          params: { threadId: 'voice-only', sdp: answer },
+        }),
+      );
     return Promise.resolve({});
   });
   const admission = new CatalogAdmissionService();
@@ -47,35 +45,23 @@ function setup() {
 }
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
-it('returns only user speech, disables integrations, uses an ephemeral read-only session and always closes it', async () => {
+it('negotiates WebRTC with the CLI, never websocket or PCM upload; returns only scoped user speech', async () => {
   vi.useFakeTimers();
-  const { service, client } = setup();
-  const pending = service.transcribe(wav());
-  for (let n = 0; n < 30; n++) await Promise.resolve();
-  client.emit('notification', {
-    method: 'thread/realtime/transcript/done',
-    params: { threadId: 'unrelated', role: 'user', text: 'wrong' },
+  const { service, client, admission } = setup();
+  const opened = await service.start(offer);
+  expect(
+    client.request.mock.calls.find(
+      ([method]) => method === 'thread/realtime/start',
+    )?.[1],
+  ).toMatchObject({
+    transport: { type: 'webrtc', sdp: offer },
+    outputModality: 'text',
+    clientManagedHandoffs: true,
+    flushTranscriptTailOnSessionEnd: false,
   });
-  client.emit('notification', {
-    method: 'thread/realtime/transcript/done',
-    params: {
-      threadId: 'voice-only',
-      role: 'assistant',
-      text: 'not dictation',
-    },
-  });
-  client.emit('notification', {
-    method: 'thread/realtime/transcript/done',
-    params: {
-      threadId: 'voice-only',
-      role: 'user',
-      text: 'Bonjour le helpdesk.',
-    },
-  });
-  await vi.advanceTimersByTimeAsync(4000);
-  await expect(pending).resolves.toEqual({ text: 'Bonjour le helpdesk.' });
   expect(
     client.request.mock.calls.find(
       ([method]) => method === 'thread/start',
@@ -83,99 +69,207 @@ it('returns only user speech, disables integrations, uses an ephemeral read-only
   ).toMatchObject({
     ephemeral: true,
     sandbox: 'read-only',
+    approvalPolicy: 'never',
     config: {
       mcp_servers: { global: { command: 'secret-tool', enabled: false } },
+      features: { apps: false, plugins: false, shell_tool: false },
+      web_search: 'disabled',
     },
   });
-  expect(client.request).not.toHaveBeenCalledWith(
-    'turn/start',
-    expect.anything(),
-  );
-  expect(client.request.mock.calls.map(([method]) => method)).toContain(
-    'thread/realtime/stop',
-  );
-  expect(client.request.mock.calls.map(([method]) => method)).toContain(
-    'thread/unsubscribe',
-  );
-  expect(client.listenerCount('notification')).toBe(0);
-});
-
-it('fails closed on unsupported CLI voice and releases the session for another attempt', async () => {
-  const { service, client } = setup();
-  client.request.mockImplementation((method: string) => {
-    if (method === 'account/read')
-      return Promise.resolve({ account: { type: 'chatgpt' } });
-    if (method === 'config/read') return Promise.resolve({ config: {} });
-    if (method === 'thread/start')
-      return Promise.resolve({ thread: { id: 'voice-only' } });
-    if (method === 'thread/realtime/start')
-      return Promise.reject(
-        new Error('Method not found or account unavailable'),
-      );
-    return Promise.resolve({});
-  });
-  await expect(service.transcribe(wav())).rejects.toThrow(
-    /expérimentale indisponible/,
-  );
-  await expect(service.transcribe(wav())).rejects.toThrow(
-    /expérimentale indisponible/,
-  );
-  expect(client.listenerCount('notification')).toBe(0);
-});
-
-it('rejects invalid audio before contacting the CLI and excludes PCM payloads from the audit', async () => {
-  const { service, client } = setup();
-  await expect(service.transcribe(Buffer.from('not audio'))).rejects.toThrow(
-    /WAV PCM/,
-  );
-  expect(client.request).not.toHaveBeenCalled();
-  const log = serializeCodexAuditEntry('out', {
-    id: 3,
-    method: 'thread/realtime/appendAudio',
-    params: {
-      threadId: 'voice',
-      audio: { data: 'PRIVATE_BASE64', sampleRate: 24000 },
-    },
-  });
-  expect(log).not.toContain('PRIVATE_BASE64');
-  expect(log).toContain('REDACTED_AUDIO');
-  expect(
-    serializeCodexAuditEntry('in', {
+  for (const [threadId, role, text] of [
+    ['unrelated', 'user', 'wrong'],
+    ['voice-only', 'assistant', 'not dictation'],
+    ['voice-only', 'user', 'Bonjour le helpdesk.'],
+  ])
+    client.emit('notification', {
       method: 'thread/realtime/transcript/done',
-      params: { text: 'PRIVATE_DRAFT' },
-    }),
-  ).not.toContain('PRIVATE_DRAFT');
+      params: { threadId, role, text },
+    });
+  const pending = service.finish(opened.id);
+  await vi.advanceTimersByTimeAsync(4000);
+  await expect(pending).resolves.toEqual({ text: 'Bonjour le helpdesk.' });
+  const methods = client.request.mock.calls.map(([method]) => method);
+  expect(methods).not.toContain('thread/realtime/appendAudio');
+  expect(methods).not.toContain('turn/start');
+  expect(methods).toContain('thread/realtime/stop');
+  expect(methods).toContain('thread/unsubscribe');
+  expect(client.listenerCount('notification')).toBe(0);
+  expect(admission.pending()).toHaveLength(0);
 });
 
-it('interrupts any attempted agent turn instead of treating dictation as an instruction', async () => {
-  const { service, client, admission } = setup();
-  const pending = service.transcribe(wav());
-  const rejected = expect(pending).rejects.toThrow(
-    /expérimentale indisponible/,
+it('waits for the matching SDP, not the start acknowledgement or another session', async () => {
+  const { service, client } = setup(false);
+  let settled = false;
+  const pending = service.start(offer).then((value) => {
+    settled = true;
+    return value;
+  });
+  await flush();
+  expect(settled).toBe(false);
+  client.emit('notification', {
+    method: 'thread/realtime/sdp',
+    params: { threadId: 'other', sdp: answer },
+  });
+  await flush();
+  expect(settled).toBe(false);
+  client.emit('notification', {
+    method: 'thread/realtime/sdp',
+    params: { threadId: 'voice-only', sdp: answer },
+  });
+  const opened = await pending;
+  expect(opened.sdp).toBe(answer);
+  await service.cancel(opened.id);
+});
+
+it('uses canonical user segments once each, excluding assistant segments', async () => {
+  vi.useFakeTimers();
+  const { service, client } = setup();
+  const opened = await service.start(offer);
+  for (const [id, role, text] of [
+    ['one', 'user', 'Ancien texte'],
+    ['one', 'user', 'Premier segment.'],
+    ['two', 'assistant', 'Réponse à ignorer'],
+    ['three', 'user', 'Deuxième segment.'],
+  ])
+    client.emit('notification', {
+      method: 'thread/realtime/item/completed',
+      params: {
+        threadId: 'voice-only',
+        item: { id, type: 'transcriptSegment', role, text },
+      },
+    });
+  const pending = service.finish(opened.id);
+  await vi.advanceTimersByTimeAsync(4000);
+  await expect(pending).resolves.toEqual({
+    text: 'Premier segment. Deuxième segment.',
+  });
+});
+
+it('rejects old PCM clients and invalid offers before contacting the CLI; redacts all media and text', async () => {
+  const { service, client } = setup();
+  await expect(service.transcribe(Buffer.from('recording'))).rejects.toThrow(
+    /rechargez la page/,
   );
-  for (let n = 0; n < 30; n++) await Promise.resolve();
+  await expect(service.start('not-sdp')).rejects.toThrow(
+    /WebRTC audio invalide/,
+  );
+  await expect(
+    service.start('v=0\r\nm=audio 9\r\n' + 'x'.repeat(65536)),
+  ).rejects.toThrow(/WebRTC audio invalide/);
+  expect(client.request).not.toHaveBeenCalled();
+  for (const [method, params] of [
+    ['thread/realtime/appendAudio', { audio: { data: 'PRIVATE_PCM' } }],
+    [
+      'thread/realtime/start',
+      { transport: { type: 'webrtc', sdp: 'PRIVATE_SDP' } },
+    ],
+    ['thread/realtime/transcript/done', { text: 'PRIVATE_DRAFT' }],
+  ] as const)
+    expect(serializeCodexAuditEntry('out', { method, params })).not.toMatch(
+      /PRIVATE_/,
+    );
+});
+
+it('reports API-key-only voice incompatibility without using keys, leaking errors or retaining admission', async () => {
+  const { service, client, admission } = setup(false);
+  const logger = vi.spyOn(
+    (service as unknown as { logger: { warn: (...args: unknown[]) => void } })
+      .logger,
+    'warn',
+  );
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const pending = service.start(offer);
+    const rejected = expect(pending).rejects.toThrow(/exige une clé API/);
+    await flush();
+    client.emit('notification', {
+      method: 'thread/realtime/error',
+      params: {
+        threadId: 'voice-only',
+        message: 'realtime conversation requires API key auth PRIVATE_TOKEN',
+      },
+    });
+    await rejected;
+    expect(admission.pending()).toHaveLength(0);
+  }
+  expect(JSON.stringify(logger.mock.calls)).not.toContain('PRIVATE_TOKEN');
+  expect(client.listenerCount('notification')).toBe(0);
+});
+
+it('refuses concurrent sessions, binds stop to the authenticated owner, and keeps another owner from closing it', async () => {
+  const { service, admission } = setup();
+  const identity = (personId: string) =>
+    ({
+      identity: {
+        kind: 'person',
+        personId,
+        name: personId,
+        role: 'administrator',
+        active: true,
+      },
+      identities: { requireAdministrator: vi.fn() },
+    }) as unknown as NonNullable<ReturnType<typeof accessContext.getStore>>;
+  const alice = identity('alice');
+  const opened = await accessContext.run(alice, () => service.start(offer));
+  await expect(service.start(offer)).rejects.toThrow(/déjà en cours/);
+  await expect(
+    accessContext.run(identity('bob'), () => service.cancel(opened.id)),
+  ).rejects.toThrow(/n’appartient pas/);
+  expect(admission.pending()).toHaveLength(1);
+  await accessContext.run(alice, () => service.cancel(opened.id));
+  expect(admission.pending()).toHaveLength(0);
+});
+
+it('interrupts an attempted agent turn and does not expose its answer as dictation', async () => {
+  const { service, client, admission } = setup();
+  const opened = await service.start(offer);
   client.emit('notification', {
     method: 'turn/started',
     params: { threadId: 'voice-only', turn: { id: 'unwanted-turn' } },
   });
-  await rejected;
+  await flush();
   expect(
     client.request.mock.calls.find(
       ([method]) => method === 'turn/interrupt',
     )?.[1],
   ).toEqual({ threadId: 'voice-only', turnId: 'unwanted-turn' });
+  await expect(
+    Promise.resolve().then(() => service.finish(opened.id)),
+  ).rejects.toThrow();
   expect(admission.pending()).toHaveLength(0);
 });
 
-it('bounds waiting and releases admission on silence', async () => {
+it('bounds missing SDP, silence and abandoned recordings, then releases the session', async () => {
   vi.useFakeTimers();
-  const { service, admission } = setup();
-  const pending = service.transcribe(wav());
-  const rejected = expect(pending).rejects.toThrow(
-    /expérimentale indisponible/,
-  );
-  for (let n = 0; n < 30; n++) await Promise.resolve();
-  await vi.advanceTimersByTimeAsync(90000);
+  const first = setup(false);
+  const pending = first.service.start(offer);
+  const rejected = expect(pending).rejects.toThrow(/démarrage.*expiré/);
+  await flush();
+  await vi.advanceTimersByTimeAsync(30000);
   await rejected;
+  expect(first.admission.pending()).toHaveLength(0);
+  const second = setup();
+  const opened = await second.service.start(offer);
+  const finishing = second.service.finish(opened.id);
+  const silent = expect(finishing).rejects.toThrow(
+    /aucune transcription finale/,
+  );
+  await vi.advanceTimersByTimeAsync(15000);
+  await silent;
+  expect(second.admission.pending()).toHaveLength(0);
+  const third = setup();
+  await third.service.start(offer);
+  await vi.advanceTimersByTimeAsync(150000);
+  expect(third.admission.pending()).toHaveLength(0);
+});
+
+it('cleans up when the CLI exits or the application shuts down', async () => {
+  const { service, client, admission } = setup();
+  await service.start(offer);
+  client.emit('close');
+  await flush();
   expect(admission.pending()).toHaveLength(0);
+  await service.start(offer);
+  await service.onModuleDestroy();
+  expect(admission.pending()).toHaveLength(0);
+  expect(client.listenerCount('notification')).toBe(0);
 });

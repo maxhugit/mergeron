@@ -147,6 +147,26 @@ export class SimpleChatController {
     });
   }
 
+  @Post('audio-sessions')
+  @ApiOperation({
+    summary: 'Negotiate native CLI voice with a browser WebRTC offer',
+  })
+  startAudioSession(@Body() body: { sdp?: unknown }) {
+    return this.simpleChatService.startAudioSession(body?.sdp);
+  }
+
+  @Post('audio-sessions/:id/finish')
+  @ApiOperation({ summary: 'Finish dictation and return user speech only' })
+  finishAudioSession(@Param('id') id: string) {
+    return this.simpleChatService.finishAudioSession(id);
+  }
+
+  @Delete('audio-sessions/:id')
+  @ApiOperation({ summary: 'Cancel an owned CLI voice session' })
+  cancelAudioSession(@Param('id') id: string) {
+    return this.simpleChatService.cancelAudioSession(id);
+  }
+
   @Get('threads')
   @ApiOperation({ summary: 'List Simple Chat conversations' })
   listThreads() {

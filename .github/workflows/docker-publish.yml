@@ -351,6 +351,8 @@ jobs:
 
       - name: Test the observe-only manager
         run: |
+          npm --prefix manager ci --ignore-scripts --no-audit --no-fund
+          npm --prefix manager run build:archive
           node --test manager/test/*.test.mjs
           node --test runtime/*.test.cjs
 

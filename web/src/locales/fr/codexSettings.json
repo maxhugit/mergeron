@@ -32,7 +32,7 @@
   "dictationBackendLabel": "Moteur de dictée",
   "dictationCliExperimental": "Codex CLI — expérimental",
   "dictationBackendIndependent": "Les moteurs du chat et de l’audio sont indépendants. Sans choix audio enregistré, la dictée suit le moteur du chat.",
-  "dictationCliWarning": "Expérimental : utilise la session vocale Codex sans clé API. La disponibilité dépend du CLI et du compte. Aucun basculement vers la clé API en cas d’erreur.",
+  "dictationCliWarning": "Expérimental : utilise la session vocale Codex en WebRTC, sans clé API. La disponibilité dépend du navigateur, du CLI et de l’accès vocal du compte. Aucun basculement vers la clé API en cas d’erreur.",
   "responseVerbosity": "Verbosité des réponses",
   "reasoningEffortDescription": "Définit l’effort consacré à résoudre la tâche. Un effort plus élevé peut demander davantage de temps et de jetons ; les niveaux disponibles dépendent du modèle.",
   "reasoningSummaryDescription": "Définit le niveau de détail du résumé fourni dans les blocs « Réfléchit ». Ce n’est pas le raisonnement interne brut, et un résumé plus détaillé n’augmente pas l’effort de raisonnement.",

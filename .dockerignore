@@ -1,5 +1,7 @@
 node_modules
 web/node_modules
+manager/node_modules
+manager/vendor
 dist
 public
 /logs

@@ -45,3 +45,43 @@ it('inherits chat until an explicit audio choice exists, then keeps both indepen
     db.sqlite.close();
   }
 });
+
+it('negotiates only the selected CLI engine and still closes its session after a settings change', async () => {
+  const db = createTestDatabase();
+  const audio = {
+    start: vi.fn().mockResolvedValue({ id: 'owned', sdp: 'answer' }),
+    finish: vi.fn().mockResolvedValue({ text: 'Texte dicté' }),
+    cancel: vi.fn().mockResolvedValue({ ok: true }),
+  };
+  const service = new SimpleChatService(
+    db.db,
+    {} as never,
+    {} as never,
+    undefined,
+    undefined,
+    undefined,
+    audio as never,
+  );
+  try {
+    service.setAudioBackend('openai');
+    expect(() => service.startAudioSession('offer')).toThrow(/pas sélectionné/);
+    expect(audio.start).not.toHaveBeenCalled();
+    service.setAudioBackend('codex');
+    await expect(service.startAudioSession('offer')).resolves.toEqual({
+      id: 'owned',
+      sdp: 'answer',
+    });
+    expect(audio.start).toHaveBeenCalledWith('offer');
+    service.setAudioBackend('openai');
+    await expect(service.finishAudioSession('owned')).resolves.toEqual({
+      text: 'Texte dicté',
+    });
+    await expect(service.cancelAudioSession('owned')).resolves.toEqual({
+      ok: true,
+    });
+    expect(audio.finish).toHaveBeenCalledWith('owned');
+    expect(audio.cancel).toHaveBeenCalledWith('owned');
+  } finally {
+    db.sqlite.close();
+  }
+});

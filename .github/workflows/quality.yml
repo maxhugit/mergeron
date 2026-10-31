@@ -64,6 +64,8 @@ jobs:
             pnpm install --frozen-lockfile
             # Backend socket integration tests import the browser client types.
             pnpm --dir web install --frozen-lockfile
+            npm --prefix manager ci --ignore-scripts --no-audit --no-fund
+            npm --prefix manager run build:archive
           else
             pnpm --dir web install --frozen-lockfile
           fi
@@ -202,6 +204,10 @@ jobs:
         if: matrix.part == 'frontend'
         run: pnpm --dir web exec vitest run --project browser src/lib/platform-session.browser.tsx src/routes/authenticated-layout.browser.tsx
 
+      - name: Test CLI dictation transport in Chromium and WebKit
+        if: matrix.part == 'frontend'
+        run: pnpm --dir web exec vitest run --project browser src/components/chat/voice-dictation-button.browser.tsx
+
       - name: Test retained agent views in Chromium and WebKit
         if: matrix.part == 'frontend'
         run: >-
@@ -211,6 +217,7 @@ jobs:
           src/components/chat/workspace-tree.browser.tsx
           src/components/files/file-actions-menu.browser.tsx
           src/components/projects/project-agent-monitors.browser.tsx
+          src/components/terminal/terminal-read-recovery.browser.tsx
 
       - name: Preserve preview interface screenshots
         if: always() && matrix.part == 'frontend'
