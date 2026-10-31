@@ -1250,6 +1250,49 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
     return this.manager.request('logs', { runId: row.runId });
   }
+  /** Browser diagnostics are scoped to the current run; callers cannot select Docker ids. */
+  async inspectRuntime(
+    projectId: string,
+    threadId: string,
+    operation: 'containers' | 'container-logs' | 'terminal',
+    input: Record<string, unknown> = {},
+  ) {
+    const scope = this.scope(projectId, threadId);
+    const row = this.row(scope.agentId);
+    if (!row) throw new NotFoundException('PREVIEW_NOT_FOUND');
+    if (row.projectId !== projectId)
+      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+    if (operation === 'terminal') {
+      requireExecutionAccess();
+      const identity = currentAccess()?.identity;
+      if (
+        !identity ||
+        identity.kind !== 'person' ||
+        !identity.personId ||
+        identity.impersonation
+      )
+        throw new ForbiddenException('PREVIEW_ACCESS_DENIED');
+      // Fail closed when a stale tab attempts to address a replaced environment.
+      if (input.runId !== row.runId)
+        throw new ConflictException('PREVIEW_IDENTITY_CHANGED');
+      return this.manager.request(operation, {
+        runId: row.runId,
+        owner: identity.personId,
+        component: input.component,
+        action: input.action,
+        sessionId: input.sessionId,
+        cols: input.cols,
+        rows: input.rows,
+        offset: input.offset,
+        sequence: input.sequence,
+        data: input.data,
+      });
+    }
+    return this.manager.request(operation, {
+      runId: row.runId,
+      component: input.component,
+    });
+  }
   async tool(
     projectId: string,
     threadId: string,

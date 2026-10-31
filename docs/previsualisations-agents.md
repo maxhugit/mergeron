@@ -19,14 +19,42 @@ ne donnent pas accès au nouveau runtime. Les service workers persistants sont
 refusés sur ces origines ; les Web Workers applicatifs et WebSocket restent
 disponibles. Aucune identité Mergeron ou Authentik n’est transmise au projet.
 
-Dans la conversation, ouvrir la fenêtre **Environnement de test** avec l’icône
-correspondante. Dès que le contrôle HTTP confirme que l’application est prête,
-son adresse apparaît en haut de la fenêtre, avec **Ouvrir l’aperçu** et
+Dans la conversation, ouvrir l’onglet **Environnement de test** avec l’icône
+correspondante. Il reste à côté de Conversation ; le fermer n’arrête pas
+l’environnement. Dès que le contrôle HTTP confirme que l’application est prête,
+son adresse apparaît sous les commandes, à côté de son état, avec **Ouvrir l’aperçu** et
 **Copier l’URL**. La copie contient l’adresse stable, jamais le ticket personnel
-temporaire ; elle ne donne pas accès à une personne non autorisée. Si le
-presse-papiers est indisponible, le champ en lecture seule reste sélectionnable.
+temporaire ; elle ne donne pas accès à une personne non autorisée. L’adresse
+affichée reste sélectionnable si le presse-papiers est indisponible.
 Pendant l’installation, après un arrêt ou si le dernier contrôle d’état échoue,
-la fenêtre ne présente pas une ancienne adresse comme un aperçu prêt.
+l’onglet ne présente pas une ancienne adresse comme un aperçu prêt.
+
+La barre conserve la durée de disponibilité, Démarrer/Arrêter, Recréer,
+Stockage, l’ouverture et la copie de l’URL. Changer la durée d’un environnement
+actif l’applique immédiatement, sans redémarrage. Arrêter et recréer demandent
+confirmation avant de supprimer les données éphémères. À l’arrêt, un message
+indique comment démarrer. Stockage affiche ou masque les consommations mesurées
+des volumes ; une mesure indisponible n’est jamais présentée comme zéro.
+
+La liste présente trois conteneurs au maximum sans défilement. Les autres sont
+accessibles par son défilement intérieur. Chaque ligne donne le nom, l’état,
+l’image, le CPU et la mémoire disponibles. Cliquer une ligne ouvre ses logs
+dans la console inférieure, qui utilise toute la hauteur restante et défile
+indépendamment. Sur petit écran, certaines colonnes secondaires sont masquées.
+
+Les administrateurs peuvent choisir Terminal pour saisir directement dans un
+vrai PTY du conteneur applicatif ou d’un service de test, avec son utilisateur
+non privilégié. Les conteneurs techniques de transport et de stockage ne donnent
+pas accès à un shell. Si l’image n’a pas de `/bin/sh`, aucun shell de remplacement
+n’est lancé ailleurs. Les lecteurs peuvent consulter les logs mais pas ouvrir
+un terminal. Aucun socket Docker n’est transmis au navigateur ou aux agents.
+
+Quitter le terminal ferme sa connexion ; le rouvrir crée une nouvelle session.
+Les sessions sont limitées à huit dans le Manager, à vingt minutes et à la durée
+de l’environnement, avec expiration après une minute sans échange. La saisie
+n’est pas rejouée après une déconnexion ou une recréation. Ces terminaux sont
+distincts des terminaux persistants du workspace. Ils modifient uniquement le
+runtime temporaire, pas les sources originales de l’agent.
 
 Le service reste désactivé par défaut. Il convient aux projets capables de
 démarrer dans une image Linux autorisée, avec un port HTTP principal. Le profil

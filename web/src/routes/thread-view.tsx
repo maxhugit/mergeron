@@ -62,9 +62,9 @@ const BrowserSidebar = lazy(() =>
     default: module.BrowserSidebar,
   })),
 );
-const AgentPreviewDialog = lazy(() =>
-  import('@/components/chat/agent-preview-dialog').then((m) => ({
-    default: m.AgentPreviewDialog,
+const AgentPreviewPanel = lazy(() =>
+  import('@/components/chat/agent-preview-panel').then((m) => ({
+    default: m.AgentPreviewPanel,
   })),
 );
 const LocalBrowserSidebar = lazy(() =>
@@ -86,7 +86,6 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
   const { t: tb } = useTranslation('browser');
   const [browserChoice, setBrowserChoice] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [localBrowserOpen, setLocalBrowserOpen] = useState(false);
   const [localBrowserEnabled, setLocalBrowserEnabled] = useState(false);
   const [localBrowserStatus, setLocalBrowserStatus] = useState('disconnected');
@@ -313,18 +312,15 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
               session.isAdministrator ? openLocalBrowser : undefined
             }
             localBrowserStatus={localBrowserStatus}
-            onPreview={previewProject ? () => setPreviewOpen(true) : undefined}
+            onPreview={
+              previewProject
+                ? () =>
+                    useWorkspaceStore
+                      .getState()
+                      .openPreview(context, previewProject.id, threadId)
+                : undefined
+            }
           />
-          {previewOpen && previewProject && (
-            <Suspense fallback={null}>
-              <AgentPreviewDialog
-                projectId={previewProject.id}
-                threadId={threadId}
-                open={previewOpen}
-                onOpenChange={setPreviewOpen}
-              />
-            </Suspense>
-          )}
           <AgentContextLinks
             onOpenDirectory={(path) => {
               explorerRef.current?.openDirectory(path);
@@ -436,13 +432,23 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
                           ? tab.path
                           : tab.kind === 'git-graph'
                             ? tab.name
-                            : t('terminal')
+                            : tab.kind === 'preview'
+                              ? t('title', { ns: 'previews' })
+                              : t('terminal')
                       }
                       className="absolute inset-0 flex min-h-0 flex-col"
                       inert={!active}
                       style={{ visibility: active ? 'visible' : 'hidden' }}
                     >
-                      {tab.kind === 'file' ? (
+                      {tab.kind === 'preview' ? (
+                        <Suspense fallback={null}>
+                          <AgentPreviewPanel
+                            projectId={tab.projectId}
+                            threadId={tab.threadId}
+                            active={active}
+                          />
+                        </Suspense>
+                      ) : tab.kind === 'file' ? (
                         active && (
                           <FileViewer
                             filePath={tab.path}

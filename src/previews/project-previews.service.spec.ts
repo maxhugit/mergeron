@@ -975,6 +975,100 @@ describe('project-scoped generic preview service', () => {
   });
 });
 
+describe('scoped preview inspector', () => {
+  it('forwards only whitelisted terminal fields with server-resolved owner and run', async () => {
+    const f = setup();
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId: 'current',
+    });
+    await f.run(() =>
+      f.service.inspectRuntime('p', 't', 'terminal', {
+        runId: 'current',
+        owner: 'attacker',
+        component: 'preview-app',
+        action: 'open',
+        cols: 80,
+        rows: 24,
+        command: 'host-shell',
+        dockerId: 'host',
+      }),
+    );
+    expect(f.request).toHaveBeenCalledWith(
+      'terminal',
+      expect.objectContaining({
+        owner: 'user',
+        runId: 'current',
+        component: 'preview-app',
+      }),
+    );
+    expect(f.request.mock.calls[0][1]).not.toHaveProperty('command');
+    expect(f.request.mock.calls[0][1]).not.toHaveProperty('dockerId');
+    f.request.mockClear();
+    await expect(
+      f.run(() =>
+        f.service.inspectRuntime('p', 't', 'terminal', { runId: 'obsolete' }),
+      ),
+    ).rejects.toThrow('PREVIEW_IDENTITY_CHANGED');
+    expect(f.request).not.toHaveBeenCalled();
+  });
+  it('denies terminals for non-administrators, impersonation and missing request identity', async () => {
+    const f = setup('standard');
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId: 'current',
+    });
+    await expect(
+      f.run(() =>
+        f.service.inspectRuntime('p', 't', 'terminal', { runId: 'current' }),
+      ),
+    ).rejects.toThrow();
+    f.identity.role = 'administrator';
+    await expect(
+      f.service.inspectRuntime('p', 't', 'terminal', { runId: 'current' }),
+    ).rejects.toThrow('PREVIEW_ACCESS_DENIED');
+    f.identity.impersonation = {
+      administratorId: 'admin',
+      personId: 'user',
+      sessionId: 'session',
+    } as NonNullable<PlatformIdentity['impersonation']>;
+    await expect(
+      f.run(() =>
+        f.service.inspectRuntime('p', 't', 'terminal', { runId: 'current' }),
+      ),
+    ).rejects.toThrow('PREVIEW_ACCESS_DENIED');
+    expect(f.request).not.toHaveBeenCalled();
+  });
+  it('allows scoped read-only diagnostics but rejects project mismatches', async () => {
+    const f = setup('standard');
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId: 'current',
+    });
+    await f.run(() =>
+      f.service.inspectRuntime('p', 't', 'container-logs', {
+        runId: 'obsolete',
+        component: 'preview-app',
+      }),
+    );
+    expect(f.request).toHaveBeenCalledWith('container-logs', {
+      runId: 'current',
+      component: 'preview-app',
+    });
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'another',
+      runId: 'current',
+    });
+    await expect(
+      f.run(() => f.service.inspectRuntime('p', 't', 'containers')),
+    ).rejects.toThrow('PREVIEW_IDENTITY_CHANGED');
+  });
+});
+
 describe('deleted-agent preview cleanup', () => {
   function fixture() {
     const f = setup();

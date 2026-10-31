@@ -64,6 +64,7 @@ export function useWorkspaceClose(context: string) {
       return;
     }
     if (
+      tab.kind === 'preview' ||
       tab.kind === 'browser' ||
       tab.kind === 'git-diff' ||
       tab.kind === 'git-graph' ||

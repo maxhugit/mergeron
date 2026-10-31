@@ -104,6 +104,76 @@ export class DockerClient {
     return this.request('/containers/json?all=1');
   }
 
+  async openTerminal(id, user, cols, rows) {
+    const exec = await this.request(
+      `/containers/${encodeURIComponent(id)}/exec`,
+      {
+        method: 'POST',
+        body: {
+          AttachStdin: true,
+          AttachStdout: true,
+          AttachStderr: true,
+          Tty: true,
+          User: user,
+          Env: ['TERM=xterm-256color'],
+          Cmd: ['/bin/sh'],
+          Privileged: false,
+        },
+      },
+    );
+    return new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        Detach: false,
+        Tty: true,
+        ConsoleSize: [rows, cols],
+      });
+      const req = this.requestFactory({
+        socketPath: this.socketPath,
+        path: `/exec/${encodeURIComponent(exec.Id)}/start`,
+        method: 'POST',
+        headers: {
+          Connection: 'Upgrade',
+          Upgrade: 'tcp',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      });
+      const timer = setTimeout(
+        () => req.destroy(new Error('PREVIEW_TERMINAL_TIMEOUT')),
+        5000,
+      );
+      req.on('upgrade', (res, socket, head) => {
+        clearTimeout(timer);
+        if (res.statusCode !== 101) {
+          socket.destroy();
+          reject(new Error('PREVIEW_TERMINAL_UNAVAILABLE'));
+          return;
+        }
+        if (head.length) socket.unshift(head);
+        let last = `${cols}:${rows}`;
+        socket.resize = async (w, h) => {
+          if (last === `${w}:${h}`) return;
+          await this.request(
+            `/exec/${encodeURIComponent(exec.Id)}/resize?w=${w}&h=${h}`,
+            { method: 'POST' },
+          );
+          last = `${w}:${h}`;
+        };
+        resolve(socket);
+      });
+      req.on('response', (res) => {
+        clearTimeout(timer);
+        res.destroy();
+        reject(new Error('PREVIEW_TERMINAL_UNAVAILABLE'));
+      });
+      req.on('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      req.end(body);
+    });
+  }
+
   inspectContainer(id) {
     return this.request(`/containers/${encodeURIComponent(id)}/json`);
   }

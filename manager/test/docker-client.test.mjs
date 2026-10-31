@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EventEmitter } from 'node:events';
 import { DockerClient } from '../src/docker-client.mjs';
+import { PassThrough } from 'node:stream';
 
 function transport(respond) {
   const requests = [];
@@ -24,6 +25,59 @@ function transport(respond) {
   };
   return { factory, requests };
 }
+
+test('container terminal uses a non-privileged fixed shell, upgraded stream and scoped exec resize', async () => {
+  const calls = [];
+  const stream = new PassThrough();
+  const docker = new DockerClient('/docker.sock', (options) => {
+    const req = new EventEmitter();
+    req.destroy = (error) => req.emit('error', error);
+    req.end = (body) => {
+      calls.push({ options, body });
+      queueMicrotask(() =>
+        req.emit('upgrade', { statusCode: 101 }, stream, Buffer.from('ready')),
+      );
+    };
+    return req;
+  });
+  docker.request = async (path, options) => {
+    calls.push({ path, options });
+    return { Id: 'exec-id' };
+  };
+  const terminal = await docker.openTerminal(
+    'owned-container',
+    '11002:11002',
+    80,
+    24,
+  );
+  assert.deepEqual(calls[0], {
+    path: '/containers/owned-container/exec',
+    options: {
+      method: 'POST',
+      body: {
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+        Tty: true,
+        User: '11002:11002',
+        Env: ['TERM=xterm-256color'],
+        Cmd: ['/bin/sh'],
+        Privileged: false,
+      },
+    },
+  });
+  assert.equal(calls[1].options.path, '/exec/exec-id/start');
+  assert.equal(calls[1].options.headers.Upgrade, 'tcp');
+  assert.deepEqual(JSON.parse(calls[1].body), {
+    Detach: false,
+    Tty: true,
+    ConsoleSize: [24, 80],
+  });
+  assert.equal(terminal.read().toString(), 'ready');
+  await terminal.resize(100, 30);
+  assert.equal(calls[2].path, '/exec/exec-id/resize?w=100&h=30');
+  terminal.destroy();
+});
 
 test('uses only the declared Docker read and create/start endpoints', async () => {
   const fake = transport((options) => ({

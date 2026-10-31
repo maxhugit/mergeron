@@ -22,6 +22,26 @@ it('creates independent browser views beside conversation, capped at five per ag
   );
   expect(useWorkspaceStore.getState().contexts['thread:b']).toBeUndefined();
 });
+it('opens one preview tab per agent, retaining conversation and other views', () => {
+  const s = useWorkspaceStore.getState();
+  s.openPreview('thread:a', 'project', 'a');
+  s.openPreview('thread:a', 'project', 'a');
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toEqual([
+    { id: 'preview', kind: 'preview', projectId: 'project', threadId: 'a' },
+  ]);
+  s.select('thread:a', 'conversation');
+  expect(useWorkspaceStore.getState().contexts['thread:a'].activeId).toBe(
+    'conversation',
+  );
+  s.openPreview('thread:b', 'project', 'b');
+  s.remove('thread:a', 'preview');
+  expect(useWorkspaceStore.getState().contexts['thread:a'].tabs).toHaveLength(
+    0,
+  );
+  expect(useWorkspaceStore.getState().contexts['thread:b'].tabs).toHaveLength(
+    1,
+  );
+});
 it('retains browser layout when other workspace surfaces are opened or closed', () => {
   const store = useWorkspaceStore.getState();
   store.openBrowser('thread:a');

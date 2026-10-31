@@ -296,6 +296,66 @@ try {
   }
   assert.equal(verifiedReady.ready, true);
   assert.equal(verifiedReady.httpStatus, 200);
+  const inspected = await manager.inspector.containers({ runId: input.runId });
+  assert.ok(
+    inspected.containers.some(
+      (c) => c.component === 'preview-app' && c.terminalAvailable,
+    ),
+  );
+  assert.ok(!inspected.containers.some((c) => 'id' in c || 'env' in c));
+  const terminalTarget = {
+    runId: input.runId,
+    owner: 'fixture-administrator',
+    component: 'preview-app',
+    cols: 80,
+    rows: 24,
+  };
+  const terminal = await manager.inspector.terminal({
+    ...terminalTarget,
+    action: 'open',
+  });
+  try {
+    let offset = 0,
+      output = '';
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const result = await manager.inspector.terminal({
+        ...terminalTarget,
+        cols: 100,
+        rows: 30,
+        ...terminal,
+        action: 'exchange',
+        sequence: 1,
+        offset,
+        data: attempt === 0 ? 'printf "__PTY_USER__"; id -u\r' : '',
+      });
+      output += result.text;
+      offset = result.offset;
+      if (/__PTY_USER__11002/.test(output)) break;
+      await sleep(100);
+    }
+    assert.match(output, /__PTY_USER__11002/);
+    await assert.rejects(
+      manager.inspector.terminal({
+        ...terminalTarget,
+        ...terminal,
+        owner: 'other-person',
+        action: 'exchange',
+        sequence: 1,
+        offset,
+        data: '',
+      }),
+      /PREVIEW_TERMINAL_EXPIRED/,
+    );
+  } finally {
+    await manager.inspector.terminal({
+      ...terminalTarget,
+      ...terminal,
+      action: 'close',
+    });
+  }
+  results.push(
+    'Container inspector and real non-root interactive PTY, resize and owner isolation',
+  );
   assert.equal(verifiedReady.storage.limits.backend, 'tmpfs');
   assert.ok(verifiedReady.storage.observation, 'real runtime storage metadata');
   const measuredCache = verifiedReady.storage.observation.mounts.find(

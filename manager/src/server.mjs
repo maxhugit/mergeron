@@ -273,6 +273,14 @@ const server = http.createServer(async (request, response) => {
         throw new Error('PREVIEW_INVALID_REQUEST');
       if (operation === 'status')
         return json(response, 200, await previews.status(body.runId));
+      if (['containers', 'container-logs', 'terminal'].includes(operation))
+        return json(
+          response,
+          200,
+          await previews.inspector[
+            operation === 'container-logs' ? 'logs' : operation
+          ](body),
+        );
       if (operation === 'lifetime')
         return json(response, 200, await previews.setLifetime(body));
       if (operation === 'stop')
