@@ -117,6 +117,7 @@ body {
   --app-safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-safe-left: env(safe-area-inset-left, 0px);
   --app-composer-bottom-gap: 0px;
+  --app-composer-ios-lift: 0px;
 }
 
 html.keyboard-open {
@@ -151,6 +152,9 @@ html.ios-standalone {
   --app-safe-right: 0px;
   --app-safe-bottom: 0px;
   --app-safe-left: 0px;
+  /* Extra visual clearance at both the screen and keyboard edges. This is
+     control spacing, not a second safe area or a change to the viewport. */
+  --app-composer-ios-lift: 8px;
 }
 
 html.ios-standalone #root {
@@ -176,15 +180,17 @@ html.ios-standalone:not(.keyboard-open) {
 /* The canvas fills the viewport; only the bottom controls reserve the home
    indicator once. With a keyboard, keep just the ordinary control spacing. */
 .app-composer {
-  padding-bottom: max(var(--app-safe-bottom), var(--app-composer-bottom-gap));
+  padding-bottom: calc(
+    max(var(--app-safe-bottom), var(--app-composer-bottom-gap)) +
+      var(--app-composer-ios-lift)
+  );
 }
 
 @media (min-width: 640px) {
   .app-composer {
-    padding-bottom: max(
-      0.75rem,
-      var(--app-safe-bottom),
-      var(--app-composer-bottom-gap)
+    padding-bottom: calc(
+      max(0.75rem, var(--app-safe-bottom), var(--app-composer-bottom-gap)) +
+        var(--app-composer-ios-lift)
     );
   }
 }
