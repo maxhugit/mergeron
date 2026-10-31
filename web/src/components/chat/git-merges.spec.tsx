@@ -160,6 +160,7 @@ it.each([
   ['pending', 'waiting', 'En attente'],
   ['in_progress', 'running', 'En cours'],
   ['failure', 'failed', 'Checks en échec'],
+  ['cancelled', 'cancelled', 'Annulé'],
   ['success', 'passed', 'Checks réussis'],
 ] as const)(
   'updates the strong indicator from Actions state %s',
@@ -191,6 +192,14 @@ it.each([
     expect(
       view.container.querySelector(`[data-merge-state="${state}"]`),
     ).toHaveTextContent(label);
+    if (state === 'cancelled') {
+      const icon = view.container.querySelector(
+        '[data-merge-state="cancelled"] svg',
+      );
+      expect(icon).toHaveClass('lucide-ban', 'h-7', 'w-7');
+      expect(icon).not.toHaveClass('animate-spin');
+      expect(screen.queryByText('Checks en échec')).not.toBeInTheDocument();
+    }
   },
 );
 

@@ -102,6 +102,7 @@ test.each([1100, 390])(
         ['in_progress', 'running'],
         ['success', 'passed'],
         ['failure', 'failed'],
+        ['cancelled', 'cancelled'],
       ]) {
         status = next;
         await act(async () => {
@@ -118,6 +119,12 @@ test.each([1100, 390])(
           .toBe(state);
         const icon = view.container.querySelector('[data-merge-state] svg')!;
         expect(icon.getBoundingClientRect().width).toBeGreaterThanOrEqual(27);
+        if (state === 'cancelled') {
+          expect(icon).toHaveClass('lucide-ban');
+          expect(
+            view.container.querySelector('[data-merge-state="cancelled"]'),
+          ).toHaveTextContent('Annulé');
+        }
         expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
         const engine = navigator.userAgent.includes('Chrome')
           ? 'chromium'
