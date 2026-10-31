@@ -232,6 +232,9 @@ export function Fixture() {
               onCreateAgentInWorkspace={vi.fn()}
               onCreateSimpleChatInWorkspace={vi.fn()}
               onCreateTaskBoard={vi.fn()}
+              onCreateAutomationBoard={vi.fn()}
+              onCreateDeliverables={vi.fn()}
+              onExportProject={vi.fn()}
               onOpenResource={vi.fn()}
               resourceActionPending={false}
               onRenameResource={vi.fn()}
@@ -322,7 +325,7 @@ async function start() {
   fireEvent.contextMenu(screen.getByText('Projet interface'));
   fireEvent.click(
     screen.getByRole('button', {
-      name: 'Enable fast navigation for this project',
+      name: 'Enable fast navigation',
     }),
   );
   expect(
@@ -480,8 +483,17 @@ test.each([390, 1262])(
     );
     fireEvent.contextMenu(await screen.findByText('Projet interface'));
     const navigation = await screen.findByRole('button', {
-      name: 'Activer la navigation rapide pour ce projet',
+      name: 'Activer la navigation rapide',
     });
+    const bounds = screen.getByRole('dialog').getBoundingClientRect();
+    expect(bounds.width).toBeLessThanOrEqual(272);
+    expect(bounds.left).toBeGreaterThanOrEqual(8);
+    expect(bounds.right).toBeLessThanOrEqual(width - 8);
+    for (const item of within(screen.getByRole('dialog')).getAllByRole(
+      'button',
+    )) {
+      expect(item.scrollWidth).toBeLessThanOrEqual(item.clientWidth);
+    }
     expect(getComputedStyle(navigation).whiteSpace).toBe('nowrap');
     expect(navigation.scrollWidth).toBeLessThanOrEqual(navigation.clientWidth);
     expect(navigation.getBoundingClientRect().height).toBe(32);
@@ -500,11 +512,9 @@ test.each([390, 1262])(
     const engine = navigator.userAgent.includes('Chrome')
       ? 'chromium'
       : 'webkit';
-    await page
-      .getByRole('dialog')
-      .screenshot({
-        path: `../../../.vitest-screenshots/project-navigation-menu-${engine}-${width}.png`,
-      });
+    await page.getByRole('dialog').screenshot({
+      path: `../../../.vitest-screenshots/project-navigation-menu-${engine}-${width}.png`,
+    });
   },
 );
 
@@ -538,7 +548,7 @@ test('bounds retained views, keeps evicted drafts, switches the opted project an
   fireEvent.contextMenu(screen.getByText('Autre projet'));
   fireEvent.click(
     screen.getByRole('button', {
-      name: 'Enable fast navigation for this project',
+      name: 'Enable fast navigation',
     }),
   );
   expect(cache.getState().projectId).toBe('q');

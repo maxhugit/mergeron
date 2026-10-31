@@ -48,7 +48,7 @@ describe('WorkspaceOverview creation menu', () => {
       ).not.toBeInTheDocument();
       fireEvent.contextMenu(screen.getByText('Selected project'));
       const navigation = screen.getByRole('button', {
-        name: 'Enable fast navigation for this project',
+        name: 'Enable fast navigation',
       });
       const deletion = screen.getByRole('button', { name: 'Delete project' });
       expect(navigation).toHaveClass('whitespace-nowrap');

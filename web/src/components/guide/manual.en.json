@@ -97,7 +97,7 @@
             "title": "Fast navigation between a project’s agents",
             "steps": [
               "Open a project’s menu in the sidebar by right-clicking its name or using its actions button.",
-              "Choose Enable fast navigation for this project. A speed indicator appears next to the project name.",
+              "Choose Enable fast navigation. A speed indicator appears next to the project name.",
               "Open the agents you need: up to five recently visited views stay in memory. Returning to one preserves its scroll position and open panels without reloading the entire history.",
               "To stop, choose Disable fast navigation in the same menu. Enabling another project replaces the previous one."
             ],
