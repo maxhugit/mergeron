@@ -573,6 +573,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             <div className="flex shrink-0 items-center gap-2">
               <TokenUsageRing />
               <VoiceDictationButton
+                active={active}
                 disabled={!threadId || readOnly || policySettling}
                 onTranscript={handleTranscript}
               />

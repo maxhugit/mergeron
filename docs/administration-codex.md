@@ -20,12 +20,19 @@ utilisée comme repli en cas d’échec du CLI.
 
 ### Dictée CLI expérimentale
 
-Le navigateur convertit l’enregistrement en WAV PCM16 mono 24 kHz, limité à deux
-minutes. `CodexAudioService` utilise les RPC expérimentaux natifs
-`thread/realtime/start`, `thread/realtime/appendAudio` et `thread/realtime/stop`
-du moteur installé, via sa connexion existante. Aucun jeton n’est extrait ni
-transmis au navigateur. Il ne s’agit ni du CLI `openai`, ni de l’API de
-transcription appelée avec une clé.
+Le moteur API conserve l’enregistrement WAV PCM16 mono 24 kHz. Pour le moteur
+CLI, le navigateur ouvre le microphone et génère une offre WebRTC avec une piste
+audio et le canal `oai-events`. `CodexAudioService` négocie cette offre via
+`thread/realtime/start` (`transport.type: "webrtc"`) et attend la notification
+`thread/realtime/sdp`, pas seulement l’accusé de réception RPC. Le CLI utilise
+sa propre authentification ; aucun jeton n’est extrait ni transmis au navigateur.
+L’audio circule ensuite sur WebRTC, pas dans `appendAudio` ni dans un fichier
+uploadé au serveur Mergeron. La connexion média du navigateur reste nécessaire.
+
+Le transport vocal WebSocket du CLI exige une authentification par clé API,
+même lorsque le compte CLI est connecté à ChatGPT. Il n’est donc pas utilisé
+pour simuler une dictée sur abonnement. Un ancien client qui envoie encore un
+WAV au moteur CLI reçoit une demande explicite de rechargement, sans repli API.
 
 Le service exige une session Codex authentifiée avec ChatGPT. Le drapeau natif
 `features.realtime_conversation` est activé dans cette session temporaire
@@ -38,13 +45,21 @@ de transcription de rôle utilisateur de cette session sont retenus, jamais une
 réponse de l’assistant. Audio et événements vocaux sont masqués dans l’audit RPC.
 Les buffers restent en mémoire ; le service n’écrit pas de fichier audio.
 
-Une dictée CLI peut fonctionner à la fois par installation ; la session est fermée
-en fin de traitement ou en cas d’erreur, avec délai d’attente borné. Le résultat
-est placé dans le brouillon et n’est jamais envoyé automatiquement.
+Une dictée CLI peut fonctionner à la fois par installation. Les routes de session
+sont réservées aux administrateurs et vérifient le propriétaire avant toute fin
+ou annulation. Le microphone est coupé à l’arrêt, à l’annulation ou au départ de
+la conversation. À l’arrêt explicite, la piste est d’abord rendue silencieuse
+pour recevoir les derniers segments, puis entièrement libérée. La session est
+fermée en fin de traitement, en cas d’erreur et à l’arrêt de l’application.
+L’attente initiale est bornée à 30 secondes, l’enregistrement à deux minutes côté
+navigateur et la finalisation à 15 secondes ; une session abandonnée expire.
+Les journaux du service indiquent une catégorie et une étape, pas le SDP, les
+paroles ni les secrets. L’interface affiche une raison bornée. Le résultat reste
+dans le brouillon, jamais envoyé automatiquement.
 
-**Limites expérimentales :** prise en charge dépendant de la version du CLI et
-de l’accès vocal du compte. Aucun succès n’est garanti sur chaque compte. Les
-fins de segments reposent sur la détection vocale native et une courte période
+**Limites expérimentales :** prise en charge dépendant de WebRTC dans le navigateur,
+de la version du CLI et de l’accès vocal du compte. Aucun succès n’est garanti
+sur chaque compte. Les fins de segments reposent sur la détection vocale native et une courte période
 de stabilisation ; relire la transcription, notamment pour un long enregistrement.
 En cas d’incompatibilité, coupure, silence ou expiration, une erreur explicite
 est retournée sans appel de secours à l’API. La validation réelle avec le compte

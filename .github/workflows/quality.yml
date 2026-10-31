@@ -202,6 +202,10 @@ jobs:
         if: matrix.part == 'frontend'
         run: pnpm --dir web exec vitest run --project browser src/lib/platform-session.browser.tsx src/routes/authenticated-layout.browser.tsx
 
+      - name: Test CLI dictation transport in Chromium and WebKit
+        if: matrix.part == 'frontend'
+        run: pnpm --dir web exec vitest run --project browser src/components/chat/voice-dictation-button.browser.tsx
+
       - name: Test retained agent views in Chromium and WebKit
         if: matrix.part == 'frontend'
         run: >-
