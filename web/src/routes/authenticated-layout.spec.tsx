@@ -212,6 +212,24 @@ function verifiedSession(personId = 'original') {
   } as unknown as ReturnType<typeof usePlatformSession>);
 }
 
+it('does not install document-wide touch handlers for pull-to-refresh', () => {
+  verifiedSession();
+  const listen = vi.spyOn(document, 'addEventListener');
+  const client = new QueryClient();
+  const view = render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedLayout />
+    </QueryClientProvider>,
+  );
+  const touchEvents = ['touchstart', 'touchmove', 'touchend', 'touchcancel'];
+  expect(
+    listen.mock.calls.filter(([type]) => touchEvents.includes(type)),
+  ).toHaveLength(0);
+  expect(screen.getByRole('textbox', { name: 'Unsent message' })).toBeVisible();
+  view.unmount();
+  client.clear();
+});
+
 it('retains the same draft DOM through expiry, hides private portals and suspends effects until verified', async () => {
   verifiedSession();
   const client = new QueryClient({
