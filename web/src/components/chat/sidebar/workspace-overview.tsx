@@ -219,7 +219,8 @@ export function WorkspaceOverview({
                   </PopoverTrigger>
                   <PopoverContent
                     align="end"
-                    className="w-max min-w-56 max-w-[calc(100vw-1rem)] p-1"
+                    collisionPadding={8}
+                    className="w-64 max-w-[calc(100vw-1rem)] p-1"
                   >
                     <Button
                       variant="ghost"

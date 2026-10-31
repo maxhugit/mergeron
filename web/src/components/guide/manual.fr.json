@@ -97,7 +97,7 @@
             "title": "Navigation rapide entre agents d’un projet",
             "steps": [
               "Ouvrez le menu d’un projet dans la barre latérale, par clic droit sur son nom ou avec son bouton d’actions.",
-              "Choisissez Activer la navigation rapide pour ce projet. Un indicateur de vitesse apparaît près du nom du projet.",
+              "Choisissez Activer la navigation rapide. Un indicateur de vitesse apparaît près du nom du projet.",
               "Ouvrez les agents dont vous avez besoin : jusqu’à cinq vues récemment consultées restent en mémoire. Revenir à l’une d’elles conserve le défilement et les panneaux ouverts, sans recharger tout l’historique.",
               "Pour arrêter, choisissez Désactiver la navigation rapide dans le même menu. Activer un autre projet remplace le précédent."
             ],
