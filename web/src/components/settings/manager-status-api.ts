@@ -101,6 +101,7 @@ export interface ManagerStatus {
 }
 
 export interface ManagerUpdatePlan {
+  backupFormat?: 'tar-gzip-v1' | null;
   backupMode?: 'full' | 'minimal' | 'none';
   backupPolicy?: ManagerBackupPolicy;
   backupScope?: string[];
@@ -151,6 +152,7 @@ export async function requestManagerUpdate(
 export const managerStatusQueryKey = ['administration', 'manager-status'];
 
 export interface ManagerBackup {
+  format?: 'directory' | 'tar-gzip-v1' | null;
   backupPolicy?: ManagerBackupPolicy | null;
   id: string;
   path?: string | null;

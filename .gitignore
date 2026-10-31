@@ -1,6 +1,8 @@
 # compiled output
 /dist
 /node_modules
+/manager/node_modules
+/manager/vendor
 /build
 /public
 
