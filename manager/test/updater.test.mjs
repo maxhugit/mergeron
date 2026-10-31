@@ -166,7 +166,15 @@ async function fixture(t, environment = 'production') {
     environment,
   );
   const root = await mkdtemp(join(tmpdir(), 'manager-update-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  let updater;
+  t.after(async () => {
+    // listBackups returns before its serialized size/cache writes finish.
+    // Keep the fixture alive until all of its own work has settled; otherwise
+    // teardown races backup-size.json creation and can fail with ENOTEMPTY.
+    await updater?.task;
+    await updater?.backupSizeTask;
+    await rm(root, { recursive: true, force: true });
+  });
   for (const name of ['home', 'workspace', 'logs', 'ssh', 'config'])
     await mkdir(join(root, name), { mode: 0o700 });
   for (const name of [
@@ -188,7 +196,7 @@ async function fixture(t, environment = 'production') {
     healthTimeoutMs: 10,
     pollMs: 1,
   };
-  const updater = new TransactionalUpdater(options);
+  updater = new TransactionalUpdater(options);
   return { root, docker, updater, options };
 }
 async function begin(updater) {
