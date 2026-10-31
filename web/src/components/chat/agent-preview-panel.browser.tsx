@@ -159,40 +159,79 @@ for (const width of [1180, 390])
       path: `../../../.vitest-screenshots/preview-workspace-${width}.png`,
     });
   });
-test('direct terminal input is scoped and clicking a container restores logs', async () => {
-  await page.viewport(1180, 800);
-  mount();
-  await screen.findByRole('button', { name: /Application/ });
-  fireEvent.click(screen.getByRole('button', { name: 'Terminal' }));
-  await waitFor(() =>
-    expect(document.querySelector('.xterm-helper-textarea')).not.toBeNull(),
-  );
-  await userEvent.keyboard('pwd{Enter}');
-  await waitFor(() =>
-    expect(
-      api.calls.some(
+test.each(['burst', 'fragmented'] as const)(
+  'direct terminal input (%s) is scoped and clicking a container restores logs',
+  async (typing) => {
+    await page.viewport(1180, 800);
+    mount();
+    await screen.findByRole('button', { name: /Application/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Terminal' }));
+    await waitFor(() => {
+      const input = document.querySelector('.xterm-helper-textarea');
+      expect(input).not.toBeNull();
+      expect(document.activeElement).toBe(input);
+      expect(api.calls.some((c) => c.body.action === 'exchange')).toBe(true);
+    });
+    if (typing === 'fragmented') {
+      // A real user may pause across the transport's 250 ms flush boundary.
+      // Waiting for receipt forces separate requests without arbitrary sleeps.
+      for (const key of ['p', 'w', 'd']) {
+        await userEvent.keyboard(key);
+        await waitFor(() =>
+          expect(
+            api.calls.some(
+              (c) => c.body.action === 'exchange' && c.body.data === key,
+            ),
+          ).toBe(true),
+        );
+      }
+      await userEvent.keyboard('{Enter}');
+    } else await userEvent.keyboard('pwd{Enter}');
+    const inputExchanges = () =>
+      api.calls.filter(
         (c) =>
-          c.body.action === 'exchange' && String(c.body.data).includes('pwd'),
-      ),
-    ).toBe(true),
-  );
-  expect(api.calls.find((c) => c.body.action === 'open')?.body).toMatchObject({
-    runId: 'synthetic-run',
-    component: 'preview-app',
-  });
-  await page.screenshot({
-    path: '../../../.vitest-screenshots/preview-workspace-terminal.png',
-  });
-  fireEvent.click(screen.getByRole('button', { name: /service3/ }));
-  await waitFor(() => expect(document.querySelector('.xterm')).toBeNull());
-  expect(screen.getByRole('button', { name: 'Logs' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await waitFor(() =>
-    expect(api.calls.some((c) => c.body.action === 'close')).toBe(true),
-  );
-});
+          c.body.action === 'exchange' &&
+          typeof c.body.data === 'string' &&
+          c.body.data.length > 0,
+      );
+    // Transport boundaries are not command boundaries: assert the complete,
+    // ordered stream, including Enter, instead of requiring one "pwd" packet.
+    await waitFor(() =>
+      expect(
+        inputExchanges()
+          .map((c) => c.body.data)
+          .join(''),
+      ).toBe('pwd\r'),
+    );
+    const sent = inputExchanges();
+    expect(sent.map((c) => c.body.sequence)).toEqual(sent.map((_, i) => i + 1));
+    for (const { body } of sent)
+      expect(body).toMatchObject({
+        runId: 'synthetic-run',
+        component: 'preview-app',
+        sessionId: 'synthetic-session',
+      });
+    if (typing === 'fragmented') expect(sent.length).toBeGreaterThanOrEqual(4);
+    expect(api.calls.find((c) => c.body.action === 'open')?.body).toMatchObject(
+      {
+        runId: 'synthetic-run',
+        component: 'preview-app',
+      },
+    );
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/preview-workspace-terminal-${typing}.png`,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /service3/ }));
+    await waitFor(() => expect(document.querySelector('.xterm')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Logs' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await waitFor(() =>
+      expect(api.calls.some((c) => c.body.action === 'close')).toBe(true),
+    );
+  },
+);
 test('not started is a useful empty state and inactive panels do not poll', async () => {
   api.running = false;
   mount();
