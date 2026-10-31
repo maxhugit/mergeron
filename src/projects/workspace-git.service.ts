@@ -18,6 +18,10 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
+import {
+  observeGitHubWorkflows,
+  type WorkflowObservation,
+} from './github-workflow-observation';
 
 export interface GitChange {
   path: string;
@@ -28,6 +32,13 @@ export interface GitChange {
 /** Inspection of registered copies; the command runner is server-only, never a route. */
 @Injectable()
 export class WorkspaceGitService {
+  private readonly workflowObservations = new Map<
+    string,
+    {
+      expiresAt: number;
+      promise: Promise<WorkflowObservation>;
+    }
+  >();
   constructor(
     private readonly copies: WorkspaceCopiesService,
     private readonly resources: WorkspaceResourcesService,
@@ -533,6 +544,7 @@ export class WorkspaceGitService {
     repo: NonNullable<ReturnType<WorkspaceGitService['github']>>,
     endpoint: string,
     emptyRepository = false,
+    options: { apiVersion?: string; signal?: AbortSignal } = {},
   ): Promise<T> {
     try {
       const response = await fetch(
@@ -540,11 +552,13 @@ export class WorkspaceGitService {
         {
           headers: {
             Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
+            'X-GitHub-Api-Version': options.apiVersion ?? '2022-11-28',
             ...(repo.token ? { Authorization: `Bearer ${repo.token}` } : {}),
           },
           redirect: 'error',
-          signal: AbortSignal.timeout(10000),
+          signal: options.signal
+            ? AbortSignal.any([options.signal, AbortSignal.timeout(10000)])
+            : AbortSignal.timeout(10000),
         },
       );
       if (emptyRepository && response.status === 409) return [] as T;
@@ -907,10 +921,52 @@ export class WorkspaceGitService {
     }>(repo, `pulls/${number}`);
     if (!pr.merged || !pr.merge_commit_sha)
       throw new ConflictException('Pull request has not been merged');
+    if (!/^[a-f0-9]{40,64}$/.test(pr.merge_commit_sha))
+      throw new ConflictException('Invalid GitHub revision');
+    const [checks, workflows] = await Promise.all([
+      this.revisionChecks(repo, pr.merge_commit_sha),
+      this.mergeWorkflows(repo, pr.merge_commit_sha),
+    ]);
     return {
-      ...(await this.revisionChecks(repo, pr.merge_commit_sha)),
+      ...checks,
+      workflows,
       url: `https://github.com/${repo.owner}/${repo.repo}/commit/${pr.merge_commit_sha}/checks`,
     };
+  }
+
+  private mergeWorkflows(
+    repo: NonNullable<ReturnType<WorkspaceGitService['github']>>,
+    revision: string,
+  ): Promise<WorkflowObservation> {
+    // Coalesce polling and isolate caches across repositories/credentials.
+    const key = createHash('sha256')
+      .update(
+        JSON.stringify([repo.owner, repo.repo, repo.token ?? '', revision]),
+      )
+      .digest('hex');
+    const cached = this.workflowObservations.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.promise;
+    for (const [entry, value] of this.workflowObservations)
+      if (value.expiresAt <= Date.now())
+        this.workflowObservations.delete(entry);
+    if (this.workflowObservations.size >= 64) {
+      const oldest = this.workflowObservations.keys().next();
+      if (!oldest.done) this.workflowObservations.delete(oldest.value);
+    }
+    const promise = observeGitHubWorkflows(
+      `${repo.owner}/${repo.repo}`,
+      revision,
+      <T>(endpoint: string, signal: AbortSignal) =>
+        this.githubGet<T>(repo, endpoint, false, {
+          apiVersion: '2026-03-10',
+          signal,
+        }),
+    );
+    this.workflowObservations.set(key, {
+      expiresAt: Date.now() + 15000,
+      promise,
+    });
+    return promise;
   }
 
   private async revisionChecks(

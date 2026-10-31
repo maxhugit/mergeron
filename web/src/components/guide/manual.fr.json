@@ -1300,6 +1300,15 @@
               "Renseignez le titre, la description et le mode brouillon, puis confirmez. Si la branche a changé depuis l’ouverture du dialogue, actualisez la préparation ; une PR déjà ouverte est réutilisée."
             ],
             "warning": "La création exige une connexion GitHub autorisée. Ouvrir une PR ne fusionne pas la branche et ne publie pas vos modifications locales non poussées."
+          },
+          {
+            "title": "Suivi après fusion",
+            "paragraphs": [
+              "Dans GitHub → Merges, la fusion Git est déjà effectuée. La grande icône suit ses contrôles et sa publication : vert pour une réussite, rouge pour un échec, violet pendant l’exécution et orange en attente. Un état inconnu ou sans contrôles reste gris.",
+              "Les exécutions Actions sont suivies même avant la création de leurs jobs. Si GitHub confirme une attente dans un groupe de concurrence, la dépendance est affichée avec un lien ; son numéro de PR n’est ajouté que si son commit de fusion correspond exactement.",
+              "Les contrôles sont actualisés toutes les 30 secondes. Le suivi est en lecture seule : il ne déclenche ni fusion, ni publication, ni déploiement."
+            ],
+            "warning": "Un accès Actions manquant ou une information incomplète n’est jamais présenté comme une réussite. Si GitHub ne confirme pas la dépendance, l’interface le précise sans la deviner. Pour un dépôt privé, vérifiez l’autorisation Actions en lecture de la connexion."
           }
         ],
         "related": ["git-remote", "git-branches", "server-update"]
