@@ -65,6 +65,7 @@ function wrap(element: React.ReactNode) {
   );
 }
 beforeEach(() => {
+  vi.resetAllMocks();
   api.readLogs.mockResolvedValue({
     data: [],
     total: 0,
@@ -144,7 +145,11 @@ it('refreshes the real monitor summary after saving one family without changing 
     return { policy: current.policy };
   });
   wrap(<LogsMonitor />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Log retention' }));
+  const retention = await screen.findByRole('button', {
+    name: 'Log retention',
+  });
+  await waitFor(() => expect(retention).toBeEnabled());
+  fireEvent.click(retention);
   const dialog = await openFamily('Application');
   fireEvent.change(
     within(dialog).getByLabelText('Maximum archives (excluding active file)'),
@@ -183,7 +188,9 @@ it('prevents closing or resubmitting a rule while its save is pending', async ()
   const dialog = await openFamily('Codex JSON-RPC');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(api.saveLogRetentionRule).toHaveBeenCalledOnce());
-  expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled();
+  await waitFor(() =>
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled(),
+  );
   expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
   expect(within(dialog).getByRole('checkbox')).toBeDisabled();
   fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
