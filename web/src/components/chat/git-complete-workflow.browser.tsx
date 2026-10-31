@@ -165,6 +165,27 @@ test.each([390, 1100])(
         </div>
       </QueryClientProvider>,
     );
+    const waitForDialogClose = async (dialog: HTMLElement) => {
+      // Data invalidation can finish before the exit animation and portal
+      // cleanup. Wait for the actual user-visible completion, not an enabled
+      // button behind an aria-hidden modal. No animation events are fabricated.
+      await expect
+        .poll(
+          () => ({
+            connected: dialog.isConnected,
+            pageHidden: view.container.hasAttribute('aria-hidden'),
+            pointerLocked: document.body.style.pointerEvents === 'none',
+            scrollLocked: document.body.hasAttribute('data-scroll-locked'),
+          }),
+          { timeout: 5000 },
+        )
+        .toEqual({
+          connected: false,
+          pageHidden: false,
+          pointerLocked: false,
+          scrollLocked: false,
+        });
+    };
     try {
       await screen.findByRole('tab', { name: /Modifications/ });
       await page.getByRole('tab', { name: /Modifications/ }).click();
@@ -192,19 +213,23 @@ test.each([390, 1100])(
       await page
         .getByRole('button', { name: 'Préparer la sélection', exact: true })
         .click();
-      await screen.findByRole('dialog');
+      const stageConfirmation = await screen.findByRole('dialog');
+      // Exercise a slow real exit animation: a refreshed Git snapshot does not
+      // mean Radix has released the modal's accessibility and pointer locks.
+      stageConfirmation.style.animationDuration = '1200ms';
       expect(server.posts).toHaveLength(1);
       await page
         .getByRole('button', { name: 'Confirmer la préparation', exact: true })
         .click();
       await expect.poll(() => commit.hasAttribute('disabled')).toBe(false);
+      await waitForDialogClose(stageConfirmation);
       expect(
-        await screen.findByRole('region', {
+        screen.getByRole('region', {
           name: 'Modifications à préparer (0)',
         }),
       ).toBeVisible();
       expect(
-        await screen.findByRole('region', {
+        screen.getByRole('region', {
           name: 'Prêtes pour le commit (1)',
         }),
       ).toBeVisible();
@@ -213,6 +238,7 @@ test.each([390, 1100])(
         path: `../../../.vitest-screenshots/git-compact-prepared-${width}.png`,
       });
       await page.getByRole('button', { name: 'Commit…' }).click();
+      const commitConfirmation = await screen.findByRole('dialog');
       await page
         .getByRole('textbox', { name: 'Message du commit' })
         .fill('Mettre à jour coucou');
@@ -233,7 +259,7 @@ test.each([390, 1100])(
       });
       await page.getByRole('button', { name: 'Confirmer le commit' }).click();
       await expect.poll(() => server.committed).toBe(true);
-      await expect.poll(() => screen.queryByRole('dialog')).toBeNull();
+      await waitForDialogClose(commitConfirmation);
       expect(
         screen.getByRole('region', { name: 'Modifications à préparer (0)' }),
       ).toBeVisible();
@@ -251,6 +277,7 @@ test.each([390, 1100])(
       const confirmation = await screen.findByRole('dialog');
       expect(confirmation).toHaveTextContent('eeeeeee');
       await page.getByRole('button', { name: 'Confirmer le push' }).click();
+      await waitForDialogClose(confirmation);
       const syncRegion = await screen.findByRole('region', {
         name: 'Synchronisation',
       });
