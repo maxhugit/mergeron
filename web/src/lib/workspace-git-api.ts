@@ -71,6 +71,27 @@ export interface GitMergeChecks {
   inspectedAt: number;
   url: string;
   items: GitChecks['items'];
+  workflows?: {
+    available: boolean;
+    limited: boolean;
+    items: Array<{
+      id: number;
+      name: string;
+      status: string;
+      url: string;
+      waitReason?: 'concurrency' | 'unknown';
+      groups?: string[];
+      queueLimited?: boolean;
+      blockers?: Array<{
+        id: number;
+        name: string;
+        status: string;
+        url: string;
+        jobName?: string;
+        pullRequest?: number;
+      }>;
+    }>;
+  };
 }
 
 export interface GitRemoteBranches {
