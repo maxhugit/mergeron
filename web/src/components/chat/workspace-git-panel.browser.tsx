@@ -27,6 +27,7 @@ import type { GitSnapshot } from '@/lib/workspace-git-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 import { locationInventoryFixture } from '@/test/project-locations-fixture';
+import { waitForDialogClose } from '@/test/wait-for-dialog-close';
 import type { GitInventory } from '@/lib/workspace-git-api';
 
 const localFixture = vi.hoisted(() => ({
@@ -333,7 +334,7 @@ test.each([330, 600])(
       inspectedAt: 1,
       branchesLimited: false,
     };
-    render(
+    const view = render(
       <QueryClientProvider client={new QueryClient()}>
         <GitLocalBranchActions
           projectId="p"
@@ -345,6 +346,7 @@ test.each([330, 600])(
       </QueryClientProvider>,
     );
     const menuLabel = `Actions de la branche ${branch.name}`;
+    const menuTrigger = screen.getByRole('button', { name: menuLabel });
     await page.getByRole('button', { name: menuLabel }).click();
     await page
       .getByRole('menuitem', { name: 'Fusionner dans la branche actuelle…' })
@@ -356,16 +358,18 @@ test.each([330, 600])(
     expect(dialog).toHaveTextContent(`${branch.name} → main`);
     expect(dialog.getBoundingClientRect().right).toBeLessThanOrEqual(width);
     expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+    // Reproduce delayed WebKit exit events while retaining the real animation.
+    dialog.style.animationDuration = '1200ms';
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: menuLabel })).toHaveFocus(),
-    );
+    await waitForDialogClose(dialog, view.container);
+    await expect.poll(() => document.activeElement).toBe(menuTrigger);
     await page.getByRole('button', { name: menuLabel }).click();
     await page.getByRole('menuitem', { name: 'Changer de branche…' }).click();
-    expect(await screen.findByRole('dialog')).toHaveTextContent(
-      `main → ${branch.name}`,
-    );
+    const switching = await screen.findByRole('dialog');
+    expect(switching).toHaveTextContent(`main → ${branch.name}`);
     await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await waitForDialogClose(switching, view.container);
+    await expect.poll(() => document.activeElement).toBe(menuTrigger);
     await page.getByRole('button', { name: menuLabel }).click();
     await page
       .getByRole('menuitem', { name: 'Supprimer la branche locale…' })
@@ -374,6 +378,9 @@ test.each([330, 600])(
     expect(deletion).toHaveTextContent(branch.name);
     expect(deletion).toHaveTextContent('Aucun fichier ni branche distante');
     expect(deletion.scrollWidth).toBeLessThanOrEqual(deletion.clientWidth);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await waitForDialogClose(deletion, view.container);
+    await expect.poll(() => document.activeElement).toBe(menuTrigger);
   },
 );
 test.each([260, 330, 600])(
