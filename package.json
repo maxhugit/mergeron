@@ -16,6 +16,7 @@
     "preview:install": "node scripts/preview/prepare.mjs install",
     "preview:build": "node scripts/preview/prepare.mjs build",
     "preview:init": "node scripts/preview/initialize.mjs",
+    "preview:activate": "node scripts/preview/activate.mjs",
     "preview:start": "node scripts/preview/start.mjs",
     "test:preview": "node --test scripts/preview/preview.test.mjs",
     "generate:api": "pnpm --dir web generate:api",

@@ -8,7 +8,7 @@ import {
   readFile,
   chmod,
 } from 'node:fs/promises';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { configuration, prepareDirectory, repository } from './config.mjs';
 
@@ -50,12 +50,39 @@ export async function initialize(config) {
   const previous = process.cwd();
   let database;
   try {
+    // Only a genuinely new database may authorize first installation. Restarting
+    // or switching modes must never re-arm an existing installation.
+    const databasePath = join(config.dataDirectory, 'mergeron-test.sqlite');
+    const newDatabase = await lstat(databasePath).then(
+      () => false,
+      (error) => {
+        if (error.code === 'ENOENT') return true;
+        throw error;
+      },
+    );
     process.chdir(config.dataDirectory);
     database = new DatabaseService(
       new ConfigService({
         WEBUI_DB_PATH: join(config.dataDirectory, 'mergeron-test.sqlite'),
       }),
     );
+    if (!config.seedAdmin) {
+      if (newDatabase) {
+        await writeFile(
+          join(config.dataDirectory, 'codex/webui-initial-admin.json'),
+          JSON.stringify({
+            version: 1,
+            installationId: randomUUID(),
+            state: 'armed',
+          }),
+          { mode: 0o600, flag: 'wx' },
+        );
+      }
+      console.log(
+        'Preview installation initialized without a pre-created account',
+      );
+      return;
+    }
     const existing = database.db
       .select()
       .from(localAuthCredentials)

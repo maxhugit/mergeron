@@ -13,6 +13,7 @@ import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { request } from 'node:http';
+import { spawnSync } from 'node:child_process';
 import {
   configuration,
   backendEnvironment,
@@ -74,6 +75,105 @@ test('refuses to adopt an existing data directory without its marker', async () 
   }
 });
 
+test(
+  'fresh preview requires activation, creates its first admin through the API and never re-arms',
+  { timeout: 90000 },
+  async () => {
+    const directory = await temporary();
+    const config = configuration({
+      PREVIEW_DATA_DIR: directory,
+      PREVIEW_PORT: String(await freePort()),
+      PREVIEW_BACKEND_PORT: String(await freePort()),
+      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: 'preview.example.test',
+    });
+    assert.equal(config.publicUrl.origin, 'https://preview.example.test');
+    let running;
+    try {
+      running = await start(config);
+      const status = () => http(config.frontendPort, '/api/auth/setup/status');
+      assert.equal(JSON.parse((await status()).body).required, true);
+      assert.equal(
+        JSON.parse((await status()).body).activationCommand,
+        'node scripts/preview/activate.mjs',
+      );
+      await assert.rejects(
+        readFile(join(directory, 'admin-credentials.json')),
+        { code: 'ENOENT' },
+      );
+      const markerPath = join(directory, 'codex/webui-initial-admin.json');
+      const marker = await readFile(markerPath, 'utf8');
+      assert.equal((await stat(markerPath)).mode & 0o777, 0o600);
+      await initialize(config);
+      assert.equal(await readFile(markerPath, 'utf8'), marker);
+      const activation = spawnSync(
+        process.execPath,
+        [join(repository, 'scripts/preview/activate.mjs')],
+        {
+          cwd: directory,
+          env: {
+            ...backendEnvironment(config),
+            PREVIEW_DATA_DIR: directory,
+            PREVIEW_PUBLIC_URL: config.publicUrl.origin,
+          },
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(activation.status, 0, activation.stderr);
+      const headers = {
+        origin: config.publicUrl.origin,
+        host: config.publicUrl.host,
+        'content-type': 'application/json',
+      };
+      const verify = await http(config.frontendPort, '/api/auth/setup/verify', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ code: activation.stdout.trim() }),
+      });
+      assert.equal(verify.status, 200, verify.body);
+      const cookie = verify.headers['set-cookie'][0].split(';')[0];
+      const account = {
+        firstName: 'Fresh',
+        lastName: 'Tester',
+        email: 'fresh@example.test',
+        username: 'fresh.tester',
+        password: 'disposable-test-password',
+        passwordConfirmation: 'disposable-test-password',
+      };
+      const complete = await http(
+        config.frontendPort,
+        '/api/auth/setup/complete',
+        {
+          method: 'POST',
+          headers: { ...headers, cookie },
+          body: JSON.stringify({
+            ...account,
+            csrfToken: JSON.parse(verify.body).csrfToken,
+          }),
+        },
+      );
+      assert.equal(complete.status, 200, complete.body);
+      await initialize(config);
+      assert.equal(JSON.parse((await status()).body).required, false);
+      assert.equal(
+        JSON.parse(await readFile(markerPath, 'utf8')).state,
+        'closed',
+      );
+      const login = await http(config.frontendPort, '/api/auth/local-login', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          username: account.username,
+          password: account.password,
+        }),
+      });
+      assert.equal(login.status, 200, login.body);
+    } finally {
+      await running?.stop();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
 async function temporary() {
   const parent = join(repository, 'artifacts/preview-tests');
   await mkdir(parent, { recursive: true });
@@ -119,6 +219,7 @@ test(
       PREVIEW_PORT: String(await freePort()),
       PREVIEW_BACKEND_PORT: String(await freePort()),
       PREVIEW_ADMIN_USERNAME: 'preview-tester',
+      PREVIEW_SEED_ADMIN: 'true',
     });
     let running;
     let socket;

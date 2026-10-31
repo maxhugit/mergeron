@@ -12,6 +12,7 @@ interface SetupStatus {
   authorized: boolean;
   csrfToken?: string;
   containerName?: string;
+  activationCommand?: string;
   completed?: boolean;
 }
 async function request(
@@ -196,8 +197,8 @@ function InitialAdminSetup({
               <>
                 <p>{t('setup.activationHelp')}</p>
                 <pre className="whitespace-pre-wrap break-all rounded-lg bg-muted p-3 text-xs">
-                  docker exec -it {status.containerName ?? 'mergeron-ui'} node
-                  /app/scripts/setup-admin.cjs
+                  {status.activationCommand ??
+                    `docker exec -it ${status.containerName ?? 'mergeron-ui'} node /app/scripts/setup-admin.cjs`}
                 </pre>
                 <p className="text-sm text-muted-foreground">
                   {t('setup.codeHelp')}
