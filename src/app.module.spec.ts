@@ -56,7 +56,7 @@ describe('AppModule', () => {
       .overrideProvider(CodexProcessManager)
       .useValue(transport.manager)
       .overrideProvider(AuthService)
-      .useValue({ authenticateToken: async () => ({ ok: true }) })
+      .useValue({ authenticateToken: () => Promise.resolve({ ok: true }) })
       .overrideProvider(IdentityService)
       .useValue({
         resolve: () => ({ active: true, role: 'administrator' }),
