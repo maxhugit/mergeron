@@ -196,11 +196,6 @@ export function WorkspaceOverview({
                     <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
                   </span>
                 )}
-                {(group.workspaces?.length ?? 0) > 1 && (
-                  <span className="shrink-0 rounded bg-muted px-1 text-[9px] font-normal text-muted-foreground">
-                    {group.workspaces?.length} {t('workspaces')}
-                  </span>
-                )}
               </button>
               <div className="flex shrink-0 items-center gap-0.5">
                 <Popover

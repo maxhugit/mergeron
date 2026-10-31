@@ -214,6 +214,15 @@ describe('WorkspaceOverview creation menu', () => {
               cwd: '/workspaces/Tests',
               projectId: 'project-1',
               name: 'Tests',
+              workspaces: [0, 1].map((index) => ({
+                id: `workspace-${index}`,
+                projectId: 'project-1',
+                name: `Workspace ${index}`,
+                path: `/workspaces/Tests/${index}`,
+                primary: index === 0,
+                createdAt: 1,
+                updatedAt: 1,
+              })),
               threads: [],
               simpleChats: [],
             },
@@ -238,6 +247,7 @@ describe('WorkspaceOverview creation menu', () => {
       </DragDropProvider>,
     );
 
+    expect(screen.queryByText('2 local locations')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Tests' }));
     expect(openProject).toHaveBeenCalledWith('project-1');
     expect(toggleCollapse).not.toHaveBeenCalled();
