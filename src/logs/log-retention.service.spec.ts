@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LogRetentionService } from './log-retention.service';
 import { DEFAULT_LOG_RETENTION, LOG_RETENTION_KEY } from './log-retention';
 import type { SettingsService } from '../settings/settings.service';
+import { accessContext } from '../auth/access-context';
+import type {
+  IdentityService,
+  PlatformIdentity,
+} from '../auth/identity.service';
 
 const io = vi.hoisted(() => ({
   prune: vi.fn().mockResolvedValue(undefined),
@@ -28,6 +33,27 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe('log retention administration', () => {
+  it('checks administrator access before single-family reads or writes', () => {
+    const { settings, service } = create();
+    const requireAdministrator = vi.fn(() => {
+      throw new Error('Administrator access');
+    });
+    accessContext.run(
+      {
+        identity: { role: 'standard' } as PlatformIdentity,
+        identities: { requireAdministrator } as unknown as IdentityService,
+      },
+      () => {
+        expect(() =>
+          service.updateFamily('codex', DEFAULT_LOG_RETENTION.codex),
+        ).toThrow('Administrator access');
+      },
+    );
+    expect(requireAdministrator).toHaveBeenCalledOnce();
+    expect(settings.getSetting).not.toHaveBeenCalled();
+    expect(settings.updateSetting).not.toHaveBeenCalled();
+    expect(io.prune).not.toHaveBeenCalled();
+  });
   it('never deletes files when reading storage or saving settings', async () => {
     const { settings, service } = create();
     expect(await service.storage()).toMatchObject({ estimatedBytes: 25 });
@@ -42,6 +68,44 @@ describe('log retention administration', () => {
     const { settings, service } = create();
     expect(() =>
       service.update({ application: { enabled: true, maxFiles: 0 } }),
+    ).toThrow('Invalid');
+    expect(settings.updateSetting).not.toHaveBeenCalled();
+  });
+  it('updates only one family and preserves the latest other-family settings', () => {
+    const { settings, service } = create();
+    const current = {
+      application: { enabled: false, maxAgeDays: 12, maxFiles: 2 },
+      codex: { enabled: true, maxAgeDays: 5, maxFiles: 5, maxFileMiB: 50 },
+    };
+    settings.getSetting.mockReturnValue({ value: current });
+    const rule = { ...current.codex, maxFiles: 3 };
+    expect(service.updateFamily('codex', rule)).toEqual({
+      policy: { application: current.application, codex: rule },
+    });
+    expect(settings.updateSetting).toHaveBeenCalledWith(LOG_RETENTION_KEY, {
+      application: current.application,
+      codex: rule,
+    });
+    expect(io.prune).not.toHaveBeenCalled();
+  });
+  it.each(['other', '../app', 'codex-jsonrpc.jsonl', '__proto__'])(
+    'rejects an unknown family %s without persisting or deleting',
+    (family) => {
+      const { settings, service } = create();
+      expect(() =>
+        service.updateFamily(family, DEFAULT_LOG_RETENTION.codex),
+      ).toThrow('Unknown log family');
+      expect(settings.updateSetting).not.toHaveBeenCalled();
+      expect(io.prune).not.toHaveBeenCalled();
+    },
+  );
+  it('validates single-family rules before saving', () => {
+    const { settings, service } = create();
+    expect(() =>
+      service.updateFamily('codex', {
+        ...DEFAULT_LOG_RETENTION.codex,
+        maxFileMiB: 0,
+      }),
     ).toThrow('Invalid');
     expect(settings.updateSetting).not.toHaveBeenCalled();
   });
