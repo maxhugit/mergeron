@@ -8,6 +8,9 @@ import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 import { locationInventoryFixture } from '@/test/project-locations-fixture';
 import type { GitInventory } from '@/lib/workspace-git-api';
+import { DragDropProvider } from '@dnd-kit/react';
+import { WorkspaceOverview } from './workspace-overview';
+import { useAgentViewCacheStore } from '@/stores/agent-view-cache-store';
 vi.mock('./workspace-transfers', () => ({ WorkspaceTransfers: () => null }));
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
@@ -37,6 +40,79 @@ vi.mock('@/lib/projects-api', () => ({
   ),
 }));
 afterEach(cleanup);
+test.each([390, 1180])(
+  'keeps project headings free of workspace counts at %ipx',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    useAgentViewCacheStore.getState().toggleProject('p');
+    const openProject = vi.fn();
+    try {
+      render(
+        <aside className="w-64 bg-background p-3 text-foreground">
+          <DragDropProvider>
+            <WorkspaceOverview
+              projectsHeader={<h2>Projets</h2>}
+              workspaceGroups={[
+                {
+                  projectId: 'p',
+                  cwd: '/workspaces/p',
+                  name: 'Projet de conception',
+                  workspaces: [0, 1, 2].map((index) => ({
+                    id: `workspace-${index}`,
+                    projectId: 'p',
+                    name: `Workspace ${index}`,
+                    path: `/workspaces/p/${index}`,
+                    primary: index === 0,
+                    createdAt: 1,
+                    updatedAt: 1,
+                  })),
+                  threads: [],
+                  simpleChats: [],
+                },
+              ]}
+              collapsedGroups={new Set()}
+              isLoading={false}
+              onToggleCollapse={vi.fn()}
+              onOpenProject={openProject}
+              onOpenArchivedDetail={vi.fn()}
+              onOpenWorkspaceDetail={vi.fn()}
+              onCreateAgentInWorkspace={vi.fn()}
+              onCreateSimpleChatInWorkspace={vi.fn()}
+              onCreateTaskBoard={vi.fn()}
+              onOpenResource={vi.fn()}
+              resourceActionPending={false}
+              onRenameResource={vi.fn()}
+              onDeleteResource={vi.fn()}
+              renderThreadRow={() => null}
+              renderSimpleChatRow={() => null}
+              movingThread={false}
+            />
+          </DragDropProvider>
+        </aside>,
+      );
+      expect(screen.queryByText(/emplacements locaux/)).not.toBeInTheDocument();
+      const heading = screen.getByRole('button', {
+        name: /Projet de conception/,
+      });
+      expect(heading).toBeVisible();
+      expect(heading.textContent).toBe('Projet de conception');
+      expect(screen.getByRole('img')).toBeVisible();
+      expect(
+        screen.getByRole('button', { name: 'Actions du projet' }),
+      ).toBeVisible();
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `../../../../.vitest-screenshots/sidebar-project-no-count-${width}.png`,
+      });
+      fireEvent.click(heading);
+      expect(openProject).toHaveBeenCalledWith('p');
+    } finally {
+      useAgentViewCacheStore.getState().clear();
+    }
+  },
+);
 test.each([390, 1001])(
   'distinguishes managed local locations and external connections at %ipx',
   async (width) => {
