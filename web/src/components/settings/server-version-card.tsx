@@ -18,6 +18,7 @@ import {
 import { ManagerUpdateControls } from './manager-update-controls';
 import { ManagerBackups } from './manager-backups';
 import { InstalledImageChanges } from './installed-image-changes';
+import { InstalledVersions } from './installed-versions';
 import {
   componentUpdatesKey,
   requestComponentUpdates,
@@ -116,63 +117,75 @@ export function ServerVersionCard({
 
         {data && (
           <>
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div className="rounded-lg border border-border bg-background/60 p-3">
-                <dt className="text-xs text-muted-foreground">
-                  {t('installedVersion')}
-                </dt>
-                <dd className="mt-1 font-medium">
-                  {data.installed.version ?? t('unknown')}
-                </dd>
-              </div>
-              <div className="rounded-lg border border-border bg-background/60 p-3">
-                <dt className="text-xs text-muted-foreground">
-                  {t('releaseChannel')}
-                </dt>
-                <dd className="mt-1 font-medium">
-                  {t(
-                    data.installed.channel === 'stable'
-                      ? 'stableChannel'
-                      : data.installed.channel === 'edge'
-                        ? 'edgeChannel'
-                        : 'unknown',
-                  )}
-                </dd>
-              </div>
-              <div className="rounded-lg border border-border bg-background/60 p-3 sm:col-span-2">
-                <dt className="text-xs text-muted-foreground">
-                  {tm('managerAvailableImage')}
-                </dt>
-                <dd className="mt-1 flex flex-wrap items-center gap-2 font-medium">
-                  <span>{data.latestVersion ?? t('unknown')}</span>
-                  {data.targetImage && (
-                    <span className="break-all font-mono text-xs">
-                      {data.targetImage}
-                    </span>
-                  )}
-                  {data.latestRevision && (
-                    <span className="font-mono text-xs">
-                      {data.latestRevision.slice(0, 7)}
-                    </span>
-                  )}
-                  {data.latestUrl && (
+            <InstalledVersions
+              application={data.installed}
+              status={manager.data}
+            />
+          </>
+        )}
+      </div>
+      <div hidden={view !== 'all' && view !== 'update'} className="space-y-4">
+        {data && (
+          <dl className="grid gap-3 text-sm">
+            <div className="rounded-lg border border-border bg-background/60 p-3">
+              <dt className="text-xs text-muted-foreground">
+                {tm('managerAvailableImage')}
+              </dt>
+              <dd className="mt-1 flex flex-wrap items-center gap-2 font-medium">
+                <span>{data.latestVersion ?? t('unknown')}</span>
+                {data.targetImage && (
+                  <span className="break-all font-mono text-xs">
+                    {data.targetImage}
+                  </span>
+                )}
+                {data.latestRevision && (
+                  <span className="font-mono text-xs">
+                    {data.latestRevision.slice(0, 7)}
+                  </span>
+                )}
+                {data.latestUrl && (
+                  <a
+                    href={data.latestUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                  >
+                    {tm('versionAvailableHistory')}
+                    <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+                  </a>
+                )}
+              </dd>
+              <dd className="mt-2 text-xs text-muted-foreground">
+                {tm('versionAvailableHelp')}
+              </dd>
+              <dd className="mt-2 text-xs text-muted-foreground">
+                {t('lastChecked')}:{' '}
+                {new Date(data.checkedAt).toLocaleString(i18n.language)}
+              </dd>
+            </div>
+            {data.githubRelease?.version && (
+              <div className="rounded-lg border border-border p-3">
+                <dt>{tm('versionGithubRelease')}</dt>
+                <dd className="mt-1">
+                  {data.githubRelease.url ? (
                     <a
-                      href={data.latestUrl}
+                      href={data.githubRelease.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                      className="text-primary underline"
                     >
-                      {t('openRelease')}
-                      <ExternalLink
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5"
-                      />
+                      {data.githubRelease.version}
                     </a>
+                  ) : (
+                    data.githubRelease.version
                   )}
                 </dd>
+                <dd className="mt-2 text-xs text-muted-foreground">
+                  {tm('versionGithubHelp')}
+                </dd>
               </div>
-            </dl>
-          </>
+            )}
+          </dl>
         )}
       </div>
       <div hidden={view !== 'all' && view !== 'update'}>
@@ -219,15 +232,6 @@ export function ServerVersionCard({
       <div hidden={view !== 'all' && view !== 'current'} className="space-y-4">
         {data && (
           <>
-            {data.installed.revision && (
-              <p className="break-all text-xs text-muted-foreground">
-                {t('buildRevision')}: {data.installed.revision}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {t('lastChecked')}:{' '}
-              {new Date(data.checkedAt).toLocaleString(i18n.language)}
-            </p>
             <InstalledImageChanges
               revision={data.installed.revision}
               enabled={view === 'all' || view === 'current'}

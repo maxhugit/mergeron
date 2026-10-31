@@ -1,4 +1,6 @@
 /** Registry discovery only: never pull, replace or start a container here. */
+import { installedImageBuild } from './installed-build.mjs';
+
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 const repository = (reference) =>
   String(reference)
@@ -52,6 +54,7 @@ export class ImageUpdates {
           installedImage: current?.image ?? null,
           installedDigest: null,
           installedImageId: null,
+          installedBuild: null,
           platform: null,
           platformCheckRequired: false,
           targetImage: null,
@@ -70,6 +73,8 @@ export class ImageUpdates {
             current.containerId,
           );
           const local = await this.docker.inspectImage(inspect.Image);
+          if (local.Id === inspect.Image)
+            result.installedBuild = installedImageBuild(local, component.id);
           result.installedImageId = digestPattern.test(
             local.Id ?? inspect.Image,
           )

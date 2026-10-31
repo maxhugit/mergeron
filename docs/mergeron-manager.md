@@ -331,7 +331,29 @@ aucun domaine propre à une installation.
 
 ### Détection et confirmation dans l’interface
 
-L’onglet **Version actuelle** détecte la révision de l’application ; l’onglet
+L’onglet **Version actuelle** distingue les builds installés de l’application,
+du Manager et du navigateur, ainsi que les images tierces gérées : version,
+révision exacte liée à son commit lorsqu’il s’agit de Mergeron, canal du build,
+date de construction et identifiant de l’image. La date de construction n’est
+pas la date d’installation. Plusieurs builds Dev peuvent partager le même numéro
+de version ; la révision et l’identité d’image les distinguent. Le canal d’un
+build installé n’est pas réécrit en fonction du canal suivi pour les mises à jour.
+L’inventaire indique sa date d’observation, indépendamment de la vérification du
+registre. Une ancienne image ou un ancien Manager sans métadonnées affiche
+**Non renseigné**, sans recopier la version de l’application ni celle d’Ubuntu.
+
+Les métadonnées des composants et du Manager sont lues sur l’image immuable
+`inspectContainer.Image`, puis `inspectImage(imageId)`, jamais sur un tag mobile
+ou sur les anciens labels de création du conteneur. L’application lit son fichier
+`/app/build-info.json` embarqué. Le Manager apparaît en lecture seule : il ne
+devient pas une cible de sa propre procédure de mise à jour. Les images navigateur
+nouvellement construites portent des labels de version, canal, date et révision
+Mergeron explicites, pour ne plus hériter de la version OCI de leur base Ubuntu.
+Les builds manuels sans argument de version ne prétendent plus être la version
+historique `0.1.0` : ils restent non renseignés. Les workflows officiels transmettent
+la version, le SHA, la date et le canal aux trois images, y compris en validation CI.
+
+L’onglet
 **Mise à jour** présente les cartes des composants gérés et prépare les
 [mises à jour individuelles](container-updates.md). La détection de l’application
 vérifie automatiquement le canal `edge` (recette) ou `latest` (stable),
@@ -348,6 +370,11 @@ sont affichés avant confirmation. Les listes longues sont limitées à 100
 commits avec un lien vers la comparaison complète. Une erreur de consultation
 des descriptions ne masque pas une image détectée ; une erreur du registre
 ne présente jamais l’installation comme étant à jour.
+L’image disponible dans le registre reste distincte de la dernière release stable
+publiée sur GitHub : une release ou un commit ne prouve ni la disponibilité de
+son image ni son installation. Si le registre est indisponible, aucune version
+GitHub n’est affichée par défaut comme « image disponible ». Aucun clic sur une
+révision, une note ou le rafraîchissement ne télécharge ni n’installe d’image.
 
 Les améliorations déjà installées se consultent séparément dans **Version
 actuelle**, même lorsqu’aucune mise à jour n’est disponible : le dernier commit

@@ -16,6 +16,12 @@ export interface ServerReleaseNote {
 }
 
 export interface ServerReleaseStatus {
+  targetChannel?: 'edge' | 'stable';
+  githubRelease?: {
+    version: string | null;
+    url: string | null;
+    publishedAt: string | null;
+  };
   installed: ServerBuildInfo;
   latestVersion: string | null;
   latestPublishedAt: string | null;

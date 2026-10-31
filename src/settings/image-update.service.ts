@@ -267,10 +267,17 @@ export class ImageUpdateService {
     const targetImage = `${repository}:${tag}`;
     const base = {
       ...stable,
-      installed: {
-        ...stable.installed,
-        channel: tag === 'edge' ? ('edge' as const) : ('stable' as const),
+      // GitHub release metadata is not evidence of a deployable registry image.
+      githubRelease: {
+        version: stable.latestVersion,
+        url: stable.latestUrl,
+        publishedAt: stable.latestPublishedAt,
       },
+      installed: stable.installed,
+      targetChannel: tag === 'edge' ? ('edge' as const) : ('stable' as const),
+      latestVersion: null as string | null,
+      latestUrl: null as string | null,
+      latestPublishedAt: null as string | null,
       targetImage,
       targetDigest: null as string | null,
       latestRevision: null as string | null,

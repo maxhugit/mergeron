@@ -27,6 +27,8 @@ const stable = {
     builtAt: null,
   },
   latestVersion: '0.1.0',
+  latestUrl: 'https://github.com/maxhugit/mergeron/releases/tag/v0.1.0',
+  latestPublishedAt: '2026-10-24T00:00:00Z',
   releases: [],
   checkError: null,
 };
@@ -96,6 +98,16 @@ describe('moving image tag discovery', () => {
     });
     expect(service.notes).not.toHaveBeenCalled();
   });
+  it('never presents a newer GitHub release as an image that has not been published', async () => {
+    const { service, releases } = fixture();
+    releases.status.mockResolvedValue({ ...stable, latestVersion: '0.9.0' });
+    expect(await service.status()).toMatchObject({
+      latestVersion: image.version,
+      latestRevision: image.revision,
+      githubRelease: { version: '0.9.0' },
+      installed: { version: '0.1.0', revision: from },
+    });
+  });
   it('keeps detection successful when change descriptions fail', async () => {
     const { service } = fixture();
     service.notes.mockRejectedValue(new Error('rate limited'));
@@ -112,6 +124,18 @@ describe('moving image tag discovery', () => {
       updateAvailable: false,
       versionStatus: 'unknown',
       checkError: 'unableToCheckForMergeronUpdates',
+      latestVersion: null,
+      latestUrl: null,
+      latestPublishedAt: null,
+      githubRelease: { version: '0.1.0', url: stable.latestUrl },
+    });
+  });
+  it('does not relabel the installed stable build as edge just because Dev tracks edge', async () => {
+    const { service } = fixture('development');
+    expect(await service.status()).toMatchObject({
+      installed: { channel: 'stable', revision: from },
+      targetChannel: 'edge',
+      targetImage: 'ghcr.io/maxhugit/mergeron:edge',
     });
   });
   it('caches registry checks and supports an explicit refresh', async () => {

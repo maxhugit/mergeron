@@ -14,7 +14,15 @@ RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund playwright-core
 COPY public-proxy.mjs server.mjs ./
 # Build identity must not invalidate the dependency/security-cleanup layers.
 ARG MERGERON_REVISION=unknown
+ARG MERGERON_VERSION=unknown
+ARG MERGERON_BUILD_DATE=unknown
+ARG MERGERON_RELEASE_CHANNEL=unknown
 LABEL org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \
+      org.opencontainers.image.title="Mergeron Browser" \
+      org.opencontainers.image.version="${MERGERON_VERSION}" \
+      org.opencontainers.image.created="${MERGERON_BUILD_DATE}" \
+      io.mergeron.version="${MERGERON_VERSION}" \
+      io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
       org.opencontainers.image.revision="${MERGERON_REVISION}"
 USER pwuser
 CMD ["node", "server.mjs"]

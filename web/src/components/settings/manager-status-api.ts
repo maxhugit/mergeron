@@ -1,6 +1,13 @@
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 
+export interface InstalledBuild {
+  version: string | null;
+  revision: string | null;
+  builtAt: string | null;
+  channel: 'edge' | 'stable' | 'unknown';
+}
+
 export type ManagerComponentState =
   | 'missing'
   | 'conflict'
@@ -30,6 +37,7 @@ export interface ManagerComponent {
   containerName: string | null;
   image: string | null;
   imageId?: string | null;
+  build?: InstalledBuild | null;
   imageRepositoryAllowed: boolean | null;
   health: string | null;
   restartCount: number;
@@ -55,6 +63,7 @@ export type ManagerBackupPolicy =
   | 'legacy-full-v1';
 
 export interface ManagerStatus {
+  manager?: { build: InstalledBuild; imageId: string } | null;
   backupPolicy?: ManagerBackupPolicy;
   capabilities?: {
     backupManagement?: boolean;
