@@ -129,3 +129,14 @@ assert.equal((await fs.stat(privateHome)).uid, 11002);
 assert.equal((await fs.stat(privateHome)).mode & 0o777, 0o500);
 console.log("Manager backup, rollback and deletion preserve live data with minimal capabilities.");
 '
+# Exercise the archive failure/recovery and Linux-only ownership/crash cases
+# with the actual restricted capabilities. The complete updater suite remains
+# mandatory in source CI; this shell-free image does not include its build tools.
+docker run --name "$fixture_name" --rm --network none --read-only \
+  --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH \
+  --security-opt no-new-privileges:true --memory 512m --cpus 0.25 --pids-limit 64 \
+  -e TMPDIR=/fixture -v "$fixture_volume:/fixture" \
+  --mount "type=bind,src=$(pwd)/manager/test/updater.test.mjs,dst=/opt/mergeron-manager/test/updater.test.mjs,readonly" \
+  --entrypoint /nodejs/bin/node "$image" --test \
+  --test-name-pattern='compressed|recovery discards a crashed extraction|minimal recovery restores private directory ownership' \
+  test/updater.test.mjs
