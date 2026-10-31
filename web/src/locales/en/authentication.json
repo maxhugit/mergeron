@@ -1,4 +1,44 @@
 {
+  "diagnostics": {
+    "title": "Connection diagnostic",
+    "help": "The last 100 events from this tab only, kept in memory until reload. No identity, cookies, tokens, URLs or conversation content. HTTP errors do not identify which server component failed. Nothing is uploaded automatically. Available again on the Logs page after recovery.",
+    "empty": "No recorded event.",
+    "download": "Download diagnostic",
+    "clear": "Clear this diagnostic",
+    "events": {
+      "paused": "Actions paused",
+      "resumed": "Session verified and resumed",
+      "checkStarted": "Identity check started",
+      "checkSucceeded": "Identity check succeeded",
+      "checkFailed": "Check or access failed",
+      "checkCancelled": "Check cancelled",
+      "retryScheduled": "Read-only retry scheduled",
+      "responseDiscarded": "Stale response discarded",
+      "requestBlocked": "Request blocked locally, not queued",
+      "wake": "Verification trigger",
+      "offline": "Browser reports offline",
+      "online": "Browser reports online",
+      "manualRetry": "Manual verification requested",
+      "renewalOpened": "Sign-in window requested",
+      "renewalBlocked": "Sign-in window blocked",
+      "renewalHint": "Sign-in hint received; fresh verification required"
+    },
+    "reasons": {
+      "verification": "Fresh verification required",
+      "wake": "Return to this tab",
+      "proxyRedirect": "Sign-in redirect; not proof of expiration",
+      "unauthorized": "Authentication refused",
+      "forbidden": "Access forbidden",
+      "timeout": "Verification deadline exceeded",
+      "rateLimited": "Too many requests",
+      "serverUnavailable": "HTTP server unavailable",
+      "transport": "Network or transport failure",
+      "invalidResponse": "Unexpected response",
+      "identityChanged": "Identity or permissions changed",
+      "inactive": "Inactive or unlinked account",
+      "superseded": "Obsolete verification generation"
+    }
+  },
   "setup": {
     "title": "Set up your platform",
     "loading": "Checking initial setup…",

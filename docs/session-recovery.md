@@ -1,5 +1,63 @@
 # Connexion après une longue inactivité
 
+## Diagnostic local des interruptions
+
+Le **Diagnostic de connexion** est disponible dans l’écran de vérification ou
+de reprise, puis dans la page **Journaux** après reconnexion. Il conserve au
+maximum 100 événements en mémoire dans l’onglet courant et regroupe les
+répétitions immédiates. Recharger ou fermer l’onglet efface cet historique ;
+il ne permet pas d’analyser rétroactivement un autre appareil ou un incident
+antérieur à son installation.
+
+La chronologie indique les déclencheurs de vérification (retour à la fenêtre,
+réseau, vérification périodique), les pauses/reprises, les nouvelles tentatives,
+les réponses obsolètes écartées et les refus locaux de requêtes. Elle distingue
+redirection de connexion, refus HTTP, indisponibilité HTTP, problème de transport,
+délai dépassé, réponse inattendue et changement d’identité ou de droits. Les
+durées, générations et numéros de tentative aident à comprendre l’ordre des
+événements. Une redirection n’est pas une preuve d’expiration ; un `502` ou un
+`503` ne prouve pas quel composant est en panne. Un signal « en ligne » du
+navigateur ne prouve pas que le serveur est joignable. Une nouvelle vérification
+déclenchée par un retour à la fenêtre se distingue des trois tentatives bornées
+d’une même vérification.
+
+**Télécharger le diagnostic** produit un JSON local à transmettre manuellement
+si nécessaire. Il ne contient ni identité, compte, email, cookie, jeton, URL,
+en-tête, message d’erreur brut ni saisie/conversation. Seuls des codes fermés et
+des valeurs numériques bornées sont enregistrés. Le nom de l’asset d’entrée
+public peut identifier le client chargé, sans son domaine ni ses paramètres.
+Aucun événement n’est téléversé automatiquement ni écrit dans le stockage
+persistant du navigateur ou les journaux serveur. Effacer ou consulter ce
+diagnostic ne change jamais l’état d’autorisation ni les tentatives de reprise.
+
+### Vérifications de panne isolées
+
+Les scénarios Chromium et WebKit de
+`web/src/routes/authenticated-layout.browser.tsx` utilisent le vrai layout et
+le vrai mécanisme de session avec trois services HTTP de test en boucle locale.
+Ils ferment puis rouvrent réellement les écouteurs du backend synthétique, du
+fournisseur d’identité synthétique ou du proxy de test. Ils vérifient la reprise
+automatique après une nouvelle réponse d’identité, la conservation du même
+brouillon et du défilement, le blocage des écritures sans mise en attente, les
+refus persistants et l’absence d’identité/contenu dans l’export. Chaque fixture
+confirme la fermeture de ses propres écouteurs après le test. Les commandes et
+routes de cette fixture n’existent que dans la configuration Vitest, pas dans
+l’application publiée.
+
+En complément, `scripts/test-session-ingress.py`, exécuté par le smoke test
+ingress de la CI, lance trois processus Nginx indépendants dans un conteneur
+jetable. Le frontal utilise le vrai modèle ingress ; les deux upstreams sont
+synthétiques. Le contrôle arrête puis relance chaque processus et vérifie les
+refus, le retour d’accès après contrôle frais, les cookies et la déconnexion.
+Le conteneur n’a ni réseau externe, port publié, montage hôte, socket Docker ni
+secret réel ; il est non privilégié, non-root, à racine en lecture seule et
+avec ressources bornées. Seule sa propre ressource Docker est retirée.
+
+Ces deux niveaux ne constituent pas un arrêt/redémarrage de la Dev ou d’Authentik
+et PostgreSQL réels. Après déploiement autorisé, une observation prolongée des
+retours de veille, changements d’onglet et interruptions réelles reste nécessaire
+pour conclure sur l’incident intermittent de l’installation.
+
 ## Vérification ordinaire et renouvellement interactif
 
 Un clic dans un champ de saisie n’est pas un retour à la fenêtre. L’écoute de
