@@ -121,6 +121,13 @@ class ManagerDeploymentTest(unittest.TestCase):
         self.assertNotIn("--health-", root.findtext("ExtraParams"))
         self.assertIn('CMD ["/nodejs/bin/node", "src/healthcheck.mjs"]', self.dockerfile)
 
+    def test_health_regression_runs_the_real_manager_at_unchanged_isolated_limits(self) -> None:
+        smoke = (ROOT / 'scripts/smoke-test-manager-health.sh').read_text()
+        for value in ['--network none', '--read-only', '--cap-drop ALL', '--security-opt no-new-privileges:true', '--memory 512m', '--cpus 0.25', '--pids-limit 64']:
+            self.assertIn(value, smoke)
+        self.assertNotIn('/var/run/docker.sock', smoke)
+        self.assertIn('bash scripts/smoke-test-manager-health.sh "$IMAGE_REF"', self.quality_workflow)
+
     def test_workflow_builds_and_promotes_the_manager_by_digest(self) -> None:
         self.assertIn("manager-build:", self.workflow)
         self.assertIn("file: ./Dockerfile.manager", self.workflow)

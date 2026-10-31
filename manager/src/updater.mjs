@@ -21,6 +21,11 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
 import { collectInventory } from './inventory.mjs';
+import {
+  allocatedTreeSize,
+  backupIdentity,
+  readBackupSize,
+} from './backup-size.mjs';
 import { agentVisualSandbox } from './agent-visual-sandbox.mjs';
 import {
   persistentEntries as dataEntries,
@@ -253,34 +258,6 @@ async function treeSize(path, selection = null) {
   }
   return value.isFile() ? value.size : 0;
 }
-
-// Allocated disk space, like du: do not follow symlinks or count hardlinks twice.
-async function allocatedTreeSize(path) {
-  const pending = [path];
-  const seen = new Set();
-  let bytes = 0;
-  // Bounded parallel metadata reads, not one syscall round-trip per file.
-  // lstat deliberately never follows symlinks outside the backup.
-  while (pending.length) {
-    await Promise.all(
-      pending.splice(-32).map(async (entry) => {
-        const value = await lstat(entry);
-        const inode = `${value.dev}:${value.ino}`;
-        if (seen.has(inode)) return;
-        seen.add(inode);
-        bytes += value.blocks * 512;
-        if (value.isDirectory()) {
-          for (const name of await readdir(entry))
-            pending.push(join(entry, name));
-        }
-      }),
-    );
-  }
-  return bytes;
-}
-
-const backupIdentity = (value) =>
-  `${value.dev}:${value.ino}:${value.mtimeMs}:${value.ctimeMs}`;
 
 export async function restorePersistentEntry(
   stateRoot,
@@ -515,7 +492,16 @@ export class TransactionalUpdater {
     // A single background queue survives list requests. A large backup must
     // finish rather than restart after each HTTP deadline and starve the rest.
     this.backupSizeTask = this.backupSizeTask.then(async () => {
+      const check = () => {
+        if (
+          this.busy ||
+          (this.current && !terminal.has(this.current.status)) ||
+          this.backupSizeCache.get(id) !== entry
+        )
+          throw new Error('backupSizeDeferred');
+      };
       try {
+        check();
         const before = await lstat(path);
         if (
           !before.isDirectory() ||
@@ -523,7 +509,18 @@ export class TransactionalUpdater {
           backupIdentity(before) !== identity
         )
           throw new Error('backupChanged');
-        const bytes = await this.measureBackupSize(path);
+        const expected = {
+          stack: this.manifest.stack,
+          environment: this.manifest.environment,
+          id,
+          identity,
+        };
+        const cachePath = join(dirname(path), 'backup-size.json');
+        const saved = await readBackupSize(cachePath, expected).catch(
+          () => null,
+        );
+        check();
+        const bytes = saved ?? (await this.measureBackupSize(path, { check }));
         if (!Number.isSafeInteger(bytes) || bytes < 0)
           throw new Error('backupSizeInvalid');
         const after = await lstat(path);
@@ -532,11 +529,21 @@ export class TransactionalUpdater {
           this.backupSizeCache.get(id) !== entry
         )
           throw new Error('backupChanged');
+        check();
+        if (saved === null) {
+          // A cache write failure must not invalidate a measured size or a
+          // backup. Never rewrite the transaction journal for this statistic.
+          await atomicJson(cachePath, { schema: 1, ...expected, bytes }).catch(
+            () => {},
+          );
+          check();
+        }
         entry.bytes = bytes;
         entry.status = 'ready';
-      } catch {
+      } catch (error) {
         entry.status = 'unavailable';
-        entry.retryAt = Date.now() + 60_000;
+        entry.retryAt =
+          error.message === 'backupSizeDeferred' ? 0 : Date.now() + 60_000;
       }
     });
     return entry;

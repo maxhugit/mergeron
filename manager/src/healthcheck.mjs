@@ -1,19 +1,9 @@
-import http from 'node:http';
+import { probeManager } from './health-probe.mjs';
 
-const request = http.request(
-  {
-    method: 'GET',
-    path: '/healthz',
-    socketPath:
-      process.env.MERGERON_MANAGER_SOCKET ??
-      '/run/mergeron-manager/manager.sock',
-    timeout: 2_000,
-  },
-  (response) => {
-    response.resume();
-    process.exit(response.statusCode === 200 ? 0 : 1);
-  },
-);
-request.on('timeout', () => request.destroy(new Error('timeout')));
-request.on('error', () => process.exit(1));
-request.end();
+const result = await probeManager({
+  socketPath:
+    process.env.MERGERON_MANAGER_SOCKET ?? '/run/mergeron-manager/manager.sock',
+});
+// Only fixed reason codes: no response bodies, paths, credentials or headers.
+if (!result.healthy) console.error(result.reason);
+process.exit(result.healthy ? 0 : 1);

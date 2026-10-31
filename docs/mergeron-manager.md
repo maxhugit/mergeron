@@ -44,12 +44,19 @@ de l’application. Le chemin hôte n’est affiché qu’après vérification d
 sinon, le chemin interne au Manager est indiqué sans inventer de chemin serveur.
 
 La taille allouée est calculée en arrière-plan pour les sauvegardes de transactions
-terminées, dans une file bornée, avec au plus 32 lectures de métadonnées en parallèle.
-Le calcul ne suit pas les liens symboliques et ne compte qu’une fois les liens
-physiques d’une sauvegarde. Il ne repart pas de zéro à chaque requête HTTP et
-n’est plus interrompu par une limite globale de dix secondes. Les résultats sont
-gardés en mémoire pendant la vie du Manager et invalidés si la racine de la copie
-change ou si la copie est supprimée.
+terminées, dans une file unique. Le parcours lit les répertoires en flux et marque
+une pause tous les 64 éléments : cette statistique administrative reste de basse
+priorité et cède la place à une mise à jour ou une suppression. Elle ne suit pas
+les liens symboliques et ne compte qu’une fois les liens physiques. Aucune liste
+de tous les fichiers et de leurs inodes n’est gardée en mémoire.
+
+Un calcul complet est conservé dans `backup-size.json`, à côté du sous-dossier
+`backup`, sans modifier les données sauvegardées ni le journal de restauration.
+Après redémarrage, le Manager réutilise ce résultat uniquement si sa portée
+(pile, environnement, transaction) et l’identité de la racine correspondent.
+Les sauvegardes de transactions terminées sont supposées immuables : ne pas
+modifier leur contenu à la main. Un cache absent ou invalide déclenche un calcul,
+jamais une suppression. Les sauvegardes historiques sont compatibles.
 
 Pendant le calcul, l’interface indique « Calcul en cours… » et se réactualise
 toutes les deux secondes. Une erreur réelle de lecture reste « Indisponible » et
@@ -57,6 +64,27 @@ peut être réessayée après une minute. Le total n’est affiché que si toute
 tailles sont connues : aucune taille partielle n’est présentée comme un total.
 Ces calculs ne changent ni les règles de conservation ni les protections de
 suppression et ne suppriment aucune sauvegarde.
+
+### Diagnostic de santé du Manager
+
+La sonde vérifie une vraie réponse HTTP 200 complète sur le socket Unix `/healthz`.
+Son échéance globale est de deux secondes, y compris l’établissement de la
+connexion et la réception ; Docker conserve son délai de trois secondes, ses
+trois échecs consécutifs et son intervalle de vingt secondes. Aucun délai ni
+quota CPU/mémoire n’est augmenté pour masquer une indisponibilité.
+
+Les échecs produisent des codes fixes (`managerHealthTimeout`,
+`managerHealthUnavailable`, `managerHealthStatusInvalid`,
+`managerHealthResponseError` ou `managerHealthResponseInvalid`), jamais le corps
+des réponses ni des identifiants. Un dépassement de délai imposé par Docker avant
+la fin du processus reste distinct de ces codes.
+
+Si la boucle JavaScript est bloquée plus d’une seconde, le Manager journalise
+`managerEventLoopDelayed`, au plus une fois par période de vingt secondes, avec
+le retard, sa mémoire RSS et les compteurs cgroup disponibles. Ces compteurs sont
+cumulatifs : ils aident à corréler bridage CPU, pression mémoire et retard, sans
+attribuer automatiquement la cause à une opération. Un état Docker `unhealthy`
+n’implique pas à lui seul un arrêt, un redémarrage ou un OOM.
 
 ## Installation initiale sécurisée
 
