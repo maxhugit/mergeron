@@ -1,4 +1,5 @@
 {
+  "modelAdminOnly": "Seuls les administrateurs peuvent modifier le modèle et l’effort.",
   "agentCacheEnable": "Activer la navigation rapide pour ce projet",
   "agentCacheDisable": "Désactiver la navigation rapide",
   "agentCacheActive": "Navigation rapide active",
