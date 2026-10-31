@@ -17,6 +17,7 @@ import { useCurrentProject } from '@/hooks/use-current-project';
 import { catalogCopy } from '@/lib/catalog-copy';
 import { useModelStore, type ReasoningEffort } from '@/stores/model-store';
 import { useTimelineStore } from '@/stores/timeline-store';
+import { usePlatformSession } from '@/lib/platform-session';
 import { OptionRow } from './option-row';
 
 /**
@@ -47,7 +48,10 @@ function modelLabel(model: ModelDto): string {
 
 /** Displays model picker and reasoning effort selector. */
 export function ModelSelector() {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'workspaces'], {
+    nsMode: 'fallback',
+  });
+  const { isAdministrator } = usePlatformSession();
   const effortOverride = useModelStore((s) => s.effortOverride);
   const setModelOverride = useModelStore((s) => s.setModelOverride);
   const setEffortOverride = useModelStore((s) => s.setEffortOverride);
@@ -107,14 +111,35 @@ export function ModelSelector() {
         <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
           {projectModel}
         </span>
-        <span className="text-muted-foreground">
-          · {projectEffort}
+        <span className="text-muted-foreground">· {projectEffort}</span>
+      </Button>
+    );
+  }
+
+  if (!isAdministrator) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-7 cursor-default gap-1 rounded-lg px-2 text-xs hover:bg-transparent"
+        title={t('modelAdminOnly')}
+        aria-label={`${displayModel}${displayEffort ? ` · ${displayEffort}` : ''} — ${t('modelAdminOnly')}`}
+        aria-readonly="true"
+      >
+        <Bot className="h-3.5 w-3.5" />
+        <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
+          {displayModel}
         </span>
+        {displayEffort && (
+          <span className="text-muted-foreground">· {displayEffort}</span>
+        )}
       </Button>
     );
   }
 
   const handleModelSelect = (model: ModelDto) => {
+    if (!isAdministrator) return;
     if (model.model === configModel) {
       setModelOverride(null);
     } else {
@@ -128,6 +153,7 @@ export function ModelSelector() {
   };
 
   const handleEffortSelect = (effort: ReasoningEffort) => {
+    if (!isAdministrator) return;
     if (effort === activeModel?.defaultReasoningEffort) {
       setEffortOverride(null);
     } else {
@@ -150,9 +176,7 @@ export function ModelSelector() {
             {displayModel}
           </span>
           {displayEffort && (
-            <span className="text-muted-foreground">
-              · {displayEffort}
-            </span>
+            <span className="text-muted-foreground">· {displayEffort}</span>
           )}
           <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[640px]/composer:block" />
         </Button>

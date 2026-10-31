@@ -106,7 +106,7 @@
               "The sixth view replaces the least recently visited one. Small drafts and attachment references remain separated by agent in the tab’s memory, even if its full view later needs to reload. Nothing is sent automatically.",
               "After a disconnection or engine restart, Mergeron verifies and catches up conversation state. The cache bypasses neither identity verification nor access checks."
             ],
-            "warning": "The setting and retained data belong to this tab and are lost on reload or close. This is not a backup or offline mode. Other projects keep normal navigation."
+            "warning": "The selected project is saved on your profile and survives reloads, including on your other devices. Each person has an independent choice. Only the choice is saved: views and drafts remain in tab memory and are lost when it closes. A failed save keeps the previous choice and displays an error. This is not a backup or offline mode. Other projects keep normal navigation."
           },
           {
             "title": "Resume after inactivity",
@@ -381,7 +381,7 @@
             "actions": [
               {
                 "label": "Model and reasoning",
-                "effect": "Choose an available model and reasoning effort. Higher effort does not grant permissions and may increase duration and usage."
+                "effect": "Only administrators can choose the model and reasoning effort. Other people can view these values but cannot change them. In a project, its settings remain authoritative. Higher effort does not grant permissions and may increase duration and usage."
               },
               {
                 "label": "Permissions and approvals",

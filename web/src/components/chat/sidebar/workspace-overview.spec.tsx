@@ -47,6 +47,20 @@ describe('WorkspaceOverview creation menu', () => {
         }),
       ).not.toBeInTheDocument();
       fireEvent.contextMenu(screen.getByText('Selected project'));
+      const navigation = screen.getByRole('button', {
+        name: 'Enable fast navigation for this project',
+      });
+      const deletion = screen.getByRole('button', { name: 'Delete project' });
+      expect(navigation).toHaveClass('whitespace-nowrap');
+      expect(navigation.previousElementSibling).toHaveAttribute(
+        'data-slot',
+        'separator',
+      );
+      expect(navigation.nextElementSibling).toHaveAttribute(
+        'data-slot',
+        'separator',
+      );
+      expect(navigation.nextElementSibling?.nextElementSibling).toBe(deletion);
       if (!authorized) {
         expect(
           screen.getByRole('button', { name: 'Work agent' }),
