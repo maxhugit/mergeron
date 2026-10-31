@@ -32,10 +32,9 @@ function fixture(
   top: number,
   bottom: number,
   sides = 0,
+  userAgent = 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile/15E148',
 ) {
-  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
-    'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile/15E148',
-  );
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
   vi.stubGlobal('matchMedia', () => ({
     matches: standalone,
     addEventListener() {},
@@ -98,10 +97,13 @@ test.each([
     expect(viewportMeta!.content).toBe('width=device-width, initial-scale=1.0');
     const footer = frame!.querySelector('footer')!;
     expect(footer.getBoundingClientRect().bottom).toBe(height);
-    const expectedInset = width >= 640 ? 12 : 8;
+    const expectedInset = width >= 640 ? 20 : 16;
     expect(parseFloat(getComputedStyle(footer).paddingBottom)).toBe(
       expectedInset,
     );
+    const surface = getComputedStyle(footer.firstElementChild!);
+    expect(surface.borderBottomLeftRadius).toBe(surface.borderTopLeftRadius);
+    expect(surface.borderBottomRightRadius).toBe(surface.borderTopRightRadius);
     for (const control of frame!.querySelectorAll('button, textarea')) {
       const rect = control.getBoundingClientRect();
       expect(rect.left).toBeGreaterThanOrEqual(0);
@@ -125,6 +127,10 @@ test('keeps Safari/desktop layout unchanged outside standalone mode', async () =
     '0px',
   );
   expect(viewportMeta!.content).toContain('viewport-fit=cover');
+  const surface = getComputedStyle(
+    frame!.querySelector('footer')!.firstElementChild!,
+  );
+  expect(surface.borderBottomLeftRadius).toBe(surface.borderTopLeftRadius);
   expect(
     getComputedStyle(frame!.querySelector('header')!).backdropFilter,
   ).not.toBe('none');
@@ -170,7 +176,7 @@ test('restores full height after keyboard dismissal even when focus stays in the
   expect(frame!.getBoundingClientRect().top).toBe(180);
   expect(frame!.getBoundingClientRect().height).toBe(420);
   expect(getComputedStyle(frame!.querySelector('footer')!).paddingBottom).toBe(
-    '0px',
+    '8px',
   );
   viewport.height = 844;
   viewport.offsetTop = 0;
@@ -182,7 +188,7 @@ test('restores full height after keyboard dismissal even when focus stays in the
   expect(frame!.getBoundingClientRect().top).toBe(0);
   expect(frame!.getBoundingClientRect().height).toBe(844);
   expect(getComputedStyle(frame!.querySelector('footer')!).paddingBottom).toBe(
-    '8px',
+    '16px',
   );
 });
 
@@ -194,9 +200,76 @@ test('leaves a small visible gap beneath the rounded composer without moving the
   expect(frame!.getBoundingClientRect().height).toBe(844);
   expect(frame!.querySelector('header')!.getBoundingClientRect().top).toBe(0);
   expect(footer.getBoundingClientRect().bottom).toBe(844);
-  expect(card.getBoundingClientRect().bottom).toBe(836);
+  expect(card.getBoundingClientRect().bottom).toBe(828);
   const control = footer.querySelector('button')!;
-  expect(control.getBoundingClientRect().bottom).toBeLessThanOrEqual(836);
+  expect(control.getBoundingClientRect().bottom).toBeLessThanOrEqual(828);
+});
+
+test.each([
+  [390, 844],
+  [844, 390],
+] as const)(
+  'lifts the composer by an extra 8px above the software keyboard at %ix%i',
+  async (width, height) => {
+    await page.viewport(width, height);
+    const viewport = fixture(true, height, 0, 0);
+    frame!.querySelector('textarea')!.focus();
+    // Leave enough space for the real textarea's intrinsic height in landscape.
+    viewport.height = height === 390 ? 260 : 420;
+    viewport.offsetTop = 30;
+    viewport.dispatchEvent(new Event('resize'));
+    const footer = frame!.querySelector('footer')!;
+    const baseGap = width >= 640 ? 12 : 0;
+    expect(getComputedStyle(footer).paddingBottom).toBe(`${baseGap + 8}px`);
+    expect(frame!.getBoundingClientRect().top).toBe(30);
+    expect(frame!.getBoundingClientRect().height).toBe(viewport.height);
+    expect(footer.getBoundingClientRect().bottom).toBe(30 + viewport.height);
+    expect(footer.firstElementChild!.getBoundingClientRect().bottom).toBe(
+      30 + viewport.height - baseGap - 8,
+    );
+    await page.screenshot({
+      path: `../../.vitest-screenshots/ios-pwa-keyboard-${engine}-${width}-${height}.png`,
+    });
+  },
+);
+
+test('does not add the keyboard lift to Safari tabs', async () => {
+  await page.viewport(390, 844);
+  const viewport = fixture(false, 844, 0, 0);
+  frame!.querySelector('textarea')!.focus();
+  viewport.height = 420;
+  viewport.dispatchEvent(new Event('resize'));
+  expect(document.documentElement.classList.contains('keyboard-open')).toBe(
+    true,
+  );
+  expect(getComputedStyle(frame!.querySelector('footer')!).paddingBottom).toBe(
+    '0px',
+  );
+});
+
+test('does not add the iOS lift to an installed Android app, with or without its keyboard', async () => {
+  await page.viewport(390, 844);
+  const viewport = fixture(
+    true,
+    844,
+    0,
+    0,
+    0,
+    'Mozilla/5.0 (Linux; Android 16) Chrome/140.0 Mobile',
+  );
+  const footer = frame!.querySelector('footer')!;
+  expect(document.documentElement.classList.contains('ios-standalone')).toBe(
+    false,
+  );
+  expect(getComputedStyle(footer).paddingBottom).toBe('0px');
+  expect(viewportMeta!.content).toContain('viewport-fit=cover');
+  frame!.querySelector('textarea')!.focus();
+  viewport.height = 420;
+  viewport.dispatchEvent(new Event('resize'));
+  expect(document.documentElement.classList.contains('keyboard-open')).toBe(
+    true,
+  );
+  expect(getComputedStyle(footer).paddingBottom).toBe('0px');
 });
 
 test('sizes portalled navigation to the same rectangle and reserves bottom safety only once', async () => {
