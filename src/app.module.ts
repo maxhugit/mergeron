@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AccessContextInterceptor } from './auth/access-context.interceptor';
 import { ServeStaticModule } from '@nestjs/serve-static';
-import type { ServerResponse } from 'node:http';
 import { LoggerModule } from 'nestjs-pino';
 import { join } from 'node:path';
 import { AccountModule } from './account/account.module';
@@ -38,6 +37,7 @@ import { TurnErrorsModule } from './turn-errors/turn-errors.module';
 import { PreviewsModule } from './previews/previews.module';
 import { PushModule } from './push/push.module';
 import { AgentMonitorsModule } from './agent-monitors/agent-monitors.module';
+import { setStaticHtmlSecurityHeaders } from './static-html-security';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -144,16 +144,7 @@ const PINO_REDACT = {
       exclude: ['/api/(.*)'],
       serveStaticOptions: {
         fallthrough: true,
-        setHeaders: (response: ServerResponse, filePath: string) => {
-          if (filePath.endsWith('.html')) {
-            response.setHeader(
-              'Content-Security-Policy',
-              "frame-ancestors 'none'",
-            );
-            response.setHeader('X-Frame-Options', 'DENY');
-            response.setHeader('Referrer-Policy', 'no-referrer');
-          }
-        },
+        setHeaders: setStaticHtmlSecurityHeaders,
       },
     }),
     AuthModule,
