@@ -3,6 +3,7 @@ import type { GitMergeChecks } from './workspace-git-api';
 export type MergeCheckState =
   | 'passed'
   | 'failed'
+  | 'cancelled'
   | 'running'
   | 'waiting'
   | 'unknown'
@@ -11,7 +12,6 @@ export type MergeCheckState =
 const failures = new Set([
   'failure',
   'error',
-  'cancelled',
   'timed_out',
   'action_required',
   'stale',
@@ -29,6 +29,7 @@ export function mergeCheckState(
   if (statuses.some((status) => failures.has(status))) return 'failed';
   if (statuses.includes('in_progress')) return 'running';
   if (statuses.some((status) => waiting.has(status))) return 'waiting';
+  if (statuses.includes('cancelled')) return 'cancelled';
   if (
     checks.limited ||
     checks.workflows?.limited ||
@@ -51,6 +52,7 @@ export function checkTone(status: string) {
     return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
   if (failures.has(status) || status === 'failed')
     return 'bg-destructive/10 text-destructive';
+  if (status === 'cancelled') return 'bg-muted text-foreground';
   if (status === 'running' || status === 'in_progress')
     return 'bg-violet-500/10 text-violet-700 dark:text-violet-300';
   if (status === 'waiting' || waiting.has(status))

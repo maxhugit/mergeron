@@ -1,10 +1,14 @@
 import { expect, it } from 'vitest';
-import { mergeCheckState } from './git-check-status';
+import { checkTone, mergeCheckState } from './git-check-status';
 
 it.each([
   [['success', 'neutral', 'skipped'], false, 'passed'],
   [['success', 'failure'], false, 'failed'],
-  [['cancelled'], false, 'failed'],
+  [['cancelled'], false, 'cancelled'],
+  [['success', 'cancelled'], false, 'cancelled'],
+  [['failure', 'cancelled'], false, 'failed'],
+  [['cancelled', 'in_progress'], false, 'running'],
+  [['cancelled', 'queued'], false, 'waiting'],
   [['timed_out'], false, 'failed'],
   [['success', 'in_progress'], false, 'running'],
   [['queued'], false, 'waiting'],
@@ -36,6 +40,7 @@ it.each([
   ['pending', true, false, 'waiting'],
   ['in_progress', true, false, 'running'],
   ['failure', true, false, 'failed'],
+  ['cancelled', true, false, 'cancelled'],
   ['success', true, false, 'passed'],
   ['success', true, true, 'unknown'],
   ['success', false, false, 'unknown'],
@@ -63,3 +68,9 @@ it.each([
     ).toBe(expected);
   },
 );
+
+it('gives cancellation a neutral tone distinct from failure and unknown', () => {
+  expect(checkTone('cancelled')).toBe('bg-muted text-foreground');
+  expect(checkTone('cancelled')).not.toBe(checkTone('failure'));
+  expect(checkTone('cancelled')).not.toBe(checkTone('unknown'));
+});
