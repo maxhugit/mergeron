@@ -585,7 +585,10 @@ export class ThreadsService {
     this.deletionRegistry.assertMutable(params.threadId);
     const beforeTurn = this.metadata.getHeldThread(params.threadId);
     const shouldAutoName = Boolean(
-      beforeTurn && !beforeTurn.name?.trim() && !beforeTurn.preview?.trim(),
+      !background &&
+      beforeTurn &&
+      !beforeTurn.name?.trim() &&
+      !beforeTurn.preview?.trim(),
     );
     // `thread/resume` does not reliably replace the cwd of an app-server
     // session that is already loaded. A sidebar workspace move is persisted

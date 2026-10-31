@@ -106,6 +106,25 @@ beforeEach(() => {
 afterEach(() => database.sqlite.close());
 
 describe('durable agent monitor store', () => {
+  it('keeps every live plan manageable even after more than 100 newer completed plans', () => {
+    const active = create();
+    for (let index = 1; index <= 101; index++) {
+      const item = store.create(
+        'p',
+        't',
+        'admin',
+        definition({ requestId: `past-${index}` }),
+        NOW + index,
+      );
+      store.stop('p', item.id, NOW + index + 1);
+    }
+    const listed = store.list('p');
+    expect(listed).toHaveLength(100);
+    expect(listed[0].id).toBe(active.id);
+    expect(listed.slice(1).every((item) => item.status === 'completed')).toBe(
+      true,
+    );
+  });
   it('bounds self-scheduled work to one live plan, preserves idempotency and cannot reset it with another request ID', () => {
     const automatic = (overrides: Partial<CreateAgentMonitor> = {}) =>
       store.create('p', 't', 'admin', definition(overrides), NOW, {

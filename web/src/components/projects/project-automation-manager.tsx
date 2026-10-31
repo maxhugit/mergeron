@@ -10,6 +10,9 @@ import {
   Zap,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ProjectAgentMonitors } from './project-agent-monitors';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -74,7 +77,41 @@ const blank = {
   active: true,
 } as const;
 
-export function ProjectAutomationManager({
+export function ProjectAutomationManager(props: {
+  projectId: string;
+  resourceId: string;
+}) {
+  const { t } = useTranslation('monitors');
+  return (
+    <Tabs
+      defaultValue="actions"
+      className="flex h-full min-h-0 min-w-0 flex-col"
+    >
+      <TabsList
+        aria-label={t('sections')}
+        className="flex shrink-0 flex-wrap gap-1 border-b p-2"
+      >
+        <TabsTrigger value="actions" className="px-3 py-2 text-sm">
+          {t('actionsTab')}
+        </TabsTrigger>
+        <TabsTrigger value="monitors" className="px-3 py-2 text-sm">
+          {t('title')}
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="actions" className="min-h-0 flex-1 overflow-auto">
+        <ScheduledAutomationBoard {...props} />
+      </TabsContent>
+      <TabsContent
+        value="monitors"
+        className="flex min-h-0 min-w-0 flex-1 flex-col data-[state=inactive]:hidden"
+      >
+        <ProjectAgentMonitors key={props.projectId} projectId={props.projectId} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+function ScheduledAutomationBoard({
   projectId,
   resourceId,
 }: {

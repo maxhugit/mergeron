@@ -146,6 +146,10 @@ function normalizeUserMessage(
         // This server-supplied context is separate from the user's editable message.
         const message = block.text
           .replace(
+            /^<mergeron_agent_monitor>\n[\s\S]*?\n<\/mergeron_agent_monitor>\n*/,
+            '',
+          )
+          .replace(
             /^<mergeron_project_context>\n[\s\S]*?\n<\/mergeron_project_context>\n*/,
             '',
           )

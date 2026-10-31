@@ -334,4 +334,29 @@ describe('normalizeThreadItem', () => {
       ).toEqual({ kind: 'invalid' });
     }
   });
+  it('does not attribute internal monitoring instructions to the person', () => {
+    const scheduled =
+      '<mergeron_agent_monitor>\nScheduled check: {"instructions":"private scope"}\n</mergeron_agent_monitor>';
+    expect(
+      normalizeThreadItem(
+        { type: 'userMessage', content: [{ type: 'text', text: scheduled }] },
+        true,
+      ),
+    ).toEqual({ kind: 'invalid' });
+    expect(
+      normalizeThreadItem(
+        {
+          type: 'userMessage',
+          content: [
+            { type: 'text', text: scheduled },
+            { type: 'text', text: 'My own follow-up' },
+          ],
+        },
+        true,
+      ),
+    ).toMatchObject({
+      kind: 'userMessage',
+      message: { text: 'My own follow-up' },
+    });
+  });
 });

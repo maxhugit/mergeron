@@ -209,7 +209,11 @@ export class AgentMonitorStore {
       .select()
       .from(monitors)
       .where(eq(monitors.projectId, projectId))
-      .orderBy(desc(monitors.updatedAt), asc(monitors.id))
+      .orderBy(
+        sql`case when ${monitors.status} in ('active', 'paused', 'needs_attention') then 0 else 1 end`,
+        desc(monitors.updatedAt),
+        asc(monitors.id),
+      )
       .limit(100)
       .all();
   }

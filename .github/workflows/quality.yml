@@ -218,6 +218,7 @@ jobs:
           src/components/chat/virtual-transcript.browser.tsx
           src/components/chat/workspace-tree.browser.tsx
           src/components/files/file-actions-menu.browser.tsx
+          src/components/projects/project-agent-monitors.browser.tsx
           src/components/terminal/terminal-read-recovery.browser.tsx
           src/components/chat/git-merges.browser.tsx
 

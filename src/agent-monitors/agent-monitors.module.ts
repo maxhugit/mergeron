@@ -9,6 +9,7 @@ import { AgentMonitorStoreModule } from './agent-monitor-store.module';
 import { AgentMonitorRuntime } from './agent-monitor-runtime.service';
 import { AgentMonitorsService } from './agent-monitors.service';
 import { AgentMonitorsController } from './agent-monitors.controller';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { AgentMonitorsController } from './agent-monitors.controller';
     InternalMcpModule,
     PendingApprovalsModule,
     AgentMonitorStoreModule,
+    PushModule,
   ],
   providers: [
     AgentMonitorRuntime,

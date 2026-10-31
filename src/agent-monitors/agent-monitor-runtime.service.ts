@@ -7,6 +7,7 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { accessContext } from '../auth/access-context';
@@ -21,6 +22,7 @@ import { ThreadSettingsObserverService } from '../threads/thread-settings-observ
 import { ThreadExecutionInventoryService } from '../threads/thread-execution-inventory.service';
 import { PendingApprovalsService } from '../pending-approvals/pending-approvals.service';
 import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
+import { PushService } from '../push/push.service';
 import {
   AgentMonitorStore,
   type AgentMonitor,
@@ -35,6 +37,7 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
   private stopped = false;
   private readonly summaries = new Map<string, string>();
   private readonly probes = new Map<string, number>();
+  private readonly foregroundTransfers = new Set<string>();
   private readonly releaseForeground: () => void;
   private readonly releaseLifecycle: () => void;
 
@@ -49,6 +52,7 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
     private readonly inventory: ThreadExecutionInventoryService,
     private readonly pending: PendingApprovalsService,
     private readonly mcp: InternalMcpService,
+    @Optional() private readonly push?: PushService,
   ) {
     this.releaseForeground = threads.onForegroundInput((id) =>
       this.yieldToForeground(id),
@@ -59,8 +63,10 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
       this.probes.clear();
       try {
         for (const run of store.active())
-          if (run.status !== 'claimed')
+          if (run.status !== 'claimed') {
             store.quarantine(run.id, 'MONITOR_ENGINE_RESTART');
+            this.notify(run);
+          }
       } catch {
         this.logger.warn(
           'Monitor recovery needs review; no action will be replayed.',
@@ -82,8 +88,10 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     // No catch-up loop: at most one future check per schedule after recovery.
     for (const run of this.store.active())
-      if (run.status !== 'claimed')
+      if (run.status !== 'claimed') {
         this.store.quarantine(run.id, 'MONITOR_BACKEND_RESTART');
+        this.notify(run);
+      }
     this.timer = setInterval(() => void this.tick(), 15_000);
     this.timer.unref();
     void this.tick();
@@ -95,6 +103,18 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
     this.releaseForeground();
     this.releaseLifecycle();
     await this.flight;
+  }
+
+  private notify(run: AgentMonitorRun) {
+    const monitor = this.store.monitorForRun(run.id);
+    if (!monitor) return;
+    try {
+      // Existing personal preferences, rights, deduplication and delivery
+      // retries apply. No instructions, summaries, credentials or URLs in push.
+      this.push?.enqueue('completed', monitor.threadId, `monitor:${run.id}`);
+    } catch {
+      this.logger.warn('A monitor notification could not be queued.');
+    }
   }
 
   authorize(monitor: AgentMonitor) {
@@ -159,6 +179,7 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('MONITOR_ENGINE_UNAVAILABLE');
     this.authorize(monitor);
     if (
+      this.foregroundTransfers.has(monitor.threadId) ||
       this.inventory.has(monitor.threadId) ||
       this.pending.listPending([monitor.threadId]).length
     )
@@ -197,7 +218,11 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
     if (this.stopped) return;
     const due = this.store.due();
     if (!this.manager.getClient()) return;
-    for (const run of this.store.active()) {
+    const active = this.store.active();
+    for (const threadId of this.foregroundTransfers)
+      if (!active.some((run) => run.activeThreadId === threadId))
+        this.foregroundTransfers.delete(threadId);
+    for (const run of active) {
       if (this.stopped) return;
       await this.reconcile(run);
     }
@@ -290,28 +315,47 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
           reason.startsWith('MONITOR_POLICY')
         )
           this.store.markAttention(monitor.projectId, monitor.id, reason);
-      } else if (latest?.status === 'dispatching')
+      } else if (latest?.status === 'dispatching') {
         this.store.quarantine(run.id, 'MONITOR_DISPATCH_UNCERTAIN');
+      }
+      if (
+        this.store.get(monitor.projectId, monitor.id).status ===
+        'needs_attention'
+      )
+        this.notify(run);
     }
   }
 
   private yieldToForeground(threadId: string) {
-    const owned = this.store
-      .active()
-      .filter((item) => item.activeThreadId === threadId);
-    for (const run of owned) {
+    // Invalidate timer ownership before any fallible persistence. A temporary
+    // SQLite write failure must never let a stale deadline cancel a human turn.
+    this.foregroundTransfers.add(threadId);
+    try {
+      const owned = this.store
+        .active()
+        .filter((item) => item.activeThreadId === threadId);
+      for (const run of owned) {
+        this.mcp.revoke(threadId);
+        this.store.yieldToForeground(run.id);
+        this.summaries.delete(run.id);
+        this.probes.delete(run.id);
+      }
+      this.foregroundTransfers.delete(threadId);
+      return owned.length > 0;
+    } catch {
       this.mcp.revoke(threadId);
-      this.store.yieldToForeground(run.id);
-      this.summaries.delete(run.id);
-      this.probes.delete(run.id);
+      this.logger.warn(
+        'A foreground handover will be persisted later; automatic work remains deferred.',
+      );
+      return true;
     }
-    return owned.length > 0;
   }
 
   private observe(note: ServerNotification) {
     if (!('threadId' in note.params)) return;
     const threadId = note.params.threadId;
     if (typeof threadId !== 'string') return;
+    if (this.foregroundTransfers.has(threadId)) return;
     const run = this.store
       .active()
       .find((item) => item.activeThreadId === threadId);
@@ -331,7 +375,7 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
       note.params.turn.id === run.turnId &&
       run.status === 'running'
     ) {
-      this.store.finish(run.id, run.turnId, {
+      const finished = this.store.finish(run.id, run.turnId, {
         success: note.params.turn.status === 'completed',
         result:
           run.result ||
@@ -344,6 +388,13 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
             ? undefined
             : 'MONITOR_TURN_INTERRUPTED'),
       });
+      if (
+        finished &&
+        (finished.changed ||
+          finished.disposition !== 'continue' ||
+          finished.status === 'failed')
+      )
+        this.notify(finished);
       this.summaries.delete(run.id);
       this.probes.delete(run.id);
     }
@@ -351,6 +402,16 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
 
   private async reconcile(run: AgentMonitorRun) {
     const now = Date.now();
+    if (
+      run.activeThreadId &&
+      this.foregroundTransfers.has(run.activeThreadId)
+    ) {
+      this.store.yieldToForeground(run.id);
+      this.foregroundTransfers.delete(run.activeThreadId);
+      this.summaries.delete(run.id);
+      this.probes.delete(run.id);
+      return;
+    }
     if (run.status === 'claimed') {
       if (run.leaseUntil <= now)
         this.store.defer(run.id, 'MONITOR_CLAIM_EXPIRED');
@@ -413,6 +474,7 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.store.attention(run.id, reason, now + 60_000);
+    this.notify(run);
     if (!run.turnId) {
       this.store.quarantine(run.id, 'MONITOR_DISPATCH_UNCERTAIN');
       return;

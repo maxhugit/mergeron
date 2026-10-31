@@ -1502,7 +1502,68 @@
             "warning": "Une automatisation peut attendre une approbation comme un agent manuel. Une erreur ne garantit pas l’annulation des opérations précédentes. Les automatisations importées sont désactivées par sécurité."
           }
         ],
-        "related": ["agent-approvals", "project-archive"]
+        "related": ["agent-approvals", "project-archive", "agent-monitors"]
+      },
+      {
+        "id": "agent-monitors",
+        "title": "Surveiller avec un agent existant",
+        "summary": "Programmer des contrôles persistants sans bloquer la conversation ni multiplier les agents.",
+        "keywords": [
+          "surveillance",
+          "monitor",
+          "réveil",
+          "contrôles",
+          "récurrence",
+          "MCP",
+          "notification"
+        ],
+        "sections": [
+          {
+            "title": "Créer une surveillance bornée",
+            "steps": [
+              "Avec votre propre compte administrateur, ouvrez Automatisations → Surveillances des agents → Nouvelle surveillance. Choisissez un agent existant du projet et décrivez précisément ce qu’il doit vérifier et les actions réellement autorisées.",
+              "Choisissez le premier contrôle, puis une répétition ou un contrôle unique. L’intervalle minimal est d’une minute et s’applique après la fin du contrôle précédent, sans rattrapage en rafale.",
+              "Définissez l’échéance (30 jours au maximum), le nombre maximal de contrôles (1 à 100) et leur durée maximale individuelle (30 secondes à 30 minutes). Un contrôle envoyé consomme un essai, même si vous reprenez ensuite la conversation.",
+              "Laissez Lecture seule sauf si votre demande autorise explicitement l’écriture dans le workspace. La politique effective de la conversation doit rester compatible : le planificateur ne la modifie pas et refuse l’accès intégral.",
+              "L’agent peut programmer lui-même un contrôle via MCP lorsqu’il est utile pour poursuivre la tâche que vous lui avez confiée : aucune demande supplémentaire ni intervention dans ce formulaire n’est nécessaire. Le serveur lie le contrôle à sa conversation et à votre identité, avec au plus les droits effectifs de son tour courant, sans accès intégral.",
+              "Une programmation créée depuis l’agent est limitée à 20 contrôles sur 24 heures, 5 minutes par contrôle, et une seule programmation non terminée par conversation. Il doit consulter l’existante au lieu de créer un doublon. Pendant un contrôle, il peut continuer le plan existant, jamais créer une chaîne de nouveaux plans ou relever ses limites."
+            ],
+            "warning": "Les limites bornent les appels et leur durée, pas une somme monétaire garantie. Une surveillance ne constitue pas une nouvelle autorisation de push, publication ou merge. Les approbations humaines ne sont jamais validées automatiquement. Ne mettez aucun secret dans la consigne."
+          },
+          {
+            "title": "Continuer la discussion et suivre les contrôles",
+            "paragraphs": [
+              "Vous pouvez parler à l’agent normalement. Le contrôle lui cède la conversation et les prochains contrôles attendent qu’il soit libre ; la surveillance ne passe pas en pause pour cette seule raison. Le délai du contrôle précédent ne peut pas interrompre votre échange.",
+              "Mergeron conserve la programmation lorsque vous fermez le navigateur. Le service et le moteur doivent fonctionner ; après une interruption, il n’exécute pas une rafale de contrôles manqués. Deux contrôles simultanés au maximum sont admis dans l’instance.",
+              "Consultez l’état, le prochain contrôle, l’échéance et le compteur. Historique présente les 100 derniers essais et leur résumé. Les notifications de réponse prête suivent vos préférences : elles sont envoyées pour un résumé différent, un objectif atteint ou une intervention nécessaire, pas pour un résumé identique à chaque contrôle."
+            ],
+            "actions": [
+              {
+                "label": "Mettre en pause",
+                "effect": "Suspend les prochains contrôles sans interrompre le travail déjà accepté. Parler à l’agent ne reprend pas une pause explicite."
+              },
+              {
+                "label": "Reprendre après vérification",
+                "effect": "Vérifie l’identité d’origine, les droits, les limites et l’inactivité réelle avant de reprogrammer. Un envoi incertain n’est jamais répété automatiquement : inspectez d’abord la conversation et ses effets."
+              },
+              {
+                "label": "Arrêter les prochains contrôles",
+                "effect": "Termine la programmation sans interrompre le tour en cours ni annuler ses actions. L’agent peut aussi signaler que l’objectif demandé est atteint."
+              },
+              {
+                "label": "Supprimer",
+                "effect": "Retire la surveillance et son historique après confirmation, uniquement si aucun contrôle ou envoi incertain ne reste réservé. Cela ne supprime pas l’agent et n’annule aucun effet passé."
+              }
+            ],
+            "warning": "Une demande d’approbation, des droits retirés, des permissions incompatibles ou un résultat incertain exigent votre intervention. Discuter ne contourne pas ces blocages ni les limites initiales."
+          }
+        ],
+        "related": [
+          "automation-schedule",
+          "agent-approvals",
+          "agent-project-tools",
+          "desktop"
+        ]
       }
     ]
   },
