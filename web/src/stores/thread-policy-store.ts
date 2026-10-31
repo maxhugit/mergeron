@@ -446,15 +446,57 @@ export function policySatisfies(
   // `observed: false` means the server has never reported this conversation's
   // settings, so its null fields are absence of evidence, not evidence of null.
   if (!observed?.observed) return false;
+  if (
+    requested.approvalMode !== undefined &&
+    observed.approvalMode !== requested.approvalMode
+  )
+    return false;
   if (requested.approvalPolicy !== undefined) {
     // Granular policies are objects; the picker only ever requests the string
     // forms, so anything non-string cannot be what this patch asked for.
     if (typeof requested.approvalPolicy !== 'string') return false;
-    if (observed.approvalPolicy !== requested.approvalPolicy) return false;
+    if (
+      observed.approvalPolicy !== requested.approvalPolicy &&
+      !(
+        requested.approvalPolicy === 'on-request' &&
+        isBoundedApproval(observed.approvalPolicy)
+      )
+    )
+      return false;
   }
   if (requested.sandboxPolicy !== undefined) {
+    // Native profile identity, not the lossy legacy writable-roots projection,
+    // owns managed copy access. The server validates the requested preset and
+    // waits for its exact profile before persisting it. Read-only -> write can
+    // legitimately add a redundant, server-owned root to this projection.
+    const selected = requested.sandboxPolicy;
+    const actual = observed.sandboxPolicy;
+    if (
+      observed.activePermissionProfileId?.startsWith('mergeron_copy_') &&
+      (selected.type === 'readOnly' || selected.type === 'workspaceWrite')
+    )
+      return (
+        actual?.type === selected.type &&
+        'networkAccess' in actual &&
+        actual.networkAccess === selected.networkAccess
+      );
     if (!sandboxSatisfies(observed.sandboxPolicy, requested.sandboxPolicy))
       return false;
   }
   return true;
+}
+
+/** The server preserves MCP prompts without allowing sandbox escalation. */
+export function isBoundedApproval(
+  value: ThreadSecurityPolicyDto['approvalPolicy'],
+): boolean {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    value.granular.mcp_elicitations &&
+    !value.granular.sandbox_approval &&
+    !value.granular.rules &&
+    !value.granular.skill_approval &&
+    !value.granular.request_permissions
+  );
 }

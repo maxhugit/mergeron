@@ -130,6 +130,7 @@ jobs:
         run: >-
           pnpm exec vitest run
           src/app.controller.spec.ts
+          src/app.module.spec.ts
           src/database/database.service.spec.ts
           src/database/pending-request-migration.spec.ts
           src/database/project-locations-migration.spec.ts
@@ -140,6 +141,7 @@ jobs:
           src/browser
           src/push
           src/document-publication
+          src/pending-approvals
           src/threads/project-connection-policy.service.spec.ts
           src/threads/project-connection-runtime.service.spec.ts
           src/threads/thread-history.service.spec.ts
@@ -217,7 +219,7 @@ jobs:
 
       - name: Test mobile viewport layout in Chromium and WebKit
         if: matrix.part == 'frontend'
-        run: pnpm --dir web exec vitest run --project browser src/lib/mobile-viewport.browser.tsx src/components/chat/compact-composer.browser.tsx
+        run: pnpm --dir web exec vitest run --project browser src/lib/mobile-viewport.browser.tsx src/components/chat/compact-composer.browser.tsx src/components/chat/security-policy-badge.browser.tsx
 
       - name: Test retained agent views in Chromium and WebKit
         if: matrix.part == 'frontend'

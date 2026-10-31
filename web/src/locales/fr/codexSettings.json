@@ -1,4 +1,10 @@
 {
+  "alwaysAllow": "Toujours autoriser",
+  "managedAgentIsolationHint": "L’agent peut passer en lecture seule ou écrire dans son espace autorisé. L’accès complet reste bloqué pour protéger les espaces des autres agents.",
+  "neverAllow": "Ne jamais autoriser",
+  "alwaysAllowForThisAgent": "Toujours autoriser cet agent ?",
+  "alwaysAllowConfirmation": "À partir du prochain message, les approbations d’outils MCP seront acceptées automatiquement pour cet agent, pour tous ses utilisateurs. Les actions peuvent modifier ou supprimer des données accessibles à ces outils. Les droits du projet, l’isolation des espaces de travail et la protection des documents publiés restent appliqués. Les questions et les connexions nécessitant votre intervention ne seront pas renseignées automatiquement.",
+  "approvalModesHint": "Sur demande : vous décidez. Ne jamais autoriser : les actions nécessitant une approbation sont refusées. Toujours autoriser : les approbations d’outils sont acceptées automatiquement, sans élargir les droits de l’agent.",
   "managedCliIdentity": "CLI personnalisé actif",
   "managedCliVerified": "Intégrité vérifiée",
   "managedCliInvalid": "Intégrité invalide — activation bloquée",

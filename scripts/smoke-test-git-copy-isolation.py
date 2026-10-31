@@ -62,6 +62,7 @@ plugins=false
         child = subprocess.Popen(command + ['app-server'], cwd=project, env=env,
                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.DEVNULL, text=True)
+        notifications = []
         def rpc(number, method, params):
             child.stdin.write(json.dumps({'id': number, 'method': method, 'params': params}) + '\n')
             child.stdin.flush()
@@ -70,6 +71,8 @@ plugins=false
                 if not line:
                     raise RuntimeError('Fixture app-server exited before replying')
                 response = json.loads(line)
+                if 'method' in response:
+                    notifications.append(response)
                 if response.get('id') == number:
                     if 'error' in response:
                         raise RuntimeError('Fixture app-server rejected ' + method)
@@ -80,6 +83,32 @@ plugins=false
             started = rpc(2, 'thread/start', {'cwd': str(project), 'ephemeral': True,
                                              'permissions': 'copy_fixture', 'approvalPolicy': 'never'})
             assert started['activePermissionProfile']['id'] == 'copy_fixture'
+            bounded = {'granular': dict(sandbox_approval=False, rules=False,
+                                       skill_approval=False, request_permissions=False,
+                                       mcp_elicitations=True)}
+            # The REST adapter must use native profile selection, not replace
+            # the read-denial map with its lossy legacy sandbox projection.
+            for number, profile_id, approval in [(3, 'copy_fixture', bounded),
+                                                  (4, 'copy_read', bounded),
+                                                  (5, 'copy_fixture', 'never')]:
+                notifications.clear()
+                rpc(number, 'thread/settings/update', {
+                    'threadId': started['thread']['id'], 'permissions': profile_id,
+                    'approvalPolicy': approval,
+                })
+                while not any(event.get('method') == 'thread/settings/updated' and
+                              event['params']['threadSettings']['activePermissionProfile']['id'] == profile_id and
+                              event['params']['threadSettings']['approvalPolicy'] == approval
+                              for event in notifications):
+                    notifications.append(json.loads(child.stdout.readline()))
+                settings = next(event['params']['threadSettings'] for event in reversed(notifications)
+                                if event.get('method') == 'thread/settings/updated')
+                sandbox = settings['sandboxPolicy']
+                assert sandbox['type'] == ('readOnly' if profile_id == 'copy_read' else 'workspaceWrite')
+                assert sandbox['networkAccess'] is False
+                if profile_id == 'copy_fixture':
+                    assert all(path == str(project) or Path(path).is_relative_to(project)
+                               for path in sandbox['writableRoots'])
         finally:
             child.terminate()
             child.wait(timeout=10)

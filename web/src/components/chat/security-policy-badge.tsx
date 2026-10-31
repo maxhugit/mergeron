@@ -1,4 +1,15 @@
 import { translationKey } from '@/locales/translation-key';
+import { useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 /**
  * Security policy selector for the composer, scoped to THIS conversation.
  *
@@ -29,7 +40,11 @@ import type {
   PatchThreadSecurityPolicyDto,
   ThreadSecurityPolicyDto,
 } from '@/generated/api';
-import { policySatisfies, sandboxMode } from '@/stores/thread-policy-store';
+import {
+  isBoundedApproval,
+  policySatisfies,
+  sandboxMode,
+} from '@/stores/thread-policy-store';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { cn } from '@/lib/utils';
 import { getAuthorizationHeader } from '@/auth-token';
@@ -43,7 +58,15 @@ import {
 
 // Codex CLI >= 0.149.0 retired `untrusted` and `on-failure`; selecting either
 // would write a value the app-server rejects.
-const APPROVAL_OPTIONS = ['on-request', 'never'] as const;
+const APPROVAL_OPTIONS = [
+  { label: 'on-request', approvalPolicy: 'on-request', approvalMode: 'manual' },
+  { label: 'neverAllow', approvalPolicy: 'never', approvalMode: 'manual' },
+  {
+    label: 'alwaysAllow',
+    approvalPolicy: 'on-request',
+    approvalMode: 'automatic',
+  },
+] as const;
 
 type SandboxPatch = NonNullable<PatchThreadSecurityPolicyDto['sandboxPolicy']>;
 
@@ -137,12 +160,18 @@ interface Props {
 }
 
 export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
+  const [confirmAutomaticFor, setConfirmAutomaticFor] = useState<string | null>(
+    null,
+  );
   const { t } = useTranslation(['common', 'codexSettings', 'workspaces'], {
     nsMode: 'fallback',
   });
   const policy = useThreadSecurityPolicy(threadId);
   const preferences = useThreadExecutionPreferences(threadId);
   const saved = preferences.preferences?.security;
+  const managedCopy =
+    policy.observed?.activePermissionProfileId?.startsWith('mergeron_copy_') ===
+    true;
   const threadCwd = useTimelineStore((s) =>
     threadId
       ? ((s.threadId === threadId
@@ -193,13 +222,17 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
       : [];
   if (!threadId) return null;
 
-  const observedApproval = describeApproval(policy.observed?.approvalPolicy);
+  const observedApproval = describeApproval(
+    policy.observed?.approvalPolicy,
+    policy.observed?.approvalMode,
+  );
   const observedSandbox = sandboxMode(policy.observed?.sandboxPolicy);
   const sandboxLabel = observedSandbox
     ? (SANDBOX_LABELS[observedSandbox] ?? observedSandbox)
     : 'unknown';
   const risky =
-    observedSandbox === 'dangerFullAccess' || observedApproval === 'never';
+    observedSandbox === 'dangerFullAccess' ||
+    observedApproval === 'alwaysAllow';
   const Icon = risky ? ShieldAlert : ShieldCheck;
 
   return (
@@ -247,7 +280,14 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
                   )
                 : '—',
               approval: saved.approvalPolicy
-                ? describeApproval(saved.approvalPolicy)
+                ? t(
+                    translationKey(
+                      describeApproval(
+                        saved.approvalPolicy,
+                        saved.approvalMode,
+                      ),
+                    ),
+                  )
                 : '—',
             })}
           </p>
@@ -318,24 +358,82 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
           </div>
           {APPROVAL_OPTIONS.map((option) => (
             <OptionRow
-              key={option}
-              label={option}
-              active={observedApproval === option}
-              saved={saved?.approvalPolicy === option}
-              requested={
-                policy.isSettling && policy.pending?.approvalPolicy === option
+              key={option.label}
+              label={option.label}
+              active={observedApproval === option.label}
+              saved={
+                saved?.approvalPolicy !== undefined &&
+                describeApproval(saved.approvalPolicy, saved.approvalMode) ===
+                  option.label
               }
-              risky={option === 'never'}
+              requested={
+                policy.isSettling &&
+                policy.pending?.approvalPolicy === option.approvalPolicy &&
+                policy.pending?.approvalMode === option.approvalMode
+              }
+              risky={option.approvalMode === 'automatic'}
               disabled={policyReadOnly || policy.isSettling}
-              onClick={() => policy.apply({ approvalPolicy: option })}
+              onClick={() =>
+                option.approvalMode === 'automatic'
+                  ? setConfirmAutomaticFor(threadId)
+                  : policy.apply({
+                      approvalPolicy: option.approvalPolicy,
+                      approvalMode: option.approvalMode,
+                    })
+              }
             />
           ))}
+          <p className="text-xs text-muted-foreground">
+            {t('approvalModesHint')}
+          </p>
         </div>
+        <AlertDialog
+          open={confirmAutomaticFor === threadId}
+          onOpenChange={(open) => {
+            if (!open) setConfirmAutomaticFor(null);
+          }}
+        >
+          <AlertDialogContent style={{ background: 'var(--popover)' }}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t('alwaysAllowForThisAgent')}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {t('alwaysAllowConfirmation')}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={policyReadOnly || policy.isSettling}
+                onClick={() => {
+                  if (
+                    confirmAutomaticFor === threadId &&
+                    !policyReadOnly &&
+                    !policy.isSettling
+                  )
+                    policy.apply({
+                      approvalPolicy: 'on-request',
+                      approvalMode: 'automatic',
+                    });
+                  setConfirmAutomaticFor(null);
+                }}
+              >
+                {t('confirm')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <div className="space-y-1 border-t border-border pt-2">
           <div className="text-xs font-medium text-muted-foreground">
             {t('sandbox')}
           </div>
+          {managedCopy && (
+            <p className="text-xs text-muted-foreground">
+              {t('managedAgentIsolationHint')}
+            </p>
+          )}
           {sandboxOptions(
             policyReadOnly ? null : threadCwd,
             observedNetworkAccess(policy.observed?.sandboxPolicy),
@@ -363,7 +461,11 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
                 policy.pending?.sandboxPolicy?.type === option.value.type
               }
               risky={option.risky}
-              disabled={policyReadOnly || policy.isSettling}
+              disabled={
+                policyReadOnly ||
+                policy.isSettling ||
+                (managedCopy && option.value.type === 'dangerFullAccess')
+              }
               onClick={() => policy.apply({ sandboxPolicy: option.value })}
             />
           ))}
@@ -468,7 +570,7 @@ function OptionRow({
   disabled: boolean;
   onClick: () => void;
 }) {
-  const { t } = useTranslation(['common', 'workspaces'], {
+  const { t } = useTranslation(['common', 'codexSettings', 'workspaces'], {
     nsMode: 'fallback',
   });
   return (
@@ -512,8 +614,12 @@ function OptionRow({
   );
 }
 
-function describeApproval(value: unknown): string {
+function describeApproval(value: unknown, mode?: string): string {
+  if (mode === 'automatic') return 'alwaysAllow';
+  if (value === 'never') return 'neverAllow';
   if (typeof value === 'string') return value;
+  if (isBoundedApproval(value as ThreadSecurityPolicyDto['approvalPolicy']))
+    return 'on-request';
   if (value && typeof value === 'object') return 'granular';
   return 'unknown';
 }

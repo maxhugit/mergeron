@@ -1779,6 +1779,8 @@ export type StartReviewDto = {
 };
 
 export type ThreadSecurityPolicyDto = {
+    activePermissionProfileId?: string | null;
+    approvalMode?: 'manual' | 'automatic';
     observed: boolean;
     source: 'unknown' | 'response' | 'notification';
     approvalPolicy: 'on-request' | 'never' | GranularApprovalPolicyDto | null;
@@ -1787,6 +1789,10 @@ export type ThreadSecurityPolicyDto = {
 };
 
 export type PatchThreadSecurityPolicyDto = {
+    /**
+     * Agent-scoped MCP tool approval handling. Never grants additional filesystem permissions or answers user questions.
+     */
+    approvalMode?: 'manual' | 'automatic';
     approvalPolicy?: 'on-request' | 'never' | GranularApprovalPolicyDto;
     sandboxPolicy?: SandboxDangerFullAccessDto | SandboxReadOnlyDto | SandboxExternalSandboxDto | SandboxWorkspaceWriteDto;
 };

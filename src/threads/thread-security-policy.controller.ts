@@ -37,6 +37,7 @@ import {
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import { validateThreadSecurityPolicy } from './thread-security-policy.validation';
 import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
+import { boundedApprovalPolicy } from './agent-approval-policy';
 
 @ApiTags('threads')
 @ApiBearerAuth()
@@ -112,24 +113,81 @@ export class ThreadSecurityPolicyController {
       threadId,
       thread.cwd,
     );
+    if (patch.approvalMode && !this.preferences)
+      throw new ConflictException('AGENT_APPROVAL_PREFERENCES_UNAVAILABLE');
+    const observed = this.settingsObserver.readSecurityPolicy(threadId);
+    const { approvalMode, ...leaves } = patch;
+    const native: typeof leaves & { permissions?: string } = { ...leaves };
+    let expectedProfileId: string | undefined;
+    if (project?.copyPermissions) {
+      const activeProfile = observed?.activePermissionProfileId;
+      if (
+        !observed?.observed ||
+        !activeProfile ||
+        ![
+          project.copyPermissions.readOnly,
+          project.copyPermissions.writable,
+        ].includes(activeProfile)
+      )
+        throw new ConflictException('GIT_COPY_ISOLATION_UNAVAILABLE');
+      const sandbox = patch.sandboxPolicy;
+      if (sandbox) {
+        // Switch only between the server-owned native profiles. Sending the
+        // legacy sandbox projection would discard read-denials on other copies.
+        const current = observed?.sandboxPolicy;
+        if (
+          !current ||
+          (sandbox.type !== 'readOnly' && sandbox.type !== 'workspaceWrite') ||
+          (current.type !== 'readOnly' && current.type !== 'workspaceWrite') ||
+          sandbox.networkAccess !== current.networkAccess ||
+          (sandbox.type === 'workspaceWrite' &&
+            (project.readOnly ||
+              project.copyPermissions.baseProfile !== ':workspace' ||
+              sandbox.writableRoots.some(
+                (root) =>
+                  root !== thread.cwd &&
+                  !(
+                    current.type === 'workspaceWrite' &&
+                    current.writableRoots.includes(root)
+                  ),
+              ) ||
+              sandbox.excludeTmpdirEnvVar ||
+              sandbox.excludeSlashTmp))
+        )
+          throw new ConflictException('GIT_COPY_ISOLATION_REQUIRED');
+      }
+      expectedProfileId =
+        project.readOnly ||
+        sandbox?.type === 'readOnly' ||
+        (!sandbox && activeProfile === project.copyPermissions.readOnly)
+          ? project.copyPermissions.readOnly
+          : project.copyPermissions.writable;
+      delete native.sandboxPolicy;
+      native.permissions = expectedProfileId;
+    }
     if (
-      project?.copyPermissions &&
-      (patch.sandboxPolicy !== undefined ||
-        (patch.approvalPolicy !== undefined &&
-          patch.approvalPolicy !== 'never'))
+      native.approvalPolicy !== undefined &&
+      (project?.copyPermissions || approvalMode === 'automatic')
     )
-      throw new ConflictException('GIT_COPY_ISOLATION_REQUIRED');
+      native.approvalPolicy = boundedApprovalPolicy(native.approvalPolicy);
     this.deletionRegistry.assertMutable(threadId);
     const selection = this.preferences?.beginSecurity(
       threadId,
       patch,
       thread.cwd,
-      this.settingsObserver.readSecurityPolicy(threadId),
+      observed,
+      {
+        ...patch,
+        ...(native.approvalPolicy !== undefined
+          ? { approvalPolicy: native.approvalPolicy }
+          : {}),
+      },
+      expectedProfileId,
     );
     try {
       await this.codex.request<Record<string, never>>(
         'thread/settings/update',
-        { threadId, ...patch },
+        { threadId, ...native },
       );
       selection?.accept();
     } catch (error) {

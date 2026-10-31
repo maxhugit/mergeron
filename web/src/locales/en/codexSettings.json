@@ -1,4 +1,10 @@
 {
+  "alwaysAllow": "Always allow",
+  "managedAgentIsolationHint": "The agent can switch between read-only and writing in its authorized workspace. Full access remains blocked to protect other agents’ workspaces.",
+  "neverAllow": "Never allow",
+  "alwaysAllowForThisAgent": "Always allow this agent?",
+  "alwaysAllowConfirmation": "From the next message, MCP tool approvals will be accepted automatically for this agent, for all its users. Actions can modify or delete data accessible to these tools. Project permissions, workspace isolation and published-document protection remain enforced. Questions and sign-ins requiring your input will not be answered automatically.",
+  "approvalModesHint": "On request: you decide. Never allow: actions requiring approval are refused. Always allow: tool approvals are accepted automatically, without expanding the agent’s permissions.",
   "managedCliIdentity": "Active custom CLI",
   "managedCliVerified": "Integrity verified",
   "managedCliInvalid": "Invalid integrity — activation blocked",

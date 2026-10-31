@@ -1,4 +1,6 @@
 import { assertCopyPermissionProfile } from '../projects/agent-copy-permissions';
+import { boundedApprovalPolicy } from './agent-approval-policy';
+import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
 /** Experimental paged thread-history access isolated from stable Codex types. */
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
@@ -110,6 +112,8 @@ export class ThreadHistoryService {
   constructor(
     private readonly codex: CodexService,
     @Optional() private readonly connections?: ProjectConnectionRuntimeService,
+    @Optional()
+    private readonly preferences?: ThreadExecutionPreferencesService,
   ) {}
 
   /**
@@ -126,16 +130,21 @@ export class ThreadHistoryService {
     const policy = await this.connections?.forResume(params.threadId);
     this.connections?.assertGeneration(generation);
     this.connections?.assertExecutionLocation(policy ?? null);
+    const savedSecurity = this.preferences?.read(params.threadId).security;
+    const readOnly =
+      policy?.readOnly || savedSecurity?.sandboxPolicy?.type === 'readOnly';
     const request: ExperimentalResumeParams = {
       threadId: params.threadId,
       ...(policy ? { config: policy.config } : {}),
       ...(policy?.executionCwd ? { cwd: policy.executionCwd } : {}),
       ...(policy?.copyPermissions
         ? {
-            permissions: policy.readOnly
+            permissions: readOnly
               ? policy.copyPermissions.readOnly
               : policy.copyPermissions.writable,
-            approvalPolicy: 'never' as const,
+            approvalPolicy: boundedApprovalPolicy(
+              savedSecurity?.approvalPolicy,
+            ),
             runtimeWorkspaceRoots: policy.executionCwd
               ? [policy.executionCwd]
               : [],
@@ -156,7 +165,7 @@ export class ThreadHistoryService {
     );
     assertCopyPermissionProfile(
       policy?.copyPermissions &&
-        (policy.readOnly
+        (readOnly
           ? policy.copyPermissions.readOnly
           : policy.copyPermissions.writable),
       response,

@@ -150,7 +150,9 @@ describe('policy request ordering', () => {
       if (failure === 'reject') older.reject(new TypeError('network lost'));
       else older.resolve({ data: undefined } as Reply);
       await first;
-      expect(useThreadPolicyStore.getState().observedByThread.thread?.stale).not.toBe(true);
+      expect(
+        useThreadPolicyStore.getState().observedByThread.thread?.stale,
+      ).not.toBe(true);
     },
   );
 
@@ -162,7 +164,9 @@ describe('policy request ordering', () => {
     await refreshThreadPolicy('thread');
     older.reject(new TypeError('network lost'));
     await first;
-    expect(useThreadPolicyStore.getState().observedByThread.thread?.stale).not.toBe(true);
+    expect(
+      useThreadPolicyStore.getState().observedByThread.thread?.stale,
+    ).not.toBe(true);
   });
 
   it('ends with unknown when the final policy read hangs', async () => {
@@ -274,6 +278,60 @@ const workspaceWrite = (
 });
 
 describe('policySatisfies', () => {
+  it('confirms automatic approval only after its durable mode is observed, and recognizes bounded engine approval', () => {
+    const approvalPolicy = {
+      granular: {
+        sandbox_approval: false,
+        rules: false,
+        skill_approval: false,
+        request_permissions: false,
+        mcp_elicitations: true,
+      },
+    };
+    const requested = {
+      approvalPolicy: 'on-request',
+      approvalMode: 'automatic',
+    } as const;
+    expect(
+      policySatisfies(
+        observed({ approvalPolicy, approvalMode: 'manual' }),
+        requested,
+      ),
+    ).toBe(false);
+    expect(
+      policySatisfies(
+        observed({ approvalPolicy, approvalMode: 'automatic' }),
+        requested,
+      ),
+    ).toBe(true);
+    expect(
+      policySatisfies(
+        observed({
+          approvalPolicy: {
+            granular: { ...approvalPolicy.granular, sandbox_approval: true },
+          },
+          approvalMode: 'automatic',
+        }),
+        requested,
+      ),
+    ).toBe(false);
+  });
+
+  it('uses the acknowledged managed profile for mode transitions without treating its redundant root as an expansion request', () => {
+    const policy = observed({
+      activePermissionProfileId: 'mergeron_copy_fixture',
+      sandboxPolicy: workspaceWrite(['/cwd/own']),
+    });
+    expect(policySatisfies(policy, { sandboxPolicy: workspaceWrite([]) })).toBe(
+      true,
+    );
+    expect(
+      policySatisfies(
+        { ...policy, activePermissionProfileId: undefined },
+        { sandboxPolicy: workspaceWrite([]) },
+      ),
+    ).toBe(false);
+  });
   it('is never satisfied by settings the server has not reported', () => {
     const patch: PatchThreadSecurityPolicyDto = { approvalPolicy: 'never' };
     // Every field is null here because nothing was observed, which is absence
@@ -343,10 +401,9 @@ describe('policySatisfies', () => {
 
   it('confirms the canonical workspace-write policy with an implicit cwd', () => {
     expect(
-      policySatisfies(
-        observed({ sandboxPolicy: workspaceWrite([]) }),
-        { sandboxPolicy: workspaceWrite([]) },
-      ),
+      policySatisfies(observed({ sandboxPolicy: workspaceWrite([]) }), {
+        sandboxPolicy: workspaceWrite([]),
+      }),
     ).toBe(true);
   });
 

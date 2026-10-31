@@ -2,6 +2,7 @@
  * Handles thread and turn operations by delegating to Codex app-server.
  */
 import { assertCopyPermissionProfile } from '../projects/agent-copy-permissions';
+import { boundedApprovalPolicy } from './agent-approval-policy';
 import {
   ConflictException,
   HttpStatus,
@@ -201,13 +202,16 @@ export class ThreadsService {
       historyMode: REQUIRED_HISTORY_MODE,
     };
     if (projectPolicy?.copyPermissions) {
+      const readOnly =
+        projectPolicy.readOnly || requestParams.sandbox === 'read-only';
       delete requestParams.sandbox;
-      requestParams.permissions =
-        projectPolicy.readOnly || params.sandbox === 'read-only'
-          ? projectPolicy.copyPermissions.readOnly
-          : projectPolicy.copyPermissions.writable;
+      requestParams.permissions = readOnly
+        ? projectPolicy.copyPermissions.readOnly
+        : projectPolicy.copyPermissions.writable;
       // A shell escalation must not remove the ownership boundary.
-      requestParams.approvalPolicy = 'never';
+      requestParams.approvalPolicy = boundedApprovalPolicy(
+        requestParams.approvalPolicy,
+      );
       requestParams.runtimeWorkspaceRoots = params.cwd ? [params.cwd] : [];
     }
     this.connections?.assertGeneration(settingsGeneration);
@@ -468,6 +472,11 @@ export class ThreadsService {
       this.connections?.assertFreshLocationPolicy(threadId, projectPolicy);
       return;
     }
+    const security = this.preferences?.forTurn(threadId);
+    const observed = this.settingsObserver?.readSecurityPolicy(threadId);
+    const readOnly =
+      projectPolicy?.readOnly ||
+      (security?.sandboxPolicy ?? observed?.sandboxPolicy)?.type === 'readOnly';
     const response = await this.codex.request<v2.ThreadResumeResponse>(
       'thread/resume',
       {
@@ -476,10 +485,12 @@ export class ThreadsService {
         excludeTurns: true,
         ...(projectPolicy?.copyPermissions
           ? {
-              permissions: projectPolicy.readOnly
+              permissions: readOnly
                 ? projectPolicy.copyPermissions.readOnly
                 : projectPolicy.copyPermissions.writable,
-              approvalPolicy: 'never' as const,
+              approvalPolicy: boundedApprovalPolicy(
+                security?.approvalPolicy ?? observed?.approvalPolicy,
+              ),
               runtimeWorkspaceRoots: [cwd],
             }
           : projectPolicy?.readOnly
@@ -489,7 +500,7 @@ export class ThreadsService {
     );
     assertCopyPermissionProfile(
       projectPolicy?.copyPermissions &&
-        (projectPolicy.readOnly
+        (readOnly
           ? projectPolicy.copyPermissions.readOnly
           : projectPolicy.copyPermissions.writable),
       response,
@@ -716,7 +727,11 @@ export class ThreadsService {
           ? projectPolicy.copyPermissions.readOnly
           : projectPolicy.copyPermissions.writable;
       delete isolated.sandboxPolicy;
-      isolated.approvalPolicy = 'never';
+      isolated.approvalPolicy = boundedApprovalPolicy(
+        isolated.approvalPolicy ??
+          this.settingsObserver?.readSecurityPolicy(params.threadId)
+            .approvalPolicy,
+      );
       isolated.runtimeWorkspaceRoots = [
         effectiveCwd,
         publication?.draftDirectory,
