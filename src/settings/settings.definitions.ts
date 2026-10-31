@@ -62,6 +62,7 @@ export const SECURITY_SETTING_KEYS = {
 } as const;
 
 export const GENERAL_SETTING_KEYS = {
+  updateBackupMode: 'general.updateBackupMode',
   maxIdleSubscriptions: 'general.maxIdleSubscriptions',
   onlyofficeUrl: 'general.onlyofficeUrl',
   onlyofficeJwtSecret: 'general.onlyofficeJwtSecret',
@@ -97,6 +98,15 @@ export const DEFAULT_EXCLUDED_DIRS =
  * and UPDATE metadata/constraints/defaults if they change.
  */
 export const SETTINGS_DEFINITIONS = [
+  {
+    key: GENERAL_SETTING_KEYS.updateBackupMode,
+    type: 'string',
+    category: 'general',
+    description:
+      'Saved backup scope for updates of this installation. Each update still requires its own reviewed plan and confirmation.',
+    defaultValue: 'full',
+    constraints: { enum: ['full', 'minimal', 'none'] },
+  },
   {
     key: SECURITY_SETTING_KEYS.projectAgentTestProfile,
     type: 'boolean',

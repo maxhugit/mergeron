@@ -31,6 +31,16 @@ it('excludes retention from the server form and its batched saves without changi
     json({
       settings: [
         {
+          key: 'general.updateBackupMode',
+          category: 'general',
+          type: 'string',
+          value: 'minimal',
+          defaultValue: 'full',
+          source: 'db',
+          description: 'Saved update backup scope',
+          constraints: { enum: ['full', 'minimal', 'none'] },
+        },
+        {
           key: 'general.logRetention',
           category: 'general',
           type: 'json',

@@ -89,8 +89,22 @@ une nouvelle archive, y compris lors d’un retour à une ancienne application.
 Dans **Serveur → Mise à jour**, le champ **Sauvegarde avant cette mise à jour**
 propose trois options en Dev comme en production. Le choix concerne la pile
 ouverte, jamais l’autre environnement. Il s’applique aussi à une mise à jour
-individuelle de conteneur. L’interface sélectionne **Complète** par défaut ; le
-choix est figé dans le plan à confirmer puis enregistré dans la transaction.
+individuelle de conteneur. Sans préférence enregistrée, l’interface sélectionne
+**Complète**. Le bouton **Enregistrer le choix de sauvegarde** conserve le choix
+en base SQLite pour cette installation, partagé entre ses administrateurs et
+indépendant de l’autre environnement. Enregistrer ne lance aucune mise à jour.
+Une sélection non enregistrée peut servir à l’opération courante, mais n’est pas
+conservée pour les prochaines visites ; l’interface le signale.
+
+À chaque ouverture, l’interface lit `general.updateBackupMode` par l’API de
+paramétrage réservée aux administrateurs ; un échec de lecture bloque la
+préparation d’une mise à jour, sans repli silencieux. Cette valeur fournit le
+`backupMode` explicite du plan pour une mise à jour globale **ou individuelle**.
+L’exécution renvoie exactement le mode du plan confirmé, même si la préférence
+est modifiée entre-temps. Le choix est figé dans l’empreinte du plan puis
+enregistré dans la transaction ; les confirmations et la récupération restent
+inchangées. Le réglage n’est pas stocké dans le navigateur ni dans le formulaire
+Socket. L’API de paramétrage n’accepte que `full`, `minimal` et `none`.
 
 | Option                                              | Copié avant la mise à jour                                                                                                                                                                                       | Retour arrière                                                                                                                          |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
