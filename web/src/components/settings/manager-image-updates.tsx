@@ -38,7 +38,9 @@ export function ManagerImageUpdates({
           <p>
             {t(
               item.checkError
-                ? 'componentUpdatesUnknown'
+                ? item.checkError === 'platformIdentityUnavailable'
+                  ? 'componentPlatformUnknown'
+                  : 'componentUpdatesUnknown'
                 : item.updateAvailable
                   ? 'componentUpdatesAvailable'
                   : 'componentUpdatesCurrent',

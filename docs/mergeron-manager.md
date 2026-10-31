@@ -263,6 +263,13 @@ commits avec un lien vers la comparaison complète. Une erreur de consultation
 des descriptions ne masque pas une image détectée ; une erreur du registre
 ne présente jamais l’installation comme étant à jour.
 
+Les améliorations déjà installées se consultent séparément dans **Version
+actuelle**, même lorsqu’aucune mise à jour n’est disponible : le dernier commit
+de l’image exacte et un lien vers son historique restent accessibles. La
+détection des autres composants compare également leur image de plateforme,
+pas seulement le catalogue multi-architecture ; voir les
+[conditions et limites](container-updates.md#technique).
+
 « Mettre à jour » vérifie les prérequis, puis ouvre une confirmation
 « Installer et redémarrer ». La cible détectée est épinglée par digest dans
 le plan afin qu’un déplacement ultérieur du tag ne change pas l’image
@@ -273,8 +280,10 @@ et n’apparaît que lorsque ces paramètres ont été modifiés.
 Le proxy sortant doit autoriser `ghcr.io`, en plus de GitHub et des domaines
 `githubusercontent.com` déjà utilisés. Le modèle Squid livré inclut cette
 règle. Les installations existantes conservent volontairement leur configuration :
-ajouter `acl allowed_domains dstdomain ghcr.io` avant de tester la détection
-avec cette nouvelle version, puis recharger Squid. Aucun élargissement vers
+ajouter `acl allowed_domains dstdomain ghcr.io` avant de tester la détection.
+La comparaison NGINX/Squid utilise aussi exactement `auth.docker.io` et
+`registry-1.docker.io` : ajouter chacun à `allowed_domains` dans une ancienne
+configuration, valider puis recharger Squid. Aucun élargissement vers
 les réseaux privés ou vers tous les domaines n’est nécessaire.
 
 Les réglages généraux du serveur proposent un aperçu puis une confirmation de

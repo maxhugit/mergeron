@@ -36,6 +36,14 @@ docker network create mergeron-proxy
 Le Manager ne configure ni ce réseau externe, ni DNS, ni certificat, ni proxy
 HTTPS. Voir le [raccordement réseau](installation-portable.md).
 
+Le modèle du proxy sortant permet la lecture des métadonnées des images auprès
+de GHCR et des deux hôtes publics Docker Hub `auth.docker.io` et
+`registry-1.docker.io`. Une configuration Squid persistante n’est pas remplacée
+à la mise à jour : l’opérateur ajoute ces deux hôtes exacts, valide la
+configuration et recharge le proxy pour la comparaison de plateforme NGINX/Squid.
+Garder les refus des réseaux privés et le contrôle TLS ; voir les
+[mises à jour des conteneurs](container-updates.md).
+
 ## 2. Choisir les paramètres
 
 Copier [manager.env.example](../deployment/manager.env.example) dans

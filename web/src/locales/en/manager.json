@@ -1,4 +1,9 @@
 {
+  "installedImprovementsTitle": "Already installed improvements",
+  "installedImprovementsDescription": "The last change included in this exact image. This is neither the list of available updates nor the complete release history.",
+  "installedImprovementsLink": "View the installed revision and its history",
+  "installedChangesUnavailable": "The installed revision summary could not be retrieved. Its history is still available through the link below.",
+  "componentPlatformUnknown": "The image for this server’s platform could not be verified. Check the Manager version and filtered access to registry metadata. A Docker catalog difference alone is never offered as an update.",
   "managerBackupMode": "Backup before this update",
   "managerFastSelectedBackupHelp": "Reuse local images verified by digest. This setting does not change the backup choice above or health checks.",
   "managerFullBackup": "Full",

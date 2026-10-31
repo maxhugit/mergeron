@@ -7,6 +7,7 @@ import { SettingsService } from './settings.service';
 import { ServerReleaseService } from './server-release.service';
 import { ManagerStatusService } from './manager-status.service';
 import { ImageUpdateService } from './image-update.service';
+import { RegistryImageIdentityService } from './registry-image-identity.service';
 import { AgentInstructionsService } from './agent-instructions.service';
 
 @Module({
@@ -18,6 +19,7 @@ import { AgentInstructionsService } from './agent-instructions.service';
     ServerReleaseService,
     ManagerStatusService,
     ImageUpdateService,
+    RegistryImageIdentityService,
   ],
   exports: [
     SettingsService,
