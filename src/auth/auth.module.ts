@@ -9,12 +9,15 @@ import { PlatformAccessGuard } from './platform-access.guard';
 import { AuthConfigService } from './auth-config.service';
 import { LocalAuthService } from './local-auth.service';
 import { OidcAuthService } from './oidc-auth.service';
+import { InitialAdminController } from './initial-admin.controller';
+import { InitialAdminService } from './initial-admin.service';
 
 @Module({
   imports: [JwtModule.register({}), DatabaseModule],
-  controllers: [AuthController],
+  controllers: [AuthController, InitialAdminController],
   providers: [
     AuthService,
+    InitialAdminService,
     AuthConfigService,
     LocalAuthService,
     OidcAuthService,

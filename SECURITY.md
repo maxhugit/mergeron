@@ -50,6 +50,21 @@ de redirection HTTP, de socket Docker applicatif ou d’identifiant fourni par
 l’utilisateur. Les SHA-256 des manifestes sont vérifiés, les tailles et délais
 bornés. Une erreur laisse l’état inconnu et bloque la proposition d’installation.
 
+## Premier administrateur
+
+L’[assistant de première configuration](docs/initial-admin-setup.md) nécessite
+une autorisation créée par le Manager uniquement sur une installation neuve et
+un code aléatoire de 256 bits émis par une commande locale de l’hôte. Ni le premier
+visiteur ni une simple adresse e-mail ne confèrent un rôle administrateur. Les
+empreintes, l’expiration de 15 minutes et le blocage temporaire sont persistés ;
+la session intermédiaire ne donne aucun accès métier. Origine HTTPS épinglée,
+cookie `__Host-`, contrôle CSRF et transaction atomique protègent la création.
+Le marqueur est fermé avant le commit et masqué aux agents ; un échec est fermé
+et exige une reprise explicite sur l’hôte. Une restauration complète d’avant
+l’initialisation doit conserver cette fermeture ou être traitée comme une
+nouvelle initialisation contrôlée. Les installations existantes ne sont pas
+réarmées automatiquement et la console Docker reste une autorité privilégiée.
+
 ## Reprise de session
 
 La reprise après inactivité ne recharge pas l’onglet de travail et ne réutilise

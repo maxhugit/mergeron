@@ -37,17 +37,19 @@ beforeEach(() => {
   identityActive = true;
   network.mockReset().mockImplementation(async (input) => {
     const path = String(input);
-    const data = path.endsWith('/methods')
-      ? { localEnabled: true }
-      : path.endsWith('/me')
-        ? {
-            kind: 'person',
-            personId: 'person',
-            name: 'Person',
-            role: 'administrator',
-            active: identityActive,
-          }
-        : {};
+    const data = path.endsWith('/setup/status')
+      ? { required: false, authorized: false }
+      : path.endsWith('/methods')
+        ? { localEnabled: true }
+        : path.endsWith('/me')
+          ? {
+              kind: 'person',
+              personId: 'person',
+              name: 'Person',
+              role: 'administrator',
+              active: identityActive,
+            }
+          : {};
     return new Response(JSON.stringify(data), {
       headers: { 'Content-Type': 'application/json' },
     });
@@ -100,7 +102,7 @@ it('never completes login for an inactive identity', async () => {
   fireEvent.click(
     await screen.findByRole('button', { name: 'Sign in locally' }),
   );
-  await waitFor(() => expect(network).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(network).toHaveBeenCalledTimes(4));
   expect(routing.navigate).not.toHaveBeenCalled();
   expect(routing.notify).not.toHaveBeenCalled();
 });

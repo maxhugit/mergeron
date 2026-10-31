@@ -23,6 +23,14 @@ conteneurs et fichiers déjà présents. Les défauts ci-dessous sont ceux du
 Le [raccordement réseau et SSO](installation-portable.md) reste indépendant des
 produits choisis. Le Manager et le socket Docker ne sont jamais publiés sur le réseau.
 
+Lors d’une installation neuve, le Manager prépare automatiquement l’autorisation
+privée de l’[assistant du premier administrateur](initial-admin-setup.md).
+`MERGERON_WEBUI_URL` doit être HTTPS ; son origine exacte est imposée à la
+validation du code et du formulaire. Aucun mot de passe ni code n’est à placer
+dans une variable d’environnement. Une mise à jour ou une adoption ne réarme
+pas cet assistant. Le préfixe de pile est aussi transmis à l’application pour
+afficher la bonne commande de console, sans publier le Manager sur le réseau.
+
 ## Images et présentation dans l’hôte
 
 | Variable                    | Défaut du code                                                  | Fonction et utilisation                                                                                                                                                                                            |

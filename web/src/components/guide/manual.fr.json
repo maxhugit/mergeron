@@ -1585,6 +1585,13 @@
         ],
         "sections": [
           {
+            "title": "Premier administrateur d’une installation neuve",
+            "paragraphs": [
+              "Après installation par le Manager, la première ouverture affiche Configurer votre plateforme. Depuis la console du serveur, lancez la commande affichée pour obtenir un code à usage unique valable 15 minutes, puis saisissez vos coordonnées et votre mot de passe dans l’assistant. Aucun fichier JSON ni service e-mail n’est nécessaire.",
+              "Après création, connectez-vous normalement et configurez les autres réglages. L’assistant reste fermé pour les installations existantes, même si un administrateur est supprimé ou désactivé. Une initialisation interrompue sans aucun compte peut être reprise volontairement depuis l’hôte avec --retry-interrupted. Ne partagez jamais le code dans un chat ou un ticket."
+            ]
+          },
+          {
             "title": "Utiliser la liste",
             "steps": [
               "Ouvrez Administration → Personnes avec un compte administrateur.",

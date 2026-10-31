@@ -1,5 +1,6 @@
 /** Outer mount boundary: a Codex approval cannot make these mounts writable. */
 import * as path from 'node:path';
+import { existsSync } from 'node:fs';
 
 export interface DocumentIsolationPlan {
   home: string;
@@ -124,6 +125,9 @@ export function documentIsolationArgs(
   // SQLite's sidecars must not expose identities, sessions or server settings.
   for (const suffix of ['', '-wal', '-shm', '-journal'])
     result.push('--ro-bind', '/dev/null', plan.databasePath + suffix);
+  const initialAdmin = path.join(plan.home, 'webui-initial-admin.json');
+  if (existsSync(initialAdmin))
+    result.push('--ro-bind', '/dev/null', initialAdmin);
   result.push('--', binary, ...args);
   return result;
 }

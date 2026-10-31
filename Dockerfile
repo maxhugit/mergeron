@@ -364,6 +364,7 @@ COPY drizzle/ ./drizzle/
 COPY scripts/project_archive.py ./scripts/project_archive.py
 COPY scripts/project_archive_native.py ./scripts/project_archive_native.py
 COPY scripts/provision-person.cjs ./scripts/provision-person.cjs
+COPY scripts/setup-admin.cjs ./scripts/setup-admin.cjs
 COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
 COPY runtime/preview-profile.cjs runtime/preview-snapshot.py runtime/preview-gateway.cjs /app/runtime/
 COPY runtime/preview-storage.cjs /app/runtime/

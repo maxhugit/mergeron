@@ -43,6 +43,27 @@ export class LocalAuthService {
     };
   }
 
+  /** Shared validation and hashing for the first administrator's local account. */
+  async prepareNewAccount(input: { username?: unknown; password?: unknown }) {
+    const username = this.normalizeUsername(input.username);
+    if (
+      typeof input.password !== 'string' ||
+      input.password.length < PASSWORD_MINIMUM_LENGTH ||
+      input.password.length > 1024
+    )
+      throw new BadRequestException(
+        'Password must contain 12 to 1024 characters',
+      );
+    const passwordHash = await hash(input.password, {
+      algorithm: 2,
+      memoryCost: 19_456,
+      timeCost: 2,
+      parallelism: 1,
+      outputLen: 32,
+    });
+    return { username, passwordHash };
+  }
+
   listAccounts() {
     const now = Date.now();
     this.deleteExpiredSessions(now);

@@ -1,5 +1,5 @@
-import { chown, mkdir, open, readFile, lstat } from 'node:fs/promises';
-import { createHash, randomBytes } from 'node:crypto';
+import { chown, mkdir, open, readFile, readdir, lstat } from 'node:fs/promises';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectInventory } from './inventory.mjs';
@@ -387,7 +387,34 @@ async function createExclusive(path, content, mode = 0o600, owner) {
   }
 }
 
-async function preparePersistentState(configuration) {
+async function preparePersistentState(configuration, creatingApplication) {
+  const emptyOrMissing = async (path) => {
+    try {
+      const info = await lstat(path);
+      return (
+        info.isDirectory() &&
+        !info.isSymbolicLink() &&
+        (await readdir(path)).length === 0
+      );
+    } catch (error) {
+      if (error.code === 'ENOENT') return true;
+      throw error;
+    }
+  };
+  // Never arm an upgrade, adoption, restored database or recreated application.
+  const initialSetup =
+    creatingApplication &&
+    !(await exists(join(configuration.hostStatePath, 'backend-token.txt'))) &&
+    !(await exists(
+      join(configuration.hostStatePath, 'backend-token-nginx.txt'),
+    )) &&
+    !(await exists(
+      join(configuration.hostStatePath, 'manager-state', 'adoption.json'),
+    )) &&
+    (await emptyOrMissing(join(configuration.hostStatePath, 'home'))) &&
+    (await emptyOrMissing(join(configuration.hostStatePath, 'workspace')));
+  if (initialSetup && new URL(configuration.publicUrl).protocol !== 'https:')
+    throw new Error('initialAdministratorSetupRequiresHttps');
   const applicationOwner =
     configuration.applyOwnership === false
       ? undefined
@@ -413,6 +440,23 @@ async function preparePersistentState(configuration) {
         applicationOwned ? 11002 : 0,
       );
     }
+  }
+
+  if (initialSetup) {
+    const directory = join(configuration.hostStatePath, 'home', '.codex');
+    await mkdir(directory, { mode: 0o700 });
+    if (applicationOwner)
+      await chown(directory, applicationOwner.uid, applicationOwner.gid);
+    await createExclusive(
+      join(directory, 'webui-initial-admin.json'),
+      JSON.stringify({
+        version: 1,
+        installationId: randomUUID(),
+        state: 'armed',
+      }),
+      0o600,
+      applicationOwner,
+    );
   }
 
   const tokenPath = join(configuration.hostStatePath, 'backend-token.txt');
@@ -535,6 +579,7 @@ export function containerSpecification(manifest, component, configuration) {
       Env: [
         `NODE_ENV=${manifest.environment}`,
         `MERGERON_STACK_ENVIRONMENT=${manifest.environment}`,
+        `MERGERON_STACK_PREFIX=${manifest.stack}`,
         'PORT=8172',
         'HOME=/home/codex',
         'CODEX_HOME=/home/codex/.codex',
@@ -690,7 +735,13 @@ export async function applyInstallPlan({
   if (!plan.applicable) throw new Error('installationBlocked');
   if (plan.actions.length === 0) return { plan, applied: [], changed: false };
 
-  await preparePersistentState(configuration);
+  await preparePersistentState(
+    configuration,
+    plan.actions.some(
+      (item) =>
+        item.type === 'createContainer' && item.component === 'application',
+    ),
+  );
   const applied = plan.actions.filter((item) =>
     ['createDirectory', 'createFile'].includes(item.type),
   );

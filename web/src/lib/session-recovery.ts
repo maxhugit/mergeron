@@ -60,6 +60,9 @@ const renewalEndpoints = new Map(
     ['methods', 'GET'],
     ['login', 'POST'],
     ['local-login', 'POST'],
+    ['setup/status', 'GET'],
+    ['setup/verify', 'POST'],
+    ['setup/complete', 'POST'],
   ].map(([path, method]) => [withBasePath(`/api/auth/${path}`), method]),
 );
 

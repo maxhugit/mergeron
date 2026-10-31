@@ -179,6 +179,8 @@ jobs:
           src/auth/project-authorization.spec.ts
           src/auth/auth-config.service.spec.ts
           src/auth/local-auth.service.spec.ts
+          src/auth/initial-admin.service.spec.ts
+          src/auth/initial-admin.http.spec.ts
           src/previews
           src/auth/platform-cookie.spec.ts
           src/auth/impersonation.spec.ts
@@ -243,6 +245,10 @@ jobs:
       - name: Test local administrator bootstrap on an isolated database
         if: matrix.part == 'backend'
         run: node scripts/smoke-test-local-bootstrap.cjs
+
+      - name: Test first-administrator console activation on an isolated database
+        if: matrix.part == 'backend'
+        run: node scripts/smoke-test-initial-admin.cjs
 
       - name: Build frontend
         if: matrix.part == 'frontend'

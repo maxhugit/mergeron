@@ -89,7 +89,9 @@ test('installation commands parse without executing or exposing a Docker endpoin
   assert.ok(!guide.includes('--privileged'));
   assert.ok(!/docker run[^`]*--publish/.test(guide));
   assert.ok(guide.includes('provision-person.cjs'));
-  assert.ok(guide.includes('La version actuelle n’a pas de formulaire public'));
+  assert.ok(guide.includes('assistant Web de première'));
+  assert.ok(guide.includes('setup-admin.cjs'));
+  assert.ok(guide.includes('--retry-interrupted'));
 });
 
 test('the installation entry points link one Manager journey without environment-specific providers', () => {

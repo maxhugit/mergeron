@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AccessContextInterceptor } from './auth/access-context.interceptor';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import type { ServerResponse } from 'node:http';
 import { LoggerModule } from 'nestjs-pino';
 import { join } from 'node:path';
 import { AccountModule } from './account/account.module';
@@ -81,6 +82,14 @@ const PINO_REDACT = {
     'apiKey',
     'password',
     'passwordHash',
+    'csrfToken',
+    'passwordConfirmation',
+    '*.csrfToken',
+    '*.passwordConfirmation',
+    'req.body.code',
+    'req.body.csrfToken',
+    'req.body.password',
+    'req.body.passwordConfirmation',
     'clientSecret',
     '*.token',
     '*.accessToken',
@@ -135,6 +144,16 @@ const PINO_REDACT = {
       exclude: ['/api/(.*)'],
       serveStaticOptions: {
         fallthrough: true,
+        setHeaders: (response: ServerResponse, filePath: string) => {
+          if (filePath.endsWith('.html')) {
+            response.setHeader(
+              'Content-Security-Policy',
+              "frame-ancestors 'none'",
+            );
+            response.setHeader('X-Frame-Options', 'DENY');
+            response.setHeader('Referrer-Policy', 'no-referrer');
+          }
+        },
       },
     }),
     AuthModule,

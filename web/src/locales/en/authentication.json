@@ -1,4 +1,32 @@
 {
+  "setup": {
+    "title": "Set up your platform",
+    "loading": "Checking initial setup…",
+    "loadError": "Unable to verify installation state. No access has been opened.",
+    "retry": "Try again",
+    "activationStep": "Step 1 of 2 — Confirm server access",
+    "accountStep": "Step 2 of 2 — Create the first administrator",
+    "activationHelp": "Run this command in your server console to obtain your activation code:",
+    "codeHelp": "The code expires after 15 minutes, is single-use and must not be shared. Running the command again invalidates the previous code and any unfinished setup session.",
+    "code": "Activation code",
+    "verify": "Validate code",
+    "codeError": "Invalid, expired or temporarily blocked code. Check it; after repeated failures wait one minute or generate a new code on the server.",
+    "accountHelp": "Create your local account. Use a password of at least 12 characters. Usernames accept 3–64 letters, digits, dots, dashes and underscores. No email service or SSO is required at this stage.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email address",
+    "username": "Username",
+    "password": "Password",
+    "passwordConfirmation": "Confirm password",
+    "passwordMismatch": "The passwords do not match.",
+    "create": "Create administrator",
+    "createError": "Unable to create the account. Check your details and session validity. If an interruption sealed setup without creating the account, recover from the server console using --retry-interrupted.",
+    "restart": "Check setup again",
+    "doneTitle": "Your administrator is ready",
+    "done": "Initial setup is now closed. Sign in with the account you just created.",
+    "nextSteps": "You can then configure Codex, optional SSO and other settings in administration.",
+    "signIn": "Sign in"
+  },
   "peopleTable": {
     "presence": "Presence",
     "connectedSince": "Connected since"
