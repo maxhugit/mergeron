@@ -212,6 +212,26 @@ export class WorkspaceGitController {
     return this.git.pullRequests(projectId, resourceId);
   }
 
+  @Get(['resources/:resourceId/merges', 'connections/:resourceId/merges'])
+  merges(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return this.git.merges(projectId, resourceId);
+  }
+
+  @Get([
+    'resources/:resourceId/merges/:number/checks',
+    'connections/:resourceId/merges/:number/checks',
+  ])
+  mergeChecks(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('number') number: string,
+  ) {
+    return this.git.mergeChecks(projectId, resourceId, number);
+  }
+
   @Get([
     'resources/:resourceId/pull-requests/:number/checks',
     'connections/:resourceId/pull-requests/:number/checks',

@@ -286,5 +286,16 @@
   "gitActionMerged": "Pull request merged.",
   "gitActionMerge": "Merge PR…",
   "gitActionConfirmMerge": "Merge pull request #{{number}}?",
-  "gitActionMergeHelp": "Creates a merge commit on the PR target branch. Checks and revisions are rechecked on the server. GitHub branch protections apply. The local copy is not updated and no branch is deleted."
+  "gitActionMergeHelp": "Creates a merge commit on the PR target branch. Checks and revisions are rechecked on the server. GitHub branch protections apply. The local copy is not updated and no branch is deleted.",
+  "gitTabMerges": "Merges",
+  "gitMergesHelp": "Track checks on the merge commit of recently merged PRs. Checks refresh automatically every 30 seconds.",
+  "gitNoMerges": "No merges among recently updated closed PRs.",
+  "gitMergesLimited": "Limited history: up to 5 merges among the 30 recently updated closed PRs.",
+  "gitMergeChecksPassed": "Checks passed",
+  "gitMergeChecksFailed": "Checks failed",
+  "gitMergedOn": "Merged on {{date}}",
+  "gitMergeCommit": "Merge commit: {{sha}}",
+  "gitMergeJobs": "Jobs ({{count}})",
+  "gitMergeOpenChecks": "View checks on GitHub",
+  "gitMergeChecksError": "Unable to check jobs for this merge. Their success is unconfirmed."
 }
