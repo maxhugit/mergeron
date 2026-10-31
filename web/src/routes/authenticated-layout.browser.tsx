@@ -11,7 +11,10 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { AuthenticatedLayout } from './authenticated-layout';
-import { installSessionRecovery } from '@/lib/session-recovery';
+import {
+  installSessionRecovery,
+  isSessionPaused,
+} from '@/lib/session-recovery';
 import { platformSessionKey } from '@/lib/platform-session';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
@@ -82,6 +85,225 @@ afterEach(() => {
   dispose?.();
   vi.restoreAllMocks();
 });
+
+test.each([390, 1180])(
+  'keeps ordinary input focus distinct from window return at %ipx',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    let clock = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => clock);
+    const identity = {
+      active: true,
+      kind: 'person',
+      personId: 'original',
+      role: 'administrator',
+    };
+    const network = vi
+      .spyOn(window, 'fetch')
+      .mockImplementation(
+        async (input) =>
+          new Response(
+            JSON.stringify(String(input).endsWith('/me') ? identity : {}),
+            { headers: { 'Content-Type': 'application/json' } },
+          ),
+      );
+    dispose = installSessionRecovery();
+    const client = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      const input = await screen.findByRole('textbox', {
+        name: 'Unsent message',
+      });
+      // Enter this test iframe while the verification is still fresh. Gaining
+      // actual window focus is intentionally different from changing fields.
+      act(() => {
+        input.focus();
+        input.blur();
+      });
+      clock += 31_000;
+      const calls = network.mock.calls.length;
+      act(() => input.focus());
+      expect(document.activeElement).toBe(input);
+      expect(isSessionPaused()).toBe(false);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(network).toHaveBeenCalledTimes(calls);
+      fireEvent.change(input, {
+        target: { value: 'La saisie ne ferme pas la session.' },
+      });
+      expect(input).toHaveValue('La saisie ne ferme pas la session.');
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);
+
+test.each([390, 1180])(
+  'silently verifies a real retained layout on window return, without renewal dialog, replay or lost draft at %ipx',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    let clock = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => clock);
+    const identity = {
+      active: true,
+      kind: 'person',
+      personId: 'original',
+      role: 'administrator',
+    };
+    const response = () =>
+      new Response(JSON.stringify(identity), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    let pending = false;
+    let finish!: (value: Response) => void;
+    const network = vi
+      .spyOn(window, 'fetch')
+      .mockImplementation(async (input) => {
+        if (String(input).endsWith('/me'))
+          return pending
+            ? new Promise<Response>((resolve) => {
+                finish = resolve;
+              })
+            : response();
+        return new Response('{}');
+      });
+    dispose = installSessionRecovery();
+    const client = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      const input = await screen.findByRole('textbox', {
+        name: 'Unsent message',
+      });
+      fireEvent.change(input, {
+        target: { value: 'Brouillon conservé pendant la vérification.' },
+      });
+      const scroll = screen.getByTestId('retained-scroll');
+      scroll.scrollTop = 320;
+      const href = window.location.href;
+      pending = true;
+      clock += 31_000;
+      const before = network.mock.calls.length;
+      act(() => {
+        window.dispatchEvent(new Event('focus'));
+        window.dispatchEvent(new Event('pageshow'));
+        window.dispatchEvent(new Event('online'));
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await waitFor(() => expect(finish).toBeTypeOf('function'));
+      expect(network).toHaveBeenCalledTimes(before + 1);
+      expect(isSessionPaused()).toBe(true);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
+      expect(
+        screen.getByRole('heading', { name: 'Vérification de l’identité…' }),
+      ).toBeVisible();
+      expect(screen.queryByText('Session à renouveler')).toBeNull();
+      expect(screen.queryByRole('textbox')).toBeNull();
+      await expect(
+        fetch('/api/projects', { method: 'POST', body: '{}' }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(network).toHaveBeenCalledTimes(before + 1);
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      const engine = navigator.userAgent.includes('Chrome')
+        ? 'chromium'
+        : 'webkit';
+      await page.screenshot({
+        path: `../../.vitest-screenshots/session-checking-${engine}-${width}.png`,
+      });
+      pending = false;
+      await act(async () => {
+        finish(response());
+      });
+      await waitFor(() => expect(screen.getByRole('textbox')).toBe(input));
+      expect(input).toHaveValue('Brouillon conservé pendant la vérification.');
+      expect(scroll.scrollTop).toBe(320);
+      expect(window.location.href).toBe(href);
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(
+        network.mock.calls.filter(([, init]) => init?.method === 'POST'),
+      ).toHaveLength(0);
+      await page.screenshot({
+        path: `../../.vitest-screenshots/session-ready-${engine}-${width}.png`,
+      });
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);
+
+test.each([403, 'changed'] as const)(
+  'keeps a real %s denial locked and distinct from session expiry',
+  async (outcome) => {
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    let reject = false;
+    const identity = {
+      active: true,
+      kind: 'person',
+      personId: 'original',
+      role: 'administrator',
+    };
+    const network = vi.spyOn(window, 'fetch').mockImplementation(
+      async (input) =>
+        new Response(
+          JSON.stringify(
+            String(input).endsWith('/me')
+              ? {
+                  ...identity,
+                  personId:
+                    reject && outcome === 'changed' ? 'other' : 'original',
+                }
+              : {},
+          ),
+          {
+            status: reject && outcome === 403 ? 403 : 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+    );
+    dispose = installSessionRecovery();
+    const client = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      await screen.findByRole('textbox', { name: 'Unsent message' });
+      reject = true;
+      await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+      await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+      expect(isSessionPaused()).toBe(true);
+      expect(screen.getByRole('dialog')).toHaveAccessibleName(
+        outcome === 'changed'
+          ? 'Identité ou droits modifiés'
+          : 'Accès indisponible',
+      );
+      expect(screen.queryByText('Session à renouveler')).toBeNull();
+      const calls = network.mock.calls.length;
+      await expect(
+        fetch('/api/projects', { method: 'DELETE' }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(network).toHaveBeenCalledTimes(calls);
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);
 
 test.each([390, 1180])(
   'does not intercept touch scrolling or reload the workspace at %ipx',
@@ -268,7 +490,8 @@ test('automatically recovers a transient real proxy redirect without navigation,
     checking = client.refetchQueries({ queryKey: platformSessionKey });
   });
   await waitFor(() => expect(release).toBeTypeOf('function'));
-  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
   expect(screen.getByRole('heading', { name: /verifying/i })).toBeVisible();
   expect(screen.queryByRole('textbox')).toBeNull();
   const calls = network.mock.calls.length;

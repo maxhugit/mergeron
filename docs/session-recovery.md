@@ -1,5 +1,38 @@
 # Connexion après une longue inactivité
 
+## Vérification ordinaire et renouvellement interactif
+
+Un clic dans un champ de saisie n’est pas un retour à la fenêtre. L’écoute de
+`focus` en phase de capture sur `window` voit aussi le focus de ses descendants :
+le client doit ignorer ces événements avant d’appliquer le seuil de fraîcheur de
+30 secondes. L’ancienne règle pouvait donc suspendre la session pendant une
+interaction normale, sans refus du serveur. Un test de régression reproduit un
+focus dans un champ après 31 secondes ; il échoue sans cette distinction.
+
+Les consommateurs de l’identité partagent un seul coordinateur par client de
+requêtes : une vérification périodique, un mécanisme de reprise et un ensemble
+d’écouteurs. Les événements rapprochés `focus`, `pageshow`, `online` et
+`visibilitychange` partagent la même sonde. Une génération nouvellement fermée
+déclenche une lecture fraîche immédiatement : le délai anti-répétition ne doit
+pas retenir cette lecture derrière une ancienne sonde, dont la réponse ne peut
+plus autoriser la génération courante. Seules les lectures d’identité dépassées
+sont annulées ; aucune action ni saisie n’est rejouée.
+
+Pendant une vérification ordinaire, le client présente un état non modal
+« Vérification de l’identité… », pas « Session à renouveler ». L’espace de travail
+reste conservé mais masqué, les requêtes protégées et le socket restent bloqués.
+Une réponse fraîche pour la même identité et les mêmes droits est toujours
+nécessaire pour reprendre. Un refus persistant, une panne de connexion et un
+changement d’identité gardent leurs états distincts et bloquants ; la fenêtre de
+connexion ne s’ouvre jamais automatiquement. Les vrais refus `401`/`403` et les
+changements de droits ne sont pas réessayés par le polling de panne serveur.
+
+Les tests unitaires et les scénarios Chromium/WebKit couvrent ces événements,
+la conservation du brouillon et du défilement, les réponses anciennes, l’absence
+de rejeu, le démontage des consommateurs et l’affichage ordinateur/mobile. Ils
+utilisent des identités synthétiques et ne remplacent pas l’observation prolongée
+de l’installation après son déploiement.
+
 ## Incidents intermittents en Dev — diagnostic du 31 octobre 2026
 
 La durée du fournisseur Authentik Dev a été relue : `hours=12`, avec une
@@ -137,7 +170,8 @@ destination fournie par un `fetch` n’est utilisée pour naviguer l’onglet pr
 
 L’espace de travail déjà vérifié est conservé dans une frontière React `Activity`
 masquée : état React et DOM conservés, effets et abonnements nettoyés pendant
-l’attente. La fenêtre d’attente n’est pas fermable par Échap ou un clic extérieur.
+l’attente. La vérification ordinaire utilise un état non modal ; les fenêtres
+de refus ou d’erreur persistante ne sont pas fermables par Échap ou un clic extérieur.
 Le suivi de mise à jour du Manager reste disponible pendant une interruption.
 Cela ne garantit pas la conservation après fermeture, rechargement volontaire
 ou suppression de l’onglet par le navigateur ; les lecteurs externes peuvent

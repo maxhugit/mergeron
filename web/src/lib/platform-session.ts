@@ -1,4 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { clearApiToken, getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
@@ -6,6 +10,7 @@ import {
   acceptVerifiedSession,
   hasVerifiedSession,
   pauseSession,
+  isSessionPaused,
   sessionVerificationGeneration,
   useSessionPaused,
 } from './session-recovery';
@@ -34,6 +39,7 @@ export interface PlatformSession {
 const SESSION_RETRY_DELAYS_MS = [500, 1_500, 3_000] as const;
 export const AUTH_REQUEST_TIMEOUT_MS = 12_000;
 export const SESSION_RECOVERY_INTERVAL_MS = 5_000;
+export const SESSION_CHECK_INTERVAL_MS = 30_000;
 
 export class AuthResourceError extends Error {
   readonly status: number;
@@ -149,7 +155,93 @@ export async function readAuthResource<T>(
     signal?.removeEventListener('abort', cancel);
   }
 }
+/** One owner per query client, not one set of timers/listeners per UI consumer. */
+const recoveryOwners = new WeakMap<
+  QueryClient,
+  { users: number; dispose(): void }
+>();
+
+function retainSessionRecovery(client: QueryClient) {
+  let entry = recoveryOwners.get(client);
+  if (!entry) {
+    let lastRequest = 0;
+    let requestedGeneration = -1;
+    const query = () =>
+      client
+        .getQueryCache()
+        .find({ queryKey: platformSessionKey, exact: true });
+    const verify = (required = false) => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      const current = query();
+      if (!current) return;
+      const now = Date.now();
+      const generation = sessionVerificationGeneration();
+      // Repeated focus/pageshow/online events share one live probe. A probe
+      // predating a newly closed gate cannot authorize that generation.
+      if (
+        current.state.fetchStatus === 'fetching' &&
+        requestedGeneration === generation
+      )
+        return;
+      if (!required && now - lastRequest < 10_000) return;
+      const superseded = required && requestedGeneration !== generation;
+      lastRequest = now;
+      requestedGeneration = generation;
+      void client.refetchQueries(
+        { queryKey: platformSessionKey, exact: true, type: 'active' },
+        { cancelRefetch: superseded },
+      );
+    };
+    const recover = () => verify(isSessionPaused());
+    const paused = (event: Event) => {
+      if ((event as CustomEvent<{ reason?: string }>).detail?.reason === 'wake')
+        verify(true);
+    };
+    const expired = () => {
+      clearApiToken();
+      pauseSession();
+      verify(true);
+    };
+    const poll = window.setInterval(() => {
+      const state = query()?.state;
+      if (!state || state.fetchStatus === 'fetching') return;
+      // Confirmed denials and identity changes never become restart polling.
+      if (state.error) {
+        if (isSessionTransportError(state.error)) verify(true);
+        return;
+      }
+      if (Date.now() - state.dataUpdatedAt >= SESSION_CHECK_INTERVAL_MS)
+        verify(isSessionPaused());
+    }, SESSION_RECOVERY_INTERVAL_MS);
+    for (const name of ['pageshow', 'online', 'focus'])
+      window.addEventListener(name, recover);
+    document.addEventListener('visibilitychange', recover);
+    window.addEventListener('codex-webui:session-paused', paused);
+    window.addEventListener('codex-webui:auth-expired', expired);
+    entry = {
+      users: 0,
+      dispose: () => {
+        window.clearInterval(poll);
+        for (const name of ['pageshow', 'online', 'focus'])
+          window.removeEventListener(name, recover);
+        document.removeEventListener('visibilitychange', recover);
+        window.removeEventListener('codex-webui:session-paused', paused);
+        window.removeEventListener('codex-webui:auth-expired', expired);
+      },
+    };
+    recoveryOwners.set(client, entry);
+  }
+  entry.users++;
+  return () => {
+    if (--entry.users === 0) {
+      entry.dispose();
+      recoveryOwners.delete(client);
+    }
+  };
+}
+
 export function usePlatformSession() {
+  const client = useQueryClient();
   const paused = useSessionPaused();
   const query = useQuery({
     queryKey: platformSessionKey,
@@ -170,11 +262,10 @@ export function usePlatformSession() {
       }
     },
     staleTime: 10_000,
-    refetchInterval: (current) =>
-      isSessionTransportError(current.state.error) ? false : 30_000,
-    refetchIntervalInBackground: false,
-    refetchOnReconnect: true,
-    refetchOnWindowFocus: true,
+    // Recovery and polling are shared by all consumers of this identity.
+    refetchInterval: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
     retry: (attempt, error) =>
       shouldRetryPlatformSession(attempt, error, hasVerifiedSession()),
     retryDelay: (attemptIndex) =>
@@ -182,47 +273,8 @@ export function usePlatformSession() {
         Math.min(attemptIndex, SESSION_RETRY_DELAYS_MS.length - 1)
       ],
   });
-  // This must survive the workspace being hidden after a failed identity probe.
-  // Do not replay mutations, and do not keep rendering a cached active identity.
-  const { refetch } = query;
-  useEffect(() => {
-    if (!isSessionTransportError(query.error)) return;
-    // A server restart does not trigger the browser's `online`/focus events.
-    // Keep this timer outside the protected workspace and avoid overlapping
-    // probes or replaying the update mutation. Never grant access from cache.
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible' && navigator.onLine)
-        void refetch({ cancelRefetch: false });
-    }, SESSION_RECOVERY_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [query.error, refetch]);
-  useEffect(() => {
-    let lastRecovery = 0;
-    const recover = () => {
-      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
-      const now = Date.now();
-      if (now - lastRecovery < 10_000) return;
-      lastRecovery = now;
-      void refetch({ cancelRefetch: false });
-    };
-    window.addEventListener('pageshow', recover);
-    window.addEventListener('online', recover);
-    window.addEventListener('focus', recover);
-    const expired = () => {
-      clearApiToken();
-      pauseSession();
-      void refetch({ cancelRefetch: false });
-    };
-    window.addEventListener('codex-webui:auth-expired', expired);
-    document.addEventListener('visibilitychange', recover);
-    return () => {
-      window.removeEventListener('pageshow', recover);
-      window.removeEventListener('online', recover);
-      window.removeEventListener('focus', recover);
-      window.removeEventListener('codex-webui:auth-expired', expired);
-      document.removeEventListener('visibilitychange', recover);
-    };
-  }, [refetch]);
+  // The layout retains an observer while protected workspace effects are hidden.
+  useEffect(() => retainSessionRecovery(client), [client]);
   return {
     ...query,
     paused,
