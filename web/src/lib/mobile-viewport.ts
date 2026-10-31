@@ -27,9 +27,29 @@ const WECHAT_UA = /MicroMessenger/i;
 /** Whether focus can currently summon an on-screen keyboard. */
 function hasKeyboardFocus(): boolean {
   const active = document.activeElement;
+  if (active instanceof HTMLInputElement) {
+    return (
+      !active.disabled &&
+      !active.readOnly &&
+      active.inputMode !== 'none' &&
+      ![
+        'button',
+        'checkbox',
+        'color',
+        'file',
+        'hidden',
+        'radio',
+        'range',
+        'reset',
+        'submit',
+      ].includes(active.type)
+    );
+  }
   return (
-    active instanceof HTMLInputElement ||
-    active instanceof HTMLTextAreaElement ||
+    (active instanceof HTMLTextAreaElement &&
+      !active.disabled &&
+      !active.readOnly &&
+      active.inputMode !== 'none') ||
     active instanceof HTMLSelectElement ||
     (active instanceof HTMLElement && active.isContentEditable)
   );
@@ -58,8 +78,17 @@ export function installMobileViewportFixes(): () => void {
   markQqBrowser();
 
   const root = document.documentElement;
+  // iPadOS can identify as a Mac. Do not parse an iOS version: installed-app
+  // viewport bugs predate iOS 27, and standalone UAs may omit version tokens.
+  const ios =
+    /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const displayMode = window.matchMedia?.('(display-mode: standalone)');
   let appliedHeight: string | null = null;
   let appliedTop: string | null = null;
+  let restingHeight = 0;
+  let restingWidth = 0;
+  const timers = new Set<number>();
 
   const sync = () => {
     const viewport = window.visualViewport;
@@ -73,24 +102,39 @@ export function installMobileViewportFixes(): () => void {
     // offset as well as its height or the composer appears at the top of the
     // screen, outside the portion left visible above the keyboard.
     if (viewport && viewport.scale !== 1) return;
-    // Some iOS standalone builds leave visualViewport.height at its keyboard
-    // value after the field loses focus and emit no final resize. Outside an
-    // editable control, innerHeight is therefore the reliable full-height
-    // fallback. CSS fills the fixed viewport directly while the keyboard is
-    // closed; these full-height readings are retained only as a fallback for
-    // browsers that do not support the class-based rule.
-    const keyboardFocused = hasKeyboardFocus();
-    root.classList.toggle('keyboard-open', keyboardFocused);
+    root.classList.toggle(
+      'ios-standalone',
+      ios &&
+        Boolean(
+          displayMode?.matches ||
+          (navigator as Navigator & { standalone?: boolean }).standalone,
+        ),
+    );
     const visualHeight = viewport?.height || 0;
-    const height = keyboardFocused
-      ? visualHeight || window.innerHeight || 0
-      : Math.max(
-          visualHeight,
-          window.innerHeight || 0,
-          document.documentElement.clientHeight || 0,
-        );
+    const layoutHeight = Math.max(
+      window.innerHeight || 0,
+      root.clientHeight || 0,
+    );
+    const width = window.innerWidth;
+    if (width !== restingWidth) {
+      restingWidth = width;
+      restingHeight = layoutHeight;
+    }
+    // Focus alone is NOT a keyboard: hardware keyboards and iOS's Hide
+    // Keyboard leave the textarea focused. Only reserve a shrunken rectangle
+    // when there is actual occlusion. The baseline also handles browsers that
+    // resize both layout and visual viewports when their keyboard appears.
+    const keyboardOpen =
+      hasKeyboardFocus() &&
+      visualHeight > 0 &&
+      Math.max(layoutHeight, restingHeight) - visualHeight > 100;
+    root.classList.toggle('keyboard-open', keyboardOpen);
+    const height = keyboardOpen
+      ? visualHeight
+      : Math.max(layoutHeight, visualHeight);
     if (height <= 0) return;
-    const top = keyboardFocused ? Math.max(0, viewport?.offsetTop || 0) : 0;
+    if (!keyboardOpen) restingHeight = height;
+    const top = keyboardOpen ? Math.max(0, viewport?.offsetTop || 0) : 0;
     const nextHeight = `${height}px`;
     const nextTop = `${top}px`;
     // `scroll` fires far more often than either reading changes; writing an
@@ -105,21 +149,47 @@ export function installMobileViewportFixes(): () => void {
     }
   };
 
+  // iOS settles safe areas/viewport readings after focus, rotation and resume;
+  // it does not always emit a final resize. Bounded retries, not a polling loop.
+  const settle = () => {
+    timers.forEach((timer) => window.clearTimeout(timer));
+    timers.clear();
+    sync();
+    for (const delay of [0, 100, 300, 700]) {
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        sync();
+      }, delay);
+      timers.add(timer);
+    }
+  };
+  const visible = () => {
+    if (document.visibilityState === 'visible') settle();
+  };
+
   sync();
   window.addEventListener('resize', sync, { passive: true });
-  window.addEventListener('orientationchange', sync, { passive: true });
-  document.addEventListener('focusin', sync);
-  document.addEventListener('focusout', sync);
+  window.addEventListener('orientationchange', settle, { passive: true });
+  window.addEventListener('pageshow', settle);
+  document.addEventListener('visibilitychange', visible);
+  document.addEventListener('focusin', settle);
+  document.addEventListener('focusout', settle);
+  displayMode?.addEventListener?.('change', settle);
   window.visualViewport?.addEventListener('resize', sync, { passive: true });
   window.visualViewport?.addEventListener('scroll', sync, { passive: true });
 
   return () => {
     window.removeEventListener('resize', sync);
-    window.removeEventListener('orientationchange', sync);
-    document.removeEventListener('focusin', sync);
-    document.removeEventListener('focusout', sync);
+    window.removeEventListener('orientationchange', settle);
+    window.removeEventListener('pageshow', settle);
+    document.removeEventListener('visibilitychange', visible);
+    document.removeEventListener('focusin', settle);
+    document.removeEventListener('focusout', settle);
+    displayMode?.removeEventListener?.('change', settle);
     window.visualViewport?.removeEventListener('resize', sync);
     window.visualViewport?.removeEventListener('scroll', sync);
     root.classList.remove('keyboard-open');
+    root.classList.remove('ios-standalone');
+    timers.forEach((timer) => window.clearTimeout(timer));
   };
 }

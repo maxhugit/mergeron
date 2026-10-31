@@ -1,5 +1,5 @@
 /** Covers the viewport sync's zoom guard, write elision, and UA classification. */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installMobileViewportFixes } from './mobile-viewport';
 
 interface FakeViewport {
@@ -62,12 +62,20 @@ const WECHAT_X5 =
 describe('installMobileViewportFixes', () => {
   const cleanups: Array<() => void> = [];
 
+  beforeEach(() => {
+    useUserAgent(CHROME_ANDROID);
+  });
+
   afterEach(() => {
     cleanups.splice(0).forEach((cleanup) => cleanup());
     document.documentElement.classList.remove('qq-browser');
     document.documentElement.classList.remove('keyboard-open');
+    delete (navigator as Navigator & { standalone?: boolean }).standalone;
+    Reflect.deleteProperty(navigator, 'maxTouchPoints');
     document.documentElement.removeAttribute('style');
     useUserAgent(CHROME_ANDROID);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -75,6 +83,132 @@ describe('installMobileViewportFixes', () => {
   function install(): void {
     cleanups.push(installMobileViewportFixes());
   }
+
+  it.each([
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_7 like Mac OS X)',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X)',
+    'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile/15E148',
+  ])('detects installed iPhones without an iOS version condition: %s', (ua) => {
+    useUserAgent(ua);
+    Object.defineProperty(navigator, 'standalone', {
+      configurable: true,
+      value: true,
+    });
+    useViewport(844);
+    install();
+    expect(document.documentElement.classList.contains('ios-standalone')).toBe(
+      true,
+    );
+  });
+
+  it('does not change Safari tabs or installed Android apps to the iOS layout', () => {
+    useUserAgent('Mozilla/5.0 (iPhone)');
+    useViewport(844);
+    install();
+    expect(document.documentElement.classList.contains('ios-standalone')).toBe(
+      false,
+    );
+    cleanups.splice(0).forEach((cleanup) => cleanup());
+    useUserAgent(CHROME_ANDROID);
+    Object.defineProperty(navigator, 'standalone', {
+      configurable: true,
+      value: true,
+    });
+    install();
+    expect(document.documentElement.classList.contains('ios-standalone')).toBe(
+      false,
+    );
+  });
+
+  it('recognizes iPadOS desktop identity and display-mode changes', () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      configurable: true,
+      value: 5,
+    });
+    const media = new EventTarget() as EventTarget & { matches: boolean };
+    media.matches = true;
+    vi.stubGlobal('matchMedia', () => media);
+    useViewport(844);
+    install();
+    expect(document.documentElement.classList.contains('ios-standalone')).toBe(
+      true,
+    );
+    media.matches = false;
+    media.dispatchEvent(new Event('change'));
+    expect(document.documentElement.classList.contains('ios-standalone')).toBe(
+      false,
+    );
+  });
+
+  it('keeps the full canvas with hardware keyboard focus and after Hide Keyboard', () => {
+    const viewport = useViewport(844);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(844);
+    const input = document.createElement('textarea');
+    document.body.append(input);
+    install();
+    input.focus();
+    expect(document.documentElement.classList.contains('keyboard-open')).toBe(
+      false,
+    );
+    viewport.height = 450;
+    viewport.emit('resize');
+    expect(document.documentElement.classList.contains('keyboard-open')).toBe(
+      true,
+    );
+    viewport.height = 844;
+    viewport.emit('resize');
+    expect(document.activeElement).toBe(input);
+    expect(document.documentElement.classList.contains('keyboard-open')).toBe(
+      false,
+    );
+    input.remove();
+  });
+
+  it.each(['checkbox', 'button', 'range'])(
+    'does not treat a %s as a text keyboard',
+    (type) => {
+      const viewport = useViewport(844);
+      const input = document.createElement('input');
+      input.type = type;
+      document.body.append(input);
+      install();
+      input.focus();
+      viewport.height = 450;
+      viewport.emit('resize');
+      expect(document.documentElement.classList.contains('keyboard-open')).toBe(
+        false,
+      );
+      input.remove();
+    },
+  );
+
+  it('settles a stale viewport after rotation/resume without an extra resize event', () => {
+    vi.useFakeTimers();
+    const viewport = useViewport(844);
+    const height = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(844);
+    const width = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390);
+    install();
+    window.dispatchEvent(new Event('orientationchange'));
+    viewport.height = 390;
+    height.mockReturnValue(390);
+    width.mockReturnValue(844);
+    vi.advanceTimersByTime(100);
+    expect(document.documentElement.style.getPropertyValue('--app-vh')).toBe(
+      '390px',
+    );
+    window.dispatchEvent(new Event('pageshow'));
+    viewport.height = 844;
+    height.mockReturnValue(844);
+    width.mockReturnValue(390);
+    vi.advanceTimersByTime(100);
+    expect(document.documentElement.style.getPropertyValue('--app-vh')).toBe(
+      '844px',
+    );
+    expect(vi.getTimerCount()).toBeLessThanOrEqual(4);
+    cleanups.splice(0).forEach((cleanup) => cleanup());
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it('publishes the visible height and tracks it as the viewport changes', () => {
     const viewport = useViewport(800);

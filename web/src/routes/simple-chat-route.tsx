@@ -358,7 +358,7 @@ export function SimpleChatRoute() {
 
         <form
           onSubmit={(event) => void send(event)}
-          className="shrink-0 bg-background px-3 pt-3 pb-0 sm:pb-3"
+          className="app-composer shrink-0 bg-background px-3 pt-3"
         >
           {status?.backend === 'codex' && activeThread?.projectId && (
             <SimpleChatFolderSelector
