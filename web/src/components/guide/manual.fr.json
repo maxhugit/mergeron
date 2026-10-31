@@ -408,7 +408,7 @@
             "actions": [
               {
                 "label": "Modèle et raisonnement",
-                "effect": "Choisir un modèle disponible et son effort de raisonnement. Un effort plus élevé n’est pas une autorisation supplémentaire et peut augmenter durée et consommation."
+                "effect": "Seuls les administrateurs peuvent choisir le modèle et l’effort de raisonnement. Les autres personnes consultent ces valeurs sans les modifier. Dans un projet, les valeurs restent définies par ses paramètres. Un effort plus élevé n’est pas une autorisation supplémentaire et peut augmenter durée et consommation."
               },
               {
                 "label": "Permissions et approbations",

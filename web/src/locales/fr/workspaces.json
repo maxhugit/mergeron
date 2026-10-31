@@ -1,4 +1,5 @@
 {
+  "modelAdminOnly": "Seuls les administrateurs peuvent modifier le modèle et l’effort.",
   "agentCacheEnable": "Activer la navigation rapide pour ce projet",
   "agentCacheDisable": "Désactiver la navigation rapide",
   "agentCacheSaveError": "Impossible d’enregistrer la navigation rapide. Votre choix précédent est conservé ; réessayez.",

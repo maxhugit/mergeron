@@ -381,7 +381,7 @@
             "actions": [
               {
                 "label": "Model and reasoning",
-                "effect": "Choose an available model and reasoning effort. Higher effort does not grant permissions and may increase duration and usage."
+                "effect": "Only administrators can choose the model and reasoning effort. Other people can view these values but cannot change them. In a project, its settings remain authoritative. Higher effort does not grant permissions and may increase duration and usage."
               },
               {
                 "label": "Permissions and approvals",

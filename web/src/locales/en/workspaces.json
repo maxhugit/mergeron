@@ -1,4 +1,5 @@
 {
+  "modelAdminOnly": "Only administrators can change the model and reasoning effort.",
   "agentCacheEnable": "Enable fast navigation for this project",
   "agentCacheDisable": "Disable fast navigation",
   "agentCacheSaveError": "Unable to save fast navigation. Your previous choice is kept; try again.",
