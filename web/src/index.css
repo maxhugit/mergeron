@@ -116,6 +116,7 @@ body {
   --app-safe-right: env(safe-area-inset-right, 0px);
   --app-safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-safe-left: env(safe-area-inset-left, 0px);
+  --app-composer-bottom-gap: 0px;
 }
 
 html.keyboard-open {
@@ -165,15 +166,26 @@ html.ios-standalone .glass-bar {
   backdrop-filter: none;
 }
 
+/* Ordinary visual breathing room, not another device safe-area inset. The
+   rounded card must not touch the native viewport's clipped bottom edge.
+   A software keyboard already provides its own boundary. */
+html.ios-standalone:not(.keyboard-open) {
+  --app-composer-bottom-gap: 0.5rem;
+}
+
 /* The canvas fills the viewport; only the bottom controls reserve the home
    indicator once. With a keyboard, keep just the ordinary control spacing. */
 .app-composer {
-  padding-bottom: var(--app-safe-bottom);
+  padding-bottom: max(var(--app-safe-bottom), var(--app-composer-bottom-gap));
 }
 
 @media (min-width: 640px) {
   .app-composer {
-    padding-bottom: max(0.75rem, var(--app-safe-bottom));
+    padding-bottom: max(
+      0.75rem,
+      var(--app-safe-bottom),
+      var(--app-composer-bottom-gap)
+    );
   }
 }
 
