@@ -7,13 +7,18 @@ import {
   AuthRedirectError,
   AUTH_REQUEST_TIMEOUT_MS,
   SESSION_RECOVERY_INTERVAL_MS,
+  SESSION_CHECK_INTERVAL_MS,
   isSessionTransportError,
   platformSessionKey,
   readAuthResource,
   shouldRetryPlatformSession,
   usePlatformSession,
 } from './platform-session';
-import { installSessionRecovery, pauseSession } from './session-recovery';
+import {
+  installSessionRecovery,
+  isSessionPaused,
+  pauseSession,
+} from './session-recovery';
 
 let disposeRecovery: () => void;
 beforeEach(() => {
@@ -150,7 +155,7 @@ describe('platform session recovery', () => {
             retry: false,
           })
           .catch(() => {});
-        await vi.advanceTimersByTimeAsync(SESSION_RECOVERY_INTERVAL_MS * 2);
+        await vi.advanceTimersByTimeAsync(SESSION_CHECK_INTERVAL_MS * 3);
       });
       expect(hook.result.current.isError).toBe(true);
       expect(fetch).not.toHaveBeenCalled();
@@ -158,6 +163,156 @@ describe('platform session recovery', () => {
       client.clear();
     },
   );
+
+  it('shares wake-up checks and polling across mounted consumers, retaining recovery when a child leaves', async () => {
+    vi.useFakeTimers();
+    disposeRecovery();
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('visible');
+    const identity = {
+      kind: 'person',
+      personId: 'original',
+      role: 'administrator',
+      active: true,
+    };
+    const response = () =>
+      new Response(JSON.stringify(identity), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const network = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => response());
+    disposeRecovery = installSessionRecovery();
+    const client = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+    const parent = renderHook(() => usePlatformSession(), { wrapper });
+    const child = renderHook(() => usePlatformSession(), { wrapper });
+    await act(async () => {
+      await parent.result.current.refetch();
+    });
+    network.mockClear();
+    visibility.mockReturnValue('hidden');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31_000);
+    });
+    let finish!: (value: Response) => void;
+    network.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    visibility.mockReturnValue('visible');
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+      window.dispatchEvent(new Event('pageshow'));
+      window.dispatchEvent(new Event('online'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(network).toHaveBeenCalledTimes(1);
+    expect(parent.result.current.paused).toBe(true);
+    expect(parent.result.current.isAdministrator).toBe(false);
+    child.unmount();
+    await act(async () => {
+      finish(response());
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(parent.result.current.paused).toBe(false);
+    network.mockClear();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(35_000);
+    });
+    expect(network).toHaveBeenCalledTimes(1);
+    parent.unmount();
+    network.mockClear();
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(network).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it('does not throttle a newly required verification behind an older in-flight focus check', async () => {
+    vi.useFakeTimers();
+    disposeRecovery();
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('visible');
+    const identity = {
+      kind: 'person',
+      personId: 'original',
+      role: 'administrator',
+      active: true,
+    };
+    const response = (personId = 'original') =>
+      new Response(JSON.stringify({ ...identity, personId }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const network = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => response());
+    disposeRecovery = installSessionRecovery();
+    const client = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity } },
+    });
+    const hook = renderHook(() => usePlatformSession(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
+    });
+    await act(async () => {
+      await hook.result.current.refetch();
+    });
+    visibility.mockReturnValue('hidden');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(29_000);
+    });
+    network.mockClear();
+    let oldFinish!: (value: Response) => void;
+    let freshFinish!: (value: Response) => void;
+    network.mockReturnValueOnce(
+      new Promise((resolve) => {
+        oldFinish = resolve;
+      }),
+    );
+    network.mockReturnValueOnce(
+      new Promise((resolve) => {
+        freshFinish = resolve;
+      }),
+    );
+    visibility.mockReturnValue('visible');
+    act(() => window.dispatchEvent(new Event('focus')));
+    expect(network).toHaveBeenCalledTimes(1);
+    expect(isSessionPaused()).toBe(false);
+    const oldSignal = network.mock.calls[0][1]?.signal;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    act(() => window.dispatchEvent(new Event('focus')));
+    expect(network).toHaveBeenCalledTimes(2);
+    expect(oldSignal?.aborted).toBe(true);
+    expect(isSessionPaused()).toBe(true);
+    await expect(
+      fetch('/api/projects', { method: 'POST' }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(network).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      freshFinish(response());
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(hook.result.current.paused).toBe(false);
+    await act(async () => {
+      oldFinish(response('changed'));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(hook.result.current.data?.personId).toBe('original');
+    expect(hook.result.current.paused).toBe(false);
+    hook.unmount();
+    client.clear();
+  });
   it('retries transient transport failures up to three times', () => {
     const networkError = new TypeError('Load failed');
 

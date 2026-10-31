@@ -23,12 +23,14 @@ export const isSessionPaused = () => paused;
 /** Presence of a prior verification is not authorization; the gate stays shut. */
 export const hasVerifiedSession = () => owner !== null;
 export const sessionVerificationGeneration = () => generation;
-export function pauseSession() {
+export function pauseSession(reason: 'verification' | 'wake' = 'verification') {
   if (paused) return;
   paused = true;
   generation++;
   for (const listener of listeners) listener();
-  window.dispatchEvent(new Event('codex-webui:session-paused'));
+  window.dispatchEvent(
+    new CustomEvent('codex-webui:session-paused', { detail: { reason } }),
+  );
 }
 
 /** Only a fresh server response for the original identity may reopen this tab. */
@@ -104,13 +106,16 @@ export function installSessionRecovery() {
     }
     return response;
   };
-  const wake = () => {
+  const wake = (event: Event) => {
+    // A capture listener on window also sees focus on every descendant input.
+    // Those are ordinary in-page interactions, not a return to this tab.
+    if (event.type === 'focus' && event.target !== event.currentTarget) return;
     if (
       document.visibilityState === 'visible' &&
       owner !== null &&
       Date.now() - verifiedAt >= 30_000
     )
-      pauseSession();
+      pauseSession('wake');
   };
   const expired = () => pauseSession();
   for (const name of ['focus', 'pageshow', 'online'])
