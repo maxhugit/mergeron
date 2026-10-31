@@ -294,6 +294,33 @@ describe('persistent authenticated monitor runtime', () => {
     expect(current().turnId).toBe('turn-2');
   });
 
+  it('defers stale timer ownership in memory if the foreground handover cannot be persisted immediately', async () => {
+    const monitor = create();
+    await runtime.tick();
+    const former = current();
+    vi.spyOn(store, 'yieldToForeground').mockImplementationOnce(() => {
+      throw new Error('Temporary write failure');
+    });
+    expect(() => foreground('t')).not.toThrow();
+    complete(former.turnId!);
+    busy = true;
+    vi.setSystemTime(NOW + 600_000);
+    await runtime.tick();
+    expect(codex.request).not.toHaveBeenCalledWith(
+      'turn/interrupt',
+      expect.anything(),
+    );
+    expect(store.get('p', monitor.id)).toMatchObject({
+      status: 'active',
+      runCount: 1,
+    });
+    expect(store.active()).toEqual([]);
+    vi.setSystemTime(NOW + 660_000);
+    busy = false;
+    await runtime.tick();
+    expect(threads.startTurn).toHaveBeenCalledTimes(2);
+  });
+
   it('does not bind a delayed start acknowledgement after foreground ownership transfer', async () => {
     const monitor = create();
     threads.startTurn.mockImplementationOnce(

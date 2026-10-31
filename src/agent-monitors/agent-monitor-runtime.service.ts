@@ -37,6 +37,7 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
   private stopped = false;
   private readonly summaries = new Map<string, string>();
   private readonly probes = new Map<string, number>();
+  private readonly foregroundTransfers = new Set<string>();
   private readonly releaseForeground: () => void;
   private readonly releaseLifecycle: () => void;
 
@@ -178,6 +179,7 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('MONITOR_ENGINE_UNAVAILABLE');
     this.authorize(monitor);
     if (
+      this.foregroundTransfers.has(monitor.threadId) ||
       this.inventory.has(monitor.threadId) ||
       this.pending.listPending([monitor.threadId]).length
     )
@@ -216,7 +218,11 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
     if (this.stopped) return;
     const due = this.store.due();
     if (!this.manager.getClient()) return;
-    for (const run of this.store.active()) {
+    const active = this.store.active();
+    for (const threadId of this.foregroundTransfers)
+      if (!active.some((run) => run.activeThreadId === threadId))
+        this.foregroundTransfers.delete(threadId);
+    for (const run of active) {
       if (this.stopped) return;
       await this.reconcile(run);
     }
@@ -321,22 +327,35 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
   }
 
   private yieldToForeground(threadId: string) {
-    const owned = this.store
-      .active()
-      .filter((item) => item.activeThreadId === threadId);
-    for (const run of owned) {
+    // Invalidate timer ownership before any fallible persistence. A temporary
+    // SQLite write failure must never let a stale deadline cancel a human turn.
+    this.foregroundTransfers.add(threadId);
+    try {
+      const owned = this.store
+        .active()
+        .filter((item) => item.activeThreadId === threadId);
+      for (const run of owned) {
+        this.mcp.revoke(threadId);
+        this.store.yieldToForeground(run.id);
+        this.summaries.delete(run.id);
+        this.probes.delete(run.id);
+      }
+      this.foregroundTransfers.delete(threadId);
+      return owned.length > 0;
+    } catch {
       this.mcp.revoke(threadId);
-      this.store.yieldToForeground(run.id);
-      this.summaries.delete(run.id);
-      this.probes.delete(run.id);
+      this.logger.warn(
+        'A foreground handover will be persisted later; automatic work remains deferred.',
+      );
+      return true;
     }
-    return owned.length > 0;
   }
 
   private observe(note: ServerNotification) {
     if (!('threadId' in note.params)) return;
     const threadId = note.params.threadId;
     if (typeof threadId !== 'string') return;
+    if (this.foregroundTransfers.has(threadId)) return;
     const run = this.store
       .active()
       .find((item) => item.activeThreadId === threadId);
@@ -383,6 +402,16 @@ export class AgentMonitorRuntime implements OnModuleInit, OnModuleDestroy {
 
   private async reconcile(run: AgentMonitorRun) {
     const now = Date.now();
+    if (
+      run.activeThreadId &&
+      this.foregroundTransfers.has(run.activeThreadId)
+    ) {
+      this.store.yieldToForeground(run.id);
+      this.foregroundTransfers.delete(run.activeThreadId);
+      this.summaries.delete(run.id);
+      this.probes.delete(run.id);
+      return;
+    }
     if (run.status === 'claimed') {
       if (run.leaseUntil <= now)
         this.store.defer(run.id, 'MONITOR_CLAIM_EXPIRED');
