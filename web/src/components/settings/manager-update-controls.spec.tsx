@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { catalogFixture, deferred, json } from './catalog/catalog.testing';
 import { ManagerUpdateControls } from './manager-update-controls';
+import { updateBackupModeKey } from './use-update-backup-mode';
 import type { ManagerStatus } from './manager-status-api';
 import {
   readManagerUpdateReceipt,
@@ -63,6 +64,9 @@ const status: ManagerStatus = {
 beforeEach(async () => {
   sessionStorage.clear();
   fixture = catalogFixture();
+  fixture.server.overrides.set(`GET /api/settings/${updateBackupModeKey}`, () =>
+    json({ key: updateBackupModeKey, value: 'full' }),
+  );
   vi.mocked(requestServerRelease).mockReset();
   vi.mocked(requestServerRelease).mockResolvedValue(release);
   await i18n.changeLanguage('fr');
@@ -188,6 +192,7 @@ it.each(['production', 'development'] as const)(
     });
     expect(select).toHaveValue('full');
     expect(screen.getAllByRole('option')).toHaveLength(3);
+    await waitFor(() => expect(select).toBeEnabled());
     await user.selectOptions(select, 'minimal');
     expect(screen.getByText(/Aucun fichier de projet/)).toBeVisible();
     await user.click(
@@ -236,6 +241,7 @@ it('explicitly confirms no backup in production and does not enable selection on
       status={{ ...status, capabilities: { backupSelection: true } }}
     />,
   );
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled());
   await user.selectOptions(screen.getByRole('combobox'), 'none');
   await user.click(screen.getByRole('button', { name: 'Mettre à jour' }));
   expect(await screen.findByRole('alertdialog')).toHaveTextContent(

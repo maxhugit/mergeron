@@ -32,6 +32,7 @@ import { ManagerBackups } from './manager-backups';
 import { ManagerImageUpdates } from './manager-image-updates';
 import { componentUpdatesKey } from './manager-image-updates-api';
 import { defaultManagerUpdateImage } from './manager-update-image';
+import { useUpdateBackupMode } from './use-update-backup-mode';
 import {
   readManagerUpdateReceipt,
   saveManagerUpdateReceipt,
@@ -83,10 +84,9 @@ export function ManagerUpdateControls({
   const [imageOverride, setImage] = useState<string | null>(null);
   const [manualSelection, setManualSelection] = useState(false);
   const [fastEnabled, setFastEnabled] = useState(true);
-  const [backupMode, setBackupMode] = useState<'full' | 'minimal' | 'none'>(
-    'full',
-  );
   const backupSelection = status.capabilities?.backupSelection === true;
+  const backupPreference = useUpdateBackupMode(backupSelection);
+  const backupMode = backupPreference.value;
   const backupInput = backupSelection ? { backupMode } : {};
   const fastAvailable =
     status.environment === 'development' &&
@@ -196,9 +196,16 @@ export function ManagerUpdateControls({
             aria-describedby="manager-backup-mode-help"
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             value={backupMode}
-            disabled={busy || blocked}
+            disabled={
+              busy ||
+              blocked ||
+              !backupPreference.ready ||
+              backupPreference.saving
+            }
             onChange={(event) => {
-              setBackupMode(event.target.value as typeof backupMode);
+              backupPreference.setValue(
+                event.target.value as typeof backupMode,
+              );
               setPlan(null);
               setConfirm(null);
             }}
@@ -217,6 +224,62 @@ export function ManagerUpdateControls({
           >
             {t(translationKey(backupDescription(`${backupMode}-v1`)))}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {t('managerBackupPreferenceHelp')}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={
+                busy ||
+                blocked ||
+                !backupPreference.ready ||
+                !backupPreference.dirty ||
+                backupPreference.saving
+              }
+              onClick={backupPreference.save}
+            >
+              {t(
+                backupPreference.saving
+                  ? 'managerBackupPreferenceSaving'
+                  : 'managerBackupPreferenceSave',
+              )}
+            </Button>
+            {(backupPreference.loading ||
+              backupPreference.saved ||
+              backupPreference.dirty) && (
+              <p role="status" className="text-xs text-muted-foreground">
+                {t(
+                  backupPreference.loading
+                    ? 'managerBackupPreferenceLoading'
+                    : backupPreference.dirty
+                      ? 'managerBackupPreferenceUnsaved'
+                      : 'managerBackupPreferenceSaved',
+                )}
+              </p>
+            )}
+            {backupPreference.readError && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={backupPreference.retry}
+              >
+                {common('retry')}
+              </Button>
+            )}
+          </div>
+          {(backupPreference.readError || backupPreference.saveError) && (
+            <p role="alert" className="text-sm text-destructive">
+              {t(
+                backupPreference.readError
+                  ? 'managerBackupPreferenceReadError'
+                  : 'managerBackupPreferenceSaveError',
+              )}
+            </p>
+          )}
         </div>
       )}
       {fastAvailable && (
@@ -246,7 +309,13 @@ export function ManagerUpdateControls({
       )}
       <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
       <ManagerImageUpdates
-        disabled={!!busy || !status.available || blocked}
+        disabled={
+          !!busy ||
+          !status.available ||
+          blocked ||
+          !backupPreference.ready ||
+          backupPreference.saving
+        }
         onUpdate={(images) => {
           mutation.mutate({
             action: 'plan',
@@ -322,6 +391,8 @@ export function ManagerUpdateControls({
                 busy ||
                 !status.available ||
                 blocked ||
+                !backupPreference.ready ||
+                backupPreference.saving ||
                 !image.trim() ||
                 (!manualSelection &&
                   (!release.data ||

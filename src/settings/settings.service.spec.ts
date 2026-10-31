@@ -2,7 +2,10 @@
 import { ConfigService } from '@nestjs/config';
 import { BusinessException } from '../common/business.exception';
 import { createTestDatabase } from '../database/database.testing';
-import { TERMINAL_SETTING_KEYS } from './settings.definitions';
+import {
+  GENERAL_SETTING_KEYS,
+  TERMINAL_SETTING_KEYS,
+} from './settings.definitions';
 import { SettingsService } from './settings.service';
 
 function createService(env: Record<string, string | undefined> = {}) {
@@ -11,10 +14,39 @@ function createService(env: Record<string, string | undefined> = {}) {
     get: vi.fn((key: string) => env[key]),
   } as unknown as ConfigService;
   const service = new SettingsService(db, config);
-  return { service, sqlite };
+  return { service, sqlite, db };
 }
 
 describe('SettingsService', () => {
+  it('persists the installation backup choice across service reconciliation and validates every scope', () => {
+    const { service, sqlite, db } = createService();
+    const key = GENERAL_SETTING_KEYS.updateBackupMode;
+    try {
+      expect(service.getSetting(key)).toMatchObject({
+        value: 'full',
+        source: 'default',
+      });
+      for (const value of ['minimal', 'none', 'full']) {
+        expect(service.updateSetting(key, value)).toMatchObject({
+          value,
+          source: 'db',
+        });
+        const restarted = new SettingsService(db, new ConfigService());
+        expect(restarted.getSetting(key)).toMatchObject({
+          value,
+          source: 'db',
+        });
+      }
+      for (const value of ['essential', '', 0, false, {}, ['minimal']]) {
+        expect(() => service.updateSetting(key, value)).toThrow(
+          BusinessException,
+        );
+        expect(service.getSetting(key).value).toBe('full');
+      }
+    } finally {
+      sqlite.close();
+    }
+  });
   it('seeds definitions with default source when DB is empty', () => {
     const { service, sqlite } = createService();
     try {
