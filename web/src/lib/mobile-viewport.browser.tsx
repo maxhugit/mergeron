@@ -7,12 +7,19 @@ import '@/index.css';
 
 let dispose: (() => void) | undefined;
 let frame: HTMLElement | undefined;
-let strip: HTMLElement | undefined;
+let safeAreas: HTMLStyleElement | undefined;
+let viewportMeta: HTMLMetaElement | undefined;
+let previousViewport: string | null = null;
+let createdViewport = false;
 const engine = navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit';
 afterEach(() => {
   dispose?.();
   frame?.remove();
-  strip?.remove();
+  safeAreas?.remove();
+  if (createdViewport) viewportMeta?.remove();
+  else if (previousViewport != null)
+    viewportMeta?.setAttribute('content', previousViewport);
+  else viewportMeta?.removeAttribute('content');
   document.documentElement.classList.remove('dark');
   document.documentElement.removeAttribute('style');
   vi.unstubAllGlobals();
@@ -40,15 +47,21 @@ function fixture(
     offsetTop: 0,
   });
   vi.stubGlobal('visualViewport', viewport);
-  const root = document.documentElement;
-  root.style.setProperty('--app-safe-top', `${top}px`);
-  root.style.setProperty('--app-safe-bottom', `${bottom}px`);
-  root.style.setProperty('--app-safe-left', `${sides}px`);
-  root.style.setProperty('--app-safe-right', `${sides}px`);
-  strip = document.createElement('div');
-  strip.id = 'app-status-bar';
-  strip.setAttribute('aria-hidden', 'true');
-  document.body.append(strip);
+  // Simulate env() at stylesheet priority, so the installed-app policy can
+  // suppress a second inset without pretending to emulate iOS's compositor.
+  safeAreas = document.createElement('style');
+  safeAreas.textContent = `:root { --app-safe-top: ${top}px; --app-safe-bottom: ${bottom}px; --app-safe-left: ${sides}px; --app-safe-right: ${sides}px; }`;
+  document.head.append(safeAreas);
+  viewportMeta =
+    document.querySelector<HTMLMetaElement>('meta[name="viewport"]') ??
+    undefined;
+  createdViewport = !viewportMeta;
+  viewportMeta ??= document.createElement('meta');
+  previousViewport = viewportMeta.getAttribute('content');
+  viewportMeta.name = 'viewport';
+  viewportMeta.content =
+    'width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content';
+  if (createdViewport) document.head.append(viewportMeta);
   frame = document.createElement('div');
   frame.id = 'root';
   // Static, inert test content only. Production CSS owns all relevant geometry.
@@ -67,8 +80,9 @@ test.each([
   [430, 932, 62, 34, 0, true],
   [844, 390, 0, 21, 44, true],
   [375, 667, 0, 0, 0, false],
+  [1280, 800, 0, 0, 0, false],
 ] as const)(
-  'fills an installed iOS %ix%i canvas, reserving safe areas once',
+  'fills the installed iOS %ix%i native viewport without reserving safe areas twice',
   async (width, height, top, bottom, sides, dark) => {
     await page.viewport(width, height);
     document.documentElement.classList.toggle('dark', dark);
@@ -79,20 +93,19 @@ test.each([
     expect(getComputedStyle(frame!).position).toBe('absolute');
     expect(getComputedStyle(frame!).paddingBottom).toBe('0px');
     const header = frame!.querySelector('header')!;
-    expect(header.getBoundingClientRect().top).toBe(top);
+    expect(header.getBoundingClientRect().top).toBe(0);
     expect(getComputedStyle(header).backdropFilter).toBe('none');
-    expect(getComputedStyle(strip!).position).toBe('fixed');
-    expect(strip!.getBoundingClientRect().height).toBe(Math.max(1, top));
+    expect(viewportMeta!.content).toBe('width=device-width, initial-scale=1.0');
     const footer = frame!.querySelector('footer')!;
     expect(footer.getBoundingClientRect().bottom).toBe(height);
-    const expectedInset = Math.max(width >= 640 ? 12 : 0, bottom);
+    const expectedInset = width >= 640 ? 12 : 0;
     expect(parseFloat(getComputedStyle(footer).paddingBottom)).toBe(
       expectedInset,
     );
     for (const control of frame!.querySelectorAll('button, textarea')) {
       const rect = control.getBoundingClientRect();
-      expect(rect.left).toBeGreaterThanOrEqual(sides);
-      expect(rect.right).toBeLessThanOrEqual(width - sides);
+      expect(rect.left).toBeGreaterThanOrEqual(0);
+      expect(rect.right).toBeLessThanOrEqual(width);
       expect(rect.bottom).toBeLessThanOrEqual(height - expectedInset);
     }
     await page.screenshot({
@@ -108,21 +121,35 @@ test('keeps Safari/desktop layout unchanged outside standalone mode', async () =
     false,
   );
   expect(getComputedStyle(frame!).position).toBe('fixed');
-  expect(getComputedStyle(strip!).display).toBe('none');
+  expect(viewportMeta!.content).toContain('viewport-fit=cover');
   expect(
     getComputedStyle(frame!.querySelector('header')!).backdropFilter,
   ).not.toBe('none');
 });
 
-test('uses measured installed-app height instead of an obsolete CSS viewport size', async () => {
+test('does not override native CSS height with a larger JavaScript reading', async () => {
   await page.viewport(390, 844);
   fixture(true, 844, 59, 34);
-  // A CSS viewport is not always the current visible rectangle after resume.
+  // JS viewport readings can disagree with the native layout after resume.
   vi.stubGlobal('innerHeight', 900);
   window.dispatchEvent(new Event('resize'));
-  expect(frame!.getBoundingClientRect().height).toBe(900);
+  expect(frame!.getBoundingClientRect().height).toBe(844);
   expect(frame!.querySelector('footer')!.getBoundingClientRect().bottom).toBe(
-    900,
+    844,
+  );
+});
+
+test('does not pin the resting PWA to a toolbar-sized stale JavaScript rectangle', async () => {
+  await page.viewport(390, 844);
+  vi.stubGlobal('innerHeight', 760);
+  vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(
+    760,
+  );
+  fixture(true, 760, 59, 34);
+  expect(frame!.getBoundingClientRect().height).toBe(844);
+  expect(frame!.querySelector('header')!.getBoundingClientRect().top).toBe(0);
+  expect(frame!.querySelector('footer')!.getBoundingClientRect().bottom).toBe(
+    844,
   );
 });
 
@@ -134,8 +161,6 @@ test('restores full height after keyboard dismissal even when focus stays in the
   viewport.height = 420;
   viewport.offsetTop = 180;
   viewport.dispatchEvent(new Event('resize'));
-  // Override the injected test inset just as the production keyboard rule does.
-  document.documentElement.style.removeProperty('--app-safe-bottom');
   expect(document.documentElement.classList.contains('keyboard-open')).toBe(
     true,
   );
@@ -164,8 +189,8 @@ test('sizes portalled navigation to the same rectangle and reserves bottom safet
   document.body.append(sheet);
   try {
     expect(sheet.getBoundingClientRect().height).toBe(844);
-    expect(getComputedStyle(sheet).paddingTop).toBe('59px');
-    expect(getComputedStyle(sheet).paddingBottom).toBe('34px');
+    expect(getComputedStyle(sheet).paddingTop).toBe('0px');
+    expect(getComputedStyle(sheet).paddingBottom).toBe('0px');
     frame!.querySelector('textarea')!.focus();
     viewport.height = 420;
     viewport.offsetTop = 180;

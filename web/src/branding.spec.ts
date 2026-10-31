@@ -34,13 +34,11 @@ describe('Mergeron web and PWA identity', () => {
     expect(manifest.scope).toBe('/');
   });
 
-  it('uses the adaptive iOS status bar instead of the deprecated translucent mode', () => {
+  it('does not add a synthetic status bar or the deprecated translucent mode', () => {
     const html = read('index.html').toString();
     expect(html).not.toContain('apple-mobile-web-app-status-bar-style');
     expect(html).toContain('viewport-fit=cover');
-    expect(html).toContain(
-      '<div id="app-status-bar" aria-hidden="true"></div>',
-    );
+    expect(html).not.toContain('id="app-status-bar"');
   });
 
   it('ships valid PNGs in all Apple and PWA sizes and a separate maskable icon', () => {
