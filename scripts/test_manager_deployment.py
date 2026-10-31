@@ -50,6 +50,7 @@ class ManagerDeploymentTest(unittest.TestCase):
         for name in ['my-mergeron-manager.xml', 'my-mergeron-dev-manager.xml']:
             root = ET.parse(ROOT / 'deployment/docker-man' / name).getroot()
             options = root.findtext('ExtraParams')
+            self.assertIn('--restart unless-stopped', options)
             for expected in ['--memory 512m', '--cpus 0.25', '--pids-limit 64', '--read-only', '--cap-drop ALL', '--security-opt no-new-privileges:true']:
                 self.assertIn(expected, options)
             self.assertEqual(root.findtext('Network'), 'none')

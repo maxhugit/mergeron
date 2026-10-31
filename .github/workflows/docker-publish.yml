@@ -425,6 +425,8 @@ jobs:
           sudo chown 0:0 "$RUNNER_TEMP/mergeron-manager-run"
           bash scripts/smoke-test-manager-secrets.sh "$IMAGE_REF"
           bash scripts/smoke-test-manager-backup.sh "$IMAGE_REF"
+          bash scripts/smoke-test-manager-performance.sh "$IMAGE_REF"
+          bash scripts/smoke-test-manager-restart.sh "$IMAGE_REF"
           container_id="$(docker run -d --read-only --network none --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH --security-opt no-new-privileges:true --tmpfs /tmp:rw,nosuid,nodev,size=8m -v /var/run/docker.sock:/var/run/docker.sock:ro -v "$RUNNER_TEMP/mergeron-manager-run:/run/mergeron-manager" "$IMAGE_REF")"
           trap 'docker logs "$container_id"; docker rm -f "$container_id" >/dev/null' EXIT
           for attempt in $(seq 1 20); do

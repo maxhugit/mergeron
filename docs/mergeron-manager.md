@@ -92,6 +92,92 @@ cumulatifs : ils aident à corréler bridage CPU, pression mémoire et retard, s
 attribuer automatiquement la cause à une opération. Un état Docker `unhealthy`
 n’implique pas à lui seul un arrêt, un redémarrage ou un OOM.
 
+### Redémarrage automatique et installations existantes
+
+Le Manager doit utiliser la politique Docker `unless-stopped`, comme la
+configuration Compose et les formulaires Unraid actuels. Elle relance un
+processus arrêté de façon inattendue, mais respecte un arrêt volontaire. Ce
+n’est pas un surveillant qui tue puis redémarre un processus seulement
+`unhealthy` : une opération lente doit être diagnostiquée, pas interrompue
+automatiquement. Voir les [règles de redémarrage Docker](https://docs.docker.com/engine/containers/start-containers-automatically/).
+
+Les anciens formulaires Unraid omettaient cette option. Leur Manager pouvait
+donc rester en politique `no` ; le remplacement de son image recopie sa
+configuration et conserve cette absence de reprise. La correction du formulaire
+ne modifie pas rétroactivement les conteneurs ni les modèles enregistrés sur
+l’hôte. Pour une installation existante, vérifier la politique effective et
+conserver `--restart unless-stopped` dans le modèle Unraid enregistré avant sa
+prochaine recréation. Ne pas recréer un Manager occupé par une transaction.
+
+Pour **l’instance Dev explicitement configurée dans le script seulement**, une
+réparation hôte distincte peut appliquer cette politique sans remplacement ni
+redémarrage :
+
+```sh
+python3 scripts/update-dev-manager.py --enable-restart --confirm-restart
+```
+
+Elle exige un Manager Dev actif, sain et inactif côté mise à jour, vérifie son
+identité et ses protections, puis ne change que `RestartPolicy`. Elle contrôle
+ensuite l’absence de changement d’image, de configuration, de limites et de
+compteur de redémarrage. Une seconde exécution est sans effet. Un remplacement
+ultérieur conserve la politique corrigée. Ce script n’est pas une procédure
+générique de production ; son exécution reste une action d’exploitation
+explicite, séparée de la publication du code.
+
+### Mesures de charge et test de reprise isolés
+
+Les contrôles suivants s’exécutent sur une image Manager construite et validée
+localement, ou automatiquement dans la CI avant publication :
+
+```sh
+bash scripts/smoke-test-manager-performance.sh "$IMAGE_REF"
+bash scripts/smoke-test-manager-restart.sh "$IMAGE_REF"
+```
+
+Chaque fixture possède son propre volume synthétique, sans réseau, port publié,
+secret, état applicatif ou véritable socket Docker. Elle conserve la racine en
+lecture seule, les capacités retirées et les limites de **512 Mio, 0,25 CPU et
+64 processus**. Les scripts retirent uniquement leur conteneur et leur volume.
+Le test de charge utilise le vrai serveur HTTP Manager et une API Docker locale
+simulée ; aucune prévisualisation réelle n’est créée. Pour les snapshots, cette
+API refuse volontairement la première création de volume après validation de
+l’archive : le test vérifie ce point de passage, pas un déploiement complet.
+
+La mesure isolée sur Unraid du 31 octobre 2026, sous ces quotas, a donné :
+
+| Charge synthétique                                          | Durée observée | Maximum `/healthz` | Maximum `/v1/status` |
+| ----------------------------------------------------------- | -------------: | -----------------: | -------------------: |
+| Repos                                                       |          3,0 s |               8 ms |                10 ms |
+| Inventaire d’une sauvegarde historique de 10 000 fichiers   |          2,1 s |              44 ms |                45 ms |
+| Compression puis restauration de 32 Mio, empreinte vérifiée |          6,7 s |              88 ms |               191 ms |
+| Trois snapshots de 55,1 Mio et 14 505 entrées               |          2,4 s |             725 ms |               725 ms |
+
+Les 105 sondes de santé et les 105 lectures d’état ont réussi sans augmenter
+leur échéance de deux secondes. Les compteurs mémoire n’indiquaient ni limite
+atteinte ni OOM. Le maximum RSS échantillonné du processus Manager était
+d’environ 144 Mio ; le pic cgroup global, environ 447 Mio, inclut aussi le
+contrôleur de test et les caches de fichiers. Ces deux mesures ne désignent pas
+la même consommation. Les résultats ne constituent ni une mesure de concurrence
+illimitée ni une garantie de latence sur un autre stockage. La courte phase
+snapshots ne comporte que quatre sondes de santé : son maximum observé est plus
+informatif qu’un percentile.
+
+La lecture, l’empreinte et la validation synchrones des gros snapshots restent
+le point de vigilance observé. Ces essais ne justifient pas de relever les
+quotas ni d’assouplir la sonde. Les tests bloquent la validation si la santé ou
+l’état ne répondent pas dans l’échéance, ou si les compteurs cgroup disponibles
+signalent une limite mémoire atteinte ou un OOM. Ils ne remplacent pas un
+diagnostic corrélé aux opérations et aux compteurs sur une instance réelle.
+
+Le test de reprise lance le vrai Manager, écrit et synchronise un marqueur
+persistant, puis provoque une sortie inattendue après douze secondes. Il
+vérifie le redémarrage automatique, le retour à l’état sain et la conservation
+du marqueur. Il arrête ensuite volontairement la fixture et vérifie qu’elle
+reste arrêtée. Ce scénario a été exécuté sur Unraid avec un redémarrage observé ;
+il ne simule ni une panne électrique de l’hôte ni toutes les interruptions
+possibles d’une transaction. Les fixtures ont été supprimées après vérification.
+
 ## Installation initiale sécurisée
 
 Le Manager sait désormais préparer une installation neuve et continue

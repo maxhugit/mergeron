@@ -78,6 +78,38 @@ def require_active(api, expected_id):
     return active
 
 
+def require_isolated_configuration(value):
+    host = value['HostConfig']
+    if (host.get('NetworkMode') != 'none' or host.get('Privileged') or
+            not host.get('ReadonlyRootfs') or host.get('CapDrop') != ['ALL'] or
+            set(host.get('CapAdd') or []) != {'CAP_CHOWN', 'CAP_DAC_READ_SEARCH'} or
+            not any(m.get('Destination') == '/host-state' and m.get('Source') == STATE
+                    for m in value.get('Mounts', []))):
+        raise RuntimeError('Unexpected dev Manager configuration')
+
+
+def enable_restart(api=docker, read_status=manager):
+    """Explicit host repair: policy only, no stop/start, recreation or data writes."""
+    require_idle(read_status)
+    original = inspect(api, NAME)
+    require_active(api, original['Id'])
+    require_isolated_configuration(original)
+    policy = {'Name': 'unless-stopped', 'MaximumRetryCount': 0}
+    if original['HostConfig'].get('RestartPolicy') == policy:
+        return {'changed': False, 'restartPolicy': policy['Name'], 'restarted': False}
+    require_idle(read_status)
+    require_active(api, original['Id'])
+    api('/containers/' + quote(original['Id'], safe='') + '/update', 'POST',
+        {'RestartPolicy': policy})
+    current = require_active(api, original['Id'])
+    expected_host = {**original['HostConfig'], 'RestartPolicy': policy}
+    if (current['HostConfig'] != expected_host or current['Config'] != original['Config'] or
+            current.get('Image') != original.get('Image') or
+            current.get('RestartCount') != original.get('RestartCount')):
+        raise RuntimeError('Dev Manager changed during restart-policy verification')
+    return {'changed': True, 'restartPolicy': policy['Name'], 'restarted': False}
+
+
 def validate_retired(api, name, expected_id, active_id):
     if not re.fullmatch(NAME + r'-rollback-[0-9a-f]{10}', name):
         raise RuntimeError('Not an explicitly named retired dev Manager')
@@ -106,12 +138,7 @@ def replace(revision, api=docker, read_status=manager, sleep=time.sleep, manage_
     old = inspect(api, NAME)
     require_active(api, old['Id'])
     host = old['HostConfig']
-    if (host.get('NetworkMode') != 'none' or host.get('Privileged') or
-            not host.get('ReadonlyRootfs') or host.get('CapDrop') != ['ALL'] or
-            set(host.get('CapAdd') or []) != {'CAP_CHOWN', 'CAP_DAC_READ_SEARCH'} or
-            not any(m.get('Destination') == '/host-state' and m.get('Source') == STATE
-                    for m in old.get('Mounts', []))):
-        raise RuntimeError('Unexpected dev Manager configuration')
+    require_isolated_configuration(old)
     tag = REPOSITORY + ':sha-' + revision[:7]
     api('/images/create?fromImage=' + quote(tag, safe=''), 'POST')
     image = api('/images/' + quote(tag, safe='') + '/json')
@@ -191,10 +218,18 @@ def main():
     parser.add_argument('revision', nargs='?')
     parser.add_argument('--confirm-replace', action='store_true')
     parser.add_argument('--manage-browser', action='store_true')
+    parser.add_argument('--enable-restart', action='store_true',
+                        help='Set unless-stopped on the verified idle Dev Manager only; no restart')
+    parser.add_argument('--confirm-restart', action='store_true')
     parser.add_argument('--cleanup-only', action='store_true')
     parser.add_argument('--retired', action='append', default=[], metavar='NAME=ID')
     args = parser.parse_args()
-    if args.cleanup_only:
+    if args.enable_restart or args.confirm_restart:
+        if (not args.enable_restart or not args.confirm_restart or args.revision or
+                args.confirm_replace or args.manage_browser or args.cleanup_only or args.retired):
+            parser.error('Restart-policy repair requires --enable-restart --confirm-restart only')
+        print(json.dumps(enable_restart()), flush=True)
+    elif args.cleanup_only:
         if args.revision or args.confirm_replace or args.manage_browser or not args.retired:
             parser.error('Cleanup requires explicit retired NAME=ID pairs only')
         require_idle()
