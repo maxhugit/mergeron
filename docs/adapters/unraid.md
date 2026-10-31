@@ -23,6 +23,14 @@ n’a pas de shell et fournit déjà son propre contrôle en forme exec.
 Ne pas mettre à jour ses dépendances individuellement depuis leurs formulaires :
 utiliser le plan et la confirmation dans Mergeron.
 
+Les formulaires Manager incluent `--restart unless-stopped`. Pour un conteneur
+créé avec un ancien formulaire, vérifier aussi son modèle enregistré sur Unraid :
+la publication d’un nouveau XML ne le modifie pas automatiquement. Un
+remplacement d’image conserve la politique existante, y compris `no`.
+Voir le [diagnostic et la réparation ciblée du redémarrage](../mergeron-manager.md#redémarrage-automatique-et-installations-existantes)
+avant toute intervention ; un état `unhealthy` ne justifie pas à lui seul de
+redémarrer un Manager occupé.
+
 Pour une instance de développement séparée, le
 [formulaire Manager Dev](../../deployment/docker-man/my-mergeron-dev-manager.xml)
 prépare des paramètres distincts. Les vérifier avant d’activer l’installation.

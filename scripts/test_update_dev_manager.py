@@ -25,7 +25,10 @@ class Docker:
         self.containers = {OLD: {'Id': OLD, 'Name': '/' + updater.NAME,
             'State': {'Running': True, 'Status': 'running', 'Health': {'Status': 'healthy'}},
             'HostConfig': {'NetworkMode': 'none', 'Privileged': False, 'ReadonlyRootfs': True,
-                           'CapDrop': ['ALL'], 'CapAdd': ['CAP_CHOWN', 'CAP_DAC_READ_SEARCH']},
+                           'CapDrop': ['ALL'], 'CapAdd': ['CAP_CHOWN', 'CAP_DAC_READ_SEARCH'],
+                           'SecurityOpt': ['no-new-privileges:true'],
+                           'Memory': 536870912, 'NanoCpus': 250000000, 'PidsLimit': 64,
+                           'RestartPolicy': {'Name': 'no', 'MaximumRetryCount': 0}},
             'Mounts': [{'Destination': '/host-state', 'Source': updater.STATE}],
             'Config': {'Image': updater.REPOSITORY + ':edge', 'Labels': {}}, 'Image': 'old-image'}}
 
@@ -59,9 +62,40 @@ class Docker:
         elif parts[-1] == 'start':
             item['State'] = {'Running': True, 'Status': 'running', 'Health': {
                 'Status': 'starting' if self.fail_health and item['Id'] == NEW else 'healthy'}}
+        elif parts[-1] == 'update':
+            item['HostConfig'].update(copy.deepcopy(body))
 
 
 class CleanupTests(unittest.TestCase):
+    def test_restart_repair_updates_only_the_exact_idle_dev_manager_policy(self):
+        api = Docker()
+        original = copy.deepcopy(api.containers[OLD])
+        result = updater.enable_restart(api, status)
+        self.assertEqual(result, {'changed': True, 'restartPolicy': 'unless-stopped', 'restarted': False})
+        self.assertEqual([c for c in api.calls if c[1] != 'GET'], [('/containers/' + OLD + '/update', 'POST')])
+        expected = copy.deepcopy(original)
+        expected['HostConfig']['RestartPolicy'] = {'Name': 'unless-stopped', 'MaximumRetryCount': 0}
+        self.assertEqual(api.containers[OLD], expected)
+        # Repeated application is a read-only no-op; replacement preserves it.
+        api.calls.clear()
+        self.assertFalse(updater.enable_restart(api, status)['changed'])
+        self.assertFalse(any(method != 'GET' for _, method in api.calls))
+        updater.replace(REVISION, api, status, lambda _: None)
+        self.assertEqual(api.containers[NEW]['HostConfig'], expected['HostConfig'])
+
+    def test_restart_repair_refuses_production_busy_unhealthy_and_unisolated(self):
+        for state in ({**status(), 'stack': 'mergeron'}, {**status(), 'update': {'busy': True}}):
+            api = Docker()
+            with self.assertRaises(RuntimeError):
+                updater.enable_restart(api, lambda: state)
+            self.assertFalse(any(method != 'GET' for _, method in api.calls))
+        for kind in ('unhealthy', 'privileged'):
+            api = Docker()
+            if kind == 'unhealthy': api.containers[OLD]['State']['Health']['Status'] = 'unhealthy'
+            else: api.containers[OLD]['HostConfig']['Privileged'] = True
+            with self.assertRaises(RuntimeError): updater.enable_restart(api, status)
+            self.assertFalse(any(method != 'GET' for _, method in api.calls))
+
     def retired(self):
         api = Docker()
         api.containers[NEW] = copy.deepcopy(api.containers[OLD])

@@ -13,7 +13,7 @@
   <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/maxhugit/mergeron/main/deployment/docker-man/my-mergeron-dev-manager.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/maxhugit/mergeron/main/web/public/pwa-dev-icon-192.png</Icon>
-  <ExtraParams>--read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH --security-opt no-new-privileges:true --tmpfs /tmp:rw,nosuid,nodev,size=8m --pids-limit 64 --memory 512m --cpus 0.25 --log-opt max-size=10m --log-opt max-file=3</ExtraParams>
+  <ExtraParams>--restart unless-stopped --read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH --security-opt no-new-privileges:true --tmpfs /tmp:rw,nosuid,nodev,size=8m --pids-limit 64 --memory 512m --cpus 0.25 --log-opt max-size=10m --log-opt max-file=3</ExtraParams>
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>

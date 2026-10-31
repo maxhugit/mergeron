@@ -204,6 +204,38 @@ test('Manager and browser keep strict scans, smoke tests and reports', () => {
   assert.match(smoke, /page\.setContent/);
 });
 
+test('Manager restart and load checks remain required before PR gates and image promotion', () => {
+  for (const workflow of [quality, publish]) {
+    assert.ok(
+      workflow.includes(
+        'bash scripts/smoke-test-manager-performance.sh "$IMAGE_REF"',
+      ),
+    );
+    assert.ok(
+      workflow.includes(
+        'bash scripts/smoke-test-manager-restart.sh "$IMAGE_REF"',
+      ),
+    );
+  }
+  for (const script of ['performance', 'restart']) {
+    const source = read(`scripts/smoke-test-manager-${script}.sh`);
+    for (const safeguard of [
+      '--network none',
+      '--read-only',
+      '--cap-drop ALL',
+      '--security-opt no-new-privileges:true',
+      '--memory 512m',
+      '--cpus 0.25',
+      '--pids-limit 64',
+    ])
+      assert.ok(source.includes(safeguard), safeguard);
+    assert.doesNotMatch(
+      source,
+      /\/var\/run\/docker\.sock|docker (?:system|volume|image) prune|--privileged/,
+    );
+  }
+});
+
 test('cache writes are component/scoped, never PR writes to trusted main/legacy', () => {
   assert.match(quality, /format\('pr-\{0\}', github\.event\.number\)/);
   for (const workflow of [quality, publish]) {
