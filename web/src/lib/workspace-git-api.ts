@@ -51,6 +51,28 @@ export interface GitPullRequests {
   }>;
 }
 
+export interface GitMerges {
+  supported: boolean;
+  limited: boolean;
+  inspectedAt: number;
+  items: Array<{
+    number: number;
+    title: string;
+    branch: string;
+    base: string;
+    mergedAt: string;
+    url: string;
+  }>;
+}
+
+export interface GitMergeChecks {
+  head: string;
+  limited: boolean;
+  inspectedAt: number;
+  url: string;
+  items: GitChecks['items'];
+}
+
 export interface GitRemoteBranches {
   supported: boolean;
   limited: boolean;

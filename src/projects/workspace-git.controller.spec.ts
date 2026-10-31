@@ -140,3 +140,29 @@ it('exposes remote branch inspection at the canonical connections path and the l
   });
   expect(remoteBranches).toHaveBeenCalledWith('project', 'connection');
 });
+
+it('routes merge history and post-merge checks through read-only connection endpoints', async () => {
+  const merges = vi.fn().mockResolvedValue({ items: [] });
+  const mergeChecks = vi.fn().mockResolvedValue({ items: [] });
+  const controller = new WorkspaceGitController(
+    { merges, mergeChecks } as unknown as WorkspaceGitService,
+    {} as WorkspaceGitActionsService,
+    {} as WorkspaceCopiesService,
+  );
+  await controller.merges('project', 'connection');
+  await controller.mergeChecks('project', 'connection', '12');
+  expect(merges).toHaveBeenCalledWith('project', 'connection');
+  expect(mergeChecks).toHaveBeenCalledWith('project', 'connection', '12');
+  for (const [method, suffix] of [
+    ['merges', 'merges'],
+    ['mergeChecks', 'merges/:number/checks'],
+  ] as const) {
+    const handler = WorkspaceGitController.prototype[method];
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.GET,
+    );
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toContain(
+      `connections/:resourceId/${suffix}`,
+    );
+  }
+});

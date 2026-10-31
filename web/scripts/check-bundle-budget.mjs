@@ -12,14 +12,11 @@ const budgets = {
   maximumJavaScriptAssetBytes: 1_100_000,
   mainEntryAssetBytes: 350_000,
   totalJavaScriptBytes: 18_000_000,
-  // The platform guide, project agent management, deliverable execution flow,
-  // workspace transfers, Mergeron Manager inventory and adoption safeguards,
-  // and the unified local/Git/SSH/FTP source picker are intentionally localized
-  // in the shared catalog. The locations/connections vocabulary adds 625 bytes
-  // above the previous ceiling (largest catalog: 183,625 bytes in CI).
-  // Keep a narrow ceiling around that reviewed content
-  // while preserving regression detection.
-  commonCatalogAssetBytes: 184_000,
+  // The shared catalog includes the platform guide, source picker and agent
+  // controls. Persistent question replies add reviewed French/English labels;
+  // the largest production catalog is now 184,424 bytes. Keep a narrow ceiling
+  // around that content while preserving regression detection.
+  commonCatalogAssetBytes: 185_000,
 };
 
 const entries = await readdir(assetsDirectory, { withFileTypes: true }).catch(

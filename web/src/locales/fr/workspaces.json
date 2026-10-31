@@ -286,5 +286,16 @@
   "gitActionMerged": "Pull request fusionnée.",
   "gitActionMerge": "Fusionner la PR…",
   "gitActionConfirmMerge": "Fusionner la pull request n°{{number}} ?",
-  "gitActionMergeHelp": "Crée un commit de fusion sur la branche cible de la PR. Les checks et les révisions sont revérifiés côté serveur. Les protections GitHub s’appliquent. La copie locale n’est pas mise à jour et aucune branche n’est supprimée."
+  "gitActionMergeHelp": "Crée un commit de fusion sur la branche cible de la PR. Les checks et les révisions sont revérifiés côté serveur. Les protections GitHub s’appliquent. La copie locale n’est pas mise à jour et aucune branche n’est supprimée.",
+  "gitTabMerges": "Merges",
+  "gitMergesHelp": "Suivez les vérifications sur le commit de fusion des PR récemment fusionnées. Actualisation automatique toutes les 30 secondes.",
+  "gitNoMerges": "Aucune fusion dans les PR fermées récemment mises à jour.",
+  "gitMergesLimited": "Historique limité : jusqu’à 5 fusions parmi les 30 PR fermées récemment mises à jour.",
+  "gitMergeChecksPassed": "Checks réussis",
+  "gitMergeChecksFailed": "Checks en échec",
+  "gitMergedOn": "Fusionnée le {{date}}",
+  "gitMergeCommit": "Commit de fusion : {{sha}}",
+  "gitMergeJobs": "Jobs ({{count}})",
+  "gitMergeOpenChecks": "Voir les checks sur GitHub",
+  "gitMergeChecksError": "Impossible de vérifier les jobs de cette fusion. Leur réussite n’est pas confirmée."
 }
