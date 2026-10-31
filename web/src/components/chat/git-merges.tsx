@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  Ban,
   CircleCheck,
   CircleHelp,
   CircleX,
@@ -24,6 +25,7 @@ import {
 const stateIcons = {
   passed: CircleCheck,
   failed: CircleX,
+  cancelled: Ban,
   running: Loader2,
   waiting: Clock3,
   unknown: CircleHelp,
@@ -154,6 +156,7 @@ function MergedPullRequest({
   const states = {
     passed: t('gitMergeChecksPassed'),
     failed: t('gitMergeChecksFailed'),
+    cancelled: t('gitCheckCancelled'),
     running: t('gitCheckInProgress'),
     waiting: t('gitCheckWaiting'),
     unknown: t('gitCheckUnknown'),
