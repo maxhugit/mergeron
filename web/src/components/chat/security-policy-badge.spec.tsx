@@ -17,6 +17,7 @@ const mock = vi.hoisted(() => ({
   outcome: null as ThreadSecurityPolicyView['outcome'],
   isSettling: false,
   apply: vi.fn(),
+  savedSandbox: undefined as Record<string, unknown> | null | undefined,
   projects: [] as ProjectSummary[],
   timeline: {
     threadId: 'agent',
@@ -52,6 +53,22 @@ vi.mock('@/hooks/use-thread-security-policy', () => ({
     stale: mock.stale,
   }),
 }));
+vi.mock('@/hooks/use-thread-execution-preferences', () => ({
+  useThreadExecutionPreferences: () => ({
+    preferences: {
+      revision: 1,
+      security: {
+        approvalPolicy: 'never',
+        sandboxPolicy:
+          mock.savedSandbox === undefined ? mock.sandbox : mock.savedSandbox,
+      },
+    },
+    busy: false,
+    error: false,
+    save: vi.fn(),
+    retry: vi.fn(),
+  }),
+}));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: string[] }) => ({
     data:
@@ -62,6 +79,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 beforeEach(() => {
   mock.apply.mockReset();
+  mock.savedSandbox = undefined;
   mock.available = true;
   mock.stale = false;
   mock.pending = null;
@@ -263,8 +281,20 @@ it('recognizes the observed workspace policy without adding other agents copies'
   mock.sandbox.writableRoots = [];
   open();
   expect(
-    screen.getByRole('button', { name: 'workspaceWritecurrent' }),
-  ).toBeDisabled();
+    screen.getByRole('button', { name: /workspaceWritecurrent/ }),
+  ).toBeEnabled();
+  expect(mock.apply).not.toHaveBeenCalled();
+});
+
+it('keeps the stored choice distinct from the currently observed sandbox after a restart', () => {
+  mock.savedSandbox = { type: 'dangerFullAccess' };
+  open();
+  expect(
+    screen.getByRole('button', { name: /workspaceWritecurrent/ }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole('button', { name: /dangerFullAccessagentSettingsSaved/ }),
+  ).toBeEnabled();
   expect(mock.apply).not.toHaveBeenCalled();
 });
 

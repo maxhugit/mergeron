@@ -1,8 +1,9 @@
 /**
- * Zustand store for session-level model, reasoning effort and service tier
- * overrides. These are applied per-turn via turn/start params.
+ * Durable per-agent choices cached from the server, plus observed engine state.
+ * Legacy unbound overrides are kept separate from named agents.
  */
 import { create } from 'zustand';
+import type { AgentExecutionPreferences } from '@/lib/thread-execution-preferences';
 
 export type ReasoningEffort =
   | 'none'
@@ -15,6 +16,15 @@ export type ReasoningEffort =
   | 'ultra';
 
 interface ModelState {
+  preferencesByThread: Record<string, AgentExecutionPreferences>;
+  pendingPreferencesByThread: Record<string, number>;
+  loadingPreferencesByThread: Record<string, boolean>;
+  recordPreferences: (
+    threadId: string,
+    preferences: AgentExecutionPreferences,
+  ) => void;
+  changePendingPreferences: (threadId: string, delta: number) => void;
+  setPreferencesLoading: (threadId: string, loading: boolean) => void;
   /** Overridden model id — null means use the server default. */
   modelOverride: string | null;
   /**
@@ -85,6 +95,40 @@ interface ModelState {
 }
 
 export const useModelStore = create<ModelState>((set) => ({
+  preferencesByThread: {},
+  pendingPreferencesByThread: {},
+  loadingPreferencesByThread: {},
+  recordPreferences: (threadId, preferences) =>
+    set((state) => {
+      if (
+        (state.preferencesByThread[threadId]?.revision ?? -1) >
+        preferences.revision
+      )
+        return state;
+      return {
+        preferencesByThread: {
+          ...state.preferencesByThread,
+          [threadId]: preferences,
+        },
+      };
+    }),
+  changePendingPreferences: (threadId, delta) =>
+    set((state) => ({
+      pendingPreferencesByThread: {
+        ...state.pendingPreferencesByThread,
+        [threadId]: Math.max(
+          0,
+          (state.pendingPreferencesByThread[threadId] ?? 0) + delta,
+        ),
+      },
+    })),
+  setPreferencesLoading: (threadId, loading) =>
+    set((state) => ({
+      loadingPreferencesByThread: {
+        ...state.loadingPreferencesByThread,
+        [threadId]: loading,
+      },
+    })),
   modelOverride: null,
   effortOverride: null,
   observedEffortByThread: {},
@@ -99,16 +143,26 @@ export const useModelStore = create<ModelState>((set) => ({
     set((state) => {
       const held = state.observedSettingsSeqByThread[threadId];
       const older = held !== undefined && held > seq;
-      if (older && (settings.serviceTier === undefined || threadId in state.observedServiceTierByThread)) return state;
+      if (
+        older &&
+        (settings.serviceTier === undefined ||
+          threadId in state.observedServiceTierByThread)
+      )
+        return state;
       return {
         observedEffortByThread: {
           ...state.observedEffortByThread,
-          [threadId]: older ? state.observedEffortByThread[threadId] : settings.effort,
+          [threadId]: older
+            ? state.observedEffortByThread[threadId]
+            : settings.effort,
         },
-        observedServiceTierByThread: settings.serviceTier === undefined ? state.observedServiceTierByThread : {
-          ...state.observedServiceTierByThread,
-          [threadId]: settings.serviceTier,
-        },
+        observedServiceTierByThread:
+          settings.serviceTier === undefined
+            ? state.observedServiceTierByThread
+            : {
+                ...state.observedServiceTierByThread,
+                [threadId]: settings.serviceTier,
+              },
         observedSettingsSeqByThread: {
           ...state.observedSettingsSeqByThread,
           [threadId]: older ? held : seq,
@@ -122,7 +176,13 @@ export const useModelStore = create<ModelState>((set) => ({
     set((state) => {
       const hasEffort = threadId in state.observedEffortByThread;
       const hasTier = threadId in state.observedServiceTierByThread;
-      if (!hasEffort && !hasTier && !(threadId in state.observedSettingsSeqByThread))
+      if (
+        !hasEffort &&
+        !hasTier &&
+        !(threadId in state.observedSettingsSeqByThread) &&
+        !(threadId in state.preferencesByThread) &&
+        !(threadId in state.loadingPreferencesByThread)
+      )
         return state;
       const next = { ...state.observedEffortByThread };
       const nextTiers = { ...state.observedServiceTierByThread };
@@ -130,7 +190,15 @@ export const useModelStore = create<ModelState>((set) => ({
       delete nextTiers[threadId];
       const nextSeqs = { ...state.observedSettingsSeqByThread };
       delete nextSeqs[threadId];
+      const preferencesByThread = { ...state.preferencesByThread };
+      const loadingPreferencesByThread = {
+        ...state.loadingPreferencesByThread,
+      };
+      delete preferencesByThread[threadId];
+      delete loadingPreferencesByThread[threadId];
       return {
+        preferencesByThread,
+        loadingPreferencesByThread,
         observedEffortByThread: next,
         observedServiceTierByThread: nextTiers,
         observedSettingsSeqByThread: nextSeqs,
@@ -138,6 +206,9 @@ export const useModelStore = create<ModelState>((set) => ({
     }),
   clearOverrides: () =>
     set({
+      preferencesByThread: {},
+      pendingPreferencesByThread: {},
+      loadingPreferencesByThread: {},
       modelOverride: null,
       effortOverride: null,
       serviceTierOverride: undefined,

@@ -36,6 +36,7 @@ import {
 } from './dto/thread-security-policy.dto';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import { validateThreadSecurityPolicy } from './thread-security-policy.validation';
+import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
 
 @ApiTags('threads')
 @ApiBearerAuth()
@@ -50,6 +51,8 @@ export class ThreadSecurityPolicyController {
     private readonly deletionRegistry: ThreadDeletionRegistryService,
     @Optional()
     private readonly projectConnections?: ProjectConnectionPolicyService,
+    @Optional()
+    private readonly preferences?: ThreadExecutionPreferencesService,
   ) {}
 
   /** Reads observations only; never resumes a thread or substitutes global defaults. */
@@ -117,10 +120,22 @@ export class ThreadSecurityPolicyController {
     )
       throw new ConflictException('GIT_COPY_ISOLATION_REQUIRED');
     this.deletionRegistry.assertMutable(threadId);
-    await this.codex.request<Record<string, never>>('thread/settings/update', {
+    const selection = this.preferences?.beginSecurity(
       threadId,
-      ...patch,
-    });
+      patch,
+      thread.cwd,
+      this.settingsObserver.readSecurityPolicy(threadId),
+    );
+    try {
+      await this.codex.request<Record<string, never>>(
+        'thread/settings/update',
+        { threadId, ...patch },
+      );
+      selection?.accept();
+    } catch (error) {
+      selection?.cancel();
+      throw error;
+    }
     return { status: 'accepted' };
   }
 }

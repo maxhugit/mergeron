@@ -13,6 +13,7 @@ import {
 } from '@/generated/api/@tanstack/react-query.gen';
 import type { ModelDto } from '@/generated/api';
 import { useModelStore } from '@/stores/model-store';
+import { useTimelineStore } from '@/stores/timeline-store';
 import { useCurrentProject } from './use-current-project';
 
 export interface ActiveModel {
@@ -36,7 +37,10 @@ export interface ActiveModel {
 
 /** Returns the resolved active model and the catalog it came from. */
 export function useActiveModel(): ActiveModel {
-  const modelOverride = useModelStore((s) => s.modelOverride);
+  const threadId = useTimelineStore((s) => s.threadId);
+  const modelOverride = useModelStore((s) =>
+    threadId ? s.preferencesByThread[threadId]?.model : s.modelOverride,
+  );
   const project = useCurrentProject();
 
   // Config model from status (lightweight, cached)

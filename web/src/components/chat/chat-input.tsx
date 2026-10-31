@@ -158,6 +158,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   // actually in force. Read here rather than inside the badge because the badge
   // is a sibling of the send button, and it is the send that must wait.
   const policySettling = useThreadSecurityPolicy(threadId).isSettling;
+  const preferencesSettling = useModelStore(
+    (s) =>
+      !!threadId &&
+      Boolean(
+        s.pendingPreferencesByThread[threadId] ||
+        s.loadingPreferencesByThread[threadId] ||
+        s.preferencesByThread[threadId]?.securitySaveState,
+      ),
+  );
   const hasActiveTurn = Boolean(threadId && activeTurnId && !readOnly);
   const cannotStart =
     turnStartPending ||
@@ -307,7 +316,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     // ends up believing they granted full access and then being asked to
     // approve — so the draft is kept and the send waits instead. The composer
     // disables the button for the same reason; this guards the keyboard path.
-    if (policySettling) return;
+    if (policySettling || preferencesSettling) return;
     // Collect image paths for timeline display
     const imageAttachments = attachmentsRef.current
       .filter(
@@ -320,19 +329,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       imageAttachments.length > 0 ? imageAttachments : undefined,
     );
     clearAfterSend();
-    const { modelOverride, effortOverride, serviceTierOverride } =
-      useModelStore.getState();
+    // The server reads this agent's durable choices at dispatch. Replaying a
+    // cached client snapshot here would undo a newer choice from another tab.
     startTurn.mutate({
       path: { threadId },
       body: {
         input: input as never,
-        ...(modelOverride && { model: modelOverride }),
-        ...(effortOverride && { effort: effortOverride }),
-        // Explicit null is meaningful here (clears the tier), so this checks
-        // for `undefined` rather than falsiness like the two overrides above.
-        ...(serviceTierOverride !== undefined && {
-          serviceTier: serviceTierOverride,
-        }),
       },
     });
     onSubmitted?.();
@@ -343,6 +345,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     cannotStart,
     readOnly,
     policySettling,
+    preferencesSettling,
     attachmentsRef,
     addUserMessage,
     clearAfterSend,
@@ -608,7 +611,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                     !hasContent ||
                     cannotStart ||
                     readOnly ||
-                    policySettling
+                    policySettling ||
+                    preferencesSettling
                   }
                   onClick={handleSubmit}
                 >

@@ -1,5 +1,9 @@
 {
   "modelAdminOnly": "Seuls les administrateurs peuvent modifier le modèle et l’effort.",
+  "agentSettingsSaved": "Enregistré",
+  "agentSettingsRemembered": "Enregistré sur cet agent : {{sandbox}} · {{approval}}. Utilisé pour les prochaines demandes, sous réserve des protections du projet.",
+  "agentSettingsSaveFailed": "Impossible de mémoriser les réglages de cet agent. Vérifiez les valeurs enregistrées puis réessayez explicitement.",
+  "agentSettingsLoadFailed": "Impossible de lire les réglages enregistrés de cet agent. Réessayez avant d’envoyer une demande.",
   "agentCacheEnable": "Activer la navigation rapide pour ce projet",
   "agentCacheDisable": "Désactiver la navigation rapide",
   "agentCacheSaveError": "Impossible d’enregistrer la navigation rapide. Votre choix précédent est conservé ; réessayez.",

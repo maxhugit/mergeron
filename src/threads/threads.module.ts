@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
+import { ThreadExecutionPreferencesController } from './thread-execution-preferences.controller';
 import { PreviewsModule } from '../previews/previews.module';
 import { SettingsModule } from '../settings/settings.module';
 import { InternalMcpModule } from '../internal-mcp/internal-mcp.module';
@@ -63,6 +65,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     ThreadDeletionModule,
   ],
   controllers: [
+    ThreadExecutionPreferencesController,
     ThreadResponseDetailController,
     ThreadsController,
     ThreadsDeletionController,
@@ -72,6 +75,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     WorkspacesManagementController,
   ],
   providers: [
+    ThreadExecutionPreferencesService,
     ProjectConnectionRuntimeService,
     GitMutationGateService,
     ProjectAgentDefaultsService,

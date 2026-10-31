@@ -24,11 +24,12 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useThreadSecurityPolicy } from '@/hooks/use-thread-security-policy';
+import { useThreadExecutionPreferences } from '@/hooks/use-thread-execution-preferences';
 import type {
   PatchThreadSecurityPolicyDto,
   ThreadSecurityPolicyDto,
 } from '@/generated/api';
-import { sandboxMode } from '@/stores/thread-policy-store';
+import { policySatisfies, sandboxMode } from '@/stores/thread-policy-store';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { cn } from '@/lib/utils';
 import { getAuthorizationHeader } from '@/auth-token';
@@ -136,10 +137,12 @@ interface Props {
 }
 
 export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
-  const { t } = useTranslation(['common', 'codexSettings'], {
+  const { t } = useTranslation(['common', 'codexSettings', 'workspaces'], {
     nsMode: 'fallback',
   });
   const policy = useThreadSecurityPolicy(threadId);
+  const preferences = useThreadExecutionPreferences(threadId);
+  const saved = preferences.preferences?.security;
   const threadCwd = useTimelineStore((s) =>
     threadId
       ? ((s.threadId === threadId
@@ -232,6 +235,28 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
         <p className="text-xs text-muted-foreground">
           {t('appliesToThisConversationFromTheNextMessage')}
         </p>
+        {saved && (
+          <p className="rounded bg-muted px-2 py-1.5 text-xs">
+            {t('agentSettingsRemembered', {
+              sandbox: saved.sandboxPolicy
+                ? t(
+                    translationKey(
+                      SANDBOX_LABELS[saved.sandboxPolicy.type] ??
+                        saved.sandboxPolicy.type,
+                    ),
+                  )
+                : '—',
+              approval: saved.approvalPolicy
+                ? describeApproval(saved.approvalPolicy)
+                : '—',
+            })}
+          </p>
+        )}
+        {preferences.preferences?.securitySaveState === 'failed' && (
+          <p role="alert" className="text-xs text-destructive">
+            {t('agentSettingsSaveFailed')}
+          </p>
+        )}
 
         {policy.unknown && (
           <p className="rounded bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
@@ -296,6 +321,7 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
               key={option}
               label={option}
               active={observedApproval === option}
+              saved={saved?.approvalPolicy === option}
               requested={
                 policy.isSettling && policy.pending?.approvalPolicy === option
               }
@@ -321,6 +347,16 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
               active={sandboxOptionIsActive(
                 policy.observed?.sandboxPolicy,
                 option.value,
+              )}
+              saved={policySatisfies(
+                {
+                  observed: true,
+                  source: 'response',
+                  approvalsReviewer: null,
+                  approvalPolicy: null,
+                  sandboxPolicy: saved?.sandboxPolicy ?? null,
+                },
+                { sandboxPolicy: option.value },
               )}
               requested={
                 policy.isSettling &&
@@ -418,6 +454,7 @@ function OptionRow({
   label,
   active,
   requested,
+  saved,
   risky,
   disabled,
   onClick,
@@ -426,15 +463,18 @@ function OptionRow({
   active: boolean;
   /** Chosen by the user but not yet observed as effective. */
   requested?: boolean;
+  saved?: boolean;
   risky?: boolean;
   disabled: boolean;
   onClick: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'workspaces'], {
+    nsMode: 'fallback',
+  });
   return (
     <button
       type="button"
-      disabled={disabled || active}
+      disabled={disabled || (active && saved)}
       onClick={onClick}
       className={cn(
         'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors',
@@ -454,6 +494,11 @@ function OptionRow({
           className="text-[10px]"
         >
           {t('current')}
+        </Badge>
+      )}
+      {saved && (
+        <Badge variant="outline" className="text-[10px]">
+          {t('agentSettingsSaved')}
         </Badge>
       )}
       {/* Requested-but-unconfirmed is its own state on purpose: presenting it

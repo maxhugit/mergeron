@@ -74,6 +74,7 @@ import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { ProjectConnectionRuntimeService } from './project-connection-runtime.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
+import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
 const MAX_FORK_CHAIN_WALK = 32;
@@ -150,6 +151,8 @@ export class ThreadsService {
     @Optional() private readonly internalMcp?: InternalMcpService,
     @Optional() private readonly agentInstructions?: AgentInstructionsService,
     @Optional() private readonly agentDefaults?: ProjectAgentDefaultsService,
+    @Optional()
+    private readonly preferences?: ThreadExecutionPreferencesService,
   ) {}
 
   /**
@@ -583,6 +586,7 @@ export class ThreadsService {
   ): Promise<v2.TurnStartResponse> {
     requireExecutionAccess();
     this.deletionRegistry.assertMutable(params.threadId);
+    params = { ...this.preferences?.forTurn(params.threadId), ...params };
     const beforeTurn = this.metadata.getHeldThread(params.threadId);
     const shouldAutoName = Boolean(
       !background &&

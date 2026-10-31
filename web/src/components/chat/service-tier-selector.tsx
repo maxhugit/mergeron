@@ -19,6 +19,7 @@ import { useModelStore } from '@/stores/model-store';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { OptionRow } from './option-row';
 import { resolveServiceTier } from '@/lib/service-tier';
+import { useThreadExecutionPreferences } from '@/hooks/use-thread-execution-preferences';
 
 /** Displays the supported local tier and lets the user explicitly change it. */
 export function ServiceTierSelector({
@@ -27,9 +28,18 @@ export function ServiceTierSelector({
   menuItem?: boolean;
 }) {
   const { t } = useTranslation();
-  const serviceTierOverride = useModelStore((s) => s.serviceTierOverride);
   const setServiceTierOverride = useModelStore((s) => s.setServiceTierOverride);
   const selectedThreadId = useTimelineStore((s) => s.threadId);
+  const preferences = useThreadExecutionPreferences(selectedThreadId);
+  const serviceTierOverride = useModelStore((s) =>
+    selectedThreadId
+      ? s.preferencesByThread[selectedThreadId]?.serviceTier
+      : s.serviceTierOverride,
+  );
+  const selectTier = (tier: string | null) =>
+    selectedThreadId
+      ? preferences.save({ serviceTier: tier })
+      : setServiceTierOverride(tier);
   const observedTier = useModelStore((s) =>
     selectedThreadId ? s.observedServiceTierByThread[selectedThreadId] : null,
   );
@@ -72,6 +82,7 @@ export function ServiceTierSelector({
           size="sm"
           className={`h-7 gap-1 rounded-lg px-2 text-xs ${menuItem ? 'w-full justify-start' : ''}`}
           title={t('speed')}
+          disabled={preferences.busy}
         >
           <Zap className="h-3.5 w-3.5" />
           <span
@@ -107,7 +118,7 @@ export function ServiceTierSelector({
           label={t('standard')}
           // Explicit null, not undefined: this is what clears a tier the
           // thread already carries.
-          onSelect={() => setServiceTierOverride(null)}
+          onSelect={() => selectTier(null)}
         />
         {serviceTiers.map((tier) => (
           <OptionRow
@@ -120,7 +131,7 @@ export function ServiceTierSelector({
             }
             description={catalogCopy(tier.description)}
             label={catalogCopy(tier.name)}
-            onSelect={() => setServiceTierOverride(tier.id)}
+            onSelect={() => selectTier(tier.id)}
           />
         ))}
       </PopoverContent>
