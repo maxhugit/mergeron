@@ -306,12 +306,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # ── Stage 6: Runtime ─────────────────────────────────────────────────
 FROM visual-runtime-base AS runtime
 
-ARG MERGERON_VERSION=0.1.0
+ARG MERGERON_VERSION=unknown
 ARG MERGERON_REVISION=unknown
 ARG MERGERON_BUILD_DATE=unknown
 ARG MERGERON_RELEASE_CHANNEL=edge
 
 LABEL org.opencontainers.image.title="Mergeron" \
+      io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
       io.mergeron.cli-policy="1" \
       io.mergeron.agent-visual-testing="1" \
       org.opencontainers.image.description="Plateforme collaborative auto-hébergée de gestion de projets et d'agents" \

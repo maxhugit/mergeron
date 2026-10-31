@@ -77,7 +77,7 @@ it('shows the installed channel, latest stable version and cumulative changes', 
   fixture.render(<ServerVersionCard />);
 
   expect(await screen.findByText('0.1.0')).toBeVisible();
-  expect(screen.getByText('Stable (latest)')).toBeVisible();
+  expect(screen.getByText('Stable')).toBeVisible();
   expect(screen.getByText('0.2.1')).toBeVisible();
   expect(screen.getByText('A new Mergeron image is available.')).toBeVisible();
   expect(screen.getByText('Mergeron 0.2.0')).toBeVisible();

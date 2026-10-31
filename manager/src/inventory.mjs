@@ -1,3 +1,8 @@
+import {
+  inspectInstalledBuild,
+  inspectManagerBuild,
+} from './installed-build.mjs';
+
 const MANAGED_LABEL = 'io.mergeron.managed';
 const COMPONENT_LABEL = 'io.mergeron.component';
 const STACK_LABEL = 'io.mergeron.stack';
@@ -240,6 +245,7 @@ async function inspectComponent(component, containers, docker) {
       null,
     image,
     imageId: inspect.Image ?? null,
+    build: await inspectInstalledBuild(docker, inspect, component.id),
     imageRepositoryAllowed,
     health: inspect.State?.Health?.Status ?? null,
     restartCount: Number(inspect.RestartCount ?? 0),
@@ -272,11 +278,14 @@ export async function collectInventory(manifest, docker, now = new Date()) {
   const containers = await docker.listContainers();
   if (!Array.isArray(containers))
     throw new Error('Docker container inventory is invalid');
-  const components = await Promise.all(
-    manifest.components.map((component) =>
-      inspectComponent(component, containers, docker),
+  const [components, manager] = await Promise.all([
+    Promise.all(
+      manifest.components.map((component) =>
+        inspectComponent(component, containers, docker),
+      ),
     ),
-  );
+    inspectManagerBuild(manifest, containers, docker),
+  ]);
   const protectedMounts = components.flatMap((component) =>
     component.protectedMounts.map((mount) => ({
       component: component.id,
@@ -299,6 +308,7 @@ export async function collectInventory(manifest, docker, now = new Date()) {
     observedAt: now.toISOString(),
     dockerConnected: true,
     components,
+    manager,
     dataSafety: {
       status: blockers.length === 0 ? 'protected' : 'blocked',
       blockers,

@@ -85,6 +85,31 @@ test('deduplicates simultaneous refreshes', async () => {
   await Promise.all([service.status(true), service.status(true)]);
   assert.equal(calls.length, 4);
 });
+test('keeps installed metadata separate from the registry target and stale container labels', async () => {
+  const { service, docker } = fixture();
+  docker.inspectContainer = async () => ({
+    Image: old,
+    Config: { Labels: { 'org.opencontainers.image.revision': 'c'.repeat(40) } },
+  });
+  docker.inspectImage = async () => ({
+    Id: old,
+    RepoDigests: [`ghcr.io/maxhugit/mergeron@${old}`],
+    Os: 'linux',
+    Architecture: 'amd64',
+    Config: {
+      Labels: {
+        'org.opencontainers.image.version': '0.5.1',
+        'org.opencontainers.image.revision': 'd'.repeat(40),
+      },
+    },
+  });
+  const result = (await service.status()).components[0];
+  assert.equal(result.installedBuild.revision, 'd'.repeat(40));
+  assert.equal(result.installedBuild.version, '0.5.1');
+  assert.equal(result.installedBuild.channel, 'unknown');
+  assert.equal(result.targetImage, 'ghcr.io/maxhugit/mergeron:edge');
+  assert.equal(result.targetDigest, next);
+});
 test('does not declare a current container outdated', async () => {
   const { service, docker } = fixture();
   docker.inspectDistribution = async () => ({

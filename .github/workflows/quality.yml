@@ -342,6 +342,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve application build identity
+        id: release-version
+        run: node scripts/release-version.mjs
 
       - name: Set up Docker Buildx
         id: app-builder
@@ -364,6 +367,11 @@ jobs:
           push: true
           load: true
           tags: ghcr.io/maxhugit/mergeron:quality-${{ github.sha }}
+          build-args: |
+            MERGERON_REVISION=${{ github.sha }}
+            MERGERON_VERSION=${{ steps.release-version.outputs.version }}
+            MERGERON_BUILD_DATE=${{ steps.release-version.outputs.created }}
+            MERGERON_RELEASE_CHANNEL=${{ steps.release-version.outputs.channel }}
           cache-from: |
             type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-${{ env.CACHE_SCOPE }}
             type=registry,ref=ghcr.io/maxhugit/mergeron:buildcache-app-main
@@ -515,6 +523,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve Manager build identity
+        id: release-version
+        run: node scripts/release-version.mjs
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GitHub Container Registry
@@ -534,6 +545,11 @@ jobs:
           push: true
           load: true
           tags: ghcr.io/maxhugit/mergeron-manager:quality-${{ github.sha }}
+          build-args: |
+            MERGERON_REVISION=${{ github.sha }}
+            MERGERON_VERSION=${{ steps.release-version.outputs.version }}
+            MERGERON_BUILD_DATE=${{ steps.release-version.outputs.created }}
+            MERGERON_RELEASE_CHANNEL=${{ steps.release-version.outputs.channel }}
           cache-from: |
             type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-${{ env.CACHE_SCOPE }}
             type=registry,ref=ghcr.io/maxhugit/mergeron-manager:buildcache-manager-main
@@ -598,6 +614,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve browser build identity
+        id: release-version
+        run: node scripts/release-version.mjs
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GitHub Container Registry
@@ -614,6 +633,11 @@ jobs:
           push: false
           load: true
           tags: mergeron-browser:quality-${{ github.sha }}
+          build-args: |
+            MERGERON_REVISION=${{ github.sha }}
+            MERGERON_VERSION=${{ steps.release-version.outputs.version }}
+            MERGERON_BUILD_DATE=${{ steps.release-version.outputs.created }}
+            MERGERON_RELEASE_CHANNEL=${{ steps.release-version.outputs.channel }}
           cache-from: |
             type=registry,ref=ghcr.io/maxhugit/mergeron-browser:buildcache-browser-${{ env.CACHE_SCOPE }}
             type=registry,ref=ghcr.io/maxhugit/mergeron-browser:buildcache-browser-main

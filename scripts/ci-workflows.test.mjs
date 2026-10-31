@@ -491,6 +491,26 @@ test('browser identity does not invalidate dependencies and cleanup', () => {
     /dpkg --compare-versions.*libbrotli1.*ge '1\.1\.0-2ubuntu0\.1'/,
   );
   assert.match(dockerfile, /USER pwuser/);
+  for (const workflow of [
+    read('.github/workflows/quality.yml'),
+    read('.github/workflows/docker-publish.yml'),
+  ]) {
+    const browser = workflow.slice(workflow.indexOf('  browser-'));
+    assert.match(browser, /Resolve browser build identity/);
+    for (const argument of [
+      'MERGERON_REVISION',
+      'MERGERON_VERSION',
+      'MERGERON_BUILD_DATE',
+      'MERGERON_RELEASE_CHANNEL',
+    ]) {
+      assert.match(browser, new RegExp(`${argument}=\\$\\{\\{`));
+    }
+  }
+  assert.match(dockerfile, /io\.mergeron\.version="\$\{MERGERON_VERSION\}"/);
+  assert.match(
+    read('scripts/smoke-test-browser-image.sh'),
+    /Browser product version missing/,
+  );
   const managerContext = read('Dockerfile.manager.dockerignore');
   assert.match(managerContext, /^\*\*$/m);
   for (const path of [

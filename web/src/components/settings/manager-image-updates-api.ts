@@ -1,11 +1,14 @@
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
+import type { InstalledBuild } from './manager-status-api';
 
 export interface ComponentImageUpdate {
   id: string;
   displayName: string;
   installedImage: string | null;
   installedDigest: string | null;
+  installedImageId?: string | null;
+  installedBuild?: InstalledBuild | null;
   targetImage: string | null;
   targetDigest: string | null;
   versionStatus: 'unknown' | 'current' | 'update_available';

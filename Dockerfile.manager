@@ -48,12 +48,13 @@ RUN mkdir -p /runtime/run/mergeron-manager /runtime/var/lib/mergeron-manager \
 # Keep npm and the build distribution out of the privileged final image.
 FROM gcr.io/distroless/nodejs22-debian13@sha256:f643bc05bdcf5a8d98442e8a2a5c7a3a4c3a0e3bc4cdc5f10557d47f1ddd5812
 
-ARG MERGERON_VERSION=0.1.0
+ARG MERGERON_VERSION=unknown
 ARG MERGERON_REVISION=unknown
 ARG MERGERON_BUILD_DATE=unknown
 ARG MERGERON_RELEASE_CHANNEL=edge
 
 LABEL org.opencontainers.image.title="Mergeron Manager" \
+      io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
       io.mergeron.codex-runtime="0.164.0-mergeron.1" \
       org.opencontainers.image.description="Gestionnaire local de la pile Mergeron" \
       org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \

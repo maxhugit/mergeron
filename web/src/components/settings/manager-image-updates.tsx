@@ -13,7 +13,7 @@ export function ManagerImageUpdates({
   disabled: boolean;
   onUpdate: (images: Record<string, string>) => void;
 }) {
-  const { t } = useTranslation('manager');
+  const { t, i18n } = useTranslation('manager');
   const query = useQuery({
     queryKey: componentUpdatesKey,
     queryFn: () => requestComponentUpdates(),
@@ -26,18 +26,37 @@ export function ManagerImageUpdates({
       <h3 className="text-sm font-semibold">{t('componentUpdatesTitle')}</h3>
       {query.isPending && <p role="status">{t('componentUpdatesLoading')}</p>}
       {query.isError && <p role="alert">{t('componentUpdatesUnavailable')}</p>}
+      {query.data?.checkedAt && (
+        <p className="text-xs text-muted-foreground">
+          {t('versionRegistryCheckedAt', {
+            date: new Date(query.data.checkedAt).toLocaleString(i18n.language),
+          })}
+        </p>
+      )}
       {query.data?.components.map((item) => (
         <article
           key={item.id}
           className="space-y-2 rounded-lg border border-border p-3 text-sm"
         >
           <h4 className="font-medium">{item.displayName}</h4>
+          <p className="text-xs text-muted-foreground">
+            {t('versionInstalledImage')}
+          </p>
           <p className="break-all font-mono text-xs">
             {item.installedImage ?? '—'}
           </p>
+          {(item.installedBuild?.version || item.installedBuild?.revision) && (
+            <p className="text-xs">
+              {item.installedBuild.version ?? t('versionUnknown')}
+              {item.installedBuild.revision
+                ? ` · ${item.installedBuild.revision.slice(0, 7)}`
+                : ''}
+            </p>
+          )}
           <p>
             {t(
-              item.checkError
+              item.checkError ||
+                (!item.updateAvailable && item.versionStatus !== 'current')
                 ? item.checkError === 'platformIdentityUnavailable'
                   ? 'componentPlatformUnknown'
                   : 'componentUpdatesUnknown'
@@ -47,10 +66,15 @@ export function ManagerImageUpdates({
             )}
           </p>
           {item.targetImage && (
-            <p className="break-all font-mono text-xs">
-              {item.targetImage}
-              {item.targetDigest ? ` · ${item.targetDigest}` : ''}
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">
+                {t('versionRegistryTarget')}
+              </p>
+              <p className="break-all font-mono text-xs">
+                {item.targetImage}
+                {item.targetDigest ? ` · ${item.targetDigest}` : ''}
+              </p>
+            </div>
           )}
           {item.updateAvailable && (
             <p className="text-xs text-muted-foreground">

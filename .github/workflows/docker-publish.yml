@@ -30,6 +30,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve browser build identity
+        id: release-version
+        run: node scripts/release-version.mjs "${GITHUB_REF_NAME}"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -52,7 +55,11 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ghcr.io/maxhugit/mergeron-browser:candidate-${{ github.sha }}
-          build-args: MERGERON_REVISION=${{ github.sha }}
+          build-args: |
+            MERGERON_REVISION=${{ github.sha }}
+            MERGERON_VERSION=${{ steps.release-version.outputs.version }}
+            MERGERON_BUILD_DATE=${{ steps.release-version.outputs.created }}
+            MERGERON_RELEASE_CHANNEL=${{ steps.release-version.outputs.channel }}
           cache-from: |
             type=registry,ref=ghcr.io/maxhugit/mergeron-browser:buildcache-browser-${{ env.CACHE_SCOPE }}
             type=registry,ref=ghcr.io/maxhugit/mergeron-browser:buildcache-browser-main
