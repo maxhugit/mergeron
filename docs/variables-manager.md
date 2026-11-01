@@ -94,3 +94,7 @@ nouvelles variables Manager.
 Pour une autre instance de développement, utiliser à la fois un autre préfixe,
 un autre dossier persistant, un autre domaine et un autre sous-réseau. Ne jamais
 tester une deuxième pile sur les données de production.
+
+## Catalogue quotidien temporaire
+
+`MERGERON_APP_CATALOG_BYPARR_ENABLED` vaut `false` par défaut. `true` permet au Manager de préparer et gérer le conteneur Byparr dédié quand un administrateur active le cache quotidien dans les paramètres Codex. Aucun port n’est publié et aucune donnée de Mergeron n’est montée dans ce conteneur. Voir [le cache et son journal](application-catalog-cache.md) pour l’activation et le retrait de ce contournement.

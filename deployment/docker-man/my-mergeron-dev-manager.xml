@@ -43,4 +43,5 @@
   <Config Name="Intervalle d'observation" Target="MERGERON_MANAGER_POLL_MS" Default="20000" Mode="" Description="Intervalle entre deux inventaires, en millisecondes." Type="Variable" Display="advanced" Required="true" Mask="false">20000</Config>
   <Config Name="Chemin du socket Docker" Target="MERGERON_DOCKER_SOCKET" Default="/var/run/docker.sock" Mode="" Description="Chemin interne du socket Docker." Type="Variable" Display="advanced" Required="true" Mask="false">/var/run/docker.sock</Config>
   <Config Name="Fichier d'adoption" Target="MERGERON_MANAGER_ADOPTION_PATH" Default="/var/lib/mergeron-manager/adoption.json" Mode="" Description="Empreinte immuable de l'installation adoptée." Type="Variable" Display="advanced" Required="true" Mask="false">/var/lib/mergeron-manager/adoption.json</Config>
+  <Config Name="Catalogue quotidien Byparr" Target="MERGERON_APP_CATALOG_BYPARR_ENABLED" Default="false" Mode="" Description="Autoriser le Manager à gérer Byparr pour le catalogue quotidien. Activer ensuite le cache dans les paramètres Codex." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
 </Container>

@@ -3,6 +3,7 @@ import net from 'node:net';
 import { chmod, chown, mkdir, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AppCatalogRunner } from './app-catalog/runner.mjs';
 import { DockerClient } from './docker-client.mjs';
 import { ImageUpdates } from './image-updates.mjs';
 import { TransactionalUpdater } from './updater.mjs';
@@ -49,6 +50,11 @@ const pollInterval = Math.max(
 const docker = new DockerClient(
   process.env.MERGERON_DOCKER_SOCKET ?? '/var/run/docker.sock',
 );
+const appCatalog = new AppCatalogRunner({
+  docker,
+  manifest,
+  enabled: process.env.MERGERON_APP_CATALOG_BYPARR_ENABLED === 'true',
+});
 const installConfiguration = readInstallConfiguration(manifest);
 const previews = new PreviewManager({
   docker,
@@ -179,6 +185,7 @@ async function adopt(body) {
     !ready ||
     installing ||
     codexCli.busy ||
+    appCatalog.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -215,6 +222,7 @@ async function install(body, automatic = false) {
     !ready ||
     adopting ||
     codexCli.busy ||
+    appCatalog.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -341,6 +349,43 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (
+    [
+      '/v1/app-catalog/download',
+      '/v1/app-catalog/prepare',
+      '/v1/app-catalog/status',
+    ].includes(request.url)
+  ) {
+    if (request.url.endsWith('/status') && request.method === 'GET')
+      return json(response, 200, await appCatalog.status());
+    if (request.method !== 'POST')
+      return json(response, 405, { error: 'methodNotAllowed' });
+    try {
+      if (
+        !ready ||
+        installing ||
+        adopting ||
+        updater.busy ||
+        codexCli.busy ||
+        previews.busy
+      )
+        throw Error('CATALOG_BUSY');
+      const input = await readJsonBody(request);
+      return json(
+        response,
+        200,
+        request.url.endsWith('/prepare')
+          ? await appCatalog.prepare()
+          : await appCatalog.download(input),
+      );
+    } catch (error) {
+      return json(response, 409, {
+        error: /^CATALOG_[A-Z_]+$/.test(error.message ?? '')
+          ? error.message
+          : 'CATALOG_DOWNLOAD_FAILED',
+      });
+    }
+  }
+  if (
     request.url === '/v1/codex-cli' ||
     request.url === '/v1/codex-cli/install'
   ) {
@@ -414,7 +459,8 @@ const server = http.createServer(async (request, response) => {
         adopting ||
         updater.busy ||
         previews.busy ||
-        codexCli.busy
+        codexCli.busy ||
+        appCatalog.busy
       )
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
@@ -494,7 +540,8 @@ const server = http.createServer(async (request, response) => {
             adopting ||
             updater.busy ||
             previews.busy ||
-            codexCli.busy))
+            codexCli.busy ||
+            appCatalog.busy))
       )
         throw new Error('managerOperationInProgress');
       json(
@@ -533,7 +580,8 @@ const server = http.createServer(async (request, response) => {
         adopting ||
         updater.busy ||
         previews.busy ||
-        codexCli.busy
+        codexCli.busy ||
+        appCatalog.busy
       )
         throw new Error('managerOperationInProgress');
       json(

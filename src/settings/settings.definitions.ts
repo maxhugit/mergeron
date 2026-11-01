@@ -123,6 +123,15 @@ export const SETTINGS_DEFINITIONS = [
     defaultValue: DEFAULT_AGENT_INSTRUCTIONS,
   },
   {
+    key: 'general.applicationCatalogSource',
+    type: 'string',
+    category: 'general',
+    description:
+      'Application directory source. Byparr uses a daily server snapshot; native disables the workaround.',
+    defaultValue: 'native',
+    constraints: { enum: ['native', 'byparr'] },
+  },
+  {
     key: 'general.logRetention',
     type: 'json',
     category: 'general',
