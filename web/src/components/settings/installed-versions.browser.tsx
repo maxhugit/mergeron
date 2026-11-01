@@ -40,6 +40,24 @@ test('separates installed builds, registry image and GitHub release on desktop a
   });
   const fetcher = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     expect(init?.method ?? 'GET').toBe('GET');
+    if (String(input).includes('/manager/image-updates'))
+      return Promise.resolve(
+        json({
+          checkedAt: '2026-10-31T13:00:00Z',
+          components: [
+            {
+              id: 'application',
+              displayName: 'Mergeron',
+              targetImage: 'ghcr.io/maxhugit/mergeron:edge',
+              targetDigest: `sha256:${'d'.repeat(64)}`,
+              targetBuild: { ...build, revision: 'd'.repeat(40) },
+              updateAvailable: true,
+              versionStatus: 'update_available',
+              checkError: null,
+            },
+          ],
+        }),
+      );
     if (!String(input).includes('/release/status'))
       return Promise.resolve(json({}));
     return Promise.resolve(
@@ -79,14 +97,10 @@ test('separates installed builds, registry image and GitHub release on desktop a
       await page.screenshot({
         path: `../../../.vitest-screenshots/versions-installed-${width}.png`,
       });
-      fireEvent.click(screen.getByRole('tab', { name: /^Mise à jour$/ }));
-      expect(screen.getByText('ddddddd')).toBeVisible();
-      expect(
-        screen.getByText('Dernière release stable sur GitHub'),
-      ).toBeVisible();
-      expect(
-        screen.getByText(/Information de publication uniquement/),
-      ).toBeVisible();
+      // The candidate now shares the current-version table with the installed build.
+      expect(within(rows[1]).getByText('ddddddd')).toBeVisible();
+      expect(within(rows[1]).queryByText('0.5.0')).toBeNull();
+      expect(within(rows[1]).getByText('aaaaaaa')).toBeVisible();
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       await page.screenshot({
         path: `../../../.vitest-screenshots/versions-available-${width}.png`,

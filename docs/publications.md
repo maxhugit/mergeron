@@ -52,19 +52,26 @@ digest immuable et la date de publication.
 
 ## Consultation depuis Mergeron
 
-La page **Réglages généraux du serveur** affiche en lecture seule la version
-installée, son canal, la dernière version stable publiée et le commit de
-construction. Elle interroge les GitHub Releases officielles avec un cache de
-15 minutes ; le bouton de vérification force une actualisation.
+L’onglet **Version actuelle** des réglages du serveur distingue la version
+installée, sa révision et son canal des images disponibles dans le registre.
+Le Manager vérifie l’application, le navigateur Mergeron, Ingress et Squid,
+et détecte séparément sa propre image. Les versions des logiciels fournisseurs
+sont affichées lorsqu’elles peuvent être vérifiées. Une erreur de consultation
+reste un état inconnu et n’est jamais interprétée comme un composant à jour.
 
-Quand une version stable plus récente existe, la page regroupe les notes de
-toutes les versions comprises entre la version installée et la dernière
-version. Une erreur de connexion est affichée explicitement et n’est jamais
-interprétée comme un serveur à jour.
+Le bouton d’actualisation relance la détection. Les actions de mise à jour
+préparent un plan soumis à confirmation, puis sont exécutées par le Manager.
+Le Manager lui-même doit être mis à jour sur l’hôte lorsque la console l’exige.
+La publication d’une image ou d’une GitHub Release ne modifie pas une
+installation existante.
 
-Cette consultation ne télécharge pas d’image et ne déclenche aucune opération
-Docker. Le lancement et le suivi d’une mise à jour relèvent d’une évolution
-séparée.
+Le **Journal des mises à jour** conserve les versions de départ et d’arrivée,
+l’auteur connu de l’opération, ses dates et ses événements consultables.
+Les améliorations affichées correspondent aux révisions effectivement
+installées. L’onglet **Restauration** regroupe la stratégie de sauvegarde,
+la rétention et les points de restauration disponibles. Voir
+[le guide du Manager](mergeron-manager.md) et
+[la sauvegarde et la restauration](sauvegarde-restauration.md).
 
 ## Préparer une publication
 

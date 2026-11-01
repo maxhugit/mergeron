@@ -132,7 +132,7 @@ it('offers retention in Dev when the Manager can create explicitly selected back
     }),
   ).toHaveValue(10);
   expect(
-    screen.getByText(/Choose a full backup, minimal backup or no backup/),
+    screen.getByRole('combobox', { name: 'Backup strategy' }),
   ).toBeVisible();
 });
 

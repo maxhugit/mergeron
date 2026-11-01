@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { BusinessException } from '../common/business.exception';
 import { ErrorCode } from '../common/error-codes';
@@ -31,6 +32,19 @@ import {
 import { SettingsService, type ResolvedSetting } from './settings.service';
 import { ManagerStatusService } from './manager-status.service';
 import { ImageUpdateService } from './image-update.service';
+import type { IdentityRequest } from '../auth/platform-access.guard';
+
+function updateActor(request?: IdentityRequest) {
+  const identity = request?.platformIdentity;
+  const id = identity?.impersonation?.administratorId ?? identity?.personId;
+  return id
+    ? {
+        id,
+        name:
+          identity?.impersonation?.administratorName ?? identity?.name ?? null,
+      }
+    : undefined;
+}
 
 @ApiTags('settings')
 @ApiBearerAuth()
@@ -128,6 +142,65 @@ export class SettingsController {
     return this.managerStatus.backups();
   }
 
+  @Get('manager/update/history')
+  managerHistory() {
+    return this.managerStatus.updateHistory();
+  }
+
+  @Get('manager/update/history/:id/changes')
+  async managerHistoryChanges(@Param('id') id: string) {
+    const history = await this.managerStatus.updateHistory();
+    const operations = Array.isArray(history.operations)
+      ? (history.operations as Record<string, unknown>[])
+      : [];
+    const operation = operations.find((op) => op.id === id);
+    return operation
+      ? this.imageUpdates.operationChanges(operation)
+      : { items: [], unavailable: true };
+  }
+
+  @Post('manager/update/restore-plan')
+  managerRestorePlan(@Body() body: { operationId?: unknown }) {
+    return this.managerStatus.updateOperation('restore-plan', {
+      operationId: body.operationId,
+    });
+  }
+
+  @Post('manager/update/checkpoint-plan')
+  managerCheckpointPlan() {
+    return this.managerStatus.updateOperation('checkpoint-plan', {});
+  }
+
+  @Post('manager/update/checkpoint')
+  managerCheckpoint(
+    @Body() body: { confirmation?: unknown; expectedFingerprint?: unknown },
+    @Req() request: IdentityRequest,
+  ) {
+    return this.managerStatus.updateOperation('checkpoint', {
+      confirmation: body.confirmation,
+      expectedFingerprint: body.expectedFingerprint,
+      actor: updateActor(request),
+    });
+  }
+
+  @Post('manager/update/restore')
+  managerRestore(
+    @Body()
+    body: {
+      operationId?: unknown;
+      confirmation?: unknown;
+      expectedFingerprint?: unknown;
+    },
+    @Req() request: IdentityRequest,
+  ) {
+    return this.managerStatus.updateOperation('restore', {
+      operationId: body.operationId,
+      confirmation: body.confirmation,
+      expectedFingerprint: body.expectedFingerprint,
+      actor: updateActor(request),
+    });
+  }
+
   @Post('manager/backups/delete')
   @ApiOperation({ summary: 'Delete one explicitly confirmed update backup' })
   managerDeleteBackup(
@@ -157,8 +230,12 @@ export class SettingsController {
       confirmation?: unknown;
       expectedFingerprint?: unknown;
     },
+    @Req() request?: IdentityRequest,
   ) {
-    return this.managerStatus.updateOperation('apply', body);
+    return this.managerStatus.updateOperation('apply', {
+      ...body,
+      actor: updateActor(request),
+    });
   }
 
   @Post('manager/update/rollback')

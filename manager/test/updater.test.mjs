@@ -210,6 +210,190 @@ async function begin(updater) {
   await updater.task;
 }
 
+test('historical restoration saves current data, restores the selected state and exposes no private specifications', async (t) => {
+  const { updater, root } = await fixture(t);
+  await begin(updater);
+  const first = updater.current.id;
+  await writeFile(join(root, 'home', 'database'), 'after-first');
+  await begin(updater);
+  await writeFile(join(root, 'home', 'database'), 'latest-current');
+  const plan = await updater.planRestore(first);
+  assert.equal(plan.backupPolicy, 'full-v1');
+  await updater.begin({
+    restoreSource: first,
+    confirmation: 'RESTORE_SAVED_STATE',
+    expectedFingerprint: plan.fingerprint,
+    actor: { id: 'admin', name: 'Administrator' },
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'succeeded');
+  assert.equal(
+    await readFile(join(root, 'home', 'database'), 'utf8'),
+    'original',
+  );
+  const snapshot = await inspectBackup(t, updater);
+  assert.equal(
+    await readFile(join(snapshot, 'home', 'database'), 'utf8'),
+    'latest-current',
+  );
+  const history = await updater.history();
+  assert.equal(history.operations.length, 3);
+  assert.equal(history.operations[0].actor.id, 'admin');
+  const publicHistory = JSON.stringify(history);
+  assert.ok(!publicHistory.includes('BROWSER_WS_PATH'));
+  assert.ok(!publicHistory.includes('HostConfig'));
+  assert.ok(!publicHistory.includes('backend-token.txt'));
+  await assert.rejects(
+    updater.planRestore('../transaction'),
+    /updateJournalInvalid/,
+  );
+});
+
+test('a corrupt historical archive cannot replace live data and restores the safety checkpoint', async (t) => {
+  const { updater, root } = await fixture(t);
+  await begin(updater);
+  const source = updater.current.id;
+  await writeFile(join(root, 'home', 'database'), 'keep-current');
+  const path = join(updater.directory, source, 'backup', BACKUP_ARCHIVE_NAME);
+  const corrupted = await readFile(path);
+  corrupted[0] ^= 0xff;
+  await writeFile(path, corrupted);
+  const plan = await updater.planRestore(source);
+  await updater.begin({
+    restoreSource: source,
+    confirmation: 'RESTORE_SAVED_STATE',
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'rolledBack');
+  assert.equal(
+    await readFile(join(root, 'home', 'database'), 'utf8'),
+    'keep-current',
+  );
+  assert.ok(updater.current.backupComplete);
+  assert.ok(updater.current.error);
+});
+
+test('a manual checkpoint preserves containers and images and is available for restoration', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const ids = [...docker.values.keys()];
+  const plan = await updater.planCheckpoint();
+  await updater.begin({
+    checkpoint: true,
+    backupMode: 'full',
+    confirmation: 'CREATE_BACKUP',
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'succeeded');
+  assert.deepEqual([...docker.values.keys()], ids);
+  assert.ok(
+    !docker.calls.some(([action]) =>
+      ['pull', 'create', 'remove', 'rename'].includes(action),
+    ),
+  );
+  assert.ok(updater.current.backupComplete);
+  assert.ok((await updater.planRestore(updater.current.id)).applicable);
+});
+
+test('a historical minimal copy restores the database but preserves current project files', async (t) => {
+  const { updater, root } = await fixture(t);
+  await mkdir(join(root, 'home/.codex'), { recursive: true });
+  await writeFile(join(root, 'home/.codex/codex-webui.sqlite'), 'old-database');
+  await writeFile(join(root, 'workspace/document'), 'old-document');
+  const minimal = await updater.plan(images, 'standard', 'minimal');
+  await updater.begin({
+    images,
+    backupMode: 'minimal',
+    confirmation: minimal.confirmation,
+    expectedFingerprint: minimal.fingerprint,
+  });
+  await updater.task;
+  const source = updater.current.id;
+  await writeFile(
+    join(root, 'home/.codex/codex-webui.sqlite'),
+    'current-database',
+  );
+  await writeFile(join(root, 'workspace/document'), 'current-document');
+  const restore = await updater.planRestore(source);
+  await updater.begin({
+    restoreSource: source,
+    confirmation: 'RESTORE_SAVED_STATE',
+    expectedFingerprint: restore.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'succeeded');
+  assert.equal(
+    await readFile(join(root, 'home/.codex/codex-webui.sqlite'), 'utf8'),
+    'old-database',
+  );
+  assert.equal(
+    await readFile(join(root, 'workspace/document'), 'utf8'),
+    'current-document',
+  );
+});
+
+test('a failed restored candidate returns to the state saved before restoration', async (t) => {
+  const { updater, root, docker } = await fixture(t);
+  await begin(updater);
+  const source = updater.current.id;
+  await writeFile(join(root, 'home/database'), 'current-state');
+  docker.afterStart = async (id) => {
+    const container = docker.values.get(id);
+    if (
+      container.Config.Labels['io.mergeron.transaction'] ===
+        updater.current.id &&
+      container.Config.Labels['io.mergeron.component'] === 'application'
+    ) {
+      container.State.Health.Status = 'unhealthy';
+      await writeFile(join(root, 'home/database'), 'failed-restored-state');
+    }
+  };
+  const plan = await updater.planRestore(source);
+  await updater.begin({
+    restoreSource: source,
+    confirmation: 'RESTORE_SAVED_STATE',
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'rolledBack');
+  assert.equal(
+    await readFile(join(root, 'home/database'), 'utf8'),
+    'current-state',
+  );
+});
+
+test('Manager host changes are detected once without inventing the actor or an update time', async (t) => {
+  const { updater, options } = await fixture(t);
+  const build = {
+    version: '0.6.0',
+    revision: 'a'.repeat(40),
+    builtAt: null,
+    channel: 'edge',
+  };
+  await updater.observeManagerBuild({
+    imageId: `sha256:${'a'.repeat(64)}`,
+    build,
+  });
+  const restarted = new TransactionalUpdater(options);
+  await restarted.observeManagerBuild({
+    imageId: `sha256:${'b'.repeat(64)}`,
+    build: { ...build, revision: 'b'.repeat(40) },
+  });
+  await restarted.observeManagerBuild({
+    imageId: `sha256:${'b'.repeat(64)}`,
+    build,
+  });
+  const history = await restarted.history();
+  assert.equal(history.operations.length, 1);
+  assert.equal(history.operations[0].hostObservation, true);
+  assert.equal(history.operations[0].actor, null);
+  assert.equal(
+    history.operations[0].builds.manager.to.revision,
+    'b'.repeat(40),
+  );
+});
+
 async function inspectBackup(t, updater) {
   const destination = await mkdtemp(join(tmpdir(), 'manager-inspect-'));
   await rm(destination, { recursive: true });
@@ -884,138 +1068,15 @@ for (const [environment, local] of [
     ]);
   });
 
-test('fast mode is rejected for production, unknown environments and production stack names', async (t) => {
-  const { updater } = await fixture(t, 'development');
-  const original = updater.manifest;
-  for (const change of [
-    { environment: 'production' },
-    { environment: undefined },
-    { stack: 'mergeron' },
-  ]) {
-    updater.manifest = { ...original, ...change };
-    await assert.rejects(
-      updater.plan(images, 'dev-fast'),
-      /updateFastDevelopmentOnly/,
-    );
-    assert.equal(updater.busy, false);
-  }
-  updater.manifest = original;
-  await assert.rejects(updater.plan(images, 'unknown'), /updateInvalidMode/);
-});
-
-test('fast dev update skips backup and inventory and rolls back images without reverting data', async (t) => {
-  const { root, updater } = await fixture(t, 'development');
-  for (let n = 0; n < 24; n++)
-    await writeFile(join(root, 'workspace', `file-${n}`), `original-${n}`, {
-      mode: 0o640,
-    });
-  const plan = await updater.plan(images, 'dev-fast');
-  const standard = await updater.plan(images);
-  assert.notEqual(plan.fingerprint, standard.fingerprint);
-  await assert.rejects(
-    updater.begin({
-      images,
-      mode: 'standard',
-      confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
-      expectedFingerprint: plan.fingerprint,
-    }),
-    /updatePlanChanged/,
-  );
-  await updater.begin({
-    images,
-    mode: 'dev-fast',
-    confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
-    expectedFingerprint: plan.fingerprint,
-  });
-  await updater.task;
-  assert.equal(updater.current.status, 'succeeded');
-  assert.equal(updater.current.backupComplete, false);
-  assert.equal(plan.backupPolicy, 'development-none-v1');
-  assert.deepEqual(plan.backupScope, []);
-  assert.ok(
-    !updater.current.events.some((event) => event.phase === 'backingUp'),
-  );
-  await assert.rejects(
-    lstat(join(updater.directory, updater.current.id, 'backup')),
-    { code: 'ENOENT' },
-  );
-  for (let n = 0; n < 24; n++)
-    assert.equal(
-      await readFile(join(root, 'workspace', `file-${n}`), 'utf8'),
-      `original-${n}`,
-    );
-  await writeFile(join(root, 'home', 'database'), 'modified-after-update');
-  await updater.requestRollback({
-    operationId: updater.current.id,
-    confirmation: 'ROLLBACK_IMAGES_ONLY',
-  });
-  await updater.task;
-  assert.equal(updater.current.status, 'rolledBack');
-  assert.equal(
-    await readFile(join(root, 'home', 'database'), 'utf8'),
-    'modified-after-update',
-  );
-});
-
-test('fast mode reuses only a verified local immutable image, never a mutable tag', async (t) => {
-  const { updater, docker } = await fixture(t, 'development');
-  const immutable = {
-    application: `ghcr.io/maxhugit/mergeron@sha256:${'b'.repeat(64)}`,
-  };
-  const inspect = docker.inspectImage.bind(docker);
-  docker.inspectImage = async (reference) =>
-    reference === immutable.application
-      ? { Id: reference, RepoDigests: [reference] }
-      : inspect(reference);
-  const plan = await updater.plan(immutable, 'dev-fast');
-  await updater.begin({
-    images: immutable,
-    mode: 'dev-fast',
-    confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
-    expectedFingerprint: plan.fingerprint,
-  });
-  await updater.task;
-  assert.equal(updater.current.status, 'succeeded');
-  assert.equal(docker.calls.filter(([action]) => action === 'pull').length, 0);
-});
-
-test('fast mode still pulls mutable tags and missing immutable images', async (t) => {
-  for (const mutable of [true, false]) {
-    const { updater, docker } = await fixture(t, 'development');
-    const requested = mutable
-      ? images
-      : { application: `ghcr.io/maxhugit/mergeron@sha256:${'b'.repeat(64)}` };
-    const inspect = docker.inspectImage.bind(docker);
-    let pulled = false;
-    const pull = docker.pullImage.bind(docker);
-    docker.pullImage = async (reference) => {
-      await pull(reference);
-      pulled = true;
-    };
-    docker.inspectImage = async (reference) => {
-      if (!mutable && reference === requested.application) {
-        if (!pulled) throw new Error('not found');
-        return { Id: reference, RepoDigests: [reference] };
-      }
-      return inspect(reference);
-    };
-    const plan = await updater.plan(requested, 'dev-fast');
-    await updater.begin({
-      images: requested,
-      mode: 'dev-fast',
-      confirmation: 'UPDATE_WITHOUT_DATA_BACKUP',
-      expectedFingerprint: plan.fingerprint,
-    });
-    await updater.task;
-    assert.equal(updater.current.status, 'succeeded');
-    assert.equal(
-      docker.calls.filter(([action]) => action === 'pull').length,
-      1,
-    );
+test('removed fast mode is rejected in development and production before any Docker write', async (t) => {
+  for (const environment of ['production', 'development']) {
+    const { updater, docker } = await fixture(t, environment);
+    await assert.rejects(updater.plan(images, 'dev-fast'), /updateInvalidMode/);
+    assert.equal(docker.calls.length, 0);
   }
 });
 
-for (const mode of ['standard', 'dev-fast']) {
+for (const mode of ['standard']) {
   test(`development ${mode} does not traverse source trees, create backups or prune old backups`, async (t) => {
     const { root, updater, options, docker } = await fixture(t, 'development');
     const unreadable = join(root, 'workspace', 'do-not-traverse');

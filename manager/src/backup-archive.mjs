@@ -370,6 +370,9 @@ export async function extractBackupArchive({
   );
   let reading;
   const extract = tar.extract();
+  // Preflight can fail before pipeline/iteration owns this stream's errors.
+  // Contain destroy(error) in that case; the function still rejects below.
+  extract.on('error', () => {});
   const hash = createHash('sha256'),
     count = { bytes: 0 };
   let entries = 0,

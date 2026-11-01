@@ -244,6 +244,30 @@ export class ImageUpdateService {
     return result;
   }
 
+  async operationChanges(operation: Record<string, unknown>) {
+    const builds = object(operation.builds);
+    const pairs = ['application', 'browser'].map((id) => object(builds[id]));
+    const pair =
+      pairs.find(
+        (pair) => object(pair.from).revision !== object(pair.to).revision,
+      ) ?? pairs[0];
+    const from = object(pair.from).revision;
+    const to = object(pair.to).revision;
+    if (
+      operation.status !== 'succeeded' ||
+      typeof from !== 'string' ||
+      typeof to !== 'string' ||
+      !revisionPattern.test(from) ||
+      !revisionPattern.test(to)
+    )
+      return { items: [], unavailable: true };
+    try {
+      return { ...(await this.changes(from, to)), unavailable: false };
+    } catch {
+      return { items: [], unavailable: true };
+    }
+  }
+
   async status(force = false) {
     const [stable, manager] = await Promise.all([
       this.releases.status(force),

@@ -66,8 +66,9 @@ export interface ManagerStatus {
   manager?: { build: InstalledBuild; imageId: string } | null;
   backupPolicy?: ManagerBackupPolicy;
   capabilities?: {
+    updateHistory?: boolean;
+    backupRestore?: boolean;
     backupManagement?: boolean;
-    devFastUpdate?: boolean;
     backupRetention?: boolean;
     backupSelection?: boolean;
   };
@@ -96,7 +97,19 @@ export interface ManagerStatus {
     busy: boolean;
     operation: null | {
       id: string;
-      status: 'running' | 'succeeded' | 'rolledBack' | 'recoveryRequired';
+      startedAt?: string;
+      finishedAt?: string | null;
+      actor?: { id: string; name: string | null } | null;
+      builds?: Record<string, { from: InstalledBuild; to: InstalledBuild }>;
+      restoreSource?: string | null;
+      checkpoint?: boolean;
+      hostObservation?: boolean;
+      status:
+        | 'running'
+        | 'succeeded'
+        | 'rolledBack'
+        | 'recoveryRequired'
+        | 'cancelled';
       phase: string;
       error?: string;
       backupRetained: boolean;
@@ -115,8 +128,14 @@ export interface ManagerUpdatePlan {
   backupPolicy?: ManagerBackupPolicy;
   backupScope?: string[];
   excludedFromDataRollback?: string[];
-  confirmation?: 'UPDATE_WITHOUT_DATA_BACKUP' | 'UPDATE_WITH_ROLLBACK';
-  mode?: 'standard' | 'dev-fast';
+  confirmation?:
+    | 'UPDATE_WITHOUT_DATA_BACKUP'
+    | 'UPDATE_WITH_ROLLBACK'
+    | 'RESTORE_SAVED_STATE'
+    | 'CREATE_BACKUP';
+  mode?: 'standard';
+  restoreSource?: string;
+  restorePolicy?: ManagerBackupPolicy;
   fingerprint: string;
   applicable: boolean;
   blockers: string[];
@@ -129,7 +148,15 @@ export type ManagerUpdateOperation = NonNullable<
 >;
 
 export async function requestManagerUpdate(
-  action: 'plan' | 'apply' | 'rollback' | 'recover',
+  action:
+    | 'plan'
+    | 'apply'
+    | 'rollback'
+    | 'recover'
+    | 'restore-plan'
+    | 'restore'
+    | 'checkpoint-plan'
+    | 'checkpoint',
   input: Record<string, unknown>,
 ): Promise<ManagerUpdatePlan | ManagerUpdateState> {
   const authorization = getAuthorizationHeader();
@@ -161,6 +188,7 @@ export async function requestManagerUpdate(
 export const managerStatusQueryKey = ['administration', 'manager-status'];
 
 export interface ManagerBackup {
+  build?: InstalledBuild | null;
   format?: 'directory' | 'tar-gzip-v1' | null;
   backupPolicy?: ManagerBackupPolicy | null;
   id: string;
@@ -177,7 +205,7 @@ export interface ManagerBackup {
 }
 export const managerBackupsQueryKey = ['administration', 'manager-backups'];
 async function backupRequest<T>(
-  path: 'backups' | 'backups/delete' | 'backups/retention',
+  path: 'backups' | 'backups/delete' | 'backups/retention' | 'update/history',
   body?: Record<string, unknown>,
 ): Promise<T> {
   const authorization = getAuthorizationHeader();
@@ -205,6 +233,12 @@ export function requestManagerBackups() {
     totalSizeBytes?: number | null;
     sizesCalculating?: boolean;
   }>('backups');
+}
+export const managerHistoryKey = ['administration', 'manager-update-history'];
+export function requestManagerHistory() {
+  return backupRequest<{ operations: ManagerUpdateOperation[] }>(
+    'update/history',
+  );
 }
 export function deleteManagerBackup(id: string) {
   return backupRequest<{ ok: boolean }>('backups/delete', {

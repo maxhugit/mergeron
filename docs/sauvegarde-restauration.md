@@ -143,7 +143,7 @@ jamais accepté comme une liste de chemins arbitraire.
 ### API et compatibilité des anciennes opérations
 
 `POST /v1/update/plan` accepte `backupMode: "full" | "minimal" | "none"`,
-indépendamment de `mode: "standard" | "dev-fast"`. Le même `backupMode` doit
+avec le moteur `standard` uniquement. Le mode `dev-fast` est refusé. Le même `backupMode` doit
 être fourni à `POST /v1/update` avec l’empreinte et la confirmation du plan :
 changer de choix invalide l’empreinte. La récupération utilise la politique
 et le périmètre enregistrés, pas un réglage actuel ou un autre environnement.
@@ -233,3 +233,32 @@ Une sauvegarde n’est fiable qu’après un test. Au minimum une fois par trime
 restaurer dans un dossier temporaire isolé, démarrer avec un nom de projet et des
 réseaux différents, puis vérifier la base SQLite et les espaces de travail sans
 publier le service sur Internet.
+
+### Restaurer un état sauvegardé depuis l’interface
+
+Dans **Serveur → Restauration**, choisir **Restaurer** sur la copie voulue, vérifier
+son périmètre puis demander le plan. La confirmation reste désactivée tant que
+le plan est bloqué ou que le remplacement des données n’a pas été accepté.
+Le choix actuel de sauvegarde ne change pas le périmètre d’une ancienne copie.
+Une copie minimale ne rétablit pas les fichiers des projets et des livrables.
+
+Les routes administrateur `POST /api/settings/manager/update/restore-plan` et
+`POST /api/settings/manager/update/restore` utilisent l’identifiant de la copie,
+puis l’empreinte du plan et la confirmation `RESTORE_SAVED_STATE`. Elles n’acceptent
+aucun chemin de fichier fourni par le navigateur. Le Manager vérifie le journal,
+la pile, l’environnement, les images autorisées et le périmètre enregistré.
+Il conserve la configuration actuelle des conteneurs au lieu de réinstaller
+une ancienne spécification Docker et ses accès réseau.
+
+Une nouvelle sauvegarde complète de l’état courant est toujours créée avant
+la restauration. L’archive choisie est extraite dans un emplacement privé et
+son intégrité est contrôlée avant de remplacer les données actives. Si le
+contrôle de santé échoue, la transaction restaure l’état précédant la tentative.
+Une récupération incomplète bloque toute nouvelle opération. Les fichiers hors
+périmètre ne sont pas modifiés ; les données remplacées restent en quarantaine.
+
+**Créer une sauvegarde** prépare une copie complète à la demande. Les services
+sont arrêtés puis redémarrés pour garantir la cohérence, sans téléchargement
+ni remplacement des images ou conteneurs. La création exige elle aussi un plan
+et une confirmation (`checkpoint-plan`, puis `checkpoint` avec `CREATE_BACKUP`).
+Le choix de sauvegarde des futures mises à jour n’est pas modifié par cette action.

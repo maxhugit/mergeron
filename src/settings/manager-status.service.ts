@@ -144,6 +144,10 @@ export class ManagerStatusService {
     return this.requestManager('/v1/backups');
   }
 
+  updateHistory() {
+    return this.requestManager('/v1/update/history');
+  }
+
   codexCli() {
     return this.requestManager('/v1/codex-cli');
   }
@@ -164,6 +168,18 @@ export class ManagerStatusService {
       ...result,
       components: await Promise.all(
         result.components.map(async (item: Record<string, unknown>) => {
+          let targetBuild: unknown = null;
+          try {
+            targetBuild = await this.registry?.imageBuild(
+              String(item.id),
+              String(item.targetImage),
+              String(item.targetDigest),
+              item.platform as ImagePlatform,
+            );
+          } catch {
+            /* Availability comparison remains useful without version labels. */
+          }
+          item = { ...item, targetBuild };
           // Support older Managers conservatively: an index-only difference is not
           // proof of a different runnable image. Never hide a real registry error.
           if (!item.platformCheckRequired && !item.updateAvailable) return item;
@@ -244,7 +260,15 @@ export class ManagerStatusService {
   }
 
   async updateOperation(
-    action: 'plan' | 'apply' | 'rollback' | 'recover',
+    action:
+      | 'plan'
+      | 'apply'
+      | 'rollback'
+      | 'recover'
+      | 'restore-plan'
+      | 'restore'
+      | 'checkpoint-plan'
+      | 'checkpoint',
     input: {
       images?: unknown;
       confirmation?: unknown;
@@ -252,14 +276,18 @@ export class ManagerStatusService {
       operationId?: unknown;
       mode?: unknown;
       backupMode?: unknown;
+      actor?: { id: string; name: string | null };
     },
   ) {
     const path = action === 'apply' ? '/v1/update' : `/v1/update/${action}`;
+    if (input?.mode !== undefined && input.mode !== 'standard')
+      throw new HttpException('updateInvalidMode', 400);
     return this.requestManager(path, 'POST', {
       images: input?.images,
       confirmation: input?.confirmation,
       expectedFingerprint: input?.expectedFingerprint,
       operationId: input?.operationId,
+      ...(input?.actor ? { actor: input.actor } : {}),
       ...(input?.mode !== undefined ? { mode: input.mode } : {}),
       ...(input?.backupMode !== undefined
         ? { backupMode: input.backupMode }

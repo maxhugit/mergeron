@@ -12,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test('keeps update actions below the scroller on desktop and mobile, without covering content', async () => {
+test('keeps update actions below the table and reachable inside the scroller on desktop and mobile', async () => {
   await i18nReady;
   await i18n.changeLanguage('en');
   const fixture = catalogFixture();
@@ -54,32 +54,31 @@ test('keeps update actions below the scroller on desktop and mobile, without cov
     </div>,
   );
   await screen.findAllByText('1.0');
-  fireEvent.click(screen.getByRole('tab', { name: 'Update' }));
-  const update = await screen.findByRole('button', {
-    name: 'Update',
+  fireEvent.click(screen.getByRole('tab', { name: 'Current version' }));
+  const refresh = await screen.findByRole('button', {
+    name: 'Refresh detection',
   });
-  const footer = update.parentElement!;
+  const footer = refresh.parentElement!;
+  const table = screen.getByRole('table');
   for (const width of [1100, 390]) {
     await page.viewport(width, 700);
+    const update = screen.getByRole('button', { name: /Update selected/ });
+    expect(update.parentElement).toBe(footer);
+    expect(update).toBeDisabled();
+    expect(footer.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      table.getBoundingClientRect().bottom,
+    );
+    refresh.scrollIntoView({ block: 'center' });
     await expect
-      .poll(() =>
-        Math.round(footer.parentElement!.getBoundingClientRect().bottom),
-      )
-      .toBe(700);
-    for (const label of [
-      'Refresh detection',
-      'View progress and logs',
-      'Restore previous version',
-    ]) {
-      const button = screen.getByRole('button', { name: label });
-      expect(button.parentElement).toBe(footer);
-    }
+      .poll(() => Math.ceil(refresh.getBoundingClientRect().bottom))
+      .toBeLessThanOrEqual(700);
+    expect(refresh.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
-    expect(
-      screen.getByLabelText('Target application image (tag or digest)'),
-    ).toBeVisible();
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/server-actions-${width}.png`,
+    });
   }
-  fireEvent.click(screen.getByRole('tab', { name: 'Current version' }));
-  expect(update).not.toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Update history' }));
+  expect(refresh).not.toBeVisible();
   fixture.dispose();
 });

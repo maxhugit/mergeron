@@ -1,252 +1,158 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { catalogFixture, json } from './catalog/catalog.testing';
 import { ServerVersionCard } from './server-version-card';
-import { managerStatusQueryKey } from './manager-status-api';
 import { GeneralSettings } from './general-settings';
-
+import {
+  managerStatusQueryKey,
+  type ManagerStatus,
+} from './manager-status-api';
+import { componentUpdatesKey } from './manager-image-updates-api';
 let fixture: ReturnType<typeof catalogFixture>;
-let fetchMock: ReturnType<typeof vi.fn>;
-
-const status = {
-  installed: {
-    version: '0.1.0',
-    revision: 'abcdef123456',
-    builtAt: '2026-10-20T09:00:00Z',
-    channel: 'stable' as const,
+let currentManager: ManagerStatus;
+const digest = 'sha256:' + 'a'.repeat(64);
+const build = {
+  version: '0.6.0',
+  revision: 'b'.repeat(40),
+  builtAt: '2026-11-01T10:00:00Z',
+  channel: 'edge',
+};
+const manager = {
+  available: true,
+  mode: 'observe',
+  dockerConnected: true,
+  components: [{ id: 'browser', build, imageId: digest }],
+  capabilities: {
+    backupSelection: true,
+    updateHistory: true,
+    backupRestore: true,
+    backupManagement: true,
+    backupRetention: true,
   },
-  latestVersion: '0.2.1',
-  latestPublishedAt: '2026-10-21T10:00:00Z',
-  latestUrl: 'https://github.com/maxhugit/mergeron/releases/tag/v0.2.1',
-  updateAvailable: true,
-  versionStatus: 'update_available' as const,
-  releases: [
+  dataSafety: { status: 'protected', blockers: [], protectedMounts: [] },
+  update: { busy: false, operation: null },
+} as unknown as ManagerStatus;
+const updates = {
+  checkedAt: '2026-11-01T10:00:00Z',
+  components: [
     {
-      version: '0.2.0',
-      publishedAt: '2026-10-20T10:00:00Z',
-      url: 'https://github.com/maxhugit/mergeron/releases/tag/v0.2.0',
-      sections: [{ heading: 'Nouveautés', items: ['Ajoute la recherche.'] }],
-    },
-    {
-      version: '0.2.1',
-      publishedAt: '2026-10-21T10:00:00Z',
-      url: 'https://github.com/maxhugit/mergeron/releases/tag/v0.2.1',
-      sections: [{ heading: 'Corrections', items: ['Corrige le mobile.'] }],
+      id: 'browser',
+      displayName: 'Browser',
+      installedImageId: digest,
+      installedBuild: build,
+      targetImage: 'ghcr.io/maxhugit/mergeron-browser:edge',
+      targetDigest: digest,
+      targetBuild: { ...build, version: '0.6.1' },
+      updateAvailable: true,
+      versionStatus: 'update_available',
+      checkError: null,
     },
   ],
-  checkedAt: '2026-10-21T10:05:00Z',
-  checkError: null,
 };
-
 beforeEach(async () => {
   await i18n.changeLanguage('en');
   fixture = catalogFixture();
-  fixture.queryClient.setQueryData(managerStatusQueryKey, {
-    available: false,
-    components: [],
-  });
-  fetchMock = vi.fn(() => Promise.resolve(json(status)));
-  vi.stubGlobal('fetch', fetchMock);
+  currentManager = manager;
+  fixture.server.overrides.set(
+    'GET /api/settings/general.updateBackupMode',
+    () => json({ key: 'general.updateBackupMode', value: 'full' }),
+  );
+  fixture.queryClient.setQueryData(managerStatusQueryKey, manager);
+  fixture.queryClient.setQueryData(componentUpdatesKey, updates);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('image-updates')) return json(updates);
+      if (url.endsWith('/manager/status')) return json(currentManager);
+      if (url.endsWith('/manager/update/history'))
+        return json({ operations: [] });
+      if (url.includes('/release/status'))
+        return json({
+          installed: build,
+          latestVersion: '0.6.1',
+          checkedAt: '2026-11-01T10:00:00Z',
+          releases: [],
+          checkError: null,
+        });
+      if (url.endsWith('/backups/retention')) return json({ maxBackups: 10 });
+      if (url.endsWith('/manager/backups')) return json({ backups: [] });
+      if (url.endsWith('/manager/update/plan'))
+        return json({
+          applicable: true,
+          fingerprint: 'plan',
+          images: JSON.parse(String(init?.body)).images,
+          backupPolicy: 'full-v1',
+          backupMode: 'full',
+          blockers: [],
+        });
+      return json({});
+    }),
+  );
 });
-
 afterEach(() => {
   fixture.dispose();
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
-
-it('keeps the current-version notice exclusively in the update tab', async () => {
-  fetchMock.mockImplementation(() =>
-    Promise.resolve(
-      json({ ...status, versionStatus: 'current', updateAvailable: false }),
+it('shows Browser and prepares its exact immutable update before confirmation', async () => {
+  fixture.render(<ServerVersionCard view="current" />);
+  const row = await screen.findByRole('row', { name: /Mergeron Browser/ });
+  expect(within(row).getByText('0.6.1')).toBeVisible();
+  const button = within(row).getByRole('button', { name: 'Update' });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  expect(await screen.findByRole('alertdialog')).toBeVisible();
+  const calls = vi
+    .mocked(fetch)
+    .mock.calls.filter(([url]) => String(url).endsWith('/update/plan'));
+  expect(JSON.parse(String(calls[0][1]?.body)).images).toEqual({
+    browser: `ghcr.io/maxhugit/mergeron-browser@${digest}`,
+  });
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.some(([url]) => String(url).endsWith('/manager/update')),
+  ).toBe(false);
+});
+it('requires a new Manager instead of component writes with an older protocol', async () => {
+  currentManager = { ...manager, capabilities: { backupSelection: true } };
+  fixture.queryClient.setQueryData(managerStatusQueryKey, currentManager);
+  fixture.render(<ServerVersionCard view="current" />);
+  expect(
+    await screen.findByText(
+      'Update the Manager on the host before using this console.',
     ),
-  );
-  fixture.render(<GeneralSettings />);
-  const notice = await screen.findByText(
-    'The Mergeron application is up to date.',
-  );
-  expect(notice).not.toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Update' }));
-  expect(notice).toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Backup' }));
-  expect(notice).not.toBeVisible();
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Update selected (1)' }),
+  ).toBeDisabled();
 });
-
-it('shows the installed channel, latest stable version and cumulative changes', async () => {
-  fixture.render(<ServerVersionCard />);
-
-  expect(await screen.findByText('0.1.0')).toBeVisible();
-  expect(screen.getByText('Stable')).toBeVisible();
-  expect(screen.getByText('0.2.1')).toBeVisible();
-  expect(screen.getByText('A new Mergeron image is available.')).toBeVisible();
-  expect(screen.getByText('Mergeron 0.2.0')).toBeVisible();
-  expect(screen.getByText('Mergeron 0.2.1')).toBeVisible();
-  expect(screen.getByText('Ajoute la recherche.')).toBeVisible();
-  expect(await screen.findByText('Corrige le mobile.')).toBeVisible();
-});
-
-it('separates current version, updates, backups and socket settings with keyboard navigation', async () => {
+it('places history and restoration on separate tabs with keyboard navigation', async () => {
   fixture.render(<GeneralSettings />);
-  expect(await screen.findByText('0.1.0')).toBeVisible();
-  expect(screen.getByRole('tab', { name: 'Current version' })).toHaveAttribute(
+  const journal = await screen.findByRole('tab', { name: 'Update history' });
+  fireEvent.click(journal);
+  expect(await screen.findByText('No recorded operations.')).toBeVisible();
+  journal.focus();
+  fireEvent.keyDown(journal, { key: 'ArrowRight' });
+  expect(screen.getByRole('tab', { name: 'Restore' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  expect(screen.getByText('Mergeron 0.2.1')).not.toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Update' }));
-  expect(screen.getByText('Mergeron 0.2.1')).toBeVisible();
-  expect(screen.getByText('0.1.0')).not.toBeVisible();
-  expect(screen.getByText('Update backups')).not.toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Backup' }));
-  expect(screen.getByText('Update backups')).toBeVisible();
-  expect(screen.getByText('Mergeron 0.2.1')).not.toBeVisible();
-  const backup = screen.getByRole('tab', { name: 'Backup' });
-  backup.focus();
-  fireEvent.keyDown(backup, { key: 'ArrowRight' });
-  expect(screen.getByRole('tab', { name: 'Socket' })).toHaveFocus();
-  expect(screen.getByRole('tabpanel')).toHaveAttribute(
-    'aria-labelledby',
-    'server-tab-socket',
-  );
-  expect(screen.getByText('Update backups')).not.toBeVisible();
-  fireEvent.keyDown(screen.getByRole('tab', { name: 'Socket' }), {
-    key: 'Home',
-  });
-  expect(screen.getByRole('tab', { name: 'Current version' })).toHaveFocus();
-  expect(screen.getByText('0.1.0')).toBeVisible();
-});
-
-it('shows running update progress even when the update panel is hidden', async () => {
-  fixture.queryClient.setQueryData(managerStatusQueryKey, {
-    available: true,
-    components: [],
-    update: {
-      busy: true,
-      operation: {
-        id: 'tab-update',
-        status: 'running',
-        phase: 'backingUp',
-        backupRetained: false,
-        images: {},
-        previousImages: {},
-        events: [],
-      },
-    },
-  });
-  fixture.render(<ServerVersionCard view="backups" />);
-  const dialog = await screen.findByRole('dialog', { name: 'Update progress' });
-  expect(dialog).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
-});
-
-it('keeps the update dialog mounted when the application cannot reach its Manager during restart', async () => {
-  fixture.queryClient.setQueryData(managerStatusQueryKey, {
-    available: true,
-    components: [],
-    update: {
-      busy: true,
-      operation: {
-        id: 'active',
-        status: 'running',
-        phase: 'backingUp',
-        backupRetained: false,
-        images: {},
-        previousImages: {},
-        events: [
-          { at: '2026-10-25T09:00:00Z', phase: 'backingUp', status: 'running' },
-        ],
-      },
-    },
-  });
-  fetchMock.mockImplementation((input: RequestInfo | URL) =>
-    Promise.resolve(
-      json(String(input).includes('/release/') ? status : { available: false }),
-    ),
-  );
-  fixture.render(<ServerVersionCard />);
-  const dialog = await screen.findByRole('dialog', { name: 'Update progress' });
-  await act(async () => {
-    fixture.queryClient.setQueryData(managerStatusQueryKey, {
-      available: false,
-      components: [],
-    });
-  });
-  expect(dialog).toBeVisible();
   expect(
-    await screen.findByText(/The server is temporarily unavailable/),
+    await screen.findByRole('spinbutton', {
+      name: 'Number of backups to keep',
+    }),
   ).toBeVisible();
-  expect(screen.getByRole('log')).toHaveTextContent('Saving application data');
+  expect(screen.queryByText(/fast update/i)).not.toBeInTheDocument();
 });
-
-it('refreshes only after the administrator requests it', async () => {
-  const user = userEvent.setup();
+it('keeps installed versions readable when Manager is unavailable', async () => {
+  currentManager = { ...manager, available: false };
+  fixture.queryClient.setQueryData(managerStatusQueryKey, currentManager);
   fixture.render(<ServerVersionCard />);
-  await screen.findByText('0.1.0');
-
-  await user.click(screen.getByRole('button', { name: 'Refresh detection' }));
-
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-  expect(fetchMock.mock.calls[1]?.[0]).toBe(
-    '/api/settings/release/status?refresh=true',
-  );
-});
-
-it('does not claim that Mergeron is current when discovery fails', async () => {
-  fetchMock.mockImplementation(() =>
-    Promise.resolve(
-      json({
-        ...status,
-        latestVersion: null,
-        latestUrl: null,
-        updateAvailable: false,
-        versionStatus: 'unknown',
-        releases: [],
-        checkError: 'unableToCheckForMergeronUpdates',
-      }),
-    ),
-  );
-  fixture.render(<ServerVersionCard />);
-
+  expect(await screen.findByText('0.6.0')).toBeVisible();
   expect(
-    await screen.findByText('Unable to check for Mergeron updates.'),
-  ).toBeVisible();
-  expect(
-    screen.queryByText('The Mergeron application is up to date.'),
-  ).not.toBeInTheDocument();
-});
-
-it('shows one update action alongside the detected image and descriptions', async () => {
-  fixture.queryClient.setQueryData(managerStatusQueryKey, {
-    available: true,
-    mode: 'observe',
-    environment: 'development',
-    dockerConnected: true,
-    components: [],
-    dataSafety: { status: 'protected', blockers: [], protectedMounts: [] },
-    update: { busy: false, operation: null },
-  });
-  fetchMock.mockImplementation(() =>
-    Promise.resolve(
-      json({
-        ...status,
-        targetImage: 'ghcr.io/maxhugit/mergeron:edge',
-        latestRevision: 'b'.repeat(40),
-      }),
-    ),
-  );
-  fixture.render(<ServerVersionCard />);
-  expect(await screen.findByRole('button', { name: 'Update' })).toBeVisible();
-  expect(screen.getAllByRole('button', { name: 'Update' })).toHaveLength(1);
-  const update = screen.getByRole('button', { name: 'Update' });
-  const refresh = screen.getByRole('button', { name: 'Refresh detection' });
-  expect(refresh.parentElement).toBe(update.parentElement);
-  expect(update.nextElementSibling).toBe(refresh);
-  expect(await screen.findByText('Corrige le mobile.')).toBeVisible();
-  expect(
-    screen.queryByRole('button', { name: 'Save' }),
-  ).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole('button', { name: 'Preview update plan' }),
-  ).not.toBeInTheDocument();
+    screen.getByRole('button', { name: 'Update selected (1)' }),
+  ).toBeDisabled();
 });

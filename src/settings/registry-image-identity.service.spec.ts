@@ -53,6 +53,63 @@ function fixture(entries?: unknown[]) {
   return { service: new Registry(), index, manifest };
 }
 describe('read-only platform image identity', () => {
+  it('reads only verified config metadata, and never mistakes a vendor distribution for its software version', async () => {
+    const config = encode({
+      created: '2026-11-01T10:00:00Z',
+      config: {
+        Env: ['TOKEN=never-export'],
+        Labels: {
+          'org.opencontainers.image.version': '24.04',
+          'io.mergeron.version': '0.6.0',
+          'org.opencontainers.image.revision': 'b'.repeat(40),
+          'io.mergeron.channel': 'edge',
+        },
+      },
+    });
+    class Metadata extends RegistryImageIdentityService {
+      corrupt = false;
+      override imageId() {
+        return Promise.resolve(config.digest);
+      }
+      protected override fetchMetadata(url: string) {
+        return Promise.resolve(
+          url.includes('/token')
+            ? encode({ token: 'public-token' })
+            : this.corrupt
+              ? { ...config, raw: 'tampered' }
+              : config,
+        );
+      }
+    }
+    const service = new Metadata();
+    expect(
+      await service.imageBuild(
+        'manager',
+        'ghcr.io/maxhugit/mergeron-manager:edge',
+        config.digest,
+        platform,
+      ),
+    ).toMatchObject({ version: '0.6.0', channel: 'edge' });
+    const vendor = new Metadata();
+    const metadata = await vendor.imageBuild(
+      'egress',
+      'ubuntu/squid:latest',
+      config.digest,
+      platform,
+    );
+    expect(metadata.version).toBeNull();
+    expect(JSON.stringify(metadata)).not.toContain('never-export');
+    const corrupt = new Metadata();
+    corrupt.corrupt = true;
+    await expect(
+      corrupt.imageBuild(
+        'browser',
+        'ghcr.io/maxhugit/mergeron-browser:edge',
+        config.digest,
+        platform,
+      ),
+    ).rejects.toThrow('Config integrity failure');
+  });
   it('selects the actual amd64 image, ignores arm64 and attestations, and caches immutable metadata', async () => {
     const { service, index, manifest } = fixture();
     expect(

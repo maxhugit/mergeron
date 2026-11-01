@@ -4,11 +4,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  backupDescription,
-  backupLabel,
-  withoutDataBackup,
-} from './manager-backup-policy';
+import { backupLabel, withoutDataBackup } from './manager-backup-policy';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +28,7 @@ import { ManagerBackups } from './manager-backups';
 import { ManagerImageUpdates } from './manager-image-updates';
 import { componentUpdatesKey } from './manager-image-updates-api';
 import { defaultManagerUpdateImage } from './manager-update-image';
+import { UpdateBackupPreference } from './update-backup-preference';
 import { useUpdateBackupMode } from './use-update-backup-mode';
 import {
   readManagerUpdateReceipt,
@@ -46,6 +43,7 @@ const phases: Record<string, string> = {
   preparing: 'managerUpdatePreparing',
   stopping: 'managerUpdateStopping',
   backingUp: 'managerUpdateBackingUp',
+  restoring: 'managerUpdateRestoring',
   replacing: 'managerUpdateReplacing',
   checkingHealth: 'managerUpdateCheckingHealth',
   committing: 'managerUpdateCommitting',
@@ -65,11 +63,16 @@ export function ManagerUpdateControls({
   trailingActions,
   showBackups = true,
   actionsContainer,
+  renderUpdates,
 }: {
   status: ManagerStatus;
   trailingActions?: ReactNode;
   showBackups?: boolean;
   actionsContainer?: HTMLElement | null;
+  renderUpdates?: (controls: {
+    disabled: boolean;
+    onUpdate: (images: Record<string, string>) => void;
+  }) => ReactNode;
 }) {
   const { t } = useTranslation('manager');
   const { t: common } = useTranslation();
@@ -83,15 +86,10 @@ export function ManagerUpdateControls({
   });
   const [imageOverride, setImage] = useState<string | null>(null);
   const [manualSelection, setManualSelection] = useState(false);
-  const [fastEnabled, setFastEnabled] = useState(true);
   const backupSelection = status.capabilities?.backupSelection === true;
   const backupPreference = useUpdateBackupMode(backupSelection);
   const backupMode = backupPreference.value;
   const backupInput = backupSelection ? { backupMode } : {};
-  const fastAvailable =
-    status.environment === 'development' &&
-    status.capabilities?.devFastUpdate === true;
-  const fastMode = fastAvailable && fastEnabled;
   const image =
     imageOverride ?? defaultManagerUpdateImage(status, release.data);
   const [plan, setPlan] = useState<ManagerUpdatePlan | null>(null);
@@ -162,7 +160,7 @@ export function ManagerUpdateControls({
       operation?.id !== progressOperation.id);
   const blocked = operation?.status === 'recoveryRequired';
   const renderActions = (actions: ReactNode) =>
-    actionsContainer ? (
+    renderUpdates ? null : actionsContainer ? (
       createPortal(actions, actionsContainer)
     ) : (
       <div className="flex flex-wrap items-center gap-2">{actions}</div>
@@ -171,173 +169,79 @@ export function ManagerUpdateControls({
     return <>{renderActions(trailingActions)}</>;
   return (
     <div className="order-first space-y-3">
-      <div className="space-y-2">
-        <label htmlFor="manager-update-image" className="text-sm">
-          {t('managerTargetApplicationImage')}
-        </label>
-        <Input
-          id="manager-update-image"
-          value={image}
-          disabled={busy || blocked}
-          onChange={(event) => {
-            setManualSelection(true);
-            setImage(event.target.value);
-            setPlan(null);
-          }}
-        />
-      </div>
-      {backupSelection && (
+      {renderUpdates?.({
+        disabled: Boolean(
+          busy ||
+          blocked ||
+          !status.available ||
+          !status.capabilities?.backupSelection ||
+          !backupPreference.ready ||
+          backupPreference.saving,
+        ),
+        onUpdate: (images) =>
+          mutation.mutate({
+            action: 'plan',
+            input: { images, ...backupInput },
+          }),
+      })}
+      <div hidden={!!renderUpdates}>
         <div className="space-y-2">
-          <label htmlFor="manager-backup-mode" className="text-sm">
-            {t('managerBackupMode')}
+          <label htmlFor="manager-update-image" className="text-sm">
+            {t('managerTargetApplicationImage')}
           </label>
-          <select
-            id="manager-backup-mode"
-            aria-describedby="manager-backup-mode-help"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={backupMode}
-            disabled={
-              busy ||
-              blocked ||
-              !backupPreference.ready ||
-              backupPreference.saving
-            }
+          <Input
+            id="manager-update-image"
+            value={image}
+            disabled={busy || blocked}
             onChange={(event) => {
-              backupPreference.setValue(
-                event.target.value as typeof backupMode,
-              );
+              setManualSelection(true);
+              setImage(event.target.value);
+              setPlan(null);
+            }}
+          />
+        </div>
+        {!renderUpdates && (
+          <UpdateBackupPreference
+            status={status}
+            busy={!!busy || blocked}
+            preference={backupPreference}
+            onChange={() => {
               setPlan(null);
               setConfirm(null);
             }}
-          >
-            <option value="full">{t('managerFullBackup')}</option>
-            <option value="minimal">{t('managerMinimalBackup')}</option>
-            <option value="none">{t('managerNoBackup')}</option>
-          </select>
-          <p
-            id="manager-backup-mode-help"
-            className={
-              backupMode === 'none'
-                ? 'text-sm text-destructive'
-                : 'text-xs text-muted-foreground'
-            }
-          >
-            {t(translationKey(backupDescription(`${backupMode}-v1`)))}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {t('managerBackupPreferenceHelp')}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={
-                busy ||
-                blocked ||
-                !backupPreference.ready ||
-                !backupPreference.dirty ||
-                backupPreference.saving
-              }
-              onClick={backupPreference.save}
-            >
-              {t(
-                backupPreference.saving
-                  ? 'managerBackupPreferenceSaving'
-                  : 'managerBackupPreferenceSave',
-              )}
-            </Button>
-            {(backupPreference.loading ||
-              backupPreference.saved ||
-              backupPreference.dirty) && (
-              <p role="status" className="text-xs text-muted-foreground">
-                {t(
-                  backupPreference.loading
-                    ? 'managerBackupPreferenceLoading'
-                    : backupPreference.dirty
-                      ? 'managerBackupPreferenceUnsaved'
-                      : 'managerBackupPreferenceSaved',
-                )}
-              </p>
-            )}
-            {backupPreference.readError && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={backupPreference.retry}
-              >
-                {common('retry')}
-              </Button>
-            )}
-          </div>
-          {(backupPreference.readError || backupPreference.saveError) && (
-            <p role="alert" className="text-sm text-destructive">
-              {t(
-                backupPreference.readError
-                  ? 'managerBackupPreferenceReadError'
-                  : 'managerBackupPreferenceSaveError',
-              )}
-            </p>
-          )}
-        </div>
-      )}
-      {fastAvailable && (
-        <div className="space-y-1">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={fastEnabled}
-              disabled={busy || blocked}
-              onChange={(event) => {
-                setFastEnabled(event.target.checked);
-                setPlan(null);
-              }}
-            />
-            {t('managerFastDevUpdate')}
-          </label>
+          />
+        )}
+        <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
+        <ManagerImageUpdates
+          disabled={
+            !!busy ||
+            !status.available ||
+            blocked ||
+            !backupPreference.ready ||
+            backupPreference.saving
+          }
+          onUpdate={(images) => {
+            mutation.mutate({
+              action: 'plan',
+              input: {
+                images,
+                ...backupInput,
+              },
+            });
+          }}
+        />
+        {!backupSelection && (
           <p className="text-xs text-muted-foreground">
             {t(
-              backupSelection
-                ? 'managerFastSelectedBackupHelp'
-                : status.backupPolicy === 'development-none-v1'
-                  ? 'managerFastDevNoBackupHelp'
-                  : 'managerFastDevUpdateHelp',
+              status.backupPolicy === 'development-none-v1'
+                ? 'managerDevelopmentNoBackup'
+                : status.backupPolicy === 'production-essential-v1'
+                  ? 'managerProductionEssentialBackup'
+                  : 'managerUpdateSafetyDescription',
             )}
           </p>
-        </div>
-      )}
-      <h3 className="text-sm font-semibold">{t('managerUpdateAction')}</h3>
-      <ManagerImageUpdates
-        disabled={
-          !!busy ||
-          !status.available ||
-          blocked ||
-          !backupPreference.ready ||
-          backupPreference.saving
-        }
-        onUpdate={(images) => {
-          mutation.mutate({
-            action: 'plan',
-            input: {
-              images,
-              ...backupInput,
-              ...(fastMode ? { mode: 'dev-fast' } : {}),
-            },
-          });
-        }}
-      />
-      {!backupSelection && (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            status.backupPolicy === 'development-none-v1'
-              ? 'managerDevelopmentNoBackup'
-              : status.backupPolicy === 'production-essential-v1'
-                ? 'managerProductionEssentialBackup'
-                : 'managerUpdateSafetyDescription',
-          )}
-        </p>
-      )}
+        )}
+      </div>
       {operation && operation.status !== 'succeeded' && (
         <div
           role="status"
@@ -379,7 +283,7 @@ export function ManagerUpdateControls({
           )}
         </div>
       )}
-      <div className="space-y-2">
+      <div hidden={!!renderUpdates} className="space-y-2">
         <p className="text-xs text-muted-foreground">
           {t('managerUpdateSeparateFromSettings')}
         </p>
@@ -414,7 +318,6 @@ export function ManagerUpdateControls({
                   input: {
                     images: { application: target },
                     ...backupInput,
-                    ...(fastMode ? { mode: 'dev-fast' } : {}),
                   },
                 });
               }}
@@ -559,7 +462,7 @@ export function ManagerUpdateControls({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {showBackups && <ManagerBackups status={status} />}
+      {showBackups && <ManagerBackups status={status} showPreference={false} />}
       <ManagerUpdateProgressDialog
         open={progressOpen}
         onOpenChange={(open) => {

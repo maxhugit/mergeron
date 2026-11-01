@@ -72,7 +72,9 @@ test.each([1000, 1295, 390])(
       </QueryClientProvider>,
     );
     try {
-      await page.getByRole('tab', { name: 'Sauvegarde', exact: true }).click();
+      await page
+        .getByRole('tab', { name: 'Restauration', exact: true })
+        .click();
       await screen.findByText('d2a55d6f-2bf0-484b-a293-c4526aa4acd8');
       const table = screen.getByRole('table');
       const scroller = table.parentElement!;
@@ -101,7 +103,7 @@ test.each([1000, 1295, 390])(
       await page
         .getByRole('tab', { name: 'Version actuelle', exact: true })
         .click();
-      expect(document.querySelector('.max-w-4xl')).not.toBeNull();
+      expect(document.querySelector('.max-w-7xl')).not.toBeNull();
     } finally {
       client.clear();
     }

@@ -85,6 +85,41 @@ test('deduplicates simultaneous refreshes', async () => {
   await Promise.all([service.status(true), service.status(true)]);
   assert.equal(calls.length, 4);
 });
+
+test('discovers the Manager separately without making it a managed update target', async () => {
+  const { service, docker, options, calls } = fixture();
+  service.manifest.stack = 'mergeron-dev';
+  const inventory = options.inventory;
+  service.inventory = async () => ({
+    ...(await inventory()),
+    manager: { imageId: old },
+  });
+  docker.listContainers = async () => [
+    { Id: 'manager', Names: ['/mergeron-dev-manager'] },
+  ];
+  const inspect = docker.inspectContainer;
+  docker.inspectContainer = async (id) =>
+    id === 'manager'
+      ? {
+          Image: 'manager',
+          Config: { Image: `ghcr.io/maxhugit/mergeron-manager@${old}` },
+        }
+      : inspect(id);
+  const image = docker.inspectImage;
+  docker.inspectImage = async (id) =>
+    id === 'manager'
+      ? {
+          Id: old,
+          RepoDigests: [`ghcr.io/maxhugit/mergeron-manager@${old}`],
+          Os: 'linux',
+          Architecture: 'amd64',
+        }
+      : image(id);
+  const result = await service.status();
+  assert.equal(result.components.length, 5);
+  assert.ok(calls.includes('ghcr.io/maxhugit/mergeron-manager:edge'));
+  assert.ok(!options.manifest.components.some((item) => item.id === 'manager'));
+});
 test('keeps installed metadata separate from the registry target and stale container labels', async () => {
   const { service, docker } = fixture();
   docker.inspectContainer = async () => ({

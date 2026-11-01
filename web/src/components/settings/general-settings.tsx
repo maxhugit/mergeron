@@ -1,7 +1,7 @@
 /** Server-wide runtime settings. */
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { BadgeInfo, Download, Archive, Plug } from 'lucide-react';
+import { BadgeInfo, History, Archive, Plug } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SettingEditor } from './setting-editor';
 import { SettingsSaveBar } from './settings-save-bar';
@@ -19,8 +19,6 @@ const EXCLUDED_RUNTIME_SETTINGS = [
 export function GeneralSettings() {
   const { t } = useTranslation();
   const { t: tm } = useTranslation('manager');
-  const [actionsContainer, setActionsContainer] =
-    useState<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<'current' | 'update' | 'backups' | 'socket'>(
     'current',
   );
@@ -63,7 +61,7 @@ export function GeneralSettings() {
           {(
             [
               ['current', 'serverCurrentVersionTab', BadgeInfo],
-              ['update', 'serverUpdateTab', Download],
+              ['update', 'serverUpdateTab', History],
               ['backups', 'serverBackupTab', Archive],
               ['socket', 'serverSocketTab', Plug],
             ] as const
@@ -94,7 +92,11 @@ export function GeneralSettings() {
         <div
           className={cn(
             'mx-auto w-full min-w-0 space-y-4 px-4 py-4 sm:px-6',
-            tab !== 'backups' && 'max-w-4xl',
+            tab === 'backups'
+              ? undefined
+              : tab === 'socket'
+                ? 'max-w-4xl'
+                : 'max-w-7xl',
           )}
         >
           {/* Keep update controls mounted so changing tabs cannot reset a plan or its progress dialog. */}
@@ -104,10 +106,7 @@ export function GeneralSettings() {
             id={tab === 'socket' ? undefined : `server-panel-${tab}`}
             aria-labelledby={tab === 'socket' ? undefined : `server-tab-${tab}`}
           >
-            <ServerVersionCard
-              view={tab === 'socket' ? 'current' : tab}
-              actionsContainer={actionsContainer}
-            />
+            <ServerVersionCard view={tab === 'socket' ? 'current' : tab} />
           </div>
           <div
             hidden={tab !== 'socket'}
@@ -153,15 +152,6 @@ export function GeneralSettings() {
             />
           </div>
         </div>
-      </div>
-      <div
-        hidden={tab !== 'update'}
-        className="shrink-0 border-t bg-background px-4 py-3 sm:px-6"
-      >
-        <div
-          ref={setActionsContainer}
-          className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-2"
-        />
       </div>
     </section>
   );

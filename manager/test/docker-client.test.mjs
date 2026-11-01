@@ -26,6 +26,26 @@ function transport(respond) {
   return { factory, requests };
 }
 
+test('vendor inspection executes only the fixed version command and returns only its version', async () => {
+  const calls = [];
+  const client = new DockerClient();
+  client.request = async (path, options) => {
+    calls.push({ path, options });
+    return path.endsWith('/exec')
+      ? { Id: 'vendor-inspection' }
+      : 'private extra output\nSquid Cache: Version 6.13\n';
+  };
+  assert.equal(await client.vendorVersion('squid', 'egress'), '6.13');
+  assert.deepEqual(calls[0].options.body.Cmd, ['/usr/sbin/squid', '-v']);
+  assert.equal(calls[0].options.body.Privileged, false);
+  assert.equal(calls[0].options.body.AttachStdin, false);
+  assert.equal(calls[1].options.maxResponseBytes, 16384);
+  await assert.rejects(
+    client.vendorVersion('squid', 'arbitrary'),
+    /Unsupported component/,
+  );
+});
+
 test('container terminal uses a non-privileged fixed shell, upgraded stream and scoped exec resize', async () => {
   const calls = [];
   const stream = new PassThrough();
