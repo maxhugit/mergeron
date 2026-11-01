@@ -60,7 +60,7 @@ en place.
 ## Copie Git créée par la conversation
 
 Pour un travail autorisé sur une connexion Git du projet, l’agent peut appeler
-`create_project_git_copy` après `list_project_connections`. Le serveur choisit
+`project_git_copy_create` après `project_connection_list`. Le serveur choisit
 le projet et le propriétaire depuis la conversation authentifiée ; l’appel
 n’accepte ni identifiant de conversation, ni chemin local, ni URL ou secret.
 La copie est clonée avec les identifiants conservés côté serveur, enregistrée
@@ -211,19 +211,19 @@ exigent une demande humaine explicite, une session administrateur active et
 un tour autorisé en écriture. `userRequest` rappelle cette demande mais ne
 constitue pas une autorisation à lui seul.
 
-| Outil / opération | Usage et paramètres spécifiques |
-| --- | --- |
-| `read_project_git / branches` | Observer les branches distantes et leurs révisions immuables. |
-| `prepare_project_git / fetch_branch` | Fournir `name` et `revision` observés. Récupère cette branche dans `refs/remotes/mergeron/<name>`, sans remplacer une branche locale ni changer le dossier de travail. |
-| `prepare_project_git / create_branch` | Créer une branche locale neuve avec `name`. Par défaut, part de HEAD ; `startRef` et `revision` permettent de partir d'une référence locale ou distante observée dans `local_status`. |
-| `prepare_project_git / switch_branch` | Passer sur une branche locale existante avec son `name` et sa `revision` observés. Exige un dossier de travail propre. |
-| `prepare_project_git / start_merge` | Intégrer une `revision` immuable dans la branche active, à partir d'un dossier propre. La fusion reste sans commit pour permettre sa revue, même sans conflit. |
-| `read_project_git / local_merge_status` | Lire le parent de fusion `mergeHead`, les chemins et les entrées d'index non résolues, avec HEAD et l'empreinte actuelle. |
-| `read_project_git / local_conflict` | Avec `path`, lire les contenus base (stage 1), courant (stage 2) et entrant (stage 3), lorsqu'ils existent. Contenus texte limités à 128 Kio par entrée ; les contenus binaires et sous-modules ne sont pas renvoyés comme texte. |
-| `prepare_project_git / continue_merge` | Avec `revision` égale au `mergeHead` observé et `message`, créer un commit à deux parents à partir du seul index revu, sous l'identité de la personne connectée. Refuse les entrées non résolues. |
-| `prepare_project_git / abort_merge` | Annuler la fusion dont le parent observé est `revision`. **Abandonne les modifications de résolution** : l'agent doit obtenir une autorisation humaine explicite pour cette perte de travail. Ne sert pas à annuler un rebase ou un cherry-pick. |
-| `read_project_git / pull_request` | Avec `number`, lire le titre, la description, `updatedAt`, les branches, les révisions et l'état d'une PR GitHub. Une description dépassant la limite est signalée. |
-| `publish_project_git / update_pull_request` | Modifier uniquement le titre et la description de la PR ouverte correspondant à la branche et au commit de cette copie. Fournir `number`, `title`, `description` et `expectedUpdatedAt` observé ; aucun changement de base, de statut brouillon ou fusion distante. |
+| Outil / opération                           | Usage et paramètres spécifiques                                                                                                                                                                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_git_read / branches`               | Observer les branches distantes et leurs révisions immuables.                                                                                                                                                                                                       |
+| `project_git_local_manage / fetch_branch`   | Fournir `name` et `revision` observés. Récupère cette branche dans `refs/remotes/mergeron/<name>`, sans remplacer une branche locale ni changer le dossier de travail.                                                                                              |
+| `project_git_local_manage / create_branch`  | Créer une branche locale neuve avec `name`. Par défaut, part de HEAD ; `startRef` et `revision` permettent de partir d'une référence locale ou distante observée dans `local_status`.                                                                               |
+| `project_git_local_manage / switch_branch`  | Passer sur une branche locale existante avec son `name` et sa `revision` observés. Exige un dossier de travail propre.                                                                                                                                              |
+| `project_git_local_manage / start_merge`    | Intégrer une `revision` immuable dans la branche active, à partir d'un dossier propre. La fusion reste sans commit pour permettre sa revue, même sans conflit.                                                                                                      |
+| `project_git_read / local_merge_status`     | Lire le parent de fusion `mergeHead`, les chemins et les entrées d'index non résolues, avec HEAD et l'empreinte actuelle.                                                                                                                                           |
+| `project_git_read / local_conflict`         | Avec `path`, lire les contenus base (stage 1), courant (stage 2) et entrant (stage 3), lorsqu'ils existent. Contenus texte limités à 128 Kio par entrée ; les contenus binaires et sous-modules ne sont pas renvoyés comme texte.                                   |
+| `project_git_local_manage / continue_merge` | Avec `revision` égale au `mergeHead` observé et `message`, créer un commit à deux parents à partir du seul index revu, sous l'identité de la personne connectée. Refuse les entrées non résolues.                                                                   |
+| `project_git_local_manage / abort_merge`    | Annuler la fusion dont le parent observé est `revision`. **Abandonne les modifications de résolution** : l'agent doit obtenir une autorisation humaine explicite pour cette perte de travail. Ne sert pas à annuler un rebase ou un cherry-pick.                    |
+| `project_git_read / pull_request`           | Avec `number`, lire le titre, la description, `updatedAt`, les branches, les révisions et l'état d'une PR GitHub. Une description dépassant la limite est signalée.                                                                                                 |
+| `project_git_publish / update_pull_request` | Modifier uniquement le titre et la description de la PR ouverte correspondant à la branche et au commit de cette copie. Fournir `number`, `title`, `description` et `expectedUpdatedAt` observé ; aucun changement de base, de statut brouillon ou fusion distante. |
 
 Chaque mutation conserve les paramètres communs `connectionId`, `copyId`,
 `expectedBranch`, `expectedHead`, `fingerprint`, `requestId` et `userRequest`.

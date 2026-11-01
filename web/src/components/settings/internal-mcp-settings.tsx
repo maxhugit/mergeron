@@ -48,7 +48,7 @@ export function InternalMcpSettings() {
   const catalog = query.data;
   const french = i18n.resolvedLanguage?.startsWith('fr');
   const tools = catalog.tools.filter((tool) =>
-    `${tool.name} ${tool.description} ${tool.descriptionFr}`
+    `${tool.name} ${tool.title} ${tool.titleFr ?? ''} ${tool.description} ${tool.descriptionFr}`
       .toLocaleLowerCase()
       .includes(search.toLocaleLowerCase()),
   );
@@ -75,7 +75,7 @@ export function InternalMcpSettings() {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="get_project, create_task…"
+          placeholder={mcpT('internalMcpSearchPlaceholder')}
         />
       </label>
       <p className="text-sm text-muted-foreground" role="status">
@@ -85,12 +85,17 @@ export function InternalMcpSettings() {
       {tools.map((tool) => (
         <details key={tool.name} className="min-w-0 rounded-xl border bg-card">
           <summary className="cursor-pointer break-words p-4">
-            <code className="font-semibold">{tool.name}</code>
+            <span className="font-semibold">
+              {french ? (tool.titleFr ?? tool.title) : tool.title}
+            </span>
             <span className="ml-3 inline-block rounded-full bg-muted px-2 py-0.5 text-xs">
               {tool.readOnly
                 ? mcpT('internalMcpRead')
                 : mcpT('internalMcpWrite')}
             </span>
+            <code className="mt-1 block text-xs text-muted-foreground">
+              {tool.name}
+            </code>
           </summary>
           <div className="min-w-0 space-y-4 border-t p-4">
             <p className="text-sm">

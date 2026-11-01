@@ -589,9 +589,9 @@
           {
             "title": "Discover project connections with MCP",
             "paragraphs": [
-              "The agent can call list_project_connections to discover connections configured in its project: name, protocol, enablement, access mode and its own copies. Credentials stay server-side. Project context advertises these tools on the next turn, including for existing agents.",
-              "read_project_git uses the connection’s credentials to read GitHub branches, files, PRs and checks. It also inspects status, diffs and commits in the agent’s own copy. SSH/SFTP/FTP/FTPS connections are listed but do not grant terminal execution through this channel.",
-              "On an explicit human request, publish_project_git can push an existing commit over HTTPS without force, then create a GitHub PR. The agent must read local_status and provide the observed branch, SHA and fingerprint. No stage, commit, merge or deployment is implicit. The agent must own the copy, have a writable turn, administrator authority outside impersonation and a read-write connection; other running agents block publication.",
+              "The agent can call project_connection_list to discover connections configured in its project: name, protocol, enablement, access mode and its own copies. Credentials stay server-side. Project context advertises these tools on the next turn, including for existing agents.",
+              "project_git_read uses the connection’s credentials to read GitHub branches, files, PRs and checks. It also inspects status, diffs and commits in the agent’s own copy. SSH/SFTP/FTP/FTPS connections are listed but do not grant terminal execution through this channel.",
+              "On an explicit human request, project_git_publish can push an existing commit over HTTPS without force, then create a GitHub PR. The agent must read local_status and provide the observed branch, SHA and fingerprint. No stage, commit, merge or deployment is implicit. The agent must own the copy, have a writable turn, administrator authority outside impersonation and a read-write connection; other running agents block publication.",
               "A stable requestId prevents duplicate dispatch. If the outcome is uncertain, inspect the remote state before requesting another operation. An available capability is never human authorization. Settings → Internal MCP shows the registered tools, parameters and examples."
             ]
           },

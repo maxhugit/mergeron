@@ -27,6 +27,12 @@ import {
   INTERNAL_MCP_VERSION,
   internalMcpCatalog,
 } from './internal-mcp-catalog';
+import {
+  internalMcpAnnotations,
+  internalMcpTransportApprovals,
+  normalizeInternalMcpRequest,
+  resolveInternalMcpTool,
+} from './internal-mcp-tools';
 
 interface Capability {
   id: string;
@@ -134,19 +140,10 @@ export class InternalMcpService implements OnModuleDestroy {
         enabled: true,
         startup_timeout_sec: 10,
         tool_timeout_sec: 180,
-        // The publication flow already requires an explicit human request and
-        // rechecks the authenticated writable turn, ownership and Git state.
-        // Avoid a second Codex transport confirmation for this tool alone.
-        // Keep its MCP write/open-world annotations and all other tool policies.
-        tools: {
-          publish_project_git: { approval_mode: 'approve' },
-          // Only the server-bound check's result can be updated. This never
-          // approves a command, file mutation or another scheduled execution.
-          agent_monitor_report: { approval_mode: 'approve' },
-          // Scheduling only continues the assigned task, with server-captured
-          // rights and tighter limits. It cannot start a second live plan.
-          agent_monitor_manage: { approval_mode: 'approve' },
-        },
+        // Preserve only the registry's existing publication/monitor exceptions,
+        // for canonical names and cached aliases. Domain authorization and MCP
+        // write/open-world annotations remain independent of transport approval.
+        tools: internalMcpTransportApprovals(),
       },
     };
   }
@@ -214,9 +211,8 @@ export class InternalMcpService implements OnModuleDestroy {
     signal: AbortSignal,
   ) {
     const lease = cap.lease;
-    const readOnly = INTERNAL_MCP_TOOLS.find(
-      (tool) => tool.name === name,
-    )?.readOnly;
+    const tool = resolveInternalMcpTool(name);
+    if (!tool) throw new Error('UNKNOWN_TOOL');
     const check = () => {
       if (
         !cap.threadId ||
@@ -233,23 +229,16 @@ export class InternalMcpService implements OnModuleDestroy {
       lease.access.identities.requireActive(identity);
       lease.access.identities.requireThread(identity, cap.threadId);
       lease.access.identities.requireProject(identity, cap.projectId);
-      if (name.startsWith('local_browser_')) {
-        if (identity.impersonation) throw new Error('ACCESS_DENIED');
+      if (tool.policy.forbidImpersonation && identity.impersonation)
+        throw new Error('ACCESS_DENIED');
+      if (tool.policy.administratorOnly) {
         lease.access.identities.requireAdministrator(identity);
       }
       this.tools.assertProject(cap.threadId, cap.projectId);
       // Scoped conversation metadata is independent of filesystem access.
       // Monitor creation cannot exceed the active turn's observed rights;
       // unattended checks can report/continue but never clone their schedule.
-      if (
-        !readOnly &&
-        ![
-          'rename_agent',
-          'agent_monitor_manage',
-          'agent_monitor_report',
-        ].includes(name) &&
-        !lease.writes
-      )
+      if (tool.policy.requiresWorkspaceWrite && !lease.writes)
         throw new Error('READ_ONLY');
     };
     check();
@@ -264,13 +253,13 @@ export class InternalMcpService implements OnModuleDestroy {
         const release = this.admission.enter('Internal MCP tool');
         try {
           return await accessContext.run({ ...lease!.access, identity }, () => {
-            if (name.startsWith('local_browser_')) {
+            if (tool.handler !== 'project') {
               if (!this.localBrowser || identity.impersonation)
                 throw new Error('ACCESS_DENIED');
               lease!.access.identities.requireAdministrator(identity);
               const owner =
                 identity.personId ?? identity.subject ?? identity.kind;
-              if (name === 'local_browser_read') {
+              if (tool.handler === 'localBrowserRead') {
                 if (args.operation === 'status')
                   return this.localBrowser.status(owner, cap.threadId!);
                 if (args.operation === 'result')
@@ -301,7 +290,8 @@ export class InternalMcpService implements OnModuleDestroy {
             }
             return this.tools.execute(
               cap.threadId!,
-              { ...args, tool: name },
+              // Stable execution key preserves existing requestId fingerprints.
+              { ...args, tool: tool.operation },
               check,
               lease!.turnId,
               lease!.writes,
@@ -328,22 +318,7 @@ export class InternalMcpService implements OnModuleDestroy {
           description: tool.description,
           inputSchema: tool.input,
           outputSchema: tool.output,
-          annotations: {
-            readOnlyHint: tool.readOnly,
-            destructiveHint: [
-              'local_browser_action',
-              'prepare_project_git',
-            ].includes(tool.name),
-            idempotentHint: tool.name !== 'local_browser_action',
-            openWorldHint:
-              tool.name.startsWith('local_browser_') ||
-              [
-                'read_project_git',
-                'create_project_git_copy',
-                'publish_project_git',
-                'prepare_project_git',
-              ].includes(tool.name),
-          },
+          annotations: internalMcpAnnotations(tool),
         },
         async (
           args: Record<string, unknown>,
@@ -503,7 +478,8 @@ export class InternalMcpService implements OnModuleDestroy {
       void server.close();
     });
     await server.connect(transport);
-    await transport.handleRequest(req, res, body);
+    // Old calls remain accepted, but tools/list exposes only canonical names.
+    await transport.handleRequest(req, res, normalizeInternalMcpRequest(body));
   }
 
   async onModuleDestroy() {
