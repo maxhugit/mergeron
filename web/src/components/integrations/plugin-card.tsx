@@ -1,5 +1,5 @@
 /** Single plugin card with status badge and install/uninstall action. */
-import { Download, Package, Star, Trash2 } from 'lucide-react';
+import { Package, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,6 @@ export function PluginCard({
   featured,
   disabled,
   onSelect,
-  onInstall,
-  onUninstall,
 }: Props) {
   const { t } = useTranslation();
   const displayName = plugin.interface?.displayName ?? plugin.name;
@@ -76,69 +74,15 @@ export function PluginCard({
 
       {/* Action button */}
       <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-        <PluginAction
-          plugin={plugin}
-          disabled={!!disabled}
-          onInstall={onInstall}
-          onUninstall={onUninstall}
-        />
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => onSelect({ marketplacePath, pluginName: plugin.name })}
+        >
+          {t(plugin.installed ? 'manage' : 'details')}
+        </Button>
       </div>
     </div>
-  );
-}
-
-/** Install / Uninstall / Built-in / Unavailable button. */
-function PluginAction({
-  plugin,
-  disabled,
-  onInstall,
-  onUninstall,
-}: {
-  plugin: PluginSummaryDto;
-  disabled: boolean;
-  onInstall: () => void;
-  onUninstall: () => void;
-}) {
-  const { t } = useTranslation();
-
-  if (plugin.installPolicy === 'NOT_AVAILABLE') {
-    return (
-      <Button size="sm" variant="ghost" disabled className="h-7 text-xs">
-        {t('unavailable')}
-      </Button>
-    );
-  }
-  if (plugin.installPolicy === 'INSTALLED_BY_DEFAULT') {
-    return (
-      <Badge variant="outline" className="text-[10px]">
-        {t('builtIn')}
-      </Badge>
-    );
-  }
-  if (plugin.installed) {
-    return (
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-7 gap-1 text-xs text-destructive hover:text-destructive"
-        disabled={disabled}
-        onClick={onUninstall}
-      >
-        <Trash2 className="h-3 w-3" />
-        {t('uninstall')}
-      </Button>
-    );
-  }
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      className="h-7 gap-1 text-xs"
-      disabled={disabled}
-      onClick={onInstall}
-    >
-      <Download className="h-3 w-3" />
-      {t('install')}
-    </Button>
   );
 }

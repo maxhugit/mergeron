@@ -52,7 +52,7 @@ export function formatSettingValue(value: SettingValue): string {
 }
 
 export function sectionLabel(section: string): string {
-  if (section === 'simpleChat') return 'Codex';
+  if (section === 'simpleChat' || section === 'integrations') return 'Codex';
   const labels: Record<string, string> = {
     general: 'General',
     onlyOffice: 'OnlyOffice',

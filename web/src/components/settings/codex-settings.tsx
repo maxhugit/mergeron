@@ -18,6 +18,7 @@ import {
   UserCog,
   UserCircle,
   PackageOpen,
+  Plug,
 } from 'lucide-react';
 import {
   ApprovalReviewerControl,
@@ -25,6 +26,7 @@ import {
   ConfigSourceBadge,
   type OverrideSelectOption,
 } from '@/components/codex-config/config-override-controls';
+import { IntegrationsPanel } from '@/components/integrations/integrations-panel';
 import { RawConfigEditor } from './raw-config-editor';
 import { SettingsSaveBar } from './settings-save-bar';
 import { loadAdminModels } from './admin-model-options';
@@ -83,6 +85,7 @@ type CodexSettingsTab =
   | 'instructions'
   | 'reasoning'
   | 'security'
+  | 'integrations'
   | 'raw';
 
 const CODEX_SETTINGS_TABS = [
@@ -94,6 +97,7 @@ const CODEX_SETTINGS_TABS = [
   { id: 'instructions', label: 'Instructions', icon: FileText },
   { id: 'reasoning', label: 'Reasoning', icon: Brain },
   { id: 'security', label: 'Security', icon: ShieldCheck },
+  { id: 'integrations', label: 'integrations', icon: Plug },
   { id: 'raw', label: 'Raw configuration', icon: FileCode2 },
 ] as const;
 
@@ -149,7 +153,7 @@ const isSandboxModeValue = (value: unknown): value is SandboxModeValue =>
 
 export function CodexSettings({
   initialTab = 'account',
-}: { initialTab?: 'account' | 'cli' | 'chatAudio' } = {}) {
+}: { initialTab?: 'account' | 'cli' | 'chatAudio' | 'integrations' } = {}) {
   const { t, i18n } = useTranslation();
   const isNonEnglish = !i18n.language.startsWith('en');
   const queryClient = useQueryClient();
@@ -173,7 +177,8 @@ export function CodexSettings({
     connected ||
     requestedTab === 'cli' ||
     requestedTab === 'chatAudio' ||
-    requestedTab === 'instructions'
+    requestedTab === 'instructions' ||
+    requestedTab === 'integrations'
       ? requestedTab
       : 'account';
 
@@ -422,6 +427,7 @@ export function CodexSettings({
     'account',
     'cli',
     'chatAudio',
+    'integrations',
   ].includes(activeTab);
   const activeKeys =
     activeTab === 'security'
@@ -514,6 +520,7 @@ export function CodexSettings({
                 id !== 'cli' &&
                 id !== 'chatAudio' &&
                 id !== 'instructions' &&
+                id !== 'integrations' &&
                 !connected
               }
               aria-selected={activeTab === id}
@@ -536,6 +543,15 @@ export function CodexSettings({
       </div>
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
+        {activeTab === 'integrations' && (
+          <div
+            id="codex-settings-panel"
+            role="tabpanel"
+            className="flex min-h-full flex-col"
+          >
+            <IntegrationsPanel />
+          </div>
+        )}
         {/* Kept mounted so changing tabs does not discard an unsaved draft. */}
         <AgentInstructionsSettings active={activeTab === 'instructions'} />
         {activeTab === 'chatAudio' && (

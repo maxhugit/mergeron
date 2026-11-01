@@ -2,8 +2,14 @@
   "defaultLocale": "en",
   "defaultNamespace": "common",
   "locales": [
-    { "code": "en", "nativeLabel": "English" },
-    { "code": "fr", "nativeLabel": "Français" }
+    {
+      "code": "en",
+      "nativeLabel": "English"
+    },
+    {
+      "code": "fr",
+      "nativeLabel": "Français"
+    }
   ],
   "namespaces": [
     "browser",
@@ -19,6 +25,7 @@
     "manager",
     "monitors",
     "projectArchives",
-    "workspaces"
+    "workspaces",
+    "integrations"
   ]
 }

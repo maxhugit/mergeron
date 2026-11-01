@@ -1,3 +1,7 @@
+import {
+  McpServerConfigDto,
+  McpServerSavedDto,
+} from './dto/mcp-server-config.dto';
 /** REST controller for MCP server status and reload operations. */
 import {
   Body,
@@ -70,6 +74,24 @@ export class McpServersController {
       limit: this.parseLimit(limit),
       detail: this.parseDetail(detail),
     });
+  }
+
+  @Post('configuration')
+  @ApiOperation({ summary: 'Configure an administrator-managed MCP server' })
+  @ApiBody({ type: McpServerConfigDto })
+  @ApiOkResponse({ type: McpServerSavedDto })
+  configure(@Body() body: McpServerConfigDto) {
+    return this.mcpServersService.configure(body);
+  }
+
+  @Post('check')
+  @ApiOperation({
+    summary: 'Reload configured MCP servers and read actual status',
+  })
+  @ApiBody({ type: McpServerOauthLoginRequestDto })
+  @ApiOkResponse({ type: McpServersListResponseDto })
+  check(@Body() body: McpServerOauthLoginRequestDto) {
+    return this.mcpServersService.check(body?.name);
   }
 
   /** Reloads all configured MCP servers. */

@@ -1,6 +1,6 @@
 import { translationKey } from '@/locales/translation-key';
-import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import {
   Bot,
@@ -28,10 +28,6 @@ import {
 } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import { useParticipants } from '@/lib/people-api';
-import {
-  projectAppsQueryOptions,
-  projectMcpServersQueryOptions,
-} from '@/lib/project-integrations-queries';
 
 type ProjectTab = 'general' | 'journal' | ProjectSettingsSection;
 
@@ -40,7 +36,6 @@ export function ProjectRoute() {
   const { t, i18n } = useTranslation();
   const { t: tb } = useTranslation('browser');
   const session = usePlatformSession();
-  const queryClient = useQueryClient();
   const projects = useQuery({
     queryKey: projectsQueryKey,
     queryFn: () => projectsApi<{ projects: ProjectSummary[] }>(),
@@ -70,12 +65,6 @@ export function ProjectRoute() {
       ),
     enabled: visibleTab === 'journal',
   });
-
-  useEffect(() => {
-    if (!session.isAdministrator) return;
-    void queryClient.prefetchQuery(projectMcpServersQueryOptions());
-    void queryClient.prefetchQuery(projectAppsQueryOptions());
-  }, [queryClient, session.isAdministrator]);
 
   if (projects.isPending)
     return (

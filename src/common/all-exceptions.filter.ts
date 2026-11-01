@@ -85,7 +85,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
       void response.status(status).send({
         statusCode: status,
         errorCode: ErrorCode.codex.rpcError,
-        message: exception.rpcMessage,
+        message: /<html\b|<!doctype\b|challenge-platform|__cf_chl/i.test(
+          exception.rpcMessage,
+        )
+          ? 'The upstream service refused the request. Its HTML response was omitted.'
+          : exception.rpcMessage.slice(0, 1200),
         params,
       } satisfies ErrorResponseBody);
       return;

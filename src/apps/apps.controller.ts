@@ -1,3 +1,4 @@
+import { InstalledAppsResponseDto } from './dto/installed-apps.dto';
 /** REST controller for experimental Codex apps/connectors. */
 import { Controller, Get, Query } from '@nestjs/common';
 import { BusinessException } from '../common/business.exception';
@@ -77,6 +78,20 @@ export class AppsController {
       appIds: ids,
       threadId: threadId?.trim() || undefined,
       includeTools: this.parseOptionalBoolean(includeTools, 'includeTools'),
+    });
+  }
+
+  @Get('installed')
+  @ApiOperation({
+    summary: 'Read installed apps without loading the directory',
+  })
+  @ApiQuery({ name: 'forceRefresh', required: false, type: Boolean })
+  @ApiOkResponse({ type: InstalledAppsResponseDto })
+  installedApps(
+    @Query('forceRefresh') forceRefresh?: string,
+  ): Promise<v2.AppsInstalledResponse> {
+    return this.appsService.installedApps({
+      forceRefresh: this.parseOptionalBoolean(forceRefresh, 'forceRefresh'),
     });
   }
 

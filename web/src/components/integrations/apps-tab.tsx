@@ -1,7 +1,21 @@
+import { IntegrationNav } from './integration-nav';
+import {
+  installedApps,
+  installedAppsKey,
+  runtimeAppInfo,
+} from '@/lib/integration-inventory';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { appsListApps } from '@/generated/api/sdk.gen';
 /**
  * Apps tab: paginated list with enable/disable toggle and external install links.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ExternalLink, Loader2, Power, SlidersHorizontal } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +24,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import {
-  appsListAppsOptions,
   appsListAppsQueryKey,
   codexConfigReadConfigOptions,
   codexStatusGetStatusOptions,
@@ -26,22 +39,50 @@ import { AppDetailSheet } from './app-detail-sheet';
 export function AppsTab() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { t: ti } = useTranslation('integrations');
+  const [view, setView] = useState<'connected' | 'catalog'>('connected');
+  const refreshRuntime = useRef(false);
+  const [association, setAssociation] = useState<AppInfoDto | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<Array<string | null>>([]);
   const [selectedApp, setSelectedApp] = useState<AppInfoDto | null>(null);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
 
-  const { data, isLoading, isError, isFetching } = useQuery({
-    ...appsListAppsOptions({
-      query: { cursor: cursor ?? undefined },
-    }),
-    staleTime: 30_000,
+  const queryKey =
+    view === 'connected'
+      ? installedAppsKey
+      : appsListAppsQueryKey({ query: { cursor: cursor ?? undefined } });
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey,
+    // Revisiting a failed category must not start another directory request.
+    // An explicit refetch still works while automatic fetching is disabled.
+    enabled: !queryClient.getQueryState(queryKey)?.error,
+    queryFn: async ({ signal }) => {
+      if (view === 'connected') {
+        const forceRefresh = refreshRuntime.current;
+        refreshRuntime.current = false;
+        const response = await installedApps(signal, forceRefresh);
+        return { data: response.apps.map(runtimeAppInfo), nextCursor: null };
+      }
+      const { data } = await appsListApps({
+        query: { cursor: cursor ?? undefined },
+        signal,
+        throwOnError: true,
+        meta: { silent: true },
+      });
+      return data;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const apps = data?.data ?? [];
   const nextCursor = data?.nextCursor ?? null;
 
   const invalidateAppsConfig = () => {
+    void queryClient.invalidateQueries({ queryKey: installedAppsKey });
     void queryClient.invalidateQueries({ queryKey: appsListAppsQueryKey() });
     void queryClient.invalidateQueries({
       queryKey: codexConfigReadConfigOptions().queryKey,
@@ -67,23 +108,54 @@ export function AppsTab() {
     });
   };
 
-  if (isLoading) {
+  const navigation = (
+    <IntegrationNav
+      label={ti('applicationViews')}
+      value={view}
+      onChange={(next) => {
+        setView(next);
+        setCursor(null);
+        setCursorStack([]);
+      }}
+      secondary
+      items={[
+        { value: 'connected', label: ti('connected') },
+        { value: 'catalog', label: ti('catalog') },
+      ]}
+    />
+  );
+  if (isLoading)
     return (
-      <div className="space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-16 w-full rounded-lg" />
-        ))}
+      <div>
+        {navigation}
+        <Skeleton className="h-16 w-full" />
       </div>
     );
-  }
-
-  if (isError) {
+  if (isError && !data)
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-        {t('failedToLoadApps')}
+      <div>
+        {navigation}
+        <div role="alert" className="rounded-lg border p-4 text-sm">
+          <p>
+            {ti(
+              view === 'catalog'
+                ? 'directoryUnavailable'
+                : 'inventoryUnavailable',
+            )}
+          </p>
+          <Button
+            variant="outline"
+            className="mt-3"
+            onClick={() => {
+              refreshRuntime.current = view === 'connected';
+              void refetch();
+            }}
+          >
+            {ti('retry')}
+          </Button>
+        </div>
       </div>
     );
-  }
 
   // App defaults are configured independently of the list, so the entry point
   // and its sheet stay mounted even when no apps are available.
@@ -91,7 +163,24 @@ export function AppsTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      {navigation}
+      {isError && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {ti('cachedInventory')}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={isFetching}
+          onClick={() => {
+            refreshRuntime.current = view === 'connected';
+            void refetch();
+          }}
+        >
+          {ti(view === 'connected' ? 'refreshConnections' : 'refresh')}
+        </Button>
         <Button
           size="sm"
           variant="outline"
@@ -115,6 +204,7 @@ export function AppsTab() {
               app={app}
               onToggled={invalidateAppsConfig}
               onOpenDetails={() => setSelectedApp(app)}
+              onAssociate={() => setAssociation(app)}
             />
           ))}
         </div>
@@ -142,6 +232,36 @@ export function AppsTab() {
         </div>
       )}
 
+      <Dialog
+        open={association !== null}
+        onOpenChange={(open) => !open && setAssociation(null)}
+      >
+        <DialogContent className="bg-popover!">
+          <DialogHeader>
+            <DialogTitle>
+              {ti('associateApplication', { name: association?.name })}
+            </DialogTitle>
+            <DialogDescription>
+              {ti('associationDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          {association?.installUrl &&
+          /^https?:\/\//i.test(association.installUrl) ? (
+            <Button asChild>
+              <a
+                href={association.installUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {ti('continueProvider')}
+                <ExternalLink className="size-4" />
+              </a>
+            </Button>
+          ) : (
+            <p>{ti('associationUnavailable')}</p>
+          )}
+        </DialogContent>
+      </Dialog>
       <AppDetailSheet app={selectedApp} onClose={() => setSelectedApp(null)} />
       <AppDefaultsSheet
         open={defaultsOpen}
@@ -156,12 +276,15 @@ function AppRow({
   app,
   onToggled,
   onOpenDetails,
+  onAssociate,
 }: {
   app: AppInfoDto;
   onToggled: () => void;
   onOpenDetails: () => void;
+  onAssociate: () => void;
 }) {
   const { t } = useTranslation();
+  const { t: ti } = useTranslation('integrations');
   const [toggling, setToggling] = useState(false);
 
   const developer =
@@ -251,11 +374,8 @@ function AppRow({
       </Button>
 
       {app.installUrl && (
-        <Button asChild size="sm" variant="ghost" className="h-7 gap-1 text-xs">
-          <a href={app.installUrl} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-3 w-3" />
-            {t('install')}
-          </a>
+        <Button size="sm" variant="ghost" onClick={onAssociate}>
+          {ti('associate')}
         </Button>
       )}
 

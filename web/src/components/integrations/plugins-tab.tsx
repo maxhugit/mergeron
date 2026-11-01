@@ -1,8 +1,13 @@
+import { IntegrationNav } from './integration-nav';
+import {
+  installedPlugins,
+  installedPluginsKey,
+} from '@/lib/integration-inventory';
 /**
  * Plugins tab: marketplace browser with search, featured strip, install/uninstall.
  */
 import { useMemo, useState } from 'react';
-import { AlertCircle, Loader2, RefreshCw, Search, Star, X } from 'lucide-react';
+import { AlertCircle, Loader2, RefreshCw, Search, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -11,7 +16,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   appsListAppsQueryKey,
   mcpServersListServersQueryKey,
-  pluginsListPluginsOptions,
   pluginsListPluginsQueryKey,
   pluginsReadPluginQueryKey,
   pluginsInstallPluginMutation,
@@ -33,15 +37,34 @@ import { PluginDetailSheet, type PluginKey } from './plugin-detail-sheet';
 export function PluginsTab() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { t: ti } = useTranslation('integrations');
+  const [view, setView] = useState<'installed' | 'featured' | 'catalog'>(
+    'installed',
+  );
   const [search, setSearch] = useState('');
   const [selectedPlugin, setSelectedPlugin] = useState<PluginKey | null>(null);
   const [lastReconcile, setLastReconcile] =
     useState<PluginReconcileResponseDto | null>(null);
 
   // --- Data ---
-  const { data, isLoading, isError } = useQuery({
-    ...pluginsListPluginsOptions(),
-    staleTime: 60_000,
+  const queryKey =
+    view === 'installed' ? installedPluginsKey : pluginsListPluginsQueryKey();
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey,
+    enabled: !queryClient.getQueryState(queryKey)?.error,
+    queryFn: async ({ signal }) => {
+      if (view === 'installed') return installedPlugins(signal);
+      const { data } = await pluginsListPlugins({
+        signal,
+        meta: { silent: true },
+        throwOnError: true,
+      });
+      return data;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const marketplaces = useMemo(() => data?.marketplaces ?? [], [data]);
@@ -64,28 +87,22 @@ export function PluginsTab() {
     return result;
   }, [marketplaces]);
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return null;
-    const q = search.toLowerCase();
-    return allPlugins.filter(
-      ({ plugin }) =>
-        plugin.name.toLowerCase().includes(q) ||
-        plugin.interface?.displayName?.toLowerCase().includes(q) ||
-        plugin.interface?.shortDescription?.toLowerCase().includes(q),
-    );
-  }, [search, allPlugins]);
-
   const featured = useMemo(
     () => allPlugins.filter(({ plugin }) => featuredIds.has(plugin.id)),
     [allPlugins, featuredIds],
   );
   const installed = useMemo(
-    () => allPlugins.filter(({ plugin }) => plugin.installed),
+    () =>
+      allPlugins.filter(
+        ({ plugin }) =>
+          plugin.installed || plugin.installPolicy === 'INSTALLED_BY_DEFAULT',
+      ),
     [allPlugins],
   );
 
   // --- Mutations ---
   const invalidateAll = () => {
+    void queryClient.invalidateQueries({ queryKey: installedPluginsKey });
     void queryClient.invalidateQueries({
       queryKey: pluginsListPluginsQueryKey(),
     });
@@ -127,26 +144,10 @@ export function PluginsTab() {
     onError: (err) => showSnackbar(getApiErrorMessage(err), 'error'),
   });
 
-  const refreshMutation = useMutation({
-    mutationFn: async () => {
-      const { data } = await pluginsListPlugins({
-        query: { forceRefetch: true },
-        throwOnError: true,
-      });
-      return data;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: pluginsListPluginsQueryKey(),
-      });
-      showSnackbar(t('marketplaceRefreshed'), 'success');
-    },
-    onError: (err) => showSnackbar(getApiErrorMessage(err), 'error'),
-  });
-
   const reconcileMutation = useMutation({
     ...pluginsReconcilePluginMutation(),
     onSuccess: (res) => {
+      void queryClient.invalidateQueries({ queryKey: installedPluginsKey });
       invalidateAfterReconcile(queryClient, res, allPlugins);
       setLastReconcile(res);
       const failures =
@@ -187,25 +188,58 @@ export function PluginsTab() {
       uninstallMutation.mutate({ body: { pluginId: plugin.id } }),
   });
 
-  // --- Loading / Error ---
-  if (isLoading) {
+  const navigation = (
+    <IntegrationNav
+      label={ti('pluginViews')}
+      value={view}
+      onChange={(next) => {
+        setView(next);
+        setSearch('');
+      }}
+      secondary
+      items={[
+        { value: 'installed', label: ti('installedIntegrated') },
+        { value: 'featured', label: ti('featured') },
+        { value: 'catalog', label: ti('catalog') },
+      ]}
+    />
+  );
+  if (isLoading)
     return (
-      <div className="space-y-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full rounded-lg" />
-        ))}
+      <div>
+        {navigation}
+        <Skeleton className="h-20 w-full" />
       </div>
     );
-  }
-  if (isError) {
-    return <ErrorBanner message={t('failedToLoadPlugins')} />;
-  }
-
+  if (isError && !data)
+    return (
+      <div>
+        {navigation}
+        <ErrorBanner message={t('failedToLoadPlugins')} />
+        <Button variant="ghost" onClick={() => void refetch()}>
+          {t('retry')}
+        </Button>
+      </div>
+    );
+  const visiblePlugins =
+    view === 'installed'
+      ? installed
+      : view === 'featured'
+        ? featured
+        : allPlugins.filter(({ plugin }) => !plugin.installed);
+  const displayed = search.trim()
+    ? visiblePlugins.filter(({ plugin }) =>
+        (plugin.interface?.displayName ?? plugin.name)
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      )
+    : visiblePlugins;
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {navigation}
       {/* Search + Refresh */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-0">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
@@ -228,10 +262,10 @@ export function PluginsTab() {
           variant="outline"
           size="sm"
           className="gap-1.5"
-          disabled={refreshMutation.isPending}
-          onClick={() => refreshMutation.mutate()}
+          disabled={isFetching}
+          onClick={() => void refetch()}
         >
-          {refreshMutation.isPending ? (
+          {isFetching ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <RefreshCw className="h-3.5 w-3.5" />
@@ -254,6 +288,11 @@ export function PluginsTab() {
         </Button>
       </div>
 
+      {isError && data && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {ti('cachedInventory')}
+        </p>
+      )}
       {/* Error banners */}
       {remoteSyncError && (
         <ErrorBanner
@@ -268,89 +307,19 @@ export function PluginsTab() {
       ))}
       {lastReconcile && <ReconcileWarnings result={lastReconcile} />}
 
-      {/* Search results */}
-      {filtered !== null ? (
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground">
-            {t('countResultS', { count: filtered.length })}
-          </h3>
-          {filtered.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              {t('noMatchingPlugins')}
-            </p>
-          ) : (
-            filtered.map(({ plugin, marketplace }) => (
-              <PluginCard
-                key={`${marketplace.path}::${plugin.name}`}
-                {...makeCardProps(plugin, marketplace)}
-              />
-            ))
-          )}
-        </div>
-      ) : (
-        <>
-          {/* Featured */}
-          {featured.length > 0 && (
-            <section>
-              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Star className="h-3 w-3" /> {t('featured')}
-              </h3>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {featured.map(({ plugin, marketplace }) => (
-                  <PluginCard
-                    key={`${marketplace.path}::${plugin.name}`}
-                    {...makeCardProps(plugin, marketplace)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Installed */}
-          {installed.length > 0 && (
-            <section>
-              <h3 className="mb-2 text-xs font-medium text-muted-foreground">
-                {t('installed')} ({installed.length})
-              </h3>
-              <div className="space-y-2">
-                {installed.map(({ plugin, marketplace }) => (
-                  <PluginCard
-                    key={`${marketplace.path}::${plugin.name}`}
-                    {...makeCardProps(plugin, marketplace)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Marketplace groups (uninstalled only) */}
-          {marketplaces.map((mp) => {
-            const uninstalled = mp.plugins.filter((p) => !p.installed);
-            if (uninstalled.length === 0) return null;
-            return (
-              <section key={mp.path}>
-                <h3 className="mb-2 text-xs font-medium text-muted-foreground">
-                  {mp.interface?.displayName ?? mp.name}
-                </h3>
-                <div className="space-y-2">
-                  {uninstalled.map((plugin) => (
-                    <PluginCard
-                      key={`${mp.path}::${plugin.name}`}
-                      {...makeCardProps(plugin, mp)}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-
-          {allPlugins.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {t('noPluginsAvailable')}
-            </p>
-          )}
-        </>
-      )}
+      <div className="space-y-2">
+        {displayed.map(({ plugin, marketplace }) => (
+          <PluginCard
+            key={`${marketplace.path}::${plugin.id}`}
+            {...makeCardProps(plugin, marketplace)}
+          />
+        ))}
+        {displayed.length === 0 && (
+          <p className="py-6 text-sm text-muted-foreground">
+            {t('noPluginsAvailable')}
+          </p>
+        )}
+      </div>
 
       <PluginDetailSheet
         pluginKey={selectedPlugin}
@@ -432,6 +401,7 @@ function invalidateAfterReconcile(
   ]);
   const pluginIds = new Set([...changedIds, ...failedIds]);
   if (pluginIds.size > 0) {
+    void queryClient.invalidateQueries({ queryKey: installedPluginsKey });
     void queryClient.invalidateQueries({
       queryKey: pluginsListPluginsQueryKey(),
     });

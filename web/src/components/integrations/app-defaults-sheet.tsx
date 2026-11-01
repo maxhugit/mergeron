@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   appsListAppsQueryKey,
   codexConfigReadConfigOptions,
@@ -116,14 +116,14 @@ export function AppDefaultsSheet({ open, onClose }: AppDefaultsSheetProps) {
   };
 
   return (
-    <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>{t('appDefaults')}</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="bg-popover! max-h-[85dvh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{t('appDefaults')}</DialogTitle>
+          <DialogDescription>
             {t('defaultsInheritedByConnectedAppsWithoutLocalOverrides')}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         {configQuery.isLoading ? (
           <div className="space-y-3 px-4 pt-2">
@@ -136,7 +136,7 @@ export function AppDefaultsSheet({ open, onClose }: AppDefaultsSheetProps) {
             <WarningBanner message={t('failedToLoadCodexConfigb48ffe49')} />
           </div>
         ) : (
-          <ScrollArea className="h-[calc(var(--app-vh,100dvh)_-_8rem)] px-4 pr-2">
+          <ScrollArea className="h-[55dvh] px-4 pr-2">
             <PolicySection title={t('defaultAppSettings')}>
               <ConfigBooleanOverrideControl
                 label={t('appsEnabled')}
@@ -212,7 +212,7 @@ export function AppDefaultsSheet({ open, onClose }: AppDefaultsSheetProps) {
             </PolicySection>
           </ScrollArea>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

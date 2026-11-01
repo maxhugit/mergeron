@@ -8,12 +8,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   appsListAppsQueryKey,
   appsReadAppsOptions,
@@ -124,16 +124,16 @@ export function AppDetailSheet({ app, onClose }: AppDetailSheetProps) {
   };
 
   return (
-    <Sheet open={app !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>
+    <Dialog open={app !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="bg-popover! max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
             {metadata?.name ?? app?.name ?? t('appDetail')}
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             {metadata?.description ?? app?.description ?? app?.id ?? ''}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         {!app ? null : detailQuery.isLoading || configQuery.isLoading ? (
           <div className="space-y-3 px-4 pt-2">
@@ -142,7 +142,7 @@ export function AppDetailSheet({ app, onClose }: AppDetailSheetProps) {
             <Skeleton className="h-28 w-full" />
           </div>
         ) : (
-          <ScrollArea className="h-[calc(var(--app-vh,100dvh)_-_8rem)] px-4 pr-2">
+          <ScrollArea className="h-[55dvh] px-4 pr-2">
             <div className="space-y-5 pb-6 pt-2">
               <AppIdentity app={app} metadata={metadata} />
 
@@ -192,8 +192,8 @@ export function AppDetailSheet({ app, onClose }: AppDetailSheetProps) {
             </div>
           </ScrollArea>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -2142,7 +2142,8 @@
           {
             "title": "Préparer les intégrations",
             "steps": [
-              "Consultez les applications, plugins et serveurs MCP configurés pour l’installation.",
+              "Ouvrez Paramètres → Codex → Intégrations pour consulter les plugins, applications et serveurs MCP de cette installation.",
+              "Les plugins installés et intégrés et les applications connectées s’affichent en premier. Les catalogues se chargent à la demande ; une erreur du catalogue ne remplace pas l’inventaire connecté.",
               "Dans la gestion des agents du projet, sélectionnez les intégrations utiles et enregistrez la sélection.",
               "Réalisez la connexion ou l’authentification requise par le service via son parcours dédié.",
               "Vérifiez les capacités réellement disponibles pour l’agent dans le projet avant de lui confier une action externe."
