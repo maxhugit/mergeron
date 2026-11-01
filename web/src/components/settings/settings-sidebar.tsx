@@ -151,6 +151,7 @@ export function SettingsSidebar() {
           </h2>
           {SETTINGS_SECTIONS.filter(
             (entry) =>
+              entry !== 'integrations' &&
               entry !== 'account' &&
               entry !== 'codexCli' &&
               entry !== 'simpleChat',
@@ -163,7 +164,9 @@ export function SettingsSidebar() {
                   pathname === '/settings' &&
                   (section === entry ||
                     (entry === 'codex' &&
-                      (section === 'codexCli' || section === 'simpleChat')))
+                      (section === 'codexCli' ||
+                        section === 'simpleChat' ||
+                        section === 'integrations')))
                     ? 'page'
                     : undefined
                 }
@@ -171,7 +174,9 @@ export function SettingsSidebar() {
                   pathname === '/settings' &&
                     (section === entry ||
                       (entry === 'codex' &&
-                        (section === 'codexCli' || section === 'simpleChat'))),
+                        (section === 'codexCli' ||
+                          section === 'simpleChat' ||
+                          section === 'integrations'))),
                 )}
                 onClick={() => {
                   close(false);

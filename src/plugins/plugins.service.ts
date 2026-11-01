@@ -14,6 +14,15 @@ export class PluginsService {
     return this.codex.request<v2.PluginListResponse>('plugin/list', params);
   }
 
+  /** Lists local installed bundles without querying a remote marketplace. */
+  async installedPlugins(): Promise<v2.PluginListResponse> {
+    const result = await this.codex.request<v2.PluginInstalledResponse>(
+      'plugin/installed',
+      {},
+    );
+    return { ...result, featuredPluginIds: [] };
+  }
+
   /** Reads detailed metadata for one plugin inside one marketplace. */
   readPlugin(params: v2.PluginReadParams): Promise<v2.PluginReadResponse> {
     return this.codex.request<v2.PluginReadResponse>('plugin/read', params);

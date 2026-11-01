@@ -252,6 +252,8 @@ it.each([
   '/codex/cli/rollback',
   '/account',
   '/mcp-servers',
+  '/mcp-servers/configuration',
+  '/mcp-servers/check',
   '/logs/export',
   '/logs/storage',
   '/logs/retention',

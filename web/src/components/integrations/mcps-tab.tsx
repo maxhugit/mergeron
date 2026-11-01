@@ -1,3 +1,4 @@
+import { McpConfigDialog } from './mcp-config-dialog';
 import { translationKey } from '@/locales/translation-key';
 /**
  * MCPs tab: full MCP server list with status, auth, reload, and OAuth login.
@@ -33,18 +34,27 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 export function McpsTab() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { t: ti } = useTranslation('integrations');
+  const [configuration, setConfiguration] = useState<string | null | undefined>(
+    undefined,
+  );
   const runtimeStatuses = useMcpStore((s) => s.statuses);
 
   const serversQuery = useQuery({
     queryKey: mcpServersListServersQueryKey(),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data } = await mcpServersListServers({
+        signal,
+        meta: { silent: true },
         query: { detail: 'toolsAndAuthOnly' },
         throwOnError: true,
       });
       return data;
     },
     staleTime: 30_000,
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const reloadMutation = useMutation({
@@ -108,6 +118,18 @@ export function McpsTab() {
         </Button>
       </div>
 
+      <div className="flex justify-end">
+        <Button onClick={() => setConfiguration(null)}>
+          {ti('addServer')}
+        </Button>
+      </div>
+      {configuration !== undefined && (
+        <McpConfigDialog
+          key={configuration ?? 'new'}
+          name={configuration}
+          onClose={() => setConfiguration(undefined)}
+        />
+      )}
       {/* Server list */}
       {rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
@@ -116,7 +138,19 @@ export function McpsTab() {
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
-            <McpServerRow key={row.name} row={row} />
+            <div key={row.name}>
+              <McpServerRow row={row} />
+              {!isPlatformMcp(row.name) && (
+                <Button
+                  className="mt-1"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setConfiguration(row.name)}
+                >
+                  {ti('configureServer')}
+                </Button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -127,6 +161,9 @@ export function McpsTab() {
 // ---------------------------------------------------------------------------
 // Row
 // ---------------------------------------------------------------------------
+
+const isPlatformMcp = (name: string) =>
+  /^(?:mergeron|codex|openai)(?:_|-|$)/.test(name);
 
 interface McpRow {
   name: string;

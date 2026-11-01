@@ -1,8 +1,10 @@
 import {
-  appsListAppsQueryKey,
-  mcpServersListServersQueryKey,
-} from '@/generated/api/@tanstack/react-query.gen';
-import { appsListApps, mcpServersListServers } from '@/generated/api';
+  installedApps,
+  installedAppsKey,
+  runtimeAppInfo,
+} from './integration-inventory';
+import { mcpServersListServersQueryKey } from '@/generated/api/@tanstack/react-query.gen';
+import { mcpServersListServers } from '@/generated/api';
 import type { AppInfoDto } from '@/generated/api/types.gen';
 
 const INTEGRATIONS_STALE_TIME = 5 * 60_000;
@@ -12,8 +14,10 @@ const INTEGRATIONS_GC_TIME = 30 * 60_000;
 export function projectMcpServersQueryOptions() {
   return {
     queryKey: mcpServersListServersQueryKey(),
-    queryFn: async () => {
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const { data } = await mcpServersListServers({
+        signal,
+        meta: { silent: true },
         query: { detail: 'toolsAndAuthOnly' },
         throwOnError: true,
       });
@@ -27,14 +31,12 @@ export function projectMcpServersQueryOptions() {
 
 export function projectAppsQueryOptions() {
   return {
-    queryKey: appsListAppsQueryKey({ query: { limit: 100 } }),
-    queryFn: async () => {
-      const { data } = await appsListApps({
-        query: { limit: 100 },
-        throwOnError: true,
-      });
-      return (data?.data ?? []) as AppInfoDto[];
+    queryKey: [...installedAppsKey, 'project'],
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      const result = await installedApps(signal);
+      return result.apps.map(runtimeAppInfo);
     },
+    retry: false,
     staleTime: INTEGRATIONS_STALE_TIME,
     gcTime: INTEGRATIONS_GC_TIME,
     refetchOnWindowFocus: false,

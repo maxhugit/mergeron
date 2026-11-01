@@ -43,7 +43,11 @@ it('puts Account first, disables other tabs without a connection and responds to
   expect(tabs[1]).toHaveTextContent('Codex CLI');
   expect(tabs[1]).toBeEnabled();
   for (const tab of tabs.slice(2)) {
-    if (['Chat and Audio', 'Instructions'].includes(tab.textContent ?? ''))
+    if (
+      ['Chat and Audio', 'Instructions', 'Integrations'].includes(
+        tab.textContent ?? '',
+      )
+    )
       expect(tab).toBeEnabled();
     else expect(tab).toBeDisabled();
   }
@@ -70,7 +74,11 @@ it('puts Account first, disables other tabs without a connection and responds to
     'true',
   );
   for (const tab of screen.getAllByRole('tab').slice(2)) {
-    if (['Chat and Audio', 'Instructions'].includes(tab.textContent ?? ''))
+    if (
+      ['Chat and Audio', 'Instructions', 'Integrations'].includes(
+        tab.textContent ?? '',
+      )
+    )
       expect(tab).toBeEnabled();
     else expect(tab).toBeDisabled();
   }

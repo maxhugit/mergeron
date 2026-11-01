@@ -2113,7 +2113,8 @@
           {
             "title": "Prepare integrations",
             "steps": [
-              "Review applications, plugins and MCP servers configured for the installation.",
+              "Open Settings → Codex → Integrations to view plugins, applications and MCP servers for this installation.",
+              "Installed and built-in plugins and connected apps appear first. Catalogs load on demand; a catalog error does not replace the connected inventory.",
               "Select useful integrations in project agent management and save the selection.",
               "Complete the service’s separate connection or authentication flow.",
               "Check actual agent capabilities in the project before assigning an external action."

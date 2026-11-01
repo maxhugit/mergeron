@@ -82,3 +82,10 @@ it('loads the Manager on the Infrastructure route without duplicating update con
     'managerInfrastructureDescription',
   );
 });
+
+it('keeps the former integrations URL inside the Codex integrations tab', async () => {
+  route.section = 'integrations';
+  render(<SettingsPage />);
+  expect(await screen.findByText('Codex integrations tabs')).toBeVisible();
+  expect(settingsPageLabel('integrations')).toBe('Codex');
+});

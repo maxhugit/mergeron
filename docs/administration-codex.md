@@ -1,5 +1,55 @@
 # Administration Codex : listes, enregistrement et version du CLI
 
+## Intégrations
+
+**Paramètres → Codex → Intégrations** regroupe les plugins, applications et
+serveurs MCP. L’ancienne adresse `/settings?section=integrations` et les liens
+`/integrations?tab=…` restent utilisables. Les définitions des trois catégories
+sont accessibles au survol et au clavier ; les actions de gestion ouvrent des
+fenêtres modales.
+
+- **Plugins** : « Installés et intégrés » consulte `plugin/installed` ; les vues
+  « En vedette » et « Catalogue » demandent `plugin/list` uniquement à l’ouverture.
+- **Applications** : « Connectées » consulte `app/installed`, l’instantané du
+  runtime. Il peut être vide avant le premier chargement des outils ; le bouton
+  « Actualiser les connexions » demande explicitement `forceRefresh`. Le
+  catalogue utilise séparément `app/list`. Une absence dans l’instantané ne prouve
+  pas que le compte n’est pas associé chez le fournisseur.
+- **Serveurs MCP** : l’administrateur peut déclarer une URL HTTP ou une commande
+  locale avec ses arguments séparés. La configuration appartient au CLI exécuté
+  dans Mergeron, pas au CLI du poste. Les noms réservés de la plateforme sont
+  protégés et un serveur existant n’est pas remplacé par un ajout. Les éditions
+  portent sur les seules propriétés de transport et vérifient la version du
+  fichier utilisateur lorsqu’elle est disponible.
+
+OAuth reste un parcours explicite après l’enregistrement. Pour un jeton, le
+formulaire accepte le **nom d’une variable d’environnement existante**, jamais
+sa valeur. Un exécutable local doit être disponible dans le conteneur et dispose
+de l’environnement du CLI ; les permissions des agents et le filtrage réseau ne
+sont pas élargis par ce formulaire. La sélection des capacités par projet reste
+nécessaire.
+
+« Vérifier le serveur enregistré » recharge les serveurs MCP configurés puis
+relit leur inventaire et leur état d’authentification. Le résultat indique les
+outils déclarés, sans prétendre avoir testé chacun d’eux. Le bouton prévient de
+la portée globale de ce rechargement.
+
+### Catalogue lent ou refusé
+
+Le chargement des connecteurs par `app/list` peut contacter le répertoire distant
+`connectors/directory/list`. Un refus Cloudflare 403 de ce répertoire ne doit
+plus bloquer l’inventaire des connexions. Ce découplage ne garantit pas que le
+catalogue distant redevienne accessible : son échec reste affiché dans la vue
+Catalogue. Le backend retire les réponses HTML des erreurs JSON-RPC et borne
+les autres messages avant transmission à l’interface.
+
+Les derniers inventaires réussis restent en cache cinq minutes ; les requêtes de
+lecture ne produisent pas de notifications globales et ne se relancent pas au
+retour de focus. Quitter une vue annule sa requête HTTP. Le client JSON-RPC actuel
+n’expose pas d’annulation de l’opération déjà reçue par le CLI : elle peut finir
+côté serveur, sans mettre à jour la vue quittée. L’ouverture d’un projet ne
+précharge plus les catalogues.
+
 ## Chat et Audio
 
 Les réglages du chat simple sont regroupés dans **Codex → Chat et Audio**,

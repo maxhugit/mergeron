@@ -50,6 +50,15 @@ export class PluginsController {
     });
   }
 
+  @Get('installed')
+  @ApiOperation({
+    summary: 'List installed plugins without loading the marketplace',
+  })
+  @ApiOkResponse({ type: PluginListResponseDto })
+  installedPlugins(): Promise<v2.PluginListResponse> {
+    return this.pluginsService.installedPlugins();
+  }
+
   /** Reads detailed plugin metadata from one marketplace. */
   @Get('detail')
   @ApiOperation({ summary: 'Read Codex plugin detail' })

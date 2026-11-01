@@ -11,11 +11,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { pluginsReadPluginOptions } from '@/generated/api/@tanstack/react-query.gen';
 
 export interface PluginKey {
@@ -53,18 +54,21 @@ export function PluginDetailSheet({
   const detail = data?.plugin ?? null;
 
   return (
-    <Sheet
+    <Dialog
       open={pluginKey !== null}
       onOpenChange={(open) => !open && onClose()}
     >
-      <SheetContent className="w-full sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>
+      <DialogContent className="bg-popover! max-h-[85dvh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>
             {detail?.summary.interface?.displayName ??
               detail?.summary.name ??
               t('pluginDetail')}
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {t('pluginDetail')}
+          </DialogDescription>
+        </DialogHeader>
 
         {isLoading ? (
           <div className="space-y-3 pt-4">
@@ -73,7 +77,7 @@ export function PluginDetailSheet({
             <Skeleton className="h-20 w-full" />
           </div>
         ) : detail ? (
-          <ScrollArea className="h-[calc(var(--app-vh,100dvh)_-_8rem)] pr-2">
+          <ScrollArea className="h-[55dvh] pr-2">
             <div className="space-y-4 pb-6 pt-2">
               {/* Description */}
               {detail.description && (
@@ -232,8 +236,8 @@ export function PluginDetailSheet({
             {t('pluginNotFound')}
           </p>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 
