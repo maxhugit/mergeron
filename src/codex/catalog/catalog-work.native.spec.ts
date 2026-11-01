@@ -15,6 +15,15 @@ describe('native retained work', () => {
     await environment.close();
   });
 
+  it('disables unrelated plugin discovery only inside the isolated test configuration', async () => {
+    const result = await environment.client.request<v2.ConfigReadResponse>(
+      'config/read',
+      { includeLayers: false },
+    );
+    expect(result.config.features).toMatchObject({ plugins: false });
+    expect(result.config.model_provider).toBe('catalog_test');
+  });
+
   it('holds an inline review until its correlated terminal turn', async () => {
     const { client, thread } = environment;
     const result = await client.request<v2.ReviewStartResponse>(
