@@ -69,13 +69,24 @@ export function ServerVersionCard({
     </Button>
   );
   return (
-    <section className="space-y-4">
+    <section
+      className={
+        view === 'current' || view === 'backups'
+          ? 'flex min-h-0 flex-1 flex-col gap-4'
+          : 'space-y-4'
+      }
+    >
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {t(translationKey(error))}
         </p>
       )}
-      <div hidden={view !== 'all' && view !== 'current'}>
+      <div
+        hidden={view !== 'all' && view !== 'current'}
+        className={
+          view === 'current' ? 'flex min-h-0 flex-1 flex-col' : undefined
+        }
+      >
         {manager.data?.available && release.data ? (
           <ManagerUpdateControls
             status={manager.data}
@@ -106,7 +117,12 @@ export function ServerVersionCard({
           <ManagerUpdateHistory status={manager.data} />
         )}
       </div>
-      <div hidden={view !== 'backups'}>
+      <div
+        hidden={view !== 'backups'}
+        className={
+          view === 'backups' ? 'flex min-h-0 flex-1 flex-col' : undefined
+        }
+      >
         {view === 'backups' && manager.data ? (
           <ManagerBackups status={manager.data} />
         ) : (

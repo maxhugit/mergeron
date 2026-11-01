@@ -243,5 +243,9 @@
   "historyObservedOnly": "Version observée ; journal d’exécution sur l’hôte indisponible.",
   "restoreBackupReview": "Vérifier la restauration",
   "createBackupReview": "Vérifier la sauvegarde",
-  "backupSavedVersion": "Version : {{version}}"
+  "backupSavedVersion": "Version : {{version}}",
+  "managerFullBackupSummary": "Toutes les données persistantes de cette installation.",
+  "managerMinimalBackupSummary": "Base et configuration uniquement ; fichiers des projets et livrables exclus.",
+  "managerNoBackupSummary": "Aucune sauvegarde : les données ne pourront pas être rétablies après un échec.",
+  "managerBackupPreferenceSummary": "Choix propre à cette installation. Chaque opération reste à confirmer."
 }

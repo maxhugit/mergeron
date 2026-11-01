@@ -40,6 +40,14 @@ vi.mock('./manager-status-api', async (original) => ({
     totalSizeBytes: null,
     sizesCalculating: true,
     backups: [
+      ...Array.from({ length: 24 }, (_, index) => ({
+        id: `backup-${index}`,
+        createdAt: '2026-10-26T22:41:08Z',
+        path: '/fixture/backup.tar.gz',
+        sizeBytes: 1000,
+        restorable: true,
+        canDelete: true,
+      })),
       {
         id: 'd2a55d6f-2bf0-484b-a293-c4526aa4acd8',
         createdAt: '2026-10-26T22:41:08Z',
@@ -89,13 +97,36 @@ test.each([1000, 1295, 390])(
         expect(scroller.scrollWidth).toBeLessThanOrEqual(
           scroller.clientWidth + 1,
         );
-        const action = screen.getByRole('button', {
+        const action = screen.getAllByRole('button', {
           name: 'Supprimer la sauvegarde',
-        });
+        })[0];
         expect(action.getBoundingClientRect().right).toBeLessThanOrEqual(
           scroller.getBoundingClientRect().right,
         );
       }
+      const refresh = screen.getByRole('button', { name: 'Actualiser' });
+      const refreshTop = refresh.getBoundingClientRect().top;
+      const headerTop = table
+        .querySelector('thead')!
+        .getBoundingClientRect().top;
+      expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
+      scroller.scrollTop = 300;
+      expect(scroller.scrollTop).toBeGreaterThan(0);
+      expect(refresh.getBoundingClientRect().top).toBe(refreshTop);
+      expect(table.querySelector('thead')!.getBoundingClientRect().top).toBe(
+        headerTop,
+      );
+      expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(900);
+      for (
+        let parent = scroller.parentElement;
+        parent;
+        parent = parent.parentElement
+      ) {
+        expect(parent.scrollHeight).toBeLessThanOrEqual(
+          parent.clientHeight + 1,
+        );
+      }
+      scroller.scrollTop = 0;
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       await page.screenshot({
         path: `../../../.vitest-screenshots/backup-table-${width}.png`,

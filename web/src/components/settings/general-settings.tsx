@@ -88,10 +88,20 @@ export function GeneralSettings() {
           ))}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        className={cn(
+          'min-h-0 flex-1',
+          tab === 'current' || tab === 'backups'
+            ? 'flex flex-col overflow-hidden'
+            : 'overflow-y-auto',
+        )}
+      >
         <div
           className={cn(
-            'mx-auto w-full min-w-0 space-y-4 px-4 py-4 sm:px-6',
+            'mx-auto w-full min-w-0 px-4 py-4 sm:px-6',
+            tab === 'current' || tab === 'backups'
+              ? 'flex min-h-0 flex-1 flex-col'
+              : 'space-y-4',
             tab === 'backups'
               ? undefined
               : tab === 'socket'
@@ -102,6 +112,11 @@ export function GeneralSettings() {
           {/* Keep update controls mounted so changing tabs cannot reset a plan or its progress dialog. */}
           <div
             hidden={tab === 'socket'}
+            className={
+              tab === 'current' || tab === 'backups'
+                ? 'flex min-h-0 flex-1 flex-col'
+                : undefined
+            }
             role={tab === 'socket' ? undefined : 'tabpanel'}
             id={tab === 'socket' ? undefined : `server-panel-${tab}`}
             aria-labelledby={tab === 'socket' ? undefined : `server-tab-${tab}`}

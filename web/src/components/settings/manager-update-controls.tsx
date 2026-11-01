@@ -168,7 +168,13 @@ export function ManagerUpdateControls({
   if (!status.available && !progressOpen && !progressOperation)
     return <>{renderActions(trailingActions)}</>;
   return (
-    <div className="order-first space-y-3">
+    <div
+      className={
+        renderUpdates
+          ? 'order-first flex min-h-0 flex-1 flex-col gap-3'
+          : 'order-first space-y-3'
+      }
+    >
       {renderUpdates?.({
         disabled: Boolean(
           busy ||

@@ -166,23 +166,38 @@ export function ManagerBackups({
     return `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(value / 1024 ** unit)} ${units[unit]}`;
   };
   return (
-    <section className="space-y-3" aria-label={t('managerBackupsTitle')}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section
+      className="flex min-h-0 flex-1 flex-col gap-3"
+      aria-label={t('managerBackupsTitle')}
+    >
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <h3 className="font-medium">{t('serverBackupTab')}</h3>
-        <Button
-          variant="outline"
-          disabled={
-            busy ||
-            !status.capabilities?.backupRestore ||
-            status.update?.operation?.status === 'recoveryRequired'
-          }
-          onClick={() => setCreating(true)}
-        >
-          {t('createBackupTitle')}
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {supported && (
+            <Button
+              variant="outline"
+              disabled={busy || query.isFetching}
+              onClick={() => void query.refetch()}
+            >
+              {t('managerBackupsRefresh')}
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            disabled={
+              busy ||
+              !status.capabilities?.backupRestore ||
+              status.update?.operation?.status === 'recoveryRequired'
+            }
+            onClick={() => setCreating(true)}
+          >
+            {t('createBackupTitle')}
+          </Button>
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">{t('managerBackupsHelp')}</p>
-      <div className="grid items-start gap-3 md:grid-cols-2">
+      <div className="grid shrink-0 items-start gap-3 md:grid-cols-2">
         {status.capabilities?.backupSelection ? (
           showPreference ? (
             <UpdateBackupPreference status={status} busy={busy} />
@@ -235,7 +250,12 @@ export function ManagerBackups({
               {t('managerBackupsEmpty')}
             </p>
           )}
-          <div className="max-h-[65vh] overflow-auto">
+          <div
+            role="region"
+            aria-label={t('managerBackupsTitle')}
+            tabIndex={0}
+            className="min-h-0 flex-1 overflow-auto overscroll-contain"
+          >
             <table
               className="w-full min-w-[800px] table-fixed text-left text-sm"
               aria-label={t('managerBackupsTitle')}
@@ -373,17 +393,6 @@ export function ManagerBackups({
             </table>
           </div>
         </>
-      )}
-      {supported && (
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            disabled={busy || query.isFetching}
-            onClick={() => void query.refetch()}
-          >
-            {t('managerBackupsRefresh')}
-          </Button>
-        </div>
       )}
       <AlertDialog
         open={selected !== null}

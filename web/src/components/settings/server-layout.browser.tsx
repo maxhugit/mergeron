@@ -12,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test('keeps update actions below the table and reachable inside the scroller on desktop and mobile', async () => {
+test('keeps component headers and bottom actions fixed while the table scrolls', async () => {
   await i18nReady;
   await i18n.changeLanguage('en');
   const fixture = catalogFixture();
@@ -66,9 +66,26 @@ test('keeps update actions below the table and reachable inside the scroller on 
     expect(update.parentElement).toBe(footer);
     expect(update).toBeDisabled();
     expect(footer.getBoundingClientRect().top).toBeGreaterThanOrEqual(
-      table.getBoundingClientRect().bottom,
+      table.parentElement!.getBoundingClientRect().bottom,
     );
-    refresh.scrollIntoView({ block: 'center' });
+    const scroller = table.parentElement!;
+    const footerTop = footer.getBoundingClientRect().top;
+    const headerTop = table.querySelector('thead')!.getBoundingClientRect().top;
+    scroller.scrollTop = 150;
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+    expect(footer.getBoundingClientRect().top).toBe(footerTop);
+    expect(table.querySelector('thead')!.getBoundingClientRect().top).toBe(
+      headerTop,
+    );
+    expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(701);
+    for (
+      let parent = scroller.parentElement;
+      parent;
+      parent = parent.parentElement
+    ) {
+      expect(parent.scrollHeight).toBeLessThanOrEqual(parent.clientHeight + 1);
+    }
+    scroller.scrollTop = 0;
     await expect
       .poll(() => Math.ceil(refresh.getBoundingClientRect().bottom))
       .toBeLessThanOrEqual(700);

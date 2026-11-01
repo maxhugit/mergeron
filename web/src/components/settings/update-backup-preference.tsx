@@ -1,7 +1,5 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { translationKey } from '@/locales/translation-key';
-import { backupDescription } from './manager-backup-policy';
 import { useUpdateBackupMode } from './use-update-backup-mode';
 import type { ManagerStatus } from './manager-status-api';
 
@@ -24,7 +22,7 @@ export function UpdateBackupPreference({
   const backupMode = backupPreference.value;
   const blocked = !status.available;
   return (
-    <section className="rounded-lg border border-border p-4">
+    <section className="rounded-lg border border-border p-3">
       {' '}
       {backupSelection && (
         <div className="space-y-2">
@@ -61,10 +59,16 @@ export function UpdateBackupPreference({
                 : 'text-xs text-muted-foreground'
             }
           >
-            {t(translationKey(backupDescription(`${backupMode}-v1`)))}
+            {t(
+              backupMode === 'none'
+                ? 'managerNoBackupSummary'
+                : backupMode === 'minimal'
+                  ? 'managerMinimalBackupSummary'
+                  : 'managerFullBackupSummary',
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {t('managerBackupPreferenceHelp')}
+            {t('managerBackupPreferenceSummary')}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button

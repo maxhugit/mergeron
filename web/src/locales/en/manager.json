@@ -243,5 +243,9 @@
   "historyObservedOnly": "Version observed; execution log on the host unavailable.",
   "restoreBackupReview": "Review restore",
   "createBackupReview": "Review backup",
-  "backupSavedVersion": "Version: {{version}}"
+  "backupSavedVersion": "Version: {{version}}",
+  "managerFullBackupSummary": "All persistent data for this installation.",
+  "managerMinimalBackupSummary": "Database and configuration only; project files and deliverables excluded.",
+  "managerNoBackupSummary": "No backup: data cannot be restored after a failure.",
+  "managerBackupPreferenceSummary": "Saved for this installation. Each operation still requires confirmation."
 }

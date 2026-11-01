@@ -72,56 +72,41 @@ export function McpsTab() {
   const rows = buildRows(
     (serversQuery.data?.data ?? []) as unknown as McpServerStatus[],
     runtimeStatuses,
-  );
-
-  if (serversQuery.isLoading) {
-    return (
-      <div className="space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-16 w-full rounded-lg" />
-        ))}
-      </div>
-    );
-  }
-
-  if (serversQuery.isError) {
-    return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-        {t('failedToLoadMcpServers')}
-      </div>
-    );
-  }
+  ).filter((row) => row.name !== 'mergeron_internal');
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       {/* Header with reload */}
-      <div className="flex items-center justify-between">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          {t('readyTotalReady', {
-            ready: rows.filter((r) => r.status === 'ready').length,
-            total: rows.length,
-          })}
+          {serversQuery.isSuccess
+            ? ti('externalServersReady', {
+                ready: rows.filter((r) => r.status === 'ready').length,
+                total: rows.length,
+              })
+            : serversQuery.isLoading
+              ? ti('loading')
+              : t('failedToLoadMcpServers')}
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          disabled={reloadMutation.isPending}
-          onClick={() => reloadMutation.mutate()}
-        >
-          {reloadMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          {t('reloadAll')}
-        </Button>
-      </div>
-
-      <div className="flex justify-end">
-        <Button onClick={() => setConfiguration(null)}>
-          {ti('addServer')}
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={reloadMutation.isPending}
+            onClick={() => reloadMutation.mutate()}
+          >
+            {reloadMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {t('reloadAll')}
+          </Button>
+          <Button size="sm" onClick={() => setConfiguration(null)}>
+            {ti('addServer')}
+          </Button>
+        </div>
       </div>
       {configuration !== undefined && (
         <McpConfigDialog
@@ -130,30 +115,45 @@ export function McpsTab() {
           onClose={() => setConfiguration(undefined)}
         />
       )}
-      {/* Server list */}
-      {rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          {t('noMcpServersReported')}
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((row) => (
-            <div key={row.name}>
-              <McpServerRow row={row} />
-              {!isPlatformMcp(row.name) && (
-                <Button
-                  className="mt-1"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setConfiguration(row.name)}
-                >
-                  {ti('configureServer')}
-                </Button>
-              )}
-            </div>
-          ))}
+      <div
+        role="region"
+        aria-label={ti('list')}
+        tabIndex={0}
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1"
+      >
+        <div className="rounded-lg border border-border/50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium">{ti('internalServer')}</span>
+            <Badge variant="secondary">{ti('conversationScoped')}</Badge>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {ti('internalServerHelp')}
+          </p>
         </div>
-      )}
+        {serversQuery.isLoading && (
+          <Skeleton className="h-16 w-full rounded-lg" />
+        )}
+        {serversQuery.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {t('failedToLoadMcpServers')}
+          </p>
+        )}
+        {rows.map((row) => (
+          <div key={row.name}>
+            <McpServerRow row={row} />
+            {!isPlatformMcp(row.name) && (
+              <Button
+                className="mt-1"
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfiguration(row.name)}
+              >
+                {ti('configureServer')}
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

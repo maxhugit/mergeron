@@ -192,7 +192,7 @@ it.each(['production', 'development'] as const)(
     expect(screen.getAllByRole('option')).toHaveLength(3);
     await waitFor(() => expect(select).toBeEnabled());
     await user.selectOptions(select, 'minimal');
-    expect(screen.getByText(/Aucun fichier de projet/)).toBeVisible();
+    expect(screen.getByText(/Base et configuration uniquement/)).toBeVisible();
     await user.click(
       screen.getByRole('button', { name: 'Test ingress update' }),
     );

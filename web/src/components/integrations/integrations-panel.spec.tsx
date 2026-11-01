@@ -159,3 +159,21 @@ it('does not repeatedly fetch a refused directory when revisiting the category',
     ).toHaveLength(2),
   );
 });
+
+// The internal server is created per conversation, not by the global CLI inventory.
+it('shows the internal MCP separately even when the global inventory fails', async () => {
+  const original = get.getMockImplementation()!;
+  get.mockImplementation((options, ...rest) =>
+    options.url === '/api/mcp-servers'
+      ? Promise.reject(new Error('inventory unavailable'))
+      : original(options, ...rest),
+  );
+  mount();
+  await screen.findByText('Documents');
+  fireEvent.click(screen.getByRole('tab', { name: 'MCP servers' }));
+  expect(await screen.findByText('Mergeron (internal)')).toBeVisible();
+  expect(screen.getByText('Per conversation')).toBeVisible();
+  await screen.findByRole('alert');
+  expect(screen.getByRole('button', { name: 'Add server' })).toBeVisible();
+  expect(screen.queryByText(/external servers ready/)).toBeNull();
+});
