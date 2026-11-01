@@ -1,14 +1,16 @@
 # Vendored upstream documentation
 
+[Documentation index](../README.md) · [Repository overview](../../README.md#documentation)
+
 Files in this directory are **verbatim copies of upstream Codex documentation**,
 kept here so protocol questions can be answered from the exact revision this
 project is pinned to rather than from whatever `main` happens to say today.
 
 Do not edit them. Fix anything wrong by refreshing from upstream.
 
-| File | Upstream path | Tag |
-|---|---|---|
-| `codex-app-server-0.153.2.md` | `codex-rs/app-server/README.md` | `rust-v0.153.2` |
+| File                                                       | Upstream path                   | Tag             |
+| ---------------------------------------------------------- | ------------------------------- | --------------- |
+| [codex-app-server-0.153.2.md](codex-app-server-0.153.2.md) | `codex-rs/app-server/README.md` | `rust-v0.153.2` |
 
 The tag matches the `@openai/codex` version pinned in the root `package.json`.
 Refresh after bumping that dependency — a protocol migration is exactly when a
@@ -21,7 +23,7 @@ curl -fsSL \
   -o "docs/upstream/codex-app-server-${VERSION}.md"
 ```
 
-Note that the README documents the *intended* protocol. Several behaviours this
+Note that the README documents the _intended_ protocol. Several behaviours this
 project depends on were established by measurement instead, because they are
 either undocumented or contradict the text — the experimental `beforeTurnId`
 fork boundary, the on-disk `history_base` record, and the exact wording of

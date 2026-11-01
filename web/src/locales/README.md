@@ -1,5 +1,7 @@
 # Translation catalogs
 
+[Repository overview](../../../README.md#documentation) · [Documentation index](../../../docs/README.md)
+
 The application uses one directory per locale and i18next namespaces. Locale
 metadata lives in `manifest.json`; the account language selector is generated
 from this manifest rather than hard-coded in a component.

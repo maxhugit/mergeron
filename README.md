@@ -5,6 +5,17 @@ les conversations, les agents et les documents. Elle s’installe sur un hôte
 Docker Linux **uniquement par Mergeron Manager**. Aucun NAS, proxy HTTPS ou
 fournisseur SSO particulier n’est imposé.
 
+## Documentation
+
+**[Ouvrir le sommaire de toute la documentation](docs/README.md)** : guides
+d’utilisation, installation, administration, architecture et références techniques.
+
+- [Utiliser Mergeron et son guide intégré](docs/guide-utilisateur.md).
+- [Installer Mergeron](docs/installation.md).
+- [Administrer, mettre à jour et dépanner](docs/README.md#installer-et-exploiter-sur-docker).
+- [Développer et comprendre les mécanismes internes](docs/README.md#développement-et-sécurité).
+- [Comprendre les répertoires du code](#répertoires-du-dépôt).
+
 ## Installer
 
 Suivre [Installer Mergeron](docs/installation.md) : préparer l’hôte, configurer
@@ -14,7 +25,6 @@ déploiement manuel ou Compose n’est nécessaire.
 
 - [Variables du Manager](docs/variables-manager.md) : défauts, rôle et quand les modifier.
 - [Raccordement réseau et SSO facultatif](docs/installation-portable.md).
-- [Documentation complète](docs/README.md).
 
 ## Fonctionnalités
 

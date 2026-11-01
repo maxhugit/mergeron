@@ -75,6 +75,7 @@ jobs:
         run: |
           python3 scripts/check-no-chinese.py
           python3 scripts/check-markdown-links.py
+          python3 -m unittest discover -s scripts -p test_markdown_links.py
           pnpm check:release
           pnpm test:release
           node --test manager/test/*.test.mjs
