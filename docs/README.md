@@ -36,6 +36,8 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 ## Guides d’utilisation
 
+- [Navigation des projets et archives](navigation-projets-et-archives.md) : focus,
+  réordonnancement, menu des projets et traçabilité de l’archivage.
 - [Guide utilisateur intégré et maintenance](guide-utilisateur.md) : sommaire
   par fonctionnalités, recherche, articles français/anglais et vérifications.
 - [Export et import des projets en ZIP](export-import-projets.md) : transfert

@@ -24,6 +24,15 @@ const transport = vi.hoisted(() => ({
   overview: vi.fn(),
   navigate: vi.fn(),
   emit: vi.fn(),
+  enable: vi.fn(),
+}));
+vi.mock('@/hooks/use-project-navigation-preference', () => ({
+  useProjectNavigationPreference: () => ({
+    available: true,
+    pending: false,
+    toggle: vi.fn(),
+    enable: transport.enable,
+  }),
 }));
 vi.mock('@/socket', () => ({
   getSocket: () => ({
@@ -108,6 +117,7 @@ function row(id: string, members = [id]): ThreadOverviewRowDto {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  transport.enable.mockResolvedValue(true);
   useTimelineStore.setState(initialTimeline, true);
   useLayoutStore.setState(initialLayout, true);
   useLayoutStore
@@ -119,6 +129,81 @@ beforeEach(() => {
     subscribedThreadIds: new Set(['root', 'branch']),
   });
 });
+
+it.each([true, false])(
+  'enters project focus only after fast navigation is saved (%s), and archives navigate without replacing the sidebar',
+  async (enabled) => {
+    transport.enable.mockResolvedValue(enabled);
+    useLayoutStore.getState().setSidebarView({ type: 'overview' });
+    useLayoutStore.setState({ collapsedGroupKeys: ['/other'] });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    const project = (id: string, cwd: string, member: string) => ({
+      id,
+      name: id,
+      workspacePath: cwd,
+      createdAt: 1,
+      updatedAt: 1,
+      workspaces: [],
+      resources: [],
+      agentThreads: [{ threadId: member, workspacePath: cwd, archived: false }],
+    });
+    client.setQueryData(projectsQueryKey, {
+      projects: [
+        project('p', '/workspace', 'root'),
+        project('other', '/other', 'neighbour'),
+      ],
+    });
+    transport.overview.mockResolvedValue({
+      data: { data: [row('root'), row('neighbour')], nextCursor: null },
+    });
+    const view = renderHook(() => ThreadSidebar(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    try {
+      await waitFor(() =>
+        expect(
+          findElement(view.result.current, WorkspaceOverview)?.props
+            .workspaceGroups,
+        ).toHaveLength(2),
+      );
+      await act(async () => {
+        findElement(
+          view.result.current,
+          WorkspaceOverview,
+        )!.props.onOpenWorkspaceDetail('/workspace');
+      });
+      expect(transport.enable).toHaveBeenCalledWith('p');
+      await waitFor(() =>
+        expect(useLayoutStore.getState().focusedProjectId).toBe(
+          enabled ? 'p' : null,
+        ),
+      );
+      const props = findElement(view.result.current, WorkspaceOverview)!.props;
+      expect(props.workspaceGroups.map((group) => group.projectId)).toEqual(
+        enabled ? ['p'] : ['p', 'other'],
+      );
+      await act(async () => props.onOpenArchivedDetail('p'));
+      expect(transport.navigate).toHaveBeenCalledWith({
+        to: '/projects/$projectId/archives',
+        params: { projectId: 'p' },
+      });
+      expect(useLayoutStore.getState().sidebarView).toEqual({
+        type: 'overview',
+      });
+      expect(useLayoutStore.getState().focusedProjectId).toBe(
+        enabled ? 'p' : null,
+      );
+      expect(useLayoutStore.getState().collapsedGroupKeys).toEqual(['/other']);
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);
 
 it.each(['navigation', 'refetch', 'confirmation refetch'] as const)(
   'retains archive membership after %s removes the initiating row',
@@ -289,16 +374,19 @@ it('ignores stale active lifecycle cached for an unsubscribed branch member', as
   client.clear();
 });
 
-
 it.each(['overview', 'workspaceDetail'] as const)(
   'requests a stable creation order for %s',
   async (view) => {
-    useLayoutStore.getState().setSidebarView(
-      view === 'overview'
-        ? { type: 'overview' }
-        : { type: 'workspaceDetail', cwd: '/workspace' },
-    );
-    transport.overview.mockResolvedValue({ data: { data: [], nextCursor: null } });
+    useLayoutStore
+      .getState()
+      .setSidebarView(
+        view === 'overview'
+          ? { type: 'overview' }
+          : { type: 'workspaceDetail', cwd: '/workspace' },
+      );
+    transport.overview.mockResolvedValue({
+      data: { data: [], nextCursor: null },
+    });
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });

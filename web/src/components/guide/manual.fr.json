@@ -102,11 +102,18 @@
               "Pour arrêter, choisissez Désactiver la navigation rapide dans le même menu. Activer un autre projet remplace le précédent."
             ],
             "paragraphs": [
+              "L’œil isole un projet et active sa navigation rapide. Tous les projets restaure la liste sans désactiver ce choix. Les poignées permettent toujours de réordonner les entrées. Le + de Projets propose création, import et repli/dépli des groupes, sans arrêter les agents.",
               "Les agents conservés continuent de recevoir leurs mises à jour par la connexion temps réel. Leurs panneaux masqués sont mis en veille ; aucun agent n’est démarré et aucun projet entier n’est préchargé par cette option.",
               "La sixième vue remplace la moins récemment consultée. Ses petits brouillons et références de pièces jointes restent séparés par agent dans la mémoire de l’onglet, même si la vue complète doit ensuite être rechargée. Rien n’est envoyé automatiquement.",
               "Après une déconnexion ou un redémarrage du moteur, Mergeron vérifie et rattrape l’état des conversations. Le cache ne contourne ni la vérification de l’identité ni les contrôles d’accès."
             ],
             "warning": "Le projet choisi est mémorisé dans votre profil et reste actif après rechargement, y compris sur vos autres appareils. Ce choix est indépendant pour chaque personne. Seul le choix est enregistré : les vues et brouillons restent en mémoire dans l’onglet et sont perdus à sa fermeture. Un échec de l’enregistrement conserve le choix précédent et affiche une erreur. Ce n’est ni une sauvegarde ni un mode hors ligne. Les autres projets gardent la navigation habituelle."
+          },
+          {
+            "title": "Conversations archivées du projet",
+            "paragraphs": [
+              "L’entrée fixe en bas du projet ouvre une page dédiée, sans changer la sidebar ni créer un onglet d’agent. Le tableau affiche emplacement, tâche, date et auteur du dernier archivage ; les données anciennes inconnues restent non renseignées. Le menu … ou clic droit propose lecture, désarchivage, branche et suppression avec confirmation."
+            ]
           },
           {
             "title": "Reprendre après une inactivité",

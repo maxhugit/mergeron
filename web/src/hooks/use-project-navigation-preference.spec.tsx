@@ -59,6 +59,38 @@ it('restores the personal choice on a new page but never cached conversations', 
   expect(cache.getState()).toMatchObject({ projectId: 'p', threadIds: [] });
   second.unmount();
 });
+
+it('enabling the already-selected project never toggles it off', async () => {
+  const view = show();
+  let enabled = false;
+  await act(async () => {
+    enabled = await view.result.current.enable('p');
+  });
+  expect(enabled).toBe(true);
+  expect(cache.getState().projectId).toBe('p');
+  expect(updateAuthResource).not.toHaveBeenCalled();
+  view.unmount();
+});
+
+it('enables a different project before focus and reports persistence errors', async () => {
+  const view = show();
+  vi.mocked(updateAuthResource).mockResolvedValueOnce({
+    fastNavigationProjectId: 'other',
+  });
+  let enabled = false;
+  await act(async () => {
+    enabled = await view.result.current.enable('other');
+  });
+  expect(enabled).toBe(true);
+  expect(cache.getState().projectId).toBe('other');
+  vi.mocked(updateAuthResource).mockRejectedValueOnce(new Error('offline'));
+  await act(async () => {
+    enabled = await view.result.current.enable('failed');
+  });
+  expect(enabled).toBe(false);
+  expect(cache.getState().projectId).toBe('other');
+  view.unmount();
+});
 it('replaces the project and retained views when the connected person changes', () => {
   const view = show();
   cache.getState().visit('p', 'agent');

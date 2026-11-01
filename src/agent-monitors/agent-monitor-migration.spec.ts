@@ -28,6 +28,15 @@ it('upgrades an existing installation without changing projects, people, convers
     const before = tables.map((table) =>
       sqlite.prepare(`SELECT * FROM ${table}`).all(),
     );
+    // The later archival migration adds nullable metadata without rewriting
+    // any existing conversation data or attributing old archives to a person.
+    before[2] = before[2].map((row) => ({
+      ...(row as Record<string, unknown>),
+      archived_at: null,
+      archived_by_person_id: null,
+      archived_by_name: null,
+      archived_by_type: null,
+    }));
     for (const migration of migrations.slice(target))
       for (const statement of migration.sql) sqlite.exec(statement);
     expect(

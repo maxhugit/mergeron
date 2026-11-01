@@ -998,6 +998,10 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           activeFolder: ReturnType<ActiveFoldersService['get']>;
           title: string;
           archived: boolean;
+          archivedAt: number | null;
+          archivedByPersonId: string | null;
+          archivedByName: string | null;
+          archivedByType: 'person' | 'service' | 'system' | null;
           taskId: string | null;
           taskResourceId: string | null;
           taskTitle: string | null;
@@ -1090,24 +1094,40 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
               canReadThread(agent.threadId) &&
               threadMetadata.has(agent.threadId),
           )
-          .map(({ threadId, workspacePath }) => {
-            const metadata = threadMetadata.get(threadId)!;
-            const task = tasks.find(
-              (candidate) => candidate.linkedThreadId === threadId,
-            );
-            return {
+          .map(
+            ({
               threadId,
               workspacePath,
-              activeFolder: this.folders.get('agent', threadId),
-              title:
-                metadata.thread.name?.trim() || metadata.thread.preview.trim(),
-              archived: metadata.archived,
-              taskId: task?.id ?? null,
-              taskResourceId: task?.resourceId ?? null,
-              taskTitle: task?.title ?? null,
-              isSubtask: Boolean(task?.parentTaskId),
-            };
-          }),
+              archivedAt,
+              archivedByPersonId,
+              archivedByName,
+              archivedByType,
+            }) => {
+              const metadata = threadMetadata.get(threadId)!;
+              const task = tasks.find(
+                (candidate) => candidate.linkedThreadId === threadId,
+              );
+              return {
+                threadId,
+                workspacePath,
+                activeFolder: this.folders.get('agent', threadId),
+                title:
+                  metadata.thread.name?.trim() ||
+                  metadata.thread.preview.trim(),
+                archived: metadata.archived,
+                archivedAt: metadata.archived ? archivedAt : null,
+                archivedByPersonId: metadata.archived
+                  ? archivedByPersonId
+                  : null,
+                archivedByName: metadata.archived ? archivedByName : null,
+                archivedByType: metadata.archived ? archivedByType : null,
+                taskId: task?.id ?? null,
+                taskResourceId: task?.resourceId ?? null,
+                taskTitle: task?.title ?? null,
+                isSubtask: Boolean(task?.parentTaskId),
+              };
+            },
+          ),
       }));
   }
 

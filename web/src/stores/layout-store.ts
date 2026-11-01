@@ -52,6 +52,9 @@ interface LayoutState {
   sidebarOpen: boolean;
   /** Current sidebar navigation view. Resets to overview on refresh. */
   sidebarView: SidebarViewState;
+  focusedProjectId: string | null;
+  setFocusedProject: (projectId: string | null) => void;
+  setGroupsCollapsed: (keys: string[], collapsed: boolean) => void;
 
   // ── Actions ────────────────────────────────────────────────────────
   setSidebarOpen: (open: boolean) => void;
@@ -84,6 +87,15 @@ export const useLayoutStore = create<LayoutState>()(
       // ── Runtime defaults ─────────────────────────────────────────────
       sidebarOpen: false,
       sidebarView: { type: 'overview' },
+      focusedProjectId: null,
+      setFocusedProject: (focusedProjectId) =>
+        set({ focusedProjectId, sidebarView: { type: 'overview' } }),
+      setGroupsCollapsed: (keys, collapsed) =>
+        set((state) => ({
+          collapsedGroupKeys: collapsed
+            ? [...new Set([...state.collapsedGroupKeys, ...keys])]
+            : state.collapsedGroupKeys.filter((key) => !keys.includes(key)),
+        })),
 
       // ── Actions ──────────────────────────────────────────────────────
       setSidebarOpen: (open) => set({ sidebarOpen: open }),

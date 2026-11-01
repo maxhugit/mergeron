@@ -1500,6 +1500,12 @@ export const projectAgentThreads = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     workspacePath: text('workspace_path').notNull(),
+    archivedAt: integer('archived_at'),
+    archivedByPersonId: text('archived_by_person_id'),
+    archivedByName: text('archived_by_name'),
+    archivedByType: text('archived_by_type', {
+      enum: ['person', 'service', 'system'],
+    }),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },
