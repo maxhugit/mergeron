@@ -1,3 +1,4 @@
+import { AppCatalogSettings } from './app-catalog-settings';
 import { PluginsTab } from './plugins-tab';
 import { IntegrationNav } from './integration-nav';
 import {
@@ -110,20 +111,23 @@ export function AppsTab() {
   };
 
   const navigation = (
-    <IntegrationNav
-      label={ti('applicationViews')}
-      value={view}
-      onChange={(next) => {
-        setView(next);
-        setCursor(null);
-        setCursorStack([]);
-      }}
-      secondary
-      items={[
-        { value: 'connected', label: ti('connected') },
-        { value: 'catalog', label: ti('catalog') },
-      ]}
-    />
+    <>
+      <IntegrationNav
+        label={ti('applicationViews')}
+        value={view}
+        onChange={(next) => {
+          setView(next);
+          setCursor(null);
+          setCursorStack([]);
+        }}
+        secondary
+        items={[
+          { value: 'connected', label: ti('connected') },
+          { value: 'catalog', label: ti('catalog') },
+        ]}
+      />
+      {view === 'catalog' && <AppCatalogSettings />}
+    </>
   );
   if (isLoading)
     return (
@@ -328,7 +332,7 @@ function AppRow({
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border/50 p-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 p-3 sm:flex-nowrap">
       {/* Logo or placeholder */}
       {app.logoUrl ? (
         <img
@@ -347,7 +351,7 @@ function AppRow({
 
       {/* Info */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{app.name}</span>
           {!app.isAccessible && (
             <Badge
@@ -380,33 +384,35 @@ function AppRow({
         )}
       </div>
 
-      {/* Install link */}
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-7 gap-1 text-xs"
-        onClick={onOpenDetails}
-      >
-        <SlidersHorizontal className="h-3 w-3" />
-        {t('manage')}
-      </Button>
-
-      {app.installUrl && (
-        <Button size="sm" variant="ghost" onClick={onAssociate}>
-          {ti('associate')}
+      <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+        {/* Install link */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 text-xs"
+          onClick={onOpenDetails}
+        >
+          <SlidersHorizontal className="h-3 w-3" />
+          {t('manage')}
         </Button>
-      )}
 
-      {/* Enable/Disable toggle */}
-      <div className="flex items-center gap-2">
-        {toggling && (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        {app.installUrl && (
+          <Button size="sm" variant="ghost" onClick={onAssociate}>
+            {ti('associate')}
+          </Button>
         )}
-        <Switch
-          checked={app.isEnabled}
-          disabled={toggling || !app.isAccessible}
-          onCheckedChange={handleToggle}
-        />
+
+        {/* Enable/Disable toggle */}
+        <div className="flex items-center gap-2">
+          {toggling && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          )}
+          <Switch
+            checked={app.isEnabled}
+            disabled={toggling || !app.isAccessible}
+            onCheckedChange={handleToggle}
+          />
+        </div>
       </div>
     </div>
   );

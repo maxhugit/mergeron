@@ -184,3 +184,46 @@ test('includes Docker diagnostic messages instead of an opaque HTTP failure', as
     /HTTP 500: invalid security option/,
   );
 });
+
+test('catalog exec writes credentials only to stdin and decodes split UTF-8 Docker frames', async () => {
+  let input = '',
+    command;
+  const stream = new EventEmitter();
+  stream.destroy = () => {};
+  stream.write = (value) => {
+    input += value;
+    const bytes = Buffer.from(
+      JSON.stringify({ apps: [{ id: 'x', name: 'été €' }] }) + '\n',
+    );
+    const split = bytes.indexOf(Buffer.from('é')) + 1;
+    for (const payload of [bytes.subarray(0, split), bytes.subarray(split)]) {
+      const header = Buffer.alloc(8);
+      header[0] = 1;
+      header.writeUInt32BE(payload.length, 4);
+      stream.emit('data', Buffer.concat([header, payload]));
+    }
+  };
+  const factory = () => {
+    const req = new EventEmitter();
+    req.destroy = () => {};
+    req.end = () =>
+      queueMicrotask(() =>
+        req.emit('upgrade', { statusCode: 101 }, stream, Buffer.alloc(0)),
+      );
+    return req;
+  };
+  const docker = new DockerClient('/test', factory);
+  docker.request = async (_path, options) => {
+    command = options.body;
+    return { Id: 'exec' };
+  };
+  const result = await docker.catalogJob('owned', 'fixed worker source', {
+    accessToken: 'secret-only-stdin',
+    accountId: 'a',
+  });
+  assert.equal(result.apps[0].name, 'été €');
+  assert.ok(input.includes('secret-only-stdin'));
+  assert.ok(!JSON.stringify(command).includes('secret-only-stdin'));
+  assert.equal(command.Tty, false);
+  assert.equal(command.Privileged, false);
+});

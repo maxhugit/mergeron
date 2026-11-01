@@ -63,6 +63,19 @@ test.each([390, 1280])(
     const calls: string[] = [];
     vi.spyOn(client, 'get').mockImplementation(async (options) => {
       calls.push(options.url);
+      if (options.url === '/api/apps/catalog/status')
+        return {
+          data: {
+            source: 'native',
+            running: false,
+            updatedAt: null,
+            nextAttempt: null,
+            count: 0,
+            stale: false,
+            warning: false,
+            history: [],
+          },
+        } as never;
       if (
         options.url === '/api/plugins/installed' ||
         options.url === '/api/plugins'
@@ -215,11 +228,9 @@ test.each([390, 1280])(
     expect(
       screen.getByRole('link', { name: 'Ouvrir l’annuaire ChatGPT' }),
     ).toHaveAttribute('href', 'https://chatgpt.com/apps');
-    await page
-      .getByRole('main')
-      .screenshot({
-        path: `../../../.vitest-screenshots/integrations-catalog-fallback-${engine}-${width}.png`,
-      });
+    await page.getByRole('main').screenshot({
+      path: `../../../.vitest-screenshots/integrations-catalog-fallback-${engine}-${width}.png`,
+    });
     fireEvent.click(screen.getByRole('tab', { name: 'Serveurs MCP' }));
     await screen.findByText('server-0');
     expect(screen.getByText('Mergeron (interne)')).toBeVisible();

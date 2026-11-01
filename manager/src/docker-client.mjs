@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { StringDecoder } from 'node:string_decoder';
 
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
@@ -213,6 +214,94 @@ export class DockerClient {
         clearTimeout(timer);
         reject(error);
       });
+      req.end(body);
+    });
+  }
+
+  /** Fixed internal catalog worker: stdin credentials never enter Docker config or logs. */
+  async catalogJob(id, source, input) {
+    const execution = await this.request(
+      '/containers/' + encodeURIComponent(id) + '/exec',
+      {
+        method: 'POST',
+        body: {
+          AttachStdin: true,
+          AttachStdout: true,
+          AttachStderr: true,
+          Tty: false,
+          User: '1000:1000',
+          Privileged: false,
+          Cmd: ['/app/.venv/bin/python', '-u', '-c', source],
+        },
+      },
+    );
+    return new Promise((resolve, reject) => {
+      const body = JSON.stringify({ Detach: false, Tty: false });
+      let socket,
+        timer,
+        settled = false,
+        buffered = Buffer.alloc(0),
+        output = '',
+        total = 0;
+      const decoder = new StringDecoder('utf8');
+      const finish = (error, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        socket?.destroy();
+        if (error) reject(Error('CATALOG_DOWNLOAD_FAILED'));
+        else resolve(value);
+      };
+      const req = this.requestFactory({
+        socketPath: this.socketPath,
+        path: '/exec/' + encodeURIComponent(execution.Id) + '/start',
+        method: 'POST',
+        headers: {
+          Connection: 'Upgrade',
+          Upgrade: 'tcp',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      });
+      timer = setTimeout(() => {
+        req.destroy();
+        finish(true);
+      }, 150000);
+      req.on('upgrade', (res, stream, head) => {
+        socket = stream;
+        if (res.statusCode !== 101) return finish(true);
+        const consume = (chunk) => {
+          total += chunk.length;
+          if (total > 33 * 1024 ** 2) return finish(true);
+          buffered = Buffer.concat([buffered, chunk]);
+          while (buffered.length >= 8) {
+            const size = buffered.readUInt32BE(4);
+            if (size > 32 * 1024 ** 2) return finish(true);
+            if (buffered.length < size + 8) return;
+            const kind = buffered[0];
+            if (kind === 1)
+              output += decoder.write(buffered.subarray(8, 8 + size));
+            buffered = buffered.subarray(size + 8);
+            if (output.includes('\n')) {
+              try {
+                return finish(false, JSON.parse(output.split('\n')[0]));
+              } catch {
+                return finish(true);
+              }
+            }
+          }
+        };
+        stream.on('data', consume);
+        stream.on('error', () => finish(true));
+        stream.on('end', () => finish(true));
+        if (head.length) consume(head);
+        if (!settled) stream.write(JSON.stringify(input) + '\n');
+      });
+      req.on('response', (res) => {
+        res.destroy();
+        finish(true);
+      });
+      req.on('error', () => finish(true));
       req.end(body);
     });
   }

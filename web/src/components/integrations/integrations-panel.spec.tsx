@@ -46,6 +46,19 @@ function mount() {
 beforeEach(() => {
   get = spyGet().mockImplementation(async (options) => {
     const url = options.url;
+    if (options.url === '/api/apps/catalog/status')
+      return {
+        data: {
+          source: 'native',
+          running: false,
+          updatedAt: null,
+          nextAttempt: null,
+          count: 0,
+          stale: false,
+          warning: false,
+          history: [],
+        },
+      } as never;
     if (url === '/api/plugins' || url === '/api/plugins/installed')
       return { data: plugins } as never;
     if (url === '/api/apps/installed')
