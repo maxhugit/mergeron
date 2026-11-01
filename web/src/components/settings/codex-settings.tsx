@@ -542,12 +542,19 @@ export function CodexSettings({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
+      <div
+        className={cn(
+          'min-h-0 flex-1 px-4 py-4 sm:px-6',
+          activeTab === 'integrations'
+            ? 'flex flex-col overflow-hidden'
+            : 'space-y-6 overflow-y-auto',
+        )}
+      >
         {activeTab === 'integrations' && (
           <div
             id="codex-settings-panel"
             role="tabpanel"
-            className="flex min-h-full flex-col"
+            className="flex min-h-0 flex-1 flex-col"
           >
             <IntegrationsPanel />
           </div>

@@ -93,7 +93,9 @@ test.each([1000, 390])(
       expect(screen.getAllByRole('option')).toHaveLength(3);
       await waitFor(() => expect(select).toBeEnabled());
       fireEvent.change(select, { target: { value: 'minimal' } });
-      expect(await screen.findByText(/Aucun fichier de projet/)).toBeVisible();
+      expect(
+        await screen.findByText(/Base et configuration uniquement/),
+      ).toBeVisible();
       expect(writes).toHaveLength(0);
       fireEvent.click(
         screen.getByRole('button', {
@@ -110,7 +112,9 @@ test.each([1000, 390])(
       });
       fireEvent.change(select, { target: { value: 'none' } });
       expect(
-        await screen.findByText(/Aucune donnée ne sera sauvegardée/),
+        await screen.findByText(
+          /Aucune sauvegarde : les données ne pourront pas/,
+        ),
       ).toBeVisible();
     } finally {
       client.clear();

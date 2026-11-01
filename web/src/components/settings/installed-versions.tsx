@@ -110,7 +110,10 @@ export function InstalledVersions({
   };
   const active = updates.data?.components.find((c) => c.id === details);
   return (
-    <section className="space-y-4" aria-label={t('versionsInstalledTitle')}>
+    <section
+      className="flex min-h-0 flex-1 flex-col gap-4"
+      aria-label={t('versionsInstalledTitle')}
+    >
       <div>
         <h2 className="text-sm font-medium">{t('versionsInstalledTitle')}</h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -138,13 +141,13 @@ export function InstalledVersions({
         </p>
       )}
       <div
-        className="max-w-full overflow-x-auto rounded-lg border border-border"
+        className="min-h-0 max-w-full flex-1 overflow-auto overscroll-contain rounded-lg border border-border"
         role="region"
         aria-label={t('versionsInstalledTitle')}
         tabIndex={0}
       >
         <table className="w-full min-w-[850px] text-left text-sm">
-          <thead className="bg-muted/40 text-xs text-muted-foreground">
+          <thead className="sticky top-0 z-10 bg-background text-xs text-muted-foreground">
             <tr>
               <th className="p-3">
                 <input
@@ -316,7 +319,7 @@ export function InstalledVersions({
           </tbody>
         </table>
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="order-last flex shrink-0 flex-wrap items-center justify-end gap-2 border-t bg-background pt-3">
         <p className="mr-auto text-xs text-muted-foreground">
           {t('consoleSelected', { count: chosen.length })}
         </p>

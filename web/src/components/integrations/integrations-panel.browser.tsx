@@ -9,7 +9,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { page } from 'vitest/browser';
-import { IntegrationsPanel } from './integrations-panel';
+import { CodexSettings } from '../settings/codex-settings';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { client } from '@/generated/api/client.gen';
 import i18n, { i18nReady } from '@/i18n';
@@ -38,7 +38,14 @@ const inventory = {
       name: 'openai-curated-remote',
       path: null,
       interface: null,
-      plugins: [plugin],
+      plugins: [
+        plugin,
+        ...Array.from({ length: 29 }, (_, i) => ({
+          ...plugin,
+          id: `plugin-${i}`,
+          name: `Plugin ${i}`,
+        })),
+      ],
     },
   ],
   marketplaceLoadErrors: [],
@@ -91,6 +98,12 @@ test.each([390, 1280])(
         return {
           data: {
             apps: [
+              ...Array.from({ length: 25 }, (_, i) => ({
+                id: `app-${i}`,
+                runtimeName: `Application ${i}`,
+                enabled: true,
+                callable: true,
+              })),
               {
                 id: 'home',
                 runtimeName: 'Home Assistant',
@@ -103,7 +116,20 @@ test.each([390, 1280])(
       if (options.url === '/api/apps')
         throw { message: '403 Forbidden', errorCode: 'codex.rpc_error' };
       if (options.url === '/api/mcp-servers')
-        return { data: { data: [], nextCursor: null } } as never;
+        return {
+          data: {
+            data: Array.from({ length: 25 }, (_, i) => ({
+              name: `server-${i}`,
+              tools: {},
+              authStatus: 'unsupported',
+            })),
+            nextCursor: null,
+          },
+        } as never;
+      if (options.url === '/api/account')
+        return { data: { account: null } } as never;
+      if (options.url === '/api/settings/{key}')
+        return { data: { value: '' } } as never;
       if (options.url === '/api/codex/config')
         return { data: { config: {}, origins: {} } } as never;
       throw Error('Unexpected fixture request: ' + options.url);
@@ -112,26 +138,62 @@ test.each([390, 1280])(
     render(
       <QueryClientProvider client={query}>
         <TooltipProvider>
-          <main className="min-h-screen bg-background text-foreground">
+          <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground">
             <header className="border-b px-4 py-3 text-lg">
               Codex · Intégrations
             </header>
-            <div className="p-3 sm:p-6">
-              <IntegrationsPanel />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <CodexSettings initialTab="integrations" />
             </div>
           </main>
         </TooltipProvider>
       </QueryClientProvider>,
     );
     await screen.findByText('Documents');
-    expect(calls).toEqual(['/api/plugins/installed']);
+    expect(calls).toContain('/api/plugins/installed');
+    expect(calls).not.toContain('/api/plugins');
+    const assertInnerScroll = async (section: string) => {
+      const list = screen.getByRole('region', {
+        name: 'Liste des intégrations',
+      });
+      expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+      const tabsTop = screen
+        .getByRole('tab', { name: 'Plugins' })
+        .getBoundingClientRect().top;
+      list.scrollTop = 200;
+      await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
+      expect(
+        screen.getByRole('tab', { name: 'Plugins' }).getBoundingClientRect()
+          .top,
+      ).toBe(tabsTop);
+      expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(
+        window.innerHeight + 1,
+      );
+      // No intermediate ancestor consumes wheel scrolling or grows past its viewport.
+      for (
+        let parent = list.parentElement;
+        parent;
+        parent = parent.parentElement
+      ) {
+        expect(parent.scrollHeight).toBeLessThanOrEqual(
+          parent.clientHeight + 1,
+        );
+      }
+      list.scrollTop = 0;
+      await page
+        .getByRole('main')
+        .screenshot({
+          path: `../../../.vitest-screenshots/integrations-list-${section}-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}-${width}.png`,
+        });
+    };
+    await assertInnerScroll('plugins');
     const engine = navigator.userAgent.includes('Chrome')
       ? 'chromium'
       : 'webkit';
     await page.getByRole('main').screenshot({
       path: `../../../.vitest-screenshots/integrations-plugins-${engine}-${width}.png`,
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Gérer' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Gérer' })[0]);
     const pluginDialog = await screen.findByRole('dialog');
     expect(pluginDialog).toBeVisible();
     expect(
@@ -144,6 +206,7 @@ test.each([390, 1280])(
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getByRole('tab', { name: 'Applications' }));
     expect(await screen.findByText('Home Assistant')).toBeVisible();
+    await assertInnerScroll('apps');
     expect(calls).not.toContain('/api/apps');
     fireEvent.click(screen.getByRole('tab', { name: 'Catalogue' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -151,6 +214,10 @@ test.each([390, 1280])(
     );
     expect(screen.getByRole('alert')).not.toHaveTextContent('<html>');
     fireEvent.click(screen.getByRole('tab', { name: 'Serveurs MCP' }));
+    await screen.findByText('server-0');
+    expect(screen.getByText('Mergeron (interne)')).toBeVisible();
+    expect(screen.getByText('Par conversation')).toBeVisible();
+    await assertInnerScroll('mcps');
     fireEvent.click(
       await screen.findByRole('button', { name: 'Ajouter un serveur' }),
     );

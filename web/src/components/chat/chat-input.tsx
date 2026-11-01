@@ -495,7 +495,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             ? t('thisConversationWasDeletedAndCanNoLongerBeUsed')
             : readOnlyReason !== null
               ? t('heldOpenByAnotherClientCloseItThereToContinueHere')
-              : t('archivedThreadsAreReadOnlyUnarchiveOrForkToContinue')}
+              : t('conversationReadOnlyRetryOpen')}
         </p>
       )}
       {/* Goal is a durable objective, not a transcript entry, so it stays
@@ -547,7 +547,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             onPaste={handlePaste}
             placeholder={
               readOnly
-                ? t('archivedThreadIsReadOnly')
+                ? t('readOnly')
                 : hasActiveTurn
                   ? t('addInputToTheActiveTurn')
                   : threadId

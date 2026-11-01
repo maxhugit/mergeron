@@ -21,7 +21,7 @@ export function IntegrationsPanel({
   const { t } = useTranslation('integrations');
   const [section, setSection] = useState(initialSection);
   return (
-    <section className="min-h-96 flex-1 rounded-lg border bg-card/40 px-4 pb-4">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card/40 px-4 pb-4">
       <IntegrationNav
         label={t('navigation')}
         value={section}
@@ -45,6 +45,7 @@ export function IntegrationsPanel({
         ]}
       />
       <div
+        className="flex min-h-0 flex-1 flex-col"
         role="tabpanel"
         aria-label={t(
           section === 'apps'

@@ -78,6 +78,14 @@ describe('ChatHeader', () => {
     },
   );
 
+  it('does not label a read-only fallback as an archived conversation', () => {
+    pathname = '/t/thread-123';
+    useTimelineStore.setState({ threadMode: 'readOnly' });
+    renderHeader();
+    expect(screen.getByText('Read only')).toBeInTheDocument();
+    expect(screen.queryByText('Archived read-only')).toBeNull();
+  });
+
   it('shows the selected Simple Chat title in the global header', () => {
     search = { thread: 'simple-123' };
     renderHeader('Actualités tech');

@@ -40,7 +40,9 @@ interface CliReleaseHistory {
 const releaseQueryKey = [...cliStatusQueryKey, 'releases'] as const;
 
 export function CodexCliSettings() {
-  const { t, i18n } = useTranslation(['common', 'codexSettings']);
+  const { t, i18n } = useTranslation(['common', 'codexSettings'], {
+    nsMode: 'fallback',
+  });
   const client = useQueryClient();
   const [confirmation, setConfirmation] = useState<
     'install' | 'update' | 'rollback' | 'managed' | null

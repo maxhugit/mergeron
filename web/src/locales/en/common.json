@@ -368,6 +368,7 @@
   "unableToSaveProfilePreferences": "Unable to save profile preferences",
   "archive": "Archive",
   "archived": "Archived",
+  "conversationReadOnlyRetryOpen": "This conversation is read-only. Retry opening it to continue.",
   "archivedReadOnly": "Archived read-only",
   "back": "Back",
   "branchGraph": "Branch graph",

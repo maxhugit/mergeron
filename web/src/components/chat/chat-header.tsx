@@ -331,7 +331,7 @@ export function ChatHeader() {
                   )}
                   {threadMode === 'readOnly' && (
                     <Badge variant="secondary" className="text-xs">
-                      {t('archivedReadOnly')}
+                      {t('readOnly')}
                     </Badge>
                   )}
                 </>

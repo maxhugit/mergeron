@@ -59,6 +59,11 @@ const codexCli = new ManagedCodexCli({
   docker,
   manifest,
   configuration: installConfiguration,
+  inventory: async () =>
+    evaluateAdoption(
+      await collectInventory(manifest, docker),
+      await readAdoptionRecord(adoptionPath),
+    ),
 });
 const imageUpdates = new ImageUpdates({
   docker,
