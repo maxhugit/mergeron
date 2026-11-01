@@ -356,6 +356,15 @@ it('replaces pending deltas with their final text without duplicating canonical 
   });
   await vi.advanceTimersByTimeAsync(3999);
   expect(settled).toBe(false);
+  // Ignored mirrors must neither grow a second buffer nor delay stabilization.
+  emit('thread/realtime/item/completed', {
+    item: {
+      id: 'mirror',
+      type: 'transcriptSegment',
+      role: 'user',
+      text: 'x'.repeat(64001),
+    },
+  });
   await vi.advanceTimersByTimeAsync(1);
   await expect(pending).resolves.toEqual({
     text: 'Premier segment. Deuxième segment.',

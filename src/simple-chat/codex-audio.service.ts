@@ -226,6 +226,7 @@ export class CodexAudioService implements OnModuleDestroy {
         // Frameless emits append-only fragments, including spaces/repetitions.
         // It may never emit transcript/done. Assistant deltas are never retained.
         streamed = true;
+        canonical.clear(); // Canonical mirrors are fallback-only, not a second buffer.
         fragments++;
         pendingText += note.params.delta;
         settle();
@@ -235,13 +236,16 @@ export class CodexAudioService implements OnModuleDestroy {
         note.params.text?.trim()
       ) {
         parts.push(note.params.text.trim());
+        canonical.clear();
         pendingText = ''; // Final text replaces this segment's provisional deltas.
         settle();
       } else if (
         note.method === 'thread/realtime/item/completed' &&
         note.params.item.type === 'transcriptSegment' &&
         note.params.item.role === 'user' &&
-        note.params.item.text.trim()
+        note.params.item.text.trim() &&
+        !streamed &&
+        parts.length === 0
       ) {
         canonical.set(note.params.item.id, note.params.item.text.trim());
         settle();
