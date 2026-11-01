@@ -40,7 +40,11 @@ const reasonKey = (code: string) =>
       value.toUpperCase(),
     );
 const key = ['integrations', 'catalog-status'] as const;
-export function AppCatalogSettings() {
+export function AppCatalogSettings({
+  onSourceChanged,
+}: {
+  onSourceChanged?: () => void;
+}) {
   const { t, i18n } = useTranslation('integrations');
   const queryClient = useQueryClient();
   const [journal, setJournal] = useState(false);
@@ -72,7 +76,9 @@ export function AppCatalogSettings() {
       return data;
     },
     onSuccess: async (data) => {
+      onSourceChanged?.();
       queryClient.setQueryData(key, data);
+      void queryClient.invalidateQueries({ queryKey: key });
       await queryClient.resetQueries({ queryKey: appsListAppsQueryKey() });
     },
     onError: () => {

@@ -126,7 +126,14 @@ export function AppsTab() {
           { value: 'catalog', label: ti('catalog') },
         ]}
       />
-      {view === 'catalog' && <AppCatalogSettings />}
+      {view === 'catalog' && (
+        <AppCatalogSettings
+          onSourceChanged={() => {
+            setCursor(null);
+            setCursorStack([]);
+          }}
+        />
+      )}
     </>
   );
   if (isLoading)
