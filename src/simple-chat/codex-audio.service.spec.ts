@@ -74,6 +74,7 @@ it('negotiates WebRTC with the CLI, never websocket or PCM upload; returns only 
   ).toMatchObject({
     transport: { type: 'webrtc', sdp: offer },
     outputModality: 'audio',
+    version: 'v3',
     clientManagedHandoffs: true,
     flushTranscriptTailOnSessionEnd: false,
   });
@@ -214,6 +215,8 @@ it.each([
   'text realtime output modality requires realtime v2',
   'AVAS realtime calls require realtime v1 or v3',
   'AVAS realtime calls require conversational realtime',
+  'AVAS requires OpenAI-Alpha: quicksilver=v2.',
+  'invalid_quicksilver_alpha_header',
 ])(
   'reports native protocol incompatibility without blaming the account: %s',
   async (message) => {

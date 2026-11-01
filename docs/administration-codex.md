@@ -29,8 +29,14 @@ sa propre authentification ; aucun jeton n’est extrait ni transmis au navigate
 L’audio circule ensuite sur WebRTC, pas dans `appendAudio` ni dans un fichier
 uploadé au serveur Mergeron. La connexion média du navigateur reste nécessaire.
 
-Le transport WebRTC natif du CLI 0.164.0 choisit le protocole v1 par défaut :
-il exige `outputModality: "audio"`. Demander `"text"` échoue localement avec
+Mergeron sélectionne explicitement le protocole **`version: "v3"`** pour le
+transport WebRTC du CLI 0.164.0. Ce protocole Frameless fait générer au CLI
+l’en-tête `OpenAI-Alpha: quicksilver=v2` exigé par AVAS. Sans sélection explicite,
+le CLI choisit le protocole v1 et envoie `quicksilver=v1`, refusé avec
+`invalid_quicksilver_alpha_header`. Ne pas confondre cet en-tête avec le protocole
+de conversation `version: "v2"`, qui ne prend pas en charge WebRTC.
+
+Ce transport exige `outputModality: "audio"`. Demander `"text"` échoue localement avec
 `text realtime output modality requires realtime v2` avant toute connexion
 vocale ; le protocole v2 n’est pas utilisable sur ce transport. Mergeron négocie
 donc la modalité audio, désactive les pistes audio distantes et ne les attache
@@ -77,8 +83,10 @@ de l’installation reste nécessaire avant de considérer ce chemin comme fiabl
 
 La CI isolée vérifie séparément le précontrôle natif avec le CLI réellement
 installé par le Manager et le service Mergeron compilé. L’ancien paramètre
-`"text"` doit être refusé avant HTTP ; le paramètre corrigé doit atteindre un
-sentinel HTTP en boucle locale. Ce faux service refuse volontairement l’appel,
+`"text"` doit être refusé avant HTTP. Un faux service reproduit ensuite la route
+ChatGPT en boucle locale : il refuse l’ancien en-tête `quicksilver=v1` et vérifie
+que la sélection explicite de `v3` produit `quicksilver=v2`. Il refuse également
+la création du média après cette vérification ;
 et la vérification du compte est simulée : aucun compte, clé, média ou service
 OpenAI n’est utilisé. Ce test de compatibilité ne prouve pas l’accès vocal réel
 du compte. Les tests Chromium/WebKit négocient deux pairs locaux avec de l’audio
