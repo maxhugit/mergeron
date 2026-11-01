@@ -1,5 +1,22 @@
 # Contribuer au projet
 
+## Signaler un problème ou proposer une amélioration
+
+Rechercher d’abord dans les [issues existantes](https://github.com/maxhugit/mergeron/issues),
+y compris celles déjà fermées, puis ouvrir le formulaire adapté :
+
+- [Signaler un bug](https://github.com/maxhugit/mergeron/issues/new?template=bug_report.yml) :
+  version installée ou SHA, environnement, étapes minimales, résultats attendu et
+  observé, fréquence et extraits de diagnostic nettoyés.
+- [Proposer une amélioration](https://github.com/maxhugit/mergeron/issues/new?template=feature_request.yml) :
+  besoin concret, personnes concernées, bénéfice, comportement attendu et critères
+  de réussite ; une demande par évolution cohérente.
+
+Le guide intégré propose ces parcours dans **Aide et contributions**. Les issues
+sont publiques : ne pas joindre de secret, conversation privée, base ou sauvegarde
+complète. Pour une vulnérabilité, suivre [le signalement privé](SECURITY.md).
+L’envoi d’une demande ne garantit ni réalisation ni délai.
+
 ## Principes
 
 - préserver la compatibilité avec `codex app-server` ;

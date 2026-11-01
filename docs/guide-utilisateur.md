@@ -26,6 +26,54 @@ La recherche ne transmet aucune requête au serveur ou à un fournisseur IA et
 ne consulte pas les données des projets. Les deux manuels sont chargés avec
 la route d’aide différée, pas avec l’écran d’accueil.
 
+## Introduction et demandes sur GitHub
+
+L’article d’accueil `overview` présente Mergeron, ses objectifs et ses points
+forts, puis propose un lien vers le dépôt officiel. Le chapitre **Aide et
+contributions** contient `report-bug` et `request-improvement` : recherche des
+demandes existantes, lien direct vers le formulaire adapté, éléments attendus,
+exemples et précautions avant publication.
+
+Les liens ouvrent GitHub dans un nouvel onglet, avec `noopener noreferrer`.
+Le modèle sélectionné provient des formulaires existants
+[`bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml) et
+[`feature_request.yml`](../.github/ISSUE_TEMPLATE/feature_request.yml).
+Un compte GitHub est nécessaire pour publier. Mergeron ne crée pas d’issue,
+ne joint pas de diagnostic et ne préremplit aucune donnée d’utilisateur, de
+projet ou de conversation.
+
+Les sections peuvent déclarer des `links` avec une `destination`, un `label` et
+une `description`. La destination est une clé du registre fermé dans
+`guide-content.ts`, pas une URL libre dans les traductions. La recherche indexe
+les libellés et descriptions. Les tests vérifient les destinations, les modèles
+présents dans le dépôt et le parcours réel des articles dans les deux langues.
+
+Les signalements ordinaires sont publics. Une vulnérabilité relève du canal
+privé indiqué dans [SECURITY.md](../SECURITY.md), jamais d’une issue publique.
+Les guides demandent des étapes reproductibles, versions installées, résultats
+attendu/observé et pièces jointes nettoyées ; une amélioration décrit surtout le
+besoin, le bénéfice et ses critères de réussite.
+
+## Cohérence avec les fonctions actuelles
+
+Le manuel français et anglais comprend 51 articles. Les identifiants historiques
+sont conservés. Les parcours suivants tiennent compte des fonctions actuelles :
+
+| Articles                        | Points de fonctionnement                                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `desktop`, `agent-composer`     | Préchargement borné après rechargement, libellés selon la largeur réelle et aides de permissions au clavier/toucher.       |
+| `browser-local`, `integrations` | Entrée Navigateur unique et statut du MCP interne observé par conversation.                                                |
+| `agent-preview`                 | Autorisation du projet, recette MCP, URL stable, logs, stockage et suppression des données temporaires.                    |
+| `server-update`, `backups`      | Choix explicite du périmètre, compression tar + gzip, limites du retour arrière et identification des versions installées. |
+| `infrastructure`, `admin-codex` | Navigateur géré après activation opérateur et préservation d’un CLI personnalisé protégé.                                  |
+| `admin-operations`              | Tableau de rétention par famille, archives volumineuses et diagnostic de connexion avant rechargement.                     |
+
+Les détails d’exploitation restent dans les guides spécialisés :
+[prévisualisations](previsualisations-agents.md),
+[sauvegardes](sauvegarde-restauration.md),
+[journaux](exploitation-depannage.md#rotation-et-rétention-des-journaux-applicatifs)
+et [reprise de session](session-recovery.md).
+
 ## Mettre à jour l’aide avec une fonctionnalité
 
 Lorsqu’une interface ou un comportement change :

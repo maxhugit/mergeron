@@ -7,6 +7,7 @@ import {
   ListTree,
   Search,
   X,
+  ExternalLink,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ import {
   guideHash,
   guideLanguage,
   guideManuals,
+  guideExternalUrl,
   searchGuide,
 } from '@/components/guide/guide-content';
 
@@ -394,6 +396,42 @@ export function HelpRoute() {
                       <li key={step}>{step}</li>
                     ))}
                   </ol>
+                )}
+                {section.links && (
+                  <ul className="space-y-2">
+                    {section.links.map((link) => {
+                      const href = guideExternalUrl(link.destination);
+                      return href ? (
+                        <li key={link.destination}>
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-w-0 items-start gap-3 rounded-lg border p-3 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                          >
+                            <span className="min-w-0 flex-1 break-words">
+                              <span className="font-medium text-primary">
+                                {link.label}
+                              </span>
+                              {link.description && (
+                                <span className="mt-1 block leading-6 text-muted-foreground">
+                                  {link.description}
+                                </span>
+                              )}
+                              <span className="sr-only">
+                                {' '}
+                                · {t('manualExternalLink')}
+                              </span>
+                            </span>
+                            <ExternalLink
+                              aria-hidden="true"
+                              className="mt-0.5 h-4 w-4 shrink-0"
+                            />
+                          </a>
+                        </li>
+                      ) : null;
+                    })}
+                  </ul>
                 )}
                 {section.actions && (
                   <div className="overflow-x-auto">

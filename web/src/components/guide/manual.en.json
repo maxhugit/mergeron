@@ -6,9 +6,39 @@
       {
         "id": "overview",
         "title": "Understand the platform",
-        "summary": "Distinguish projects, conversations, agents, tasks and deliverables.",
-        "keywords": ["home", "organization", "differences", "guide"],
+        "summary": "Organize work with AI in Mergeron, from shared context to a verified result.",
+        "keywords": [
+          "home",
+          "organization",
+          "differences",
+          "guide",
+          "Mergeron",
+          "GitHub",
+          "purpose"
+        ],
         "sections": [
+          {
+            "title": "What Mergeron is for",
+            "paragraphs": [
+              "Mergeron is a self-hosted platform for organizing work with AI. It brings conversations, agents, tasks and documents together in one project, with its participants, files and knowledge.",
+              "The goal is to turn a request into a verifiable result while keeping decisions and outputs connected to the work. You choose which actions to entrust to agents and validate their results."
+            ],
+            "links": [
+              {
+                "destination": "project",
+                "label": "Mergeron project on GitHub",
+                "description": "Browse the source code and project development."
+              }
+            ]
+          },
+          {
+            "title": "Key strengths",
+            "paragraphs": [
+              "Shared context: participants can find the tasks, documents, knowledge and conversations relevant to each project.",
+              "Agents connected to real work: files, Git, MCP tools and test environments can be used according to configured permissions and services.",
+              "Reviewable results: conversation history, Git diffs, document versions and human validation help you check what was produced."
+            ]
+          },
           {
             "title": "The building blocks",
             "paragraphs": [
@@ -39,7 +69,9 @@
           "first-project",
           "simple-chat",
           "agent-create",
-          "deliverable-lifecycle"
+          "deliverable-lifecycle",
+          "report-bug",
+          "request-improvement"
         ]
       },
       {
@@ -104,9 +136,10 @@
             "paragraphs": [
               "Retained agents keep receiving updates over the real-time connection. Hidden panels are suspended; this option does not start agents or preload every agent in a project.",
               "The sixth view replaces the least recently visited one. Small drafts and attachment references remain separated by agent in the tab’s memory, even if its full view later needs to reload. Nothing is sent automatically.",
-              "After a disconnection or engine restart, Mergeron verifies and catches up conversation state. The cache bypasses neither identity verification nor access checks."
+              "After a disconnection or engine restart, Mergeron verifies and catches up conversation state. The cache bypasses neither identity verification nor access checks.",
+              "After reload, recent conversation IDs are restored in the same tab and checked against the authorized project. The selected conversation has priority; up to four other recent histories are read progressively and project page code is warmed in the background without starting their actions."
             ],
-            "warning": "The selected project is saved on your profile and survives reloads, including on your other devices. Each person has an independent choice. Only the choice is saved: views and drafts remain in tab memory and are lost when it closes. A failed save keeps the previous choice and displays an error. This is not a backup or offline mode. Other projects keep normal navigation."
+            "warning": "The project choice is saved in your profile independently for each person. Up to five IDs survive reload in the same tab; history and drafts remain in memory, without durable backup or offline mode. Disabling the option or changing accounts removes the previous list. A save failure keeps the previous choice and shows an error. Other projects keep their normal navigation."
           },
           {
             "title": "Resume after inactivity",
@@ -127,6 +160,131 @@
           }
         ],
         "related": ["server-update", "simple-messages"]
+      }
+    ]
+  },
+  {
+    "id": "support",
+    "title": "Help and contributions",
+    "articles": [
+      {
+        "id": "report-bug",
+        "title": "Report a bug",
+        "summary": "Open the GitHub form and provide enough information to reproduce the problem.",
+        "keywords": [
+          "bug",
+          "GitHub",
+          "issue",
+          "error",
+          "report",
+          "form",
+          "diagnostics"
+        ],
+        "sections": [
+          {
+            "title": "Check existing reports and open the form",
+            "paragraphs": [
+              "First search open and closed issues for the error message or affected feature. If the same problem is already reported, add useful observations instead of creating a duplicate.",
+              "The button opens the official repository’s existing Signaler un bug form directly in a new tab; its field labels are in French. GitHub may ask you to sign in. The report will be public. Nothing is sent automatically: review the form and submit it yourself on GitHub."
+            ],
+            "links": [
+              {
+                "destination": "issues",
+                "label": "Search existing issues",
+                "description": "Check open and closed reports before creating an issue."
+              },
+              {
+                "destination": "bug",
+                "label": "Open the bug report form on GitHub",
+                "description": "The existing Signaler un bug template is already selected."
+              }
+            ]
+          },
+          {
+            "title": "Make the problem reproducible",
+            "steps": [
+              "Use a specific title naming the feature, action and symptom rather than “It does not work”. Report one problem per issue.",
+              "Include the installed version or Git SHA and whether this is Dev or production. An administrator can find these under Settings → Server → Current version. Ask them if you cannot access this information; do not confuse the latest available release with the installed version.",
+              "Specify browser and version, operating system, desktop or mobile, your role and, where relevant, integrated browser or extension mode. For a CLI problem, include its version separately from the application version.",
+              "List the minimum steps from the entry point to the error, using anonymized sample data. Separate the expected result from what actually happened.",
+              "State whether the problem always occurs or is intermittent, its frequency, the time with timezone and any recovery that works. Copy the exact error after removing sensitive information.",
+              "Attach only a cropped screenshot or a relevant, sanitized log excerpt. For a session interruption, download the connection diagnostic before reloading the tab if that action is available."
+            ]
+          },
+          {
+            "title": "Example of a useful description",
+            "paragraphs": [
+              "Fictional example: “After renaming a file, the old name remains in the explorer. Steps: open a test project, create example.txt, rename it to example-2.txt. Expected: the new name appears. Actual: the old name remains until refresh. Reproduced three times out of three.” Then add versions and a sanitized screenshot."
+            ],
+            "warning": "Repository issues are public. Never attach passwords, API keys, cookies, tokens, databases, full backups or private conversations. Use private security reporting for a vulnerability, not this form. If that channel is unavailable, contact the administrator privately.",
+            "links": [
+              {
+                "destination": "security",
+                "label": "Open private security reporting",
+                "description": "For vulnerabilities; do not publish them in ordinary issues."
+              }
+            ]
+          }
+        ],
+        "related": [
+          "request-improvement",
+          "admin-operations",
+          "server-update",
+          "desktop"
+        ]
+      },
+      {
+        "id": "request-improvement",
+        "title": "Request an improvement",
+        "summary": "Explain the need, expected outcome and criteria for assessing the proposal.",
+        "keywords": [
+          "GitHub",
+          "issue",
+          "feature",
+          "improvement",
+          "enhancement",
+          "suggestion",
+          "form"
+        ],
+        "sections": [
+          {
+            "title": "Open a focused request",
+            "paragraphs": [
+              "Search existing proposals first. Explain the need before prescribing a technical solution and keep each request focused on one coherent improvement. Use the bug form when an existing feature fails.",
+              "The link selects the existing Proposer une amélioration form directly on GitHub; its field labels are in French. A GitHub account may be required. The request will be public. Opening it publishes nothing and attaches no Mergeron data; you review and submit the request yourself."
+            ],
+            "links": [
+              {
+                "destination": "issues",
+                "label": "Browse existing requests",
+                "description": "Look for ideas already discussed before adding your own."
+              },
+              {
+                "destination": "improvement",
+                "label": "Open the improvement form on GitHub",
+                "description": "The existing Proposer une amélioration template is already selected."
+              }
+            ]
+          },
+          {
+            "title": "Describe a need and a measurable outcome",
+            "steps": [
+              "Under Besoin (Need), describe who encounters the difficulty, in what situation and what is missing today. Explain the impact: wasted time, error risk, accessibility or an operation that cannot be completed.",
+              "Under Solution proposée (Proposed solution), describe the desired behavior, a small example and alternatives tried. An anonymized sketch can help; you do not need to design the architecture.",
+              "Add observable success criteria, including keyboard and mobile use for interface changes. State the priority and reason without promising a delivery date or treating personal urgency as a project commitment.",
+              "Mention known effects on data, permissions or deployment. Say when they are unknown or none are expected; do not provide secrets or new access."
+            ]
+          },
+          {
+            "title": "Follow the discussion",
+            "paragraphs": [
+              "Example criterion: “In a project with many folders, find recent documents using the keyboard and on mobile without opening every folder.” This outcome helps compare solutions rather than fixing a single button location.",
+              "After submitting, keep the issue number and use GitHub notifications to answer questions. An accepted request, a merged pull request and an installed release are separate stages. Tracking work on GitHub does not update your installation."
+            ],
+            "warning": "The request is public and submission guarantees neither implementation nor a delivery date. Remove names, documents, private addresses and confidential screenshots before publishing."
+          }
+        ],
+        "related": ["report-bug", "overview", "git-pr"]
       }
     ]
   },
@@ -397,13 +555,14 @@
             "title": "Settings saved on the agent",
             "paragraphs": [
               "Chosen model, effort, speed, approval and sandbox settings survive reloads and restarts on this agent. They are shared by its authorized users, not personal preferences. Other agents retain their own choices.",
-              "Changes apply to subsequent requests without changing running work. Permissions are saved only after engine confirmation. Saved and Current are distinct: the next request reapplies the saved choice subject to project, Git copy and document protections. A failed save requires an explicit selection again."
+              "Changes apply to subsequent requests without changing running work. Permissions are saved only after engine confirmation. Saved and Current are distinct: the next request reapplies the saved choice subject to project, Git copy and document protections. A failed save requires an explicit selection again.",
+              "In the permissions menu, hover an option to read its explanation or open its information button using the keyboard or touch. Reading help does not select the option. Always allow still requires explicit confirmation and does not expand project permissions."
             ]
           },
           {
             "title": "Compact mode and quick commands",
             "paragraphs": [
-              "In a narrow composer, the model and reasoning effort remain visible. Permissions and capabilities use icons only; hover or use their accessible names to identify them without changing their values.",
+              "Labels progressively compact according to the actual composer width, including on a large screen shared with the explorer. In the narrowest columns, model, effort, permissions and capabilities may appear as icons; full names remain available on hover and to keyboard users.",
               "Typing / at the start of a draft opens commands offered by this version: planning, goals, review, compaction or feedback. Review each dialog before confirming. These commands do not replace model or connector settings."
             ],
             "warning": "Do not select full access just to hide a folder error. Fix the location or relevant permissions first."
@@ -658,6 +817,55 @@
         ]
       },
       {
+        "id": "agent-preview",
+        "title": "Start and inspect a test environment",
+        "summary": "View an agent’s changes at a stable URL using an isolated project copy.",
+        "keywords": [
+          "preview",
+          "MCP",
+          "Docker",
+          "URL",
+          "preview",
+          "test",
+          "storage",
+          "logs"
+        ],
+        "sections": [
+          {
+            "title": "Authorize and prepare",
+            "steps": [
+              "An administrator must enable the service on the installation and test environments in the project settings. The project defines allowed runtimes and limits; an agent cannot grant itself authorization.",
+              "When agent-managed environments are authorized, ask the agent to prepare and start one through the official MCP tools. It may ask for missing commands or test data. Otherwise use the project’s manual profile.",
+              "Specify installation, build, server command, port and page to check. The server listens on 0.0.0.0 inside the runtime; no host port should be published. Use test data without production accounts or secrets."
+            ]
+          },
+          {
+            "title": "Open the preview and understand its state",
+            "paragraphs": [
+              "The Test environment icon opens a tab beside Conversation. It stays neutral when stopped, turns green after checks confirm normal operation and red on a problem. A starting state is not yet a ready page.",
+              "After installation, build and HTTP checks succeed, Open preview opens the real site and Copy URL provides its address. The origin stays the same for this agent after recreation. Reopen from Mergeron to authorize access to the new instance; copying the URL grants no access to another person.",
+              "Sources are synchronized from the agent’s copy. Hot reload depends on the project server; dependency changes may require recreation. If installation or build fails, inspect that stage’s logs before retrying."
+            ]
+          },
+          {
+            "title": "Logs, storage and temporary data",
+            "paragraphs": [
+              "The tab lists this instance’s containers with their state and available measurements. Select a container to read its logs; application container terminals are administrator-only. Storage details usage, space and available inodes when measurable.",
+              "Original sources remain in the agent workspace. Caches, build output, databases and runtime data use temporary test volumes separate from sources and production. These volumes may consume RAM: the agent terminal preflight does not measure their limits."
+            ]
+          },
+          {
+            "title": "Stop or recreate",
+            "paragraphs": [
+              "Stop removes runtime resources and temporary data; the recipe and history remain recorded. Recreate starts from current sources. These actions require confirmation in the interface, and the agent can also stop through MCP. Closing the tab does not stop the runtime.",
+              "The selected lifetime can stop the environment automatically. Changing it for an active instance does not restart it; Never disables automatic expiry. After testing, verify the stopped state and cleanup confirmation."
+            ],
+            "warning": "This is not a backup. Copy useful results to the workspace before stopping or recreating. No Codex account, Git token or production secret is copied automatically. Do not disable the proxy, TLS or sandbox to start a test."
+          }
+        ],
+        "related": ["agent-visual-checks", "agent-project-tools", "report-bug"]
+      },
+      {
         "id": "agent-visual-checks",
         "title": "Have an agent visually check an interface",
         "summary": "Get desktop and mobile screenshots of the real site and distinguish automated checks from visual inspection.",
@@ -692,7 +900,8 @@
           "admin-agent-instructions",
           "browser-annotation",
           "agent-approvals",
-          "git-pr"
+          "git-pr",
+          "agent-preview"
         ]
       }
     ]
@@ -1395,7 +1604,7 @@
           {
             "title": "Install and pair on desktop",
             "steps": [
-              "In the agent, open Extension pairing (plug icon), or Browser → Local browser · extension (test). This preview is restricted to administrators outside impersonation mode.",
+              "In the agent, open Browser → Local browser · extension (test). The Browser button groups both modes and carries the sharing or intervention indicator. Pairing opens a compact dialog without adding a view that reduces conversation width. This preview is restricted to administrators outside impersonation.",
               "For Chrome or Edge, download and extract the ZIP. In chrome://extensions or edge://extensions, enable developer mode and load the unpacked extension from the extracted folder.",
               "In extension options, allow only your Mergeron instance’s HTTPS origin, then reload Mergeron. Keep Mergeron and the shared page in the same browser and profile.",
               "Request pairing with this agent, compare the code in Mergeron and the extension, and confirm in the extension. On the intended HTTPS page, choose the agent and click Point, or Share / resume this tab for reading only."
@@ -1672,19 +1881,27 @@
             "steps": [
               "In Settings → Server → Update, read the application version and Container updates cards: application, NGINX ingress, Squid egress and the browser when managed.",
               "Refresh detection checks images without installing or downloading them. Each card shows the installed image, channel and availability; an unknown state or error does not mean “up to date”.",
+              "Review Backup before this update: Full, Minimal — database and configuration, or No backup. Save backup choice remembers this setting for this installation without starting the operation; an unsaved selection applies only to this update.",
               "Choose Update for the intended component, or Replace with published image when migration of a known local browser is offered. Review the component and exact image digest in the plan, then confirm.",
-              "Even when only the selected image is upgraded, the entire stack stops and is recreated for a consistent backup and rollback. The progress monitor is prepared before server downtime; keep it open during the operation.",
+              "Even when only one image is upgraded, the stack is stopped and recreated within the transaction. Any backup and rollback possibilities depend on the confirmed scope. Tracking is prepared before the server stops; keep it open during the operation.",
               "After success, reload the interface and check important features. View progress and logs reopens the result; if an older monitor is marked superseded, open the latest operation."
             ]
           },
           {
             "title": "Rollback and DEV mode",
             "paragraphs": [
-              "When configured, Manager checks prerequisites and retains a backup. Failure can trigger recovery according to its tracking; do not ignore a recovery-required state.",
-              "Fast mode is limited to a dedicated DEV stack. It accelerates some stages without removing the complete backup or updating production.",
-              "Detection requires compatible Manager and application versions. Other component images remain unchanged; the managed browser is still DEV-only. The Manager itself is updated from the host. Component publisher links do not provide a guaranteed summary of differences between two digests."
+              "The confirmed plan scope determines which data can be restored: full, minimal or no backup. Without a backup, rollback may restore images but does not undo migrations or data changes. Inspect failures or states requiring recovery in the operation tracking.",
+              "Fast mode is restricted to a dedicated Dev stack. Dev and production have separate settings: never infer backup scope from the environment name alone and review the plan before confirming.",
+              "These features require compatible application and Manager versions. Unselected images remain unchanged. An existing browser can be managed in Dev or production after explicit operator configuration; the Manager itself is updated from the host."
             ],
             "warning": "Do not run concurrent operations. Refreshing the application, updating Codex CLI and updating the server image are different actions."
+          },
+          {
+            "title": "Identify the version actually installed",
+            "paragraphs": [
+              "Server → Current version distinguishes the application, Manager, browser and other available components. Record the installed version, channel, Git revision and, if needed, image identity. Unknown means information is missing, not that the component is up to date.",
+              "The latest published release, a Dev build revision and the Codex CLI version are separate information. A merged pull request may not yet be installed. For support, identify the components actually involved without sharing private configuration."
+            ]
           }
         ],
         "related": ["backups", "infrastructure", "admin-codex", "desktop"]
@@ -1709,6 +1926,14 @@
               "Backup lists update copies with date, identifier, server path, disk usage, state and actions. Total usage helps monitor accumulation.",
               "The maximum-count setting controls retention. Cleanup runs after a successful update while protecting items needed for current rollback; a copy is not simply deleted to make room before a risky migration."
             ]
+          },
+          {
+            "title": "Understand scope and compression",
+            "paragraphs": [
+              "Full preserves managed persistent roots. Minimal — database and configuration preserves the database, settings and credentials required by the stack, but not all project files, documents, versions or Git work. No backup copies no data before the update.",
+              "New backups are compressed as tar + gzip. The displayed size is the compressed archive size; older directory backups remain usable without automatic conversion. Compression does not encrypt data: keep these archives in private storage."
+            ],
+            "warning": "The database alone does not contain documents and their historical versions. A minimal backup cannot restore an entire project. With No backup, returning to previous images does not guarantee compatibility with data already migrated."
           },
           {
             "title": "Choose restoration or removal",
@@ -1745,13 +1970,13 @@
             ]
           },
           {
-            "title": "Managed browser in DEV",
+            "title": "Browser managed by the Manager",
             "paragraphs": [
-              "When explicitly enabled on a DEV stack, Mergeron Browser appears in the inventory and participates in Manager transactions. Its public 1.1.1.1 DNS is reapplied during recreation and rollback without changing the host DNS.",
+              "An existing browser can appear in the inventory and participate in Manager transactions when the operator explicitly enables management. This requires a compatible Manager and the expected protected topology. Existing installations are not enabled automatically.",
               "Server → Update can detect and individually update its published image, like NGINX and Squid, with confirmation and a transaction affecting the entire stack. The browser image must remain compatible with the application. A locally built browser without a published digest may require Replace with published image; an unknown state does not prove it is up to date.",
               "Infrastructure displays state and configuration; update actions are in the Update tab. The Manager itself remains administered from the host."
             ],
-            "warning": "Do not disable the sandbox or expose its control port to fix errors. DEV-specific settings must not be implicitly applied to production."
+            "warning": "Do not disable the sandbox or expose the control port to fix an error. Production configuration must use a compatible official stable image and be validated by the operator; Dev settings are never applied implicitly."
           }
         ],
         "related": ["browser-live", "server-update", "backups"]
@@ -1784,7 +2009,8 @@
             "title": "Install or update the CLI",
             "paragraphs": [
               "Codex CLI lets administrators install the executable when integrated management is available, read its version, check stable releases and install after confirmation. Returning to a previous selection may be offered.",
-              "Models and efforts depend on the installed Codex and catalog. Updating the CLI does not guarantee immediate UI support for every new protocol. External installation can limit the UI to consultation."
+              "Models and efforts depend on the installed Codex and catalog. Updating the CLI does not guarantee immediate UI support for every new protocol. External installation can limit the UI to consultation.",
+              "A protected Mergeron CLI variant has a channel and provenance distinct from an official version. Official updates or unvalidated rollbacks may be blocked to preserve sandbox protections. Do not bypass this block with a manual installation; consult the administrator."
             ],
             "warning": "Back up Codex data first: returning to an older executable does not automatically restore potentially migrated data."
           }
@@ -1893,6 +2119,13 @@
               "Text instructions and hidden buttons alone do not establish isolation. Project restrictions and effective service permissions must agree."
             ],
             "warning": "An action can transmit data or change an external system. Specify destination and scope and review confirmations before authorizing an agent."
+          },
+          {
+            "title": "Check the agent’s internal MCP",
+            "paragraphs": [
+              "Capabilities → MCP servers reads the displayed conversation’s inventory. Mergeron (internal) is separate from external servers selected for the project and shows tools actually observed for this agent.",
+              "Not observed means no connection has yet been reported; the internal server is configured when sending a message. A read error is neither proof of an outage nor a Ready state. Global reload concerns external servers; do not resend a message solely to clear an indicator."
+            ]
           }
         ],
         "related": ["agent-composer", "agent-knowledge", "project-people"]
@@ -1931,12 +2164,32 @@
             "title": "Operational settings",
             "paragraphs": [
               "Terminal, Files, Database, Security and OnlyOffice concern the installation. They do not replace project participants or folder settings.",
-              "Log retention is configured in Logs. Saving policies can automatically delete archives exceeding age or count limits while protecting the active file."
+              "Logs → Log retention shows a table by family: application, Codex JSON-RPC and unrecognized files. It shows active retention, archives, maximum age, rotation threshold and total size. The row’s ⋮ menu opens that family’s settings; the active file and unrecognized files are not deleted automatically."
             ],
             "warning": "The global terminal affects the server, not just the displayed project. Deletion, database changes and authentication settings can affect others; back up and verify before acting."
+          },
+          {
+            "title": "Why log size may not decrease immediately",
+            "paragraphs": [
+              "Enabling Codex JSON-RPC retention enables rotation for subsequent writes. An old large file may be moved to an archive of the same size: the threshold does not split or compress existing archives.",
+              "Automatic cleanup removes recognized archives exceeding the age or count limit approximately every minute while the rule is enabled. An archive still within these limits may remain large. Saving a rule or opening the table does not trigger an immediate purge."
+            ]
+          },
+          {
+            "title": "Keep diagnostics for a session interruption",
+            "paragraphs": [
+              "Connection diagnostics is available during verification or recovery and from Logs after reconnection. Download diagnostics before reloading or closing the tab: recent events are kept only in its memory.",
+              "This local JSON describes checks, pauses, responses and attempts without exporting conversations, cookies or tokens. Downloading sends it to no one and does not restore permissions. Review attachments and include relevant material in your report."
+            ]
           }
         ],
-        "related": ["infrastructure", "backups", "onlyoffice", "impersonation"]
+        "related": [
+          "infrastructure",
+          "backups",
+          "onlyoffice",
+          "impersonation",
+          "report-bug"
+        ]
       }
     ]
   }
