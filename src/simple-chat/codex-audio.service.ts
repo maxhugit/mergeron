@@ -83,11 +83,22 @@ export class CodexAudioService implements OnModuleDestroy {
     let closing: Promise<void> | undefined;
     let finishingRequested = false;
     const parts: string[] = [];
+    let pendingText = '';
+    let streamed = false;
+    let fragments = 0;
     const canonical = new Map<string, string>();
+    const interruptedTurns = new Map<
+      string,
+      {
+        acknowledged: boolean;
+        terminated: boolean;
+        timer: ReturnType<typeof setTimeout>;
+      }
+    >();
     const transcript = () =>
-      (canonical.size
-        ? [...canonical.values()].join(' ')
-        : parts.join(' ')
+      (streamed || parts.length
+        ? [...parts, pendingText].filter(Boolean).join(' ')
+        : [...canonical.values()].join(' ')
       ).trim();
     let answerResolve!: (sdp: string) => void;
     let answerReject!: (error: Error) => void;
@@ -117,6 +128,8 @@ export class CodexAudioService implements OnModuleDestroy {
       closed = true;
       clearTimeout(deadline);
       if (quiet) clearTimeout(quiet);
+      for (const turn of interruptedTurns.values()) clearTimeout(turn.timer);
+      interruptedTurns.clear();
       client.removeListener('notification', onNotification);
       client.removeListener('close', onClose);
       answerReject(failure ?? unavailable('la session a été annulée.'));
@@ -142,8 +155,52 @@ export class CodexAudioService implements OnModuleDestroy {
     };
     const settle = () => {
       if (quiet) clearTimeout(quiet);
-      if (finishingRequested && transcript())
+      if (finishingRequested && transcript() && interruptedTurns.size === 0)
         quiet = setTimeout(() => doneResolve(transcript()), 4000);
+    };
+    const confirmInterrupted = (id: string) => {
+      const turn = interruptedTurns.get(id);
+      if (!turn || !turn.acknowledged || !turn.terminated || closed) return;
+      clearTimeout(turn.timer);
+      interruptedTurns.delete(id);
+      settle();
+    };
+    const interruptUnwantedTurn = (id: string) => {
+      if (interruptedTurns.has(id)) return;
+      if (interruptedTurns.size >= 16) {
+        fail(
+          'agent-turn-limit',
+          'les tentatives de relais d’agent dépassent la limite autorisée.',
+        );
+        return;
+      }
+      const turn = {
+        acknowledged: false,
+        terminated: false,
+        timer: setTimeout(
+          () =>
+            fail(
+              'agent-interrupt-timeout',
+              'l’interruption du relais d’agent n’a pas été confirmée.',
+            ),
+          5000,
+        ),
+      };
+      interruptedTurns.set(id, turn);
+      settle(); // Never return a draft while an unwanted turn might still run.
+      void client
+        .request('turn/interrupt', { threadId, turnId: id }, 5000)
+        .then(
+          () => {
+            turn.acknowledged = true;
+            confirmInterrupted(id);
+          },
+          () =>
+            fail(
+              'agent-interrupt-failed',
+              'le relais d’agent n’a pas pu être interrompu.',
+            ),
+        );
     };
     const onNotification = (note: ServerNotification) => {
       if (
@@ -161,32 +218,52 @@ export class CodexAudioService implements OnModuleDestroy {
           fail('invalid-answer', 'la réponse WebRTC du CLI est invalide.');
         else answerResolve(note.params.sdp);
       } else if (
+        note.method === 'thread/realtime/transcript/delta' &&
+        note.params.role === 'user' &&
+        typeof note.params.delta === 'string' &&
+        note.params.delta.length
+      ) {
+        // Frameless emits append-only fragments, including spaces/repetitions.
+        // It may never emit transcript/done. Assistant deltas are never retained.
+        streamed = true;
+        canonical.clear(); // Canonical mirrors are fallback-only, not a second buffer.
+        fragments++;
+        pendingText += note.params.delta;
+        settle();
+      } else if (
         note.method === 'thread/realtime/transcript/done' &&
         note.params.role === 'user' &&
         note.params.text?.trim()
       ) {
         parts.push(note.params.text.trim());
+        canonical.clear();
+        pendingText = ''; // Final text replaces this segment's provisional deltas.
         settle();
       } else if (
         note.method === 'thread/realtime/item/completed' &&
         note.params.item.type === 'transcriptSegment' &&
         note.params.item.role === 'user' &&
-        note.params.item.text.trim()
+        note.params.item.text.trim() &&
+        !streamed &&
+        parts.length === 0
       ) {
         canonical.set(note.params.item.id, note.params.item.text.trim());
         settle();
       } else if (note.method === 'turn/started') {
-        void client
-          .request(
-            'turn/interrupt',
-            { threadId, turnId: note.params.turn.id },
-            5000,
-          )
-          .catch(() => {});
-        fail(
-          'agent-turn-refused',
-          'la session vocale a tenté une action d’agent et a été interrompue.',
-        );
+        interruptUnwantedTurn(note.params.turn.id);
+      } else if (
+        note.method === 'turn/completed' &&
+        interruptedTurns.has(note.params.turn.id)
+      ) {
+        if (note.params.turn.status !== 'interrupted') {
+          fail(
+            'agent-interrupt-unconfirmed',
+            'le relais d’agent s’est terminé sans interruption confirmée.',
+          );
+        } else {
+          interruptedTurns.get(note.params.turn.id)!.terminated = true;
+          confirmInterrupted(note.params.turn.id);
+        }
       } else if (note.method === 'thread/realtime/error') {
         const needsKey = note.params.message.includes('requires API key auth');
         const incompatible = [
@@ -216,6 +293,8 @@ export class CodexAudioService implements OnModuleDestroy {
       if (
         transcript().length > 64000 ||
         parts.length > 1024 ||
+        pendingText.length > 64000 ||
+        fragments > 8192 ||
         canonical.size > 1024
       )
         fail(
@@ -329,6 +408,7 @@ export class CodexAudioService implements OnModuleDestroy {
         outputModality: 'audio',
         includeStartupContext: false,
         clientManagedHandoffs: true,
+        delegationAckFiller: false,
         flushTranscriptTailOnSessionEnd: false,
         transport: { type: 'webrtc', sdp: offer },
         prompt:

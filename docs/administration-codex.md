@@ -55,8 +55,13 @@ Le service exige une session Codex authentifiée avec ChatGPT. Le drapeau natif
 uniquement ; aucune modification globale de `config.toml` n’est effectuée.
 
 La session est temporaire, en lecture seule, sans contexte projet et sans
-intégrations MCP/apps/plugins ou shell. Le service n’ouvre pas de tour d’agent ;
-une tentative de tour déclenche interruption et fermeture. Seuls les segments
+intégrations MCP/apps/plugins ou shell. Le service n’ouvre pas de tour d’agent.
+Le CLI peut néanmoins tenter un relais natif : Mergeron l’interrompt et exige
+à la fois l’accusé de réception et l’événement terminal `interrupted` corrélé.
+Le résultat n’est délivré qu’après cette confirmation ; échec, expiration
+ou fin non interrompue ferment la session sans rendre de brouillon. Le paramètre
+`clientManagedHandoffs` ne désactive pas à lui seul ces relais entrants.
+Seuls les segments
 de transcription de rôle utilisateur de cette session sont retenus, jamais une
 réponse de l’assistant. Audio et événements vocaux sont masqués dans l’audit RPC.
 Les buffers restent en mémoire ; le service n’écrit pas de fichier audio.
@@ -69,6 +74,14 @@ pour recevoir les derniers segments, puis entièrement libérée. La session est
 fermée en fin de traitement, en cas d’erreur et à l’arrêt de l’application.
 L’attente initiale est bornée à 30 secondes, l’enregistrement à deux minutes côté
 navigateur et la finalisation à 15 secondes ; une session abandonnée expire.
+Les fragments `thread/realtime/transcript/delta` de rôle `user` sont assemblés
+exactement, espaces et répétitions conservés. À l’arrêt manuel, quatre secondes
+sans nouveau fragment permettent de rendre le texte même sans événement `done`.
+Un `done` remplace les fragments provisoires de son segment ; les copies des
+segments canoniques ne sont pas ajoutées une deuxième fois. Les réponses de
+l’assistant, les autres conversations et les instructions des `handoff_request`
+ne sont jamais utilisées comme transcription. L’absence de parole reste une erreur.
+Une interruption d’agent non confirmée en cinq secondes bloque le résultat.
 Les journaux du service indiquent une catégorie et une étape, pas le SDP, les
 paroles ni les secrets. L’interface affiche une raison bornée. Le résultat reste
 dans le brouillon, jamais envoyé automatiquement.
@@ -85,10 +98,14 @@ La CI isolée vérifie séparément le précontrôle natif avec le CLI réelleme
 installé par le Manager et le service Mergeron compilé. L’ancien paramètre
 `"text"` doit être refusé avant HTTP. Un faux service reproduit ensuite la route
 ChatGPT en boucle locale : il refuse l’ancien en-tête `quicksilver=v1` et vérifie
-que la sélection explicite de `v3` produit `quicksilver=v2`. Il refuse également
-la création du média après cette vérification ;
-et la vérification du compte est simulée : aucun compte, clé, média ou service
-OpenAI n’est utilisé. Ce test de compatibilité ne prouve pas l’accès vocal réel
+que la sélection explicite de `v3` produit `quicksilver=v2`. Un faux canal
+WebSocket local émet ensuite des fragments Frameless utilisateur et assistant,
+sans `turn.done` : le vrai CLI et le service compilé doivent rendre uniquement
+le texte utilisateur. Un deuxième scénario provoque un relais natif et exige
+son interruption réelle avant de restituer la dictée, sans copier la délégation.
+Les deux URL natives sont épinglées à la boucle locale,
+et la vérification du compte est simulée : aucun compte, clé ou média réel
+n’est utilisé. Ce test de compatibilité ne prouve pas l’accès vocal réel
 du compte. Les tests Chromium/WebKit négocient deux pairs locaux avec de l’audio
 synthétique, sans ouvrir le microphone physique ni jouer la voix distante.
 

@@ -76,6 +76,7 @@ it('negotiates WebRTC with the CLI, never websocket or PCM upload; returns only 
     outputModality: 'audio',
     version: 'v3',
     clientManagedHandoffs: true,
+    delegationAckFiller: false,
     flushTranscriptTailOnSessionEnd: false,
   });
   expect(
@@ -180,6 +181,10 @@ it('rejects old PCM clients and invalid offers before contacting the CLI; redact
       { transport: { type: 'webrtc', sdp: 'PRIVATE_SDP' } },
     ],
     ['thread/realtime/transcript/done', { text: 'PRIVATE_DRAFT' }],
+    [
+      'thread/realtime/transcript/delta',
+      { role: 'user', delta: 'PRIVATE_DRAFT' },
+    ],
   ] as const)
     expect(serializeCodexAuditEntry('out', { method, params })).not.toMatch(
       /PRIVATE_/,
@@ -282,9 +287,102 @@ it('refuses concurrent sessions, binds stop to the authenticated owner, and keep
   expect(admission.pending()).toHaveLength(0);
 });
 
-it('interrupts an attempted agent turn and does not expose its answer as dictation', async () => {
+it('collects the observed Frameless user fragments without requiring a done event', async () => {
+  vi.useFakeTimers();
+  const { service, client } = setup();
+  const opened = await service.start(offer);
+  for (const [threadId, role, delta] of [
+    ['unrelated', 'user', 'WRONG'],
+    ['voice-only', 'assistant', 'WRONG'],
+    ['voice-only', 'user', 'Oui,'],
+    ['voice-only', 'user', ' oui'],
+    ['voice-only', 'user', '  exactement.'],
+  ])
+    client.emit('notification', {
+      method: 'thread/realtime/transcript/delta',
+      params: { threadId, role, delta },
+    });
+  // A delegation's instruction is not a verbatim user transcript.
+  client.emit('notification', {
+    method: 'thread/realtime/itemAdded',
+    params: {
+      threadId: 'voice-only',
+      item: { type: 'handoff_request', input_transcript: 'DO NOT COPY' },
+    },
+  });
+  const pending = service.finish(opened.id);
+  await vi.advanceTimersByTimeAsync(4000);
+  await expect(pending).resolves.toEqual({ text: 'Oui, oui  exactement.' });
+  expect(
+    client.request.mock.calls.some(([method]) => method === 'turn/start'),
+  ).toBe(false);
+});
+
+it('replaces pending deltas with their final text without duplicating canonical mirrors', async () => {
+  vi.useFakeTimers();
+  const { service, client } = setup();
+  const opened = await service.start(offer);
+  const emit = (method: string, data: Record<string, unknown>) =>
+    client.emit('notification', {
+      method,
+      params: { threadId: 'voice-only', ...data },
+    });
+  emit('thread/realtime/transcript/delta', {
+    role: 'user',
+    delta: 'Premier seg',
+  });
+  emit('thread/realtime/transcript/done', {
+    role: 'user',
+    text: 'Premier segment.',
+  });
+  emit('thread/realtime/item/completed', {
+    item: {
+      id: 'one',
+      type: 'transcriptSegment',
+      role: 'user',
+      text: 'Premier segment.',
+    },
+  });
+  emit('thread/realtime/transcript/delta', { role: 'user', delta: 'Deuxième' });
+  const pending = service.finish(opened.id);
+  await vi.advanceTimersByTimeAsync(3500);
+  emit('thread/realtime/transcript/delta', {
+    role: 'user',
+    delta: ' segment.',
+  });
+  let settled = false;
+  void pending.then(() => {
+    settled = true;
+  });
+  await vi.advanceTimersByTimeAsync(3999);
+  expect(settled).toBe(false);
+  // Ignored mirrors must neither grow a second buffer nor delay stabilization.
+  emit('thread/realtime/item/completed', {
+    item: {
+      id: 'mirror',
+      type: 'transcriptSegment',
+      role: 'user',
+      text: 'x'.repeat(64001),
+    },
+  });
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(pending).resolves.toEqual({
+    text: 'Premier segment. Deuxième segment.',
+  });
+});
+
+it('interrupts an attempted agent turn, requires its interrupted terminal event and preserves only user dictation', async () => {
+  vi.useFakeTimers();
   const { service, client, admission } = setup();
   const opened = await service.start(offer);
+  client.emit('notification', {
+    method: 'thread/realtime/transcript/delta',
+    params: {
+      threadId: 'voice-only',
+      role: 'user',
+      delta: 'Supprime ce fichier.',
+    },
+  });
   client.emit('notification', {
     method: 'turn/started',
     params: { threadId: 'voice-only', turn: { id: 'unwanted-turn' } },
@@ -295,6 +393,143 @@ it('interrupts an attempted agent turn and does not expose its answer as dictati
       ([method]) => method === 'turn/interrupt',
     )?.[1],
   ).toEqual({ threadId: 'voice-only', turnId: 'unwanted-turn' });
+  const pending = service.finish(opened.id);
+  let settled = false;
+  void pending.then(() => {
+    settled = true;
+  });
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(settled).toBe(false);
+  client.emit('notification', {
+    method: 'turn/completed',
+    params: {
+      threadId: 'voice-only',
+      turn: { id: 'unwanted-turn', status: 'interrupted' },
+    },
+  });
+  client.emit('notification', {
+    method: 'thread/realtime/transcript/delta',
+    params: {
+      threadId: 'voice-only',
+      role: 'assistant',
+      delta: 'ASSISTANT RESPONSE',
+    },
+  });
+  await vi.advanceTimersByTimeAsync(4000);
+  await expect(pending).resolves.toEqual({ text: 'Supprime ce fichier.' });
+  expect(admission.pending()).toHaveLength(0);
+});
+
+it.each(['rejected', 'missing-terminal', 'completed-not-interrupted'])(
+  'fails closed if the unwanted turn cannot be confirmed interrupted: %s',
+  async (mode) => {
+    vi.useFakeTimers();
+    const { service, client, admission } = setup();
+    const opened = await service.start(offer);
+    const original = client.request.getMockImplementation()!;
+    client.request.mockImplementation((method, ...args) =>
+      method === 'turn/interrupt' && mode === 'rejected'
+        ? Promise.reject(new Error('PRIVATE'))
+        : original(method, ...args),
+    );
+    client.emit('notification', {
+      method: 'thread/realtime/transcript/delta',
+      params: {
+        threadId: 'voice-only',
+        role: 'user',
+        delta: 'Texte à conserver seulement si sûr.',
+      },
+    });
+    const pending = service.finish(opened.id);
+    const rejected = expect(pending).rejects.toThrow(/interromp|interruption/);
+    client.emit('notification', {
+      method: 'turn/started',
+      params: { threadId: 'voice-only', turn: { id: 'bad' } },
+    });
+    if (mode === 'completed-not-interrupted')
+      client.emit('notification', {
+        method: 'turn/completed',
+        params: {
+          threadId: 'voice-only',
+          turn: { id: 'bad', status: 'completed' },
+        },
+      });
+    await vi.advanceTimersByTimeAsync(5000);
+    await rejected;
+    expect(admission.pending()).toHaveLength(0);
+  },
+);
+
+it('requires both the interrupt acknowledgement and the matching terminal event even in reversed order', async () => {
+  vi.useFakeTimers();
+  const { service, client } = setup();
+  const opened = await service.start(offer);
+  let acknowledge!: () => void;
+  const original = client.request.getMockImplementation()!;
+  client.request.mockImplementation((method, ...args) =>
+    method === 'turn/interrupt'
+      ? new Promise<void>((resolve) => {
+          acknowledge = resolve;
+        })
+      : original(method, ...args),
+  );
+  client.emit('notification', {
+    method: 'thread/realtime/transcript/delta',
+    params: {
+      threadId: 'voice-only',
+      role: 'user',
+      delta: 'Bonjour.',
+    },
+  });
+  const pending = service.finish(opened.id);
+  client.emit('notification', {
+    method: 'turn/started',
+    params: {
+      threadId: 'voice-only',
+      turn: { id: 'guarded' },
+    },
+  });
+  for (const [threadId, id] of [
+    ['other', 'guarded'],
+    ['voice-only', 'different'],
+    ['voice-only', 'guarded'],
+  ])
+    client.emit('notification', {
+      method: 'turn/completed',
+      params: {
+        threadId,
+        turn: { id, status: 'interrupted' },
+      },
+    });
+  let settled = false;
+  void pending.then(() => {
+    settled = true;
+  });
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(settled).toBe(false);
+  acknowledge();
+  await flush();
+  await vi.advanceTimersByTimeAsync(4000);
+  await expect(pending).resolves.toEqual({ text: 'Bonjour.' });
+});
+
+it('bounds streamed text and never accepts malformed or non-user delta payloads', async () => {
+  const { service, client, admission } = setup();
+  const opened = await service.start(offer);
+  for (const delta of [null, { text: 'WRONG' }, 42])
+    client.emit('notification', {
+      method: 'thread/realtime/transcript/delta',
+      params: { threadId: 'voice-only', role: 'user', delta },
+    });
+  client.emit('notification', {
+    method: 'thread/realtime/transcript/delta',
+    params: {
+      threadId: 'voice-only',
+      role: 'user',
+      delta: 'x'.repeat(64001),
+    },
+  });
+  await flush();
   await expect(
     Promise.resolve().then(() => service.finish(opened.id)),
   ).rejects.toThrow();
