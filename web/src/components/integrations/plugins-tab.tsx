@@ -31,16 +31,18 @@ import type {
 import { showSnackbar } from '@/stores/snackbar-store';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { queryHasId } from '@/lib/query-invalidation';
+import { pluginReference } from './plugin-reference';
 import { PluginCard } from './plugin-card';
 import { PluginDetailSheet, type PluginKey } from './plugin-detail-sheet';
 
-export function PluginsTab() {
+export function PluginsTab({ catalogOnly = false }: { catalogOnly?: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { t: ti } = useTranslation('integrations');
   const [view, setView] = useState<'installed' | 'featured' | 'catalog'>(
-    'installed',
+    catalogOnly ? 'catalog' : 'installed',
   );
+  const [catalogPage, setCatalogPage] = useState(0);
   const [search, setSearch] = useState('');
   const [selectedPlugin, setSelectedPlugin] = useState<PluginKey | null>(null);
   const [lastReconcile, setLastReconcile] =
@@ -177,24 +179,26 @@ export function PluginsTab() {
   ) => ({
     plugin,
     marketplacePath: mp.path,
+    marketplaceName: mp.name,
     featured: featuredIds.has(plugin.id),
     disabled: mutating,
     onSelect: setSelectedPlugin,
     onInstall: () =>
       installMutation.mutate({
-        body: { marketplacePath: mp.path, pluginName: plugin.name },
+        body: pluginReference(mp, plugin.name),
       }),
     onUninstall: () =>
       uninstallMutation.mutate({ body: { pluginId: plugin.id } }),
   });
 
-  const navigation = (
+  const navigation = !catalogOnly && (
     <IntegrationNav
       label={ti('pluginViews')}
       value={view}
       onChange={(next) => {
         setView(next);
         setSearch('');
+        setCatalogPage(0);
       }}
       secondary
       items={[
@@ -226,7 +230,9 @@ export function PluginsTab() {
       ? installed
       : view === 'featured'
         ? featured
-        : allPlugins.filter(({ plugin }) => !plugin.installed);
+        : catalogOnly
+          ? allPlugins
+          : allPlugins.filter(({ plugin }) => !plugin.installed);
   const displayed = search.trim()
     ? visiblePlugins.filter(({ plugin }) =>
         (plugin.interface?.displayName ?? plugin.name)
@@ -234,6 +240,9 @@ export function PluginsTab() {
           .includes(search.toLowerCase()),
       )
     : visiblePlugins;
+  const pageCount = Math.max(1, Math.ceil(displayed.length / 50));
+  const currentPage = Math.min(catalogPage, pageCount - 1);
+  const pagePlugins = displayed.slice(currentPage * 50, (currentPage + 1) * 50);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       {navigation}
@@ -243,7 +252,10 @@ export function PluginsTab() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCatalogPage(0);
+            }}
             placeholder={t('searchPlugins')}
             className="pl-9"
           />
@@ -252,7 +264,10 @@ export function PluginsTab() {
               variant="ghost"
               size="icon"
               className="absolute right-1 top-1 h-7 w-7"
-              onClick={() => setSearch('')}
+              onClick={() => {
+                setSearch('');
+                setCatalogPage(0);
+              }}
             >
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -313,9 +328,9 @@ export function PluginsTab() {
         tabIndex={0}
         className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1"
       >
-        {displayed.map(({ plugin, marketplace }) => (
+        {pagePlugins.map(({ plugin, marketplace }) => (
           <PluginCard
-            key={`${marketplace.path}::${plugin.id}`}
+            key={`${marketplace.name}::${marketplace.path}::${plugin.id}`}
             {...makeCardProps(plugin, marketplace)}
           />
         ))}
@@ -326,12 +341,39 @@ export function PluginsTab() {
         )}
       </div>
 
+      {pageCount > 1 && (
+        <div className="flex shrink-0 items-center justify-between gap-2 text-sm">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === 0}
+            onClick={() => setCatalogPage(currentPage - 1)}
+          >
+            {ti('previousPage')}
+          </Button>
+          <span role="status">
+            {ti('catalogPage', {
+              page: currentPage + 1,
+              pages: pageCount,
+              count: displayed.length,
+            })}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage + 1 >= pageCount}
+            onClick={() => setCatalogPage(currentPage + 1)}
+          >
+            {ti('nextPage')}
+          </Button>
+        </div>
+      )}
       <PluginDetailSheet
         pluginKey={selectedPlugin}
         onClose={() => setSelectedPlugin(null)}
-        onInstall={(mp, name) =>
+        onInstall={(reference) =>
           installMutation.mutate({
-            body: { marketplacePath: mp, pluginName: name },
+            body: reference,
           })
         }
         onUninstall={(id) =>
@@ -416,10 +458,7 @@ function invalidateAfterReconcile(
     if (!pluginIds.has(plugin.id)) continue;
     void queryClient.invalidateQueries({
       queryKey: pluginsReadPluginQueryKey({
-        query: {
-          marketplacePath: marketplace.path,
-          pluginName: plugin.name,
-        },
+        query: pluginReference(marketplace, plugin.name),
       }),
     });
   }

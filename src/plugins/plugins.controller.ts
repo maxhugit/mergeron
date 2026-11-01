@@ -62,18 +62,17 @@ export class PluginsController {
   /** Reads detailed plugin metadata from one marketplace. */
   @Get('detail')
   @ApiOperation({ summary: 'Read Codex plugin detail' })
-  @ApiQuery({ name: 'marketplacePath', required: true })
+  @ApiQuery({ name: 'marketplacePath', required: false })
+  @ApiQuery({ name: 'remoteMarketplaceName', required: false })
   @ApiQuery({ name: 'pluginName', required: true })
   @ApiOkResponse({ type: PluginReadResponseDto })
   readPlugin(
     @Query('marketplacePath') marketplacePath?: string,
     @Query('pluginName') pluginName?: string,
+    @Query('remoteMarketplaceName') remoteMarketplaceName?: string,
   ): Promise<v2.PluginReadResponse> {
     return this.pluginsService.readPlugin({
-      marketplacePath: this.requireTrimmedString(
-        marketplacePath,
-        'marketplacePath',
-      ),
+      ...this.marketplaceSource(marketplacePath, remoteMarketplaceName),
       pluginName: this.requireTrimmedString(pluginName, 'pluginName'),
     });
   }
@@ -107,9 +106,9 @@ export class PluginsController {
       );
     }
     return this.pluginsService.installPlugin({
-      marketplacePath: this.requireTrimmedString(
+      ...this.marketplaceSource(
         body.marketplacePath,
-        'marketplacePath',
+        body.remoteMarketplaceName,
       ),
       pluginName: this.requireTrimmedString(body.pluginName, 'pluginName'),
     });
@@ -132,6 +131,25 @@ export class PluginsController {
     return this.pluginsService.uninstallPlugin({
       pluginId: this.requireTrimmedString(body.pluginId, 'pluginId'),
     });
+  }
+
+  private marketplaceSource(local: unknown, remote: unknown) {
+    for (const [field, value] of [
+      ['marketplacePath', local],
+      ['remoteMarketplaceName', remote],
+    ] as const) {
+      if (value !== undefined && value !== null && typeof value !== 'string')
+        this.requireTrimmedString(value, field);
+    }
+    const path = typeof local === 'string' ? local.trim() : '';
+    const name = typeof remote === 'string' ? remote.trim() : '';
+    if (Boolean(path) === Boolean(name))
+      throw BusinessException.badRequest(
+        ErrorCode.validation.typeMismatch,
+        'Provide exactly one marketplacePath or remoteMarketplaceName',
+        { field: 'marketplace' },
+      );
+    return path ? { marketplacePath: path } : { remoteMarketplaceName: name };
   }
 
   private requireTrimmedString(value: unknown, field: string): string {

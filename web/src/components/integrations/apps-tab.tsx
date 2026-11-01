@@ -1,3 +1,4 @@
+import { PluginsTab } from './plugins-tab';
 import { IntegrationNav } from './integration-nav';
 import {
   installedApps,
@@ -133,27 +134,39 @@ export function AppsTab() {
     );
   if (isError && !data)
     return (
-      <div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         {navigation}
-        <div role="alert" className="rounded-lg border p-4 text-sm">
+        <div role="alert" className="shrink-0 rounded-lg border p-4 text-sm">
           <p>
             {ti(
-              view === 'catalog'
-                ? 'directoryUnavailable'
-                : 'inventoryUnavailable',
+              view === 'catalog' ? 'directoryFallback' : 'inventoryUnavailable',
             )}
           </p>
-          <Button
-            variant="outline"
-            className="mt-3"
-            onClick={() => {
-              refreshRuntime.current = view === 'connected';
-              void refetch();
-            }}
-          >
-            {ti('retry')}
-          </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                refreshRuntime.current = view === 'connected';
+                void refetch();
+              }}
+            >
+              {ti('retry')}
+            </Button>
+            {view === 'catalog' && (
+              <Button asChild variant="outline">
+                <a
+                  href="https://chatgpt.com/apps"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {ti('openOfficialDirectory')}
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
+        {view === 'catalog' && <PluginsTab catalogOnly />}
       </div>
     );
 

@@ -48,5 +48,10 @@
   "internalServer": "Mergeron (interne)",
   "conversationScoped": "Par conversation",
   "internalServerHelp": "Outils internes de Mergeron. La connexion et les outils disponibles sont vérifiés dans chaque conversation via Capacités → Serveurs MCP, selon les autorisations du projet.",
-  "externalServersReady": "{{ready}}/{{total}} serveurs externes prêts"
+  "externalServersReady": "{{ready}}/{{total}} serveurs externes prêts",
+  "directoryFallback": "L’annuaire des applications ne répond pas. Le catalogue officiel des plugins Codex est affiché ci-dessous : ouvre une fiche pour voir ses applications associées. Cette liste est distincte de l’annuaire ChatGPT.",
+  "openOfficialDirectory": "Ouvrir l’annuaire ChatGPT",
+  "previousPage": "Précédent",
+  "nextPage": "Suivant",
+  "catalogPage": "{{page}} / {{pages}} · {{count}} intégrations"
 }

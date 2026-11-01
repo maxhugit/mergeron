@@ -19,15 +19,13 @@ import {
 } from '@/components/ui/dialog';
 import { pluginsReadPluginOptions } from '@/generated/api/@tanstack/react-query.gen';
 
-export interface PluginKey {
-  marketplacePath: string;
-  pluginName: string;
-}
+import { pluginReference, type PluginKey } from './plugin-reference';
+export type { PluginKey } from './plugin-reference';
 
 interface Props {
   pluginKey: PluginKey | null;
   onClose: () => void;
-  onInstall: (marketplacePath: string, pluginName: string) => void;
+  onInstall: (reference: PluginKey) => void;
   onUninstall: (pluginId: string) => void;
   mutating: boolean;
 }
@@ -41,14 +39,12 @@ export function PluginDetailSheet({
 }: Props) {
   const { t } = useTranslation();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     ...pluginsReadPluginOptions({
-      query: {
-        marketplacePath: pluginKey?.marketplacePath ?? '',
-        pluginName: pluginKey?.pluginName ?? '',
-      },
+      query: pluginKey ?? { pluginName: '' },
     }),
     enabled: pluginKey !== null,
+    retry: false,
   });
 
   const detail = data?.plugin ?? null;
@@ -75,6 +71,13 @@ export function PluginDetailSheet({
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-4 w-1/2" />
             <Skeleton className="h-20 w-full" />
+          </div>
+        ) : isError ? (
+          <div className="space-y-3 py-6 text-sm">
+            <p role="alert">{t('failedToLoadPlugins')}</p>
+            <Button variant="outline" onClick={() => void refetch()}>
+              {t('retry')}
+            </Button>
           </div>
         ) : detail ? (
           <ScrollArea className="h-[55dvh] pr-2">
@@ -221,7 +224,15 @@ export function PluginDetailSheet({
                     className="gap-1.5"
                     disabled={mutating}
                     onClick={() =>
-                      onInstall(detail.marketplacePath, detail.summary.name)
+                      onInstall(
+                        pluginReference(
+                          {
+                            path: detail.marketplacePath,
+                            name: detail.marketplaceName,
+                          },
+                          detail.summary.name,
+                        ),
+                      )
                     }
                   >
                     <Download className="h-3.5 w-3.5" />

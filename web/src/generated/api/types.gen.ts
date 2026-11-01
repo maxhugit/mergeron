@@ -1897,10 +1897,10 @@ export type PluginSummaryDto = {
 };
 
 export type PluginMarketplaceEntryDto = {
-    name: string;
-    path: string;
-    interface: MarketplaceInterfaceDto | null;
-    plugins: Array<PluginSummaryDto>;
+  name: string;
+  path: string | null;
+  interface: MarketplaceInterfaceDto | null;
+  plugins: Array<PluginSummaryDto>;
 };
 
 export type MarketplaceLoadErrorInfoDto = {
@@ -1935,13 +1935,13 @@ export type PluginAppSummaryDto = {
 };
 
 export type PluginDetailDto = {
-    marketplaceName: string;
-    marketplacePath: string;
-    summary: PluginSummaryDto;
-    description: string | null;
-    skills: Array<PluginSkillSummaryDto>;
-    apps: Array<PluginAppSummaryDto>;
-    mcpServers: Array<string>;
+  marketplaceName: string;
+  marketplacePath: string | null;
+  summary: PluginSummaryDto;
+  description: string | null;
+  skills: Array<PluginSkillSummaryDto>;
+  apps: Array<PluginAppSummaryDto>;
+  mcpServers: Array<string>;
 };
 
 export type PluginReadResponseDto = {
@@ -1967,8 +1967,9 @@ export type PluginReconcileResponseDto = {
 };
 
 export type PluginInstallRequestDto = {
-    marketplacePath: string;
-    pluginName: string;
+  marketplacePath?: string;
+  remoteMarketplaceName?: string;
+  pluginName: string;
 };
 
 export type PluginInstallResponseDto = {
@@ -3946,13 +3947,14 @@ export type PluginsListPluginsResponses = {
 export type PluginsListPluginsResponse = PluginsListPluginsResponses[keyof PluginsListPluginsResponses];
 
 export type PluginsReadPluginData = {
-    body?: never;
-    path?: never;
-    query: {
-        marketplacePath: string;
-        pluginName: string;
-    };
-    url: '/api/plugins/detail';
+  body?: never;
+  path?: never;
+  query: {
+    marketplacePath?: string;
+    pluginName: string;
+    remoteMarketplaceName?: string;
+  };
+  url: '/api/plugins/detail';
 };
 
 export type PluginsReadPluginErrors = {
