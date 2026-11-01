@@ -50,6 +50,32 @@ Votre proxy HTTPS et votre éventuel SSO restent administrés séparément.
 Voir l’[architecture](docs/architecture.md) et le [fonctionnement du Manager](docs/mergeron-manager.md).
 Les [adaptations aux panneaux hôtes](docs/adapters/README.md) sont facultatives.
 
+## Répertoires du dépôt
+
+Chaque répertoire racine suivi dans Git possède un README qui explique son
+objectif fonctionnel, son contenu et ses précautions d’usage.
+
+| Répertoire                           | Objectif fonctionnel                                            |
+| ------------------------------------ | --------------------------------------------------------------- |
+| [.github](.github/README.md)         | Valider les changements et organiser les publications GitHub.   |
+| [codex_probe](codex_probe/README.md) | Vérifier le comportement réel du protocole Codex.               |
+| [deployment](deployment/README.md)   | Fournir les modèles d’installation et d’exploitation.           |
+| [docs](docs/README.md)               | Expliquer les parcours utilisateur et l’administration.         |
+| [drizzle](drizzle/README.md)         | Faire évoluer les données SQLite entre versions.                |
+| [images](images/README.md)           | Conserver les captures de référence documentaires.              |
+| [manager](manager/README.md)         | Installer et maintenir les composants et prévisualisations.     |
+| [runtime](runtime/README.md)         | Partager les contrats du CLI et des environnements exécutés.    |
+| [scripts](scripts/README.md)         | Construire, vérifier et maintenir la solution.                  |
+| [security](security/README.md)       | Conserver les évaluations et correctifs de sécurité.            |
+| [skills](skills/README.md)           | Fournir les méthodes spécialisées des agents.                   |
+| [src](src/README.md)                 | Appliquer les règles métier et exposer les services du serveur. |
+| [web](web/README.md)                 | Fournir l’interface, la PWA et l’extension navigateur.          |
+
+Les dossiers locaux générés comme `node_modules/`, `dist/` et `public/` à la
+racine ne sont pas des sources à maintenir dans Git. Pour les règles de
+nettoyage du code et de conservation des tests, voir la
+[maintenance du code](docs/maintenance-code.md).
+
 ## Construction et versions de l’image
 
 Mergeron reste en version majeure `0` pendant sa phase actuelle. Les versions

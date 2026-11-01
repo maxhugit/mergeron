@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
-import { ManageWorkspacesDialog } from './manage-workspaces-dialog';
+import { ProjectSettingsPanel } from '@/components/projects/project-settings-dialog';
 import type { ProjectSummary } from '@/lib/projects-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
@@ -12,6 +12,23 @@ import { DragDropProvider } from '@dnd-kit/react';
 import { WorkspaceOverview } from './workspace-overview';
 import { useAgentViewCacheStore } from '@/stores/agent-view-cache-store';
 vi.mock('./workspace-transfers', () => ({ WorkspaceTransfers: () => null }));
+vi.mock('@/lib/platform-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/platform-session')>()),
+  usePlatformSession: () => ({ isAdministrator: true }),
+}));
+const modelQuery = vi.hoisted(() => vi.fn().mockResolvedValue({ data: [] }));
+vi.mock(
+  '@/generated/api/@tanstack/react-query.gen',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@/generated/api/@tanstack/react-query.gen')
+    >()),
+    modelsListModelsOptions: () => ({
+      queryKey: ['fixture-models'],
+      queryFn: modelQuery,
+    }),
+  }),
+);
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
   projectsApi: vi.fn().mockImplementation(async () =>
@@ -133,21 +150,18 @@ test.each([390, 1001])(
       ],
       agentThreads: [],
     } as unknown as ProjectSummary;
-    const add = vi.fn(),
-      detach = vi.fn();
+    modelQuery.mockClear();
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <ManageWorkspacesDialog
+        <ProjectSettingsPanel
           project={project}
-          pending={false}
-          onClose={() => {}}
-          onAdd={add}
-          onDetach={detach}
+          section="workspaces"
+          canManageParticipants={true}
         />
       </QueryClientProvider>,
     );
     expect(
-      screen.getByRole('dialog', {
+      screen.getByRole('heading', {
         name: 'Gérer les emplacements et connexions',
       }),
     ).toBeVisible();
@@ -160,13 +174,23 @@ test.each([390, 1001])(
       screen.getByRole('heading', { name: 'Connexions externes' }),
     ).toBeVisible();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    const engine = navigator.userAgent.includes('Chrome')
+      ? 'chromium'
+      : 'webkit';
+    await page.screenshot({
+      path: `../../../../.vitest-screenshots/project-locations-current-${engine}-${width}.png`,
+    });
     fireEvent.click(
       screen.getByRole('button', {
         name: 'Ajouter un emplacement ou une connexion',
       }),
     );
-    expect(add).toHaveBeenCalledWith(project);
-    expect(detach).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('dialog', {
+        name: 'Ajouter un emplacement ou une connexion',
+      }),
+    ).toBeVisible();
+    expect(modelQuery).not.toHaveBeenCalled();
     expect(project.workspaces[0].path).toBe('/workspaces/p');
   },
 );

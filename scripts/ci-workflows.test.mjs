@@ -6,6 +6,29 @@ import { runInNewContext } from 'node:vm';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
+
+test('every tracked root directory has a functional README linked from the repository index', () => {
+  const tracked = spawnSync('git', ['ls-files', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(tracked.status, 0, tracked.stderr);
+  const directories = new Set(
+    tracked.stdout
+      .split('\0')
+      .filter((file) => file.includes('/'))
+      .map((file) => file.split('/')[0]),
+  );
+  const index = read('README.md');
+  assert.ok(directories.size > 0);
+  for (const directory of directories) {
+    const path = `${directory}/README.md`;
+    const content = read(path);
+    assert.match(content, /^# .+$/m, `${path}: missing descriptive title`);
+    assert.ok(content.length > 200, `${path}: explain its functional purpose`);
+    assert.ok(index.includes(`](${path})`), `${path}: missing from root index`);
+  }
+});
 const quality = read('.github/workflows/quality.yml');
 const publish = read('.github/workflows/docker-publish.yml');
 const job = (workflow, name) => {

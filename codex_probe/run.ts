@@ -76,7 +76,7 @@ export interface Probe {
 function prepareHome(): string {
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(
-      `Missing ${CONFIG_PATH}. Copy config.toml.exmaple to config.toml and fill it in.`,
+      `Missing ${CONFIG_PATH}. Copy config.toml.example to config.toml and fill it in.`,
     );
   }
   rmSync(HOME_DIR, { recursive: true, force: true });
