@@ -11,6 +11,7 @@ const sources = {
   ingress: 'nginx',
   egress: 'ubuntu/squid',
   browser: 'ghcr.io/maxhugit/mergeron-browser',
+  manager: 'ghcr.io/maxhugit/mergeron-manager',
 };
 const notes = {
   application: 'https://github.com/maxhugit/mergeron/releases',
@@ -44,10 +45,32 @@ export class ImageUpdates {
   async discover() {
     const inventory = await this.inventory();
     const components = await Promise.all(
-      this.manifest.components.map(async (component) => {
-        const current = inventory.components.find(
+      [
+        ...this.manifest.components,
+        ...(inventory.manager
+          ? [
+              {
+                id: 'manager',
+                displayName: 'Manager',
+                allowedImageRepositories: [sources.manager],
+              },
+            ]
+          : []),
+      ].map(async (component) => {
+        let current = inventory.components.find(
           (item) => item.id === component.id,
         );
+        if (component.id === 'manager') {
+          const matches = (
+            (await this.docker.listContainers?.().catch(() => [])) ?? []
+          ).filter((item) =>
+            item.Names?.includes(`/${this.manifest.stack}-manager`),
+          );
+          current =
+            matches.length === 1
+              ? { containerId: matches[0].Id, adoption: 'managed' }
+              : null;
+        }
         const result = {
           id: component.id,
           displayName: component.displayName,
@@ -74,7 +97,10 @@ export class ImageUpdates {
           );
           const local = await this.docker.inspectImage(inspect.Image);
           if (local.Id === inspect.Image)
-            result.installedBuild = installedImageBuild(local, component.id);
+            result.installedBuild =
+              current?.build ?? installedImageBuild(local, component.id);
+          result.installedImage =
+            inspect.Config?.Image ?? result.installedImage;
           result.installedImageId = digestPattern.test(
             local.Id ?? inspect.Image,
           )
@@ -92,7 +118,9 @@ export class ImageUpdates {
             !component.allowedImageRepositories.includes(expected)
           )
             throw new Error('unsupportedSource');
-          const defaultTag = ['application', 'browser'].includes(component.id)
+          const defaultTag = ['application', 'browser', 'manager'].includes(
+            component.id,
+          )
             ? this.manifest.environment === 'development'
               ? 'edge'
               : 'latest'

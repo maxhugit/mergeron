@@ -52,7 +52,7 @@ it('allows an update plan slower than three seconds without retrying or starting
   const f = fixture();
   const result = f.service.updateOperation('plan', {
     images: { application: 'approved' },
-    mode: 'dev-fast',
+    mode: 'standard',
     backupMode: 'minimal',
   });
   expect(vi.mocked(http.request).mock.calls[0][0]).toMatchObject({

@@ -73,6 +73,39 @@ function fixture(environment = 'production', localId: string | null = oldId) {
 }
 
 describe('moving image tag discovery', () => {
+  it('reports historical changes only for successful operations with exact recorded revisions', async () => {
+    const { service } = fixture();
+    const operation = {
+      status: 'rolledBack',
+      builds: {
+        application: { from: { revision: from }, to: { revision: to } },
+      },
+    };
+    expect(await service.operationChanges(operation)).toEqual({
+      items: [],
+      unavailable: true,
+    });
+    expect(service.notes).not.toHaveBeenCalled();
+    expect(
+      await service.operationChanges({ ...operation, status: 'succeeded' }),
+    ).toMatchObject({
+      unavailable: false,
+      items: ['Corrige le canal de mise à jour.'],
+    });
+    expect(service.notes).toHaveBeenCalledTimes(1);
+    expect(
+      await service.operationChanges({
+        status: 'succeeded',
+        builds: {
+          application: {
+            from: { revision: 'https://private.invalid' },
+            to: { revision: to },
+          },
+        },
+      }),
+    ).toEqual({ items: [], unavailable: true });
+    expect(service.notes).toHaveBeenCalledTimes(1);
+  });
   it.each(['production', 'development'])(
     'detects a new image without a version bump in %s',
     async (environment) => {

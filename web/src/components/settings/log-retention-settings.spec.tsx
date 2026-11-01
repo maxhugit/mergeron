@@ -70,7 +70,7 @@ it('excludes retention from the server form and its batched saves without changi
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   expect(fixture.server.writes).toHaveLength(0);
   fireEvent.change(input, { target: { value: '20' } });
-  fireEvent.click(screen.getByRole('tab', { name: 'Update' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Update history' }));
   expect(input).not.toBeVisible();
   fireEvent.click(screen.getByRole('tab', { name: 'Socket' }));
   expect(input).toHaveValue(20);

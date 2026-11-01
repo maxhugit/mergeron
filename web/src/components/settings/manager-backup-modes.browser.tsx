@@ -75,7 +75,7 @@ test.each([1000, 390])(
       dockerConnected: true,
       components: [],
       dataSafety: { status: 'protected', blockers: [], protectedMounts: [] },
-      capabilities: { backupSelection: true, devFastUpdate: true },
+      capabilities: { backupSelection: true },
       update: { busy: false, operation: null },
     };
     render(
@@ -87,7 +87,7 @@ test.each([1000, 390])(
     );
     try {
       const select = screen.getByRole('combobox', {
-        name: 'Sauvegarde avant cette mise à jour',
+        name: 'Stratégie de sauvegarde',
       });
       expect(select).toHaveValue('full');
       expect(screen.getAllByRole('option')).toHaveLength(3);

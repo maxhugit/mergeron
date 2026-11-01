@@ -25,10 +25,10 @@ chemin et la taille compressée du fichier, sans parcours récursif. Les politiq
 complète/minimale/aucune et la rétention ne changent pas. Voir le
 [format, les contrôles de restauration et la compatibilité](sauvegarde-restauration.md#format-des-nouvelles-sauvegardes).
 
-L’onglet Sauvegarde permet de régler le nombre de copies à conserver : **10 par
+L’onglet Restauration permet de régler le nombre de copies à conserver : **10 par
 défaut**, de 1 à 1 000. Le réglage est conservé dans l’état privé du Manager et
 isolé par stack/environnement. Il nécessite une application et un Manager à jour.
-L’enregistrement ne supprime rien immédiatement. Après chaque mise à jour réussie,
+L’enregistrement ne supprime rien immédiatement. Après chaque opération réussie qui crée une sauvegarde,
 le Manager retire les copies les plus anciennes au-delà de la limite, sans toucher
 à la sauvegarde courante, aux métadonnées inconnues ou protégées, aux journaux ni
 aux quarantaines. Ces protections peuvent laisser plus de copies que la limite.
@@ -510,3 +510,27 @@ des aperçus : l’arrêt d’un aperçu retire uniquement ses conteneurs, rése
 volumes vérifiés par identité et labels. Les données applicatives couvertes
 par `STATE_ROOT` sont restaurées lors du rollback transactionnel ; les dossiers
 externes sous `/appdata` n’en font pas partie.
+
+## Console des versions et journal
+
+**Serveur → Version actuelle** réunit l’application, le Manager, Mergeron Browser,
+Ingress (Nginx) et Squid. Les versions fournisseurs désignent le logiciel, pas
+la version de sa distribution de base. La date d’une image fournisseur est
+présentée comme une date de création d’image. Une nouvelle image peut conserver
+le même numéro de logiciel. Une découverte impossible est indiquée comme inconnue,
+jamais comme « à jour ». Les cibles sont figées par leur empreinte avant confirmation.
+Le Manager doit annoncer les capacités de cette console avant qu’elle autorise
+les mises à jour et restaurations. Le Manager lui-même reste mis à jour sur l’hôte.
+
+Le **Journal des mises à jour** conserve l’auteur identifié, la date, les versions
+et révisions observées, les étapes et le code d’erreur éventuel. **Voir le log**
+rouvre les étapes d’une opération terminée sans démarrer une autre opération.
+Les améliorations de l’application sont consultées entre ses révisions exactes ;
+les notes indisponibles ne sont pas inventées. Une ancienne opération sans auteur
+ou version reste signalée comme telle. Les spécifications Docker privées et leurs
+secrets ne sont jamais exposées par ce journal.
+
+Une mise à jour manuelle du Manager est inscrite comme un changement détecté sur
+l’hôte : le journal conserve l’heure de détection et les deux images observées.
+Il n’invente ni l’identité de la personne sur l’hôte ni l’heure exacte du remplacement.
+La première observation constitue seulement le point de référence.

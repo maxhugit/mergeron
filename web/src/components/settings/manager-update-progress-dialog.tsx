@@ -32,6 +32,7 @@ const updatePhaseLabels: Record<string, string> = {
   preparing: 'managerUpdatePreparing',
   stopping: 'managerUpdateStopping',
   backingUp: 'managerUpdateBackingUp',
+  restoring: 'managerUpdateRestoring',
   replacing: 'managerUpdateReplacing',
   checkingHealth: 'managerUpdateCheckingHealth',
   committing: 'managerUpdateCommitting',
@@ -122,9 +123,14 @@ export function ManagerUpdateProgressDialog({
     if (operation && !monitoringPaused)
       retainManagerUpdateSnapshot(session, operation);
   }, [operation, session, monitoringPaused]);
+  const operationStages = operation?.checkpoint
+    ? allStages.filter((item) => item !== 'replacing')
+    : operation?.restoreSource
+      ? [...allStages.slice(0, 3), 'restoring', ...allStages.slice(3)]
+      : allStages;
   const stages = withoutDataBackup(operation?.backupPolicy)
-    ? allStages.filter((item) => item !== 'backingUp')
-    : allStages;
+    ? operationStages.filter((item) => item !== 'backingUp')
+    : operationStages;
   const stage = stages.indexOf(phase);
   const completed = operation?.status === 'succeeded';
   const interrupted = operation?.status === 'recoveryRequired';
@@ -133,13 +139,17 @@ export function ManagerUpdateProgressDialog({
     ? 'managerUpdateSuperseded'
     : !operation && requestError
       ? 'managerUpdateStartUnconfirmed'
-      : completed
-        ? 'managerUpdateSucceeded'
-        : restored
-          ? 'managerUpdateRolledBack'
-          : interrupted
-            ? 'managerUpdateRecoveryRequired'
-            : 'managerUpdateRunning';
+      : completed && operation?.checkpoint
+        ? 'managerCheckpointSucceeded'
+        : completed
+          ? 'managerUpdateSucceeded'
+          : restored
+            ? 'managerUpdateRolledBack'
+            : interrupted
+              ? 'managerUpdateRecoveryRequired'
+              : operation?.checkpoint
+                ? 'managerCheckpointRunning'
+                : 'managerUpdateRunning';
 
   return (
     <Dialog

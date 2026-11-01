@@ -121,11 +121,15 @@ async function refresh() {
           ),
         inspectContainer: (id) => docker.inspectContainer(id),
         inspectImage: (reference) => docker.inspectImage(reference),
+        vendorVersion: (id, component) => docker.vendorVersion(id, component),
       });
       snapshot = evaluateAdoption(
         inventory,
         await readAdoptionRecord(adoptionPath),
       );
+      await updater.observeManagerBuild(snapshot.manager).catch(() => {
+        console.error('Manager build observation could not be recorded');
+      });
     } catch (error) {
       snapshot = unavailableInventory(manifest, error);
     }
@@ -323,11 +327,10 @@ const server = http.createServer(async (request, response) => {
         backupManagement: true,
         backupRetention: true,
         backupSelection: true,
+        updateHistory: true,
+        backupRestore: true,
         imageUpdates: true,
         managedCodexCli: true,
-        devFastUpdate:
-          manifest.environment === 'development' &&
-          manifest.stack !== 'mergeron',
       },
     });
     return;
@@ -392,6 +395,10 @@ const server = http.createServer(async (request, response) => {
       '/v1/update',
       '/v1/update/rollback',
       '/v1/update/recover',
+      '/v1/update/restore-plan',
+      '/v1/update/restore',
+      '/v1/update/checkpoint-plan',
+      '/v1/update/checkpoint',
     ].includes(request.url) &&
     request.method === 'POST'
   ) {
@@ -406,7 +413,34 @@ const server = http.createServer(async (request, response) => {
       )
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
-      if (request.url === '/v1/update/plan')
+      if (request.url === '/v1/update/checkpoint-plan')
+        json(response, 200, await updater.planCheckpoint('full'));
+      else if (request.url === '/v1/update/checkpoint')
+        json(
+          response,
+          200,
+          await updater.begin({
+            checkpoint: true,
+            backupMode: 'full',
+            confirmation: body.confirmation,
+            expectedFingerprint: body.expectedFingerprint,
+            actor: body.actor,
+          }),
+        );
+      else if (request.url === '/v1/update/restore-plan')
+        json(response, 200, await updater.planRestore(body.operationId));
+      else if (request.url === '/v1/update/restore')
+        json(
+          response,
+          200,
+          await updater.begin({
+            confirmation: body.confirmation,
+            expectedFingerprint: body.expectedFingerprint,
+            restoreSource: body.operationId,
+            actor: body.actor,
+          }),
+        );
+      else if (request.url === '/v1/update/plan')
         json(
           response,
           200,
@@ -433,6 +467,15 @@ const server = http.createServer(async (request, response) => {
       );
     }
     return;
+  }
+  if (request.url === '/v1/update/history') {
+    if (request.method !== 'GET')
+      return json(response, 405, { error: 'methodNotAllowed' });
+    try {
+      return json(response, 200, await updater.history());
+    } catch {
+      return json(response, 503, { error: 'managerHistoryUnavailable' });
+    }
   }
   if (
     request.url === '/v1/backups/retention' &&

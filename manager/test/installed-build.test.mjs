@@ -22,6 +22,27 @@ const image = {
   },
 };
 
+test('vendor versions describe the software, not the inherited Ubuntu release', async () => {
+  const squid = {
+    Id: id,
+    Created: '2026-10-01T12:00:00Z',
+    Config: { Labels: { 'org.opencontainers.image.version': '24.04' } },
+  };
+  const docker = {
+    inspectImage: async () => squid,
+    vendorVersion: async () => '6.13',
+  };
+  assert.equal(installedImageBuild(squid, 'egress').version, null);
+  const build = await inspectInstalledBuild(
+    docker,
+    { Id: 'squid', Image: id, State: { Running: true } },
+    'egress',
+  );
+  assert.equal(build.version, '6.13');
+  assert.equal(build.builtAt, '2026-10-01T12:00:00.000Z');
+  assert.equal(build.revision, null);
+});
+
 test('reads installed build from the immutable image, never a moving tag or stale container labels', async () => {
   const calls = [];
   const docker = {

@@ -85,7 +85,9 @@ export class DockerClient {
                 resolve(messages);
                 return;
               }
-              resolve(body ? JSON.parse(body) : null);
+              resolve(
+                responseType === 'text' ? body : body ? JSON.parse(body) : null,
+              );
             } catch {
               reject(new Error('Docker API returned invalid JSON'));
             }
@@ -102,6 +104,47 @@ export class DockerClient {
 
   listContainers() {
     return this.request('/containers/json?all=1');
+  }
+
+  /** Fixed read-only version commands. No shell, environment dump or user input. */
+  async vendorVersion(id, component) {
+    const commands = {
+      ingress: ['/usr/sbin/nginx', '-v'],
+      egress: ['/usr/sbin/squid', '-v'],
+    };
+    if (!Object.hasOwn(commands, component))
+      throw Error('Unsupported component');
+    const execution = await this.request(
+      `/containers/${encodeURIComponent(id)}/exec`,
+      {
+        method: 'POST',
+        body: {
+          Cmd: commands[component],
+          AttachStdin: false,
+          AttachStdout: true,
+          AttachStderr: true,
+          Tty: false,
+          Privileged: false,
+          User: '65534',
+        },
+      },
+    );
+    const output = await this.request(
+      `/exec/${encodeURIComponent(execution.Id)}/start`,
+      {
+        method: 'POST',
+        body: { Detach: false, Tty: false },
+        responseType: 'text',
+        timeout: 3000,
+        maxResponseBytes: 16384,
+      },
+    );
+    return (
+      (component === 'ingress'
+        ? /nginx\/(\d+(?:\.\d+){1,3})/
+        : /Squid Cache: Version (\d+(?:\.\d+){1,3})/
+      ).exec(output)?.[1] ?? null
+    );
   }
 
   async openTerminal(id, user, cols, rows) {

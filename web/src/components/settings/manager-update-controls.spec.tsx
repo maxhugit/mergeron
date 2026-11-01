@@ -72,11 +72,9 @@ beforeEach(async () => {
   await i18n.changeLanguage('fr');
 });
 
-it('offers fast updates only when a development Manager explicitly supports them', async () => {
+it('never offers the removed fast update mode', async () => {
   const view = fixture.render(
-    <ManagerUpdateControls
-      status={{ ...status, capabilities: { devFastUpdate: true } }}
-    />,
+    <ManagerUpdateControls status={{ ...status, capabilities: {} }} />,
   );
   expect(
     screen.queryByRole('checkbox', {
@@ -89,15 +87,15 @@ it('offers fast updates only when a development Manager explicitly supports them
       status={{
         ...status,
         environment: 'development',
-        capabilities: { devFastUpdate: true },
+        capabilities: {},
       }}
     />,
   );
   expect(
-    screen.getByRole('checkbox', {
+    screen.queryByRole('checkbox', {
       name: 'Mise à jour rapide — dev uniquement',
     }),
-  ).toBeChecked();
+  ).not.toBeInTheDocument();
 });
 
 it.each(['development-none-v1', 'production-essential-v1'] as const)(
@@ -188,7 +186,7 @@ it.each(['production', 'development'] as const)(
       />,
     );
     const select = screen.getByRole('combobox', {
-      name: 'Sauvegarde avant cette mise à jour',
+      name: 'Stratégie de sauvegarde',
     });
     expect(select).toHaveValue('full');
     expect(screen.getAllByRole('option')).toHaveLength(3);

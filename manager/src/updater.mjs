@@ -23,6 +23,10 @@ import {
 import { basename, dirname, join, relative } from 'node:path';
 import { collectInventory } from './inventory.mjs';
 import {
+  installedImageBuild,
+  inspectInstalledBuild,
+} from './installed-build.mjs';
+import {
   allocatedTreeSize,
   backupIdentity,
   readBackupSize,
@@ -372,12 +376,339 @@ export class TransactionalUpdater {
         backupRetained: operation.backupComplete === true,
         backupPolicy: recordedBackupPolicy(operation),
         rollbackAvailable:
+          operation.checkpoint !== true &&
           operation.status === 'succeeded' &&
           (operation.backupComplete === true ||
             withoutDataBackup(recordedBackupPolicy(operation))),
         mode: operation.mode ?? 'standard',
+        actor: operation.actor ?? null,
+        builds: operation.builds ?? {},
+        restoreSource: operation.restoreSource ?? null,
+        checkpoint: operation.checkpoint === true,
       },
     };
+  }
+
+  async readOperation(id) {
+    if (
+      typeof id !== 'string' ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)
+    )
+      throw Error('updateJournalInvalid');
+    if (this.current?.id === id) return this.current;
+    const path = join(this.directory, `${id}.json`);
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > 1024 * 1024)
+      throw Error('updateJournalInvalid');
+    const operation = JSON.parse(await readFile(path, 'utf8'));
+    if (
+      operation.id !== id ||
+      operation.stack !== this.manifest.stack ||
+      operation.environment !== this.manifest.environment
+    )
+      throw Error('updateJournalInvalid');
+    recordedBackupPolicy(operation);
+    return operation;
+  }
+
+  async history() {
+    const names = await readdir(this.directory).catch((error) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    });
+    const ids = new Set(
+      names
+        .filter((name) => /^[a-f0-9-]{36}\.json$/.test(name))
+        .map((name) => name.slice(0, -5)),
+    );
+    if (this.current) ids.add(this.current.id);
+    const operations = [];
+    for (const id of ids) {
+      try {
+        const op = await this.readOperation(id);
+        // Explicit public projection. Never expose original/target container specs or Docker output.
+        const builds = Object.fromEntries(
+          Object.entries(op.builds ?? {})
+            .filter(([id]) =>
+              [
+                'application',
+                'browser',
+                'ingress',
+                'egress',
+                'manager',
+              ].includes(id),
+            )
+            .map(([id, value]) => [
+              id,
+              {
+                from: value.from,
+                to: value.to,
+              },
+            ]),
+        );
+        operations.push({
+          id: op.id,
+          status: op.status,
+          phase: op.phase,
+          startedAt: op.startedAt,
+          finishedAt: op.finishedAt ?? null,
+          actor: op.actor ?? null,
+          builds,
+          restoreSource: op.restoreSource ?? null,
+          checkpoint: op.checkpoint === true,
+          hostObservation: op.hostObservation === true,
+          backupPolicy: recordedBackupPolicy(op),
+          backupRetained: op.backupComplete === true,
+          error: op.error ? this.safeError(new Error(op.error)) : null,
+          events: (op.events ?? [])
+            .slice(-50)
+            .map((e) => ({ at: e.at, phase: e.phase, status: e.status })),
+        });
+      } catch {
+        /* A malformed journal must not disclose private data or hide valid records. */
+      }
+    }
+    return {
+      operations: operations
+        .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))
+        .slice(0, 100),
+    };
+  }
+
+  async observeManagerBuild(observation) {
+    if (
+      !observation?.build ||
+      !/^sha256:[a-f0-9]{64}$/.test(observation.imageId ?? '')
+    )
+      return;
+    if (this.observedManagerImage === observation.imageId) return;
+    const path = join(this.directory, '..', 'manager-build-observation.json');
+    let previous = null;
+    try {
+      const info = await lstat(path);
+      if (!info.isFile() || info.isSymbolicLink() || info.size > 4096) return;
+      previous = JSON.parse(await readFile(path, 'utf8'));
+    } catch (error) {
+      if (error.code !== 'ENOENT') return;
+    }
+    if (previous?.imageId === observation.imageId) {
+      this.observedManagerImage = observation.imageId;
+      return;
+    }
+    const now = new Date().toISOString();
+    if (
+      previous?.build &&
+      /^sha256:[a-f0-9]{64}$/.test(previous.imageId ?? '')
+    ) {
+      const key = digest({
+        before: previous.imageId,
+        after: observation.imageId,
+        baseline: previous.observedAt,
+      }).slice(0, 32);
+      const id = `${key.slice(0, 8)}-${key.slice(8, 12)}-${key.slice(12, 16)}-${key.slice(16, 20)}-${key.slice(20)}`;
+      await mkdir(this.directory, { recursive: true, mode: 0o700 });
+      await atomicJson(join(this.directory, `${id}.json`), {
+        id,
+        stack: this.manifest.stack,
+        environment: this.manifest.environment,
+        hostObservation: true,
+        status: 'succeeded',
+        phase: 'complete',
+        startedAt: now,
+        finishedAt: now,
+        actor: null,
+        builds: { manager: { from: previous.build, to: observation.build } },
+        backupPolicy: 'none-v1',
+        backupComplete: false,
+        events: [{ at: now, phase: 'complete', status: 'succeeded' }],
+      });
+    }
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    await atomicJson(path, {
+      imageId: observation.imageId,
+      build: observation.build,
+      observedAt: now,
+    });
+    this.observedManagerImage = observation.imageId;
+  }
+
+  async restorationSource(id) {
+    const op = await this.readOperation(id);
+    if (
+      !op.backupComplete ||
+      !terminal.has(op.status) ||
+      withoutDataBackup(recordedBackupPolicy(op))
+    )
+      throw Error('updateRollbackUnavailable');
+    for (const path of [
+      join(this.directory, id),
+      join(this.directory, id, 'backup'),
+    ]) {
+      const info = await lstat(path);
+      if (!info.isDirectory() || info.isSymbolicLink())
+        throw Error('updateJournalInvalid');
+    }
+    const policy = recordedBackupPolicy(op);
+    const entries = policy === MINIMAL ? op.backupScope : backupEntries(policy);
+    if (policy === MINIMAL) {
+      const application = op.containers.find(
+        (c) => c.component === 'application',
+      );
+      if (
+        !application ||
+        digest(entries) !==
+          digest([
+            ...backupEntries(MINIMAL),
+            ...minimalHomeEntries(application.original.Env),
+          ]) ||
+        !Array.isArray(op.backupMissing) ||
+        op.backupMissing.some(
+          (name) =>
+            !minimalHomeEntries(application.original.Env)
+              .slice(1)
+              .includes(name),
+        )
+      )
+        throw Error('updateJournalInvalid');
+    }
+    const archive = archiveDescriptor(op);
+    if (archive) {
+      const info = await lstat(
+        join(this.directory, id, 'backup', BACKUP_ARCHIVE_NAME),
+      );
+      if (
+        !info.isFile() ||
+        info.isSymbolicLink() ||
+        info.nlink !== 1 ||
+        info.size !== archive.bytes
+      )
+        throw Error('updateBackupArchiveInvalid');
+    }
+    return { op, policy, entries, archive };
+  }
+
+  async planRestore(id) {
+    const { op, policy, entries, archive } = await this.restorationSource(id);
+    const images = Object.fromEntries(
+      op.containers.map((item) => [item.component, item.original.Image]),
+    );
+    // Old configuration/secrets are never used as a replacement container specification.
+    const plan = await this.plan(images, 'standard', 'full');
+    if (policy === MINIMAL) {
+      const application = plan.containers.find(
+        (item) => item.component === 'application',
+      );
+      const inspect = application
+        ? await this.docker.inspectContainer(application.id)
+        : null;
+      if (
+        !inspect ||
+        digest(entries) !==
+          digest([
+            ...backupEntries(MINIMAL),
+            ...minimalHomeEntries(inspect.Config.Env),
+          ])
+      )
+        throw Error('updateJournalInvalid');
+    }
+    return {
+      ...plan,
+      fingerprint: digest({
+        plan: plan.fingerprint,
+        id,
+        archive,
+        entries,
+        policy,
+      }),
+      restoreSource: id,
+      restorePolicy: policy,
+      restoreScope: entries,
+      confirmation: 'RESTORE_SAVED_STATE',
+    };
+  }
+
+  async planCheckpoint(backupMode = 'full') {
+    if (!['full', 'minimal'].includes(backupMode))
+      throw Error('updateConfirmationRequired');
+    const inventory = await collectInventory(this.manifest, this.docker);
+    const application = inventory.components.find(
+      (item) => item.id === 'application',
+    );
+    if (!application?.containerId) throw Error('updateBlocked');
+    const inspect = await this.docker.inspectContainer(application.containerId);
+    const plan = await this.plan(
+      { application: inspect.Config.Image },
+      'standard',
+      backupMode,
+    );
+    return {
+      ...plan,
+      checkpoint: true,
+      fingerprint: digest({ plan: plan.fingerprint, checkpoint: true }),
+      confirmation: 'CREATE_BACKUP',
+    };
+  }
+
+  async restoreHistoricalData(id) {
+    const source = await this.restorationSource(id);
+    const base = join(this.directory, this.current.id);
+    const destination = join(base, 'historical-input');
+    const roots = source.entries.filter(
+      (name) => !source.op.backupMissing?.includes(name),
+    );
+    let backupRoot = join(this.directory, id, 'backup');
+    if (source.archive) {
+      await extractBackupArchive({
+        path: join(backupRoot, BACKUP_ARCHIVE_NAME),
+        destination,
+        descriptor: source.archive,
+        roots,
+      });
+      backupRoot = destination;
+    }
+    // Validate every entry before modifying any live data.
+    for (const name of source.entries) {
+      if (
+        (await exists(join(backupRoot, name))) !==
+        !source.op.backupMissing?.includes(name)
+      )
+        throw Error('updateJournalInvalid');
+    }
+    const storage = join(
+      this.configuration.hostStatePath,
+      'manager-state',
+      'updates',
+      this.current.id,
+      'source-restore',
+    );
+    const [local, alias] = await Promise.all([
+      lstat(base),
+      lstat(dirname(storage)),
+    ]);
+    if (
+      !alias.isDirectory() ||
+      alias.isSymbolicLink() ||
+      local.dev !== alias.dev ||
+      local.ino !== alias.ino
+    )
+      throw Error('updateJournalInvalid');
+    await mkdir(storage, { recursive: true, mode: 0o700 });
+    for (const name of source.entries) {
+      if (source.policy === MINIMAL)
+        await this.restoreMinimalEntry(storage, name, backupRoot, {
+          missing: source.op.backupMissing,
+          restoreId: `${this.current.id}-source`,
+        });
+      else
+        await restorePersistentEntry(
+          this.configuration.hostStatePath,
+          storage,
+          `${this.current.id}-source`,
+          name,
+          { backupRoot },
+        );
+    }
+    if (source.archive) await removeDiscardedBackupTree(destination);
   }
 
   async listBackups() {
@@ -468,6 +799,7 @@ export class TransactionalUpdater {
       const sizeBytes = measured?.bytes ?? null;
       backups.push({
         id,
+        build: valid ? (operation.builds?.application?.from ?? null) : null,
         backupPolicy: valid ? policy : null,
         path: hostDirectory
           ? join(
@@ -704,14 +1036,7 @@ export class TransactionalUpdater {
   }
 
   async plan(images, mode = 'standard', backupMode) {
-    if (!['standard', 'dev-fast'].includes(mode))
-      throw new Error('updateInvalidMode');
-    if (
-      mode === 'dev-fast' &&
-      (this.manifest.environment !== 'development' ||
-        this.manifest.stack === 'mergeron')
-    )
-      throw new Error('updateFastDevelopmentOnly');
+    if (mode !== 'standard') throw new Error('updateInvalidMode');
     const backupPolicy = environmentBackupPolicy(this.manifest, backupMode);
     if (
       !images ||
@@ -926,16 +1251,29 @@ export class TransactionalUpdater {
     expectedFingerprint,
     mode = 'standard',
     backupMode,
+    actor,
+    restoreSource,
+    checkpoint,
   }) {
     if (this.busy) throw new Error('managerOperationInProgress');
     if (
       confirmation !==
-      updateConfirmation(environmentBackupPolicy(this.manifest, backupMode))
+      (checkpoint
+        ? 'CREATE_BACKUP'
+        : restoreSource
+          ? 'RESTORE_SAVED_STATE'
+          : updateConfirmation(
+              environmentBackupPolicy(this.manifest, backupMode),
+            ))
     )
       throw new Error('updateConfirmationRequired');
     this.busy = true;
     try {
-      const plan = await this.plan(images, mode, backupMode);
+      const plan = checkpoint
+        ? await this.planCheckpoint(backupMode)
+        : restoreSource
+          ? await this.planRestore(restoreSource)
+          : await this.plan(images, mode, backupMode);
       if (plan.fingerprint !== expectedFingerprint)
         throw new Error('updatePlanChanged');
       if (plan.blockers.length) throw new Error('updateBlocked');
@@ -956,10 +1294,22 @@ export class TransactionalUpdater {
         phase: 'preparing',
         startedAt: new Date().toISOString(),
         mode,
+        actor:
+          actor && typeof actor.id === 'string' && actor.id.length <= 128
+            ? {
+                id: actor.id,
+                name:
+                  typeof actor.name === 'string'
+                    ? actor.name.slice(0, 160)
+                    : null,
+              }
+            : null,
+        restoreSource: restoreSource ?? null,
+        checkpoint: checkpoint === true,
         backupPolicy: plan.backupPolicy,
         backupScope: plan.backupScope,
         backupMissing: [],
-        images,
+        images: plan.images,
         previousImages: {},
         containers: [],
         events: [],
@@ -982,26 +1332,18 @@ export class TransactionalUpdater {
       // Pull every requested image before stopping anything, then pin its immutable ID.
       const imageIds = {};
       const targetImages = {};
-      for (const [component, reference] of Object.entries(plan.images)) {
-        let cached;
-        if (plan.mode === 'dev-fast' && reference.includes('@sha256:')) {
-          try {
-            const local = await this.docker.inspectImage(reference);
-            if (pinnedImage(local, reference) === reference) cached = local;
-          } catch {
-            /* Missing or unverifiable image: pull normally. */
-          }
-        }
-        if (!cached) await this.docker.pullImage(reference);
-        targetImages[component] =
-          cached ?? (await this.docker.inspectImage(reference));
+      for (const [component, reference] of Object.entries(
+        plan.checkpoint ? {} : plan.images,
+      )) {
+        await this.docker.pullImage(reference);
+        targetImages[component] = await this.docker.inspectImage(reference);
         imageIds[component] = pinnedImage(targetImages[component], reference);
       }
-      const rechecked = await this.plan(
-        plan.images,
-        plan.mode,
-        plan.backupMode,
-      );
+      const rechecked = plan.checkpoint
+        ? await this.planCheckpoint(plan.backupMode)
+        : plan.restoreSource
+          ? await this.planRestore(plan.restoreSource)
+          : await this.plan(plan.images, plan.mode, plan.backupMode);
       if (rechecked.fingerprint !== plan.fingerprint)
         throw new Error('updatePlanChanged');
       if (targetImages.application)
@@ -1019,6 +1361,19 @@ export class TransactionalUpdater {
           (c) => c.id === item.component,
         );
         const previousImage = await this.docker.inspectImage(inspect.Image);
+        this.current.builds ??= {};
+        this.current.builds[item.component] = {
+          from:
+            (await inspectInstalledBuild(
+              this.docker,
+              inspect,
+              item.component,
+            )) ?? installedImageBuild(previousImage, item.component),
+          to: installedImageBuild(
+            targetImages[item.component] ?? previousImage,
+            item.component,
+          ),
+        };
         // A pre-existing DEV browser can be a local build. Its immutable image
         // ID is retained; never turn a local tag into an implicit registry pull.
         const previous =
@@ -1123,6 +1478,18 @@ export class TransactionalUpdater {
         await durableRename(temporary, join(backup, BACKUP_ARCHIVE_NAME));
         this.current.backupComplete = true;
       }
+      if (plan.restoreSource) {
+        await this.save('restoring');
+        await this.restoreHistoricalData(plan.restoreSource);
+      }
+      if (plan.checkpoint) {
+        await this.save('checkingHealth');
+        await this.startAndCheck(this.current.containers);
+        this.current.committed = true;
+        await this.save('committing');
+        await this.commit();
+        return;
+      }
       await this.save('replacing');
       for (const item of this.current.containers) {
         await this.docker.renameContainer(item.id, item.backupName);
@@ -1152,7 +1519,8 @@ export class TransactionalUpdater {
       });
       this.current.error = this.safeError(error);
       try {
-        await this.rollback();
+        if (this.current.checkpoint) await this.recoverCheckpoint();
+        else await this.rollback();
       } catch (recoveryError) {
         this.current.error = this.safeError(recoveryError);
         await this.save('recoveryRequired', 'recoveryRequired');
@@ -1206,8 +1574,26 @@ export class TransactionalUpdater {
   }
 
   async commit() {
+    for (const item of this.current.containers.filter((item) =>
+      ['ingress', 'egress'].includes(item.component),
+    )) {
+      try {
+        const inspect = await this.docker.inspectContainer(
+          this.current.checkpoint ? item.id : item.candidateId,
+        );
+        const build = await inspectInstalledBuild(
+          this.docker,
+          inspect,
+          item.component,
+        );
+        if (build && this.current.builds?.[item.component])
+          this.current.builds[item.component].to = build;
+      } catch {
+        /* Missing version metadata must not fail a healthy transaction. */
+      }
+    }
     for (const item of this.current.containers) {
-      if (await this.containerExists(item.id))
+      if (!this.current.checkpoint && (await this.containerExists(item.id)))
         await this.docker.removeContainer(item.id);
     }
     // Refresh the adoption baseline only for an already explicitly adopted stack.
@@ -1222,6 +1608,17 @@ export class TransactionalUpdater {
         'Manager backup retention cleanup failed; backups retained',
       );
     }
+  }
+
+  async recoverCheckpoint() {
+    // A checkpoint never replaced live data or containers. Do not restore a
+    // snapshot over originals which may already be running after a crash.
+    await this.startAndCheck(this.current.containers);
+    this.current.finishedAt = new Date().toISOString();
+    if (this.current.backupComplete) {
+      this.current.committed = true;
+      await this.commit();
+    } else await this.save('complete', 'cancelled');
   }
 
   async refreshAdoption() {
@@ -1247,6 +1644,7 @@ export class TransactionalUpdater {
     if (
       this.current?.id !== operationId ||
       this.current.status !== 'succeeded' ||
+      this.current.checkpoint === true ||
       (!this.current.backupComplete && !withoutDataBackup(policy))
     )
       throw new Error('updateRollbackUnavailable');
@@ -1310,9 +1708,10 @@ export class TransactionalUpdater {
     storageBase,
     name,
     backupRoot = join(storageBase, 'backup'),
+    { missing = this.current.backupMissing, restoreId = this.current.id } = {},
   ) {
     const parent = dirname(name);
-    const allowMissing = this.current.backupMissing?.includes(name) === true;
+    const allowMissing = missing?.includes(name) === true;
     const saved = await exists(join(backupRoot, name));
     if (!saved && !allowMissing) throw new Error('updateJournalInvalid');
     if (saved && allowMissing) throw new Error('updateJournalInvalid');
@@ -1360,7 +1759,7 @@ export class TransactionalUpdater {
         await restorePersistentEntry(
           this.configuration.hostStatePath,
           storageBase,
-          this.current.id,
+          restoreId,
           name,
           { allowMissing, backupRoot },
         );
@@ -1560,7 +1959,8 @@ export class TransactionalUpdater {
       archiveDescriptor(this.current);
       if (terminal.has(this.current.status)) return;
       try {
-        await this.rollback();
+        if (this.current.checkpoint) await this.recoverCheckpoint();
+        else await this.rollback();
       } catch (error) {
         this.current.error = this.safeError(error);
         await this.save('recoveryRequired', 'recoveryRequired');

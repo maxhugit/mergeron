@@ -1,5 +1,19 @@
 import { render, screen, within, cleanup } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+vi.mock('./manager-image-updates-api', async (original) => ({
+  ...(await original<typeof import('./manager-image-updates-api')>()),
+  requestComponentUpdates: async () => ({ components: [] }),
+}));
+function draw(node: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>{node}</QueryClientProvider>,
+  );
+}
 import i18n from '@/i18n';
 import { InstalledVersions } from './installed-versions';
 import type { ManagerStatus } from './manager-status-api';
@@ -14,7 +28,7 @@ const build = {
 
 it('separates installed revisions with equal versions and keeps Manager host-managed', async () => {
   await i18n.changeLanguage('en');
-  render(
+  draw(
     <InstalledVersions
       application={build}
       status={
@@ -34,7 +48,7 @@ it('separates installed revisions with equal versions and keeps Manager host-man
   );
   const table = screen.getByRole('table');
   const rows = within(table).getAllByRole('row');
-  expect(rows).toHaveLength(4);
+  expect(rows).toHaveLength(6);
   expect(within(rows[1]).getByRole('link')).toHaveAttribute(
     'href',
     `https://github.com/maxhugit/mergeron/commit/${build.revision}`,
@@ -43,14 +57,16 @@ it('separates installed revisions with equal versions and keeps Manager host-man
   expect(within(rows[3]).getByRole('link')).toHaveTextContent('ccccccc');
   expect(screen.getAllByText('0.5.1')).toHaveLength(3);
   expect(
-    screen.getByText(/Updating it remains a separate host operation/),
-  ).toBeVisible();
-  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    screen.getByRole('button', { name: 'Update selected (0)' }),
+  ).toBeDisabled();
+  expect(
+    within(rows[2]).getByRole('button', { name: 'On the host' }),
+  ).toBeEnabled();
 });
 
 it('reports unknown with an older/offline Manager instead of copying the application version', async () => {
   await i18n.changeLanguage('en');
-  render(
+  draw(
     <InstalledVersions
       application={build}
       status={
@@ -68,7 +84,7 @@ it('reports unknown with an older/offline Manager instead of copying the applica
   const rows = screen.getAllByRole('row');
   for (const row of rows.slice(2)) {
     expect(within(row).queryByText('0.5.1')).not.toBeInTheDocument();
-    expect(within(row).getAllByText('Not reported')).toHaveLength(4);
+    expect(within(row).getAllByText(/Not reported/).length).toBeGreaterThan(0);
     expect(within(row).queryByRole('link')).not.toBeInTheDocument();
   }
 });

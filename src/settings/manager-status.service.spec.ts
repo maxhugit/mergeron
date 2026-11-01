@@ -15,6 +15,14 @@ class FixtureManagerStatusService extends ManagerStatusService {
 }
 
 describe('ManagerStatusService', () => {
+  it('rejects the removed fast mode before contacting even an older Manager', async () => {
+    const service = new FixtureManagerStatusService(
+      new Error('must not be contacted'),
+    );
+    await expect(
+      service.updateOperation('plan', { mode: 'dev-fast' }),
+    ).rejects.toMatchObject({ status: 400, message: 'updateInvalidMode' });
+  });
   it('uses fixed backup endpoints and discards arbitrary input fields', async () => {
     class BackupFixture extends ManagerStatusService {
       requests: unknown[][] = [];

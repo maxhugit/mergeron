@@ -3,6 +3,8 @@ import { backupLabel, withoutDataBackup } from './manager-backup-policy';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { UpdateBackupPreference } from './update-backup-preference';
+import { ManagerRestoreBackup } from './manager-restore-backup';
 import { translationKey } from '@/locales/translation-key';
 import {
   AlertDialog,
@@ -118,10 +120,18 @@ function BackupRetentionForm({
   );
 }
 
-export function ManagerBackups({ status }: { status: ManagerStatus }) {
+export function ManagerBackups({
+  status,
+  showPreference = true,
+}: {
+  status: ManagerStatus;
+  showPreference?: boolean;
+}) {
   const { t, i18n } = useTranslation('manager');
   const client = useQueryClient();
   const [selected, setSelected] = useState<ManagerBackup | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [restoring, setRestoring] = useState<ManagerBackup | null>(null);
   const supported = status.capabilities?.backupManagement === true;
   const query = useQuery({
     queryKey: managerBackupsQueryKey,
@@ -157,28 +167,45 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
   };
   return (
     <section className="space-y-3" aria-label={t('managerBackupsTitle')}>
-      <h3 className="font-medium">{t('managerBackupsTitle')}</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-medium">{t('serverBackupTab')}</h3>
+        <Button
+          variant="outline"
+          disabled={
+            busy ||
+            !status.capabilities?.backupRestore ||
+            status.update?.operation?.status === 'recoveryRequired'
+          }
+          onClick={() => setCreating(true)}
+        >
+          {t('createBackupTitle')}
+        </Button>
+      </div>
       <p className="text-xs text-muted-foreground">{t('managerBackupsHelp')}</p>
-      {status.capabilities?.backupSelection ? (
-        <p className="text-sm">{t('managerBackupSelectionHelp')}</p>
-      ) : (
-        status.backupPolicy && (
-          <p className="text-sm">
-            {t(
-              status.backupPolicy === 'development-none-v1'
-                ? 'managerDevelopmentNoBackup'
-                : status.backupPolicy === 'production-essential-v1'
-                  ? 'managerProductionEssentialBackup'
-                  : 'managerLegacyFullBackup',
-            )}
-          </p>
-        )
-      )}
-      {status.capabilities?.backupRetention &&
-        (status.capabilities?.backupSelection ||
-          !withoutDataBackup(status.backupPolicy)) && (
-          <BackupRetention busy={busy} />
+      <div className="grid items-start gap-3 md:grid-cols-2">
+        {status.capabilities?.backupSelection ? (
+          showPreference ? (
+            <UpdateBackupPreference status={status} busy={busy} />
+          ) : null
+        ) : (
+          status.backupPolicy && (
+            <p className="text-sm">
+              {t(
+                status.backupPolicy === 'development-none-v1'
+                  ? 'managerDevelopmentNoBackup'
+                  : status.backupPolicy === 'production-essential-v1'
+                    ? 'managerProductionEssentialBackup'
+                    : 'managerLegacyFullBackup',
+              )}
+            </p>
+          )
         )}
+        {status.capabilities?.backupRetention &&
+          (status.capabilities?.backupSelection ||
+            !withoutDataBackup(status.backupPolicy)) && (
+            <BackupRetention busy={busy} />
+          )}
+      </div>
       {query.data && (
         <p className="text-sm font-medium">
           {t('managerBackupsTotalSize', {
@@ -201,9 +228,6 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
           {query.isError && (
             <div className="text-sm">
               <p role="alert">{t('managerBackupsUnavailable')}</p>
-              <Button variant="outline" onClick={() => void query.refetch()}>
-                {t('managerBackupsRefresh')}
-              </Button>
             </div>
           )}
           {query.data?.backups.length === 0 && (
@@ -254,6 +278,16 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                       <p className="break-all font-mono text-xs text-muted-foreground">
                         {backup.id}
                       </p>
+                      <p className="mt-1 text-xs">
+                        {t('backupSavedVersion', {
+                          version: backup.build?.version ?? t('versionUnknown'),
+                        })}
+                      </p>
+                      {backup.build?.revision && (
+                        <p className="text-xs font-mono text-muted-foreground">
+                          {backup.build.revision.slice(0, 7)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <p className="break-all font-mono text-xs text-muted-foreground">
@@ -309,6 +343,20 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
                     <td className="px-3 py-3">
                       <Button
                         variant="outline"
+                        className="mb-2 w-full"
+                        disabled={
+                          busy ||
+                          !backup.restorable ||
+                          !status.capabilities?.backupRestore ||
+                          status.update?.operation?.status ===
+                            'recoveryRequired'
+                        }
+                        onClick={() => setRestoring(backup)}
+                      >
+                        {t('restoreBackupAction')}
+                      </Button>
+                      <Button
+                        variant="outline"
                         className="h-auto min-h-8 w-full whitespace-normal break-words px-2 py-2 text-xs"
                         disabled={busy || !backup.canDelete}
                         onClick={() => {
@@ -325,6 +373,17 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
             </table>
           </div>
         </>
+      )}
+      {supported && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            disabled={busy || query.isFetching}
+            onClick={() => void query.refetch()}
+          >
+            {t('managerBackupsRefresh')}
+          </Button>
+        </div>
       )}
       <AlertDialog
         open={selected !== null}
@@ -366,6 +425,18 @@ export function ManagerBackups({ status }: { status: ManagerStatus }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {creating && (
+        <ManagerRestoreBackup
+          backup={null}
+          onClose={() => setCreating(false)}
+        />
+      )}
+      {restoring && (
+        <ManagerRestoreBackup
+          backup={restoring}
+          onClose={() => setRestoring(null)}
+        />
+      )}
     </section>
   );
 }

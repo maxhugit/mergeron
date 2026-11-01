@@ -9,6 +9,7 @@ export interface ComponentImageUpdate {
   installedDigest: string | null;
   installedImageId?: string | null;
   installedBuild?: InstalledBuild | null;
+  targetBuild?: InstalledBuild | null;
   targetImage: string | null;
   targetDigest: string | null;
   versionStatus: 'unknown' | 'current' | 'update_available';

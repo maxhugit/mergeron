@@ -18,6 +18,12 @@ const sources: Record<
   string,
   { repository: string; host: string; scope: string; auth: string }
 > = {
+  manager: {
+    repository: 'ghcr.io/maxhugit/mergeron-manager',
+    host: 'ghcr.io',
+    scope: 'maxhugit/mergeron-manager',
+    auth: 'https://ghcr.io/token?service=ghcr.io',
+  },
   application: {
     repository: 'ghcr.io/maxhugit/mergeron',
     host: 'ghcr.io',
@@ -56,6 +62,79 @@ export interface ImagePlatform {
 
 @Injectable()
 export class RegistryImageIdentityService {
+  private readonly builds = new Map<
+    string,
+    {
+      version: string | null;
+      revision: string | null;
+      builtAt: string | null;
+      channel: string;
+    }
+  >();
+
+  async imageBuild(
+    id: string,
+    reference: string,
+    digest: string,
+    platform: ImagePlatform,
+  ) {
+    const imageId = await this.imageId(id, reference, digest, platform);
+    const cached = this.builds.get(imageId);
+    if (cached) return cached;
+    const source = sources[id];
+    const auth = await this.fetchMetadata(
+      `${source.auth}&scope=repository:${source.scope}:pull`,
+    );
+    const token = object(auth.value).token;
+    if (
+      typeof token !== 'string' ||
+      !token ||
+      token.length > 16384 ||
+      /[\r\n]/.test(token)
+    )
+      throw Error('Invalid registry token');
+    const config = await this.fetchMetadata(
+      `https://${source.host}/v2/${source.scope}/blobs/${imageId}`,
+      token,
+    );
+    if (
+      `sha256:${createHash('sha256').update(config.raw).digest('hex')}` !==
+      imageId
+    )
+      throw Error('Config integrity failure');
+    const labels = object(object(object(config.value).config).Labels);
+    // Vendor OCI versions can describe the base distribution, not its software.
+    const version = ['application', 'browser', 'manager'].includes(id)
+      ? (labels['io.mergeron.version'] ??
+        (id === 'browser' ? null : labels['org.opencontainers.image.version']))
+      : null;
+    const revision = labels['org.opencontainers.image.revision'];
+    const created = object(config.value).created;
+    const build = {
+      version:
+        typeof version === 'string' &&
+        /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/.test(version)
+          ? version
+          : null,
+      revision:
+        typeof revision === 'string' && /^[a-f0-9]{40}$/.test(revision)
+          ? revision
+          : null,
+      builtAt:
+        typeof created === 'string' && Number.isFinite(Date.parse(created))
+          ? new Date(created).toISOString()
+          : null,
+      channel:
+        labels['io.mergeron.channel'] === 'edge'
+          ? 'edge'
+          : labels['io.mergeron.channel'] === 'stable'
+            ? 'stable'
+            : 'unknown',
+    };
+    if (this.builds.size >= 64) this.builds.clear();
+    this.builds.set(imageId, build);
+    return build;
+  }
   private readonly cache = new Map<string, string>();
   private readonly pending = new Map<string, Promise<string>>();
 
