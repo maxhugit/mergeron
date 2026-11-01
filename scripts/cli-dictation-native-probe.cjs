@@ -316,25 +316,37 @@ requires_openai_auth = false
     console.log(
       'Native CLI dictation: v3 sideband parses user fragments without turn.done; assistant/delegation text excluded; real unwanted turn confirmed interrupted. No account or media call used.',
     );
+    phase = 'cleanup';
   } catch (error) {
     console.error(JSON.stringify({ phase, calls, faults }));
     throw error;
   } finally {
     clearTimeout(deadline);
     await service?.onModuleDestroy();
-    child?.kill('SIGKILL');
+    const hardStop = setTimeout(() => child?.kill('SIGKILL'), 2000);
+    child?.kill('SIGTERM');
     await childDone;
+    clearTimeout(hardStop);
     for (const socket of sockets) socket.destroy();
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
     // Exact directory created by this probe, never an application data path.
-    await rm(home, { recursive: true, force: true });
+    await rm(home, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    });
   }
 }
 
-main().catch(() => {
+main().catch((error) => {
+  const code =
+    typeof error.code === 'string' && /^[A-Z_]{1,48}$/.test(error.code)
+      ? error.code
+      : 'UNCLASSIFIED';
   console.error(
-    `Offline native CLI dictation preflight failed at ${phase} (no account or audio data logged).`,
+    `Offline native CLI dictation preflight failed at ${phase} [${code}] (no account or audio data logged).`,
   );
   process.exitCode = 1;
 });
