@@ -16,7 +16,13 @@ WORKDIR /app/web
 COPY web/package.json web/pnpm-lock.yaml* web/pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-web,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --store-dir=/pnpm/store
-COPY web/ ./
+# Keep every source (including its type-checked specs), but do not invalidate
+# production assets for README, editor configuration or browser evidence changes.
+COPY web/index.html web/tsconfig*.json web/vite.config.ts ./
+COPY web/src/ ./src/
+COPY web/public/ ./public/
+COPY web/browser-extension/ ./browser-extension/
+COPY web/scripts/ ./scripts/
 COPY runtime/preview-profile.cjs runtime/preview-profile.d.cts /app/runtime/
 COPY runtime/preview-storage.cjs runtime/preview-storage.d.cts /app/runtime/
 RUN pnpm build

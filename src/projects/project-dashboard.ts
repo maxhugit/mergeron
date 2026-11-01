@@ -6,6 +6,19 @@ import type {
 } from '../database/schema';
 
 const DAY = 86_400_000;
+
+/** Request-local indexes; never retain authorization-sensitive data between requests. */
+function groupBy<T>(rows: T[], key: (row: T) => string) {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = key(row);
+    const group = groups.get(id);
+    if (group) group.push(row);
+    else groups.set(id, [row]);
+  }
+  return groups;
+}
+
 export function summarizeProjects(input: {
   projects: Project[];
   resources: ProjectResource[];
@@ -20,6 +33,16 @@ export function summarizeProjects(input: {
   const horizon = new Date(today);
   horizon.setDate(horizon.getDate() + 8);
   const percent = (value: number) => Math.max(0, Math.min(100, value || 0));
+  const resourcesByProject = groupBy(input.resources, (row) => row.projectId);
+  const projectByResource = new Map(
+    input.resources.map((row) => [row.id, row.projectId]),
+  );
+  const tasksByProject = groupBy(
+    input.tasks.filter((row) => projectByResource.has(row.resourceId)),
+    (row) => projectByResource.get(row.resourceId)!,
+  );
+  const statusesByResource = groupBy(input.statuses, (row) => row.resourceId);
+  const activityByProject = groupBy(input.activity, (row) => row.projectId);
   const alerts: Array<{
     projectId: string;
     projectName: string;
@@ -32,11 +55,9 @@ export function summarizeProjects(input: {
   }> = [];
   const projects = input.projects
     .map((project) => {
-      const resources = input.resources.filter(
-        (r) => r.projectId === project.id,
-      );
-      const ids = new Set(resources.map((r) => r.id));
-      const tasks = input.tasks.filter((task) => ids.has(task.resourceId));
+      const resources = resourcesByProject.get(project.id) ?? [];
+      // Preserve input task order, including the stable order of tied alerts.
+      const tasks = tasksByProject.get(project.id) ?? [];
       const finalIds = new Set(
         resources.flatMap((resource) => {
           const config = resource.config as Record<string, unknown> | null;
@@ -47,7 +68,7 @@ export function summarizeProjects(input: {
             ? settings.terminalStatusIds.filter(
                 (id): id is string => typeof id === 'string',
               )
-            : input.statuses
+            : (statusesByResource.get(resource.id) ?? [])
                 .filter(
                   (s) => s.resourceId === resource.id && s.kind === 'done',
                 )
@@ -61,9 +82,8 @@ export function summarizeProjects(input: {
       const roots = tasks.filter((task) => !task.parentTaskId);
       const open = tasks.filter((task) => !closed(task));
       const openRoots = roots.filter((task) => !closed(task));
-      const leaves = open.filter(
-        (task) => !tasks.some((child) => child.parentTaskId === task.id),
-      );
+      const parentIds = new Set(tasks.map((task) => task.parentTaskId));
+      const leaves = open.filter((task) => !parentIds.has(task.id));
       const overdue = open.filter(
         (task) => task.dueAt !== null && task.dueAt < today.getTime(),
       );
@@ -82,23 +102,26 @@ export function summarizeProjects(input: {
       const errors = open.filter(
         (task) => task.executionMode === 'agent' && task.agentState === 'error',
       );
-      const latestActivity = Math.max(
-        project.updatedAt,
-        project.createdAt,
-        ...resources.map((r) => r.updatedAt),
-        ...tasks.map((t) => t.updatedAt),
-        ...input.activity
-          .filter((a) => a.projectId === project.id)
-          .map((a) => a.updatedAt),
-      );
+      // A spread into Math.max can exceed V8's argument limit on large boards.
+      let latestActivity = Math.max(project.updatedAt, project.createdAt);
+      for (const row of resources)
+        latestActivity = Math.max(latestActivity, row.updatedAt);
+      for (const row of tasks)
+        latestActivity = Math.max(latestActivity, row.updatedAt);
+      for (const row of activityByProject.get(project.id) ?? [])
+        latestActivity = Math.max(latestActivity, row.updatedAt);
+      const errorTasks = new Set(errors);
+      const overdueTasks = new Set(overdue);
+      const reviewTasks = new Set(review);
+      const dueSoonTasks = new Set(dueSoon);
       for (const task of open) {
-        const reason = errors.includes(task)
+        const reason = errorTasks.has(task)
           ? 'agent_error'
-          : overdue.includes(task)
+          : overdueTasks.has(task)
             ? 'overdue'
-            : review.includes(task)
+            : reviewTasks.has(task)
               ? 'review'
-              : dueSoon.includes(task)
+              : dueSoonTasks.has(task)
                 ? 'due_soon'
                 : null;
         if (reason)

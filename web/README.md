@@ -15,6 +15,7 @@ pnpm dev
 pnpm build
 pnpm test
 pnpm test:watch
+pnpm test:browser
 pnpm lint
 pnpm generate:api
 ```
@@ -42,3 +43,6 @@ WebKit. Les anciennes fenêtres retirées de l’application ne doivent pas êtr
 conservées uniquement pour faire passer une fixture : tester le parcours utilisé.
 Ne pas modifier à la main les clients générés, les dépendances installées ni les
 captures temporaires. Voir [Contribuer](../CONTRIBUTING.md).
+La CI exécute l’ensemble du catalogue navigateur, indépendamment des tests
+unitaires et de la compilation. Voir les
+[mesures de performance](../docs/performance-et-stabilite.md).

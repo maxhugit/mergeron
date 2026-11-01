@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
@@ -31,6 +31,45 @@ test('every tracked root directory has a functional README linked from the repos
 });
 const quality = read('.github/workflows/quality.yml');
 const publish = read('.github/workflows/docker-publish.yml');
+const requireBackendCoverage = (...files) => {
+  assert.match(
+    quality,
+    /name: Test complete backend suite\n        if: matrix.part == 'backend'\n        run: pnpm test\s*\n/,
+  );
+  assert.equal(
+    JSON.parse(read('package.json')).scripts.test,
+    'pnpm ensure:codex-schema && vitest run',
+  );
+  assert.ok(
+    read('vitest.config.mts').includes("include: ['src/**/*.spec.ts']"),
+  );
+  for (const file of files)
+    assert.ok(read(file).length > 0, `Missing backend regression ${file}`);
+};
+const browserFiles = new Set(
+  readdirSync(new URL('web/src/', root), { recursive: true })
+    .filter((file) => /\.browser\.(ts|tsx)$/.test(file))
+    .map((file) => `src/${file}`),
+);
+const requireBrowserCoverage = (...files) => {
+  assert.match(quality, /part: \[backend, frontend, frontend-browser\]/);
+  assert.match(
+    quality,
+    /name: Test all browser workflows in Chromium and WebKit\n        if: matrix.part == 'frontend-browser'/,
+  );
+  assert.match(quality, /pnpm --dir web test:browser\s*\n/);
+  const command = JSON.parse(read('web/package.json')).scripts['test:browser'];
+  assert.match(command, /vitest run --project browser$/);
+  const config = read('web/vitest.config.ts');
+  assert.ok(config.includes("include: ['src/**/*.browser.{ts,tsx}']"));
+  assert.ok(
+    config.includes(
+      "instances: [{ browser: 'chromium' }, { browser: 'webkit' }]",
+    ),
+  );
+  for (const file of files)
+    assert.ok(browserFiles.has(file), `Missing browser regression ${file}`);
+};
 const job = (workflow, name) => {
   const match = workflow.match(
     new RegExp(
@@ -44,20 +83,23 @@ const job = (workflow, name) => {
 
 test('stacked PRs receive the full validation without a main-only trigger filter', () => {
   assert.match(quality, /^  pull_request:\s*\n  workflow_dispatch:/m);
-  assert.match(quality, /^          src\/agent-monitors$/m);
-  assert.match(quality, /^          src\/database\/migration-order.spec.ts$/m);
+  requireBackendCoverage(
+    'src/agent-monitors/agent-monitor-runtime.service.spec.ts',
+    'src/database/migration-order.spec.ts',
+  );
 });
 
 test('monitor management receives real Chromium and WebKit interface coverage', () => {
-  assert.match(
-    quality,
-    /^          src\/components\/projects\/project-agent-monitors.browser.tsx$/m,
+  requireBrowserCoverage(
+    'src/components/projects/project-agent-monitors.browser.tsx',
   );
 });
 
 test('session recovery keeps browser outage coverage and the isolated real ingress test', () => {
-  assert.ok(quality.includes('src/routes/authenticated-layout.browser.tsx'));
-  assert.ok(quality.includes('src/lib/platform-session.browser.tsx'));
+  requireBrowserCoverage(
+    'src/routes/authenticated-layout.browser.tsx',
+    'src/lib/platform-session.browser.tsx',
+  );
   assert.ok(
     read('scripts/smoke-test-ingress.sh').includes(
       'python3 scripts/test-session-ingress.py',
@@ -79,39 +121,69 @@ test('session recovery keeps browser outage coverage and the isolated real ingre
 });
 
 test('reviewed Git replacement receives responsive browser coverage without bypassing checks', () => {
-  assert.match(
-    quality,
-    /name: Test reviewed Git restoration in Chromium and WebKit\n        if: matrix.part == 'frontend'/,
-  );
   for (const file of [
     'git-restore-dialog',
     'workspace-git-panel',
     'git-complete-workflow',
   ]) {
-    assert.ok(quality.includes(`src/components/chat/${file}.browser.tsx`));
+    requireBrowserCoverage(`src/components/chat/${file}.browser.tsx`);
   }
-  assert.match(
-    quality,
-    /^          src\/projects\/workspace-git.service.spec.ts$/m,
+  requireBackendCoverage(
+    'src/projects/workspace-git.service.spec.ts',
+    'src/internal-mcp/internal-mcp.service.spec.ts',
   );
-  assert.match(quality, /^          src\/internal-mcp$/m);
 });
 
 test('mobile viewport geometry is checked in both engines without replacing the other browser suites', () => {
+  requireBrowserCoverage(
+    'src/lib/mobile-viewport.browser.tsx',
+    'src/components/chat/compact-composer.browser.tsx',
+    'src/lib/platform-session.browser.tsx',
+    'src/components/chat/agent-workspace-cache.browser.tsx',
+  );
+});
+
+test('browser checks cover all fixtures once and run independently of unit/build work', () => {
+  requireBrowserCoverage(
+    'src/components/chat/voice-dictation-button.browser.tsx',
+    'src/components/chat/agent-preview.browser.tsx',
+    'src/components/chat/agent-preview-panel.browser.tsx',
+    'src/components/account/push-notification-settings.browser.tsx',
+  );
+  assert.ok(browserFiles.size >= 57);
+  assert.equal(
+    (quality.match(/pnpm --dir web test:browser\s*\n/g) ?? []).length,
+    1,
+  );
+  assert.doesNotMatch(quality, /vitest run --project browser src\//);
   assert.match(
     quality,
-    /name: Test mobile viewport layout in Chromium and WebKit\n        if: matrix.part == 'frontend'/,
+    /name: Lint\n        if: matrix.part != 'frontend-browser'/,
   );
-  assert.ok(quality.includes('src/lib/mobile-viewport.browser.tsx'));
+  assert.match(quality, /if: always\(\) && matrix.part == 'frontend-browser'/);
+  requireBackendCoverage(
+    'src/projects/project-dashboard.spec.ts',
+    'src/projects/project-dashboard.service.spec.ts',
+    'src/logs/log-retention.service.spec.ts',
+    'src/terminal/terminal.integration.spec.ts',
+    'src/threads/thread-settings-recovery.spec.ts',
+  );
+});
+
+test('frontend image inputs preserve source type checks without copying docs or test evidence', () => {
+  const frontend = read('Dockerfile')
+    .split('FROM node:22-bookworm-slim AS frontend-builder')[1]
+    .split('# ── Stage 2:')[0];
+  for (const directory of ['src', 'public', 'browser-extension', 'scripts']) {
+    assert.ok(frontend.includes(`COPY web/${directory}/ ./${directory}/`));
+  }
   assert.ok(
-    quality.includes('src/components/chat/compact-composer.browser.tsx'),
+    frontend.includes(
+      'COPY web/index.html web/tsconfig*.json web/vite.config.ts ./',
+    ),
   );
-  assert.ok(
-    quality.includes('name: Test session recovery in Chromium and WebKit'),
-  );
-  assert.ok(
-    quality.includes('name: Test retained agent views in Chromium and WebKit'),
-  );
+  assert.doesNotMatch(frontend, /COPY web\/ \.\//);
+  assert.ok(frontend.includes('RUN pnpm build'));
 });
 
 test('all independent image checks run concurrently, including UI/docs-only PRs', () => {

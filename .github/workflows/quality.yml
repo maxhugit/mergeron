@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [backend, frontend]
+        part: [backend, frontend, frontend-browser]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -105,6 +105,7 @@ jobs:
           echo "$RUNNER_TEMP/7zip" >> "$GITHUB_PATH"
 
       - name: Lint
+        if: matrix.part != 'frontend-browser'
         run: |
           if [[ "${{ matrix.part }}" == backend ]]; then
             pnpm ensure:codex-schema
@@ -125,75 +126,9 @@ jobs:
           node scripts/test-local-browser-extension.mjs
           node scripts/test-local-browser-webkit.mjs
 
-      - name: Test backend startup and migrations
+      - name: Test complete backend suite
         if: matrix.part == 'backend'
-        run: >-
-          pnpm exec vitest run
-          src/app.controller.spec.ts
-          src/app.module.spec.ts
-          src/database/database.service.spec.ts
-          src/database/pending-request-migration.spec.ts
-          src/database/project-locations-migration.spec.ts
-          src/database/migration-order.spec.ts
-          src/agent-monitors
-          src/http-stack.spec.ts
-          src/archive
-          src/browser
-          src/push
-          src/document-publication
-          src/pending-approvals
-          src/threads/project-connection-policy.service.spec.ts
-          src/threads/project-connection-runtime.service.spec.ts
-          src/threads/thread-history.service.spec.ts
-          src/threads/threads.service.spec.ts
-          src/threads/thread-execution-preferences.spec.ts
-          src/threads/thread-security-policy.controller.spec.ts
-          src/threads/thread-settings-observer.service.spec.ts
-          src/settings/agent-instructions.service.spec.ts
-          src/settings/settings.service.spec.ts
-          src/codex/catalog/catalog-admission.service.spec.ts
-          src/projects/project-workspace-layout.spec.ts
-          src/projects/project-locations.service.spec.ts
-          src/projects/project-location-selection.spec.ts
-          src/projects/project-agent-creation.spec.ts
-          src/projects/workspace-copies.service.spec.ts
-          src/projects/workspace-git.service.spec.ts
-          src/projects/workspace-git-merges.service.spec.ts
-          src/projects/github-workflow-observation.spec.ts
-          src/projects/workspace-git-limits.spec.ts
-          src/projects/project-connection-tools.service.spec.ts
-          src/threads/git-mutation-gate.service.spec.ts
-          src/threads/agent-test-profile.spec.ts
-          src/threads/agent-test-profile.controller.spec.ts
-          src/threads/project-agent-defaults.service.spec.ts
-          src/projects/workspace-git.controller.spec.ts
-          src/projects/workspace-transfers.service.spec.ts
-          src/active-folders
-          src/projects/project-archives.spec.ts
-          src/project-knowledge/project-knowledge.service.spec.ts
-          src/project-knowledge/project-agent-tools.service.spec.ts
-          src/internal-mcp
-          src/simple-chat
-          src/codex/codex-jsonrpc-client.spec.ts
-          src/codex/cli/codex-cli.service.spec.ts
-          src/codex/cli/cli-access.spec.ts
-          src/project-knowledge/knowledge-proposals.service.spec.ts
-          src/deliverables/deliverables.service.spec.ts
-          src/deliverables/deliverables-agent.controller.spec.ts
-          src/files/files.service.spec.ts
-          src/auth/project-authorization.spec.ts
-          src/auth/auth-config.service.spec.ts
-          src/auth/local-auth.service.spec.ts
-          src/auth/initial-admin.service.spec.ts
-          src/auth/initial-admin.http.spec.ts
-          src/previews
-          src/auth/platform-cookie.spec.ts
-          src/auth/impersonation.spec.ts
-          src/auth/api-key.guard.spec.ts
-          src/auth/platform-access.spec.ts
-          src/auth/platform-access.http.spec.ts
-          src/auth/platform-access.socket.spec.ts
-          src/auth/project-socket-authorization.spec.ts
+        run: pnpm test
 
       - name: Test release-pair compensation
         if: matrix.part == 'backend'
@@ -203,46 +138,17 @@ jobs:
         if: matrix.part == 'frontend'
         run: pnpm --dir web test
 
-      - name: Test preview controls in Chromium and WebKit
-        if: matrix.part == 'frontend'
+      # Browser checks do not depend on unit tests or the production build.
+      # Discover every browser fixture once instead of restarting Vite six times
+      # and maintaining a partial list that silently misses new regressions.
+      - name: Test all browser workflows in Chromium and WebKit
+        if: matrix.part == 'frontend-browser'
         run: |
           pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
-          pnpm --dir web exec vitest run --project browser src/components/chat/agent-preview.browser.tsx src/components/chat/agent-preview-panel.browser.tsx src/components/account/push-notification-settings.browser.tsx
-
-      - name: Test session recovery in Chromium and WebKit
-        if: matrix.part == 'frontend'
-        run: pnpm --dir web exec vitest run --project browser src/lib/platform-session.browser.tsx src/routes/authenticated-layout.browser.tsx
-
-      - name: Test CLI dictation transport in Chromium and WebKit
-        if: matrix.part == 'frontend'
-        run: pnpm --dir web exec vitest run --project browser src/components/chat/voice-dictation-button.browser.tsx
-
-      - name: Test mobile viewport layout in Chromium and WebKit
-        if: matrix.part == 'frontend'
-        run: pnpm --dir web exec vitest run --project browser src/lib/mobile-viewport.browser.tsx src/components/chat/compact-composer.browser.tsx src/components/chat/security-policy-badge.browser.tsx src/components/chat/model-selector.browser.tsx
-
-      - name: Test retained agent views in Chromium and WebKit
-        if: matrix.part == 'frontend'
-        run: >-
-          pnpm --dir web exec vitest run --project browser
-          src/components/chat/agent-workspace-cache.browser.tsx
-          src/components/chat/virtual-transcript.browser.tsx
-          src/components/chat/workspace-tree.browser.tsx
-          src/components/files/file-actions-menu.browser.tsx
-          src/components/projects/project-agent-monitors.browser.tsx
-          src/components/terminal/terminal-read-recovery.browser.tsx
-          src/components/chat/git-merges.browser.tsx
-
-      - name: Test reviewed Git restoration in Chromium and WebKit
-        if: matrix.part == 'frontend'
-        run: >-
-          pnpm --dir web exec vitest run --project browser
-          src/components/chat/git-restore-dialog.browser.tsx
-          src/components/chat/workspace-git-panel.browser.tsx
-          src/components/chat/git-complete-workflow.browser.tsx
+          pnpm --dir web test:browser
 
       - name: Preserve preview interface screenshots
-        if: always() && matrix.part == 'frontend'
+        if: always() && matrix.part == 'frontend-browser'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: preview-ui-evidence-${{ github.sha }}
