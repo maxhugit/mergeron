@@ -84,6 +84,22 @@ function mount() {
   );
 }
 
+it('explains a startup timeout without presenting the environment as ready', async () => {
+  preview = {
+    ...readyPreview,
+    state: 'failed',
+    ready: false,
+    url: null,
+    error: 'PREVIEW_STARTUP_TIMEOUT',
+  };
+  mount();
+  expect(
+    await screen.findByText(/Startup did not complete within 20 minutes/),
+  ).toBeVisible();
+  expect(screen.queryByText('PREVIEW_STARTUP_TIMEOUT')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Open preview' })).toBeNull();
+});
+
 it('shows a labelled read-only address and copies only the stable URL on request', async () => {
   session.isAdministrator = false;
   mount();

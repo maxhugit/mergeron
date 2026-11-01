@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({
   calls: [] as { path: string; body: Record<string, unknown> }[],
   running: true,
   admin: true,
+  startupTimeout: false,
 }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: api.admin }),
@@ -63,11 +64,11 @@ vi.mock('@/lib/projects-api', () => ({
       preview: api.running
         ? {
             runId: 'synthetic-run',
-            state: 'running',
-            ready: true,
-            url: 'https://test.preview.example/',
+            state: api.startupTimeout ? 'failed' : 'running',
+            ready: !api.startupTimeout,
+            url: api.startupTimeout ? null : 'https://test.preview.example/',
             sourcePath: '/workspace',
-            error: null,
+            error: api.startupTimeout ? 'PREVIEW_STARTUP_TIMEOUT' : null,
             expiresAt: null,
             lastSyncedAt: Date.now(),
             updateMode: 'hot',
@@ -109,6 +110,7 @@ beforeEach(async () => {
   api.calls = [];
   api.running = true;
   api.admin = true;
+  api.startupTimeout = false;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -127,6 +129,16 @@ function mount(active = true) {
     </QueryClientProvider>,
   );
 }
+test('startup timeout is an explicit failure with retained diagnostics, not an endless running badge', async () => {
+  api.startupTimeout = true;
+  mount();
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Le démarrage n’a pas abouti dans le délai de 20 minutes',
+  );
+  expect(screen.getByRole('status')).toHaveTextContent('Échec');
+  expect(await screen.findByLabelText('Logs')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
+});
 for (const width of [1180, 390])
   test(`unified preview fits ${width}px, three rows and independently scrolling console`, async () => {
     await page.viewport(width, 800);

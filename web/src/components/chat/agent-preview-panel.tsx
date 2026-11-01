@@ -323,7 +323,9 @@ export function AgentPreviewPanel({
         <p role="alert" className="shrink-0 px-3 py-2 text-xs text-destructive">
           {operation.error?.message ||
             lifetime.error?.message ||
-            preview?.error ||
+            (preview?.error === 'PREVIEW_STARTUP_TIMEOUT'
+              ? t('startupTimeout')
+              : preview?.error) ||
             t('unavailable')}
         </p>
       )}

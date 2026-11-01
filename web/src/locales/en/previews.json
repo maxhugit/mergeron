@@ -11,6 +11,7 @@
   },
   "metricsUnavailable": "Measurement unavailable",
   "noActiveUrl": "No active URL",
+  "startupTimeout": "Startup did not complete within 20 minutes (installation, build or launch). The application process was stopped; test logs and volumes remain available until the environment is stopped, recreated or expires.",
   "emptyTitle": "No environment started",
   "emptyHelp": "Choose the availability duration, then click Start above. Containers and logs will appear here once the environment is running.",
   "emptyReadOnly": "Ask an administrator to start this environment. Its containers and logs will then appear here.",

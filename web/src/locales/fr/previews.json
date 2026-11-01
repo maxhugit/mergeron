@@ -11,6 +11,7 @@
   },
   "metricsUnavailable": "Mesure indisponible",
   "noActiveUrl": "Aucune URL active",
+  "startupTimeout": "Le démarrage n’a pas abouti dans le délai de 20 minutes (installation, compilation ou lancement). Le processus applicatif a été arrêté ; les logs et volumes de test restent disponibles jusqu’à l’arrêt, la recréation ou l’expiration de l’environnement.",
   "emptyTitle": "Aucun environnement démarré",
   "emptyHelp": "Choisissez la durée de disponibilité, puis cliquez sur Démarrer ci-dessus. Les conteneurs et leurs logs apparaîtront ici une fois l’environnement lancé.",
   "emptyReadOnly": "Demandez à un administrateur de démarrer cet environnement. Ses conteneurs et leurs logs apparaîtront ensuite ici.",
