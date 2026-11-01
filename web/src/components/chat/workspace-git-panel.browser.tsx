@@ -498,12 +498,11 @@ test.each([260, 330, 600])(
       expect(retrieveDialog.scrollWidth).toBeLessThanOrEqual(
         retrieveDialog.clientWidth,
       );
+      // Exit animations can finish late on WebKit/loaded runners.
+      retrieveDialog.style.animationDuration = '1200ms';
       await page.getByRole('button', { name: 'Annuler', exact: true }).click();
-      await waitFor(() =>
-        expect(
-          screen.getByRole('button', { name: remoteMenuName }),
-        ).toHaveFocus(),
-      );
+      await waitForDialogClose(retrieveDialog, view.container);
+      await expect.poll(() => document.activeElement).toBe(remoteTrigger);
       await page.getByRole('button', { name: remoteMenuName }).click();
       await page
         .getByRole('menuitem', { name: 'Créer une pull request' })
@@ -520,11 +519,8 @@ test.each([260, 330, 600])(
         screen.getByRole('button', { name: 'Créer une pull request' }),
       ).toBeEnabled();
       await page.getByRole('button', { name: 'Annuler', exact: true }).click();
-      await waitFor(() =>
-        expect(
-          screen.getByRole('button', { name: remoteMenuName }),
-        ).toHaveFocus(),
-      );
+      await waitForDialogClose(prDialog, view.container);
+      await expect.poll(() => document.activeElement).toBe(remoteTrigger);
       await page
         .getByRole('tab', { name: 'Synchronisation', exact: true })
         .click();

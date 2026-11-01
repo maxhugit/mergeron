@@ -33,6 +33,7 @@ import {
 import type { ThreadDto } from '@/generated/api';
 import { createProjectAgent } from '@/lib/project-agent-creation';
 import { selectSidebarRows } from '@/lib/sidebar-rows';
+import { createSidebarActivitySelector } from '@/lib/sidebar-activity';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { useLayoutStore } from '@/stores/layout-store';
 import { cn } from '@/lib/utils';
@@ -150,11 +151,8 @@ export function ThreadSidebar() {
   const { t } = useTranslation(['common', 'projectArchives']);
   const threadId = useTimelineStore((s) => s.threadId);
   const threadMode = useTimelineStore((s) => s.threadMode);
-  const turnStartPending = useTimelineStore((s) => s.turnStartPending);
-  const activeTurnId = useTimelineStore((s) => s.activeTurnId);
-  const approvals = useTimelineStore((s) => s.approvals);
-  const threadStatus = useTimelineStore((s) => s.threadStatus);
-  const threadsById = useTimelineStore((s) => s.threadsById);
+  const selectActivity = useMemo(() => createSidebarActivitySelector(), []);
+  const activityByThread = useTimelineStore(selectActivity);
   const subscribedThreadIds = useTimelineStore((s) => s.subscribedThreadIds);
   const setActiveThread = useTimelineStore((s) => s.setActiveThread);
   const clearThread = useTimelineStore((s) => s.clearThread);
@@ -881,10 +879,7 @@ export function ThreadSidebar() {
   ) => {
     const row = rowByThreadId.get(thread.id);
     const linkedTask = linkedTaskByThreadId.get(thread.id);
-    const readRuntime = (id: string) =>
-      id === threadId
-        ? { turnStartPending, activeTurnId, approvals, threadStatus }
-        : threadsById[id];
+    const readRuntime = (id: string) => activityByThread.get(id);
 
     // Row flags come from the server, which already lifted them off hidden
     // branch members. Local socket state is layered on top because it is
@@ -902,20 +897,9 @@ export function ThreadSidebar() {
       .filter((id) => subscribedThreadIds.has(id))
       .map(readRuntime)
       .filter((runtime) => runtime !== undefined);
-    const isRunning = observedRuntimes.some(
-      (runtime) => runtime.turnStartPending || runtime.activeTurnId,
-    );
-    const activeFlags = observedRuntimes.flatMap((runtime) =>
-      runtime.threadStatus?.type === 'active'
-        ? runtime.threadStatus.activeFlags
-        : [],
-    );
+    const isRunning = observedRuntimes.some((runtime) => runtime.busy);
     const localPendingCount = treeRuntimes.reduce(
-      (total, runtime) =>
-        total +
-        Object.values(runtime.approvals ?? {}).filter(
-          (a) => a.status === 'pending',
-        ).length,
+      (total, runtime) => total + runtime.pendingApprovalCount,
       0,
     );
     const pendingApprovalCount = Math.max(
@@ -924,17 +908,15 @@ export function ThreadSidebar() {
     );
     const waitingOnApproval =
       Boolean(row?.waitingOnApproval) ||
-      activeFlags.includes('waitingOnApproval') ||
+      observedRuntimes.some((runtime) => runtime.waitingOnApproval) ||
       pendingApprovalCount > 0;
     const waitingOnUserInput =
       Boolean(row?.waitingOnUserInput) ||
-      activeFlags.includes('waitingOnUserInput');
+      observedRuntimes.some((runtime) => runtime.waitingOnUserInput);
     // "Generating" = thread active but not blocked on any user-facing request.
     const generating =
       (Boolean(row?.running) ||
-        observedRuntimes.some(
-          (runtime) => runtime.threadStatus?.type === 'active',
-        )) &&
+        observedRuntimes.some((runtime) => runtime.active)) &&
       !waitingOnApproval &&
       !waitingOnUserInput;
 

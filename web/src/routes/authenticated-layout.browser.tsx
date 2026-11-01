@@ -187,9 +187,6 @@ test.each([
       await page.screenshot({
         path: `../../.vitest-screenshots/session-outage-${fault}-${engine}-${width}.png`,
       });
-      const checking = getSessionDiagnostics().filter(
-        (entry) => entry.event === 'check_started',
-      ).length;
       await commands.sessionStackControl('restore', fixture.id);
       // No manual refetch, focus or pageshow: the existing bounded recovery owns it.
       await waitFor(() => expect(screen.getByRole('textbox')).toBe(input), {
@@ -198,11 +195,21 @@ test.each([
       expect(input).toHaveValue('PRIVATE_UNSENT_DRAFT');
       expect(scroll.scrollTop).toBe(320);
       expect(window.location.href).toBe(href);
+      // Recovery may already be checking while the screenshot is captured.
+      // Its response can succeed after restore without starting another check.
+      // Assert a real retry after the failure, not a new request after restore.
+      const diagnostics = getSessionDiagnostics();
+      const failure = diagnostics.findIndex(
+        (entry) =>
+          entry.event === 'check_failed' &&
+          entry.reason === 'server_unavailable',
+      );
+      expect(failure).toBeGreaterThanOrEqual(0);
       expect(
-        getSessionDiagnostics().filter(
-          (entry) => entry.event === 'check_started',
-        ).length,
-      ).toBeGreaterThan(checking);
+        diagnostics
+          .slice(failure + 1)
+          .some((entry) => entry.event === 'check_started'),
+      ).toBe(true);
       expect(
         getSessionDiagnostics().some((entry) => entry.event === 'resumed'),
       ).toBe(true);

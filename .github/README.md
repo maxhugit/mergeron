@@ -7,6 +7,8 @@ avant sa fusion et de publier des composants identifiables par leur révision.
 ## Contenu
 
 - `workflows/quality.yml` exécute les contrôles de code, tests et constructions isolées.
+  Le backend, le frontend et la suite Chromium/WebKit sont validés en parallèle ;
+  tous les fichiers de tests navigateur sont découverts automatiquement.
 - `workflows/docker-publish.yml` construit, vérifie et promeut les images de
   l’application, du Manager et du navigateur, ainsi que les publications associées.
 - `workflows/cleanup-ghcr.yml` applique la politique de conservation du registre.
@@ -18,4 +20,5 @@ Ne jamais remplacer un contrôle en échec par sa désactivation. Les permission
 versions épinglées et séparations entre caches de PR et de `main` sont des protections.
 
 Voir [Versions et publications](../docs/publications.md) et
-[Contribuer](../CONTRIBUTING.md).
+[Contribuer](../CONTRIBUTING.md). Les mesures et protections sont détaillées dans
+[Performance et stabilité du code](../docs/performance-et-stabilite.md).

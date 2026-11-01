@@ -10,6 +10,8 @@ les images ; d’autres demandent une intervention explicite de l’administrate
   composants et contrôlent leur publication.
 - `check-*`, `audit-*`, `verify-*` et leurs tests vérifient le contenu du dépôt
   et les évaluations de sécurité.
+- `benchmark-project-dashboard.mjs` compare le calcul du tableau de bord à un
+  commit local sur des données synthétiques, sans démarrer de service.
 - `smoke-test-*` et `test-*` valident des fonctions réelles dans des fixtures
   contrôlées. Les scripts de conteneurs nettoient uniquement leurs propres ressources.
 - `environment-check.*` et `visual-check.*` vérifient le contexte d’exécution

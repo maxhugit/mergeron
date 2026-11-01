@@ -57,6 +57,8 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 - [Contribuer](../CONTRIBUTING.md)
 - [Maintenance du code](maintenance-code.md) : nettoyage des éléments inutilisés,
   lectures regroupées et maintien de la couverture des tests.
+- [Performance et stabilité du code](performance-et-stabilite.md) : mesures du
+  backend, abonnements frontend et organisation de la CI.
 - [Interface Web](../web/README.md)
 - [Caches et précontrôle de l’environnement des agents](environnement-agents.md)
 - [Vérification visuelle du vrai site](verification-visuelle.md)

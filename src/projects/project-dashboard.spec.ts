@@ -50,6 +50,36 @@ const dashboard = (tasks: ProjectTask[]) =>
   });
 
 describe('project dashboard', () => {
+  it('handles large conversation histories without exceeding the argument stack', () => {
+    const result = summarizeProjects({
+      projects: [project],
+      resources: [resource],
+      tasks: [],
+      statuses: [],
+      activity: Array.from({ length: 150_000 }, (_, index) => ({
+        projectId: 'p',
+        updatedAt: now + index,
+      })),
+      now,
+    });
+    expect(result.projects[0].lastActivityAt).toBe(now + 149_999);
+  });
+  it('preserves tied alert order across interleaved resources and excludes closed children from estimates', () => {
+    const result = summarizeProjects({
+      projects: [project],
+      resources: [resource, { ...resource, id: 'second' }],
+      tasks: [
+        task({ id: 'b', resourceId: 'second', dueAt: now }),
+        task({ id: 'a', dueAt: now }),
+        task({ id: 'closed-child', parentTaskId: 'a', subtaskStatus: 'done' }),
+      ],
+      statuses: [],
+      activity: [],
+      now,
+    });
+    expect(result.alerts.map((alert) => alert.taskId)).toEqual(['b', 'a']);
+    expect(result.projects[0].remainingMinutes).toBe(120);
+  });
   it('counts remaining leaf estimates once and excludes completed or cancelled work', () => {
     const result = dashboard([
       task({ estimateMinutes: 999 }),
