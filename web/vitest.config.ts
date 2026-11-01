@@ -228,7 +228,13 @@ export default mergeConfig(
               // renaming a case orphans its file rather than replacing it.
               // Collected in one ignored directory that `test:browser` clears.
               screenshotDirectory: '.vitest-screenshots',
-              instances: [{ browser: 'chromium' }, { browser: 'webkit' }],
+              // Linux WebKit pages compete for native focus/animation progress.
+              // Keep modal/viewport checks on one page at a time in that engine;
+              // Chromium and the independent CI jobs retain their parallelism.
+              instances: [
+                { browser: 'chromium' },
+                { browser: 'webkit', fileParallelism: false },
+              ],
             },
           },
         },

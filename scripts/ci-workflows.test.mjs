@@ -62,11 +62,8 @@ const requireBrowserCoverage = (...files) => {
   assert.match(command, /vitest run --project browser$/);
   const config = read('web/vitest.config.ts');
   assert.ok(config.includes("include: ['src/**/*.browser.{ts,tsx}']"));
-  assert.ok(
-    config.includes(
-      "instances: [{ browser: 'chromium' }, { browser: 'webkit' }]",
-    ),
-  );
+  assert.ok(config.includes("{ browser: 'chromium' }"));
+  assert.ok(config.includes("{ browser: 'webkit', fileParallelism: false }"));
   for (const file of files)
     assert.ok(browserFiles.has(file), `Missing browser regression ${file}`);
 };

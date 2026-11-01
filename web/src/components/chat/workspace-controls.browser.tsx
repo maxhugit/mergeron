@@ -181,6 +181,9 @@ test('a portalled dialog leaves the document when its surface deactivates', asyn
     );
   const view = render(<Host active />);
   expect(title()).toBeTruthy();
+  const dialog = document.querySelector<HTMLElement>(
+    '[data-slot="dialog-content"]',
+  )!;
   // Activation is flipped directly rather than through a click: an open modal
   // legitimately blocks every pointer outside it. That is also the reason this
   // test exists — a Radix portal escapes the panel's subtree, so neither
@@ -188,5 +191,6 @@ test('a portalled dialog leaves the document when its surface deactivates', asyn
   // behind would hold the whole page's pointer input and focus hostage.
   // Withdrawal therefore has to remove the node, not merely hide it.
   view.rerender(<Host active={false} />);
+  await expect.poll(() => dialog.dataset.state).toBe('closed');
   await expect.poll(() => title()).toBeUndefined();
 });

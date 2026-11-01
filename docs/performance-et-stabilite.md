@@ -78,6 +78,10 @@ Une seule invocation Vitest découvre tous les fichiers `.browser.ts` et
 `.browser.tsx` dans Chromium et WebKit. La liste manuelle précédente couvrait
 20 fichiers en six invocations ; le catalogue actuel en contient 57. L’ajout
 d’un nouveau test ne nécessite plus une modification du workflow pour l’exécuter.
+Les fichiers WebKit s’exécutent un à un dans leur moteur pour éviter les
+interférences de focus et d’animations de pages simultanées observées sur Linux.
+Chromium, les tests unitaires et les autres jobs restent parallèles ; aucun test
+n’est supprimé ou relancé automatiquement pour masquer un échec.
 
 Les contrôles de session, dictée, prévisualisation, Git, disposition mobile et
 vues retenues restent couverts. Un test de workflow vérifie leur découverte,
