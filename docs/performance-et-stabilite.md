@@ -115,6 +115,20 @@ d’annoncer un gain global de livraison.
 
 ## Vérifications et suivi
 
+Les essais natifs de conservation des objectifs utilisent un fournisseur local
+et un répertoire Codex jetable. La découverte de plugins y est désactivée et
+vérifiée par `config/read` : un téléchargement Git du catalogue, sans rapport
+avec ces essais, pouvait continuer pendant le nettoyage du répertoire. Les
+fonctionnalités de plugins de l’installation réelle restent inchangées.
+
+Le test de défilement animé établit d’abord une intention de lecture par un
+geste natif, puis exige un déplacement supplémentaire de plus de 3 000 pixels.
+Le délai et les assertions de visibilité restent identiques. Le geste natif
+depuis la fin de conversation est couvert séparément. Retirer la protection
+contre les compensations de mesure pendant le geste fait toujours échouer ce
+test : cette préparation évite une course au premier affichage sans masquer
+une interruption réelle de l’animation.
+
 Les suites ciblées protègent les calculs, l’accès aux projets et le cycle des
 badges. La validation frontend comprend l’ensemble des tests unitaires et
 navigateur, TypeScript, lint et budgets de bundle. Les images et essais natifs
