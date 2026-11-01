@@ -49,14 +49,18 @@ function show() {
     ),
   });
 }
-it('restores the personal choice on a new page but never cached conversations', () => {
+it('restores the personal choice and recent IDs on reload, without persisting transcripts', () => {
   const first = show();
   expect(cache.getState().projectId).toBe('p');
   cache.getState().visit('p', 'agent');
   first.unmount();
-  cache.getState().clear();
+  // A document reload discards Zustand memory, but keeps this tab's sessionStorage.
+  cache.setState({ owner: null, projectId: null, threadIds: [] });
   const second = show();
-  expect(cache.getState()).toMatchObject({ projectId: 'p', threadIds: [] });
+  expect(cache.getState()).toMatchObject({
+    projectId: 'p',
+    threadIds: ['agent'],
+  });
   second.unmount();
 });
 it('replaces the project and retained views when the connected person changes', () => {

@@ -27,6 +27,8 @@ export function useCurrentProject(): ProjectSummary | undefined {
     enabled: Boolean(threadId),
   });
   return threadId
-    ? projectForWorkspace(projects.data?.projects, cwd ?? null)
+    ? (projects.data?.projects.find((project) =>
+        project.agentThreads?.some((agent) => agent.threadId === threadId),
+      ) ?? projectForWorkspace(projects.data?.projects, cwd ?? null))
     : undefined;
 }

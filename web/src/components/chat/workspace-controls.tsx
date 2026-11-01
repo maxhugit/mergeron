@@ -1,6 +1,6 @@
 import { translationKey } from '@/locales/translation-key';
 /** Desktop tabs and phone view chooser share descriptors and explicit activation. */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   FileCode,
   FolderTree,
@@ -12,7 +12,6 @@ import {
   GitBranch,
   Cloud,
   Globe,
-  Plug,
   FlaskConical,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +30,6 @@ interface Props {
   onExplorer: () => void;
   onBrowser?: () => void;
   onPreview?: () => void;
-  onLocalBrowser?: () => void;
   localBrowserStatus?: string;
   onNewTerminal: () => void;
   canCreateTerminal?: boolean;
@@ -48,12 +46,12 @@ export function WorkspaceControls({
   onExplorer,
   onBrowser,
   onPreview,
-  onLocalBrowser,
   localBrowserStatus = 'disconnected',
   onNewTerminal,
   canCreateTerminal = true,
   terminalCreationDisabled,
 }: Props) {
+  const browserStatusId = useId();
   const { t } = useTranslation();
   const { t: tw } = useTranslation('workspaces');
   const { t: tb } = useTranslation('browser');
@@ -265,12 +263,39 @@ export function WorkspaceControls({
       {onBrowser && (
         <button
           type="button"
-          className="h-10 shrink-0 px-3 hover:bg-accent"
-          title={tw('browser')}
+          className="relative h-10 shrink-0 px-3 hover:bg-accent"
+          title={`${tw('browser')} · ${tb('localConnection')}`}
           aria-label={tw('browser')}
+          aria-describedby={
+            localBrowserStatus !== 'disconnected' ? browserStatusId : undefined
+          }
           onClick={onBrowser}
         >
           <Globe className="h-4 w-4" />
+          {localBrowserStatus !== 'disconnected' && (
+            <>
+              <span id={browserStatusId} className="sr-only">
+                {tb(
+                  localBrowserStatus === 'shared'
+                    ? 'localStateShared'
+                    : localBrowserStatus === 'pairing'
+                      ? 'localStatePairing'
+                      : localBrowserStatus === 'attention'
+                        ? 'localAttention'
+                        : 'localStatePaused',
+                )}
+              </span>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'absolute right-2 top-2 h-1.5 w-1.5 rounded-full',
+                  localBrowserStatus === 'shared'
+                    ? 'bg-primary'
+                    : 'bg-amber-500',
+                )}
+              />
+            </>
+          )}
         </button>
       )}
       {onPreview && (
@@ -282,37 +307,6 @@ export function WorkspaceControls({
           onClick={onPreview}
         >
           <FlaskConical className="h-4 w-4" />
-        </button>
-      )}
-      {onLocalBrowser && (
-        <button
-          type="button"
-          className="relative h-10 shrink-0 px-3 hover:bg-accent"
-          title={tb('localConnection')}
-          aria-label={tb('localConnection')}
-          onClick={onLocalBrowser}
-        >
-          <Plug className="h-4 w-4" />
-          <span className="sr-only">
-            {tb(
-              localBrowserStatus === 'shared'
-                ? 'localStateShared'
-                : localBrowserStatus === 'pairing'
-                  ? 'localStatePairing'
-                  : localBrowserStatus === 'attention'
-                    ? 'localAttention'
-                    : 'localStatePaused',
-            )}
-          </span>
-          {localBrowserStatus !== 'disconnected' && (
-            <span
-              aria-hidden="true"
-              className={cn(
-                'absolute right-2 top-2 h-1.5 w-1.5 rounded-full',
-                localBrowserStatus === 'shared' ? 'bg-primary' : 'bg-amber-500',
-              )}
-            />
-          )}
         </button>
       )}
       <button

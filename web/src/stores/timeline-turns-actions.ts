@@ -163,7 +163,11 @@ export function createTimelineTurnsActions({
 
     setOpenStateForThread: (threadId, state) => {
       if (!get().getThreadRuntime(threadId)) return;
-      applyThreadUpdate(threadId, (runtime) => ({ ...runtime, ...state }));
+      applyThreadUpdate(threadId, (runtime) => ({
+        ...runtime,
+        ...state,
+        ...(state.openState === 'ready' ? { historyPreview: false } : {}),
+      }));
     },
 
     setTurnStartPendingForThread: (threadId, turnStartPending) => {

@@ -9,6 +9,7 @@ import { CapabilitiesMenu } from './capabilities-menu';
 import { PlanModeBadge } from './plan-mode-badge';
 import { Button } from '@/components/ui/button';
 import { ComposerActionGroup } from './composer-action-group';
+import { ComposerToolbar } from './composer-toolbar';
 import { TokenUsageRing } from './token-usage-ring';
 import { VoiceDictationButton } from './voice-dictation-button';
 import { useTimelineStore } from '@/stores/timeline-store';
@@ -60,21 +61,27 @@ vi.mock('@/lib/projects-api', async (importOriginal) => ({
 }));
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   useTimelineStore.setState({ latestTokenUsage: null });
   document.documentElement.classList.remove('ios-standalone', 'dark');
 });
 
 test.each([
   [320, 390, 844, false, false],
+  [320, 390, 844, false, true],
   [366, 390, 844, true, false],
   [366, 390, 844, true, true],
   [500, 1214, 988, false, false],
   [614, 1274, 913, false, false],
   [614, 1274, 913, false, true],
+  [700, 1214, 988, false, false],
+  [700, 1214, 988, false, true],
   [800, 1214, 988, false, false],
+  [1200, 1400, 988, false, false],
 ] as const)(
   'centres the composer actions in a %ipx column, viewport %ix%i (iOS: %s, active turn: %s)',
   async (width, viewportWidth, viewportHeight, installedIos, activeTurn) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
     await page.viewport(viewportWidth, viewportHeight);
     document.documentElement.classList.toggle('ios-standalone', installedIos);
     document.documentElement.classList.add('dark');
@@ -107,24 +114,27 @@ test.each([
             rows={1}
             className="min-h-20 w-full resize-none border-none bg-transparent px-3 pt-2.5"
           />
-          <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <ModelSelector />
-              <PlanModeBadge
-                state={{
-                  mode: 'plan',
-                  observed: true,
-                  source: 'notification',
-                  model: 'gpt-6-sol',
-                  reasoningEffort: 'medium',
-                }}
-                pending={false}
-                disabled={false}
-                onToggle={() => {}}
-              />
-              <SecurityPolicyBadge threadId="thread" />
-              <CapabilitiesMenu cwd="/workspace" onSelectSkill={() => {}} />
-            </div>
+          <ComposerToolbar
+            controls={
+              <>
+                <ModelSelector />
+                <PlanModeBadge
+                  state={{
+                    mode: 'plan',
+                    observed: true,
+                    source: 'notification',
+                    model: 'gpt-6-sol',
+                    reasoningEffort: 'medium',
+                  }}
+                  pending={false}
+                  disabled={false}
+                  onToggle={() => {}}
+                />
+                <SecurityPolicyBadge threadId="thread" />
+                <CapabilitiesMenu cwd="/workspace" onSelectSkill={() => {}} />
+              </>
+            }
+          >
             <ComposerActionGroup>
               <TokenUsageRing />
               <VoiceDictationButton onTranscript={() => {}} />
@@ -148,7 +158,7 @@ test.each([
                 </Button>
               )}
             </ComposerActionGroup>
-          </div>
+          </ComposerToolbar>
         </div>
       </QueryClientProvider>,
     );
@@ -161,7 +171,7 @@ test.each([
     // The final 36px toolbar row has 4px of visual clearance above/below the
     // 28px actions. Extra horizontal clearance keeps focus rings off the edge.
     expect(toolbarBounds.bottom - actionBounds.bottom).toBe(4);
-    expect(toolbarBounds.right - actionBounds.right).toBe(12);
+    expect(toolbarBounds.right - actionBounds.right).toBe(8);
     const centres = [...actions.children].map((element) => {
       const rect = element.getBoundingClientRect();
       return rect.top + rect.height / 2;
@@ -179,8 +189,20 @@ test.each([
     }
     expect(composer.scrollWidth).toBeLessThanOrEqual(composer.clientWidth);
     const modelLabel = screen.getByText('GPT-6-Sol');
-    expect(modelLabel).toBeVisible();
-    expect(screen.getByText('· medium')).toBeVisible();
+    if (width >= 480) expect(modelLabel).toBeVisible();
+    else expect(modelLabel).not.toBeVisible();
+    if (width > 800) expect(screen.getByText('· medium')).toBeVisible();
+    else expect(screen.getByText('· medium')).not.toBeVisible();
+    const controls = toolbar.firstElementChild!.getBoundingClientRect();
+    if (width >= 366) {
+      expect(
+        Math.abs(
+          controls.top +
+            controls.height / 2 -
+            (actionBounds.top + actionBounds.height / 2),
+        ),
+      ).toBeLessThan(0.1);
+    }
     expect(
       screen.getByRole('button', { name: /GPT-6-Sol/ }).getAttribute('title'),
     ).toContain('medium');

@@ -6,6 +6,7 @@ import {
   Loader2,
   PlugZap,
   RefreshCw,
+  CircleHelp,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -31,13 +32,14 @@ type Mode = 'input' | 'header';
 
 interface McpRow {
   name: string;
-  status: McpServerStartupState;
+  status: McpServerStartupState | 'unobserved';
   error: string | null;
   authStatus?: McpServerStatus['authStatus'];
   toolCount?: number;
 }
 
 interface Props {
+  threadId?: string | null;
   mode?: Mode;
   menuItem?: boolean;
 }
@@ -45,21 +47,34 @@ interface Props {
 const STALE_STARTING_STATUS_MS = 30_000;
 
 /** Header mode only appears for starting/failed; input mode always shows aggregate status. */
-export function McpStatusBadge({ mode = 'input', menuItem = false }: Props) {
-  const { t } = useTranslation();
+export function McpStatusBadge({
+  threadId,
+  mode = 'input',
+  menuItem = false,
+}: Props) {
+  const { t } = useTranslation(['common', 'codexSettings'], {
+    nsMode: 'fallback',
+  });
   const queryClient = useQueryClient();
   const runtimeStatuses = useMcpStore((s) => s.statuses);
   const project = useCurrentProject();
   const allowedNames = project ? new Set(project.mcpServerIds ?? []) : null;
+  if (threadId && allowedNames) allowedNames.add('mergeron_internal');
+  // The controller already supports threadId. Keep it in both the request and
+  // cache identity; global startup notifications carry no conversation identity.
+  const query = {
+    detail: 'toolsAndAuthOnly' as const,
+    ...(threadId ? { threadId } : {}),
+  };
   const hasStartingRuntime = Object.values(runtimeStatuses).some(
     (server) => server.status === 'starting',
   );
 
   const serversQuery = useQuery({
-    queryKey: mcpServersListServersQueryKey(),
+    queryKey: mcpServersListServersQueryKey({ query }),
     queryFn: async () => {
       const { data } = await mcpServersListServers({
-        query: { detail: 'toolsAndAuthOnly' },
+        query,
         throwOnError: true,
       });
       return data;
@@ -67,7 +82,7 @@ export function McpStatusBadge({ mode = 'input', menuItem = false }: Props) {
     staleTime: 30_000,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
-    refetchInterval: hasStartingRuntime ? 5_000 : false,
+    refetchInterval: threadId || hasStartingRuntime ? 5_000 : false,
   });
 
   const reloadMutation = useMutation({
@@ -84,15 +99,34 @@ export function McpStatusBadge({ mode = 'input', menuItem = false }: Props) {
     ((serversQuery.data?.data ?? []) as unknown as McpServerStatus[]).filter(
       (server) => !allowedNames || allowedNames.has(server.name),
     ),
-    allowedNames
-      ? Object.fromEntries(
-          Object.entries(runtimeStatuses).filter(([name]) =>
-            allowedNames.has(name),
-          ),
-        )
-      : runtimeStatuses,
+    threadId
+      ? {}
+      : allowedNames
+        ? Object.fromEntries(
+            Object.entries(runtimeStatuses).filter(([name]) =>
+              allowedNames.has(name),
+            ),
+          )
+        : runtimeStatuses,
     serversQuery.isSuccess,
   );
+  if (
+    threadId &&
+    project &&
+    !rows.some((row) => row.name === 'mergeron_internal')
+  ) {
+    rows.unshift({
+      name: 'mergeron_internal',
+      status: 'unobserved',
+      error: null,
+    });
+  }
+  if (serversQuery.isError) {
+    for (const row of rows) {
+      row.status = 'unobserved';
+      row.toolCount = undefined;
+    }
+  }
   const failed = rows.filter((row) => row.status === 'failed').length;
   const starting = rows.filter((row) => row.status === 'starting').length;
   const ready = rows.filter((row) => row.status === 'ready').length;
@@ -129,9 +163,12 @@ export function McpStatusBadge({ mode = 'input', menuItem = false }: Props) {
     );
   }
 
-  const label =
-    total > 0 ? t('readyTotalReady', { ready, total }) : t('mcpUnavailable');
-  const risky = failed > 0;
+  const label = serversQuery.isError
+    ? t('failedToLoadMcpServers')
+    : total > 0
+      ? t('readyTotalReady', { ready, total })
+      : t('noMcpServersReported');
+  const risky = failed > 0 || serversQuery.isError;
   const busy = starting > 0;
 
   return (
@@ -175,7 +212,10 @@ export function McpStatusBadge({ mode = 'input', menuItem = false }: Props) {
             size="sm"
             variant="outline"
             className="h-7 text-xs"
-            disabled={reloadMutation.isPending}
+            disabled={
+              reloadMutation.isPending ||
+              !rows.some((row) => row.name !== 'mergeron_internal')
+            }
             onClick={() => reloadMutation.mutate()}
           >
             {reloadMutation.isPending ? (
@@ -209,13 +249,17 @@ export function McpStatusBadge({ mode = 'input', menuItem = false }: Props) {
 }
 
 function ServerRow({ row }: { row: McpRow }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'codexSettings'], {
+    nsMode: 'fallback',
+  });
   const Icon =
-    row.status === 'failed'
-      ? AlertCircle
-      : row.status === 'starting'
-        ? Loader2
-        : CheckCircle2;
+    row.status === 'unobserved'
+      ? CircleHelp
+      : row.status === 'failed'
+        ? AlertCircle
+        : row.status === 'starting'
+          ? Loader2
+          : CheckCircle2;
 
   return (
     <div className="rounded-md border border-border/50 px-2.5 py-2">
@@ -229,10 +273,14 @@ function ServerRow({ row }: { row: McpRow }) {
           )}
         />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {row.name}
+          {row.name === 'mergeron_internal'
+            ? t('mcpInternalMergeron')
+            : row.name}
         </span>
         <Badge variant={row.status === 'failed' ? 'destructive' : 'secondary'}>
-          {t(translationKey(row.status))}
+          {row.status === 'unobserved'
+            ? t('mcpNotObserved')
+            : t(translationKey(row.status))}
         </Badge>
       </div>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 pl-5 text-[11px] text-muted-foreground">
@@ -249,6 +297,11 @@ function ServerRow({ row }: { row: McpRow }) {
       </div>
       {row.error && (
         <p className="mt-1 pl-5 text-xs text-destructive">{row.error}</p>
+      )}
+      {row.status === 'unobserved' && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('mcpInternalNotObservedHint')}
+        </p>
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { LocalBrowserSidebar } from './local-browser-sidebar';
 import { WorkspaceControls } from './workspace-controls';
+import { BrowserModeDialog } from './browser-mode-dialog';
 import { useChatAttachments } from '@/hooks/use-chat-attachments';
 import { useComposerDraftStore } from '@/stores/composer-draft-store';
 import { i18nReady } from '@/i18n';
@@ -36,6 +37,7 @@ vi.mock('@/socket', () => ({
 
 export function Fixture() {
   const [open, setOpen] = useState(false);
+  const [choice, setChoice] = useState(false);
   const [value, setValue] = useState('Existing message');
   const [status, setStatus] = useState('disconnected');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -62,8 +64,16 @@ export function Fixture() {
         onClose={vi.fn()}
         onExplorer={vi.fn()}
         onNewTerminal={vi.fn()}
-        onLocalBrowser={() => setOpen(true)}
+        onBrowser={() => setChoice(true)}
         localBrowserStatus={status}
+      />
+      <BrowserModeDialog
+        open={choice}
+        onOpenChange={setChoice}
+        onChoose={(mode) => {
+          setChoice(false);
+          if (mode === 'local') setOpen(true);
+        }}
       />
       <textarea
         aria-label="Message"
@@ -147,8 +157,12 @@ test.each([
     const input = screen.getByRole('textbox', { name: 'Message' });
     const originalWidth = input.getBoundingClientRect().width;
     expect(originalWidth).toBeGreaterThan(300);
+    fireEvent.click(screen.getByRole('button', { name: 'Browser' }));
+    expect(
+      screen.queryByRole('button', { name: 'Extension connection' }),
+    ).toBeNull();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Extension connection' }),
+      screen.getByRole('button', { name: 'Local browser · extension (test)' }),
     );
     expect(
       screen.getByRole('dialog').getBoundingClientRect().width,

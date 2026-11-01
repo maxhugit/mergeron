@@ -11,6 +11,13 @@
  * There is exactly one owner now: the route. Every other surface navigates.
  */
 import { HISTORY_PAGE_SIZE } from '@/lib/history-prefetch';
+import {
+  AGENT_SNAPSHOT_MAX_AGE_MS,
+  agentSnapshotKey,
+  type AgentNavigationSnapshot,
+} from '@/lib/agent-navigation-prefetch';
+import { useAgentViewCacheStore } from '@/stores/agent-view-cache-store';
+import { isSessionPaused } from '@/lib/session-recovery';
 import { useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invalidateThreadDetails } from '@/lib/query-invalidation';
@@ -306,6 +313,32 @@ export function useOpenThread() {
       const store = useTimelineStore.getState();
       invalidateThreadEpoch(threadId);
       const joined = store.setActiveThread(threadId);
+      const cache = useAgentViewCacheStore.getState();
+      if (
+        cache.owner &&
+        cache.projectId &&
+        cache.threadIds.includes(threadId) &&
+        !isSessionPaused() &&
+        !store.getThreadRuntime(threadId)?.hydrated
+      ) {
+        const key = agentSnapshotKey(cache.owner, cache.projectId, threadId);
+        const snapshot = queryClient.getQueryData<AgentNavigationSnapshot>(key);
+        const updatedAt = queryClient.getQueryState(key)?.dataUpdatedAt ?? 0;
+        if (snapshot && Date.now() - updatedAt < AGENT_SNAPSHOT_MAX_AGE_MS) {
+          store.hydrateOpenedThread({
+            threadId,
+            turnsNewestFirst: snapshot.page.data,
+            historyCursor: snapshot.page.nextCursor,
+            cwd: snapshot.metadata.thread.cwd,
+            readOnlyReason: null,
+          });
+          store.setThreadTitleForThread(
+            threadId,
+            threadLabel(snapshot.metadata.thread),
+          );
+          store.setOpenStateForThread(threadId, { historyPreview: true });
+        }
+      }
       store.setHistoryLoadingForThread(threadId, false);
       const runtime = store.getThreadRuntime(threadId);
       store.setOpenStateForThread(threadId, {

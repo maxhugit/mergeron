@@ -37,10 +37,16 @@ export function ConversationFrame({
     (s) => s.threadsById[threadId]?.hydrated ?? false,
   );
   const openState = useTimelineStore((s) => s.threadsById[threadId]?.openState);
+  const historyPreview = useTimelineStore(
+    (s) => s.threadsById[threadId]?.historyPreview ?? false,
+  );
   const historyError = useTimelineStore(
     (s) => s.threadsById[threadId]?.historyError,
   );
-  const dataReady = selected && hydrated && openState === 'ready';
+  // A prefetched page may be read while the normal open verifies ownership.
+  // Sending remains gated by ChatInput's observed openState === 'ready'.
+  const dataReady =
+    selected && hydrated && (openState === 'ready' || historyPreview);
   const measureReady = useCallback(
     (measured: boolean) =>
       setLayoutReady((old) => (old === measured ? old : measured)),
@@ -62,22 +68,24 @@ export function ConversationFrame({
   return (
     <SurfaceActivityContext value={visible}>
       <div className="relative flex h-full min-h-0 flex-col">
-        <ChatTimeline
-          conversationId={threadId}
-          active={visible}
-          ready={dataReady && height !== null}
-          onReady={measureReady}
-          bottomInset={height ?? 0}
-          scrollToLatestSignal={sendSignal}
-          onEditMessage={(text) => input.current?.setInput(text)}
-        />
-        <div ref={composer} className="absolute inset-x-0 bottom-0 w-full">
-          <ChatInput
-            ref={input}
+        <div className="contents" inert={openState !== 'ready'}>
+          <ChatTimeline
             conversationId={threadId}
             active={visible}
-            onSubmitted={() => setSendSignal((n) => n + 1)}
+            ready={dataReady && height !== null}
+            onReady={measureReady}
+            bottomInset={height ?? 0}
+            scrollToLatestSignal={sendSignal}
+            onEditMessage={(text) => input.current?.setInput(text)}
           />
+          <div ref={composer} className="absolute inset-x-0 bottom-0 w-full">
+            <ChatInput
+              ref={input}
+              conversationId={threadId}
+              active={visible}
+              onSubmitted={() => setSendSignal((n) => n + 1)}
+            />
+          </div>
         </div>
         {(!dataReady || !layoutReady) && (
           <div
@@ -98,14 +106,20 @@ export function ConversationFrame({
             )}
           </div>
         )}
-        {dataReady && layoutReady && historyError && (
-          <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2 text-xs">
-            <span className="flex-1">{historyError}</span>
-            <Button size="sm" variant="ghost" onClick={onRetry}>
-              {t('retry')}
-            </Button>
-          </div>
-        )}
+        {dataReady &&
+          layoutReady &&
+          (historyError || openState !== 'ready') && (
+            <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2 text-xs">
+              <span className="flex-1">
+                {historyError ?? t('loadingConversation')}
+              </span>
+              {historyError && (
+                <Button size="sm" variant="ghost" onClick={onRetry}>
+                  {t('retry')}
+                </Button>
+              )}
+            </div>
+          )}
       </div>
     </SurfaceActivityContext>
   );

@@ -11,6 +11,16 @@ message ou les pièces jointes de l’utilisateur.
 Le rattachement explicite détermine le projet, jamais
 le chemin Git. Les conversations existantes en bénéficient au prochain échange.
 
+Dans **Capacités → Serveurs MCP**, l’inventaire est celui de la conversation
+affichée (`GET /api/mcp-servers?threadId=…`), pas celui du catalogue global.
+**Mergeron (interne)** reste visible avec les serveurs externes autorisés par le
+projet. Le nombre d’outils vient de cette observation. Les notifications globales
+de démarrage ne remplacent pas l’état d’une autre conversation.
+**Non observé** indique qu’aucune connexion interne n’a encore été rapportée pour
+cet agent ; sa configuration se fait lors d’un message. Une erreur de lecture
+est affichée séparément : elle ne prouve ni une connexion prête ni une panne du
+serveur interne. Le rechargement global concerne les serveurs externes.
+
 Un véritable serveur MCP natif, `mergeron_internal`, remplace la CLI Python.
 Aucune commande terminal ni fichier de requête n’est nécessaire aux outils projet.
 Exemples : « Liste les tâches du projet », « Consulte le livrable Présentation »,

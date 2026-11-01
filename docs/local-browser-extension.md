@@ -15,7 +15,7 @@ sur l'instance Mergeron utilisée.
    puis **Charger l'extension non empaquetée** et sélectionner le dossier extrait.
 3. Ouvrir les options de l'extension, saisir uniquement l'origine HTTPS de Mergeron
    et accepter l'autorisation pour cette origine. Recharger Mergeron.
-4. Dans une conversation, utiliser le bouton **Association de l’extension** (prise), ou **Navigateur → Navigateur local · extension (test)** puis
+4. Dans une conversation, utiliser **Navigateur → Navigateur local · extension (test)** puis
    demander l'association. Vérifier le code affiché dans Mergeron et dans l'extension,
    puis confirmer dans l'extension.
 5. Dans l'onglet HTTPS à partager, utiliser l'icône de l'extension, sélectionner
@@ -27,6 +27,12 @@ sur l'instance Mergeron utilisée.
 7. Pour une passkey, suspendre le partage, effectuer soi-même l'authentification dans
    le navigateur natif puis partager de nouveau la page. Mergeron ne pilote pas
    le dialogue système et n'exporte aucune clé passkey.
+
+Le bouton Navigateur regroupe les deux modes. Son indicateur signale le partage
+actif ou une intervention attendue de l’extension. L’association ouvre une fenêtre
+compacte ; elle ne crée pas d’onglet de navigateur dans la conversation et ne réduit
+pas sa largeur. Fermer cette fenêtre conserve le partage et la réception des
+annotations dans le message en préparation.
 
 ### Safari sur Mac (18.4 minimum)
 
