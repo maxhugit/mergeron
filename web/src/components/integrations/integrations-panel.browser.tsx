@@ -35,8 +35,8 @@ const plugin = {
 const inventory = {
   marketplaces: [
     {
-      name: 'local',
-      path: '/fixture/plugins',
+      name: 'openai-curated-remote',
+      path: null,
       interface: null,
       plugins: [plugin],
     },
@@ -68,19 +68,25 @@ test.each([390, 1280])(
               : ['docs'],
           },
         } as never;
-      if (options.url === '/api/plugins/detail')
+      if (options.url === '/api/plugins/detail') {
+        expect(options.query).toEqual({
+          remoteMarketplaceName: 'openai-curated-remote',
+          pluginName: 'Documents',
+        });
         return {
           data: {
             plugin: {
               summary: plugin,
               description: 'Créer et relire des documents.',
-              marketplacePath: '/fixture/plugins',
+              marketplacePath: null,
+              marketplaceName: 'openai-curated-remote',
               skills: [],
               mcpServers: [],
               apps: [],
             },
           },
         } as never;
+      }
       if (options.url === '/api/apps/installed')
         return {
           data: {
@@ -128,6 +134,9 @@ test.each([390, 1280])(
     fireEvent.click(screen.getByRole('button', { name: 'Gérer' }));
     const pluginDialog = await screen.findByRole('dialog');
     expect(pluginDialog).toBeVisible();
+    expect(
+      await screen.findByText('Créer et relire des documents.'),
+    ).toBeVisible();
     await page.getByRole('dialog').screenshot({
       path: `../../../.vitest-screenshots/integrations-plugin-modal-${engine}-${width}.png`,
     });

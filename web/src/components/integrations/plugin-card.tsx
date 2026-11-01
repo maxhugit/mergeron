@@ -5,11 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { PluginSummaryDto } from '@/generated/api/types.gen';
 import { cn } from '@/lib/utils';
-import type { PluginKey } from './plugin-detail-sheet';
+import { pluginReference, type PluginKey } from './plugin-reference';
 
 interface Props {
   plugin: PluginSummaryDto;
-  marketplacePath: string;
+  marketplacePath: string | null;
+  marketplaceName: string;
   featured?: boolean;
   disabled?: boolean;
   onSelect: (key: PluginKey) => void;
@@ -20,6 +21,7 @@ interface Props {
 export function PluginCard({
   plugin,
   marketplacePath,
+  marketplaceName,
   featured,
   disabled,
   onSelect,
@@ -33,12 +35,24 @@ export function PluginCard({
       className={cn(
         'flex cursor-pointer items-start gap-3 rounded-lg border border-border/50 p-3 transition-colors hover:bg-accent/30',
       )}
-      onClick={() => onSelect({ marketplacePath, pluginName: plugin.name })}
+      onClick={() =>
+        onSelect(
+          pluginReference(
+            { path: marketplacePath, name: marketplaceName },
+            plugin.name,
+          ),
+        )
+      }
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ')
-          onSelect({ marketplacePath, pluginName: plugin.name });
+          onSelect(
+            pluginReference(
+              { path: marketplacePath, name: marketplaceName },
+              plugin.name,
+            ),
+          );
       }}
     >
       {/* Icon placeholder */}
@@ -78,7 +92,14 @@ export function PluginCard({
           size="sm"
           variant="outline"
           disabled={disabled}
-          onClick={() => onSelect({ marketplacePath, pluginName: plugin.name })}
+          onClick={() =>
+            onSelect(
+              pluginReference(
+                { path: marketplacePath, name: marketplaceName },
+                plugin.name,
+              ),
+            )
+          }
         >
           {t(plugin.installed ? 'manage' : 'details')}
         </Button>

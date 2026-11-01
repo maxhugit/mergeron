@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { jsonValueSchema } from '../../codex/dto/v2/openapi.schema';
 
 export const PLUGIN_INSTALL_POLICY_VALUES = [
@@ -106,8 +106,8 @@ export class PluginMarketplaceEntryDto {
   @ApiProperty()
   name!: string;
 
-  @ApiProperty()
-  path!: string;
+  @ApiProperty({ type: String, nullable: true })
+  path!: string | null;
 
   @ApiProperty({ type: () => MarketplaceInterfaceDto, nullable: true })
   interface!: MarketplaceInterfaceDto | null;
@@ -175,8 +175,8 @@ export class PluginDetailDto {
   @ApiProperty()
   marketplaceName!: string;
 
-  @ApiProperty()
-  marketplacePath!: string;
+  @ApiProperty({ type: String, nullable: true })
+  marketplacePath!: string | null;
 
   @ApiProperty({ type: () => PluginSummaryDto })
   summary!: PluginSummaryDto;
@@ -202,8 +202,11 @@ export class PluginReadResponseDto {
 
 /** Request body for plugin/install. */
 export class PluginInstallRequestDto {
-  @ApiProperty()
-  marketplacePath!: string;
+  @ApiPropertyOptional()
+  marketplacePath?: string;
+
+  @ApiPropertyOptional()
+  remoteMarketplaceName?: string;
 
   @ApiProperty()
   pluginName!: string;

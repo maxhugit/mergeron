@@ -28,6 +28,44 @@ describe('PluginsController', () => {
     await moduleRef.close();
   });
 
+  it.each([
+    [
+      '/plugins',
+      undefined,
+      { marketplacePath: '/plugins', pluginName: 'docs' },
+    ],
+    [
+      undefined,
+      'remote',
+      { remoteMarketplaceName: 'remote', pluginName: 'docs' },
+    ],
+  ])(
+    'reads the selected marketplace without inventing a local path',
+    async (path, remote, expected) => {
+      await controller.readPlugin(path, 'docs', remote);
+      expect(pluginsService.readPlugin).toHaveBeenCalledWith(expected);
+    },
+  );
+
+  it('installs from a remote marketplace', async () => {
+    await controller.installPlugin({
+      remoteMarketplaceName: 'remote',
+      pluginName: 'docs',
+    });
+    expect(pluginsService.installPlugin).toHaveBeenCalledWith({
+      remoteMarketplaceName: 'remote',
+      pluginName: 'docs',
+    });
+  });
+
+  it.each([
+    [undefined, undefined],
+    ['/plugins', 'remote'],
+  ])('rejects missing or ambiguous marketplace identities', (path, remote) => {
+    expect(() => controller.readPlugin(path, 'docs', remote)).toThrow();
+    expect(pluginsService.readPlugin).not.toHaveBeenCalled();
+  });
+
   it('forwards reconcile requests with a trimmed optional reason', async () => {
     const response: v2.PluginReconcileResponse = {
       changedPlugins: [],

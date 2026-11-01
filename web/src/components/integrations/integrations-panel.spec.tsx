@@ -159,3 +159,72 @@ it('does not repeatedly fetch a refused directory when revisiting the category',
     ).toHaveLength(2),
   );
 });
+
+it.each([
+  ['/plugins', undefined],
+  [null, 'remote'],
+])(
+  'opens details using the marketplace identity (%s)',
+  async (path, remote) => {
+    get.mockImplementation(async (options) => {
+      if (options.url === '/api/plugins/installed')
+        return {
+          data: {
+            ...plugins,
+            marketplaces: [
+              { name: 'remote', path, interface: null, plugins: [plugin] },
+            ],
+          },
+        } as never;
+      if (options.url === '/api/plugins/detail')
+        return {
+          data: {
+            plugin: {
+              marketplaceName: 'remote',
+              marketplacePath: path,
+              summary: plugin,
+              description: 'Plugin details loaded',
+              skills: [],
+              apps: [],
+              mcpServers: [],
+            },
+          },
+        } as never;
+      throw Error('Unexpected request');
+    });
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+    expect(await screen.findByText('Plugin details loaded')).toBeVisible();
+    expect(
+      get.mock.calls.find(([o]) => o.url === '/api/plugins/detail')?.[0].query,
+    ).toEqual(
+      path
+        ? { marketplacePath: path, pluginName: 'Documents' }
+        : { remoteMarketplaceName: remote, pluginName: 'Documents' },
+    );
+  },
+);
+
+it('reports a failed detail request and permits an explicit retry', async () => {
+  const original = get.getMockImplementation()!;
+  get.mockImplementation((options, ...rest) =>
+    options.url === '/api/plugins/detail'
+      ? Promise.reject(new Error('unavailable'))
+      : original(options, ...rest),
+  );
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Failed to load plugins',
+  );
+  expect(screen.queryByText('Plugin not found')).not.toBeInTheDocument();
+  expect(
+    get.mock.calls.filter(([o]) => o.url === '/api/plugins/detail'),
+  ).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() =>
+    expect(
+      get.mock.calls.filter(([o]) => o.url === '/api/plugins/detail'),
+    ).toHaveLength(2),
+  );
+});

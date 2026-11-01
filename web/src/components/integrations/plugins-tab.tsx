@@ -31,6 +31,7 @@ import type {
 import { showSnackbar } from '@/stores/snackbar-store';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { queryHasId } from '@/lib/query-invalidation';
+import { pluginReference } from './plugin-reference';
 import { PluginCard } from './plugin-card';
 import { PluginDetailSheet, type PluginKey } from './plugin-detail-sheet';
 
@@ -177,12 +178,13 @@ export function PluginsTab() {
   ) => ({
     plugin,
     marketplacePath: mp.path,
+    marketplaceName: mp.name,
     featured: featuredIds.has(plugin.id),
     disabled: mutating,
     onSelect: setSelectedPlugin,
     onInstall: () =>
       installMutation.mutate({
-        body: { marketplacePath: mp.path, pluginName: plugin.name },
+        body: pluginReference(mp, plugin.name),
       }),
     onUninstall: () =>
       uninstallMutation.mutate({ body: { pluginId: plugin.id } }),
@@ -310,7 +312,7 @@ export function PluginsTab() {
       <div className="space-y-2">
         {displayed.map(({ plugin, marketplace }) => (
           <PluginCard
-            key={`${marketplace.path}::${plugin.id}`}
+            key={`${marketplace.name}::${marketplace.path}::${plugin.id}`}
             {...makeCardProps(plugin, marketplace)}
           />
         ))}
@@ -324,9 +326,9 @@ export function PluginsTab() {
       <PluginDetailSheet
         pluginKey={selectedPlugin}
         onClose={() => setSelectedPlugin(null)}
-        onInstall={(mp, name) =>
+        onInstall={(reference) =>
           installMutation.mutate({
-            body: { marketplacePath: mp, pluginName: name },
+            body: reference,
           })
         }
         onUninstall={(id) =>
@@ -411,10 +413,7 @@ function invalidateAfterReconcile(
     if (!pluginIds.has(plugin.id)) continue;
     void queryClient.invalidateQueries({
       queryKey: pluginsReadPluginQueryKey({
-        query: {
-          marketplacePath: marketplace.path,
-          pluginName: plugin.name,
-        },
+        query: pluginReference(marketplace, plugin.name),
       }),
     });
   }
