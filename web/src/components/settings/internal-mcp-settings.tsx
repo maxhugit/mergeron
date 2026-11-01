@@ -48,7 +48,7 @@ export function InternalMcpSettings() {
   const catalog = query.data;
   const french = i18n.resolvedLanguage?.startsWith('fr');
   const tools = catalog.tools.filter((tool) =>
-    `${tool.name} ${tool.title} ${tool.titleFr ?? ''} ${(tool.aliases ?? []).join(' ')} ${tool.description} ${tool.descriptionFr}`
+    `${tool.name} ${tool.title} ${tool.titleFr ?? ''} ${tool.description} ${tool.descriptionFr}`
       .toLocaleLowerCase()
       .includes(search.toLocaleLowerCase()),
   );
@@ -98,12 +98,6 @@ export function InternalMcpSettings() {
             </code>
           </summary>
           <div className="min-w-0 space-y-4 border-t p-4">
-            {Boolean(tool.aliases?.length) && (
-              <p className="break-words text-xs text-muted-foreground">
-                {mcpT('internalMcpLegacyNames')}{' '}
-                <code>{tool.aliases?.join(', ')}</code>
-              </p>
-            )}
             <p className="text-sm">
               {french ? tool.descriptionFr : tool.description}
             </p>

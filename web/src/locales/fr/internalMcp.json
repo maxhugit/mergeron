@@ -4,7 +4,6 @@
   "internalMcpGenerated": "Cette documentation est générée depuis les schémas réellement enregistrés dans le serveur MCP. Cette page est une référence, pas une console d’exécution.",
   "internalMcpSearch": "Rechercher une méthode",
   "internalMcpSearchPlaceholder": "project_get, project_task_create…",
-  "internalMcpLegacyNames": "Anciens noms toujours acceptés pour compatibilité :",
   "internalMcpCount_one": "{{count}} méthode",
   "internalMcpCount_other": "{{count}} méthodes",
   "internalMcpNoResults": "Aucune méthode ne correspond à cette recherche.",

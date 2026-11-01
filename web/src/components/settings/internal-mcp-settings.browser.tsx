@@ -104,6 +104,8 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
   await screen.findByText('Créer un livrable.');
   fireEvent.click(screen.getByText('project_git_publish').closest('summary')!);
   expect(screen.getAllByText('Modification')).toHaveLength(2);
+  expect(screen.queryByText('publish_project_git')).toBeNull();
+  expect(screen.queryByText('create_deliverable')).toBeNull();
   document.documentElement.classList.add('dark');
   for (const width of [1000, 390]) {
     await page.viewport(width, 800);

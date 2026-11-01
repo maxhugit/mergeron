@@ -137,14 +137,14 @@ describe('internal MCP documentation', () => {
     expect(await screen.findByText('2 methods')).toBeVisible();
   });
 
-  it('finds canonical tools by legacy name or localized title without duplicate entries', async () => {
+  it('searches current names and localized titles without showing or searching legacy aliases', async () => {
     await i18n.changeLanguage('fr');
     page();
     await screen.findByText('project_task_create');
     const search = screen.getByRole('textbox', {
       name: 'Rechercher une méthode',
     });
-    for (const value of ['create_task', 'Tâches — Créer']) {
+    for (const value of ['project_task_create', 'Tâches — Créer']) {
       fireEvent.change(search, { target: { value } });
       expect(screen.getByText('1 méthode')).toBeVisible();
       expect(screen.getAllByText('project_task_create')).toHaveLength(1);
@@ -153,9 +153,10 @@ describe('internal MCP documentation', () => {
     fireEvent.click(
       screen.getByText('project_task_create').closest('summary')!,
     );
-    expect(screen.getByText('create_task')).toBeVisible();
-    expect(
-      screen.getByText('Anciens noms toujours acceptés pour compatibilité :'),
-    ).toBeVisible();
+    expect(screen.queryByText('create_task')).toBeNull();
+    expect(screen.queryByText(/Anciens noms/)).toBeNull();
+    fireEvent.change(search, { target: { value: 'create_task' } });
+    expect(screen.getByText('0 méthode')).toBeVisible();
+    expect(screen.queryByText('project_task_create')).toBeNull();
   });
 });

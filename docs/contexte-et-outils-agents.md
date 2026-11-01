@@ -85,7 +85,8 @@ L’entrée **MCP interne** des réglages globaux ouvre
 `/settings?section=internalMcp`. Réservée aux administrateurs, elle présente :
 
 - recherche parmi les méthodes métier, Git, prévisualisation et navigateur local ;
-- titres français/anglais lisibles, nom technique et recherche par ancien nom ;
+- titres français/anglais lisibles et noms techniques actuels, sans afficher ni
+  rechercher les anciens alias ; la compatibilité des appels reste interne ;
 - paramètres, types, champs obligatoires et contraintes ;
 - schémas JSON complets des entrées et des résultats ;
 - exemples d’appels, protocole, limites, erreurs et instructions de sécurité.

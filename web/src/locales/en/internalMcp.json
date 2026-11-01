@@ -4,7 +4,6 @@
   "internalMcpGenerated": "This reference is generated from the schemas actually registered in the MCP server. This page documents tools; it does not execute them.",
   "internalMcpSearch": "Search methods",
   "internalMcpSearchPlaceholder": "project_get, project_task_create…",
-  "internalMcpLegacyNames": "Legacy names still accepted for compatibility:",
   "internalMcpCount_one": "{{count}} method",
   "internalMcpCount_other": "{{count}} methods",
   "internalMcpNoResults": "No methods match this search.",
