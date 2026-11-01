@@ -14,7 +14,7 @@ import type { InternalMcpCatalog } from './internal-mcp-api';
 const catalog: InternalMcpCatalog = {
   server: {
     name: 'mergeron_internal',
-    version: '1.0.0',
+    version: '1.8.0',
     transport: 'Streamable HTTP',
     exposure: 'loopback-only',
     authentication: 'conversation-bound',
@@ -25,8 +25,10 @@ const catalog: InternalMcpCatalog = {
   errors: ['READ_ONLY'],
   tools: [
     {
-      name: 'get_project',
-      title: 'Read project',
+      name: 'project_get',
+      title: 'Project — Read the project',
+      titleFr: 'Projet — Consulter le projet',
+      aliases: ['get_project'],
       description: 'Read the project.',
       descriptionFr: 'Consulter le projet.',
       readOnly: true,
@@ -35,8 +37,10 @@ const catalog: InternalMcpCatalog = {
       example: {},
     },
     {
-      name: 'create_task',
-      title: 'Create task',
+      name: 'project_task_create',
+      title: 'Tasks — Create a task',
+      titleFr: 'Tâches — Créer une tâche',
+      aliases: ['create_task'],
       description: 'Create a task on request.',
       descriptionFr: 'Créer une tâche sur demande.',
       readOnly: false,
@@ -86,12 +90,12 @@ describe('internal MCP documentation', () => {
     expect(await screen.findByText('2 methods')).toBeVisible();
     expect(screen.getByText('mergeron_internal')).toBeVisible();
     fireEvent.change(screen.getByRole('textbox', { name: 'Search methods' }), {
-      target: { value: 'create_task' },
+      target: { value: 'project_task_create' },
     });
-    expect(screen.queryByText('get_project')).toBeNull();
+    expect(screen.queryByText('project_get')).toBeNull();
     expect(screen.getByText('1 method')).toBeVisible();
-    const details = screen.getByText('create_task').closest('details')!;
-    fireEvent.click(screen.getByText('create_task'));
+    const details = screen.getByText('project_task_create').closest('details')!;
+    fireEvent.click(screen.getByText('project_task_create'));
     expect(within(details).getByText('requestId')).toBeVisible();
     expect(
       within(details).getByText('Input schema (JSON Schema)'),
@@ -110,7 +114,8 @@ describe('internal MCP documentation', () => {
     await i18n.changeLanguage('fr');
     page();
     expect(await screen.findByText('MCP interne')).toBeVisible();
-    fireEvent.click(screen.getByText('get_project'));
+    expect(screen.getByText('Projet — Consulter le projet')).toBeVisible();
+    fireEvent.click(screen.getByText('project_get'));
     expect(screen.getByText('Consulter le projet.')).toBeVisible();
     expect(screen.getByText('Aucun paramètre.')).toBeVisible();
     fireEvent.change(
@@ -130,5 +135,27 @@ describe('internal MCP documentation', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('2 methods')).toBeVisible();
+  });
+
+  it('finds canonical tools by legacy name or localized title without duplicate entries', async () => {
+    await i18n.changeLanguage('fr');
+    page();
+    await screen.findByText('project_task_create');
+    const search = screen.getByRole('textbox', {
+      name: 'Rechercher une méthode',
+    });
+    for (const value of ['create_task', 'Tâches — Créer']) {
+      fireEvent.change(search, { target: { value } });
+      expect(screen.getByText('1 méthode')).toBeVisible();
+      expect(screen.getAllByText('project_task_create')).toHaveLength(1);
+      expect(screen.queryByText('project_get')).toBeNull();
+    }
+    fireEvent.click(
+      screen.getByText('project_task_create').closest('summary')!,
+    );
+    expect(screen.getByText('create_task')).toBeVisible();
+    expect(
+      screen.getByText('Anciens noms toujours acceptés pour compatibilité :'),
+    ).toBeVisible();
   });
 });

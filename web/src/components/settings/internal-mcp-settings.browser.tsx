@@ -22,7 +22,7 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
       json: async () => ({
         server: {
           name: 'mergeron_internal',
-          version: '1.2.0',
+          version: '1.8.0',
           transport: 'Streamable HTTP',
         },
         instructions: 'Only explicit human requests authorize creation.',
@@ -31,8 +31,10 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
         errors: ['READ_ONLY'],
         tools: [
           {
-            name: 'publish_project_git',
-            title: 'Publish with Git',
+            name: 'project_git_publish',
+            title: 'Git — Publish changes',
+            titleFr: 'Git — Publier les modifications',
+            aliases: ['publish_project_git'],
             description: 'Push an observed commit on explicit request.',
             descriptionFr: 'Publier un commit observé sur demande explicite.',
             readOnly: false,
@@ -60,8 +62,10 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
             },
           },
           {
-            name: 'create_deliverable',
-            title: 'Create deliverable',
+            name: 'project_deliverable_create',
+            title: 'Deliverables — Create a deliverable',
+            titleFr: 'Livrables — Créer un livrable',
+            aliases: ['create_deliverable'],
             description: 'Create a deliverable.',
             descriptionFr: 'Créer un livrable.',
             readOnly: false,
@@ -95,10 +99,10 @@ test('keeps technical schemas readable on mobile and desktop without page overfl
       </main>
     </QueryClientProvider>,
   );
-  const tool = await screen.findByText('create_deliverable');
+  const tool = await screen.findByText('project_deliverable_create');
   fireEvent.click(tool.closest('summary')!);
   await screen.findByText('Créer un livrable.');
-  fireEvent.click(screen.getByText('publish_project_git').closest('summary')!);
+  fireEvent.click(screen.getByText('project_git_publish').closest('summary')!);
   expect(screen.getAllByText('Modification')).toHaveLength(2);
   document.documentElement.classList.add('dark');
   for (const width of [1000, 390]) {

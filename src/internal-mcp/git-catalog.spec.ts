@@ -6,7 +6,7 @@ import { INTERNAL_MCP_TOOLS } from './internal-mcp-catalog';
 import { prepareProjectGitOperationInput } from '../projects/project-connection-tools.schema';
 it('advertises both reviewed restore operations to native agents without arbitrary reset or missing confirmations', async () => {
   const definition = INTERNAL_MCP_TOOLS.find(
-    (tool) => tool.name === 'prepare_project_git',
+    (tool) => tool.name === 'project_git_local_manage',
   )!;
   const server = new McpServer({ name: 'test-restore', version: '1' });
   server.registerTool(
@@ -81,7 +81,7 @@ it('advertises both reviewed restore operations to native agents without arbitra
 });
 it('advertises retargeting and its remote preconditions to native MCP clients', async () => {
   const definition = INTERNAL_MCP_TOOLS.find(
-    (tool) => tool.name === 'publish_project_git',
+    (tool) => tool.name === 'project_git_publish',
   )!;
   const server = new McpServer({ name: 'test-git', version: '1' });
   server.registerTool(

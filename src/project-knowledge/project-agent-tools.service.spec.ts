@@ -236,6 +236,8 @@ describe('project context and business tools', () => {
       tools.context('agent', '/unrelated/git'),
     );
     expect(context).toContain('Tests 2');
+    expect(context).toContain('Use MCP project_get, project_task_list');
+    expect(context).toContain('cached legacy names remain compatible');
     expect(context).not.toContain('Presentation');
     expect(context).toContain('/unrelated/git');
     expect(context).not.toContain('Foreign');

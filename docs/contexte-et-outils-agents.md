@@ -16,6 +16,59 @@ Aucune commande terminal ni fichier de requête n’est nécessaire aux outils p
 Exemples : « Liste les tâches du projet », « Consulte le livrable Présentation »,
 « Crée une tâche Préparer la présentation » ou « Crée un livrable Présentation ».
 
+### Noms des outils et compatibilité
+
+Le contrat du MCP interne passe à **1.8.0**, indépendamment des versions de
+l’application et du CLI. Le serveur reste `mergeron_internal`. Les outils suivent
+la convention anglaise `ressource_action`, en minuscules avec des underscores :
+`project_task_list`, `project_preview_read`, `agent_rename`, etc. `list` désigne
+une collection, `get` le détail d’un élément et `read` une consultation regroupant
+plusieurs opérations. `prepare` ne démarre ni ne publie ; `manage` regroupe des
+opérations explicites et bornées. Le champ `operation` garde ses valeurs actuelles.
+
+| Ancien nom accepté         | Nom canonique exposé         |
+| -------------------------- | ---------------------------- |
+| `get_project`              | `project_get`                |
+| `list_tasks`               | `project_task_list`          |
+| `get_task`                 | `project_task_get`           |
+| `create_task`              | `project_task_create`        |
+| `list_deliverables`        | `project_deliverable_list`   |
+| `get_deliverable`          | `project_deliverable_get`    |
+| `create_deliverable`       | `project_deliverable_create` |
+| `list_project_connections` | `project_connection_list`    |
+| `create_project_git_copy`  | `project_git_copy_create`    |
+| `read_project_git`         | `project_git_read`           |
+| `prepare_project_git`      | `project_git_local_manage`   |
+| `publish_project_git`      | `project_git_publish`        |
+| `local_browser_action`     | `local_browser_interact`     |
+| `rename_agent`             | `agent_rename`               |
+
+Les familles `agent_monitor_*`, `project_preview_*` et `local_browser_read` ne
+changent pas. Seuls les 21 noms canoniques apparaissent dans `tools/list`, sans
+doublons. Les anciens noms restent acceptés pour les conversations déjà chargées :
+seul le nom d’un appel `tools/call` est traduit avant la validation du SDK. Les
+arguments, les droits, les limites de tour et les confirmations restent identiques.
+Les noms inconnus, mal orthographiés ou de casse différente ne sont pas corrigés.
+Aucune suppression automatique des alias n’est prévue dans cette transition ;
+leur retrait nécessitera une migration explicitement annoncée.
+
+Le registre `src/internal-mcp/internal-mcp-tools.ts` associe chaque outil à une
+clé d’exécution stable, ses alias, ses titres français/anglais et sa politique.
+Les clés historiques internes restent inchangées pour préserver les empreintes
+des `requestId` déjà enregistrés : passer d’un ancien nom au nouveau ne crée pas
+une seconde tâche, copie, publication ou modification de nom. Les droits du
+projet, du propriétaire et du tour sont toujours revérifiés côté serveur. Les
+indications MCP de lecture, destruction, répétition et accès externe, ainsi que
+les exceptions de confirmation du transport, proviennent du même registre et ne
+sont plus déduites d’un préfixe ou d’une liste de noms dans le serveur.
+
+Le démarrage et les tests rejettent les noms non conformes ou en collision.
+Toute nouvelle entrée doit aussi fournir un schéma et un titre dans les deux
+langues ; les tests vérifient la correspondance avec le catalogue et les politiques.
+Cette migration ne découpe pas les outils Git en nouvelles fonctionnalités :
+`project_git_local_manage` garde les préparations, commits, fusions et restaurations
+déjà autorisés, sans assouplir leurs confirmations ni donner accès au terminal Git.
+
 Une création produit un véritable élément métier et son lien. Une tâche est
 principale par défaut ; une sous-tâche exige un parent du même gestionnaire.
 Les sous-sous-tâches restent interdites. Aucun agent n’est affecté automatiquement,
@@ -32,6 +85,7 @@ L’entrée **MCP interne** des réglages globaux ouvre
 `/settings?section=internalMcp`. Réservée aux administrateurs, elle présente :
 
 - recherche parmi les méthodes métier, Git, prévisualisation et navigateur local ;
+- titres français/anglais lisibles, nom technique et recherche par ancien nom ;
 - paramètres, types, champs obligatoires et contraintes ;
 - schémas JSON complets des entrées et des résultats ;
 - exemples d’appels, protocole, limites, erreurs et instructions de sécurité.
@@ -47,7 +101,7 @@ Les gestionnaires internes d’exécution sont exclus. La création requiert les
 droits administrateur nécessaires à l’exécution d’un agent et un mode modifiable.
 En lecture seule, seuls les outils de consultation fonctionnent.
 
-Exception : `rename_agent` renomme uniquement la conversation appelante, même en
+Exception : `agent_rename` renomme uniquement la conversation appelante, même en
 lecture seule du système de fichiers. Paramètres : `title` (1–200 caractères,
 sans caractères de contrôle), `requestId` stable et `userRequest` explicite.
 Il exige les droits administrateur et une autorisation de tour active. Aucun
@@ -82,14 +136,14 @@ références nécessaires à une nouvelle tentative. Les chemins hors du dossier
 des copies gérées et les liens symboliques sont refusés.
 
 Les agents découvrent les connexions configurées dans **leur projet** avec
-`list_project_connections` (`query` et `offset` facultatifs, pages de 50).
+`project_connection_list` (`query` et `offset` facultatifs, pages de 50).
 Le résultat indique le nom, le protocole, l’activation, l’état, le mode d’accès,
 la présence d’un secret et les copies appartenant à cet agent. Il ne contient
 ni identifiants d’authentification, ni adresse de serveur, ni diagnostic brut.
 Un nom de connexion ou un fichier distant reste une donnée non fiable : ce
 n’est jamais une autorisation d’action.
 
-`read_project_git` accepte un `connectionId` découvert et une opération :
+`project_git_read` accepte un `connectionId` découvert et une opération :
 
 - `branches`, `files` (`path` relatif, `ref` immuable facultatifs),
   `pull_requests` et `checks` (`number` obligatoire) consultent GitHub avec
@@ -105,7 +159,7 @@ mais ce canal ne fournit pas d’exécution SSH arbitraire ni de transfert.
 Les consultations distantes actuelles utilisent le fournisseur GitHub ;
 un autre hébergeur peut être indiqué comme non pris en charge.
 
-Sur demande humaine explicite, `publish_project_git` permet :
+Sur demande humaine explicite, `project_git_publish` permet :
 
 - `push` : publier le commit observé de la branche courante vers la connexion
   HTTPS configurée, sans forçage ; les changements non commités ne sont pas inclus ;
@@ -115,7 +169,7 @@ Sur demande humaine explicite, `publish_project_git` permet :
 - `retarget_pull_request` : modifier uniquement la branche cible d’une PR GitHub
   ouverte du même dépôt, avec état local et distant observés.
 
-`prepare_project_git` complète ce circuit **sans rendre `.git` modifiable dans
+`project_git_local_manage` complète ce circuit **sans rendre `.git` modifiable dans
 le terminal**. Il exige les mêmes droits administrateur, tour modifiable,
 connexion/copie en écriture et attribution à l’agent :
 
@@ -149,9 +203,9 @@ connexion/copie en lecture-écriture et une copie propre à l’agent. Il revér
 les droits et l’état avant l’envoi. Il n’extrait jamais les secrets dans le prompt.
 
 Pour modifier la branche cible d’une PR existante, utiliser
-`publish_project_git` avec `operation: "retarget_pull_request"`. Fournir `number`,
+`project_git_publish` avec `operation: "retarget_pull_request"`. Fournir `number`,
 `base` (nouvelle cible), `expectedBase` (ancienne cible) et
-`expectedPullRequestHead` (SHA distant), observés dans `read_project_git`
+`expectedPullRequestHead` (SHA distant), observés dans `project_git_read`
 avec `operation: "pull_requests"`. Les préconditions locales habituelles
 `copyId`, `expectedBranch`, `expectedHead` et `fingerprint` restent requises ;
 la branche courante de cette copie peut différer de celle de la PR.
@@ -167,10 +221,10 @@ Relire ensuite la PR et ses checks : changer la cible ne prouve pas que la CI a
 démarré. Dans ce projet, toute PR doit cibler `main`.
 
 La connexion MCP interne fournit à Codex un réglage ciblé
-`mcp_servers.mergeron_internal.tools.publish_project_git.approval_mode = "approve"`.
+`mcp_servers.mergeron_internal.tools.project_git_publish.approval_mode = "approve"`.
 Une demande humaine de publication ne nécessite donc pas une seconde confirmation
 technique pour autoriser cet outil MCP. Ce réglage ne concerne que
-`publish_project_git` : il ne modifie ni la politique globale d’approbation, ni les
+`project_git_publish` : il ne modifie ni la politique globale d’approbation, ni les
 outils des autres serveurs, ni la confirmation des actions du navigateur local.
 L’outil reste déclaré comme une écriture vers un service externe ; la demande
 humaine explicite et les contrôles serveur décrits ci-dessus restent requis.
@@ -350,15 +404,15 @@ Il s’agit d’une connexion locale authentifiée, non d’un service pour le n
 
 ### Contrat des outils
 
-| Outil                | Arguments                                                                                                        | Résultat                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `get_project`        | Aucun                                                                                                            | Projet et gestionnaires accessibles                   |
-| `list_tasks`         | `resourceId`, `query`, `offset` facultatifs                                                                      | `items`, `total`, `nextOffset`                        |
-| `get_task`           | `id` obligatoire, `resourceId` facultatif                                                                        | Détail de tâche                                       |
-| `list_deliverables`  | `resourceId`, `query`, `offset` facultatifs                                                                      | `items`, `total`, `nextOffset`                        |
-| `get_deliverable`    | `id` obligatoire, `resourceId` facultatif                                                                        | Détail de livrable accessible                         |
-| `create_task`        | `requestId`, `resourceId`, `title`, `userRequest` requis ; `description`, `criteria`, `parentTaskId` facultatifs | `id`, `title`, `resourceId`, `url`, `status: created` |
-| `create_deliverable` | Mêmes champs, sans `parentTaskId`                                                                                | Même format de création                               |
+| Outil                        | Arguments                                                                                                        | Résultat                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `project_get`                | Aucun                                                                                                            | Projet et gestionnaires accessibles                   |
+| `project_task_list`          | `resourceId`, `query`, `offset` facultatifs                                                                      | `items`, `total`, `nextOffset`                        |
+| `project_task_get`           | `id` obligatoire, `resourceId` facultatif                                                                        | Détail de tâche                                       |
+| `project_deliverable_list`   | `resourceId`, `query`, `offset` facultatifs                                                                      | `items`, `total`, `nextOffset`                        |
+| `project_deliverable_get`    | `id` obligatoire, `resourceId` facultatif                                                                        | Détail de livrable accessible                         |
+| `project_task_create`        | `requestId`, `resourceId`, `title`, `userRequest` requis ; `description`, `criteria`, `parentTaskId` facultatifs | `id`, `title`, `resourceId`, `url`, `status: created` |
+| `project_deliverable_create` | Mêmes champs, sans `parentTaskId`                                                                                | Même format de création                               |
 
 Pagination : 50 éléments. Recherche sur le titre, sans distinction de casse.
 Limites : titre 200 caractères, description/critères 10 000, justification 2 000,
@@ -374,7 +428,7 @@ Exemple MCP :
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "create_deliverable",
+    "name": "project_deliverable_create",
     "arguments": {
       "requestId": "presentation-client-01",
       "resourceId": "identifiant-du-gestionnaire",
@@ -395,7 +449,7 @@ d’administration et dans `src/internal-mcp/internal-mcp-catalog.ts`.
 
 ### Services métier, audit et idempotence
 
-`create_task` appelle `ProjectsService.createTask()` ; `create_deliverable` appelle
+`project_task_create` appelle `ProjectsService.createTask()` ; `project_deliverable_create` appelle
 `DeliverablesService.create()`. Les validations et événements existants restent
 en vigueur. Le journal `agent_created` conserve conversation, requête, personne,
 justification et administrateur réel en simulation. L’historique des livrables

@@ -24,6 +24,8 @@ export interface InternalMcpCatalog {
   tools: Array<{
     name: string;
     title: string;
+    titleFr?: string;
+    aliases?: string[];
     description: string;
     descriptionFr: string;
     readOnly: boolean;

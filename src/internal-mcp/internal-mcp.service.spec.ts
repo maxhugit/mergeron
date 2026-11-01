@@ -444,7 +444,7 @@ describe('native internal MCP over HTTP', () => {
       expect(
         (
           await client.callTool({
-            name: 'prepare_project_git',
+            name: 'project_git_local_manage',
             arguments: args,
           })
         ).isError,
@@ -453,7 +453,7 @@ describe('native internal MCP over HTTP', () => {
       activate();
       const catalog = await client.listTools();
       expect(
-        catalog.tools.find((tool) => tool.name === 'prepare_project_git')
+        catalog.tools.find((tool) => tool.name === 'project_git_local_manage')
           ?.annotations,
       ).toMatchObject({
         destructiveHint: true,
@@ -463,14 +463,17 @@ describe('native internal MCP over HTTP', () => {
       expect(
         (
           await client.callTool({
-            name: 'prepare_project_git',
+            name: 'project_git_local_manage',
             arguments: args,
           })
         ).structuredContent,
       ).toMatchObject({
         data: { restored: true, backupBranch: 'mergeron-backup/test' },
       });
-      await client.callTool({ name: 'prepare_project_git', arguments: args });
+      await client.callTool({
+        name: 'project_git_local_manage',
+        arguments: args,
+      });
       expect(restoreConnection).toHaveBeenCalledTimes(1);
       expect(restoreConnection.mock.calls[0][2]).toMatchObject({
         agentThreadId: 'agent',
@@ -483,7 +486,7 @@ describe('native internal MCP over HTTP', () => {
     const { client } = await connect();
     activate('admin', false);
     const listed = await client.callTool({
-      name: 'list_project_connections',
+      name: 'project_connection_list',
       arguments: {},
     });
     expect(listed.isError).not.toBe(true);
@@ -497,7 +500,7 @@ describe('native internal MCP over HTTP', () => {
       /never-return-this-token|encryptedValue|authTag/,
     );
     const branches = await client.callTool({
-      name: 'read_project_git',
+      name: 'project_git_read',
       arguments: { connectionId: gitConnectionId, operation: 'branches' },
     });
     expect(branches.isError).not.toBe(true);
@@ -515,7 +518,7 @@ describe('native internal MCP over HTTP', () => {
       fingerprint: gitFingerprint,
     };
     const blocked = await client.callTool({
-      name: 'publish_project_git',
+      name: 'project_git_publish',
       arguments: args,
     });
     expect(blocked.isError).toBe(true);
@@ -523,7 +526,7 @@ describe('native internal MCP over HTTP', () => {
     expect(pushConnection).not.toHaveBeenCalled();
     activate();
     const pushed = await client.callTool({
-      name: 'publish_project_git',
+      name: 'project_git_publish',
       arguments: args,
     });
     expect(pushed.isError).not.toBe(true);
@@ -531,13 +534,15 @@ describe('native internal MCP over HTTP', () => {
       operation: 'push',
       data: { sha: gitHead },
     });
-    await client.callTool({ name: 'publish_project_git', arguments: args });
+    expect(
+      await client.callTool({ name: 'publish_project_git', arguments: args }),
+    ).toEqual(pushed);
     expect(pushConnection).toHaveBeenCalledTimes(1);
     service.revoke('agent');
     expect(
       (
         await client.callTool({
-          name: 'list_project_connections',
+          name: 'project_connection_list',
           arguments: {},
         })
       ).isError,
@@ -554,7 +559,7 @@ describe('native internal MCP over HTTP', () => {
     };
     activate('admin', false);
     const denied = await client.callTool({
-      name: 'create_project_git_copy',
+      name: 'project_git_copy_create',
       arguments: args,
     });
     expect(denied.isError).toBe(true);
@@ -562,7 +567,7 @@ describe('native internal MCP over HTTP', () => {
     expect(cloneConnection).not.toHaveBeenCalled();
     activate();
     const created = await client.callTool({
-      name: 'create_project_git_copy',
+      name: 'project_git_copy_create',
       arguments: args,
     });
     expect(created.isError).not.toBe(true);
@@ -577,7 +582,12 @@ describe('native internal MCP over HTTP', () => {
       { branch: 'main', agentThreadId: 'agent' },
       expect.any(Function),
     );
-    await client.callTool({ name: 'create_project_git_copy', arguments: args });
+    expect(
+      await client.callTool({
+        name: 'create_project_git_copy',
+        arguments: args,
+      }),
+    ).toEqual(created);
     expect(cloneConnection).toHaveBeenCalledTimes(1);
   });
 
@@ -596,12 +606,16 @@ describe('native internal MCP over HTTP', () => {
     };
     activate('admin', false);
     expect(
-      (await client.callTool({ name: 'prepare_project_git', arguments: args }))
-        .isError,
+      (
+        await client.callTool({
+          name: 'project_git_local_manage',
+          arguments: args,
+        })
+      ).isError,
     ).toBe(true);
     activate();
     const result = await client.callTool({
-      name: 'prepare_project_git',
+      name: 'project_git_local_manage',
       arguments: args,
     });
     expect(result.isError).not.toBe(true);
@@ -614,7 +628,7 @@ describe('native internal MCP over HTTP', () => {
     expect(
       (
         await client.callTool({
-          name: 'prepare_project_git',
+          name: 'project_git_local_manage',
           arguments: { ...args, operation: 'commit', message: 'x' },
         })
       ).isError,
@@ -622,15 +636,19 @@ describe('native internal MCP over HTTP', () => {
     expect(
       (
         await client.callTool({
-          name: 'prepare_project_git',
+          name: 'project_git_local_manage',
           arguments: { ...args, authorName: 'spoof' },
         })
       ).isError,
     ).toBe(true);
     service.revoke('agent');
     expect(
-      (await client.callTool({ name: 'prepare_project_git', arguments: args }))
-        .isError,
+      (
+        await client.callTool({
+          name: 'project_git_local_manage',
+          arguments: args,
+        })
+      ).isError,
     ).toBe(true);
   });
 
@@ -650,7 +668,7 @@ describe('native internal MCP over HTTP', () => {
       fingerprint: gitFingerprint,
     };
     const result = await client.callTool({
-      name: 'prepare_project_git',
+      name: 'project_git_local_manage',
       arguments: args,
     });
     expect(result.isError).not.toBe(true);
@@ -666,7 +684,7 @@ describe('native internal MCP over HTTP', () => {
       expect(
         (
           await client.callTool({
-            name: 'prepare_project_git',
+            name: 'project_git_local_manage',
             arguments: { ...args, requestId: 'bad-fetch', ...extra },
           })
         ).isError,
@@ -675,7 +693,7 @@ describe('native internal MCP over HTTP', () => {
     expect(
       (
         await client.callTool({
-          name: 'prepare_project_git',
+          name: 'project_git_local_manage',
           arguments: { ...args, requestId: 'revoked-fetch' },
         })
       ).isError,
@@ -721,7 +739,7 @@ describe('native internal MCP over HTTP', () => {
       ).structuredContent,
     ).toMatchObject({ sessions: [{ id: sessionId }] });
     const pending = await client.callTool({
-      name: 'local_browser_action',
+      name: 'local_browser_interact',
       arguments: {
         sessionId,
         action: 'click',
@@ -744,7 +762,7 @@ describe('native internal MCP over HTTP', () => {
     expect(
       (
         await client.callTool({
-          name: 'local_browser_action',
+          name: 'local_browser_interact',
           arguments: {
             sessionId,
             action: 'scroll',
@@ -784,7 +802,7 @@ describe('native internal MCP over HTTP', () => {
       userRequest: 'Please rename this agent.',
     };
     const result = await client.callTool({
-      name: 'rename_agent',
+      name: 'agent_rename',
       arguments: args,
     });
     expect(result.isError).not.toBe(true);
@@ -793,7 +811,9 @@ describe('native internal MCP over HTTP', () => {
       name: 'Qualité PLM',
       status: 'renamed',
     });
-    await client.callTool({ name: 'rename_agent', arguments: args });
+    expect(
+      await client.callTool({ name: 'rename_agent', arguments: args }),
+    ).toEqual(result);
     expect(setThreadName).toHaveBeenCalledExactlyOnceWith(
       'agent',
       'Qualité PLM',
@@ -805,12 +825,12 @@ describe('native internal MCP over HTTP', () => {
       entityId: 'agent',
     });
     const forged = await client.callTool({
-      name: 'rename_agent',
+      name: 'agent_rename',
       arguments: { ...args, threadId: 'other' },
     });
     expect(forged.isError).toBe(true);
     const conflict = await client.callTool({
-      name: 'rename_agent',
+      name: 'agent_rename',
       arguments: { ...args, title: 'Different' },
     });
     expect(conflict.isError).toBe(true);
@@ -825,13 +845,13 @@ describe('native internal MCP over HTTP', () => {
       userRequest: 'Rename please.',
     };
     expect(
-      (await client.callTool({ name: 'rename_agent', arguments: args }))
+      (await client.callTool({ name: 'agent_rename', arguments: args }))
         .isError,
     ).toBe(true);
     activate();
     service.revoke('agent');
     expect(
-      (await client.callTool({ name: 'rename_agent', arguments: args }))
+      (await client.callTool({ name: 'agent_rename', arguments: args }))
         .isError,
     ).toBe(true);
     expect(setThreadName).not.toHaveBeenCalled();
@@ -848,6 +868,9 @@ describe('native internal MCP over HTTP', () => {
       expect(native.inputSchema).toEqual(method.inputSchema);
       expect(native.outputSchema).toEqual(method.outputSchema);
       expect(native.annotations?.readOnlyHint).toBe(method.readOnly);
+      expect(native.annotations).toEqual(method.annotations);
+      for (const alias of method.aliases)
+        expect(advertised.some((tool) => tool.name === alias)).toBe(false);
     }
     expect(JSON.stringify(catalog)).not.toContain('Bearer ');
   });
@@ -856,14 +879,14 @@ describe('native internal MCP over HTTP', () => {
     const { client } = await connect();
     activate();
     const project = await client.callTool({
-      name: 'get_project',
+      name: 'project_get',
       arguments: {},
     });
     expect(project.structuredContent).toMatchObject({
       project: { name: 'Tests 2' },
     });
     const task = await client.callTool({
-      name: 'create_task',
+      name: 'project_task_create',
       arguments: createTask,
     });
     expect(task.isError).not.toBe(true);
@@ -879,17 +902,21 @@ describe('native internal MCP over HTTP', () => {
     expect(
       (
         await client.callTool({
-          name: 'list_tasks',
+          name: 'project_task_list',
           arguments: { query: 'Presentation' },
         })
       ).structuredContent,
     ).toMatchObject({ total: 1 });
     expect(
-      (await client.callTool({ name: 'get_task', arguments: { id: taskId } }))
-        .structuredContent,
+      (
+        await client.callTool({
+          name: 'project_task_get',
+          arguments: { id: taskId },
+        })
+      ).structuredContent,
     ).toMatchObject({ title: 'Presentation', parentTaskId: null });
     const item = await client.callTool({
-      name: 'create_deliverable',
+      name: 'project_deliverable_create',
       arguments: {
         ...createTask,
         requestId: 'deliverable-request-1',
@@ -899,13 +926,17 @@ describe('native internal MCP over HTTP', () => {
     expect(item.isError).not.toBe(true);
     const itemId = (item.structuredContent as { id: string }).id;
     expect(
-      (await client.callTool({ name: 'list_deliverables', arguments: {} }))
-        .structuredContent,
+      (
+        await client.callTool({
+          name: 'project_deliverable_list',
+          arguments: {},
+        })
+      ).structuredContent,
     ).toMatchObject({ total: 1 });
     expect(
       (
         await client.callTool({
-          name: 'get_deliverable',
+          name: 'project_deliverable_get',
           arguments: { id: itemId },
         })
       ).structuredContent,
@@ -919,15 +950,62 @@ describe('native internal MCP over HTTP', () => {
     ).toHaveLength(2);
   });
 
+  it.each(INTERNAL_MCP_TOOLS.filter((tool) => tool.aliases.length))(
+    'keeps the same active-turn and schema checks for the old $operation name',
+    async (tool) => {
+      const { client } = await connect();
+      const current = await client.callTool({
+        name: tool.name,
+        arguments: tool.example,
+      });
+      expect(current.isError).toBe(true);
+      expect(JSON.stringify(current)).toContain('NO_ACTIVE_TURN');
+      expect(
+        await client.callTool({
+          name: tool.operation,
+          arguments: tool.example,
+        }),
+      ).toEqual(current);
+      activate();
+      const invalid = { ...tool.example, unexpectedField: 'refused' };
+      const invalidCurrent = await client.callTool({
+        name: tool.name,
+        arguments: invalid,
+      });
+      expect(invalidCurrent.isError).toBe(true);
+      expect(
+        await client.callTool({ name: tool.operation, arguments: invalid }),
+      ).toEqual(invalidCurrent);
+      if (tool.policy.requiresWorkspaceWrite) {
+        activate('admin', false);
+        const readOnly = await client.callTool({
+          name: tool.name,
+          arguments: tool.example,
+        });
+        expect(JSON.stringify(readOnly)).toContain('READ_ONLY');
+        expect(
+          await client.callTool({
+            name: tool.operation,
+            arguments: tool.example,
+          }),
+        ).toEqual(readOnly);
+      }
+    },
+  );
+
   it('supports existing conversations, read-only reads and server-side creation refusal', async () => {
     const { client } = await connect('existing-agent');
     activate('admin', false, 'existing-agent');
     expect(
-      (await client.callTool({ name: 'get_project', arguments: {} })).isError,
+      (await client.callTool({ name: 'project_get', arguments: {} })).isError,
     ).not.toBe(true);
     expect(
-      (await client.callTool({ name: 'create_task', arguments: createTask }))
-        .isError,
+      (
+        await client.callTool({
+          name: 'project_task_create',
+          arguments: createTask,
+        })
+      ).isError,
     ).toBe(true);
     expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
     const previewPreparation = await client.callTool({
@@ -953,8 +1031,12 @@ describe('native internal MCP over HTTP', () => {
       { ...createTask, title: 'x'.repeat(201) },
     ]) {
       expect(
-        (await client.callTool({ name: 'create_task', arguments: args }))
-          .isError,
+        (
+          await client.callTool({
+            name: 'project_task_create',
+            arguments: args,
+          })
+        ).isError,
       ).toBe(true);
     }
     expect(
@@ -974,16 +1056,24 @@ describe('native internal MCP over HTTP', () => {
     const { client } = await connect();
     activate('reader');
     expect(
-      (await client.callTool({ name: 'list_deliverables', arguments: {} }))
-        .structuredContent,
+      (
+        await client.callTool({
+          name: 'project_deliverable_list',
+          arguments: {},
+        })
+      ).structuredContent,
     ).toMatchObject({ total: 0 });
     expect(
-      (await client.callTool({ name: 'create_task', arguments: createTask }))
-        .isError,
+      (
+        await client.callTool({
+          name: 'project_task_create',
+          arguments: createTask,
+        })
+      ).isError,
     ).toBe(true);
     database.db.delete(projectParticipants).run();
     expect(
-      (await client.callTool({ name: 'get_project', arguments: {} })).isError,
+      (await client.callTool({ name: 'project_get', arguments: {} })).isError,
     ).toBe(true);
     activate();
     database.db
@@ -992,19 +1082,23 @@ describe('native internal MCP over HTTP', () => {
       .where(eq(people.id, 'admin'))
       .run();
     expect(
-      (await client.callTool({ name: 'create_task', arguments: createTask }))
-        .isError,
+      (
+        await client.callTool({
+          name: 'project_task_create',
+          arguments: createTask,
+        })
+      ).isError,
     ).toBe(true);
   });
 
   it('requires a running authenticated turn and revokes on stop, completion and rebind', async () => {
     const { client } = await connect();
     expect(
-      (await client.callTool({ name: 'get_project', arguments: {} })).isError,
+      (await client.callTool({ name: 'project_get', arguments: {} })).isError,
     ).toBe(true);
     const lease = asPerson('admin', () => service.prepare('agent', 'p', true));
     expect(
-      (await client.callTool({ name: 'get_project', arguments: {} })).isError,
+      (await client.callTool({ name: 'project_get', arguments: {} })).isError,
     ).toBe(true);
     lease?.bind('turn-1');
     notify({
@@ -1015,12 +1109,12 @@ describe('native internal MCP over HTTP', () => {
       },
     } as unknown as ServerNotification);
     expect(
-      (await client.callTool({ name: 'get_project', arguments: {} })).isError,
+      (await client.callTool({ name: 'project_get', arguments: {} })).isError,
     ).toBe(true);
     activate();
     service.revoke('agent');
     expect(
-      (await client.callTool({ name: 'get_project', arguments: {} })).isError,
+      (await client.callTool({ name: 'project_get', arguments: {} })).isError,
     ).toBe(true);
     activate();
     database.db
@@ -1029,8 +1123,12 @@ describe('native internal MCP over HTTP', () => {
       .where(eq(projectAgentThreads.threadId, 'agent'))
       .run();
     expect(
-      (await client.callTool({ name: 'create_task', arguments: createTask }))
-        .isError,
+      (
+        await client.callTool({
+          name: 'project_task_create',
+          arguments: createTask,
+        })
+      ).isError,
     ).toBe(true);
   });
 
@@ -1086,6 +1184,7 @@ describe('native internal MCP over HTTP', () => {
   it('preapproves scoped monitor metadata without approving arbitrary commands or writes', async () => {
     const { client, connection } = await connect();
     expect(connection.config.tools).toEqual({
+      project_git_publish: { approval_mode: 'approve' },
       publish_project_git: { approval_mode: 'approve' },
       agent_monitor_report: { approval_mode: 'approve' },
       agent_monitor_manage: { approval_mode: 'approve' },
@@ -1093,14 +1192,18 @@ describe('native internal MCP over HTTP', () => {
     expect(connection.config).not.toHaveProperty('default_tools_approval_mode');
     const catalog = await client.listTools();
     expect(
-      catalog.tools.find((tool) => tool.name === 'publish_project_git')
+      catalog.tools.find((tool) => tool.name === 'project_git_publish')
         ?.annotations,
     ).toMatchObject({
       readOnlyHint: false,
       openWorldHint: true,
     });
-    expect(connection.config.tools).not.toHaveProperty('local_browser_action');
-    expect(connection.config.tools).not.toHaveProperty('prepare_project_git');
+    expect(connection.config.tools).not.toHaveProperty(
+      'local_browser_interact',
+    );
+    expect(connection.config.tools).not.toHaveProperty(
+      'project_git_local_manage',
+    );
     expect(connection.config.tools).toHaveProperty(
       'agent_monitor_manage.approval_mode',
       'approve',
@@ -1223,7 +1326,7 @@ describe('native internal MCP over HTTP', () => {
     expect(
       (
         await client.callTool({
-          name: 'create_project_git_copy',
+          name: 'project_git_copy_create',
           arguments: {
             connectionId: gitConnectionId,
             requestId: 'still-readonly',
@@ -1298,8 +1401,11 @@ describe('native internal MCP over HTTP', () => {
       expect(Object.keys(internal?.tools ?? {})).toHaveLength(
         INTERNAL_MCP_TOOLS.length,
       );
+      expect(Object.keys(internal?.tools ?? {}).sort()).toEqual(
+        INTERNAL_MCP_TOOLS.map((tool) => tool.name).sort(),
+      );
       expect(Object.keys(internal?.tools ?? {})).toContain(
-        'create_deliverable',
+        'project_deliverable_create',
       );
     } finally {
       const rpc = manager.getClient();
