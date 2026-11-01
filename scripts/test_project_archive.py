@@ -394,7 +394,7 @@ class ProjectArchiveTest(unittest.TestCase):
                 if source:
                     db.execute('INSERT INTO thread_history_projection_state VALUES(?,?,1)', (agent, len(raw)))
         with sqlite3.connect(self.source_db) as db:
-            db.execute('INSERT INTO project_agent_threads VALUES(?,?,?,?,?)', (agent, 'project-source', str(self.project), 1, 1))
+            db.execute('INSERT INTO project_agent_threads(thread_id,project_id,workspace_path,created_at,updated_at) VALUES(?,?,?,?,?)', (agent, 'project-source', str(self.project), 1, 1))
         return agent
 
     def test_agent_history_and_paginated_offsets_follow_new_ids_and_paths(self):
@@ -539,7 +539,7 @@ class ProjectArchiveTest(unittest.TestCase):
         with sqlite3.connect(self.home / 'state_5.sqlite') as db:
             db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,NULL,NULL)', (child, str(child_file), '0.153.2', str(self.project), '{}', 'never'))
         with sqlite3.connect(self.source_db) as db:
-            db.execute('INSERT INTO project_agent_threads VALUES(?,?,?,?,?)', (child, 'project-source', str(self.project), 1, 1))
+            db.execute('INSERT INTO project_agent_threads(thread_id,project_id,workspace_path,created_at,updated_at) VALUES(?,?,?,?,?)', (child, 'project-source', str(self.project), 1, 1))
             db.execute('INSERT INTO conversation_branch_edges VALUES(?,?,?,?,?,?,?,?)', (child, parent, parent, '__end__', 'prefix', '[]', 1, 'local'))
         self.export()
         zip_file, manifest = self.load()

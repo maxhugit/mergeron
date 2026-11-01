@@ -1,5 +1,5 @@
-import type { ThreadDto } from '../src/generated/api';
-import type { ProjectSummary } from '../src/lib/projects-api';
+import type { ThreadDto } from '../generated/api';
+import type { ProjectSummary } from '../lib/projects-api';
 export const focusThreads = Array.from(
   { length: 8 },
   (_, index) =>

@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { DragDropProvider } from '@dnd-kit/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { page, commands } from 'vitest/browser';
 import { WorkspaceOverview } from './workspace-overview';
 import { ThreadRow } from './thread-row';
 import { ProjectsMenu } from './projects-menu';
 import { ProjectArchivedAgents } from '@/components/projects/project-archived-agents';
 import { useAgentViewCacheStore } from '@/stores/agent-view-cache-store';
-import {
-  focusProject,
-  focusThreads,
-} from '../../../../test/project-focus-fixture';
+import { focusProject, focusThreads } from '@/test-fixtures/project-focus';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 
@@ -191,6 +194,7 @@ test('keeps draggable compact rows in focus and opens the archives as a central 
     ),
   ).toBeLessThan(2);
   await commands.sidebarProjectDrag('agent-0', 'agent-2');
+  await settleSidebarDrag(sidebar, 'Agent 0');
   await waitFor(() =>
     expect(sidebar.querySelector('[data-testid^="agent-"]')).toHaveAttribute(
       'data-testid',
@@ -205,6 +209,7 @@ test('keeps draggable compact rows in focus and opens the archives as a central 
   expect(sidebar.querySelectorAll('[data-testid^="agent-"]')).toHaveLength(8);
   expect(useAgentViewCacheStore.getState().projectId).toBe(focusProject.id);
   await commands.sidebarProjectDrag('agent-1', 'agent-3');
+  await settleSidebarDrag(sidebar, 'Agent 1');
   await waitFor(() =>
     expect(sidebar.querySelector('[data-testid^="agent-"]')).toHaveAttribute(
       'data-testid',
@@ -235,11 +240,6 @@ test('keeps draggable compact rows in focus and opens the archives as a central 
   await waitFor(() =>
     expect(Math.abs(header.getBoundingClientRect().top - top)).toBeLessThan(1),
   );
-  await waitFor(() =>
-    expect(
-      document.querySelector('[data-dnd-dropping], [data-dnd-dragging]'),
-    ).toBeNull(),
-  );
   const engine = navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit';
   await Promise.allSettled(
     document
@@ -260,6 +260,20 @@ test('keeps draggable compact rows in focus and opens the archives as a central 
   await page.getByRole('button', { name: 'All projects', exact: true }).click();
   expect(screen.getByText('Other project')).toBeVisible();
 });
+
+async function settleSidebarDrag(sidebar: HTMLElement, label: string) {
+  // The order commits before the drop animation removes its temporary clone.
+  // Compare the stable sidebar, not a snapshot containing the disappearing row.
+  await waitFor(() => {
+    expect(
+      document.querySelector('[data-dnd-dropping], [data-dnd-dragging]'),
+    ).toBeNull();
+    expect(sidebar.querySelector('.opacity-40')).toBeNull();
+    expect(within(sidebar).getAllByText(label, { exact: true })).toHaveLength(
+      1,
+    );
+  });
+}
 
 declare module 'vitest/browser' {
   interface BrowserCommands {
