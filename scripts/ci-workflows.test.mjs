@@ -602,6 +602,20 @@ test('the isolated real CLI checks the actual dictation service before passing t
   assert.match(probe, /assert\.equal\(\s*calls\.length,\s*0/);
   assert.match(probe, /assert\.equal\(\s*calls\.length,\s*2/);
   assert.match(probe, /old-default-protocol/);
+  assert.match(probe, /synthetic-frameless-transcript/);
+  assert.match(probe, /synthetic-guarded-handoff/);
+  assert.match(probe, /assert.equal\(guardedTurnInterrupted, true\)/);
+  assert.match(
+    probe,
+    /experimental_realtime_ws_base_url = "http:\/\/127\.0\.0\.1:/,
+  );
+  assert.match(
+    probe,
+    /experimental_realtime_webrtc_call_base_url = "http:\/\/127\.0\.0\.1:/,
+  );
+  assert.match(probe, /type: 'input_transcript.added'/);
+  assert.match(probe, /type: 'output_transcript.added'/);
+  assert.match(probe, /assert.equal\(transcript.text, 'Bonjour, oui oui.'\)/);
   assert.match(
     probe,
     /assert\.deepEqual\(calls, \['quicksilver=v1', 'quicksilver=v2'\]\)/,
