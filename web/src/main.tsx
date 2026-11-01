@@ -11,7 +11,9 @@ import { i18nReady } from './i18n';
 import { initializePwaInstall } from './lib/pwa-install';
 import { installSessionRecovery } from './lib/session-recovery';
 import './index.css';
+import { finishApplicationReload } from './lib/reload-application';
 
+finishApplicationReload();
 installSessionRecovery();
 configureApiClient();
 installMobileViewportFixes();
@@ -23,7 +25,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const serviceWorkerUrl = new URL('sw.js', document.baseURI);
     void navigator.serviceWorker
-      .register(serviceWorkerUrl.pathname)
+      .register(serviceWorkerUrl.pathname, { updateViaCache: 'none' })
       .catch(() => {
         // PWA support is progressive: a registration failure must not prevent
         // the authenticated application from starting.

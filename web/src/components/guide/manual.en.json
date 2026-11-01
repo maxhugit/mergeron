@@ -121,7 +121,7 @@
             "steps": [
               "After signing in, open My account → Install application, or use Edge’s Applications menu when offered.",
               "The installed application keeps the native title bar for moving the window and minimizing, maximizing or closing it.",
-              "After an update, use the refresh icon between Settings and Account. Save important drafts first."
+              "After an update, the refresh icon between Settings and Account clears Mergeron’s technical caches, checks for a service worker update and reloads the server version. Sign-in, preferences and notifications are kept. Copy drafts before continuing: they are memory-only and a confirmation warns you if any remain."
             ],
             "warning": "Installation depends on your browser and device policies. It does not provide offline access to APIs, conversations or files. Refreshing the interface does not install a server update."
           }
