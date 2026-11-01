@@ -10,7 +10,10 @@
 
 ## Environnement de développement
 
-Prérequis : Node.js 20 ou supérieur et pnpm 10.
+Prérequis : Node.js 22 ou supérieur et la version de pnpm déclarée dans le champ
+`packageManager` du `package.json` racine. La CI épingle sa version de Node.js
+dans [.github/workflows/quality.yml](.github/workflows/quality.yml) ; l’utiliser
+pour reproduire ses contrôles. Le Manager nécessite lui aussi Node.js 22 minimum.
 
 ```bash
 pnpm install

@@ -1,5 +1,14 @@
 # Protocol probes
 
+## Objectif fonctionnel
+
+Ce répertoire vérifie le comportement réel du protocole Codex lorsqu’une règle
+de reprise, de classement ou de permission ne peut pas être déduite de sa seule
+description. Il ne fait pas partie du serveur Mergeron lancé en production.
+Les résultats restent liés à la version mesurée. Certaines sondes peuvent
+exécuter des commandes ou utiliser un modèle payant : lire leur périmètre avant
+de les lancer, avec une configuration de test distincte des comptes de production.
+
 Small programs that drive `codex app-server` over stdio JSON-RPC to answer
 questions about how the pinned CLI actually behaves.
 
@@ -9,13 +18,13 @@ The vendored protocol README describes intent. Several conclusions this project
 depends on contradicted both that document and careful reasoning about it, and
 were only knowable by asking the binary:
 
-| Question | What the docs implied | What was measured |
-|---|---|---|
-| Does `reloadUserConfig` reach a loaded thread? | Yes, it hot-reloads | No — approval policy and sandbox mode stay put, and no notification fires |
-| When is an item persisted? | At turn completion | At **item** completion, so a running turn already exposes its finished items |
-| Do live and persisted item order agree? | Assumed yes | No — live is start order, persisted is completion order, and nothing aligns them |
-| Does a terminal payload carry a tail or the whole result? | Assumed a tail | The whole accumulated result, so repair is replacement, never concatenation |
-| Is `thread/settings/update` usable? | Not in the exported schema | Works at runtime; schema silence is not evidence of absence |
+| Question                                                  | What the docs implied      | What was measured                                                                |
+| --------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------- |
+| Does `reloadUserConfig` reach a loaded thread?            | Yes, it hot-reloads        | No — approval policy and sandbox mode stay put, and no notification fires        |
+| When is an item persisted?                                | At turn completion         | At **item** completion, so a running turn already exposes its finished items     |
+| Do live and persisted item order agree?                   | Assumed yes                | No — live is start order, persisted is completion order, and nothing aligns them |
+| Does a terminal payload carry a tail or the whole result? | Assumed a tail             | The whole accumulated result, so repair is replacement, never concatenation      |
+| Is `thread/settings/update` usable?                       | Not in the exported schema | Works at runtime; schema silence is not evidence of absence                      |
 
 Two of those were being asserted from reasoning until a probe proved them wrong.
 That is the standing lesson: **measure before claiming**, and treat "the schema
@@ -24,7 +33,7 @@ does not export it" as a question rather than an answer.
 ## Setup
 
 ```bash
-cp codex_probe/config.toml.exmaple codex_probe/config.toml   # then edit
+cp codex_probe/config.toml.example codex_probe/config.toml   # then edit
 export YOUR_PROVIDER_API_KEY=...                             # whatever env_key names
 ```
 
@@ -316,7 +325,7 @@ pending, so any client that must present the approval has to be given the subjec
 by the backend rather than fetch it. This is what makes backend retention a
 correctness requirement rather than an optimization.
 
-**Not established by the first run:** whether `item/started` *precedes* the
+**Not established by the first run:** whether `item/started` _precedes_ the
 approval on the wire. Notifications and requests were recorded in separate lists,
 and the first run only proved the item event existed by the time the request had
 arrived — the log is read after the fact, so it cannot order the two. Retention

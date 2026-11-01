@@ -1,5 +1,10 @@
 # Documentation française
 
+Ce répertoire explique comment installer, utiliser, administrer et faire évoluer
+Mergeron. Les guides fonctionnels décrivent les parcours et leurs protections ;
+les références techniques détaillent l’architecture, les contrats et les contrôles.
+Pour situer le code, consulter les [répertoires racine du dépôt](../README.md#répertoires-du-dépôt).
+
 ## Installer et exploiter sur Docker
 
 Le [premier administrateur et ses contrôles techniques](initial-admin-setup.md)
@@ -50,6 +55,8 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 ## Développement et sécurité
 
 - [Contribuer](../CONTRIBUTING.md)
+- [Maintenance du code](maintenance-code.md) : nettoyage des éléments inutilisés,
+  lectures regroupées et maintien de la couverture des tests.
 - [Interface Web](../web/README.md)
 - [Caches et précontrôle de l’environnement des agents](environnement-agents.md)
 - [Vérification visuelle du vrai site](verification-visuelle.md)

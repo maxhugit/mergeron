@@ -1,5 +1,9 @@
 # Fichiers de déploiement Mergeron
 
+Ce répertoire fournit les modèles reproductibles nécessaires à l’installation
+et à l’exploitation : composants Docker, entrée HTTP, sortie réseau filtrée,
+navigateur distant et adaptations facultatives aux outils de l’hôte.
+
 Commencer par [Installer Mergeron](../docs/installation.md).
 **Le Manager est le seul parcours d’installation pris en charge.**
 Il crée lui-même les dépendances ; aucun déploiement Compose parallèle ou

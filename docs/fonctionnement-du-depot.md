@@ -9,17 +9,10 @@ dispose jamais directement des secrets OpenAI, SSH ou MCP.
 
 ## Arborescence
 
-| Chemin               | Contenu                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `src/`               | backend NestJS, API, base SQLite, terminaux, fichiers et intégrations    |
-| `web/`               | interface React, PWA et affichage mobile                                 |
-| `drizzle/`           | migrations de la base de données                                         |
-| `skills/`            | compétences disponibles dans le conteneur, notamment Office              |
-| `deployment/`        | définitions reproductibles de la pile Docker et adaptations facultatives |
-| `docs/`              | documentation d’architecture, installation et exploitation               |
-| `codex_probe/`       | outils de vérification du protocole Codex                                |
-| `.github/workflows/` | construction et publication de l’image GHCR                              |
-| `Dockerfile`         | construction multiétape de l’image Docker officielle durcie              |
+La [cartographie des répertoires racine](../README.md#répertoires-du-dépôt)
+présente leur rôle fonctionnel. Chaque dossier possède son propre README,
+avec son contenu et ses précautions d’usage. Les dossiers générés localement
+ne font pas partie de cette cartographie des sources suivies dans Git.
 
 ## Construction de l’image
 
