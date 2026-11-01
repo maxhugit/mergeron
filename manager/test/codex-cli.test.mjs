@@ -90,35 +90,40 @@ test('rejects stale package identity before creating any directory', (t) => {
   );
   assert.deepEqual(fs.readdirSync(f.home), []);
 });
-test('Manager uses only its own immutable image in an unprivileged network-none helper', async (t) => {
+function managedFixture(t, options = {}) {
   const f = fixture(t);
   const calls = [];
+  const app = {
+    Id: 'application-id',
+    Name: '/test-ui',
+    Image: 'app',
+    Config: {
+      Image: 'ghcr.io/maxhugit/mergeron:latest',
+      User: '11002:11002',
+      Labels: {
+        'io.mergeron.managed': 'true',
+        'io.mergeron.stack': 'test',
+        'io.mergeron.component': 'application',
+      },
+    },
+    Mounts: [
+      {
+        Type: 'bind',
+        RW: true,
+        Source: '/state/home',
+        Destination: '/home/codex',
+      },
+    ],
+  };
+  if (options.unlabeled) app.Config.Labels = {};
+  options.mutate?.(app);
   const docker = {
     inspectContainer: async (id) =>
       id === 'manager-self'
         ? { Image: `sha256:${'c'.repeat(64)}` }
         : id === 'helper'
           ? { State: { Running: false } }
-          : {
-              Name: '/test-ui',
-              Image: 'app',
-              Config: {
-                User: '11002:11002',
-                Labels: {
-                  'io.mergeron.managed': 'true',
-                  'io.mergeron.stack': 'test',
-                  'io.mergeron.component': 'application',
-                },
-              },
-              Mounts: [
-                {
-                  Type: 'bind',
-                  RW: true,
-                  Source: '/state/home',
-                  Destination: '/home/codex',
-                },
-              ],
-            },
+          : app,
     inspectImage: async (id) =>
       id === 'app'
         ? {
@@ -146,9 +151,31 @@ test('Manager uses only its own immutable image in an unprivileged network-none 
       components: [{ id: 'application', canonicalName: 'test-ui' }],
     },
     configuration: { stateRoot: '/state' },
+    inventory: options.inventory,
     bundle: f.directory,
     self: 'manager-self',
   });
+  return { cli, calls, f, app };
+}
+function adoptedInventory() {
+  return {
+    stack: 'test',
+    adoption: { state: 'adopted', blockers: [] },
+    dataSafety: { status: 'protected' },
+    components: [
+      {
+        id: 'application',
+        adoption: 'managed',
+        containerId: 'application-id',
+        containerName: 'test-ui',
+        image: 'ghcr.io/maxhugit/mergeron:latest',
+        imageRepositoryAllowed: true,
+      },
+    ],
+  };
+}
+test('Manager uses only its own immutable image in an unprivileged network-none helper', async (t) => {
+  const { cli, calls, f } = managedFixture(t);
   await cli.install(f.expected);
   const spec = calls[0];
   assert.equal(spec.User, '11002:11002');
@@ -167,6 +194,96 @@ test('Manager uses only its own immutable image in an unprivileged network-none 
   assert.deepEqual(spec.Env, ['NODE_ENV=production']);
   assert.deepEqual(calls.at(-1), ['remove', 'helper']);
   assert.equal(cli.busy, false);
+});
+test('accepts an unlabeled application only after exact verified adoption', async (t) => {
+  const { cli, f, calls } = managedFixture(t, {
+    unlabeled: true,
+    inventory: async () => adoptedInventory(),
+  });
+  await cli.install(f.expected);
+  assert.equal(calls[0].HostConfig.NetworkMode, 'none');
+  assert.equal(calls[0].User, '11002:11002');
+});
+for (const [name, change] of [
+  [
+    'no adoption',
+    (s) => {
+      s.adoption.state = 'eligible';
+    },
+  ],
+  [
+    'stale adoption',
+    (s) => {
+      s.adoption.state = 'drifted';
+    },
+  ],
+  [
+    'blockers',
+    (s) => {
+      s.adoption.blockers = ['unsafe'];
+    },
+  ],
+  [
+    'wrong stack',
+    (s) => {
+      s.stack = 'other';
+    },
+  ],
+  [
+    'replaced container',
+    (s) => {
+      s.components[0].containerId = 'replacement';
+    },
+  ],
+  [
+    'changed image',
+    (s) => {
+      s.components[0].image = 'other:latest';
+    },
+  ],
+  [
+    'unsafe repository',
+    (s) => {
+      s.components[0].imageRepositoryAllowed = false;
+    },
+  ],
+])
+  test(`rejects unlabeled applications with ${name}`, async (t) => {
+    const inventory = adoptedInventory();
+    change(inventory);
+    const { cli, f, calls } = managedFixture(t, {
+      unlabeled: true,
+      inventory: async () => inventory,
+    });
+    await assert.rejects(
+      cli.install(f.expected),
+      /codexRuntimeApplicationNotManaged/,
+    );
+    assert.equal(calls.length, 0);
+  });
+test('does not override conflicting ownership labels even with an adoption callback', async (t) => {
+  const { cli, f, calls } = managedFixture(t, {
+    mutate: (app) => {
+      app.Config.Labels['io.mergeron.stack'] = 'foreign';
+    },
+    inventory: async () => adoptedInventory(),
+  });
+  await assert.rejects(
+    cli.install(f.expected),
+    /codexRuntimeApplicationNotManaged/,
+  );
+  assert.equal(calls.length, 0);
+});
+test('keeps the managed home validation for adopted applications', async (t) => {
+  const { cli, f, calls } = managedFixture(t, {
+    unlabeled: true,
+    mutate: (app) => {
+      app.Mounts[0].Source = '/outside/home';
+    },
+    inventory: async () => adoptedInventory(),
+  });
+  await assert.rejects(cli.install(f.expected), /codexRuntimeUnsafeHome/);
+  assert.equal(calls.length, 0);
 });
 test('Manager rejects images that would remove an active CLI protection', (t) => {
   const f = fixture(t);
