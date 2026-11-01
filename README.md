@@ -62,12 +62,12 @@ Les [adaptations aux panneaux hôtes](docs/adapters/README.md) sont facultatives
 
 ## Répertoires du dépôt
 
-Chaque répertoire racine suivi dans Git possède un README qui explique son
-objectif fonctionnel, son contenu et ses précautions d’usage.
+Les répertoires racine suivis dans Git disposent d’une documentation qui explique
+leur objectif fonctionnel, leur contenu et leurs précautions d’usage.
 
 | Répertoire                           | Objectif fonctionnel                                            |
 | ------------------------------------ | --------------------------------------------------------------- |
-| [.github](.github/README.md)         | Valider les changements et organiser les publications GitHub.   |
+| [.github](.github/AUTOMATION.md)     | Valider les changements et organiser les publications GitHub.   |
 | [codex_probe](codex_probe/README.md) | Vérifier le comportement réel du protocole Codex.               |
 | [deployment](deployment/README.md)   | Fournir les modèles d’installation et d’exploitation.           |
 | [docs](docs/README.md)               | Expliquer les parcours utilisateur et l’administration.         |

@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 
-test('every tracked root directory has a functional README linked from the repository index', () => {
+test('every tracked root directory has functional documentation linked from the repository index', () => {
   const tracked = spawnSync('git', ['ls-files', '-z'], {
     cwd: root,
     encoding: 'utf8',
@@ -20,9 +20,21 @@ test('every tracked root directory has a functional README linked from the repos
       .map((file) => file.split('/')[0]),
   );
   const index = read('README.md');
+  // GitHub selects .github/README before the root README. Keep the landing
+  // page about Mergeron and document automation under its own filename.
+  assert.ok(
+    !readdirSync(new URL('.github/', root)).some((name) =>
+      /^readme(?:\.[^.]+)?$/i.test(name),
+    ),
+    'A .github README would replace the general repository presentation',
+  );
+  assert.match(index, /^# Mergeron\s*$/m);
   assert.ok(directories.size > 0);
   for (const directory of directories) {
-    const path = `${directory}/README.md`;
+    const path =
+      directory === '.github'
+        ? '.github/AUTOMATION.md'
+        : `${directory}/README.md`;
     const content = read(path);
     assert.match(content, /^# .+$/m, `${path}: missing descriptive title`);
     assert.ok(content.length > 200, `${path}: explain its functional purpose`);
