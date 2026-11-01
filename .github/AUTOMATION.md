@@ -1,5 +1,7 @@
 # Automatisation GitHub
 
+Retour à la [présentation générale de Mergeron](../README.md).
+
 Ce répertoire organise la validation des changements, la publication des images
 et le recueil des demandes des utilisateurs. Il permet de vérifier une modification
 avant sa fusion et de publier des composants identifiables par leur révision.
