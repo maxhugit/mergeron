@@ -162,14 +162,14 @@ export function AppsTab() {
   const isEmpty = apps.length === 0 && cursorStack.length === 0;
 
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       {navigation}
       {isError && (
         <p role="status" className="text-xs text-muted-foreground">
           {ti('cachedInventory')}
         </p>
       )}
-      <div className="flex justify-end gap-2">
+      <div className="flex shrink-0 flex-wrap justify-end gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -197,7 +197,12 @@ export function AppsTab() {
           {t('noAppsAvailable')}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div
+          role="region"
+          aria-label={ti('list')}
+          tabIndex={0}
+          className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1"
+        >
           {apps.map((app) => (
             <AppRow
               key={app.id}
@@ -212,7 +217,7 @@ export function AppsTab() {
 
       {/* Pagination */}
       {(cursorStack.length > 0 || nextCursor) && (
-        <div className="flex justify-end gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <Button
             size="sm"
             variant="outline"

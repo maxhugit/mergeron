@@ -26,7 +26,7 @@ export function IntegrationNav<T extends string>({
       role="tablist"
       aria-label={label}
       className={cn(
-        'flex flex-wrap gap-x-5 border-b',
+        'flex shrink-0 flex-wrap gap-x-5 border-b',
         secondary
           ? 'mb-3 border-border/50'
           : '-mx-4 mb-4 rounded-t-lg bg-muted/30 px-4',

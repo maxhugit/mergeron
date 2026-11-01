@@ -43,5 +43,10 @@
   "serverNotReported": "Le serveur n’est pas encore déclaré. Vérifie son état d’exécution et sa configuration.",
   "save": "Enregistrer",
   "close": "Fermer",
-  "refreshConnections": "Actualiser les connexions"
+  "refreshConnections": "Actualiser les connexions",
+  "list": "Liste des intégrations",
+  "internalServer": "Mergeron (interne)",
+  "conversationScoped": "Par conversation",
+  "internalServerHelp": "Outils internes de Mergeron. La connexion et les outils disponibles sont vérifiés dans chaque conversation via Capacités → Serveurs MCP, selon les autorisations du projet.",
+  "externalServersReady": "{{ready}}/{{total}} serveurs externes prêts"
 }

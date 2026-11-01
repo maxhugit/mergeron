@@ -43,5 +43,10 @@
   "serverNotReported": "The server is not yet reported. Check runtime status and configuration.",
   "save": "Save",
   "close": "Close",
-  "refreshConnections": "Refresh connections"
+  "refreshConnections": "Refresh connections",
+  "list": "Integration list",
+  "internalServer": "Mergeron (internal)",
+  "conversationScoped": "Per conversation",
+  "internalServerHelp": "Internal Mergeron tools. Connection and available tools are checked per conversation under Capabilities → MCP servers, according to project permissions.",
+  "externalServersReady": "{{ready}}/{{total}} external servers ready"
 }

@@ -89,7 +89,7 @@ const updates = {
 test.each([1100, 390])(
   'manages updates, history logs and restoration without page overflow at %ipx',
   async (width) => {
-    await page.viewport(width, 1000);
+    await page.viewport(width, 913);
     await i18nReady;
     await i18n.changeLanguage('fr');
     let backupMode = 'full';
@@ -198,7 +198,7 @@ test.each([1100, 390])(
     });
     render(
       <QueryClientProvider client={client}>
-        <div className="flex h-[940px] w-full flex-col bg-background text-foreground">
+        <div className="flex h-dvh min-h-0 w-full flex-col bg-background text-foreground">
           <GeneralSettings />
         </div>
       </QueryClientProvider>,
@@ -243,11 +243,29 @@ test.each([1100, 390])(
       });
       await waitFor(() => expect(select).toBeEnabled());
       fireEvent.change(select, { target: { value: 'minimal' } });
-      await screen.findByText(/Aucun fichier de projet/);
+      await screen.findByText(/Base et configuration uniquement/);
       const retention = await screen.findByRole('spinbutton', {
         name: 'Nombre de sauvegardes à conserver',
       });
       fireEvent.change(retention, { target: { value: '15' } });
+      const backupTable = screen.getByRole('table');
+      const backupScroller = backupTable.parentElement!;
+      expect(backupScroller.clientHeight).toBeGreaterThan(100);
+      for (
+        let parent = backupScroller.parentElement;
+        parent;
+        parent = parent.parentElement
+      ) {
+        expect(parent.scrollHeight).toBeLessThanOrEqual(
+          parent.clientHeight + 1,
+        );
+      }
+      expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(914);
+      const refreshBackups = screen.getByRole('button', { name: 'Actualiser' });
+      expect(refreshBackups.getBoundingClientRect().bottom).toBeLessThan(
+        backupScroller.getBoundingClientRect().top,
+      );
+
       await page.screenshot({
         path: `../../../.vitest-screenshots/server-console-restore-${width}.png`,
       });
