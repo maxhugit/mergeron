@@ -31,8 +31,15 @@ export function configuration(env = process.env) {
   if (!['127.0.0.1', '0.0.0.0'].includes(host))
     throw new Error('Unsupported preview bind address');
   let publicUrl;
-  if (env.PREVIEW_PUBLIC_URL) {
-    publicUrl = new URL(env.PREVIEW_PUBLIC_URL);
+  // Mergeron's executor supplies this exact host, never a request header.
+  const managedHost = env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS;
+  const publicOrigin =
+    env.PREVIEW_PUBLIC_URL ??
+    (managedHost && /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/i.test(managedHost)
+      ? `https://${managedHost}`
+      : undefined);
+  if (publicOrigin) {
+    publicUrl = new URL(publicOrigin);
     if (
       publicUrl.protocol !== 'https:' ||
       publicUrl.username ||
@@ -63,6 +70,7 @@ export function configuration(env = process.env) {
     allowedHosts: [...allowedHosts, ...(publicUrl ? [publicUrl.hostname] : [])],
     username: env.PREVIEW_ADMIN_USERNAME ?? 'maxime',
     password: env.PREVIEW_ADMIN_PASSWORD,
+    seedAdmin: env.PREVIEW_SEED_ADMIN === 'true',
   };
 }
 
@@ -138,6 +146,10 @@ export function backendEnvironment(config, env = process.env) {
     WORKSPACE_ROOTS: join(config.dataDirectory, 'workspaces'),
     WEBUI_API_KEY: randomBytes(32).toString('hex'),
     WEBUI_REQUIRE_IDENTITY: 'false',
+    MERGERON_PREVIEW_SETUP: 'true',
     CODEX_BIN: join(config.dataDirectory, 'ai-unavailable.cjs'),
+    ...(config.publicUrl
+      ? { MERGERON_PUBLIC_URL: config.publicUrl.origin }
+      : {}),
   };
 }

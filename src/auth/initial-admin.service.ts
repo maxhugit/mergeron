@@ -210,6 +210,9 @@ export class InitialAdminService {
     return {
       required: true,
       authorized: !!grant,
+      ...(this.config.get<string>('MERGERON_PREVIEW_SETUP') === 'true'
+        ? { activationCommand: 'node scripts/preview/activate.mjs' }
+        : {}),
       ...(grant ? { csrfToken: csrf(grant) } : {}),
       containerName: /^[a-z0-9][a-z0-9-]{0,62}$/.test(prefix)
         ? `${prefix}-ui`

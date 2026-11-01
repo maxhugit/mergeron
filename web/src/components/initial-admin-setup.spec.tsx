@@ -35,6 +35,23 @@ it('keeps existing installations on ordinary login without submitting any mutati
   expect(fetch).toHaveBeenCalledOnce();
   expect(fetch.mock.calls[0][1].method).toBe('GET');
 });
+it('shows the isolated preview activation command supplied by the server', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      response({
+        required: true,
+        authorized: false,
+        activationCommand: 'node scripts/preview/activate.mjs',
+      }),
+    ),
+  );
+  mount();
+  expect(
+    await screen.findByText('node scripts/preview/activate.mjs'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/docker exec/)).toBeNull();
+});
 it('never mounts login on an unavailable or malformed setup state, and retries without reloading', async () => {
   const fetch = vi
     .fn()

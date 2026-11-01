@@ -46,7 +46,20 @@ JSON-RPC rejette l’initialisation sans fermer le pipe. Aucune réponse de mod�
 de compte réussie n’est simulée et aucun appel ChatGPT n’est nécessaire au lancement.
 Les fonctions IA ne sont donc pas validées par cet environnement d’interface.
 
-Un administrateur local `maxime` est créé au premier démarrage. Sans mot de passe
+Par défaut, aucun compte n'est créé. Une base nouvellement créée reçoit le marqueur
+d'autorisation de première installation, avec les permissions 0600. Ouvrir `/login`
+pour afficher le parcours initial. Dans la console du runtime de test, depuis les
+sources et avec les mêmes variables de prévisualisation, exécuter
+`node scripts/preview/activate.mjs` puis saisir le code dans le formulaire. Le code
+expire après 15 minutes et n'est jamais écrit dans les journaux du serveur. Le
+formulaire permet ensuite de choisir son administrateur et son mot de passe.
+L'origine HTTPS de l'aperçu est transmise au backend pour vérifier les requêtes
+d'activation ; elle provient de `PREVIEW_PUBLIC_URL` ou de l'hôte injecté par Mergeron.
+Un redémarrage conserve le marqueur et les comptes ; il ne réarme jamais une base
+existante. Pour retester l'installation, recréer les données jetables via Mergeron.
+
+Le mode facultatif `PREVIEW_SEED_ADMIN=true`, destiné aux tests qui ont besoin
+d'un compte précréé, crée un administrateur local `maxime`. Sans mot de passe
 fourni, un mot de passe aléatoire est écrit dans `admin-credentials.json` sous le
 dossier de données, avec les permissions 0600 ; il n’est pas affiché dans les logs.
 Pour choisir un autre identifiant ou un mot de passe de test, fournir
@@ -78,7 +91,7 @@ Préparer la recette par les outils MCP officiels avec les révisions observées
 | build      | `node scripts/preview/prepare.mjs build`   |
 | start      | `node scripts/preview/start.mjs`           |
 | port       | `3000`                                     |
-| path       | `/help`                                    |
+| path       | `/login`                                   |
 | updateMode | `hot`                                      |
 
 Variables non secrètes de la recette :
