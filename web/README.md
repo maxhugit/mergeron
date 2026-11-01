@@ -4,6 +4,9 @@ Ce répertoire fournit les écrans dans lesquels l’utilisateur organise ses
 projets, échange avec les agents, consulte ses fichiers et suit les opérations.
 Il contient aussi les ressources PWA, le guide intégré et l’extension navigateur.
 
+Voir le [sommaire de la documentation](../docs/README.md) et la
+[référence des catalogues de traduction](src/locales/README.md).
+
 L’interface utilise React 19 et Vite 8. Elle communique avec le backend par les
 routes REST `/api/*` et Socket.IO. En production, le résultat de la compilation
 est servi par le backend NestJS ; aucun serveur frontal séparé n’est nécessaire.

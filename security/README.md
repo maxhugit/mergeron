@@ -10,7 +10,8 @@ effectivement retenu.
 - `system-components.*` et `linux-libc-dev.*` conservent les évaluations,
   inventaires et déclarations OpenVEX.
 - `libxml2-patches/` contient les correctifs épinglés et leur manifeste ;
-  `libxml2-backport.md` et `openssh-backport.md` expliquent les rétroportages.
+  les guides [libxml2](libxml2-backport.md) et [OpenSSH](openssh-backport.md)
+  expliquent les rétroportages.
 - `codex-netlink/` conserve le correctif ciblé et ses tests pour l’interrogation
   des interfaces réseau par le CLI personnalisé.
 
