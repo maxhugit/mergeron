@@ -16,6 +16,7 @@ import { normalizeForwardedPrefix, renderIndexHtml } from './public-base-path';
 import { FILES_SETTING_KEYS } from './settings/settings.definitions';
 import { SettingsService } from './settings/settings.service';
 import { isPreviewHost, isPreviewOrigin } from './previews/preview-origin';
+import { rejectMissingBuildAsset } from './static-html-security';
 
 /** Keeps generated SDK operation names stable across controller renames. */
 function operationIdFactory(controllerKey: string, methodKey: string): string {
@@ -106,6 +107,14 @@ async function bootstrap() {
       .getInstance()
       .addHook('onSend', async (request, reply, payload) => {
         const contentType = String(reply.getHeader('content-type') ?? '');
+        // The SPA fallback must never masquerade as a removed build asset.
+        // This also covers files requested by an old tab after deployment.
+        const missingAsset = rejectMissingBuildAsset(
+          request.url,
+          reply,
+          payload,
+        );
+        if (missingAsset !== undefined) return missingAsset;
         if (
           request.method !== 'GET' ||
           request.url.startsWith('/api') ||
@@ -116,6 +125,7 @@ async function bootstrap() {
 
         if (payload instanceof Readable) payload.destroy();
         reply.removeHeader('content-length');
+        reply.header('Cache-Control', 'no-store');
         const basePath = normalizeForwardedPrefix(
           request.headers['x-forwarded-prefix'],
         );

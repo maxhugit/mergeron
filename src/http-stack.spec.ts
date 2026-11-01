@@ -16,7 +16,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ApiKeyGuard } from './auth/api-key.guard';
 import { AuthService } from './auth/auth.service';
-import { setStaticHtmlSecurityHeaders } from './static-html-security';
+import {
+  rejectMissingBuildAsset,
+  setStaticHtmlSecurityHeaders,
+} from './static-html-security';
 import { io } from '../web/node_modules/socket.io-client/build/cjs/index.js';
 
 @UseGuards(ApiKeyGuard)
@@ -68,6 +71,7 @@ describe('NestJS/Fastify HTTP stack compatibility', () => {
     root = await mkdtemp(join(tmpdir(), 'webui-http-stack-'));
     await writeFile(join(root, 'index.html'), '<html>WebUI</html>');
     await writeFile(join(root, 'asset.js'), 'window.webui = true;');
+    await writeFile(join(root, 'sw.js'), '// worker');
     const adapter = new FastifyAdapter();
     // ServeStaticModule chooses its loader during provider construction.
     // Tests must expose the adapter before compile(), as NestFactory does.
@@ -106,6 +110,14 @@ describe('NestJS/Fastify HTTP stack compatibility', () => {
       limits: { fileSize: 32 },
     });
     app.setGlobalPrefix('api');
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .addHook(
+        'onSend',
+        async (request, reply, payload) =>
+          rejectMissingBuildAsset(request.url, reply, payload) ?? payload,
+      );
     app.useWebSocketAdapter(new IoAdapter(app));
     SwaggerModule.setup(
       'api/docs',
@@ -133,12 +145,32 @@ describe('NestJS/Fastify HTTP stack compatibility', () => {
       );
       expect(response.headers['x-frame-options']).toBe('DENY');
       expect(response.headers['referrer-policy']).toBe('no-referrer');
+      expect(response.headers['cache-control']).toBe('no-store');
       // A request after the HTML callback must still succeed on the same server.
       expect(
         (await app.inject({ url: '/api/probe', headers })).statusCode,
       ).toBe(200);
     },
   );
+
+  it.each([
+    '/assets/old-build.js',
+    '/assets/old-build.css?version=1',
+    '/assets/nested/chunk.js',
+  ])('never returns SPA HTML for missing build asset %s', async (url) => {
+    const response = await app.inject({ url });
+    expect(response.statusCode).toBe(404);
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.body).not.toContain('<html>');
+  });
+
+  it('revalidates the service worker without altering its MIME type', async () => {
+    const response = await app.inject({ url: '/sw.js' });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['content-type']).toContain('javascript');
+  });
 
   it('serves assets and Swagger with the updated static plugin', async () => {
     const asset = await app.inject({ url: '/asset.js' });

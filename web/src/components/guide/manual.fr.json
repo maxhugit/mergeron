@@ -121,7 +121,7 @@
             "steps": [
               "Après connexion, ouvrez Mon compte → Installer l’application, ou le menu Applications d’Edge si le navigateur le propose.",
               "L’application installée conserve la barre de titre native pour déplacer la fenêtre et accéder à réduire, agrandir et fermer.",
-              "Après une mise à jour, utilisez l’icône d’actualisation entre Paramètres et Compte pour recharger l’application. Sauvegardez les brouillons importants auparavant."
+              "Après une mise à jour, l’icône d’actualisation entre Paramètres et Compte nettoie les caches techniques de Mergeron, recherche une mise à jour du service worker et recharge la version du serveur. La connexion, les préférences et les notifications sont conservées. Copiez les brouillons avant de continuer : ils sont en mémoire seulement et une confirmation vous avertit s’il en reste."
             ],
             "warning": "L’installation dépend du navigateur et des règles de votre poste. Ce n’est pas un mode hors ligne pour les API, conversations et fichiers ; un rechargement n’installe pas une mise à jour du serveur."
           }
