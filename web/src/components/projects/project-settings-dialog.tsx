@@ -76,6 +76,7 @@ export function ProjectSettingsPanel({
   );
   const models = useQuery({
     ...modelsListModelsOptions({ query: { includeHidden: true } }),
+    enabled: section === 'agents',
     staleTime: 60_000,
   });
   const selectedModel = useMemo(

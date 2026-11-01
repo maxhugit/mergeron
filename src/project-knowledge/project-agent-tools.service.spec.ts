@@ -317,6 +317,100 @@ describe('project context and business tools', () => {
     });
   });
 
+  it.each([12, 501])(
+    'batches task reads across %i boards while preserving order, scope and bounded context',
+    async (boardCount) => {
+      const now = Date.now();
+      const ids = Array.from(
+        { length: boardCount },
+        (_, index) => `board-${String(index).padStart(4, '0')}`,
+      );
+      database.db
+        .insert(projectResources)
+        .values(
+          ids.map((id) => ({
+            id,
+            projectId: 'p',
+            type: 'task_board',
+            name: id,
+            config: {},
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .run();
+      database.db
+        .insert(projectTaskStatuses)
+        .values(
+          ids.map((id) => ({
+            id: `${id}-todo`,
+            resourceId: id,
+            name: 'To do',
+            kind: 'unassigned',
+            position: 0,
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .run();
+      database.db
+        .insert(projectTasks)
+        .values(
+          [...ids, 'internal', 'foreign'].map((resourceId) => ({
+            id: `${resourceId}-task`,
+            resourceId,
+            statusId: `${resourceId}-todo`,
+            title: resourceId,
+            linkedThreadId: 'agent',
+            position: 0,
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .run();
+      const prepare = vi.spyOn(database.sqlite, 'prepare');
+      const taskQueries = () =>
+        prepare.mock.calls
+          .map(([sql]) => sql)
+          .filter((sql) => sql.includes('from "project_tasks"'));
+      try {
+        await asPerson('admin', async () => {
+          const result = (await tools.execute('agent', {
+            tool: 'list_tasks',
+          })) as {
+            items: Array<{ id: string }>;
+            total: number;
+            nextOffset: number | null;
+          };
+          expect(result.total).toBe(boardCount);
+          expect(result.items.map((item) => item.id)).toEqual(
+            ids.slice(0, 50).map((id) => `${id}-task`),
+          );
+          expect(result.nextOffset).toBe(boardCount > 50 ? 50 : null);
+          expect(taskQueries()).toHaveLength(Math.ceil((boardCount + 1) / 500));
+          prepare.mockClear();
+          const context = await tools.context('agent');
+          const snapshot = JSON.parse(context!.split('\n')[2]) as {
+            linkedTasks: Array<{ id: string }>;
+          };
+          expect(snapshot.linkedTasks.map((task) => task.id)).toEqual(
+            ids.slice(0, 10).map((id) => `${id}-task`),
+          );
+          expect(context).not.toContain('internal-task');
+          expect(context).not.toContain('foreign-task');
+          expect(taskQueries()).toHaveLength(Math.ceil((boardCount + 1) / 500));
+          expect(
+            taskQueries().every((sql) =>
+              /where .*"linked_thread_id" = \?.*limit \?$/.test(sql),
+            ),
+          ).toBe(true);
+        });
+      } finally {
+        prepare.mockRestore();
+      }
+    },
+  );
+
   it('creates real tasks and deliverables with durable idempotency and audit', async () => {
     await asPerson('admin', async () => {
       const first = (await tools.execute('agent', create())) as { id: string };
