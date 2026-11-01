@@ -193,6 +193,8 @@ export class CodexAudioService implements OnModuleDestroy {
           'text realtime output modality requires realtime v2',
           'AVAS realtime calls require realtime v1 or v3',
           'AVAS realtime calls require conversational realtime',
+          'AVAS requires OpenAI-Alpha: quicksilver=v2',
+          'invalid_quicksilver_alpha_header',
         ].some((reason) => note.params.message.includes(reason));
         fail(
           incompatible
@@ -319,8 +321,11 @@ export class CodexAudioService implements OnModuleDestroy {
       phase = 'webrtc';
       await client.request('thread/realtime/start', {
         threadId,
-        // Native WebRTC defaults to v1 and rejects text-only output (v2-only).
-        // Negotiate audio, but never play assistant audio or return its transcript.
+        // Native WebRTC defaults to legacy v1 (quicksilver=v1). AVAS now requires
+        // the Frameless v3 protocol, whose CLI-generated header is quicksilver=v2.
+        // This is NOT conversation v2, which does not support WebRTC.
+        version: 'v3',
+        // Never play assistant audio or return its transcript.
         outputModality: 'audio',
         includeStartupContext: false,
         clientManagedHandoffs: true,

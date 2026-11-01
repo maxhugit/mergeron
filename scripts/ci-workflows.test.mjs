@@ -567,7 +567,7 @@ test('the isolated real CLI checks the actual dictation service before passing t
   );
   assert.match(
     probe,
-    /require\('\/app\/dist\/simple-chat\/codex-audio\.service'\)/,
+    /require\(\s*join\(appRoot, 'dist\/simple-chat\/codex-audio\.service'\),?\s*\)/,
   );
   assert.match(
     probe,
@@ -577,7 +577,12 @@ test('the isolated real CLI checks the actual dictation service before passing t
   assert.match(probe, /old-text-control/);
   assert.match(probe, /corrected-audio/);
   assert.match(probe, /assert\.equal\(\s*calls\.length,\s*0/);
-  assert.match(probe, /assert\.equal\(\s*calls\.length,\s*1/);
+  assert.match(probe, /assert\.equal\(\s*calls\.length,\s*2/);
+  assert.match(probe, /old-default-protocol/);
+  assert.match(
+    probe,
+    /assert\.deepEqual\(calls, \['quicksilver=v1', 'quicksilver=v2'\]\)/,
+  );
   assert.match(probe, /await childDone/);
   assert.doesNotMatch(probe, /process\.env\.OPENAI_API_KEY/);
 });

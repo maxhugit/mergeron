@@ -10,12 +10,13 @@ const { join } = require('node:path');
 const { spawn } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const { createInterface } = require('node:readline');
-const {
-  CodexAudioService,
-} = require('/app/dist/simple-chat/codex-audio.service');
-const {
-  CatalogAdmissionService,
-} = require('/app/dist/codex/catalog/catalog-admission.service');
+const appRoot = process.env.MERGERON_PROBE_APP_ROOT || '/app';
+const { CodexAudioService } = require(
+  join(appRoot, 'dist/simple-chat/codex-audio.service'),
+);
+const { CatalogAdmissionService } = require(
+  join(appRoot, 'dist/codex/catalog/catalog-admission.service'),
+);
 
 const binary = process.argv[2];
 assert.ok(binary, 'Installed test CLI is required');
@@ -34,23 +35,40 @@ async function main() {
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, 'http://localhost');
-      if (request.method === 'GET' && url.pathname === '/v1/models') {
+      if (
+        request.method === 'GET' &&
+        url.pathname === '/backend-api/codex/models'
+      ) {
         response.writeHead(200, { 'Content-Type': 'application/json' });
         response.end('{"models":[]}');
         return;
       }
       assert.equal(request.method, 'POST');
-      assert.equal(url.pathname, '/v1/realtime/calls');
+      assert.equal(url.pathname, '/backend-api/codex/realtime/calls');
       let body = '';
       for await (const chunk of request) {
         body += chunk;
         assert.ok(body.length <= 65536, 'Sentinel body exceeded limit');
       }
-      assert.ok(body.includes(offer), 'Native CLI did not forward the offer');
-      assert.match(body, /name="session"/);
-      calls.push(true);
-    } catch {
-      faults.push('unexpected-loopback-request');
+      const payload = JSON.parse(body);
+      assert.equal(payload.sdp, offer, 'Native CLI did not forward the offer');
+      assert.equal(typeof payload.session, 'object');
+      const alpha = request.headers['openai-alpha'];
+      assert.ok(['quicksilver=v1', 'quicksilver=v2'].includes(alpha));
+      calls.push(alpha);
+      if (alpha !== 'quicksilver=v2') {
+        response.writeHead(400, { 'Content-Type': 'application/json' });
+        response.end(
+          '{"error":{"message":"AVAS requires OpenAI-Alpha: quicksilver=v2.","code":"invalid_quicksilver_alpha_header","type":"invalid_request_error"}}',
+        );
+        return;
+      }
+    } catch (error) {
+      faults.push(
+        error instanceof assert.AssertionError
+          ? 'unexpected-loopback-request:' + error.operator
+          : 'unexpected-loopback-request',
+      );
     }
     response.writeHead(400, { 'Content-Type': 'application/json' });
     response.end(
@@ -75,7 +93,7 @@ model = "gpt-5.4"
 web_search = "disabled"
 [model_providers.offline_voice_fixture]
 name = "Offline voice fixture"
-base_url = "http://127.0.0.1:${port}/v1"
+base_url = "http://127.0.0.1:${port}/backend-api/codex"
 wire_api = "responses"
 requires_openai_auth = false
 `,
@@ -94,13 +112,16 @@ requires_openai_auth = false
     child.stderr.resume(); // Drain, but never print native errors or session data.
     let nextId = 0;
     const pending = new Map();
-    let emulateOldRequest = false;
+    let emulateOldRequest;
     wire = new EventEmitter();
     wire.request = async (method, params) => {
       // Only the account check is stubbed; never read real auth.json or log in.
       if (method === 'account/read') return { account: { type: 'chatgpt' } };
-      if (emulateOldRequest && method === 'thread/realtime/start')
-        params = { ...params, outputModality: 'text' };
+      if (emulateOldRequest && method === 'thread/realtime/start') {
+        params = { ...params };
+        delete params.version;
+        if (emulateOldRequest === 'text') params.outputModality = 'text';
+      }
       const id = ++nextId;
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -154,27 +175,39 @@ requires_openai_auth = false
     const admission = new CatalogAdmissionService();
     service = new CodexAudioService({ getClient: () => wire }, admission);
     phase = 'old-text-control';
-    emulateOldRequest = true;
+    emulateOldRequest = 'text';
     await assert.rejects(
       service.start(offer),
       /configuration vocale est incompatible/,
     );
     assert.equal(calls.length, 0, 'Old invalid mode must fail before HTTP');
     assert.equal(admission.pending().length, 0);
-    emulateOldRequest = false;
+    phase = 'old-default-protocol';
+    emulateOldRequest = 'default';
+    await assert.rejects(
+      service.start(offer),
+      /configuration vocale est incompatible/,
+    );
+    assert.deepEqual(calls, ['quicksilver=v1']);
+    assert.equal(admission.pending().length, 0);
+    emulateOldRequest = undefined;
     phase = 'corrected-audio';
     await assert.rejects(service.start(offer), /erreur technique/);
     assert.equal(
       calls.length,
-      1,
+      2,
       'Corrected mode must pass native preflight and reach the sentinel',
     );
+    assert.deepEqual(calls, ['quicksilver=v1', 'quicksilver=v2']);
     assert.deepEqual(faults, []);
     assert.equal(admission.pending().length, 0);
     assert.equal(wire.listenerCount('notification'), 0);
     console.log(
-      'Native CLI dictation preflight: old text mode rejected; corrected service reaches offline sentinel. No account or media call used.',
+      'Native CLI dictation preflight: old text rejected; default protocol rejected by sentinel; explicit v3 sends quicksilver=v2. No account or media call used.',
     );
+  } catch (error) {
+    console.error(JSON.stringify({ phase, calls, faults }));
+    throw error;
   } finally {
     clearTimeout(deadline);
     await service?.onModuleDestroy();
