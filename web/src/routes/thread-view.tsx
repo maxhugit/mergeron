@@ -308,9 +308,6 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
             onBrowser={
               session.isAdministrator ? () => setBrowserChoice(true) : undefined
             }
-            onLocalBrowser={
-              session.isAdministrator ? openLocalBrowser : undefined
-            }
             localBrowserStatus={localBrowserStatus}
             onPreview={
               previewProject

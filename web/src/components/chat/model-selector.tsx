@@ -120,11 +120,13 @@ export function ModelSelector() {
         aria-readonly="true"
       >
         <Bot className="h-3.5 w-3.5" />
-        <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
+        <span className="hidden max-w-[110px] truncate @min-[480px]/composer:inline @min-[800px]/composer:max-w-[140px]">
           {displayModel}
         </span>
         {displayEffort && (
-          <span className="text-muted-foreground">· {displayEffort}</span>
+          <span className="hidden text-muted-foreground @min-[800px]/composer:inline">
+            · {displayEffort}
+          </span>
         )}
       </Button>
     );
@@ -172,13 +174,15 @@ export function ModelSelector() {
           aria-label={`${t('modelReasoningEffort')} : ${displayModel}${displayEffort ? ` · ${displayEffort}` : ''}`}
         >
           <Bot className="h-3.5 w-3.5" />
-          <span className="max-w-[90px] truncate @min-[640px]/composer:max-w-[120px]">
+          <span className="hidden max-w-[110px] truncate @min-[480px]/composer:inline @min-[800px]/composer:max-w-[140px]">
             {displayModel}
           </span>
           {displayEffort && (
-            <span className="text-muted-foreground">· {displayEffort}</span>
+            <span className="hidden text-muted-foreground @min-[800px]/composer:inline">
+              · {displayEffort}
+            </span>
           )}
-          <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[640px]/composer:block" />
+          <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[800px]/composer:block" />
         </Button>
       </PopoverTrigger>
 

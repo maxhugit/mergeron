@@ -13,6 +13,7 @@ import {
 } from '@/lib/projects-api';
 import { RetainedSurface } from '@/components/retained-surface';
 import { retainAgentFilesStores } from '@/stores/files-store';
+import { useAgentNavigationPrefetch } from '@/hooks/use-agent-navigation-prefetch';
 
 const Workspace = lazy(() =>
   import('@/routes/thread-view').then((m) => ({
@@ -34,12 +35,18 @@ export function AgentWorkspaceHost({
   });
   const project = projects.data?.projects.find((p) => p.id === projectId);
   const eligible = useMemo(
-    () => new Set(project?.agentThreads?.map((agent) => agent.threadId) ?? []),
+    () =>
+      new Set(
+        project?.agentThreads
+          ?.filter((agent) => !agent.archived)
+          .map((agent) => agent.threadId) ?? [],
+      ),
     [project],
   );
   const activeEligible = Boolean(
     activeThreadId && eligible.has(activeThreadId),
   );
+  useAgentNavigationPrefetch(projectId, activeThreadId, eligible);
   const cached = [
     ...retained.filter((id) => eligible.has(id) && id !== activeThreadId),
     ...(activeEligible ? [activeThreadId!] : []),
@@ -53,6 +60,20 @@ export function AgentWorkspaceHost({
   const idsKey = ids.join('\0');
   useLayoutEffect(() => {
     retainAgentFilesStores(idsKey ? idsKey.split('\0') : []);
+    if (projectId && projects.isSuccess && project) {
+      const state = useAgentViewCacheStore.getState();
+      const valid = state.threadIds.filter((id) => eligible.has(id));
+      state.forget(state.threadIds.filter((id) => !eligible.has(id)));
+      // A first reload has no recent IDs yet. Seed a bounded selection, with
+      // the selected conversation last in the LRU and first on the open path.
+      if (state.owner && valid.length === 0) {
+        for (const id of [...eligible]
+          .filter((id) => id !== activeThreadId)
+          .slice(0, MAX_CACHED_AGENT_VIEWS - 1)
+          .reverse())
+          state.visit(projectId, id);
+      }
+    }
     if (projectId && activeThreadId && activeEligible)
       useAgentViewCacheStore.getState().visit(projectId, activeThreadId);
     const state = useAgentViewCacheStore.getState();

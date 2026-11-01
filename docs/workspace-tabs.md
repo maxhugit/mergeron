@@ -49,12 +49,28 @@ The dedicated `person_navigation_preferences` table is excluded from shared
 people/project exports. Writes verify project access; reads do not activate an
 inaccessible project, and deletion clears its reference. The client applies only
 an acknowledged save for the same verified identity. Errors retain the previous
-choice without retries. Only the choice is durable: cached views and drafts stay
-in tab memory; no history or credential is persisted by this preference.
+choice without retries. Recent conversation IDs are stored in sessionStorage,
+scoped to the verified account and project, with a maximum of five. Reloading
+restores those IDs only after authentication and checks them against the current
+project inventory. Disabling the mode or changing identity removes the previous
+list. Transcripts, drafts and credentials are never written by this preference.
 
 `AgentWorkspaceHost`, outside the route outlet, retains up to five recently
-visited agent workspaces from that project in an LRU. It never preloads the entire
-project. The current view outside that project is not retained on departure.
+visited agent workspaces from that project in an LRU. After reload, the selected
+conversation opens first. Once ready, the client reads one full recent history
+page (20 turns) for up to four other recent agents, sequentially. A first visit
+without recent IDs selects at most four unarchived agents from the project list.
+The project resource page code is warmed without mounting those pages or starting
+their actions. It never preloads the entire project. The current view outside
+that project is not retained on departure.
+
+Background reads never resume conversations, claim writer ownership, subscribe
+to rooms, send messages or start browsers, terminals or previews. Their memory
+cache expires after one minute and is removed when the project or account changes.
+Work stops when the session pauses, the tab becomes hidden or the browser goes
+offline. On selection, a warm page can be displayed while the normal open verifies
+access; its controls remain inert until that open completes. Errors remain visible
+and never turn a cached page into proof of a writable connection.
 React Activity preserves retained DOM/state while suspending hidden effects;
 surface activity also withdraws portalled controls. Draft text and attachment
 references have a separate memory-only owner, so evicting a full view or disabling
@@ -90,7 +106,7 @@ identity or the remembered desktop width. The left navigation is unchanged.
 | `terminal-store`                                | Shared metadata, typed operations, creation-free discovery and presented-only recovery                             |
 | `terminal-view-store` / `TerminalHost`          | Local retained attachments and the currently visible presentation rectangle                                        |
 | `timeline-store` and its action modules         | Conversation-scoped history, opening, submission, execution and pending decisions                                  |
-| `agent-view-cache-store` / `AgentWorkspaceHost` | Profile-backed project choice; memory-only bounded recent-view retention                                           |
+| `agent-view-cache-store` / `AgentWorkspaceHost` | Profile-backed project choice; bounded recent IDs in tab storage, retained views in memory                         |
 | `composer-draft-store`                          | Memory-only text and attachment references keyed by conversation; independent of view eviction                     |
 | `transcript-anchor`                             | In-memory reading bookmarks independent of runtime-cache eviction                                                  |
 

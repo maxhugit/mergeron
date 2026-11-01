@@ -48,6 +48,11 @@ vi.mock('@/socket', () => ({ getSocket: () => calls.socket }));
 vi.mock('@/routes/thread-view', () => ({
   ConversationWorkspace: FixtureWorkspace,
 }));
+// This fixture measures retained React surfaces. Read-only warm-up and its
+// identity/cancellation gates have their own tests and must not contact auth.
+vi.mock('@/hooks/use-agent-navigation-prefetch', () => ({
+  useAgentNavigationPrefetch: vi.fn(),
+}));
 vi.mock('@/lib/navigation-workspace-check', () => ({
   checkNavigationWorkspaces: calls.check,
 }));

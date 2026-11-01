@@ -12,13 +12,19 @@ import { ResponseDetailSelector } from './response-detail-selector';
 import { SkillSelector, type SkillSelection } from './skill-selector';
 
 interface Props {
+  threadId?: string | null;
   cwd: string | null;
   disabled?: boolean;
   onSelectSkill: (skill: SkillSelection) => void;
 }
 
 /** Groups optional execution controls so the composer stays compact. */
-export function CapabilitiesMenu({ cwd, disabled, onSelectSkill }: Props) {
+export function CapabilitiesMenu({
+  threadId,
+  cwd,
+  disabled,
+  onSelectSkill,
+}: Props) {
   const { t } = useTranslation();
 
   return (
@@ -32,17 +38,17 @@ export function CapabilitiesMenu({ cwd, disabled, onSelectSkill }: Props) {
           aria-label={t('chatCapabilities')}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          <span className="hidden @min-[640px]/composer:inline">
+          <span className="hidden @min-[900px]/composer:inline">
             {t('chatCapabilities')}
           </span>
-          <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[640px]/composer:block" />
+          <ChevronDown className="hidden h-3 w-3 opacity-50 @min-[900px]/composer:block" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" side="top" className="w-72 space-y-1 p-2">
         <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
           {t('chatCapabilities')}
         </p>
-        <McpStatusBadge menuItem />
+        <McpStatusBadge threadId={threadId} menuItem />
         <SkillSelector
           cwd={cwd}
           disabled={disabled}

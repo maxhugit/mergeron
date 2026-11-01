@@ -23,6 +23,8 @@ import {
 export type ThreadMode = 'live' | 'readOnly';
 
 export interface ThreadRuntimeState {
+  /** A recent prefetched page may be read while the ordinary open checks ownership. */
+  historyPreview?: boolean;
   threadId: string;
   /** Working directory of this thread. */
   threadCwd: string | null;
@@ -89,6 +91,7 @@ export interface ThreadRuntimeInput {
 }
 
 export interface TimelineState {
+  historyPreview?: boolean;
   selectedThreadId: string | null;
   threadsById: Record<string, ThreadRuntimeState>;
   subscribedThreadIds: Set<string>;
@@ -319,7 +322,10 @@ export interface TimelineState {
   setOpenStateForThread: (
     threadId: string,
     state: Partial<
-      Pick<ThreadRuntimeState, 'historyRequest' | 'historyError' | 'openState'>
+      Pick<
+        ThreadRuntimeState,
+        'historyRequest' | 'historyError' | 'openState' | 'historyPreview'
+      >
     >,
   ) => void;
   addApprovalForThread: (threadId: string, approval: ApprovalRequest) => void;

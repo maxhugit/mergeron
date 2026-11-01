@@ -51,6 +51,7 @@ import { AttachmentChips } from './attachment-chips';
 import { MentionPopover } from './mention-popover';
 import { VoiceDictationButton } from './voice-dictation-button';
 import { ComposerActionGroup } from './composer-action-group';
+import { ComposerToolbar } from './composer-toolbar';
 
 /** Imperative handle exposed via ref for external input manipulation. */
 export interface ChatInputHandle {
@@ -557,23 +558,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             rows={1}
             className="max-h-40 min-h-20 resize-none overflow-y-auto border-none bg-transparent pr-4 pt-2.5 shadow-none focus-visible:ring-0"
           />
-          <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <ModelSelector />
-              <PlanModeBadge
-                state={slashDispatch.collaborationMode}
-                pending={slashDispatch.planPending}
-                disabled={!threadId || readOnly}
-                onToggle={slashDispatch.togglePlanMode}
-              />
-              <SecurityPolicyBadge threadId={threadId} readOnly={readOnly} />
-              <CapabilitiesMenu
-                cwd={threadCwd}
-                disabled={!threadId || readOnly}
-                onSelectSkill={handleSkillSelect}
-              />
-            </div>
-
+          <ComposerToolbar
+            controls={
+              <>
+                <ModelSelector />
+                <PlanModeBadge
+                  state={slashDispatch.collaborationMode}
+                  pending={slashDispatch.planPending}
+                  disabled={!threadId || readOnly}
+                  onToggle={slashDispatch.togglePlanMode}
+                />
+                <SecurityPolicyBadge threadId={threadId} readOnly={readOnly} />
+                <CapabilitiesMenu
+                  threadId={threadId}
+                  cwd={threadCwd}
+                  disabled={!threadId || readOnly}
+                  onSelectSkill={handleSkillSelect}
+                />
+              </>
+            }
+          >
             <ComposerActionGroup>
               <TokenUsageRing />
               <VoiceDictationButton
@@ -621,7 +625,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                 </Button>
               )}
             </ComposerActionGroup>
-          </div>
+          </ComposerToolbar>
         </div>
       </div>
 

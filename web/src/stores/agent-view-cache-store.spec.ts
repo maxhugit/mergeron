@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import {
   MAX_CACHED_AGENT_VIEWS,
   useAgentViewCacheStore as cache,
@@ -29,6 +29,30 @@ it('keeps a five-view LRU, not every agent in the project', () => {
   expect(cache.getState().threadIds).toEqual(['6', '7', '8', '9', '5']);
   cache.getState().forget(['7', '9']);
   expect(cache.getState().threadIds).toEqual(['6', '8', '5']);
+});
+it('namespaces only recent IDs by account and project, and clears them when disabled', () => {
+  cache.getState().restorePreference('owner-a', 'p');
+  cache.getState().visit('p', 'a');
+  cache.setState({ owner: null, projectId: null, threadIds: [] });
+  cache.getState().restorePreference('owner-b', 'p');
+  expect(cache.getState().threadIds).toEqual([]);
+  cache.setState({ owner: null, projectId: null, threadIds: [] });
+  cache.getState().restorePreference('owner-a', 'p');
+  expect(cache.getState().threadIds).toEqual(['a']);
+  cache.getState().restorePreference('owner-a', null);
+  cache.getState().restorePreference('owner-a', 'p');
+  expect(cache.getState().threadIds).toEqual([]);
+});
+it('falls back to memory when tab storage is unavailable', () => {
+  const storage = vi
+    .spyOn(Storage.prototype, 'getItem')
+    .mockImplementation(() => {
+      throw new Error('blocked');
+    });
+  cache.getState().restorePreference('owner', 'p');
+  cache.getState().visit('p', 'a');
+  expect(cache.getState().threadIds).toEqual(['a']);
+  storage.mockRestore();
 });
 it('keeps small per-agent drafts and attachments even when their view is evicted', () => {
   drafts.getState().setText('a', 'unfinished');

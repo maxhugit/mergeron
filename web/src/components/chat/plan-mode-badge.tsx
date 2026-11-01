@@ -46,7 +46,7 @@ export function PlanModeBadge({ state, pending, disabled, onToggle }: Props) {
       ) : (
         <Telescope className="h-3.5 w-3.5" />
       )}
-      <span className="hidden @min-[640px]/composer:inline">{t('plan')}</span>
+      <span className="hidden @min-[800px]/composer:inline">{t('plan')}</span>
     </Button>
   );
 }

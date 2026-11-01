@@ -24,7 +24,13 @@ import {
  * The global default for new conversations is edited in Settings, where it
  * belongs. This control changes one conversation, and says so.
  */
-import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Info, Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -250,7 +256,7 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
           ) : (
             <Icon className="h-3.5 w-3.5" />
           )}
-          <span className="hidden @min-[640px]/composer:inline">
+          <span className="hidden max-w-[360px] truncate @min-[1120px]/composer:inline-block">
             {t(translationKey(sandboxLabel))}
             <span className="mx-1 text-muted-foreground">·</span>
             {t(translationKey(observedApproval))}
@@ -260,38 +266,43 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
       <PopoverContent
         align="start"
         side="top"
-        className="w-64 space-y-3 p-3 text-sm"
+        className="w-80 max-w-[calc(100vw-24px)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto space-y-2 p-2 text-sm"
       >
         {/* An in-flight turn keeps the policy it captured at start, and running
             processes keep the authority they were launched with. Saying so is
             the difference between an honest control and the previous one. */}
-        <p className="text-xs text-muted-foreground">
-          {t('appliesToThisConversationFromTheNextMessage')}
-        </p>
-        {saved && (
-          <p className="rounded bg-muted px-2 py-1.5 text-xs">
-            {t('agentSettingsRemembered', {
-              sandbox: saved.sandboxPolicy
-                ? t(
-                    translationKey(
-                      SANDBOX_LABELS[saved.sandboxPolicy.type] ??
-                        saved.sandboxPolicy.type,
-                    ),
-                  )
-                : '—',
-              approval: saved.approvalPolicy
-                ? t(
-                    translationKey(
-                      describeApproval(
-                        saved.approvalPolicy,
-                        saved.approvalMode,
-                      ),
-                    ),
-                  )
-                : '—',
-            })}
+        <PolicyHelp label={t('securityPolicyForThisConversation')}>
+          <p className="text-xs">
+            {t('appliesToThisConversationFromTheNextMessage')}
           </p>
-        )}
+          {saved && (
+            <p className="rounded bg-muted px-2 py-1.5 text-xs">
+              {t('agentSettingsRemembered', {
+                sandbox: saved.sandboxPolicy
+                  ? t(
+                      translationKey(
+                        SANDBOX_LABELS[saved.sandboxPolicy.type] ??
+                          saved.sandboxPolicy.type,
+                      ),
+                    )
+                  : '—',
+                approval: saved.approvalPolicy
+                  ? t(
+                      translationKey(
+                        describeApproval(
+                          saved.approvalPolicy,
+                          saved.approvalMode,
+                        ),
+                      ),
+                    )
+                  : '—',
+              })}
+            </p>
+          )}
+          <p className="text-xs">
+            {t('theDefaultForNewConversationsLivesInSettings')}
+          </p>
+        </PolicyHelp>
         {preferences.preferences?.securitySaveState === 'failed' && (
           <p role="alert" className="text-xs text-destructive">
             {t('agentSettingsSaveFailed')}
@@ -360,6 +371,11 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
             <OptionRow
               key={option.label}
               label={option.label}
+              help={t(
+                translationKey(
+                  `approvalHelp${option.label === 'on-request' ? 'Manual' : option.label === 'neverAllow' ? 'Never' : 'Automatic'}`,
+                ),
+              )}
               active={observedApproval === option.label}
               saved={
                 saved?.approvalPolicy !== undefined &&
@@ -383,9 +399,6 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
               }
             />
           ))}
-          <p className="text-xs text-muted-foreground">
-            {t('approvalModesHint')}
-          </p>
         </div>
         <AlertDialog
           open={confirmAutomaticFor === threadId}
@@ -429,11 +442,6 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
           <div className="text-xs font-medium text-muted-foreground">
             {t('sandbox')}
           </div>
-          {managedCopy && (
-            <p className="text-xs text-muted-foreground">
-              {t('managedAgentIsolationHint')}
-            </p>
-          )}
           {sandboxOptions(
             policyReadOnly ? null : threadCwd,
             observedNetworkAccess(policy.observed?.sandboxPolicy),
@@ -442,6 +450,11 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
             <OptionRow
               key={option.label}
               label={option.label}
+              help={
+                managedCopy
+                  ? t('managedAgentIsolationHint')
+                  : t(translationKey(`sandboxHelp${option.value.type}`))
+              }
               active={sandboxOptionIsActive(
                 policy.observed?.sandboxPolicy,
                 option.value,
@@ -477,6 +490,11 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
           </div>
           <OptionRow
             label="agentTestProfileEnable"
+            help={t(
+              testProfile.data?.available
+                ? 'agentTestProfileHint'
+                : 'agentTestProfileUnavailable',
+            )}
             active={false}
             disabled={
               policyReadOnly ||
@@ -502,17 +520,11 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
               });
             }}
           />
-          <p className="text-xs text-muted-foreground">
-            {t(
-              testProfile.data?.available
-                ? 'agentTestProfileHint'
-                : 'agentTestProfileUnavailable',
-            )}
-          </p>
           {policy.observed?.sandboxPolicy?.type === 'workspaceWrite' &&
             policy.observed.sandboxPolicy.networkAccess && (
               <OptionRow
                 label="agentTestProfileDisable"
+                help={t('agentTestProfileHint')}
                 active={false}
                 disabled={
                   policyReadOnly ||
@@ -530,10 +542,6 @@ export function SecurityPolicyBadge({ threadId, readOnly = false }: Props) {
               />
             )}
         </div>
-
-        <p className="border-t border-border pt-2 text-xs text-muted-foreground">
-          {t('theDefaultForNewConversationsLivesInSettings')}
-        </p>
       </PopoverContent>
     </Popover>
   );
@@ -554,6 +562,7 @@ function sandboxOptionIsActive(
 
 function OptionRow({
   label,
+  help,
   active,
   requested,
   saved,
@@ -562,6 +571,7 @@ function OptionRow({
   onClick,
 }: {
   label: string;
+  help: string;
   active: boolean;
   /** Chosen by the user but not yet observed as effective. */
   requested?: boolean;
@@ -574,43 +584,88 @@ function OptionRow({
     nsMode: 'fallback',
   });
   return (
-    <button
-      type="button"
-      disabled={disabled || (active && saved)}
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-        active
-          ? risky
-            ? 'bg-destructive/10 text-destructive'
-            : 'bg-accent text-accent-foreground'
-          : 'hover:bg-accent/50',
-        risky && !active && 'text-destructive',
-        disabled && !active && 'opacity-50',
-      )}
-    >
-      {t(translationKey(label))}
-      {active && (
-        <Badge
-          variant={risky ? 'destructive' : 'secondary'}
-          className="text-[10px]"
-        >
-          {t('current')}
-        </Badge>
-      )}
-      {saved && (
-        <Badge variant="outline" className="text-[10px]">
-          {t('agentSettingsSaved')}
-        </Badge>
-      )}
-      {/* Requested-but-unconfirmed is its own state on purpose: presenting it
+    <div className="flex items-center gap-1">
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="min-w-0 flex-1">
+              <button
+                type="button"
+                disabled={disabled || (active && saved)}
+                onClick={onClick}
+                className={cn(
+                  'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                  active
+                    ? risky
+                      ? 'bg-destructive/10 text-destructive'
+                      : 'bg-accent text-accent-foreground'
+                    : 'hover:bg-accent/50',
+                  risky && !active && 'text-destructive',
+                  disabled && !active && 'opacity-50',
+                )}
+              >
+                {t(translationKey(label))}
+                {active && (
+                  <Badge
+                    variant={risky ? 'destructive' : 'secondary'}
+                    className="text-[10px]"
+                  >
+                    {t('current')}
+                  </Badge>
+                )}
+                {saved && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {t('agentSettingsSaved')}
+                  </Badge>
+                )}
+                {/* Requested-but-unconfirmed is its own state on purpose: presenting it
           as current is exactly how the old control managed to be wrong. */}
-      {!active && requested && (
-        <Badge variant="outline" className="text-[10px]">
-          {t('applying')}
-        </Badge>
-      )}
-    </button>
+                {!active && requested && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {t('applying')}
+                  </Badge>
+                )}
+              </button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{help}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <PolicyHelp label={t(translationKey(label))}>{help}</PolicyHelp>
+    </div>
+  );
+}
+
+/** Separate help action: tapping an explanation never selects a permission. */
+function PolicyHelp({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  const { t } = useTranslation('codexSettings');
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          aria-label={`${t('policyHelp')} : ${label}`}
+        >
+          <Info className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        className="w-72 max-w-[calc(100vw-24px)] space-y-2 text-xs"
+      >
+        <p className="font-medium">{label}</p>
+        {children}
+      </PopoverContent>
+    </Popover>
   );
 }
 
