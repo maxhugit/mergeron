@@ -942,20 +942,24 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           : entry.thread.updatedAt,
       ]),
     );
+    const readableProjects = this.db
+      .select()
+      .from(projects)
+      .all()
+      .filter((project) => canReadProject(project.id));
+    const readableProjectIds = new Set(
+      readableProjects.map((project) => project.id),
+    );
     const resources = this.db
       .select()
       .from(projectResources)
       .all()
-      .filter((resource) => canReadProject(resource.projectId));
+      .filter((resource) => readableProjectIds.has(resource.projectId));
     const readableResourceIds = new Set(
       resources.map((resource) => resource.id),
     );
     return summarizeProjects({
-      projects: this.db
-        .select()
-        .from(projects)
-        .all()
-        .filter((p) => canReadProject(p.id)),
+      projects: readableProjects,
       resources,
       tasks: this.db
         .select()

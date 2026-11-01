@@ -12,7 +12,7 @@ par requête. Il ne relit plus la table des ressources pour chaque tâche. Pour
 deux projets contenant chacun 1 000 tâches, la fixture de comptage passe de
 2 006 à 6 lectures des données métier, hors requêtes propres au contrôle d’identité.
 Les droits sont évalués dans la requête courante, sans cache partagé entre
-utilisateurs. Un test avec le vrai service d’identité change puis révoque la
+utilisateurs, une fois par projet plutôt qu’à chaque ressource. Un test avec le vrai service d’identité change puis révoque la
 participation au projet, y compris pendant l’attente des métadonnées.
 
 `summarizeProjects()` regroupe les données une fois par projet ou par ressource.
@@ -71,7 +71,7 @@ surfaces cachées sont conservés. Aucun gain de taille du bundle n’est attrib
 La matrice de contrôle distingue le backend, le frontend et les tests navigateur.
 Ces derniers n’attendent plus la fin du lint et des tests unitaires frontend.
 Le backend utilise également la découverte complète de `src/**/*.spec.ts` : la
-sélection précédente couvrait 95 des 171 fichiers suivis au commit de référence.
+sélection précédente couvrait 94 des 171 fichiers suivis au commit de référence.
 Les tests de logs, terminal, catalogue natif et reprise ne doivent pas rester
 hors CI simplement parce qu’ils n’ont pas été ajoutés à une liste manuelle.
 Une seule invocation Vitest découvre tous les fichiers `.browser.ts` et
@@ -91,6 +91,11 @@ peut déjà être en vol pendant la capture d’écran. Le test exige désormais
 nouvelle tentative après la panne, et non obligatoirement après le rétablissement
 du serveur. Les assertions de reprise, absence de rejeu, brouillon, défilement,
 confidentialité du diagnostic et fermeture des ressources sont maintenues.
+Les tests de fenêtres Git attendent leur vraie fin de fermeture avant de vérifier
+le retour du focus. Une animation de sortie ralentie à 1 200 ms reproduit l’échec
+de l’ancienne assertion, qui ne laissait qu’une seconde au cycle complet. Le
+contrôle partagé vérifie aussi la disparition du portail, le retrait du masquage
+d’accessibilité et la libération du défilement et des pointeurs.
 
 Le build frontend Docker copie explicitement les sources, configurations de
 compilation, ressources publiques, extension et scripts. Les sources des tests

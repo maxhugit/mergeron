@@ -89,12 +89,17 @@ it.each([10, 1000])(
       database.db,
     );
     const prepare = vi.spyOn(database.sqlite, 'prepare');
+    const canReadProject = vi.fn(
+      (_identity: unknown, id: string) => id === 'visible',
+    );
     const run = (allowed: string) =>
       accessContext.run(
         {
           identity: {} as never,
           identities: {
-            canReadProject: (_identity: unknown, id: string) => id === allowed,
+            canReadProject: canReadProject.mockImplementation(
+              (_identity: unknown, id: string) => id === allowed,
+            ),
           } as never,
         },
         () => service.dashboard(),
@@ -102,15 +107,18 @@ it.each([10, 1000])(
     const visible = await run('visible');
     expect(visible.projects.map((project) => project.id)).toEqual(['visible']);
     expect(visible.totals.openTasks).toBe(count);
+    expect(canReadProject).toHaveBeenCalledTimes(2);
     expect(
       prepare.mock.calls.filter(([sql]) => /^select /i.test(sql)),
     ).toHaveLength(6);
     prepare.mockClear();
+    canReadProject.mockClear();
     const privateResult = await run('private');
     expect(privateResult.projects.map((project) => project.id)).toEqual([
       'private',
     ]);
     expect(privateResult.totals.openTasks).toBe(count);
+    expect(canReadProject).toHaveBeenCalledTimes(2);
     expect(
       prepare.mock.calls.filter(([sql]) => /^select /i.test(sql)),
     ).toHaveLength(6);
