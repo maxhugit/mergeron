@@ -14,6 +14,8 @@ const { previewStorage, cacheEnvironment, readStorageObservation } = storage;
 const label = 'io.mergeron.preview';
 const digest = /^.+@sha256:[a-f0-9]{64}$/;
 const states = ['starting', 'running', 'failed', 'stopped'];
+// Covers installation, compilation and startup, not the lifetime of a ready app.
+export const PREVIEW_STARTUP_TIMEOUT_MS = 20 * 60_000;
 const fail = (code) => {
   throw new Error(code);
 };
@@ -778,6 +780,7 @@ export class PreviewManager {
       r.runtimeId = runtime;
       this.save(r);
       await this.docker.startContainer(runtime);
+      r.runtimeStartedAt = Date.now();
       const token = randomBytes(32).toString('hex'),
         admin = this.manifest.networks.find((n) => n.id === 'admin').name;
       const relay = await this.add(
@@ -846,6 +849,8 @@ export class PreviewManager {
       if (r.updateMode === 'restart') {
         await this.docker.stopContainer(r.runtimeId, 3);
         await this.docker.startContainer(r.runtimeId);
+        r.runtimeStartedAt = Date.now();
+        r.firstReadyAt = null;
         r.requiresRestart = false;
         this.save(r);
       }
@@ -909,6 +914,12 @@ export class PreviewManager {
         this.save(r);
       }
     }
+    if (r.state === 'running' && !Number.isFinite(r.runtimeStartedAt)) {
+      // Old journals have no startup observation. Grant a full window on
+      // upgrade rather than killing a long-lived app on a transient bad probe.
+      r.runtimeStartedAt = Date.now();
+      this.save(r);
+    }
     const health =
       r.state === 'running' && checkHttp
         ? relayReadiness(
@@ -919,8 +930,35 @@ export class PreviewManager {
                 'preview-relay',
               )
             ).State?.Health,
+            Date.now(),
+            r.runtimeStartedAt,
           )
         : { ready: false, httpStatus: null };
+    if (r.state === 'running' && checkHttp) {
+      if (health.ready && !r.firstReadyAt) {
+        r.firstReadyAt = Date.now();
+        this.save(r);
+      } else if (
+        !health.ready &&
+        !r.firstReadyAt &&
+        Date.now() - (r.runtimeStartedAt ?? r.createdAt) >=
+          PREVIEW_STARTUP_TIMEOUT_MS &&
+        !this.busy
+      ) {
+        this.busy = true;
+        try {
+          // Stop only this owned runtime. Keep logs and ephemeral volumes for
+          // diagnosis until explicit recreation/stop or the existing expiry.
+          await this.owned(r.runtimeId, r, 'preview-app');
+          await this.docker.stopContainer(r.runtimeId, 3);
+          r.state = 'failed';
+          r.error = 'PREVIEW_STARTUP_TIMEOUT';
+          this.save(r);
+        } finally {
+          this.busy = false;
+        }
+      }
+    }
     await this.observeStorage(r);
     return {
       runId: r.runId,
@@ -1118,6 +1156,8 @@ export class PreviewManager {
     await this.ready;
     if (this.busy) return;
     for (const r of this.records.values()) {
+      // Enforce the startup deadline even when no browser is polling status.
+      if (r.state === 'running') await this.status(r.runId);
       if (
         (r.objects.length || ['starting', 'running'].includes(r.state)) &&
         r.expiresAt !== null &&

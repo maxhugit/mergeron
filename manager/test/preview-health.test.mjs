@@ -21,6 +21,7 @@ test('only fresh, structured results from the owned relay healthcheck announce r
     ready: true,
     httpStatus: 302,
   });
+  assert.equal(relayReadiness(health, now, now + 1).ready, false);
   for (const value of [
     undefined,
     { Status: 'healthy' },

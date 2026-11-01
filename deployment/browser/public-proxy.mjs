@@ -33,6 +33,33 @@ export async function resolvePublic(host, resolver = lookup) {
   return addresses[0].address;
 }
 
+/** A dead upstream must never leave a CONNECT client waiting indefinitely. */
+export function relayTunnel(socket, upstream, head) {
+  const close = () => {
+    socket.destroy();
+    upstream.destroy();
+  };
+  upstream.setTimeout(60_000);
+  upstream.on('timeout', close);
+  upstream.on('error', close);
+  upstream.on('close', () => {
+    // A normal EOF must flush buffered response bytes, not truncate a download.
+    if (upstream.readableEnded) socket.end();
+    else close();
+  });
+  socket.on('error', close);
+  socket.on('close', close);
+  upstream.once('connect', () => {
+    if (socket.destroyed || upstream.destroyed) return close();
+    socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    if (head.length) upstream.write(head);
+    socket.pipe(upstream);
+    upstream.pipe(socket);
+  });
+  // The client may disappear while the DNS lookup was pending.
+  if (socket.destroyed) close();
+}
+
 /** Every TCP connection uses the validated address, with no second DNS lookup. */
 export function publicProxy({ allowedDomains } = {}) {
   const allowed = (host) =>
@@ -94,16 +121,7 @@ export function publicProxy({ allowedDomains } = {}) {
         throw new Error('Unsupported tunnel');
       const address = await resolvePublic(url.hostname);
       const upstream = net.connect(443, address);
-      upstream.setTimeout(60_000, () => upstream.destroy());
-      upstream.on('connect', () => {
-        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        if (head.length) upstream.write(head);
-        socket.pipe(upstream);
-        upstream.pipe(socket);
-      });
-      upstream.on('error', () => socket.destroy());
-      socket.on('error', () => upstream.destroy());
-      socket.on('close', () => upstream.destroy());
+      relayTunnel(socket, upstream, head);
     })().catch(() => {
       socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
     });

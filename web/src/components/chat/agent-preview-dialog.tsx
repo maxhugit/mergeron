@@ -266,7 +266,9 @@ export function AgentPreviewDialog({
             )}
             {preview.error && (
               <p role="alert" className="text-sm text-destructive">
-                {preview.error}
+                {preview.error === 'PREVIEW_STARTUP_TIMEOUT'
+                  ? t('startupTimeout')
+                  : preview.error}
               </p>
             )}
           </>

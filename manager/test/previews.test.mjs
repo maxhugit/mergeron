@@ -5,7 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { PreviewManager, previewCatalog } from '../src/previews.mjs';
+import {
+  PreviewManager,
+  previewCatalog,
+  PREVIEW_STARTUP_TIMEOUT_MS,
+} from '../src/previews.mjs';
 import http from 'node:http';
 import archives from '../../runtime/preview-archive.cjs';
 import storage from '../../runtime/preview-storage.cjs';
@@ -536,6 +540,114 @@ test('does not announce a URL until the application answers HTTP, not only Docke
   assert.equal(ready.ready, true);
   assert.equal(ready.url, `https://${f.input.previewId}.preview.example.org/`);
   await f.manager.stop(f.input.runId);
+});
+test('startup deadline stops a stuck runtime, retains evidence and exposes a specific error', async () => {
+  const f = await fixture();
+  f.docker.httpStatus = 502;
+  await f.manager.start(f.input);
+  const r = f.manager.records.get(f.input.runId);
+  const before = [...r.volumes];
+  r.runtimeStartedAt = Date.now() - PREVIEW_STARTUP_TIMEOUT_MS + 60_000;
+  assert.equal((await f.manager.status(r.runId)).state, 'running');
+  r.runtimeStartedAt -= 120_000;
+  // No UI polling: the periodic sweep must still enforce the deadline.
+  await f.manager.expire();
+  const result = await f.manager.status(r.runId);
+  assert.equal(result.state, 'failed');
+  assert.equal(result.error, 'PREVIEW_STARTUP_TIMEOUT');
+  assert.equal(result.ready, false);
+  assert.equal(result.url, null);
+  assert.equal(f.docker.containers.get(r.runtimeId).State.Running, false);
+  assert.deepEqual(r.volumes, before);
+  assert.ok(f.docker.containers.has(r.runtimeId));
+  assert.equal(f.manager.busy, false);
+  await f.manager.stop(r.runId);
+});
+test('a previously ready app is not mistaken for a startup timeout after an HTTP failure', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  const r = f.manager.records.get(f.input.runId);
+  assert.ok(r.firstReadyAt);
+  r.runtimeStartedAt = Date.now() - PREVIEW_STARTUP_TIMEOUT_MS - 1;
+  const relay = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-relay',
+  );
+  f.docker.httpStatus = 502;
+  relay.State.Health = f.docker.health();
+  const result = await f.manager.status(r.runId);
+  assert.equal(result.state, 'running');
+  assert.equal(result.ready, false);
+  assert.equal(f.docker.containers.get(r.runtimeId).State.Running, true);
+  await f.manager.stop(r.runId);
+});
+test('startup deadline survives Manager recovery and is not triggered by transport-only reads', async () => {
+  const f = await fixture();
+  f.docker.httpStatus = 502;
+  await f.manager.start(f.input);
+  const r = f.manager.records.get(f.input.runId);
+  r.runtimeStartedAt = Date.now() - PREVIEW_STARTUP_TIMEOUT_MS - 1;
+  f.manager.save(r);
+  const recovered = new PreviewManager({
+    docker: f.docker,
+    manifest: f.manifest,
+    configuration: f.configuration,
+    env: f.env,
+    self: 'self',
+  });
+  await recovered.ready;
+  assert.equal((await recovered.status(r.runId, false)).state, 'running');
+  assert.equal(
+    (await recovered.status(r.runId)).error,
+    'PREVIEW_STARTUP_TIMEOUT',
+  );
+  await recovered.stop(r.runId);
+});
+test('old journals receive a fresh startup window instead of an immediate timeout on upgrade', async () => {
+  const f = await fixture();
+  f.docker.httpStatus = 502;
+  await f.manager.start(f.input);
+  const r = f.manager.records.get(f.input.runId);
+  delete r.runtimeStartedAt;
+  r.createdAt = Date.now() - 3 * PREVIEW_STARTUP_TIMEOUT_MS;
+  assert.equal((await f.manager.status(r.runId)).state, 'running');
+  assert.ok(r.runtimeStartedAt > Date.now() - 1000);
+  await f.manager.stop(r.runId);
+});
+test('restart synchronization requires a new readiness sample and grants a new startup window', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  const r = f.manager.records.get(f.input.runId);
+  r.updateMode = 'restart';
+  r.runtimeStartedAt = Date.now() - PREVIEW_STARTUP_TIMEOUT_MS - 1;
+  fs.writeFileSync(path.join(f.source, 'index.html'), '<h1>restart</h1>');
+  const next = f.exportSource();
+  const relay = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-relay',
+  );
+  relay.State.Health.Log[0].End = new Date(Date.now() - 1000).toISOString();
+  const result = await f.manager.sync({
+    runId: r.runId,
+    snapshotId: next.snapshotId,
+    sourceSha: next.sourceSha,
+  });
+  assert.equal(result.state, 'running');
+  assert.equal(result.ready, false);
+  assert.equal(r.firstReadyAt, null);
+  assert.ok(r.runtimeStartedAt > Date.now() - 1000);
+  relay.State.Health = f.docker.health();
+  assert.equal((await f.manager.status(r.runId)).ready, true);
+  await f.manager.stop(r.runId);
+});
+test('startup timeout refuses to stop a runtime whose ownership changed', async () => {
+  const f = await fixture();
+  f.docker.httpStatus = 502;
+  await f.manager.start(f.input);
+  const r = f.manager.records.get(f.input.runId);
+  r.runtimeStartedAt = Date.now() - PREVIEW_STARTUP_TIMEOUT_MS - 1;
+  const runtime = f.docker.containers.get(r.runtimeId);
+  runtime.Config.Labels['io.mergeron.stack'] = 'other-stack';
+  await assert.rejects(f.manager.status(r.runId), /PREVIEW_OBJECT_CHANGED/);
+  assert.equal(runtime.State.Running, true);
 });
 test('recreating an agent preview retains its public URL but replaces private runtime resources', async () => {
   const f = await fixture();

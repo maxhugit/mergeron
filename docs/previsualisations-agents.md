@@ -216,6 +216,31 @@ un éventuel `EDQUOT` d’un autre stockage : ne pas confondre un quota signalé
 par une application avec une saturation d’octets ou d’inodes mesurée. Ne pas
 nettoyer les caches ou ressources d’autres agents pour résoudre cet échec.
 
+### Téléchargements interrompus et démarrage bloqué
+
+Le proxy sortant ferme les deux côtés d’un tunnel HTTPS lorsqu’une connexion
+échoue, se ferme ou reste inactive pendant 60 secondes. Un installateur reçoit
+ainsi une déconnexion et peut appliquer ses propres tentatives, plutôt que
+d’attendre sur une connexion locale orpheline. Les contrôles de domaines et
+d’adresses publiques restent identiques ; aucun accès réseau supplémentaire
+n’est autorisé.
+
+Le Manager impose également un délai de **20 minutes entre le démarrage du
+conteneur applicatif et sa première réponse HTTP valide**, installation et
+compilation comprises. Ce contrôle s’exécute aussi lors du balayage périodique
+(toutes les 30 secondes), même sans page ouverte. Au dépassement, il arrête
+uniquement le conteneur applicatif concerné et expose
+`PREVIEW_STARTUP_TIMEOUT`, traduit dans l’interface. Les logs et volumes sont
+conservés pour le diagnostic jusqu’à l’arrêt, la recréation ou l’expiration
+déjà prévue. Ce n’est pas un détecteur d’inactivité des logs : une préparation
+encore active peut aussi atteindre ce plafond. Une application ayant déjà été
+prête n’est pas arrêtée par ce délai lors d’une panne HTTP ultérieure. Une
+synchronisation avec redémarrage réinitialise le délai.
+
+Le correctif du proxy nécessite une nouvelle image Manager puis la recréation
+des environnements existants : leur conteneur `egress` conserve sinon l’ancien
+code. Les conteneurs de production et les sources originales ne sont pas modifiés.
+
 ### Déléguer la préparation aux agents
 
 Activer « Autoriser les environnements de test pour ce projet », puis

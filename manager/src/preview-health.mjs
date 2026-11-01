@@ -4,12 +4,13 @@ import contract from '../../runtime/preview-profile.cjs';
 
 // The Manager has network_mode:none. Docker executes the fixed probe inside
 // its owned relay; only a fresh, bounded, structured health result is consumed.
-export function relayReadiness(health, now = Date.now()) {
+export function relayReadiness(health, now = Date.now(), notBefore = 0) {
   const unavailable = { ready: false, httpStatus: null };
   const last = health?.Log?.at(-1);
   const end = Date.parse(last?.End);
   if (
     !Number.isFinite(end) ||
+    end < notBefore ||
     end < now - 10000 ||
     end > now + 2000 ||
     typeof last?.Output !== 'string' ||
