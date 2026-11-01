@@ -1,5 +1,22 @@
 # Contribuer au projet
 
+## Signaler un problème ou proposer une amélioration
+
+Rechercher d’abord dans les [issues existantes](https://github.com/maxhugit/mergeron/issues),
+y compris celles déjà fermées, puis ouvrir le formulaire adapté :
+
+- [Signaler un bug](https://github.com/maxhugit/mergeron/issues/new?template=bug_report.yml) :
+  version installée ou SHA, environnement, étapes minimales, résultats attendu et
+  observé, fréquence et extraits de diagnostic nettoyés.
+- [Proposer une amélioration](https://github.com/maxhugit/mergeron/issues/new?template=feature_request.yml) :
+  besoin concret, personnes concernées, bénéfice, comportement attendu et critères
+  de réussite ; une demande par évolution cohérente.
+
+Le guide intégré propose ces parcours dans **Aide et contributions**. Les issues
+sont publiques : ne pas joindre de secret, conversation privée, base ou sauvegarde
+complète. Pour une vulnérabilité, suivre [le signalement privé](SECURITY.md).
+L’envoi d’une demande ne garantit ni réalisation ni délai.
+
 ## Principes
 
 - préserver la compatibilité avec `codex app-server` ;
@@ -33,6 +50,8 @@ pnpm dev
 
 ```bash
 python3 scripts/check-no-chinese.py
+python3 scripts/check-markdown-links.py
+python3 -m unittest discover -s scripts -p test_markdown_links.py
 pnpm lint
 pnpm test
 cd web && pnpm test
@@ -53,6 +72,16 @@ Vérifier au minimum :
   sécurité ou de dépendances système ;
 - les guides d’installation et d’exploitation pour les changements de
   conteneurs, variables, volumes, réseaux ou procédures serveur.
+
+Tout document Markdown doit être accessible depuis le `README.md` principal
+par une chaîne de liens Markdown : ajouter le guide dans le sommaire
+`docs/README.md` ou dans un index de répertoire déjà accessible. Un simple nom
+de fichier entre accents graves ne constitue pas un lien. Le contrôle CI
+`scripts/check-markdown-links.py` vérifie les cibles locales et signale aussi
+les documents orphelins, y compris un groupe de pages qui ne se lient qu’entre
+elles. Les liens dans les exemples de code ou les commentaires ne comptent
+pas comme navigation. Ce contrôle ne valide pas les URL externes ni les ancres
+à l’intérieur d’une page.
 
 Si aucun document n’est modifié, la description de la pull request doit indiquer
 pourquoi le changement est sans impact utilisateur, administrateur ou migration.

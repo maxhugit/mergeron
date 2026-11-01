@@ -34,7 +34,10 @@ export async function localCatalogProvider() {
   const port = (provider.address() as AddressInfo).port;
   writeAtomic(
     fixture.paths.configFile,
-    `model_catalog_json=${JSON.stringify(catalog)}\nmodel="gpt-5.6-sol"\nreview_model="gpt-5.6-sol"\nmodel_provider="catalog_test"\n[model_providers.catalog_test]\nname="Local test"\nbase_url="http://127.0.0.1:${port}/v1"\nwire_api="responses"\nexperimental_bearer_token="test-only"\nrequest_max_retries=0\n`,
+    // These tests exercise retained work against a loopback provider, not
+    // marketplace discovery. Do not start unrelated plugin Git downloads that
+    // may outlive the child and race removal of this disposable home.
+    `model_catalog_json=${JSON.stringify(catalog)}\nmodel="gpt-5.6-sol"\nreview_model="gpt-5.6-sol"\nmodel_provider="catalog_test"\n[model_providers.catalog_test]\nname="Local test"\nbase_url="http://127.0.0.1:${port}/v1"\nwire_api="responses"\nexperimental_bearer_token="test-only"\nrequest_max_retries=0\n[features]\nplugins=false\n`,
   );
   const manager = new CodexProcessManager(fixture.storage, {
     getStringSetting: () => null,

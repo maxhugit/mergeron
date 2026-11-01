@@ -67,6 +67,39 @@ it('reports no results without hiding the selected article', () => {
     'Understand the platform',
   );
 });
+it('opens the project and each feedback form through explicit safe GitHub links', () => {
+  render(<HelpRoute />);
+  const project = screen.getByRole('link', {
+    name: /Mergeron project on GitHub/,
+  });
+  expect(project).toHaveAttribute(
+    'href',
+    'https://github.com/maxhugit/mergeron',
+  );
+  expect(project).toHaveAttribute('target', '_blank');
+  expect(project).toHaveAttribute('rel', 'noopener noreferrer');
+  for (const [id, label, template] of [
+    ['report-bug', 'Open the bug report form on GitHub', 'bug_report.yml'],
+    [
+      'request-improvement',
+      'Open the improvement form on GitHub',
+      'feature_request.yml',
+    ],
+  ]) {
+    window.history.replaceState(null, '', `/help#guide/${id}`);
+    fireEvent.popState(window);
+    const link = within(screen.getByRole('article')).getByRole('link', {
+      name: new RegExp(label),
+    });
+    expect(link).toHaveAttribute(
+      'href',
+      `https://github.com/maxhugit/mergeron/issues/new?template=${template}`,
+    );
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.queryByRole('form')).toBeNull();
+  }
+});
 it('supports direct links and browser history events', () => {
   window.history.replaceState(null, '', '/help#guide/git-pr');
   render(<HelpRoute />);

@@ -68,6 +68,61 @@ const scrollTranscript: BrowserCommand<[delta: number]> = async (
   await context.page.mouse.wheel(0, delta);
 };
 
+const sidebarProjectDrag: BrowserCommand<
+  [sourceId: string, targetId: string]
+> = async (context, sourceId, targetId) => {
+  await context.iframe.getByTestId(sourceId).evaluate(async () => {
+    await Promise.allSettled(
+      document
+        .getAnimations()
+        .filter(
+          (animation) => animation.effect?.getTiming().iterations !== Infinity,
+        )
+        .map((animation) => animation.finished),
+    );
+  });
+  await context.iframe
+    .locator('[aria-label="Sidebar fixture"] .opacity-40')
+    .waitFor({ state: 'hidden' });
+  await context.iframe.getByTestId(sourceId).evaluate(async (element) => {
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => {})),
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
+  const source = await context.iframe
+    .getByTestId(sourceId)
+    .getByRole('button')
+    .first()
+    .boundingBox();
+  const target = await context.iframe.getByTestId(targetId).boundingBox();
+  if (!source || !target) throw new Error('Sidebar drag target missing');
+  const mouse = context.page.mouse;
+  await mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await mouse.down();
+  await mouse.move(
+    source.x + source.width / 2 + 8,
+    source.y + source.height / 2 + 8,
+    { steps: 5 },
+  );
+  await mouse.move(target.x + target.width / 2, target.y + target.height / 2, {
+    steps: 20,
+  });
+  await context.iframe
+    .getByTestId(targetId)
+    .evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+  await mouse.up();
+};
+
 /** Holds a real pointer gesture so ResizeObserver changes can arrive before pointer release. */
 const holdTranscriptPointer: BrowserCommand<[held: boolean]> = async (
   context,
@@ -218,6 +273,7 @@ export default mergeConfig(
               commands: {
                 authenticatedManifest,
                 scrollTranscript,
+                sidebarProjectDrag,
                 holdTranscriptPointer,
                 explorerDivider,
                 sessionStackControl,

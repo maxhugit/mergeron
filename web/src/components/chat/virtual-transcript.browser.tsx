@@ -481,14 +481,22 @@ test('a large browser-animated scroll is not interrupted by row measurement', as
   const id = `browser:${++threadSequence}`;
   render(<Fixture id={id} />);
   await expect.poll(distance).toBeLessThan(2);
-  await finishGesture();
+  // Establish real reading intent before asking the browser to animate. Focus
+  // alone does not mean "leave follow mode": a pending cold-open measurement
+  // may legitimately keep the tail pinned before the first animated offset.
+  // The previous test separately covers a large native gesture from the tail.
+  await scrollAndFinish(-200);
+  await expect.poll(distance).toBeGreaterThan(150);
+  const before = distance();
   // Linux WebKit animates wheel input. Explicit native smooth scrolling also
   // exercises that path on platforms whose wheel input moves immediately.
   scroller().focus({ preventScroll: true });
   scroller().scrollBy({ top: -3500, behavior: 'smooth' });
-  await expect.poll(distance, { timeout: 3000 }).toBeGreaterThan(3000);
+  await expect
+    .poll(() => distance() - before, { timeout: 3000 })
+    .toBeGreaterThan(3000);
   await finishGesture();
-  expect(distance()).toBeGreaterThan(3000);
+  expect(distance() - before).toBeGreaterThan(3000);
   const viewport = scroller().getBoundingClientRect();
   expect(
     document

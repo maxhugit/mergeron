@@ -7,6 +7,10 @@ export interface ProjectAgentThreadSummary {
   activeFolder: ActiveFolderSummary | null;
   title: string;
   archived: boolean;
+  archivedAt?: number | null;
+  archivedByPersonId?: string | null;
+  archivedByName?: string | null;
+  archivedByType?: 'person' | 'service' | 'system' | null;
   taskId: string | null;
   taskResourceId: string | null;
   taskTitle: string | null;

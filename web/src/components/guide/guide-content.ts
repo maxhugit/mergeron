@@ -1,11 +1,29 @@
 import french from './manual.fr.json';
 import english from './manual.en.json';
 
+// Fixed destinations: opening help never sends a project URL, account, log or
+// conversation to GitHub. Localized content only chooses one of these targets.
+const guideDestinations = {
+  project: 'https://github.com/maxhugit/mergeron',
+  issues: 'https://github.com/maxhugit/mergeron/issues',
+  bug: 'https://github.com/maxhugit/mergeron/issues/new?template=bug_report.yml',
+  improvement:
+    'https://github.com/maxhugit/mergeron/issues/new?template=feature_request.yml',
+  security: 'https://github.com/maxhugit/mergeron/security/advisories/new',
+} as const;
+
+export function guideExternalUrl(destination: string): string | undefined {
+  return Object.hasOwn(guideDestinations, destination)
+    ? guideDestinations[destination as keyof typeof guideDestinations]
+    : undefined;
+}
+
 export interface GuideSection {
   title: string;
   paragraphs?: string[];
   steps?: string[];
   actions?: { label: string; effect: string }[];
+  links?: { destination: string; label: string; description?: string }[];
   warning?: string;
 }
 export interface GuideArticle {
@@ -56,6 +74,10 @@ export function searchGuide(chapters: GuideChapter[], query: string) {
           ...(section.actions ?? []).flatMap((action) => [
             action.label,
             action.effect,
+          ]),
+          ...(section.links ?? []).flatMap((link) => [
+            link.label,
+            link.description ?? '',
           ]),
           section.warning ?? '',
         ].join(' '),

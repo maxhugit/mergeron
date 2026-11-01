@@ -1,4 +1,5 @@
 {
+  "manualExternalLink": "Opens GitHub in a new tab",
   "manualTitle": "Platform guide",
   "manualIntroduction": "User help: procedures, commands, permissions and precautions organized by feature.",
   "manualContents": "Contents",
@@ -87,5 +88,5 @@
   "administrationButton2": "Log retention → Save",
   "administrationEffect2": "Configure retention in Logs. After saving, archives beyond the age or count limits may be deleted automatically; the active file stays protected.",
   "administrationButton3": "Restore previous version / delete a backup",
-  "administrationEffect3": "Dev updates do not back up data: rollback restores images only, without undoing migrations. Production restores only backed-up essential data. An older full backup keeps its original scope. Deleting a backup is permanent and removes that rollback option; check its usefulness before cleanup."
+  "administrationEffect3": "Rollback restores images and only data included in the confirmed scope: full, minimal or no backup. Without a backup, migrations remain applied. An older backup keeps its original scope. Deleting a backup is permanent and removes its associated rollback."
 }

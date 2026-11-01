@@ -1,0 +1,60 @@
+import type { ThreadDto } from '../generated/api';
+import type { ProjectSummary } from '../lib/projects-api';
+export const focusThreads = Array.from(
+  { length: 8 },
+  (_, index) =>
+    ({
+      id: `agent-${index}`,
+      name: `Agent ${index}`,
+      preview: '',
+      cwd: '/project',
+      createdAt: index,
+      updatedAt: index,
+      status: { type: 'idle' },
+      turns: [],
+      forkedFromId: null,
+      ephemeral: false,
+      modelProvider: 'test',
+      model: null,
+      reasoningEffort: null,
+      path: null,
+      cliVersion: '0.164.0',
+      source: 'appServer',
+      agentNickname: null,
+      agentRole: null,
+      gitInfo: null,
+    }) as ThreadDto,
+);
+export const focusProject: ProjectSummary = {
+  id: 'focus-project',
+  name: 'Projet Exemple',
+  workspacePath: '/project',
+  createdAt: 1,
+  updatedAt: 1,
+  workspaces: [],
+  resources: [
+    {
+      id: 'tasks',
+      projectId: 'focus-project',
+      type: 'task_board',
+      name: 'Gestionnaire de tâches',
+      config: {},
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ],
+  agentThreads: Array.from({ length: 18 }, (_, index) => ({
+    threadId: `archive-${index}`,
+    title: `Conversation archivée ${index + 1}`,
+    archived: true,
+    workspacePath: '/project/sources',
+    activeFolder: null,
+    taskId: index % 2 ? null : 'task',
+    taskResourceId: index % 2 ? null : 'tasks',
+    taskTitle: index % 2 ? null : 'Dossier de conception',
+    isSubtask: false,
+    archivedAt: index ? 1793516400000 : null,
+    archivedByName: index ? 'Administrateur Exemple' : null,
+    archivedByType: index ? 'person' : null,
+  })),
+};

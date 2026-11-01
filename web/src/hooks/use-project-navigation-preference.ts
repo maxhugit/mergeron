@@ -76,6 +76,26 @@ export function useProjectNavigationPreference() {
   return {
     available: ready,
     pending: save.isPending,
+    enable: async (selected: string): Promise<boolean> => {
+      if (!ready || !owner || inFlight.current || isSessionPaused())
+        return false;
+      if (useAgentViewCacheStore.getState().projectId === selected) return true;
+      inFlight.current = true;
+      try {
+        await save.mutateAsync({
+          projectId: selected,
+          owner,
+          generation: sessionVerificationGeneration(),
+        });
+        return (
+          !isSessionPaused() &&
+          useAgentViewCacheStore.getState().owner === owner &&
+          useAgentViewCacheStore.getState().projectId === selected
+        );
+      } catch {
+        return false;
+      }
+    },
     toggle: (selected: string) => {
       if (!ready || !owner || inFlight.current || isSessionPaused()) return;
       inFlight.current = true;

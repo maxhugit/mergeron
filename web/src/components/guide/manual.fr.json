@@ -6,9 +6,39 @@
       {
         "id": "overview",
         "title": "Comprendre la plateforme",
-        "summary": "Distinguer projet, conversation, agent, tâche et livrable avant de commencer.",
-        "keywords": ["accueil", "organisation", "différences", "guide"],
+        "summary": "Organiser le travail avec l’IA dans Mergeron, du contexte partagé au résultat vérifié.",
+        "keywords": [
+          "accueil",
+          "organisation",
+          "différences",
+          "guide",
+          "Mergeron",
+          "GitHub",
+          "objectifs"
+        ],
         "sections": [
+          {
+            "title": "À quoi sert Mergeron",
+            "paragraphs": [
+              "Mergeron est une plateforme auto-hébergée pour organiser le travail avec l’IA. Elle réunit conversations, agents, tâches et documents dans un même projet, avec ses participants, ses fichiers et ses connaissances.",
+              "L’objectif est de passer d’une demande à un résultat vérifiable, en gardant les décisions et les productions liées au travail. Vous choisissez les actions confiées aux agents et vous validez les résultats."
+            ],
+            "links": [
+              {
+                "destination": "project",
+                "label": "Projet Mergeron sur GitHub",
+                "description": "Consulter le code source et le développement du projet."
+              }
+            ]
+          },
+          {
+            "title": "Les points forts",
+            "paragraphs": [
+              "Un contexte partagé : les participants retrouvent les tâches, documents, connaissances et échanges utiles à chaque projet.",
+              "Des agents reliés au travail réel : fichiers, Git, outils MCP et environnements de test peuvent être utilisés selon les droits et services configurés.",
+              "Des résultats contrôlables : historique des échanges, différences Git, versions documentaires et validations humaines aident à vérifier ce qui a été produit."
+            ]
+          },
           {
             "title": "Les éléments de votre travail",
             "paragraphs": [
@@ -39,7 +69,9 @@
           "first-project",
           "simple-chat",
           "agent-create",
-          "deliverable-lifecycle"
+          "deliverable-lifecycle",
+          "report-bug",
+          "request-improvement"
         ]
       },
       {
@@ -102,11 +134,19 @@
               "Pour arrêter, choisissez Désactiver la navigation rapide dans le même menu. Activer un autre projet remplace le précédent."
             ],
             "paragraphs": [
+              "L’œil isole un projet et active sa navigation rapide. Tous les projets restaure la liste sans désactiver ce choix. Les poignées permettent toujours de réordonner les entrées. Le + de Projets propose création, import et repli/dépli des groupes, sans arrêter les agents.",
               "Les agents conservés continuent de recevoir leurs mises à jour par la connexion temps réel. Leurs panneaux masqués sont mis en veille ; aucun agent n’est démarré et aucun projet entier n’est préchargé par cette option.",
               "La sixième vue remplace la moins récemment consultée. Ses petits brouillons et références de pièces jointes restent séparés par agent dans la mémoire de l’onglet, même si la vue complète doit ensuite être rechargée. Rien n’est envoyé automatiquement.",
-              "Après une déconnexion ou un redémarrage du moteur, Mergeron vérifie et rattrape l’état des conversations. Le cache ne contourne ni la vérification de l’identité ni les contrôles d’accès."
+              "Après une déconnexion ou un redémarrage du moteur, Mergeron vérifie et rattrape l’état des conversations. Le cache ne contourne ni la vérification de l’identité ni les contrôles d’accès.",
+              "Après rechargement, les identifiants des conversations récentes sont retrouvés dans le même onglet, puis vérifiés avec le projet autorisé. La conversation ouverte est prioritaire ; jusqu’à quatre autres historiques récents sont relus progressivement et le code des pages du projet est préparé en arrière-plan, sans lancer leurs actions."
             ],
-            "warning": "Le projet choisi est mémorisé dans votre profil et reste actif après rechargement, y compris sur vos autres appareils. Ce choix est indépendant pour chaque personne. Seul le choix est enregistré : les vues et brouillons restent en mémoire dans l’onglet et sont perdus à sa fermeture. Un échec de l’enregistrement conserve le choix précédent et affiche une erreur. Ce n’est ni une sauvegarde ni un mode hors ligne. Les autres projets gardent la navigation habituelle."
+            "warning": "Le choix du projet est enregistré dans votre profil, indépendamment pour chaque personne. Dans le même onglet, cinq identifiants au maximum survivent au rechargement ; les historiques et brouillons restent en mémoire, sans sauvegarde durable ni mode hors ligne. Désactiver l’option ou changer de compte retire la liste précédente. Un échec d’enregistrement conserve le choix précédent et affiche une erreur. Les autres projets gardent leur navigation habituelle."
+          },
+          {
+            "title": "Conversations archivées du projet",
+            "paragraphs": [
+              "L’entrée fixe en bas du projet ouvre une page dédiée, sans changer la sidebar ni créer un onglet d’agent. Le tableau affiche emplacement, tâche, date et auteur du dernier archivage ; les données anciennes inconnues restent non renseignées. Le menu … ou clic droit propose lecture, désarchivage, branche et suppression avec confirmation."
+            ]
           },
           {
             "title": "Reprendre après une inactivité",
@@ -127,6 +167,131 @@
           }
         ],
         "related": ["server-update", "simple-messages"]
+      }
+    ]
+  },
+  {
+    "id": "support",
+    "title": "Aide et contributions",
+    "articles": [
+      {
+        "id": "report-bug",
+        "title": "Signaler un bug rencontré",
+        "summary": "Ouvrir le formulaire GitHub et fournir les informations qui permettent de reproduire le problème.",
+        "keywords": [
+          "bug",
+          "GitHub",
+          "issue",
+          "erreur",
+          "signaler",
+          "formulaire",
+          "diagnostic"
+        ],
+        "sections": [
+          {
+            "title": "Vérifier puis ouvrir le formulaire",
+            "paragraphs": [
+              "Recherchez d’abord le message d’erreur ou la fonction concernée dans les demandes existantes, ouvertes et fermées. Si le même problème est déjà décrit, ajoutez vos observations utiles plutôt que créer un doublon.",
+              "Le bouton ouvre directement le formulaire Signaler un bug du dépôt officiel, dans un nouvel onglet. GitHub peut vous demander de vous connecter. Le signalement sera public. Rien n’est envoyé automatiquement : relisez le formulaire puis publiez-le vous-même sur GitHub."
+            ],
+            "links": [
+              {
+                "destination": "issues",
+                "label": "Rechercher une demande existante",
+                "description": "Vérifier les signalements ouverts et fermés avant de créer une demande."
+              },
+              {
+                "destination": "bug",
+                "label": "Ouvrir le formulaire de bug sur GitHub",
+                "description": "Le modèle Signaler un bug est déjà sélectionné."
+              }
+            ]
+          },
+          {
+            "title": "Rendre le problème reproductible",
+            "steps": [
+              "Donnez un titre précis : fonction concernée, action effectuée et symptôme, plutôt que « Ça ne marche pas ». Décrivez un problème par demande.",
+              "Indiquez la version installée ou le SHA Git, et Dev ou production. Un administrateur les retrouve dans Paramètres → Serveur → Version actuelle. Si vous n’y avez pas accès, demandez-lui ces informations ; ne confondez pas la dernière version disponible avec celle installée.",
+              "Précisez le navigateur et sa version, le système, ordinateur ou mobile, votre rôle et, si cela compte, le mode navigateur intégré ou extension. Pour un problème CLI, ajoutez sa version distincte de celle de l’application.",
+              "Listez les étapes minimales, depuis le point d’entrée jusqu’à l’erreur, avec des données d’exemple anonymisées. Distinguez le résultat attendu de ce qui s’est réellement passé.",
+              "Indiquez si le problème est systématique ou intermittent, sa fréquence, l’heure avec fuseau et ce qui rétablit éventuellement le fonctionnement. Copiez le message exact après retrait des informations sensibles.",
+              "Joignez seulement une capture recadrée ou un extrait de log utile et nettoyé. Pour une coupure de session, Téléchargez le diagnostic de connexion avant de recharger l’onglet si cette commande est disponible."
+            ]
+          },
+          {
+            "title": "Exemple de description utile",
+            "paragraphs": [
+              "Exemple fictif : « Après le renommage d’un fichier, l’ancien nom reste affiché dans l’explorateur. Étapes : ouvrir un projet d’essai, créer exemple.txt, le renommer en exemple-2.txt. Attendu : le nouveau nom apparaît. Observé : l’ancien reste visible jusqu’à actualisation. Reproduit trois fois sur trois. » Ajoutez ensuite les versions et une capture nettoyée."
+            ],
+            "warning": "Les issues du dépôt sont publiques. Ne joignez jamais de mot de passe, clé API, cookie, jeton, base de données, sauvegarde complète ou conversation privée. Une vulnérabilité doit passer par le signalement de sécurité privé, pas par ce formulaire. Si ce canal est indisponible, contactez l’administrateur par un moyen privé.",
+            "links": [
+              {
+                "destination": "security",
+                "label": "Ouvrir le signalement de sécurité privé",
+                "description": "Pour une vulnérabilité ; ne pas la publier dans les issues ordinaires."
+              }
+            ]
+          }
+        ],
+        "related": [
+          "request-improvement",
+          "admin-operations",
+          "server-update",
+          "desktop"
+        ]
+      },
+      {
+        "id": "request-improvement",
+        "title": "Proposer une amélioration",
+        "summary": "Expliquer le besoin, le résultat attendu et les critères qui permettront de juger la proposition.",
+        "keywords": [
+          "GitHub",
+          "issue",
+          "feature",
+          "amélioration",
+          "évolution",
+          "suggestion",
+          "formulaire"
+        ],
+        "sections": [
+          {
+            "title": "Ouvrir une demande ciblée",
+            "paragraphs": [
+              "Recherchez d’abord une proposition existante. Expliquez le besoin avant d’imposer une solution technique et gardez une demande par amélioration cohérente. Si une fonction existante échoue, utilisez plutôt le formulaire de bug.",
+              "Le lien sélectionne directement le formulaire Proposer une amélioration sur GitHub. Un compte GitHub peut être nécessaire. La demande sera publique. L’ouverture ne publie rien et ne joint aucune donnée de Mergeron ; vous relisez et envoyez la demande vous-même."
+            ],
+            "links": [
+              {
+                "destination": "issues",
+                "label": "Consulter les demandes existantes",
+                "description": "Chercher les idées déjà discutées avant de proposer la vôtre."
+              },
+              {
+                "destination": "improvement",
+                "label": "Ouvrir le formulaire d’amélioration sur GitHub",
+                "description": "Le modèle Proposer une amélioration est déjà sélectionné."
+              }
+            ]
+          },
+          {
+            "title": "Présenter un besoin et un résultat mesurable",
+            "steps": [
+              "Dans Besoin, décrivez qui rencontre la difficulté, dans quel contexte et ce qui manque aujourd’hui. Expliquez l’impact : temps perdu, risque d’erreur, accessibilité ou opération impossible.",
+              "Dans Solution proposée, décrivez le comportement attendu, un petit exemple et les alternatives essayées. Une esquisse anonymisée peut aider ; il n’est pas nécessaire de concevoir l’architecture.",
+              "Ajoutez des critères de réussite observables, y compris clavier et mobile si cela concerne l’interface. Précisez la priorité et pourquoi, sans promettre de date ni confondre urgence personnelle et engagement du projet.",
+              "Mentionnez les conséquences connues sur les données, les droits ou le déploiement. Si elles sont inconnues ou qu’aucune n’est envisagée, dites-le ; ne fournissez aucun secret ni nouvel accès."
+            ]
+          },
+          {
+            "title": "Suivre la discussion",
+            "paragraphs": [
+              "Exemple de critère : « Depuis un projet comportant de nombreux dossiers, retrouver ses documents récents au clavier et sur mobile, sans parcourir chaque dossier. » Ce résultat aide à comparer plusieurs solutions plutôt qu’un seul emplacement de bouton.",
+              "Après envoi, conservez le numéro de l’issue et utilisez les notifications GitHub pour répondre aux questions. Une demande acceptée, une PR fusionnée et une version installée sont trois étapes différentes. Le suivi sur GitHub ne met pas votre installation à jour."
+            ],
+            "warning": "La demande est publique et son envoi ne garantit ni réalisation ni délai. Retirez les noms, documents, adresses privées et captures confidentielles avant publication."
+          }
+        ],
+        "related": ["report-bug", "overview", "git-pr"]
       }
     ]
   },
@@ -424,13 +589,14 @@
             "title": "Réglages mémorisés sur l’agent",
             "paragraphs": [
               "Le modèle, l’effort, la vitesse, les approbations et le bac à sable choisis sont conservés sur cet agent après rechargement ou redémarrage. Ces choix sont communs à ses utilisateurs autorisés, pas personnels. Les autres agents gardent leurs propres réglages.",
-              "Les changements s’appliquent aux prochaines demandes, sans modifier le travail en cours. Les permissions ne sont enregistrées qu’après confirmation du moteur. Le menu distingue Enregistré et Actuel : le prochain envoi réapplique le choix enregistré, sous réserve des protections du projet, des copies Git et des documents. Un échec d’enregistrement demande une nouvelle sélection explicite."
+              "Les changements s’appliquent aux prochaines demandes, sans modifier le travail en cours. Les permissions ne sont enregistrées qu’après confirmation du moteur. Le menu distingue Enregistré et Actuel : le prochain envoi réapplique le choix enregistré, sous réserve des protections du projet, des copies Git et des documents. Un échec d’enregistrement demande une nouvelle sélection explicite.",
+              "Dans le menu de permissions, survolez une option pour lire son explication, ou ouvrez son bouton d’information au clavier ou au toucher. Lire une aide ne sélectionne pas l’option. Toujours autoriser conserve une confirmation explicite et n’élargit pas les droits du projet."
             ]
           },
           {
             "title": "Mode compact et commandes rapides",
             "paragraphs": [
-              "Quand le champ est étroit, le modèle et l’effort restent visibles. Les permissions et capacités sont représentées par leurs icônes ; leur survol ou leur nom accessible permet de retrouver leur fonction, sans modifier leur valeur.",
+              "Les libellés se réduisent progressivement selon la largeur réelle du champ, même sur un grand écran partagé avec l’explorateur. Dans les colonnes les plus étroites, modèle, effort, permissions et capacités peuvent se présenter sous forme d’icônes ; leur nom complet reste accessible au survol et au clavier.",
               "Saisir / au début du brouillon ouvre les commandes proposées par cette version : plan, objectif, revue, condensation ou retour. Relisez le dialogue de la commande avant de confirmer. Ces commandes ne remplacent pas les réglages du modèle ou des connecteurs."
             ],
             "warning": "Ne choisissez pas un accès complet simplement pour masquer une erreur de dossier. Corrigez d’abord l’emplacement ou les droits concernés."
@@ -679,6 +845,55 @@
         ]
       },
       {
+        "id": "agent-preview",
+        "title": "Lancer et consulter un environnement de test",
+        "summary": "Visualiser les modifications d’un agent sur une URL stable, dans une copie isolée du projet.",
+        "keywords": [
+          "preview",
+          "MCP",
+          "Docker",
+          "URL",
+          "prévisualisation",
+          "test",
+          "stockage",
+          "logs"
+        ],
+        "sections": [
+          {
+            "title": "Autoriser et préparer",
+            "steps": [
+              "Un administrateur doit activer le service sur l’installation et l’environnement de test dans les paramètres du projet. Le projet choisit les runtimes autorisés et les limites ; l’agent ne peut pas s’accorder cette autorisation.",
+              "Avec la gestion par agent autorisée, demandez-lui de préparer puis lancer l’environnement via les outils MCP officiels. Il peut demander les commandes ou les données de test manquantes. Sinon, utilisez le profil manuel du projet.",
+              "Précisez l’installation, la compilation, la commande serveur, le port et la page à vérifier. Le serveur écoute sur 0.0.0.0 dans le runtime ; aucun port hôte ne doit être publié. Utilisez des données de test, sans compte ni secret de production."
+            ]
+          },
+          {
+            "title": "Ouvrir l’aperçu et comprendre l’état",
+            "paragraphs": [
+              "L’icône Environnement de test ouvre un onglet à côté de Conversation. Elle reste neutre à l’arrêt, devient verte lorsque le contrôle confirme un fonctionnement normal et rouge lors d’un problème. Un état de démarrage n’est pas encore une page prête.",
+              "Après installation et compilation réussies puis contrôle HTTP, Ouvrir l’aperçu ouvre le vrai site et Copier l’URL donne son adresse. L’origine reste identique pour cet agent après recréation. Rouvrez depuis Mergeron pour autoriser l’accès à la nouvelle instance ; copier l’URL ne donne aucun droit à une autre personne.",
+              "Les sources sont synchronisées depuis la copie de l’agent. Le rechargement à chaud dépend du serveur du projet ; un changement de dépendances peut demander une recréation. En cas d’échec d’installation ou de compilation, consultez les logs de cette étape avant de relancer."
+            ]
+          },
+          {
+            "title": "Logs, stockage et données temporaires",
+            "paragraphs": [
+              "L’onglet liste les conteneurs de cette instance avec leur état et les mesures disponibles. Sélectionnez un conteneur pour lire ses logs ; le terminal des conteneurs applicatifs est réservé aux administrateurs. Stockage détaille les consommations, l’espace et les inodes disponibles quand ils peuvent être mesurés.",
+              "Les sources originales restent dans l’espace de travail de l’agent. Caches, compilation, bases et données du runtime utilisent des volumes de test temporaires, distincts des sources et de la production. Ces volumes peuvent consommer de la RAM : le précontrôle du terminal de l’agent ne mesure pas leurs limites."
+            ]
+          },
+          {
+            "title": "Arrêter ou recréer",
+            "paragraphs": [
+              "Arrêter supprime les ressources d’exécution et les données temporaires ; la recette et l’historique restent enregistrés. Recréer repart des sources actuelles. Ces actions demandent confirmation dans l’interface, et l’agent dispose aussi de l’arrêt via MCP. Fermer l’onglet ne suffit pas à arrêter le runtime.",
+              "La durée choisie peut arrêter automatiquement l’environnement. Sa modification sur une instance active ne la redémarre pas ; Jamais désactive cet arrêt automatique. Vérifiez l’état arrêté et la confirmation du nettoyage après un essai."
+            ],
+            "warning": "Ce n’est pas une sauvegarde. Copiez les résultats utiles dans l’espace de travail avant arrêt ou recréation. Aucun compte Codex, jeton Git ou secret de production n’est copié automatiquement. Ne désactivez ni le proxy, ni TLS, ni le sandbox pour faire démarrer un test."
+          }
+        ],
+        "related": ["agent-visual-checks", "agent-project-tools", "report-bug"]
+      },
+      {
         "id": "agent-visual-checks",
         "title": "Faire vérifier une interface par un agent",
         "summary": "Obtenir des captures ordinateur et mobile du vrai site et distinguer les tests de l’examen visuel.",
@@ -713,7 +928,8 @@
           "admin-agent-instructions",
           "browser-annotation",
           "agent-approvals",
-          "git-pr"
+          "git-pr",
+          "agent-preview"
         ]
       }
     ]
@@ -1423,7 +1639,7 @@
           {
             "title": "Installer et associer sur ordinateur",
             "steps": [
-              "Dans l’agent, ouvrez Association de l’extension (icône de prise), ou Navigateur → Navigateur local · extension (test). Cette préversion est réservée aux administrateurs, hors simulation de droits.",
+              "Dans l’agent, ouvrez Navigateur → Navigateur local · extension (test). Le même bouton Navigateur regroupe les deux modes et porte l’indicateur de partage ou d’intervention. L’association ouvre une fenêtre compacte, sans ajouter de vue qui réduit la conversation. Cette préversion est réservée aux administrateurs, hors simulation de droits.",
               "Pour Chrome ou Edge, téléchargez et extrayez le ZIP. Dans chrome://extensions ou edge://extensions, activez le mode développeur puis chargez l’extension non empaquetée depuis le dossier extrait.",
               "Dans les options de l’extension, autorisez uniquement l’origine HTTPS de votre instance Mergeron, puis rechargez Mergeron. Gardez Mergeron et la page partagée dans le même navigateur et le même profil.",
               "Demandez l’association à cet agent, comparez le code dans Mergeron et dans l’extension, puis confirmez dans l’extension. Sur la page HTTPS voulue, choisissez l’agent et cliquez sur Pointer, ou Partager / reprendre cet onglet pour une simple lecture."
@@ -1700,19 +1916,27 @@
             "steps": [
               "Dans Paramètres → Serveur → Mise à jour, consultez la version de l’application et les cartes Mises à jour des conteneurs : application, ingress NGINX, sortie Squid et navigateur lorsqu’il est géré.",
               "Actualiser la détection recherche les images sans les installer ni les télécharger. Chaque carte indique l’image installée, le canal et la disponibilité ; un état inconnu ou une erreur ne signifie pas « à jour ».",
+              "Relisez Sauvegarde avant cette mise à jour : Complète, Minimale — base et configuration, ou Aucune sauvegarde. Enregistrer le choix de sauvegarde mémorise ce réglage pour cette installation, sans lancer l’opération ; une sélection non enregistrée ne vaut que pour cette mise à jour.",
               "Choisissez Mettre à jour sur le composant voulu, ou Remplacer par l’image publiée si la migration d’un navigateur local connu est proposée. Relisez le composant et l’empreinte exacte du plan, puis confirmez.",
-              "Même si seule l’image choisie est mise à niveau, toute la pile est arrêtée et recréée pour la sauvegarde cohérente et le retour arrière. Le suivi est préparé avant l’arrêt du serveur ; gardez-le ouvert pendant l’opération.",
+              "Même si seule l’image choisie est mise à niveau, la pile est arrêtée et recréée dans la transaction. La sauvegarde éventuelle et les possibilités de retour arrière dépendent du périmètre confirmé. Le suivi est préparé avant l’arrêt du serveur ; gardez-le ouvert pendant l’opération.",
               "Après réussite, rechargez l’interface et contrôlez les fonctions importantes. Voir le suivi et les logs permet de rouvrir le résultat ; si un ancien suivi est signalé comme dépassé, ouvrez le dernier suivi."
             ]
           },
           {
             "title": "Retour arrière et mode DEV",
             "paragraphs": [
-              "Lorsque le Manager est configuré, une mise à jour vérifie les prérequis et conserve une sauvegarde. Une défaillance peut déclencher la restauration selon son suivi ; un état exigeant une récupération ne doit pas être ignoré.",
-              "Le mode rapide est réservé à une pile DEV dédiée. Il accélère certaines étapes sans supprimer la sauvegarde complète ni transformer une mise à jour de DEV en mise à jour de production.",
-              "Cette détection nécessite une version compatible du Manager et de l’application. Les images des autres composants restent inchangées ; le navigateur géré reste limité à DEV. Le Manager lui-même se met à jour depuis l’hôte. Les liens éditeur des composants n’offrent pas un résumé garanti des différences entre deux empreintes."
+              "Le périmètre du plan confirmé détermine les données restaurables : complète, minimale ou aucune sauvegarde. Sans sauvegarde, le retour arrière peut remettre les images, mais n’annule ni migration ni modification des données. Une défaillance ou un état exigeant une récupération doit être relu dans le suivi.",
+              "Le mode rapide est réservé à une pile Dev dédiée. Dev et production ont leurs réglages distincts : ne supposez jamais le périmètre d’après le seul nom de l’environnement et relisez le plan avant confirmation.",
+              "Ces fonctions nécessitent une application et un Manager compatibles. Les images non sélectionnées restent inchangées. Un navigateur déjà présent peut être géré en Dev ou en production après configuration explicite de l’opérateur ; le Manager lui-même se met à jour depuis l’hôte."
             ],
             "warning": "Ne lancez pas deux opérations simultanées. Actualiser l’application, mettre à jour le CLI Codex et mettre à jour l’image serveur sont trois actions différentes."
+          },
+          {
+            "title": "Identifier la version réellement installée",
+            "paragraphs": [
+              "Serveur → Version actuelle distingue l’application, le Manager, le navigateur et les autres composants disponibles. Relevez la version installée, le canal, la révision Git et, si nécessaire, l’identité d’image. Inconnue signifie que l’information manque, pas que le composant est à jour.",
+              "La dernière version publiée, la révision d’un build Dev et la version du CLI Codex sont des informations distinctes. Une PR fusionnée peut ne pas encore être installée. Pour une demande de support, indiquez les composants réellement concernés, sans partager la configuration privée."
+            ]
           }
         ],
         "related": ["backups", "infrastructure", "admin-codex", "desktop"]
@@ -1737,6 +1961,14 @@
               "L’onglet Sauvegarde présente les copies de mises à jour dans un tableau avec date, identifiant, chemin serveur, espace occupé, état et actions. L’espace total permet de surveiller l’accumulation.",
               "Le réglage du nombre maximal définit la rétention. Le nettoyage est appliqué après une mise à jour réussie en protégeant les éléments requis pour le retour arrière courant ; une copie n’est pas supprimée simplement pour faire de la place avant une migration risquée."
             ]
+          },
+          {
+            "title": "Comprendre le périmètre et la compression",
+            "paragraphs": [
+              "Complète conserve les racines persistantes gérées. Minimale — base et configuration conserve la base, les réglages et les identifiants nécessaires à la pile, mais pas tous les fichiers de projet, documents, versions ou travaux Git. Aucune sauvegarde ne copie aucune donnée avant la mise à jour.",
+              "Les nouvelles sauvegardes sont compressées en tar + gzip. La taille affichée est celle de l’archive compressée ; les anciennes sauvegardes en répertoires restent utilisables sans conversion automatique. La compression ne chiffre pas les données : conservez ces archives dans un emplacement privé."
+            ],
+            "warning": "La base seule ne contient pas les documents et leurs versions historiques. Une sauvegarde minimale ne permet pas de restaurer tout un projet. Avec Aucune sauvegarde, le retour aux images précédentes ne garantit pas la compatibilité des données déjà migrées."
           },
           {
             "title": "Décider une restauration ou un retrait",
@@ -1773,13 +2005,13 @@
             ]
           },
           {
-            "title": "Cas du navigateur géré en DEV",
+            "title": "Navigateur géré par le Manager",
             "paragraphs": [
-              "Lorsque cette intégration est explicitement activée sur une pile DEV, Mergeron Browser apparaît dans l’inventaire et participe aux transactions du Manager. Son DNS public 1.1.1.1 est réappliqué lors des recréations et restaurations, sans changer le DNS de l’hôte.",
+              "Un navigateur déjà présent peut apparaître dans l’inventaire et participer aux transactions du Manager lorsque l’opérateur a explicitement activé sa gestion. Cela exige un Manager compatible et la topologie protégée attendue. Ce n’est pas une activation automatique sur les installations existantes.",
               "Serveur → Mise à jour peut détecter et mettre à jour séparément son image publiée, comme celles de NGINX et Squid, avec confirmation et transaction sur toute la pile. L’image du navigateur doit rester compatible avec l’application. Un navigateur construit localement sans empreinte publiée peut nécessiter Remplacer par l’image publiée ; un état inconnu n’est pas une preuve de mise à jour.",
               "Infrastructure sert à consulter l’état et la configuration ; les actions de mise à jour sont dans l’onglet Mise à jour. Le Manager lui-même reste administré depuis l’hôte."
             ],
-            "warning": "Ne désactivez pas le sandbox et n’exposez pas le port de contrôle pour résoudre une erreur. Les réglages réservés à DEV ne doivent pas être appliqués implicitement à la production."
+            "warning": "Ne désactivez pas le sandbox et n’exposez pas le port de contrôle pour résoudre une erreur. La configuration de production doit utiliser une image officielle stable compatible et être validée par l’opérateur ; un réglage Dev n’y est jamais appliqué implicitement."
           }
         ],
         "related": ["browser-live", "server-update", "backups"]
@@ -1812,7 +2044,8 @@
             "title": "Installer ou mettre à jour le CLI",
             "paragraphs": [
               "L’onglet Codex CLI permet à un administrateur d’installer l’exécutable lorsque la gestion intégrée est disponible, de consulter la version, de rechercher une version stable et de l’installer après confirmation. Un retour à la sélection précédente peut être proposé.",
-              "Les modèles et efforts disponibles dépendent du Codex installé et de son catalogue. Mettre à jour le CLI ne garantit pas que l’interface prenne en charge immédiatement chaque nouveau protocole. Une installation externe peut limiter l’interface à la consultation."
+              "Les modèles et efforts disponibles dépendent du Codex installé et de son catalogue. Mettre à jour le CLI ne garantit pas que l’interface prenne en charge immédiatement chaque nouveau protocole. Une installation externe peut limiter l’interface à la consultation.",
+              "Si une variante Mergeron protégée du CLI est installée, son canal et sa provenance sont distincts d’une version officielle. Les mises à jour officielles ou retours non validés peuvent être bloqués pour conserver les protections du sandbox. Ne contournez pas ce blocage par une installation manuelle : consultez l’administrateur."
             ],
             "warning": "Sauvegardez les données Codex avant une mise à jour : revenir à l’ancien exécutable ne restaure pas automatiquement les données éventuellement migrées."
           }
@@ -1922,6 +2155,13 @@
               "Les instructions textuelles et le masquage d’un bouton ne constituent pas à eux seuls une isolation. Les restrictions du projet et les autorisations effectives du service doivent être cohérentes."
             ],
             "warning": "Une action peut transmettre des données ou modifier un système externe. Précisez le destinataire et le périmètre, et relisez les confirmations avant d’autoriser l’agent."
+          },
+          {
+            "title": "Vérifier le MCP interne de l’agent",
+            "paragraphs": [
+              "Capacités → Serveurs MCP lit l’inventaire de la conversation affichée. Mergeron (interne) est distinct des serveurs externes choisis dans le projet et indique les outils effectivement observés pour cet agent.",
+              "Non observé signifie qu’aucune connexion n’a encore été rapportée ; le serveur interne est configuré lors d’un message. Une erreur de lecture n’est ni la preuve d’une panne ni un état Prêt. Le rechargement global concerne les serveurs externes ; il ne faut pas renvoyer un message uniquement pour faire disparaître un indicateur."
+            ]
           }
         ],
         "related": ["agent-composer", "agent-knowledge", "project-people"]
@@ -1960,12 +2200,32 @@
             "title": "Paramètres d’exploitation",
             "paragraphs": [
               "Les sections Terminal, Fichiers, Base de données, Sécurité et OnlyOffice concernent l’installation. Elles ne remplacent pas les réglages des participants ou dossiers d’un projet.",
-              "La rétention des logs est configurée dans Logs. Après enregistrement, les archives trop anciennes ou trop nombreuses peuvent être supprimées automatiquement, sans supprimer le fichier actif."
+              "Logs → Rétention des logs présente un tableau par famille : application, Codex JSON-RPC et fichiers non reconnus. Il affiche la rétention active, les archives, l’âge maximal, le seuil de rotation et la taille totale. Le menu ⋮ de la ligne ouvre ses propres réglages ; le fichier actif et les fichiers non reconnus ne sont pas supprimés automatiquement."
             ],
             "warning": "Le terminal global agit sur le serveur, pas uniquement sur le projet affiché. Une suppression, un changement de base ou un réglage d’authentification peut toucher d’autres utilisateurs ; sauvegardez et vérifiez avant toute action."
+          },
+          {
+            "title": "Pourquoi la taille des logs ne diminue pas immédiatement",
+            "paragraphs": [
+              "Activer la rétention Codex JSON-RPC active la rotation pour les prochaines écritures. Un ancien fichier volumineux peut être déplacé vers une archive de même taille : le seuil ne redécoupe et ne compresse pas les archives existantes.",
+              "Le passage automatique supprime les archives reconnues dépassant l’âge ou le nombre maximal, environ chaque minute lorsque la règle est active. Une archive encore dans ces limites peut donc rester volumineuse. Enregistrer une règle ou ouvrir le tableau ne lance pas de purge immédiate."
+            ]
+          },
+          {
+            "title": "Conserver le diagnostic d’une coupure de session",
+            "paragraphs": [
+              "Diagnostic de connexion est accessible pendant la vérification ou la reprise, puis depuis Journaux après reconnexion. Téléchargez le diagnostic avant de recharger ou fermer l’onglet : les événements récents sont conservés uniquement dans sa mémoire.",
+              "Ce JSON local décrit les vérifications, pauses, réponses et tentatives sans exporter les conversations, cookies ou jetons. Son téléchargement ne le transmet à personne et ne rétablit pas les droits. Relisez les pièces jointes puis joignez les éléments utiles à votre signalement."
+            ]
           }
         ],
-        "related": ["infrastructure", "backups", "onlyoffice", "impersonation"]
+        "related": [
+          "infrastructure",
+          "backups",
+          "onlyoffice",
+          "impersonation",
+          "report-bug"
+        ]
       }
     ]
   }

@@ -16,6 +16,7 @@ import {
 
 interface CreateProjectDialogProps {
   open: boolean;
+  initialMode?: 'new' | 'import';
   pending: boolean;
   name: string;
   onNameChange: (value: string) => void;
@@ -26,6 +27,7 @@ interface CreateProjectDialogProps {
 /** The primary workspace path is assigned by the server. */
 export function CreateProjectDialog({
   open,
+  initialMode = 'new',
   pending,
   name,
   onNameChange,
@@ -36,7 +38,7 @@ export function CreateProjectDialog({
     nsMode: 'fallback',
   });
   const session = usePlatformSession();
-  const [mode, setMode] = useState<'new' | 'import'>('new');
+  const [mode, setMode] = useState<'new' | 'import'>(initialMode);
   const [importBusy, setImportBusy] = useState(false);
   const close = () => {
     setMode('new');

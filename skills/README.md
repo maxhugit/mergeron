@@ -5,7 +5,7 @@ agents dans l’image Mergeron. Elles expliquent comment produire et vérifier u
 résultat, sans constituer un serveur MCP ni une permission supplémentaire.
 
 La compétence `office-files/` couvre la création, la modification et la
-vérification de fichiers bureautiques. Son fichier `SKILL.md` est la référence
+vérification de fichiers bureautiques. Son [fichier SKILL.md](office-files/SKILL.md) est la référence
 pour les formats, outils et contrôles attendus.
 
 Une compétence doit respecter les permissions de l’agent, les protections des
