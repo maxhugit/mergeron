@@ -179,6 +179,31 @@ describe('daily app directory snapshot', () => {
     });
     expect(transport.request).not.toHaveBeenCalled();
   });
+  it('refreshes managed OAuth before the daily download instead of reusing yesterday’s access token', async () => {
+    const request = vi.fn().mockImplementation(() => {
+      const path = join(home, 'auth.json');
+      const auth = JSON.parse(readFileSync(path, 'utf8')) as {
+        tokens: { access_token: string };
+      };
+      auth.tokens.access_token = 'renewed-access-token';
+      writeFileSync(path, JSON.stringify(auth));
+      return Promise.resolve({ account: { type: 'chatgpt' } });
+    });
+    const refreshed = new AppCatalogService(
+      { get: () => home } as unknown as ConfigService,
+      { getSetting: () => ({ value: source }) } as unknown as SettingsService,
+      transport as unknown as AppCatalogTransport,
+      { request } as unknown as import('../codex/codex.service').CodexService,
+    );
+    await refreshed.tick();
+    expect(request).toHaveBeenCalledWith('account/read', {
+      refreshToken: true,
+    });
+    expect(transport.request).toHaveBeenCalledWith(
+      'download',
+      expect.objectContaining({ accessToken: 'renewed-access-token' }),
+    );
+  });
 });
 
 it('catalog status is restricted to administrators', async () => {

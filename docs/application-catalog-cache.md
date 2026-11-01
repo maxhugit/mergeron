@@ -24,7 +24,7 @@ Les fichiers sont dans `$CODEX_HOME/webui/app-directory/`, sous un nom dérivé 
 
 Les pages du catalogue sont servies depuis ce fichier, par petits lots. Ouvrir ou actualiser le catalogue ne déclenche pas un téléchargement de l’annuaire. Les états activé et accessible sont lus dans le runtime courant ; la présence dans le fichier ne donne jamais l’autorisation d’appeler un outil.
 
-Le jeton du compte Codex configuré est utilisé uniquement en mémoire pour l’URL officielle de l’annuaire sur `chatgpt.com`. Les en-têtes sensibles sont supprimés des autres requêtes, y compris les scripts de challenge. Les pages suivantes sont téléchargées avec les jetons de pagination du fournisseur, sous des limites de durée et de taille. Une réponse vide, invalide, tronquée ou une pagination incohérente ne remplace pas le dernier catalogue valide.
+Avant le téléchargement, le CLI renouvelle normalement son jeton OAuth géré si nécessaire. Le jeton de rafraîchissement est réservé au flux OAuth normal du CLI et n’est pas transmis à Byparr. Le jeton d’accès du compte Codex configuré est utilisé uniquement en mémoire pour l’URL officielle de l’annuaire sur `chatgpt.com`. Les en-têtes sensibles sont supprimés des autres requêtes, y compris les scripts de challenge. Les pages suivantes sont téléchargées avec les jetons de pagination du fournisseur, sous des limites de durée et de taille. Une réponse vide, invalide, tronquée ou une pagination incohérente ne remplace pas le dernier catalogue valide.
 
 Après chaque tentative, le Manager redémarre le même conteneur Byparr pour fermer tous les processus du navigateur, y compris après un délai dépassé. Cela évite le blocage de fermeture observé pendant le prototype. Le conteneur permanent est conservé.
 

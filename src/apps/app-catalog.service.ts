@@ -4,7 +4,9 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
+import { CodexService } from '../codex/codex.service';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -39,6 +41,7 @@ export class AppCatalogService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService,
     private readonly settings: SettingsService,
     private readonly transport: AppCatalogTransport,
+    @Optional() private readonly codex?: CodexService,
   ) {}
   get enabled() {
     return this.settings.getSetting(CATALOG_SETTING).value === 'byparr';
@@ -48,8 +51,8 @@ export class AppCatalogService implements OnModuleInit, OnModuleDestroy {
       void this.tick().catch(() => this.logger.warn('CATALOG_STORAGE_FAILED'));
     }, 60000);
     this.timer.unref();
-    // No external request is started by opening a settings page.
-    void this.tick().catch(() => this.logger.warn('CATALOG_STORAGE_FAILED'));
+    // Allow Codex to finish startup. Explicit activation still downloads immediately.
+    // Opening a settings page never starts an external request.
   }
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
@@ -273,6 +276,15 @@ export class AppCatalogService implements OnModuleInit, OnModuleDestroy {
     ].slice(0, 30);
     this.write(state);
     try {
+      // Managed OAuth access tokens expire sooner than the daily schedule. Let
+      // Codex perform its normal refresh; refresh tokens are never passed to the Byparr adapter.
+      if (this.codex) {
+        try {
+          await this.codex.request('account/read', { refreshToken: true });
+        } catch {
+          throw Error('CATALOG_AUTH_UNAVAILABLE');
+        }
+      }
       const identity = this.identity();
       if (identity.scope !== state.scope)
         throw Error('CATALOG_ACCOUNT_CHANGED');
