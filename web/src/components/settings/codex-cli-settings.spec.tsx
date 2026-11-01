@@ -325,3 +325,21 @@ it('offers rollback for a selected installation even if its binary cannot run', 
     ),
   );
 });
+
+it('explains an untrusted application in French instead of showing the internal error code', async () => {
+  fetchMock.mockResolvedValue(
+    json({ ...available, installedError: 'codexRuntimeApplicationNotManaged' }),
+  );
+  await i18n.changeLanguage('fr');
+  try {
+    fixture.render(<CodexCliSettings />);
+    expect(
+      await screen.findByText(
+        'Le conteneur de l’application n’est pas reconnu comme géré : vérifiez son adoption dans Infrastructure avant d’installer le CLI validé.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText('codexRuntimeApplicationNotManaged')).toBeNull();
+  } finally {
+    await i18n.changeLanguage('en');
+  }
+});

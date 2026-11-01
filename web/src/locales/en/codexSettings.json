@@ -1,4 +1,5 @@
 {
+  "codexRuntimeApplicationNotManaged": "The application container is not recognized as managed. Check its adoption in Infrastructure before installing the validated CLI.",
   "policyHelp": "Explanation",
   "approvalHelpManual": "You decide when an action requires approval.",
   "approvalHelpNever": "Actions requiring approval are refused.",

@@ -128,10 +128,18 @@ export class ManagedCodexCli {
     docker,
     manifest,
     configuration,
+    inventory,
     bundle = new URL('../codex-runtime', import.meta.url).pathname,
     self = process.env.HOSTNAME,
   }) {
-    Object.assign(this, { docker, manifest, configuration, bundle, self });
+    Object.assign(this, {
+      docker,
+      manifest,
+      configuration,
+      inventory,
+      bundle,
+      self,
+    });
     this.busy = false;
   }
   status() {
@@ -164,13 +172,46 @@ export class ManagedCodexCli {
       const app = await this.docker.inspectContainer(component.canonicalName);
       if (
         !app ||
-        app.Config?.Labels?.['io.mergeron.managed'] !== 'true' ||
-        app.Config?.Labels?.['io.mergeron.stack'] !== this.manifest.stack ||
-        app.Config?.Labels?.['io.mergeron.component'] !== 'application' ||
         app.Config?.User !== '11002:11002' ||
         app.Name !== `/${component.canonicalName}`
       )
         throw new Error('codexRuntimeApplicationNotManaged');
+      const labels = app.Config.Labels ?? {};
+      const ownershipKeys = [
+        'io.mergeron.managed',
+        'io.mergeron.stack',
+        'io.mergeron.component',
+      ];
+      const labeled =
+        labels[ownershipKeys[0]] === 'true' &&
+        labels[ownershipKeys[1]] === this.manifest.stack &&
+        labels[ownershipKeys[2]] === 'application';
+      if (!labeled) {
+        // Historical installations are explicitly adopted without rewriting Docker labels.
+        // Never forgive conflicting ownership labels or a stale adoption fingerprint.
+        const unlabeled = ownershipKeys.every(
+          (key) => labels[key] === undefined,
+        );
+        const inventory =
+          unlabeled && this.inventory
+            ? await this.inventory().catch(() => null)
+            : null;
+        const adopted = inventory?.components?.find(
+          (entry) => entry.id === 'application',
+        );
+        if (
+          inventory?.stack !== this.manifest.stack ||
+          inventory.adoption?.state !== 'adopted' ||
+          inventory.adoption.blockers?.length !== 0 ||
+          inventory.dataSafety?.status !== 'protected' ||
+          adopted?.adoption !== 'managed' ||
+          adopted.containerId !== app.Id ||
+          adopted.containerName !== component.canonicalName ||
+          adopted.image !== app.Config.Image ||
+          adopted.imageRepositoryAllowed !== true
+        )
+          throw new Error('codexRuntimeApplicationNotManaged');
+      }
       const mount = app.Mounts?.find((m) => m.Destination === '/home/codex');
       if (
         mount?.Type !== 'bind' ||

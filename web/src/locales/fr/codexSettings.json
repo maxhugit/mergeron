@@ -1,4 +1,5 @@
 {
+  "codexRuntimeApplicationNotManaged": "Le conteneur de l’application n’est pas reconnu comme géré : vérifiez son adoption dans Infrastructure avant d’installer le CLI validé.",
   "policyHelp": "Explication",
   "approvalHelpManual": "Vous décidez lorsqu’une action nécessite une approbation.",
   "approvalHelpNever": "Les actions nécessitant une approbation sont refusées.",
