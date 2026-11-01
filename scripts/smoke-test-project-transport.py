@@ -124,8 +124,8 @@ def main():
             with sqlite3.connect(database) as db:
                 db.execute('INSERT INTO projects(id,name,workspace_path,workspace_layout_version,created_at,updated_at) VALUES(?,?,?,2,1,1)', ('fixture-project', 'Fixture', str(project)))
                 db.execute('INSERT INTO project_workspaces(id,project_id,name,path,is_primary,created_at,updated_at) VALUES(?,?,?,?,1,1,1)', ('fixture-workspace', 'fixture-project', 'Main', str(project)))
-                db.execute('INSERT INTO project_agent_threads VALUES(?,?,?,?,?)', (thread['id'], 'fixture-project', str(project), 1, 1))
-                db.execute('INSERT INTO project_agent_threads VALUES(?,?,?,?,?)', (child['id'], 'fixture-project', str(project), 1, 1))
+                db.execute('INSERT INTO project_agent_threads(thread_id,project_id,workspace_path,created_at,updated_at) VALUES(?,?,?,?,?)', (thread['id'], 'fixture-project', str(project), 1, 1))
+                db.execute('INSERT INTO project_agent_threads(thread_id,project_id,workspace_path,created_at,updated_at) VALUES(?,?,?,?,?)', (child['id'], 'fixture-project', str(project), 1, 1))
                 db.execute('INSERT INTO conversation_branch_edges VALUES(?,?,?,?,?,?,?,?)', (child['id'], thread['id'], thread['id'], '__end__', '__start__', '[]', 1, 'local'))
                 db.execute('INSERT INTO conversation_branch_edges VALUES(?,?,?,?,?,?,?,?)', ('outside-project', thread['id'], thread['id'], '__end__', '__start__', '[]', 1, 'local'))
             result = archive.export_archive(dict(options, projectId='fixture-project'))

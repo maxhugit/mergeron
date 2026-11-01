@@ -13,6 +13,7 @@ import {
   Plus,
   Download,
   Gauge,
+  Folder,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useDroppable } from '@dnd-kit/react';
@@ -53,6 +54,7 @@ function ThreadSkeleton() {
 }
 
 interface Props {
+  focusedProjectId?: string | null;
   onToggleProjectCache?: (projectId: string) => void;
   projectCachePending?: boolean;
   projectsHeader: React.ReactNode;
@@ -88,6 +90,7 @@ interface Props {
 }
 
 export function WorkspaceOverview({
+  focusedProjectId,
   onToggleProjectCache,
   projectCachePending = false,
   projectsHeader,
@@ -145,8 +148,11 @@ export function WorkspaceOverview({
 
       {/* Workspace groups */}
       {workspaceGroups.map((group) => {
-        const collapsed = collapsedGroups.has(group.cwd);
-        const orderedItems = orderSidebarItems(group);
+        const focused = Boolean(
+          group.projectId && group.projectId === focusedProjectId,
+        );
+        const collapsed = !focused && collapsedGroups.has(group.cwd);
+        const orderedItems = orderSidebarItems(group, focused);
         return (
           <WorkspaceDropTarget
             key={group.cwd}
@@ -165,20 +171,27 @@ export function WorkspaceOverview({
                 setOpenMenu(group.cwd);
               }}
             >
-              <button
-                type="button"
-                className="flex h-7 shrink-0 cursor-pointer items-center text-muted-foreground hover:text-foreground"
-                onClick={() => onToggleCollapse(group.cwd)}
-                aria-label={
-                  collapsed ? t('expandProject') : t('collapseProject')
-                }
-              >
-                {collapsed ? (
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform" />
-                )}
-              </button>
+              {focused ? (
+                <Folder
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="flex h-7 shrink-0 cursor-pointer items-center text-muted-foreground hover:text-foreground"
+                  onClick={() => onToggleCollapse(group.cwd)}
+                  aria-label={
+                    collapsed ? t('expandProject') : t('collapseProject')
+                  }
+                >
+                  {collapsed ? (
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform" />
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left text-sm font-medium text-foreground/80 hover:text-foreground"
@@ -203,6 +216,18 @@ export function WorkspaceOverview({
                 )}
               </button>
               <div className="flex shrink-0 items-center gap-0.5">
+                {!focused && group.projectId && (
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={projectCachePending}
+                    onClick={() => onOpenWorkspaceDetail(group.cwd)}
+                    aria-label={tw('focusProject')}
+                    title={tw('focusProject')}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <Popover
                   open={openMenu === group.cwd}
                   onOpenChange={(open) => setOpenMenu(open ? group.cwd : null)}
@@ -306,6 +331,20 @@ export function WorkspaceOverview({
                     )}
                     {group.projectId && (
                       <>
+                        {!focused && (
+                          <Button
+                            variant="ghost"
+                            disabled={projectCachePending}
+                            className="h-8 w-full justify-start gap-2 px-2 text-xs"
+                            onClick={() => {
+                              setOpenMenu(null);
+                              onOpenWorkspaceDetail(group.cwd);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            {tw('focusProject')}
+                          </Button>
+                        )}
                         <Separator className="my-1" />
                         <Button
                           variant="ghost"
@@ -341,17 +380,6 @@ export function WorkspaceOverview({
                     </Button>
                   </PopoverContent>
                 </Popover>
-                {group.threads.length + group.simpleChats.length >= 5 && (
-                  <button
-                    type="button"
-                    className="cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                    onClick={() => onOpenWorkspaceDetail(group.cwd)}
-                    aria-label={t('viewMore')}
-                    title={t('viewMore')}
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </button>
-                )}
               </div>
             </div>
             <AnimatePresence initial={false}>
@@ -392,23 +420,22 @@ export function WorkspaceOverview({
                         )}
                       </SidebarItemDropTarget>
                     ))}
-                    {group.projectId &&
-                      Boolean(group.archivedAgents?.length) && (
-                        <button
-                          type="button"
-                          className="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-                          onClick={() => onOpenArchivedDetail(group.projectId!)}
-                        >
-                          <Archive className="h-3.5 w-3.5 shrink-0" />
-                          <span className="min-w-0 flex-1 truncate">
-                            {t('archivedAgents')}
-                          </span>
-                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
-                            {group.archivedAgents?.length}
-                          </span>
-                          <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
-                        </button>
-                      )}
+                    {group.projectId && (
+                      <button
+                        type="button"
+                        className="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+                        onClick={() => onOpenArchivedDetail(group.projectId!)}
+                      >
+                        <Archive className="h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">
+                          {t('archivedAgents')}
+                        </span>
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                          {group.archivedAgents?.length ?? 0}
+                        </span>
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -435,7 +462,10 @@ type SidebarItem =
       thread: WorkspaceGroup['simpleChats'][number];
     };
 
-function orderSidebarItems(group: WorkspaceGroup): SidebarItem[] {
+function orderSidebarItems(
+  group: WorkspaceGroup,
+  focused = false,
+): SidebarItem[] {
   const items: SidebarItem[] = [
     ...(group.resources ?? []).map(
       (resource): SidebarItem => ({
@@ -471,7 +501,7 @@ function orderSidebarItems(group: WorkspaceGroup): SidebarItem[] {
   return items.filter((item) => {
     if (item.kind === 'resource') return true;
     visibleConversations += 1;
-    return visibleConversations <= 5;
+    return focused || visibleConversations <= 5;
   });
 }
 

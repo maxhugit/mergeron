@@ -9,6 +9,7 @@ import {
   Injectable,
   Logger,
   Optional,
+  Inject,
 } from '@nestjs/common';
 import {
   canReadThread,
@@ -76,6 +77,9 @@ import { ProjectConnectionRuntimeService } from './project-connection-runtime.se
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
 import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
+import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
+import { projectAgentThreads } from '../database/schema';
+import { eq } from 'drizzle-orm';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
 const MAX_FORK_CHAIN_WALK = 32;
@@ -154,6 +158,7 @@ export class ThreadsService {
     @Optional() private readonly agentDefaults?: ProjectAgentDefaultsService,
     @Optional()
     private readonly preferences?: ThreadExecutionPreferencesService,
+    @Optional() @Inject(DRIZZLE_DB) private readonly db?: AppDatabase,
   ) {}
 
   /**
@@ -980,11 +985,31 @@ export class ThreadsService {
   async archiveThread(threadId: string): Promise<void> {
     requireExecutionAccess();
     this.deletionRegistry.assertMutable(threadId);
+    const identity = currentAccess()?.identity;
+    // Snapshot the acting administrator, not the impersonated person. Never
+    // accept an author or timestamp supplied by the browser.
+    const archival = {
+      archivedByPersonId:
+        identity?.impersonation?.administratorId ?? identity?.personId ?? null,
+      archivedByName:
+        identity?.impersonation?.administratorName ?? identity?.name ?? null,
+      archivedByType:
+        identity?.kind === 'person'
+          ? ('person' as const)
+          : identity?.kind === 'service'
+            ? ('service' as const)
+            : ('system' as const),
+    };
     await this.applyToBranchTree(threadId, async (treeThreadId) => {
       this.deletionRegistry.assertMutable(treeThreadId);
       await this.codex.request<v2.ThreadArchiveResponse>('thread/archive', {
         threadId: treeThreadId,
       });
+      this.db
+        ?.update(projectAgentThreads)
+        .set({ ...archival, archivedAt: Date.now() })
+        .where(eq(projectAgentThreads.threadId, treeThreadId))
+        .run();
       this.resumeRegistry.forget(treeThreadId);
     });
   }
@@ -1005,6 +1030,16 @@ export class ThreadsService {
         'thread/unarchive',
         { threadId: treeThreadId },
       );
+      this.db
+        ?.update(projectAgentThreads)
+        .set({
+          archivedAt: null,
+          archivedByPersonId: null,
+          archivedByName: null,
+          archivedByType: null,
+        })
+        .where(eq(projectAgentThreads.threadId, treeThreadId))
+        .run();
       if (treeThreadId === threadId) requested = response;
     });
     if (!requested) {

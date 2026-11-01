@@ -102,11 +102,18 @@
               "To stop, choose Disable fast navigation in the same menu. Enabling another project replaces the previous one."
             ],
             "paragraphs": [
+              "The eye focuses a project and enables fast navigation. All projects restores the list without disabling that preference. Drag handles still reorder entries. The Projects + menu offers creation, import and group collapse/expand, without stopping agents.",
               "Retained agents keep receiving updates over the real-time connection. Hidden panels are suspended; this option does not start agents or preload every agent in a project.",
               "The sixth view replaces the least recently visited one. Small drafts and attachment references remain separated by agent in the tab’s memory, even if its full view later needs to reload. Nothing is sent automatically.",
               "After a disconnection or engine restart, Mergeron verifies and catches up conversation state. The cache bypasses neither identity verification nor access checks."
             ],
             "warning": "The selected project is saved on your profile and survives reloads, including on your other devices. Each person has an independent choice. Only the choice is saved: views and drafts remain in tab memory and are lost when it closes. A failed save keeps the previous choice and displays an error. This is not a backup or offline mode. Other projects keep normal navigation."
+          },
+          {
+            "title": "Project conversation archives",
+            "paragraphs": [
+              "The fixed last project entry opens a dedicated page without replacing the sidebar or adding an agent tab. The table shows location, task and the last archive date and author; unknown older data stays unrecorded. The … or right-click menu offers reading, restoration, branching and deletion with confirmation."
+            ]
           },
           {
             "title": "Resume after inactivity",

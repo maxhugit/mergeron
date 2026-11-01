@@ -69,6 +69,10 @@ const ProjectResourceRoute = lazyRouteComponent(
   () => import('./project-resource-route'),
   'ProjectResourceRoute',
 );
+const ProjectArchivesRoute = lazyRouteComponent(
+  () => import('./project-archives-route'),
+  'ProjectArchivesRoute',
+);
 const ProjectRoute = lazyRouteComponent(
   () => import('./project-route'),
   'ProjectRoute',
@@ -230,6 +234,11 @@ const projectRoute = createRoute({
   path: '/projects/$projectId',
   component: ProjectRoute,
 });
+const projectArchivesRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/projects/$projectId/archives',
+  component: ProjectArchivesRoute,
+});
 
 /** Settings page. */
 const settingsRoute = createRoute({
@@ -267,6 +276,7 @@ const routeTree = rootRoute.addChildren([
     simpleChatRoute,
     projectRoute,
     projectResourceRoute,
+    projectArchivesRoute,
     settingsRoute,
     integrationsRoute,
   ]),

@@ -20,6 +20,13 @@ import { ProjectAgentDefaultsService } from './project-agent-defaults.service';
 import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { ThreadSettingsObserverService } from './thread-settings-observer.service';
 import { ThreadExecutionPreferencesService } from './thread-execution-preferences.service';
+import { accessContext } from '../auth/access-context';
+import type {
+  IdentityService,
+  PlatformIdentity,
+} from '../auth/identity.service';
+import { createTestDatabase } from '../database/database.testing';
+import { projects, projectAgentThreads } from '../database/schema';
 
 /** Branch state as the local-only service reports it for an untracked thread. */
 function localBranchState(threadId: string) {
@@ -1115,6 +1122,163 @@ describe('ThreadsService', () => {
     });
     expect(mockResumeRegistry.forget).toHaveBeenCalledWith('root');
     expect(mockResumeRegistry.forget).toHaveBeenCalledWith('child');
+  });
+
+  function archiveDatabase() {
+    const database = createTestDatabase();
+    database.db
+      .insert(projects)
+      .values({
+        id: 'p',
+        name: 'Project',
+        workspacePath: '/project',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(projectAgentThreads)
+      .values(
+        ['root', 'child'].map((threadId) => ({
+          threadId,
+          projectId: 'p',
+          workspacePath: '/project',
+          createdAt: 1,
+          updatedAt: 1,
+        })),
+      )
+      .run();
+    Object.assign(service, { db: database.db });
+    mockBranches.listKnownTreeThreadIds.mockReturnValue(['root', 'child']);
+    return database;
+  }
+  function asPerson(
+    identity: Partial<PlatformIdentity>,
+    action: () => Promise<unknown>,
+  ) {
+    return accessContext.run(
+      {
+        identity: {
+          kind: 'person',
+          personId: 'actor',
+          name: 'Acting person',
+          role: 'administrator',
+          active: true,
+          ...identity,
+        },
+        identities: {
+          requireAdministrator: vi.fn(),
+        } as unknown as IdentityService,
+      },
+      action,
+    );
+  }
+
+  it('records the authenticated author and server timestamp for each archived member, then clears on restoration', async () => {
+    const database = archiveDatabase();
+    try {
+      mockCodex.request.mockResolvedValue({ thread: { id: 'child' } });
+      const start = Date.now();
+      await asPerson({}, () => service.archiveThread('child'));
+      const rows = database.db.select().from(projectAgentThreads).all();
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row).toMatchObject({
+          archivedByPersonId: 'actor',
+          archivedByName: 'Acting person',
+          archivedByType: 'person',
+        });
+        expect(row.archivedAt).toBeGreaterThanOrEqual(start);
+      }
+      await asPerson({}, () => service.unarchiveThread('child'));
+      expect(
+        database.db
+          .select()
+          .from(projectAgentThreads)
+          .all()
+          .every(
+            (row) => row.archivedAt === null && row.archivedByPersonId === null,
+          ),
+      ).toBe(true);
+      await asPerson({ personId: 'next', name: 'Next author' }, () =>
+        service.archiveThread('root'),
+      );
+      expect(
+        database.db
+          .select()
+          .from(projectAgentThreads)
+          .all()
+          .every((row) => row.archivedByPersonId === 'next'),
+      ).toBe(true);
+    } finally {
+      database.sqlite.close();
+    }
+  });
+
+  it('attributes impersonated actions to the real administrator and never marks failed archives successful', async () => {
+    const database = archiveDatabase();
+    try {
+      mockCodex.request
+        .mockRejectedValueOnce(new Error('root refused'))
+        .mockResolvedValueOnce({});
+      await expect(
+        asPerson(
+          {
+            impersonation: {
+              sessionId: 'session',
+              administratorId: 'real-admin',
+              administratorName: 'Real administrator',
+              personId: 'viewed-person',
+              personName: 'Viewed person',
+              expiresAt: Date.now() + 60000,
+            },
+          },
+          () => service.archiveThread('root'),
+        ),
+      ).rejects.toThrow('root refused');
+      const rows = database.db.select().from(projectAgentThreads).all();
+      expect(
+        rows.find((row) => row.threadId === 'root')?.archivedAt,
+      ).toBeNull();
+      expect(rows.find((row) => row.threadId === 'child')).toMatchObject({
+        archivedByPersonId: 'real-admin',
+        archivedByName: 'Real administrator',
+      });
+    } finally {
+      database.sqlite.close();
+    }
+  });
+
+  it('labels service actions as technical and leaves legacy records unknown', async () => {
+    const database = archiveDatabase();
+    try {
+      expect(
+        database.db
+          .select()
+          .from(projectAgentThreads)
+          .all()
+          .every(
+            (row) => row.archivedAt === null && row.archivedByName === null,
+          ),
+      ).toBe(true);
+      mockCodex.request.mockResolvedValue({});
+      await asPerson({ kind: 'service', personId: null, name: null }, () =>
+        service.archiveThread('root'),
+      );
+      expect(
+        database.db
+          .select()
+          .from(projectAgentThreads)
+          .all()
+          .every(
+            (row) =>
+              row.archivedByType === 'service' &&
+              row.archivedByPersonId === null,
+          ),
+      ).toBe(true);
+    } finally {
+      database.sqlite.close();
+    }
   });
 
   it('attempts every tree member before reporting an archive failure', async () => {

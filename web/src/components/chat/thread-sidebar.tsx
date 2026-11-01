@@ -3,9 +3,15 @@
  * Rendering is split into sidebar/ sub-components; this file orchestrates
  * state, queries, mutations, and view routing.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { DragDropProvider } from '@dnd-kit/react';
-import { BookOpen, FolderKanban, FolderOpen, House, Plus } from 'lucide-react';
+import {
+  BookOpen,
+  FolderKanban,
+  FolderOpen,
+  House,
+  ArrowLeft,
+} from 'lucide-react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +68,8 @@ import { SimpleChatRow } from './sidebar/simple-chat-row';
 import { RenameDialog, ConfirmDialog } from './sidebar/sidebar-dialogs';
 import { ForkGoalDialog } from './sidebar/fork-goal-dialog';
 import { CreateProjectDialog } from './sidebar/create-project-dialog';
+import { ProjectsMenu } from './sidebar/projects-menu';
+import { useFocusedProjectThreads } from '@/hooks/use-focused-project-threads';
 import { ProjectArchiveExportDialog } from '@/components/projects/project-archive-transfer';
 import { usePlatformSession } from '@/lib/platform-session';
 import { useProjectNavigationPreference } from '@/hooks/use-project-navigation-preference';
@@ -132,6 +140,11 @@ function useActiveView():
 export function ThreadSidebar() {
   const session = usePlatformSession();
   const navigationPreference = useProjectNavigationPreference();
+  const { t: tw } = useTranslation('workspaces');
+  const focusedProjectId = useLayoutStore((s) => s.focusedProjectId);
+  const setFocusedProject = useLayoutStore((s) => s.setFocusedProject);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const overviewScroll = useRef(0);
   const [exportProjectId, setExportProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
   const activeView = useActiveView();
@@ -188,6 +201,9 @@ export function ThreadSidebar() {
   const [deleteSimpleThread, setDeleteSimpleThread] =
     useState<SimpleChatThread | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createProjectMode, setCreateProjectMode] = useState<'new' | 'import'>(
+    'new',
+  );
   const [createProjectValue, setCreateProjectValue] = useState('');
   const [deleteProject, setDeleteProject] = useState<ProjectSummary | null>(
     null,
@@ -234,7 +250,7 @@ export function ThreadSidebar() {
     ...threadsListOverviewOptions({
       query: { archived: false, limit: 100, sortKey: 'created_at' },
     }),
-    enabled: isHomeView,
+    enabled: isHomeView && !focusedProjectId,
   });
   const detailQuery = useQuery({
     ...threadsListOverviewOptions({
@@ -257,6 +273,19 @@ export function ThreadSidebar() {
     queryKey: projectsQueryKey,
     queryFn: () => projectsApi<{ projects: ProjectSummary[] }>(),
   });
+  const focusedProject = projectsQuery.data?.projects.find(
+    (project) => project.id === focusedProjectId,
+  );
+  const focusedThreads = useFocusedProjectThreads(focusedProject);
+  useEffect(() => {
+    if (focusedProjectId && projectsQuery.isSuccess && !focusedProject)
+      setFocusedProject(null);
+  }, [
+    focusedProjectId,
+    focusedProject,
+    projectsQuery.isSuccess,
+    setFocusedProject,
+  ]);
 
   // ── Deletion ────────────────────────────────────────────────────────
   const adoptionStatus = useBranchAdoptionStatus();
@@ -275,11 +304,18 @@ export function ThreadSidebar() {
   // a row can be looked up by the thread it displays.
   const rowsByView = useMemo(
     () => ({
-      active: overviewThreadsQuery.data?.data ?? [],
+      active: focusedProjectId
+        ? (focusedThreads.data?.data ?? [])
+        : (overviewThreadsQuery.data?.data ?? []),
       archived: [],
       detail: detailQuery.data?.data ?? [],
     }),
-    [overviewThreadsQuery.data, detailQuery.data],
+    [
+      overviewThreadsQuery.data,
+      detailQuery.data,
+      focusedProjectId,
+      focusedThreads.data,
+    ],
   );
   // Which views may contribute, and why, is enforced in `selectSidebarRows`.
   const { rowByThreadId, displayThreadIdByMember, visibleThreads } = useMemo(
@@ -818,18 +854,27 @@ export function ThreadSidebar() {
 
   // ── View navigation helpers ─────────────────────────────────────────
 
-  const resetDetailPagination = () => {
-    setCursor(null);
-    setCursorStack([]);
-  };
-
   const openWorkspaceDetail = (cwd: string) => {
-    resetDetailPagination();
-    setSidebarView({ type: 'workspaceDetail', cwd });
+    const project = workspaceGroups.find((group) => group.cwd === cwd);
+    if (!project?.projectId) return;
+    const viewport = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    overviewScroll.current = viewport?.scrollTop ?? 0;
+    void navigationPreference.enable(project.projectId).then((enabled) => {
+      if (enabled) {
+        setFocusedProject(project.projectId!);
+        requestAnimationFrame(() => {
+          if (viewport) viewport.scrollTop = 0;
+        });
+      }
+    });
   };
   const openArchivedDetail = (projectId: string) => {
-    resetDetailPagination();
-    setSidebarView({ type: 'archivedDetail', projectId });
+    void navigate({
+      to: '/projects/$projectId/archives',
+      params: { projectId },
+    });
   };
 
   const goNext = () => {
@@ -1032,18 +1077,29 @@ export function ThreadSidebar() {
         <FolderKanban aria-hidden="true" className="h-4 w-4 shrink-0" />
         {t('projects')}
       </span>
-      <div className="flex items-center gap-1">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6"
-          aria-label={t('newProject')}
-          title={t('newProject')}
-          onClick={() => setCreateProjectOpen(true)}
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+      <ProjectsMenu
+        canImport={session.isAdministrator}
+        onCreate={() => {
+          setCreateProjectMode('new');
+          setCreateProjectOpen(true);
+        }}
+        onImport={() => {
+          setCreateProjectMode('import');
+          setCreateProjectOpen(true);
+        }}
+        onCollapse={() =>
+          useLayoutStore.getState().setGroupsCollapsed(
+            workspaceGroups.map((group) => group.cwd),
+            true,
+          )
+        }
+        onExpand={() =>
+          useLayoutStore.getState().setGroupsCollapsed(
+            workspaceGroups.map((group) => group.cwd),
+            false,
+          )
+        }
+      />
     </div>
   );
 
@@ -1083,20 +1139,66 @@ export function ThreadSidebar() {
 
       <Separator />
 
-      <ScrollArea className="min-h-0 flex-1 px-2 [&_[data-slot=scroll-area-viewport]>div]:block!">
+      <ScrollArea
+        ref={scrollAreaRef}
+        className="min-h-0 flex-1 px-2 [&_[data-slot=scroll-area-viewport]>div]:block!"
+      >
         <DragDropProvider onDragEnd={handleThreadDragEnd}>
+          {focusedProjectId && focusedThreads.isError && (
+            <div role="alert" className="p-2 text-xs text-destructive">
+              {getApiErrorMessage(focusedThreads.error)}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void focusedThreads.refetch()}
+              >
+                {t('retry')}
+              </Button>
+            </div>
+          )}
           {sidebarView.type !== 'overview' && projectsHeader}
           {sidebarView.type === 'overview' ? (
             <WorkspaceOverview
+              focusedProjectId={focusedProjectId}
               onToggleProjectCache={navigationPreference.toggle}
               projectCachePending={
                 navigationPreference.pending || !navigationPreference.available
               }
-              projectsHeader={projectsHeader}
-              workspaceGroups={workspaceGroups}
+              projectsHeader={
+                focusedProjectId ? (
+                  <Button
+                    variant="ghost"
+                    className="h-8 justify-start gap-2 px-1 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setFocusedProject(null);
+                      requestAnimationFrame(() => {
+                        const viewport = scrollAreaRef.current?.querySelector(
+                          '[data-slot="scroll-area-viewport"]',
+                        );
+                        if (viewport)
+                          viewport.scrollTop = overviewScroll.current;
+                      });
+                    }}
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    {tw('allProjects')}
+                  </Button>
+                ) : (
+                  projectsHeader
+                )
+              }
+              workspaceGroups={
+                focusedProjectId
+                  ? workspaceGroups.filter(
+                      (group) => group.projectId === focusedProjectId,
+                    )
+                  : workspaceGroups
+              }
               collapsedGroups={collapsedGroups}
               isLoading={
-                overviewThreadsQuery.isLoading || projectsQuery.isLoading
+                (focusedProjectId
+                  ? focusedThreads.isLoading
+                  : overviewThreadsQuery.isLoading) || projectsQuery.isLoading
               }
               onToggleCollapse={toggleCollapsedGroup}
               onOpenProject={(projectId) =>
@@ -1237,6 +1339,8 @@ export function ThreadSidebar() {
         />
       )}
       <CreateProjectDialog
+        key={`${createProjectOpen}:${createProjectMode}`}
+        initialMode={createProjectMode}
         open={createProjectOpen}
         pending={createProject.isPending}
         name={createProjectValue}
