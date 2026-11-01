@@ -180,11 +180,9 @@ test.each([390, 1280])(
         );
       }
       list.scrollTop = 0;
-      await page
-        .getByRole('main')
-        .screenshot({
-          path: `../../../.vitest-screenshots/integrations-list-${section}-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}-${width}.png`,
-        });
+      await page.getByRole('main').screenshot({
+        path: `../../../.vitest-screenshots/integrations-list-${section}-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}-${width}.png`,
+      });
     };
     await assertInnerScroll('plugins');
     const engine = navigator.userAgent.includes('Chrome')
@@ -210,9 +208,18 @@ test.each([390, 1280])(
     expect(calls).not.toContain('/api/apps');
     fireEvent.click(screen.getByRole('tab', { name: 'Catalogue' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'temporairement indisponible',
+      'annuaire des applications ne répond pas',
     );
     expect(screen.getByRole('alert')).not.toHaveTextContent('<html>');
+    expect(await screen.findByText('Documents')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Ouvrir l’annuaire ChatGPT' }),
+    ).toHaveAttribute('href', 'https://chatgpt.com/apps');
+    await page
+      .getByRole('main')
+      .screenshot({
+        path: `../../../.vitest-screenshots/integrations-catalog-fallback-${engine}-${width}.png`,
+      });
     fireEvent.click(screen.getByRole('tab', { name: 'Serveurs MCP' }));
     await screen.findByText('server-0');
     expect(screen.getByText('Mergeron (interne)')).toBeVisible();

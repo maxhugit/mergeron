@@ -48,5 +48,10 @@
   "internalServer": "Mergeron (internal)",
   "conversationScoped": "Per conversation",
   "internalServerHelp": "Internal Mergeron tools. Connection and available tools are checked per conversation under Capabilities → MCP servers, according to project permissions.",
-  "externalServersReady": "{{ready}}/{{total}} external servers ready"
+  "externalServersReady": "{{ready}}/{{total}} external servers ready",
+  "directoryFallback": "The application directory is unavailable. The official Codex plugin catalog is shown below: open a detail to see its associated applications. This list is separate from the ChatGPT directory.",
+  "openOfficialDirectory": "Open ChatGPT directory",
+  "previousPage": "Previous",
+  "nextPage": "Next",
+  "catalogPage": "{{page}} / {{pages}} · {{count}} integrations"
 }
