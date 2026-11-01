@@ -368,6 +368,7 @@
   "unableToSaveProfilePreferences": "Impossible d’enregistrer les préférences du profil",
   "archive": "Archiver",
   "archived": "Archivée",
+  "conversationReadOnlyRetryOpen": "Cette conversation est en lecture seule. Réessayez son ouverture pour continuer.",
   "archivedReadOnly": "Archive en lecture seule",
   "back": "Retour",
   "branchGraph": "Graphe des branches",

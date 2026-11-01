@@ -1,3 +1,4 @@
+import { useTimelineStore } from '@/stores/timeline-store';
 /** Conversation-scoped MCP inventory, rendered with actual translated popovers. */
 import { cleanup, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -52,6 +53,14 @@ test.each([390, 980])(
         </main>
       </QueryClientProvider>
     );
+    useTimelineStore.getState().ensureThreadState({ threadId: 'ready-agent' });
+    useTimelineStore
+      .getState()
+      .setOpenStateForThread('ready-agent', { openState: 'ready' });
+    useTimelineStore.getState().ensureThreadState({ threadId: 'new-agent' });
+    useTimelineStore
+      .getState()
+      .setOpenStateForThread('new-agent', { openState: 'ready' });
     const view = render(tree('ready-agent'));
     try {
       await page.getByRole('button', { name: /Serveurs MCP · 1/ }).click();

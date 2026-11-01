@@ -27,11 +27,19 @@ describe('ProjectConnectionPolicyService', () => {
               config: {
                 apps: { github: { enabled: true } },
                 mcp_servers: {
-                  fixture: { command: 'node', args: ['fixture.js'] },
+                  fixture: {
+                    command: 'node',
+                    args: ['fixture.js'],
+                    tool_timeout_sec: null,
+                    startup_timeout_sec: null,
+                  },
                   disabled: { command: 'node', enabled: false },
                 },
                 plugins: {
-                  google: { enabled: true, mcp_servers: { drive: {} } },
+                  google: {
+                    enabled: true,
+                    mcp_servers: { drive: { tool_timeout_sec: null } },
+                  },
                 },
               },
             }
@@ -75,6 +83,23 @@ describe('ProjectConnectionPolicyService', () => {
     );
     return { service, request };
   }
+  it('omits absent optional MCP fields before sending TOML-compatible overrides', async () => {
+    const { service } = setup([], ['fixture']);
+    const config = await service.configForCwd('/workspaces/project');
+    expect(config?.mcp_servers).toMatchObject({
+      fixture: { enabled: true, command: 'node' },
+    });
+    expect(
+      (config?.mcp_servers as Record<string, unknown>).fixture,
+    ).not.toHaveProperty('tool_timeout_sec');
+    expect(
+      (config?.mcp_servers as Record<string, unknown>).fixture,
+    ).not.toHaveProperty('startup_timeout_sec');
+    expect(config?.plugins).toMatchObject({
+      google: { mcp_servers: { drive: { enabled: false } } },
+    });
+    expect(JSON.stringify(config)).not.toContain('tool_timeout_sec');
+  });
   it('explicitly disables global MCP servers, plugin servers and per-app enables for an empty selection', async () => {
     const { service, request } = setup();
     await expect(service.configForCwd('/workspaces/project')).resolves.toEqual({

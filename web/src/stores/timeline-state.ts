@@ -30,7 +30,7 @@ export interface ThreadRuntimeState {
   threadCwd: string | null;
   /** Display title, falling back to preview/id in UI. */
   threadTitle: string | null;
-  /** Live threads are resumable; read-only threads are archived snapshots. */
+  /** Live threads have writer access; read-only snapshots may also result from a failed open. */
   threadMode: ThreadMode;
   timeline: TimelineEntry[];
   /** A start submission remains pending until its response or lifecycle is reconciled. */

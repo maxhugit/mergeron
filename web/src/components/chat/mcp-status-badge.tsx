@@ -26,6 +26,7 @@ import type { McpServerStartupState, McpServerStatus } from '@/types/mcp';
 import { cn } from '@/lib/utils';
 import { showSnackbar } from '@/stores/snackbar-store';
 import { useMcpStore, type McpServerRuntimeStatus } from '@/stores/mcp-store';
+import { useTimelineStore } from '@/stores/timeline-store';
 import { useCurrentProject } from '@/hooks/use-current-project';
 
 type Mode = 'input' | 'header';
@@ -70,6 +71,16 @@ export function McpStatusBadge({
     (server) => server.status === 'starting',
   );
 
+  const canInspect = useTimelineStore((state) => {
+    if (!threadId) return true;
+    const runtime = state.getThreadRuntime(threadId);
+    return (
+      runtime?.threadMode === 'live' &&
+      runtime.openState === 'ready' &&
+      runtime.readOnlyReason === null
+    );
+  });
+
   const serversQuery = useQuery({
     queryKey: mcpServersListServersQueryKey({ query }),
     queryFn: async () => {
@@ -79,10 +90,17 @@ export function McpStatusBadge({
       });
       return data;
     },
+    enabled: canInspect,
+    retry: false,
     staleTime: 30_000,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
-    refetchInterval: threadId || hasStartingRuntime ? 5_000 : false,
+    refetchInterval: (query) =>
+      !canInspect || query.state.error
+        ? false
+        : threadId || hasStartingRuntime
+          ? 5_000
+          : false,
   });
 
   const reloadMutation = useMutation({
@@ -95,10 +113,13 @@ export function McpStatusBadge({
     },
   });
 
+  const inventoryError = canInspect && serversQuery.isError;
   const rows = buildRows(
-    ((serversQuery.data?.data ?? []) as unknown as McpServerStatus[]).filter(
-      (server) => !allowedNames || allowedNames.has(server.name),
-    ),
+    (
+      (canInspect
+        ? (serversQuery.data?.data ?? [])
+        : []) as unknown as McpServerStatus[]
+    ).filter((server) => !allowedNames || allowedNames.has(server.name)),
     threadId
       ? {}
       : allowedNames
@@ -108,7 +129,7 @@ export function McpStatusBadge({
             ),
           )
         : runtimeStatuses,
-    serversQuery.isSuccess,
+    canInspect && serversQuery.isSuccess,
   );
   if (
     threadId &&
@@ -121,7 +142,7 @@ export function McpStatusBadge({
       error: null,
     });
   }
-  if (serversQuery.isError) {
+  if (inventoryError) {
     for (const row of rows) {
       row.status = 'unobserved';
       row.toolCount = undefined;
@@ -163,12 +184,12 @@ export function McpStatusBadge({
     );
   }
 
-  const label = serversQuery.isError
+  const label = inventoryError
     ? t('failedToLoadMcpServers')
     : total > 0
       ? t('readyTotalReady', { ready, total })
       : t('noMcpServersReported');
-  const risky = failed > 0 || serversQuery.isError;
+  const risky = failed > 0 || inventoryError;
   const busy = starting > 0;
 
   return (
@@ -227,7 +248,7 @@ export function McpStatusBadge({
           </Button>
         </div>
 
-        {serversQuery.isError && (
+        {inventoryError && (
           <p className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
             {t('failedToLoadMcpServers')}
           </p>

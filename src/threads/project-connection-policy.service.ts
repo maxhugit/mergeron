@@ -24,6 +24,26 @@ import {
 
 type JsonObject = { [key: string]: JsonValue };
 
+/** Effective config serializes absent optionals as null; TOML overrides must omit them. */
+function transportOverrides(value: {
+  [key: string]: JsonValue | undefined;
+}): JsonObject {
+  const result: JsonObject = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === null || entry === undefined) continue;
+    result[key] = Array.isArray(entry)
+      ? entry.map((item) =>
+          item && typeof item === 'object' && !Array.isArray(item)
+            ? transportOverrides(item)
+            : item,
+        )
+      : typeof entry === 'object'
+        ? transportOverrides(entry)
+        : entry;
+  }
+  return result;
+}
+
 export interface ProjectExecutionPolicy {
   internalMcpId?: string;
   copyPermissions?: {
@@ -139,7 +159,7 @@ export class ProjectConnectionPolicyService {
     const pluginConfig: JsonObject = {};
     for (const [name, value] of Object.entries(object(global.mcp_servers))) {
       if (name === 'codex_apps') continue;
-      const server = object(value);
+      const server = transportOverrides(object(value));
       directMcpConfig[name] = {
         ...server,
         enabled: selectedMcpServers.has(name) && server.enabled !== false,
@@ -150,7 +170,7 @@ export class ProjectConnectionPolicyService {
       const servers: JsonObject = {};
       for (const [name, raw] of Object.entries(object(plugin.mcp_servers)))
         servers[name] = {
-          ...object(raw),
+          ...transportOverrides(object(raw)),
           enabled:
             selectedMcpServers.has(name) && object(raw).enabled !== false,
         };

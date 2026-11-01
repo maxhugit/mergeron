@@ -1,3 +1,4 @@
+import { useTimelineStore } from '@/stores/timeline-store';
 import {
   cleanup,
   fireEvent,
@@ -24,12 +25,22 @@ vi.mock('react-i18next', () => ({
       values?.total !== undefined ? `${values.ready}/${values.total}` : key,
   }),
 }));
+const pristineTimeline = useTimelineStore.getState();
 let client: QueryClient;
 beforeEach(() => {
+  useTimelineStore.setState(pristineTimeline, true);
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   mock.list.mockReset();
+  useTimelineStore.getState().ensureThreadState({ threadId: 'agent-a' });
+  useTimelineStore
+    .getState()
+    .setOpenStateForThread('agent-a', { openState: 'ready' });
+  useTimelineStore.getState().ensureThreadState({ threadId: 'agent-b' });
+  useTimelineStore
+    .getState()
+    .setOpenStateForThread('agent-b', { openState: 'ready' });
   useMcpStore.setState({ statuses: {} });
 });
 afterEach(() => {
@@ -110,4 +121,45 @@ it('shows an inventory error rather than claiming an MCP outage or a successful 
   ).toBeInTheDocument();
   expect(screen.getByText('mcpNotObserved')).toBeInTheDocument();
   expect(screen.queryByText('ready')).toBeNull();
+});
+
+it('does not inspect connections of a read-only fallback after a failed resume', async () => {
+  const store = useTimelineStore.getState();
+  store.ensureThreadState({ threadId: 'failed-open', mode: 'readOnly' });
+  store.setOpenStateForThread('failed-open', { openState: 'ready' });
+  show('failed-open');
+  await screen.findByRole('button', { name: 'mcpServers · 0/1' });
+  expect(mock.list).not.toHaveBeenCalled();
+});
+it('waits for writer acquisition before inspecting thread connections', async () => {
+  const store = useTimelineStore.getState();
+  store.ensureThreadState({ threadId: 'opening' });
+  show('opening');
+  expect(mock.list).not.toHaveBeenCalled();
+  mock.list.mockResolvedValue({ data: { data: [internal] } });
+  store.setOpenStateForThread('opening', { openState: 'ready' });
+  await screen.findByRole('button', { name: 'mcpServers · 1/1' });
+  expect(mock.list).toHaveBeenCalledTimes(1);
+});
+it('stops automatic retries and polling after an inventory failure', async () => {
+  mock.list.mockRejectedValue(new Error('thread not found: agent-a'));
+  show();
+  await screen.findByRole('button', {
+    name: 'mcpServers · failedToLoadMcpServers',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5200));
+  expect(mock.list).toHaveBeenCalledTimes(1);
+}, 10000);
+
+it('does not present a cached live connection as ready after the thread becomes read-only', async () => {
+  mock.list.mockResolvedValue({ data: { data: [internal] } });
+  show();
+  await screen.findByRole('button', { name: 'mcpServers · 1/1' });
+  useTimelineStore
+    .getState()
+    .setReadOnlyThread({ id: 'agent-a' } as Parameters<
+      ReturnType<typeof useTimelineStore.getState>['setReadOnlyThread']
+    >[0]);
+  await screen.findByRole('button', { name: 'mcpServers · 0/1' });
+  expect(mock.list).toHaveBeenCalledTimes(1);
 });
