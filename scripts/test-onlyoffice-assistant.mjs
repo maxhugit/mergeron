@@ -11,7 +11,7 @@ const providerRequire = createRequire(
   webRequire.resolve('@vitest/browser-playwright'),
 );
 const { chromium, webkit } = providerRequire('playwright');
-import ts from 'typescript';
+const ts = webRequire('typescript');
 const bridgeSource = (
   await readFile(
     resolve('web/src/components/files/viewers/onlyoffice-assistant-bridge.ts'),

@@ -6,6 +6,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   Logger,
   Optional,
@@ -112,6 +113,7 @@ export class OnlyOfficeController {
    * so the save callback can be securely verified.
    */
   @Get('config')
+  @Header('Cache-Control', 'private, no-store')
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
   @ApiBadRequestResponse({ type: ApiErrorResponseDto })
