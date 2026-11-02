@@ -70,6 +70,14 @@ utilisée comme repli en cas d’échec du CLI.
 
 ### Dictée CLI expérimentale
 
+La session vocale désactive les serveurs MCP et les outils. Avant de transmettre
+les réglages effectifs à Codex, elle omet leurs champs facultatifs sans valeur
+(`null`/`undefined`), avec le même traitement que les agents de projet. Sans ce
+nettoyage, un délai MCP absent peut devenir un texte vide dans les paramètres
+TOML et bloquer `thread/start`, même pour un serveur désactivé. Les délais
+numériques renseignés sont conservés ; les configurations MCP enregistrées ne
+sont pas modifiées.
+
 Le moteur API conserve l’enregistrement WAV PCM16 mono 24 kHz. Pour le moteur
 CLI, le navigateur ouvre le microphone et génère une offre WebRTC avec une piste
 audio et le canal `oai-events`. `CodexAudioService` négocie cette offre via

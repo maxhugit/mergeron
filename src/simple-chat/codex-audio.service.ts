@@ -6,6 +6,8 @@ import { BusinessException } from '../common/business.exception';
 import { ErrorCode } from '../common/error-codes';
 import { currentAccess, requireExecutionAccess } from '../auth/access-context';
 import type { ServerNotification } from '../codex/codex-schema';
+import type { JsonValue } from '../codex/codex-schema/serde_json/JsonValue';
+import { transportOverrides } from '../codex/config-overrides';
 
 interface VoiceSession {
   id: string;
@@ -354,7 +356,7 @@ export class CodexAudioService implements OnModuleDestroy {
         throw unavailable('une connexion du CLI à ChatGPT est nécessaire.');
       phase = 'configuration';
       const config = await client.request<{
-        config: { mcp_servers?: Record<string, unknown> };
+        config: { mcp_servers?: Record<string, JsonValue> };
       }>('config/read', {});
       if (closed)
         throw failure ?? unavailable('le démarrage a été interrompu.');
@@ -362,11 +364,13 @@ export class CodexAudioService implements OnModuleDestroy {
         Object.entries(config.config.mcp_servers ?? {}).map(([name, value]) => [
           name,
           {
-            ...(typeof value === 'object' &&
-            value !== null &&
-            !Array.isArray(value)
-              ? value
-              : {}),
+            ...transportOverrides(
+              typeof value === 'object' &&
+                value !== null &&
+                !Array.isArray(value)
+                ? value
+                : {},
+            ),
             enabled: false,
           },
         ]),
