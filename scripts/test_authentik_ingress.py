@@ -6,6 +6,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AuthentikIngressConfigurationTest(unittest.TestCase):
+    def test_onlyoffice_plugin_assets_do_not_grant_a_service_identity(self) -> None:
+        for template in (self.nginx, self.native):
+            block = template.split("location ^~ /api/onlyoffice/assistant/plugin/ {", 1)[1].split("\n        }", 1)[0]
+            self.assertIn('limit_except GET { deny all; }', block)
+            self.assertIn('proxy_set_header Authorization "";', block)
+            self.assertIn('proxy_set_header X-Webui-Auth-Source "";', block)
+            self.assertNotIn('MERGERON_BACKEND_TOKEN', block)
+            self.assertNotIn('location ^~ /api/onlyoffice/assistant/ {', template)
+        block = self.traefik.split('mergeron-onlyoffice-plugin:', 1)[1].split('    # OnlyOffice Document Server', 1)[0]
+        self.assertIn('PathPrefix(`/api/onlyoffice/assistant/plugin/`)', block)
+        self.assertNotIn('mergeron-security-headers', block)
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.nginx = (ROOT / "deployment/config/nginx.conf.template").read_text()

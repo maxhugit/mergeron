@@ -118,6 +118,18 @@ http {
             proxy_read_timeout 300s;
         }
 
+        # Public plugin code only. Agent/data endpoints remain authenticated.
+        location ^~ /api/onlyoffice/assistant/plugin/ {
+            limit_except GET { deny all; }
+            proxy_pass $mergeron_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header Authorization "";
+            proxy_set_header X-Webui-Auth-Source "";
+            proxy_set_header X-Webui-Auth-Subject "";
+            proxy_set_header X-Webui-Auth-Email "";
+        }
+
         # OnlyOffice save callback. Codex additionally verifies the signed
         # state and OnlyOffice JWT before accepting a write.
         location = /api/onlyoffice/callback {

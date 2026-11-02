@@ -147,13 +147,16 @@ jobs:
         run: |
           pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
           pnpm --dir web test:browser
+          node scripts/test-onlyoffice-assistant.mjs
 
       - name: Preserve preview interface screenshots
         if: always() && matrix.part == 'frontend-browser'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: preview-ui-evidence-${{ github.sha }}
-          path: web/.vitest-screenshots/
+          path: |
+            web/.vitest-screenshots/
+            artifacts/onlyoffice-assistant/
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
