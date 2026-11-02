@@ -223,3 +223,59 @@ test('offers explicit migration only for a known local DEV browser image', async
     false,
   );
 });
+
+test('discovers an observed stopped Byparr without starting it or exposing it as an arbitrary update target', async () => {
+  const f = fixture();
+  const id = 'appCatalog';
+  const repo = 'ghcr.io/thephaseless/byparr';
+  f.options.manifest.observedComponents = [
+    {
+      id,
+      observational: true,
+      displayName: 'Byparr',
+      allowedImageRepositories: [repo],
+    },
+  ];
+  const inventory = f.options.inventory;
+  f.options.inventory = async () => {
+    const value = await inventory();
+    return {
+      ...value,
+      components: [
+        ...value.components,
+        {
+          id,
+          containerId: 'byparr',
+          adoption: 'managed',
+          state: 'stopped',
+          image: `${repo}@${old}`,
+        },
+      ],
+    };
+  };
+  const inspect = f.docker.inspectContainer;
+  f.docker.inspectContainer = async (key) =>
+    key === 'byparr'
+      ? {
+          Image: 'byparr-image',
+          Config: { Image: `${repo}@${old}` },
+          State: { Running: false },
+        }
+      : inspect(key);
+  const image = f.docker.inspectImage;
+  f.docker.inspectImage = async (key) =>
+    key === 'byparr-image'
+      ? {
+          Id: 'byparr-image',
+          RepoDigests: [`${repo}@${old}`],
+          Os: 'linux',
+          Architecture: 'amd64',
+        }
+      : image(key);
+  const result = await new ImageUpdates(f.options).status();
+  const row = result.components.find((c) => c.id === id);
+  assert.equal(row.targetImage, repo + ':latest');
+  assert.equal(row.updateManagedBy, 'manager');
+  assert.equal(row.targetDigest, next);
+  assert.ok(f.calls.includes(repo + ':latest'));
+});

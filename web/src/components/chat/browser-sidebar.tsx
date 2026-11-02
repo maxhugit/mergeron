@@ -12,6 +12,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { browserApi } from '@/lib/browser-api';
 import { translationKey } from '@/locales/translation-key';
 import { BrowserLiveViewport } from './browser-live-viewport';
@@ -51,6 +58,9 @@ interface Tab {
 const errorLabels: Record<string, string> = {
   BROWSER_NOT_CONFIGURED: 'notConfigured',
   BROWSER_RUNTIME_UNAVAILABLE: 'runtimeUnavailable',
+  BROWSER_RUNTIME_START_TIMEOUT: 'runtimeStartTimedOut',
+  BROWSER_RUNTIME_UNHEALTHY: 'runtimeUnhealthy',
+  BROWSER_RUNTIME_ISOLATION: 'runtimeIsolation',
   BROWSER_TIMEOUT: 'timedOut',
   BROWSER_BUSY: 'busy',
   BROWSER_TAB_LIMIT: 'tabLimit',
@@ -102,6 +112,9 @@ export function BrowserSidebar({
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [startingRuntime, setStartingRuntime] = useState(false);
+  const startupAbort = useRef<AbortController | null>(null);
+  const cancelledStartup = useRef(false);
   const [added, setAdded] = useState(false);
   const [expired, setExpired] = useState(false);
   const locked = useRef(false);
@@ -131,6 +144,63 @@ export function BrowserSidebar({
     setBusy(true);
     setError('');
     try {
+      if (!active && ['navigate', 'new'].includes(action)) {
+        cancelledStartup.current = false;
+        const controller = new AbortController();
+        startupAbort.current = controller;
+        let deadline = Date.now() + 110_000;
+        let policyRead = false;
+        try {
+          for (;;) {
+            const status = await browserApi<{
+              state: string;
+              error?: string | null;
+              startupSeconds?: number;
+            }>(`${root}/runtime`, { instanceId }, controller.signal);
+            if (!alive.current || controller.signal.aborted) return;
+            if (
+              !policyRead &&
+              typeof status.startupSeconds === 'number' &&
+              status.startupSeconds >= 10 &&
+              status.startupSeconds <= 300
+            ) {
+              deadline = Date.now() + (status.startupSeconds + 15) * 1000;
+              policyRead = true;
+            }
+            if (status.state === 'ready' || status.state === 'external') break;
+            if (
+              (status.state !== 'starting' && status.state !== 'stopped') ||
+              Date.now() >= deadline
+            )
+              throw new Error(
+                status.error && Object.hasOwn(errorLabels, status.error)
+                  ? status.error
+                  : 'BROWSER_RUNTIME_UNAVAILABLE',
+              );
+            setStartingRuntime(true);
+            await new Promise<void>((resolve, reject) => {
+              const aborted = () => {
+                clearTimeout(timer);
+                reject(new DOMException('Cancelled', 'AbortError'));
+              };
+              const timer = setTimeout(() => {
+                controller.signal.removeEventListener('abort', aborted);
+                resolve();
+              }, 1000);
+              controller.signal.addEventListener('abort', aborted, {
+                once: true,
+              });
+            });
+          }
+        } finally {
+          if (controller.signal.aborted)
+            void browserApi(`${root}/runtimeCancel`, { instanceId }).catch(
+              () => {},
+            );
+          startupAbort.current = null;
+          if (alive.current) setStartingRuntime(false);
+        }
+      }
       let target = typeof body.tabId === 'string' ? body.tabId : active;
       if (action === 'navigate' && !target) {
         target = tabs[0]?.id ?? '';
@@ -202,6 +272,7 @@ export function BrowserSidebar({
         }
       }
     } catch (error) {
+      if (cancelledStartup.current) return;
       if (alive.current)
         setError(
           t(
@@ -254,6 +325,7 @@ export function BrowserSidebar({
     }
     return () => {
       alive.current = false;
+      startupAbort.current?.abort();
     };
     // The keyed sidebar belongs to one conversation; no request can retarget it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -446,6 +518,40 @@ export function BrowserSidebar({
           <X className="h-4 w-4" />
         </Button>
       </form>
+      <Dialog
+        open={startingRuntime}
+        onOpenChange={(open) => {
+          if (!open) {
+            cancelledStartup.current = true;
+            startupAbort.current?.abort();
+          }
+        }}
+      >
+        <DialogContent
+          className="bg-popover!"
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>{t('runtimeStartingTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('runtimeStartingDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div role="status" className="flex items-center gap-3 text-sm">
+            <Loader2 className="size-5 animate-spin" />
+            {t('runtimeStartingHealth')}
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              cancelledStartup.current = true;
+              startupAbort.current?.abort();
+            }}
+          >
+            {t('runtimeCancelWait')}
+          </Button>
+        </DialogContent>
+      </Dialog>
       {tabs.find((tab) => tab.id === active)?.popup && (
         <div className="flex items-center justify-between border-b px-2 text-xs">
           <span>{t('popupActive')}</span>

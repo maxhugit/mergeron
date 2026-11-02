@@ -1064,13 +1064,21 @@ export class TransactionalUpdater {
     if (adoption.adoption.state === 'drifted')
       blockers.push('updateAdoptionDrift');
     const containers = [];
-    for (const component of inventory.components) {
+    for (const component of inventory.components.filter(
+      (c) => !c.observational,
+    )) {
       if (
         component.adoption !== 'managed' &&
         adoption.adoption.state !== 'adopted'
       )
         blockers.push(`${component.id}:updateNotManaged`);
-      if (component.state !== 'healthy')
+      if (
+        component.state !== 'healthy' &&
+        !(
+          component.id === 'browser' &&
+          ['created', 'stopped'].includes(component.state)
+        )
+      )
         blockers.push(`${component.id}:updateNotHealthy`);
       if (!component.containerId) continue;
       const inspect = await this.docker.inspectContainer(component.containerId);
@@ -1165,6 +1173,7 @@ export class TransactionalUpdater {
       containers.push({
         component: component.id,
         id: inspect.Id,
+        stayStopped: component.id === 'browser' && !inspect.State.Running,
         imageId: inspect.Image,
         name: inspect.Name.slice(1),
         fingerprint: digest({
@@ -1439,7 +1448,9 @@ export class TransactionalUpdater {
       }
       await this.save('stopping');
       const stopped = await Promise.allSettled(
-        this.stopOrder().map((item) => this.docker.stopContainer(item.id)),
+        this.stopOrder()
+          .filter((item) => !item.stayStopped)
+          .map((item) => this.docker.stopContainer(item.id)),
       );
       const stopFailure = stopped.find(
         (result) => result.status === 'rejected',
@@ -1546,6 +1557,7 @@ export class TransactionalUpdater {
   async startAndCheck(containers) {
     for (const component of ['egress', 'browser', 'application', 'ingress']) {
       const item = containers.find((c) => c.component === component);
+      if (item?.stayStopped) continue;
       // Preparation may fail while only part of the original specifications
       // has been journalled. Those originals were not stopped; recover the
       // recorded subset without inventing missing container identities.
@@ -1567,6 +1579,7 @@ export class TransactionalUpdater {
     }
     // Check all three again: a dependency must not have died during later startup.
     for (const item of containers) {
+      if (item.stayStopped) continue;
       const inspect = await this.docker.inspectContainer(item.id);
       if (!inspect.State.Running || inspect.State.Health?.Status !== 'healthy')
         throw new Error('updateHealthCheckFailed');

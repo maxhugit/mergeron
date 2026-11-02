@@ -306,3 +306,40 @@ test('refuses a stale preview and detects later drift without overwriting the re
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('observed companions do not invalidate core adoption or become trusted through adoption', () => {
+  const base = inventory();
+  const record = legacyRecord(base);
+  const observed = {
+    id: 'appCatalog',
+    observational: true,
+    adoption: 'adoptable',
+    state: 'stopped',
+    networks: [],
+    missingNetworks: [],
+    protectedMounts: [],
+    containerId: 'byparr',
+  };
+  const result = evaluateAdoption(
+    { ...base, components: [...base.components, observed] },
+    record,
+  );
+  assert.equal(result.adoption.state, 'adopted');
+  assert.equal(
+    result.components.find((c) => c.id === 'appCatalog').adoption,
+    'adoptable',
+  );
+  const changed = {
+    ...base,
+    components: base.components.map((c, i) =>
+      i === 0 ? { ...c, image: 'changed' } : c,
+    ),
+  };
+  assert.equal(
+    evaluateAdoption(
+      { ...changed, components: [...changed.components, observed] },
+      record,
+    ).adoption.state,
+    'drifted',
+  );
+});

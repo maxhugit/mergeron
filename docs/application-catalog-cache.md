@@ -33,3 +33,16 @@ Après chaque tentative, le Manager redémarre le même conteneur Byparr pour fe
 Désactiver **Catalogue quotidien via Byparr** rétablit immédiatement les appels natifs du CLI et arrête les téléchargements planifiés. Les fichiers conservés ne sont plus utilisés pour cet accès direct. Après vérification, l’administrateur peut arrêter puis supprimer le conteneur Byparr et désactiver son option dans le Manager. Les autres composants de Mergeron restent indépendants de cet adaptateur.
 
 L’adaptateur est isolé dans `src/apps/app-catalog*` et `manager/src/app-catalog/`. Il est destiné à être retiré lorsque l’accès natif fonctionne à nouveau. L’image est figée sur la version testée ; une autre version exige une validation et une mise à jour du Manager, plutôt qu’un changement silencieux pendant un téléchargement quotidien.
+
+## Inventaire et mises à jour de Byparr
+
+Le conteneur Byparr présent apparaît aussi dans **Serveur → Version actuelle** et **Infrastructure**,
+y compris arrêté, avec son image, sa version vérifiable, ses réseaux et son état. Le Manager consulte
+le registre sans démarrer le conteneur. Une indisponibilité du registre est signalée comme inconnue.
+
+Byparr reste un compagnon observé, distinct des composants principaux : son apparition ne modifie
+pas l’empreinte d’adoption existante et ne bloque pas l’installation principale. Il ne reçoit pas de
+confiance supplémentaire grâce à l’adoption de l’application. Les contrôles de propriété du catalogue
+restent actifs. Les nouvelles images disponibles ne sont pas installées automatiquement : le Manager
+conserve son empreinte approuvée et sa préparation explicite du catalogue. Le cycle de vie à la demande
+introduit pour le navigateur Mergeron ne modifie pas encore le fonctionnement permanent de Byparr.

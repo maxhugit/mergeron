@@ -266,3 +266,50 @@ test('does not select labeled production containers from a development stack', a
   );
   assert.equal(status.components[0].state, 'missing');
 });
+
+test('includes the installed stopped Byparr in inventory, without waking it or exposing environment values', async () => {
+  const scoped = scopeManifest(manifest);
+  const base = fixtureDocker();
+  const imageId = 'sha256:' + 'd'.repeat(64);
+  const labels = {
+    'io.mergeron.managed': 'true',
+    'io.mergeron.component': 'appCatalog',
+    'io.mergeron.stack': 'mergeron',
+  };
+  const entries = await base.listContainers();
+  const docker = {
+    ...base,
+    listContainers: async () => [
+      ...entries,
+      { Id: 'byparr', Names: ['/mergeron-byparr'], Labels: labels },
+    ],
+    inspectContainer: async (id) =>
+      id === 'byparr'
+        ? {
+            Id: id,
+            Name: '/mergeron-byparr',
+            Image: imageId,
+            Config: {
+              Image: 'ghcr.io/thephaseless/byparr:latest',
+              Labels: labels,
+              Env: ['VERSION=2.2.0', 'SECRET=never-expose'],
+            },
+            State: { Running: false, Status: 'exited' },
+            NetworkSettings: { Networks: { 'mergeron-isolated': {} } },
+            Mounts: [],
+            HostConfig: {},
+          }
+        : base.inspectContainer(id),
+    inspectImage: async () => ({
+      Id: imageId,
+      Config: { Env: ['VERSION=v2.2.0'] },
+    }),
+  };
+  const result = await collectInventory(scoped, docker);
+  const byparr = result.components.find((c) => c.id === 'appCatalog');
+  assert.equal(byparr.state, 'stopped');
+  assert.equal(byparr.build.version, '2.2.0');
+  assert.equal(byparr.observational, true);
+  assert.equal(byparr.adoption, 'managed');
+  assert.ok(!JSON.stringify(result).includes('never-expose'));
+});

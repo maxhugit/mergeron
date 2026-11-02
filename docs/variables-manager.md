@@ -98,3 +98,22 @@ tester une deuxième pile sur les données de production.
 ## Catalogue quotidien temporaire
 
 `MERGERON_APP_CATALOG_BYPARR_ENABLED` vaut `false` par défaut. `true` permet au Manager de préparer et gérer le conteneur Byparr dédié quand un administrateur active le cache quotidien dans les paramètres Codex. Aucun port n’est publié et aucune donnée de Mergeron n’est montée dans ce conteneur. Voir [le cache et son journal](application-catalog-cache.md) pour l’activation et le retrait de ce contournement.
+
+### Cycle de vie du navigateur géré
+
+Avec `MERGERON_MANAGE_BROWSER=true`, le navigateur conforme existant démarre à la demande.
+Le Manager ne le réveille pas pour lire son inventaire ou détecter une mise à jour.
+
+| Variable                           | Défaut | Rôle                                                                                                    |
+| ---------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| `MERGERON_BROWSER_IDLE_SECONDS`    | `300`  | Délai de 30 à 86 400 secondes après libération de toutes les réservations avant l’arrêt.                |
+| `MERGERON_BROWSER_STARTUP_SECONDS` | `90`   | Attente maximale de 10 à 300 secondes du contrôle de santé. Un dépassement est signalé à l’utilisateur. |
+
+Ces réglages appartiennent à la définition persistante du Manager (Compose ou formulaire hôte).
+Ils s’appliquent à toutes les conversations de la pile. Les nouvelles installations ne démarrent
+pas automatiquement un navigateur arrêté. Après redémarrage du Manager, un délai d’inactivité
+complet laisse aux sessions de l’application le temps de renouveler leurs réservations.
+
+Le backend peut explicitement utiliser `MERGERON_BROWSER_LIFECYCLE=external` pour un runtime
+externe non géré. Les anciens Managers sans cette API conservent le raccordement direct ; une
+erreur réseau du Manager moderne reste une erreur, sans démarrage alternatif ni modification du sandbox.

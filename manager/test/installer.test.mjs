@@ -226,7 +226,7 @@ async function fixtureConfiguration(directory) {
   return configuration;
 }
 
-test('starts an existing managed DEV browser without inventing an installation image', async (t) => {
+test('leaves an existing managed DEV browser stopped until requested without inventing an installation image', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'mergeron-browser-install-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const scoped = scopeManifest(
@@ -264,7 +264,7 @@ test('starts an existing managed DEV browser without inventing an installation i
     confirmation: 'INSTALL',
   });
   assert.ok(
-    docker.calls.some(
+    !docker.calls.some(
       ([action, id]) => action === 'startContainer' && id === created.Id,
     ),
   );
