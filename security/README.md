@@ -21,5 +21,13 @@ conditions indiquées ; elle ne vaut pas garantie pour toute version future.
 Ne pas retirer un correctif ou une évaluation sans vérifier ses consommateurs,
 le composant construit et les tests correspondants.
 
+L’image finale actualise `linux-libc-dev` et exige au minimum `6.12.115-2`,
+version corrigée pour [CVE-2026-99083](https://security-tracker.debian.org/tracker/CVE-2026-99083).
+Ce rafraîchissement reste indépendant du cache des étapes lourdes de compilation.
+Le test de l’image vérifie cette borne, l’inventaire des en-têtes et la compilation
+C/C++. Les anciennes déclarations OpenVEX restent limitées à leur version exacte :
+elles ne sont pas étendues au nouveau paquet. Le rapport brut et le blocage des
+vulnérabilités critiques corrigibles sont conservés.
+
 Voir la [politique de sécurité](../SECURITY.md) et
 les [composants système](system-components.md).

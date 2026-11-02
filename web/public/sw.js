@@ -1,13 +1,12 @@
-const STATIC_CACHE = 'mergeron-static-v6';
+const STATIC_CACHE = 'mergeron-static-v7';
+const MANIFEST_FILES = ['./manifest.webmanifest', './manifest-dev.webmanifest'];
 const STATIC_FILES = [
-  './manifest.webmanifest',
   './favicon.svg',
   './pwa-icon-180.png',
   './pwa-icon-192.png',
   './pwa-icon-512.png',
   './pwa-icon-maskable-512.png',
   './mergeron-icon.svg',
-  './manifest-dev.webmanifest',
   './mergeron-dev-icon.svg',
   './pwa-dev-icon-180.png',
   './pwa-dev-icon-192.png',
@@ -22,7 +21,7 @@ function cacheableResponse(request, response) {
   if (!response.ok || response.redirected || response.type !== 'basic') return false;
   if (type === 'text/html' || type === 'application/xhtml+xml') return false;
   if (new URL(request.url).pathname.endsWith('.webmanifest'))
-    return type === 'application/manifest+json' || type === 'application/json';
+    return false;
   return /^(?:image\/|font\/|text\/css|(?:application|text)\/javascript|application\/(?:wasm|octet-stream|x-font))/.test(type);
 }
 
@@ -52,6 +51,14 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Installed apps must see current display settings, not an old manifest
+  // pinned by the static cache. Keep the authenticated request and bypass
+  // HTTP caches too; never fall back to a stale manifest or a login response.
+  if (MANIFEST_FILES.some((file) => new URL(file, self.registration.scope).pathname === url.pathname)) {
+    event.respondWith(fetch(new Request(request, { credentials: 'include', cache: 'no-store' })));
+    return;
+  }
 
   // Never cache authentication, API, WebSocket, navigation, conversation or
   // file responses. Only immutable frontend assets and public PWA artwork are

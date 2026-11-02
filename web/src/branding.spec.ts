@@ -69,7 +69,7 @@ describe('Mergeron web and PWA identity', () => {
     for (const color of ['#29282e', '#dfa071', '#fff9f0'])
       expect(master).toContain(color);
     const sw = read('public/sw.js').toString();
-    expect(sw).toContain("'mergeron-static-v6'");
+    expect(sw).toContain("'mergeron-static-v7'");
     expect(sw).toContain("'./pwa-icon-maskable-512.png'");
     expect(sw).toContain("'./mergeron-icon.svg'");
   });
