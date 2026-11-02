@@ -16,6 +16,42 @@ export class ManagerStatusService {
     @Optional() private readonly registry?: RegistryImageIdentityService,
   ) {}
 
+  async transcriptionStatus() {
+    const status = await this.requestManager('/v1/transcription/status');
+    if (
+      status.platformCheckRequired &&
+      typeof status.registryDigest === 'string' &&
+      this.registry
+    ) {
+      try {
+        const imageId = await this.registry.imageId(
+          'transcription',
+          String(status.image),
+          status.registryDigest,
+          status.platform as ImagePlatform,
+        );
+        return {
+          ...status,
+          updateAvailable: imageId !== status.installedImageId,
+          platformCheckRequired: false,
+        };
+      } catch {
+        return {
+          ...status,
+          updateAvailable: false,
+          updateCheckError: 'TRANSCRIPTION_REGISTRY_UNAVAILABLE',
+        };
+      }
+    }
+    return status;
+  }
+  transcriptionLease(owner: string, release = false) {
+    return this.requestManager('/v1/transcription/lease', 'POST', {
+      owner,
+      release,
+    });
+  }
+
   private socketPath(): string {
     return (
       this.config.get<string>('MERGERON_MANAGER_SOCKET') ??

@@ -19,6 +19,38 @@ env:
   CACHE_SCOPE: ${{ github.ref == 'refs/heads/main' && 'main' || github.sha }}
 
 jobs:
+  transcription-build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/transcription-image.yml
+    with:
+      publish: true
+
+  transcription-publish:
+    needs: [quality, transcription-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote verified transcription image
+        env:
+          DIGEST: ${{ needs.transcription-build.outputs.digest }}
+          TAGS: ${{ needs.transcription-build.outputs.tags }}
+        run: |
+          args=()
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then args+=(--tag "$tag"); fi
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" "ghcr.io/maxhugit/mergeron-transcription@$DIGEST"
+
   browser-build:
     # Prepare/scan concurrently, but never move release tags before quality.
     outputs:
@@ -509,7 +541,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, manager-build, promote]
+    needs: [build, manager-build, promote, transcription-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write

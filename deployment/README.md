@@ -21,3 +21,5 @@ Le développement du code suit [Contribuer](../CONTRIBUTING.md).
 Le proxy HTTPS et le SSO facultatif sont indépendants des produits choisis.
 Les secrets, configurations privées et données persistantes ne sont jamais
 à enregistrer dans ce dépôt.
+
+Le service facultatif [`transcription/`](../docs/file-transcription.md) embarque les modèles CPU de transcription de fichiers audio/vidéo ; le Manager le démarre à la demande et arrête son runtime après inactivité.

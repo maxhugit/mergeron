@@ -31,6 +31,12 @@ env:
   CACHE_SCOPE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref == 'refs/heads/main' && 'main' || github.sha }}
 
 jobs:
+  transcription-image:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/transcription-image.yml
+    with:
+      publish: false
+
   checks:
     strategy:
       fail-fast: false

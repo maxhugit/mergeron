@@ -76,6 +76,16 @@ export function InstalledVersions({
       build: components.find((c) => c.id === 'browser')?.build,
       imageId: components.find((c) => c.id === 'browser')?.imageId,
     },
+    ...(status?.optionalServices?.transcription?.enabled
+      ? [
+          {
+            id: 'transcription',
+            name: 'Mergeron Transcription',
+            build: status.optionalServices.transcription.build,
+            imageId: status.optionalServices.transcription.installedImageId,
+          },
+        ]
+      : []),
     ...['ingress', 'egress'].map((id) => {
       const item = components.find((component) => component.id === id);
       return {

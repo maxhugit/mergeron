@@ -98,3 +98,14 @@ tester une deuxième pile sur les données de production.
 ## Catalogue quotidien temporaire
 
 `MERGERON_APP_CATALOG_BYPARR_ENABLED` vaut `false` par défaut. `true` permet au Manager de préparer et gérer le conteneur Byparr dédié quand un administrateur active le cache quotidien dans les paramètres Codex. Aucun port n’est publié et aucune donnée de Mergeron n’est montée dans ce conteneur. Voir [le cache et son journal](application-catalog-cache.md) pour l’activation et le retrait de ce contournement.
+
+## Transcription locale facultative
+
+| Variable | Défaut | Fonction |
+| --- | --- | --- |
+| `MERGERON_TRANSCRIPTION_ENABLED` | `false` | Autorise la création à la demande du worker CPU de fichiers audio/vidéo. |
+| `MERGERON_TRANSCRIPTION_DIARIZATION` | `false` | Monte uniquement les modèles locaux préparés dans `config/transcription-diarization`, en lecture seule. |
+| `MERGERON_TRANSCRIPTION_IDLE_SECONDS` | `300` | Délai sans bail avant arrêt ; entier de 30 à 86 400 secondes. |
+| `MERGERON_TRANSCRIPTION_IMAGE` | `ghcr.io/maxhugit/mergeron-transcription:edge` en Dev, `:latest` en production | Uniquement ce dépôt, avec tag explicite ou digest SHA-256. Pas de registre arbitraire. |
+
+Voir [le fonctionnement, les ressources et les modèles](file-transcription.md).
