@@ -6,8 +6,10 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   Logger,
+  Optional,
   Post,
   Query,
   Req,
@@ -42,6 +44,10 @@ import { Public } from '../auth/public.decorator';
 import { GENERAL_SETTING_KEYS } from '../settings/settings.definitions';
 import { SettingsService } from '../settings/settings.service';
 import {
+  OFFICE_ASSISTANT_GUID,
+  OnlyOfficeAssistantService,
+} from './onlyoffice-assistant.service';
+import {
   OnlyOfficeCallbackDto,
   OnlyOfficeConfigResponseDto,
 } from './dto/onlyoffice.dto';
@@ -62,6 +68,14 @@ interface OnlyOfficeEditorConfig {
     lang: string;
     mode: 'edit' | 'view';
     customization: Record<string, boolean>;
+    plugins?: {
+      pluginsData: string[];
+      autostart: string[];
+      options: Record<
+        string,
+        { mergeronChannel: string; mergeronLang: string }
+      >;
+    };
     embedded?: { autostart: 'document'; toolbarDocked: 'top' };
     user: {
       id: string;
@@ -88,6 +102,7 @@ export class OnlyOfficeController {
     private readonly authService: AuthService,
     private readonly identities: IdentityService,
     private readonly deliverables: DeliverablesService,
+    @Optional() private readonly assistant?: OnlyOfficeAssistantService,
   ) {}
 
   // ── Config endpoint ─────────────────────────────────────────────────
@@ -98,6 +113,7 @@ export class OnlyOfficeController {
    * so the save callback can be securely verified.
    */
   @Get('config')
+  @Header('Cache-Control', 'private, no-store')
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
   @ApiBadRequestResponse({ type: ApiErrorResponseDto })
@@ -218,6 +234,24 @@ export class OnlyOfficeController {
       },
     };
 
+    const assistant =
+      editorMode === 'edit'
+        ? this.assistant?.create(metadata.path, documentType)
+        : undefined;
+    if (assistant) {
+      config.editorConfig.plugins = {
+        pluginsData: [
+          this.joinUrl(baseUrl, '/api/onlyoffice/assistant/plugin/config.json'),
+        ],
+        autostart: [OFFICE_ASSISTANT_GUID],
+        options: {
+          [OFFICE_ASSISTANT_GUID]: {
+            mergeronChannel: assistant.channel,
+            mergeronLang: this.normalizeEditorLanguage(identity?.language),
+          },
+        },
+      };
+    }
     if (secret) {
       config.token = sign(config, secret, { algorithm: 'HS256' });
     }
@@ -228,6 +262,7 @@ export class OnlyOfficeController {
         '/web-apps/apps/api/documents/api.js',
       ),
       config: config as unknown as Record<string, unknown>,
+      ...(assistant ? { assistant } : {}),
     };
   }
 

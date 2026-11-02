@@ -9,6 +9,16 @@ http:
         stsIncludeSubdomains: true
 
   routers:
+    # Public code only; the backend restricts iframe ancestors to Mergeron and Docs.
+    mergeron-onlyoffice-plugin:
+      rule: "Host(`mergeron.example.com`) && PathPrefix(`/api/onlyoffice/assistant/plugin/`)"
+      entryPoints:
+        - websecure
+      priority: 210
+      service: mergeron-web
+      tls:
+        certResolver: tls
+
     # OnlyOffice Document Server cannot complete an interactive Authentik
     # login. These two machine-to-machine endpoints remain protected by the
     # Mergeron ingress credential plus the signed OnlyOffice callback JWT/state.
