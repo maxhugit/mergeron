@@ -13,6 +13,7 @@ import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { eq } from 'drizzle-orm';
 import { currentAccess } from '../auth/access-context';
 import { CodexService } from '../codex/codex.service';
+import { transportOverrides } from '../codex/config-overrides';
 import type { v2 } from '../codex/codex-schema';
 import type { JsonValue } from '../codex/codex-schema/serde_json/JsonValue';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
@@ -23,26 +24,6 @@ import {
 } from '../database/schema';
 
 type JsonObject = { [key: string]: JsonValue };
-
-/** Effective config serializes absent optionals as null; TOML overrides must omit them. */
-function transportOverrides(value: {
-  [key: string]: JsonValue | undefined;
-}): JsonObject {
-  const result: JsonObject = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (entry === null || entry === undefined) continue;
-    result[key] = Array.isArray(entry)
-      ? entry.map((item) =>
-          item && typeof item === 'object' && !Array.isArray(item)
-            ? transportOverrides(item)
-            : item,
-        )
-      : typeof entry === 'object'
-        ? transportOverrides(entry)
-        : entry;
-  }
-  return result;
-}
 
 export interface ProjectExecutionPolicy {
   internalMcpId?: string;

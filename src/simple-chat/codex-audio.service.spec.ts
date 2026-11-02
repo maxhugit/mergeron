@@ -12,7 +12,10 @@ const answer = 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n';
 async function flush() {
   for (let n = 0; n < 40; n++) await Promise.resolve();
 }
-function setup(autoAnswer = true) {
+function setup(
+  autoAnswer = true,
+  mcpServers: Record<string, unknown> = { global: { command: 'secret-tool' } },
+) {
   const client = new EventEmitter() as EventEmitter & {
     request: Mock<
       (method: string, params?: unknown, timeoutMs?: number) => Promise<unknown>
@@ -23,7 +26,7 @@ function setup(autoAnswer = true) {
       return Promise.resolve({ account: { type: 'chatgpt' } });
     if (method === 'config/read')
       return Promise.resolve({
-        config: { mcp_servers: { global: { command: 'secret-tool' } } },
+        config: { mcp_servers: mcpServers },
       });
     if (method === 'thread/start')
       return Promise.resolve({ thread: { id: 'voice-only' } });
@@ -61,6 +64,63 @@ function setup(autoAnswer = true) {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+it('omits absent MCP options before disabling servers for the voice-only thread', async () => {
+  const { service, client, admission } = setup(true, {
+    unraid: {
+      url: 'https://unraid.example.test/mcp',
+      tool_timeout_sec: null,
+      startup_timeout_sec: undefined,
+      enabled: true,
+      env: { absent: null, retained: 'value' },
+    },
+    homeassistant: {
+      url: 'https://ha.example.test/mcp',
+      tool_timeout_sec: 60,
+      startup_timeout_sec: 20,
+      enabled: false,
+    },
+  });
+  try {
+    await service.start(offer);
+    expect(
+      client.request.mock.calls.find(
+        ([method]) => method === 'thread/start',
+      )?.[1],
+    ).toMatchObject({
+      sandbox: 'read-only',
+      approvalPolicy: 'never',
+      config: {
+        features: { apps: false, plugins: false, shell_tool: false },
+        mcp_servers: {
+          unraid: {
+            enabled: false,
+            url: 'https://unraid.example.test/mcp',
+            env: { retained: 'value' },
+          },
+          homeassistant: {
+            enabled: false,
+            tool_timeout_sec: 60,
+            startup_timeout_sec: 20,
+          },
+        },
+      },
+    });
+    const start = client.request.mock.calls.find(
+      ([method]) => method === 'thread/start',
+    )?.[1] as { config: { mcp_servers: { unraid: Record<string, unknown> } } };
+    expect(start.config.mcp_servers.unraid).not.toHaveProperty(
+      'tool_timeout_sec',
+    );
+    expect(start.config.mcp_servers.unraid).not.toHaveProperty(
+      'startup_timeout_sec',
+    );
+    expect(start.config.mcp_servers.unraid.env).not.toHaveProperty('absent');
+  } finally {
+    await service.onModuleDestroy();
+  }
+  expect(admission.pending()).toHaveLength(0);
 });
 
 it('negotiates WebRTC with the CLI, never websocket or PCM upload; returns only scoped user speech', async () => {
