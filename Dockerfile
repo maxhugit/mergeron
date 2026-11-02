@@ -312,6 +312,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # ── Stage 6: Runtime ─────────────────────────────────────────────────
 FROM visual-runtime-base AS runtime
 
+# Refresh this package even when the expensive runtime/toolchain base is cached.
+# Debian fixes CVE-2026-99083 in 6.12.115-2; retain all scan findings and gates.
+ARG LINUX_LIBC_DEV_MIN_VERSION=6.12.115-2
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade linux-libc-dev \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' linux-libc-dev)" ge "${LINUX_LIBC_DEV_MIN_VERSION}"
+
 ARG MERGERON_VERSION=unknown
 ARG MERGERON_REVISION=unknown
 ARG MERGERON_BUILD_DATE=unknown
