@@ -7,6 +7,7 @@ function runtime() {
   const handlers = new Map<string, (event: Record<string, unknown>) => void>();
   const put = vi.fn();
   const remove = vi.fn();
+  const match = vi.fn();
   const showNotification = vi.fn().mockResolvedValue(undefined);
   const windows: {
     url: string;
@@ -31,14 +32,7 @@ function runtime() {
   const context = vm.createContext({
     URL,
     Promise,
-    Request: class {
-      url: string;
-      credentials: string;
-      constructor(url: URL, options: { credentials: string }) {
-        this.url = String(url);
-        this.credentials = options.credentials;
-      }
-    },
+    Request,
     self: {
       registration: { scope: 'https://example.test/app/', showNotification },
       location: { origin: 'https://example.test' },
@@ -60,9 +54,10 @@ function runtime() {
           'unrelated-cache',
           'mergeron-static-v4',
           'mergeron-static-v6',
+          'mergeron-static-v7',
         ]),
       delete: remove,
-      match: vi.fn(),
+      match,
     },
     fetch,
   });
@@ -71,13 +66,14 @@ function runtime() {
     handlers,
     put,
     remove,
+    match,
     fetch,
     showNotification,
     windows,
     openWindow,
   };
 }
-it('preloads with credentials but never caches authentication redirects or HTML', async () => {
+it('preloads artwork with credentials without preloading or caching manifests', async () => {
   const { handlers, put, fetch } = runtime();
   let done: Promise<unknown> | undefined;
   handlers.get('install')!({
@@ -96,6 +92,88 @@ it('preloads with credentials but never caches authentication redirects or HTML'
     put.mock.calls.some(([request]) => request.url.endsWith('.webmanifest')),
   ).toBe(false);
   expect(put).toHaveBeenCalled();
+  expect(
+    fetch.mock.calls.some(([request]) => request.url.endsWith('.webmanifest')),
+  ).toBe(false);
+});
+
+it('does not cache artwork when authentication returns redirected HTML', async () => {
+  const { handlers, fetch, put } = runtime();
+  fetch.mockResolvedValue({
+    ok: true,
+    type: 'basic',
+    redirected: true,
+    headers: { get: () => 'text/html' },
+  });
+  let done: Promise<unknown> | undefined;
+  handlers.get('install')!({
+    waitUntil: (promise: Promise<unknown>) => {
+      done = promise;
+    },
+  });
+  await done;
+  expect(put).not.toHaveBeenCalled();
+});
+
+it.each(['manifest.webmanifest', 'manifest-dev.webmanifest'])(
+  'fetches %s freshly with the session despite a stale cached display mode',
+  async (filename) => {
+    const { handlers, match, fetch, put } = runtime();
+    match.mockResolvedValue({ display_override: ['window-controls-overlay'] });
+    const fresh = {
+      ok: true,
+      type: 'basic',
+      redirected: false,
+      headers: { get: () => 'application/manifest+json' },
+    };
+    fetch.mockResolvedValueOnce(fresh);
+    let result: Promise<unknown> | undefined;
+    handlers.get('fetch')!({
+      request: new Request(
+        `https://example.test/app/${filename}?version=latest`,
+        { credentials: 'omit' },
+      ),
+      respondWith: (promise: Promise<unknown>) => {
+        result = promise;
+      },
+    });
+    expect(await result).toBe(fresh);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0][0]).toMatchObject({
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    expect(match).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+  },
+);
+
+it('never substitutes a cached manifest when the session redirects or the network fails', async () => {
+  const { handlers, match, fetch, put } = runtime();
+  match.mockResolvedValue({ display_override: ['window-controls-overlay'] });
+  const redirected = {
+    ok: true,
+    type: 'basic',
+    redirected: true,
+    headers: { get: () => 'text/html' },
+  };
+  fetch.mockResolvedValueOnce(redirected);
+  const request = new Request('https://example.test/app/manifest.webmanifest');
+  const read = () => {
+    let result: Promise<unknown> | undefined;
+    handlers.get('fetch')!({
+      request,
+      respondWith: (promise: Promise<unknown>) => {
+        result = promise;
+      },
+    });
+    return result;
+  };
+  expect(await read()).toBe(redirected);
+  fetch.mockRejectedValueOnce(new Error('offline'));
+  await expect(read()).rejects.toThrow('offline');
+  expect(match).not.toHaveBeenCalled();
+  expect(put).not.toHaveBeenCalled();
 });
 it('shows generic localized alerts with a stable tag, never supplied titles/HTML/URLs', async () => {
   const { handlers, showNotification } = runtime();
@@ -215,5 +293,8 @@ it('cleans only caches owned by Mergeron', async () => {
     },
   });
   await done;
-  expect(remove).toHaveBeenCalledExactlyOnceWith('mergeron-static-v4');
+  expect(remove.mock.calls).toEqual([
+    ['mergeron-static-v4'],
+    ['mergeron-static-v6'],
+  ]);
 });

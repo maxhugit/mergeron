@@ -19,6 +19,14 @@ portée. Il refuse les réponses HTML et les redirections de connexion, joint la
 session pendant le préchargement et ne nettoie que ses propres anciens caches.
 Ce n’est pas un mode hors ligne pour les fichiers, conversations ou API.
 
+Les manifestes d’installation sont toujours relus sur le réseau avec la session
+et sans cache HTTP. Ils ne font pas partie du cache statique : une ancienne
+option d’affichage ne doit pas rester figée dans une application déjà installée.
+L’activation du service worker retire les anciens caches statiques de Mergeron,
+sans toucher aux autres applications ni aux données de session. Si la session
+est expirée ou le réseau indisponible, aucun ancien manifeste n’est substitué à
+la réponse du serveur ; se reconnecter avant de retenter l’installation.
+
 Les manifestes dev et production utilisent `standalone`, sans
 `window-controls-overlay`. Edge conserve ainsi sa barre de titre native sur
 toute la largeur : elle permet de déplacer la fenêtre et réserve une zone aux
@@ -28,12 +36,21 @@ Edge doit récupérer le manifeste mis à jour ; fermer puis rouvrir l’applica
 après cette actualisation. Un simple rechargement ne garantit pas l’application
 immédiate des changements du manifeste par le navigateur.
 
+Si seule une ancienne installation de production conserve une fenêtre sans
+barre de titre alors que la dev fonctionne, comparer d’abord le manifeste
+actuellement servi. Dans Edge, quitter le plein écran si nécessaire (`F11`),
+puis fermer et rouvrir l’application après connexion. Si Edge conserve encore
+l’ancienne présentation, désinstaller uniquement l’application depuis
+`edge://apps`, sans demander l’effacement des données du site, puis la réinstaller
+depuis Mergeron. Cela ne supprime pas les projets ou conversations du serveur.
+
 Le test navigateur `web/src/pwa-install.browser.tsx` vérifie le vrai chargement
 Chromium du manifeste derrière un cookie de session, puis les critères
 d’installation via DevTools Protocol. La fixture n’existe que dans le serveur
 Vitest, jamais dans l’application déployée.
 
 Références :
+
 - https://web.dev/articles/add-manifest
 - https://learn.microsoft.com/en-us/microsoft-edge/progressive-web-apps/how-to/
 - https://learn.microsoft.com/en-us/microsoft-edge/progressive-web-apps/how-to/window-controls-overlay
