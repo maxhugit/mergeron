@@ -14,10 +14,11 @@ chmod 644 "$fixture"/*.wav "$fixture/video.mp4"
 docker run -d --name "$name" --network none --read-only --user 11003:11003 --cap-drop ALL --security-opt no-new-privileges:true --memory 6g --cpus 4 --pids-limit 128 --init --tmpfs /tmp:rw,nosuid,nodev,noexec,size=1g,mode=1777 --mount "type=bind,src=$fixture,dst=/fixtures,readonly" -e "TRANSCRIPTION_TOKEN=$(printf 'a%.0s' {1..64})" "$image" >/dev/null
 # -i is required to pass the fixture driver over stdin.
 docker exec -i "$name" python - <<'PY'
-import hashlib, json, os, subprocess, time, urllib.request, urllib.error, uuid
+import hashlib, importlib.util, json, os, subprocess, time, urllib.request, urllib.error, uuid
 import torch, torchcodec
 from pyannote.audio import Pipeline
 assert not torch.cuda.is_available()
+assert importlib.util.find_spec("pip") is None
 base='http://127.0.0.1:8090'
 def request(path,method='GET',data=None,extra=None):
     headers={'Authorization':'Bearer '+os.environ['TRANSCRIPTION_TOKEN'],**(extra or {})}

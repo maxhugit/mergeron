@@ -10,7 +10,9 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade setuptools==81.0.0 wheel==0.46.3 \
  && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.11.0 torchaudio==2.11.0 torchcodec==0.17.0 \
  && pip install --no-cache-dir -r requirements.txt \
- && pip check
+ && pip check \
+ && pip uninstall --yes pip \
+ && python -c "import importlib.util; assert importlib.util.find_spec('pip') is None"
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-small', revision='536b0662742c02347bc0e980a01041f333bce120', local_dir='/models/asr', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.*','preprocessor_config.json'])" \
  && rm -rf /models/asr/.cache \
  && addgroup -g 11003 transcription && adduser -D -H -u 11003 -G transcription transcription

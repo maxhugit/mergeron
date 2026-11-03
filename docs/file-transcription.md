@@ -102,7 +102,9 @@ Son paquet [FFmpeg 9](https://github.com/wolfi-dev/os/blob/main/ffmpeg-9.0.yaml)
 fournit les bibliothèques partagées nécessaires à
 [TorchCodec 0.17](https://github.com/meta-pytorch/torchcodec/blob/v0.17.0/README.md).
 PyTorch reste en version CPU 2.11 ; `pip check` vérifie les contraintes de
-l’environnement avant sa validation sur de vrais fichiers synthétiques.
+l’environnement avant sa validation sur de vrais fichiers synthétiques. Le programme
+d’installation pip est ensuite désinstallé du runtime : le service utilise
+uniquement les dépendances et les modèles déjà présents dans son image.
 
 Pour les locuteurs, préparer une copie **complète et fonctionnant hors ligne** de
 [Pyannote Community-1](https://huggingface.co/pyannote/speaker-diarization-community-1),
