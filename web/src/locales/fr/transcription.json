@@ -50,5 +50,21 @@
     "noSpeakersDetected": "Aucune voix exploitable détectée par la diarisation."
   },
   "unattributed": "Non attribué",
-  "speakersDisabled": "La séparation des locuteurs est désactivée dans le Manager."
+  "speakersDisabled": "La séparation des locuteurs est désactivée dans le Manager.",
+  "subtitles": {
+    "title": "Sous-titres synchronisés",
+    "load": "Charger un fichier SRT",
+    "loading": "Chargement des sous-titres…",
+    "empty": "Aucun SRT du même nom trouvé. Chargez un fichier SRT pour afficher la transcription synchronisée.",
+    "invalid": "Ce fichier SRT est vide ou contient des sous-titres invalides.",
+    "tooLarge": "Le fichier SRT dépasse la limite de 2 Mio ou de 10 000 sous-titres.",
+    "loadFailed": "Impossible de charger les sous-titres. Vous pouvez choisir un autre fichier SRT.",
+    "follow": "Suivre la lecture",
+    "videoError": "Impossible de lire cette vidéo.",
+    "chooseDescription": "Choisissez un SRT du dossier de la vidéo ou un fichier sur votre appareil. Le chargement ne modifie pas vos fichiers.",
+    "inFolder": "Dans le dossier de la vidéo",
+    "listFailed": "Impossible de lire le dossier. Vous pouvez choisir un fichier sur votre appareil.",
+    "noOtherFile": "Aucun fichier SRT dans ce dossier.",
+    "localFile": "Choisir sur cet appareil"
+  }
 }
