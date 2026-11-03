@@ -6,10 +6,24 @@ import { AgentTeamStore } from './agent-team-store';
 import { AgentTeamObserver } from './agent-team-observer.service';
 import { AgentTeamsService } from './agent-teams.service';
 import { AgentTeamsController } from './agent-teams.controller';
+import { ThreadsModule } from '../threads/threads.module';
+import { PendingApprovalsModule } from '../pending-approvals/pending-approvals.module';
+import { AgentTeamControlsService } from './agent-team-controls.service';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, CodexModule],
-  providers: [AgentTeamStore, AgentTeamObserver, AgentTeamsService],
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    CodexModule,
+    ThreadsModule,
+    PendingApprovalsModule,
+  ],
+  providers: [
+    AgentTeamStore,
+    AgentTeamObserver,
+    AgentTeamsService,
+    AgentTeamControlsService,
+  ],
   controllers: [AgentTeamsController],
 })
 export class AgentTeamsModule {}

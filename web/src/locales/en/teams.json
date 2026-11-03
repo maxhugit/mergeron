@@ -19,6 +19,27 @@
     "completed": "Completed",
     "failed": "Failed",
     "cancelled": "Cancelled",
-    "unknown": "State to verify"
-  }
+    "unknown": "State to verify",
+    "approval": "Approval required",
+    "question": "Answer required"
+  },
+  "refreshRequest": "Refreshing this request before it can be answered…",
+  "unsupportedRequest": "This request cannot be answered in this panel.",
+  "stopUnconfirmed": "The stop is not confirmed. Verify the state or explicitly retry; work has not been replayed.",
+  "stateNeedsVerification": "The execution state needs verification. No work will be restarted automatically.",
+  "controlsLimited": "Grouped controls are unavailable for teams with more than 64 members.",
+  "verifyState": "Verify execution state",
+  "stopTeam": "Stop the team…",
+  "administratorRequired": "An administrator must answer the pending request.",
+  "requestFromCoordinator": "Request from the coordinator",
+  "requestFromMember": "Request from {{name}}",
+  "hideHistory": "Hide messages",
+  "showHistory": "View agent messages",
+  "coordinatorMessage": "Instructions received",
+  "emptyHistory": "No messages are available in this history page.",
+  "olderMessages": "Load earlier messages",
+  "stopTitle": "Stop this team?",
+  "stopDescription": "The current work will be interrupted where its state can be confirmed. Existing changes and results are kept. An uncertain stop will be reported explicitly.",
+  "cancel": "Cancel",
+  "confirmStop": "Stop the work"
 }

@@ -1,6 +1,7 @@
 /** Scoped team reads use the same session transport as the project interface. */
 import { z } from 'zod';
 import { projectsApi } from './projects-api';
+import type { PendingServerRequestDto } from '@/generated/api';
 
 const assignment = z.object({
   id: z.string(),
@@ -18,6 +19,22 @@ const summary = z.object({
   coordinatorThreadId: z.string(),
   nativeTurnId: z.string().nullable(),
   origin: z.enum(['planned', 'observed']),
+  state: z
+    .enum([
+      'observed',
+      'draft',
+      'preparing',
+      'dispatching',
+      'running',
+      'completed',
+      'failed',
+      'stopping',
+      'stopped',
+      'unknown',
+      'needs_attention',
+    ])
+    .default('observed'),
+  lastError: z.string().nullable().default(null),
   objective: z.string(),
   createdAt: z.number(),
   assignments: z.array(assignment),
@@ -27,6 +44,18 @@ const listing = z.object({
   launchAvailable: z.boolean(),
 });
 const detail = summary.extend({
+  canRespond: z.boolean().default(false),
+  requests: z.array(z.custom<PendingServerRequestDto>()).default([]),
+  attention: z
+    .array(
+      z.object({
+        threadId: z.string(),
+        status: z.string(),
+        kind: z.enum(['approval', 'question']),
+      }),
+    )
+    .default([]),
+  controlsLimited: z.boolean().default(false),
   assignments: z.array(
     assignment.extend({
       instructions: z.string(),
@@ -58,6 +87,45 @@ export async function readAgentTeam(
 ) {
   return detail.parse(
     await projectsApi<unknown>(teamPath(projectId, teamId), { signal }),
+  );
+}
+export async function controlAgentTeam(
+  projectId: string,
+  teamId: string,
+  action: 'stop' | 'reconcile',
+) {
+  return detail.parse(
+    await projectsApi<unknown>(teamPath(projectId, teamId) + '/' + action, {
+      method: 'POST',
+    }),
+  );
+}
+const history = z.object({
+  messages: z.array(
+    z.object({
+      id: z.string(),
+      role: z.enum(['agent', 'user']),
+      text: z.string(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+export async function readTeamHistory(
+  projectId: string,
+  teamId: string,
+  assignmentId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+) {
+  return history.parse(
+    await projectsApi<unknown>(
+      teamPath(projectId, teamId) +
+        '/assignments/' +
+        encodeURIComponent(assignmentId) +
+        '/history' +
+        (cursor ? '?cursor=' + encodeURIComponent(cursor) : ''),
+      { signal },
+    ),
   );
 }
 export function assignmentState(

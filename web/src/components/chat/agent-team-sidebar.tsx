@@ -22,6 +22,7 @@ import {
 } from '@/lib/agent-teams-api';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
+import { AgentTeamActions } from './agent-team-actions';
 
 const icons = {
   planned: Circle,
@@ -31,6 +32,8 @@ const icons = {
   failed: CircleX,
   cancelled: CircleX,
   unknown: CircleHelp,
+  approval: Clock3,
+  question: CircleHelp,
 };
 const colors = {
   planned: 'text-muted-foreground',
@@ -40,6 +43,8 @@ const colors = {
   failed: 'text-destructive',
   cancelled: 'text-muted-foreground',
   unknown: 'text-muted-foreground',
+  approval: 'text-amber-700 dark:text-amber-300',
+  question: 'text-amber-700 dark:text-amber-300',
 };
 
 export function AgentTeamSidebar({
@@ -66,6 +71,8 @@ export function AgentTeamSidebar({
     failed: t('states.failed'),
     cancelled: t('states.cancelled'),
     unknown: t('states.unknown'),
+    approval: t('states.approval'),
+    question: t('states.question'),
   };
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<string | null>(
@@ -152,7 +159,14 @@ export function AgentTeamSidebar({
             <p className="text-xs text-muted-foreground">{t('coordinator')}</p>
             <div className="space-y-2" aria-label={t('members')}>
               {assignments.map((assignment) => {
-                const state = assignmentState(assignment, assignments),
+                const pending = details.isError
+                  ? undefined
+                  : details.data?.attention.find(
+                      (request) =>
+                        request.threadId === assignment.nativeThreadId,
+                    );
+                const state =
+                    pending?.kind ?? assignmentState(assignment, assignments),
                   Icon = icons[state];
                 return (
                   <button
@@ -230,6 +244,18 @@ export function AgentTeamSidebar({
                   <p role="status">{t('loading')}</p>
                 )}
               </div>
+            )}
+            {!details.isError && details.data && selected && (
+              <AgentTeamActions
+                key={`${team?.id}:${selected.id}`}
+                projectId={projectId}
+                team={details.data}
+                assignmentId={selected.id}
+                onChanged={() => {
+                  void listing.refetch();
+                  void details.refetch();
+                }}
+              />
             )}
           </>
         )}
