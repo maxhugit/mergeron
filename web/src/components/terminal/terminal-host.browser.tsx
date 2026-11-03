@@ -137,7 +137,9 @@ afterEach(() => {
 
 test('positions the overlay on the placeholder and follows it when it resizes', async () => {
   const view = render(<Panel terminalId="a" />);
-  await settle();
+  await expect
+    .poll(() => overlay('a')?.width)
+    .toBeCloseTo(placeholder().getBoundingClientRect().width, 0);
   const before = placeholder().getBoundingClientRect();
   const painted = overlay('a')!;
   expect(painted.width).toBeCloseTo(before.width, 0);
@@ -148,7 +150,9 @@ test('positions the overlay on the placeholder and follows it when it resizes', 
   // The explorer rail commits a new width, or the window changes: the panel
   // moves and shrinks without the terminal's own React tree being touched.
   view.rerender(<Panel terminalId="a" width={380} height={500} offset={90} />);
-  await settle();
+  await expect
+    .poll(() => overlay('a')?.width)
+    .toBeCloseTo(placeholder().getBoundingClientRect().width, 0);
   const after = placeholder().getBoundingClientRect();
   const moved = overlay('a')!;
   expect(moved.width).toBeCloseTo(after.width, 0);
