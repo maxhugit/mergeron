@@ -189,10 +189,9 @@ export function DeliverableDocuments({
       document: DeliverableDocument;
       file: File;
     }) => {
-      if (
-        file.name.split('.').pop()?.toLowerCase() !==
-        document.format.toLowerCase()
-      )
+      const dot = file.name.lastIndexOf('.');
+      const extension = dot > 0 ? file.name.slice(dot + 1).toLowerCase() : '';
+      if (extension !== document.format.toLowerCase())
         throw new Error('filename');
       await uploadDocument(
         file,
@@ -460,7 +459,14 @@ export function DeliverableDocuments({
             </DialogDescription>
           </DialogHeader>
           <p className="break-words text-sm">{pendingReplacement?.file.name}</p>
-          {addVersion.isError&&<p role="alert" className="text-sm text-destructive">{addVersion.error instanceof Error&&addVersion.error.message==='filename'?documentText('documentsSameFormat'):t('unableToUpdateDocument')}</p>}
+          {addVersion.isError && (
+            <p role="alert" className="text-sm text-destructive">
+              {addVersion.error instanceof Error &&
+              addVersion.error.message === 'filename'
+                ? documentText('documentsSameFormat')
+                : t('unableToUpdateDocument')}
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <Button
               variant="outline"

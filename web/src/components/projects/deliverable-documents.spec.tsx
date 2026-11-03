@@ -49,7 +49,7 @@ beforeEach(() => {
   });
 });
 
-function setup(disabled = false, context = false) {
+function setup(disabled = false, context = false, name = 'report.docx') {
   const refresh = vi.fn().mockResolvedValue(undefined);
   const onError = vi.fn();
   const item = {
@@ -59,9 +59,9 @@ function setup(disabled = false, context = false) {
       {
         id: 'document',
         deliverableId: 'deliverable',
-        name: 'report.docx',
-        format: 'docx',
-        sourcePath: '/project/report.docx',
+        name,
+        format: name.includes('.') ? name.split('.').pop()! : '',
+        sourcePath: `/project/${name}`,
         currentVersionNumber: 2,
         deletedAt: null,
         createdAt: 0,
@@ -208,6 +208,24 @@ it('uploads a new version through the scoped staging endpoint instead of overwri
       kind: 'invalidate',
       paths: ['/project/report.docx'],
     });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('accepts an extensionless document as a version while preserving its canonical name', async () => {
+  const upload = vi.fn().mockResolvedValue({ ok: true });
+  vi.stubGlobal('fetch', upload);
+  try {
+    const { refresh } = setup(false, false, 'README');
+    fireEvent.change(screen.getByLabelText('Save a new version'), {
+      target: { files: [new File(['Revised'], 'README')] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create new version' }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(
+      (upload.mock.calls[0][1].body as FormData).get('files'),
+    ).toMatchObject({ name: 'README' });
   } finally {
     vi.unstubAllGlobals();
   }

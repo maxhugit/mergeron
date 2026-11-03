@@ -848,6 +848,7 @@ export class ThreadsService {
     prompt: string;
     instructions: string;
     outputSchema?: v2.TurnStartParams['outputSchema'];
+    lockedReadOnly?: boolean;
   }): Promise<string> {
     requireExecutionAccess();
     const started = await this.startThread({
@@ -895,6 +896,15 @@ export class ThreadsService {
         threadId,
         cwd: input.cwd,
         input: [{ type: 'text', text: input.prompt, text_elements: [] }],
+        ...(input.lockedReadOnly
+          ? {
+              approvalPolicy: 'never' as const,
+              sandboxPolicy: {
+                type: 'readOnly' as const,
+                networkAccess: false,
+              },
+            }
+          : {}),
         ...(input.outputSchema ? { outputSchema: input.outputSchema } : {}),
       });
       const turn = await completed;

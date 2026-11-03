@@ -10,7 +10,10 @@ export class DocumentLabelsAiAdapter implements OnModuleInit {
   ) {}
   onModuleInit() {
     this.organization.setRunner((input) =>
-      this.threads.runProjectStructuredPrompt(input),
+      this.threads.runProjectStructuredPrompt({
+        ...input,
+        lockedReadOnly: true,
+      }),
     );
   }
 }
