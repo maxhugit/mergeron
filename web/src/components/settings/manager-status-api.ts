@@ -65,6 +65,14 @@ export type ManagerBackupPolicy =
   | 'legacy-full-v1';
 
 export interface ManagerStatus {
+  optionalServices?: {
+    transcription?: {
+      enabled: boolean;
+      state: string;
+      build?: InstalledBuild | null;
+      installedImageId?: string | null;
+    };
+  };
   manager?: { build: InstalledBuild; imageId: string } | null;
   backupPolicy?: ManagerBackupPolicy;
   capabilities?: {

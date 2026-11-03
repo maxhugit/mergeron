@@ -1,0 +1,105 @@
+name: Validate transcription image
+on:
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+    outputs:
+      digest:
+        value: ${{ jobs.image.outputs.digest }}
+      tags:
+        value: ${{ jobs.image.outputs.tags }}
+permissions:
+  contents: read
+jobs:
+  image:
+    if: ${{ !inputs.publish || (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install synthetic media tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+      - name: Check anonymous speaker mapping and bounded private API
+        run: python3 -m unittest discover -s deployment/transcription -p 'test_*.py'
+      - name: Resolve build identity
+        id: version
+        run: node scripts/release-version.mjs "${GITHUB_REF_NAME}"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: inputs.publish
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        id: meta
+        with:
+          images: ghcr.io/maxhugit/mergeron-transcription
+          tags: |
+            type=raw,value=edge,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: build
+        with:
+          context: deployment/transcription
+          platforms: linux/amd64
+          load: ${{ !inputs.publish }}
+          push: ${{ inputs.publish }}
+          tags: ghcr.io/maxhugit/mergeron-transcription:candidate-${{ github.sha }}
+          build-args: |
+            MERGERON_VERSION=${{ steps.version.outputs.version }}
+            MERGERON_REVISION=${{ github.sha }}
+            MERGERON_BUILD_DATE=${{ steps.version.outputs.created }}
+            MERGERON_RELEASE_CHANNEL=${{ steps.version.outputs.channel }}
+          cache-from: type=gha,scope=transcription-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref == 'refs/heads/main' && 'main' || github.sha }}
+          cache-to: type=gha,scope=transcription-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref == 'refs/heads/main' && 'main' || github.sha }},mode=max
+          provenance: ${{ inputs.publish && 'mode=max' || 'false' }}
+          sbom: ${{ inputs.publish }}
+      - name: Load exact published candidate for validation
+        if: inputs.publish
+        env:
+          IMAGE: ghcr.io/maxhugit/mergeron-transcription@${{ steps.build.outputs.digest }}
+        run: docker pull "$IMAGE"
+      - name: Inspect Python and embedded SBOM provenance
+        env:
+          IMAGE: ${{ inputs.publish && format('ghcr.io/maxhugit/mergeron-transcription@{0}', steps.build.outputs.digest) || format('ghcr.io/maxhugit/mergeron-transcription:candidate-{0}', github.sha) }}
+        run: docker run --rm --interactive --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --entrypoint python "$IMAGE" - < scripts/inspect-transcription-python.py
+      - name: Scan transcription image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: ${{ inputs.publish && format('ghcr.io/maxhugit/mergeron-transcription@{0}', steps.build.outputs.digest) || format('ghcr.io/maxhugit/mergeron-transcription:candidate-{0}', github.sha) }}
+          format: json
+          output: trivy-transcription-results.json
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+      - name: Report exact vulnerable package locations
+        if: always()
+        run: |
+          if [ -f trivy-transcription-results.json ]; then
+            jq -c '.Results[]? | .Target as $target | .Vulnerabilities[]? | {target: $target, package: .PkgName, path: .PkgPath, installed: .InstalledVersion, fixed: .FixedVersion, cve: .VulnerabilityID}' trivy-transcription-results.json
+          fi
+      - name: Preserve transcription security report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-transcription-report-${{ github.sha }}
+          path: trivy-transcription-results.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Transcribe synthetic audio offline in the real image
+        env:
+          IMAGE: ${{ inputs.publish && format('ghcr.io/maxhugit/mergeron-transcription@{0}', steps.build.outputs.digest) || format('ghcr.io/maxhugit/mergeron-transcription:candidate-{0}', github.sha) }}
+        run: bash scripts/smoke-test-transcription-image.sh "$IMAGE"

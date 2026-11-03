@@ -1,9 +1,10 @@
+import { BrowserLifecycle } from './browser-lifecycle.mjs';
+import { ManagedTranscription } from './transcription.mjs';
 import http from 'node:http';
 import net from 'node:net';
 import { chmod, chown, mkdir, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BrowserLifecycle } from './browser-lifecycle.mjs';
 import { AppCatalogRunner } from './app-catalog/runner.mjs';
 import { DockerClient } from './docker-client.mjs';
 import { ImageUpdates } from './image-updates.mjs';
@@ -87,6 +88,25 @@ const updater = new TransactionalUpdater({
   configuration: installConfiguration,
   adoptionPath,
   directory: `${dirname(adoptionPath)}/updates`,
+});
+const transcription = new ManagedTranscription({
+  docker,
+  manifest,
+  configuration: installConfiguration,
+  inventory: async () =>
+    evaluateAdoption(
+      await collectInventory(manifest, docker),
+      await readAdoptionRecord(adoptionPath),
+    ),
+  blocked: () =>
+    !ready ||
+    !!installing ||
+    !!adopting ||
+    updater.busy ||
+    previews.busy ||
+    codexCli.busy ||
+    appCatalog.busy ||
+    updater.current?.status === 'recoveryRequired',
 });
 const browserLifecycle = new BrowserLifecycle({
   docker,
@@ -198,6 +218,7 @@ async function adopt(body) {
     installing ||
     codexCli.busy ||
     appCatalog.busy ||
+    transcription.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -235,6 +256,7 @@ async function install(body, automatic = false) {
     adopting ||
     codexCli.busy ||
     appCatalog.busy ||
+    transcription.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -330,6 +352,29 @@ const server = http.createServer(async (request, response) => {
       });
     }
   }
+  if (
+    ['/v1/transcription/status', '/v1/transcription/lease'].includes(
+      request.url,
+    )
+  ) {
+    try {
+      if (request.url.endsWith('/status') && request.method === 'GET')
+        return json(response, 200, await transcription.status());
+      if (request.url.endsWith('/lease') && request.method === 'POST')
+        return json(
+          response,
+          200,
+          await transcription.lease(await readJsonBody(request)),
+        );
+      return json(response, 405, { error: 'methodNotAllowed' });
+    } catch (error) {
+      return json(response, 409, {
+        error: /^TRANSCRIPTION_[A-Z_]+$/.test(error.message ?? '')
+          ? error.message
+          : 'TRANSCRIPTION_UNAVAILABLE',
+      });
+    }
+  }
   if (request.url === '/v1/services/browser') {
     try {
       if (request.method === 'GET')
@@ -365,6 +410,7 @@ const server = http.createServer(async (request, response) => {
     await refresh();
     json(response, 200, {
       ...snapshot,
+      optionalServices: { transcription: await transcription.status() },
       components: snapshot.components.map((component) =>
         component.id === 'browser'
           ? {
@@ -388,6 +434,7 @@ const server = http.createServer(async (request, response) => {
         imageUpdates: true,
         browserLifecycle: true,
         managedCodexCli: true,
+        managedTranscription: true,
       },
     });
     return;
@@ -507,7 +554,8 @@ const server = http.createServer(async (request, response) => {
         updater.busy ||
         previews.busy ||
         codexCli.busy ||
-        appCatalog.busy
+        appCatalog.busy ||
+        transcription.busy
       )
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
@@ -589,7 +637,8 @@ const server = http.createServer(async (request, response) => {
             updater.busy ||
             previews.busy ||
             codexCli.busy ||
-            appCatalog.busy))
+            appCatalog.busy ||
+            transcription.busy))
       )
         throw new Error('managerOperationInProgress');
       json(
@@ -630,7 +679,8 @@ const server = http.createServer(async (request, response) => {
         updater.busy ||
         previews.busy ||
         codexCli.busy ||
-        appCatalog.busy
+        appCatalog.busy ||
+        transcription.busy
       )
         throw new Error('managerOperationInProgress');
       json(
@@ -716,6 +766,19 @@ server.listen(socketPath, async () => {
   }
   await updater.recover();
   ready = true;
+  setInterval(() => {
+    if (!transcription.checkingUpdates)
+      transcription.checkingUpdates = transcription
+        .updates()
+        .catch(() => undefined)
+        .finally(() => {
+          transcription.checkingUpdates = null;
+        });
+  }, 300_000).unref();
+  setInterval(
+    () => void transcription.tick().catch(() => undefined),
+    10000,
+  ).unref();
   setInterval(
     () =>
       void previews

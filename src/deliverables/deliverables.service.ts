@@ -431,6 +431,7 @@ export class DeliverablesService implements OnModuleInit {
             fresh?.id,
             false,
             true,
+            request.beforeCommit,
           );
           const stat = await fs.stat(requested);
           return {
@@ -449,7 +450,12 @@ export class DeliverablesService implements OnModuleInit {
     resourceId: string,
     deliverableId: string,
     uploads: AsyncIterable<FileUploadInput>,
-    input: { documentId?: string; expectedVersion?: number; comment?: string },
+    input: {
+      documentId?: string;
+      expectedVersion?: number;
+      comment?: string;
+      beforeCommit?: () => void;
+    },
   ) {
     this.get(projectId, resourceId, deliverableId);
     const files: Array<{ path: string; size: number }> = [];
@@ -476,6 +482,7 @@ export class DeliverablesService implements OnModuleInit {
         documentId: input.documentId,
         expectedVersion: input.expectedVersion,
         comment: input.comment,
+        beforeCommit: input.beforeCommit,
       });
       if (!result)
         throw new BadRequestException('Document is outside its deliverable');
@@ -1820,6 +1827,7 @@ export class DeliverablesService implements OnModuleInit {
     documentId?: string,
     trustedOnlyOffice = false,
     stagedUpload = false,
+    beforeCommit?: () => void,
   ) {
     const deliverable = this.get(projectId, resourceId, deliverableId);
     this.requireDocumentMutable(deliverable);
@@ -1947,6 +1955,7 @@ export class DeliverablesService implements OnModuleInit {
             throw new ConflictException(
               'Save pending document changes as a version before replacing the retained source',
             );
+          beforeCommit?.();
           projectionPath = target;
           replacedProjection = Boolean(document);
           try {
@@ -1998,6 +2007,7 @@ export class DeliverablesService implements OnModuleInit {
           'Document changed while its version was created',
         );
       }
+      beforeCommit?.();
       const now = Date.now();
       return this.db.transaction((tx) => {
         if (!document) {

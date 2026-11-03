@@ -216,7 +216,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
   const gate = job(quality, 'quality');
   assert.match(
     gate,
-    /needs: \[checks, image, manager-image, browser-image, cli-runtime\]/,
+    /needs:\s*\[\s*checks,\s*image,\s*manager-image,\s*browser-image,\s*cli-runtime,\s*transcription-image,?\s*\]/,
   );
   assert.match(gate, /if: always\(\)/);
   assert.match(gate, /EXPECT_IMAGES:.*github\.event_name == 'pull_request'/);
@@ -227,6 +227,8 @@ test('required gate rejects every missing, failed or cancelled security job', ()
     MANAGER_RESULT: 'success',
     BROWSER_RESULT: 'success',
     CLI_RESULT: 'success',
+    TRANSCRIPTION_RESULT: 'success',
+    EXPECT_TRANSCRIPTION: 'true',
     EXPECT_IMAGES: 'true',
   };
   const run = (overrides) =>
@@ -240,6 +242,7 @@ test('required gate rejects every missing, failed or cancelled security job', ()
     'MANAGER_RESULT',
     'BROWSER_RESULT',
     'CLI_RESULT',
+    'TRANSCRIPTION_RESULT',
   ]) {
     for (const result of ['failure', 'cancelled', 'skipped', '']) {
       assert.notEqual(
@@ -252,6 +255,8 @@ test('required gate rejects every missing, failed or cancelled security job', ()
   assert.equal(
     run({
       EXPECT_IMAGES: 'false',
+      EXPECT_TRANSCRIPTION: 'false',
+      TRANSCRIPTION_RESULT: 'skipped',
       IMAGE_RESULT: 'skipped',
       MANAGER_RESULT: 'skipped',
       BROWSER_RESULT: 'skipped',
@@ -260,6 +265,11 @@ test('required gate rejects every missing, failed or cancelled security job', ()
     0,
   );
   assert.notEqual(run({ EXPECT_IMAGES: 'false' }), 0);
+  assert.notEqual(run({ EXPECT_TRANSCRIPTION: 'false' }), 0);
+  assert.equal(
+    run({ EXPECT_TRANSCRIPTION: 'false', TRANSCRIPTION_RESULT: 'skipped' }),
+    0,
+  );
 });
 
 test('all previous app integration/security controls remain mandatory', () => {

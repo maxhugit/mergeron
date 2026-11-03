@@ -1,3 +1,4 @@
+import { TranscriptionsModule } from './transcriptions/transcriptions.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -105,6 +106,7 @@ const PINO_REDACT = {
   imports: [
     AgentMonitorsModule,
     BrowserModule,
+    TranscriptionsModule,
     ConfigModule.forRoot({ isGlobal: true }),
     LoggerModule.forRoot({
       pinoHttp: {

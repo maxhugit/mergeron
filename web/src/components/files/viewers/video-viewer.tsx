@@ -1,5 +1,5 @@
+import { FileTranscriptionPanel } from '../../transcriptions/file-transcription-panel';
 /** Native video preview using the authenticated preview URL. */
-import { Film } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildPreviewUrl, type PreviewSource } from './preview-source';
@@ -27,24 +27,21 @@ export function VideoViewer({ source }: Props) {
     setError(false);
   }
 
-  if (error) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-        <Film className="h-8 w-8 opacity-40" />
-        <span className="text-sm">{t('failedToLoadVideo')}</span>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-full items-center justify-center bg-black">
+    <div className="flex h-full min-h-0 flex-col gap-3 p-3">
+      {error && (
+        <p role="alert" className="text-sm text-muted-foreground">
+          {t('failedToLoadVideo')}
+        </p>
+      )}
       <video
         key={key}
         src={buildPreviewUrl(source)}
         controls
-        className="max-h-full max-w-full"
+        className="max-h-[40%] max-w-full shrink-0 bg-black"
         onError={() => setError(true)}
       />
+      <FileTranscriptionPanel key={key} source={source} />
     </div>
   );
 }

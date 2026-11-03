@@ -109,6 +109,7 @@ interface ResolveTargetOptions {
 }
 
 export interface ProjectDocumentMutation {
+  beforeCommit?: () => void;
   operation:
     | 'create'
     | 'write'

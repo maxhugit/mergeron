@@ -1767,3 +1767,35 @@ export const documentAccessSessions = sqliteTable('document_access_sessions', {
   }>(),
   expiresAt: integer('expires_at').notNull(),
 });
+
+/** Private file transcription results. Original media is never stored here. */
+export const transcriptionJobs = sqliteTable(
+  'transcription_jobs',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull(),
+    filename: text('filename').notNull(),
+    sourceKey: text('source_key').notNull(),
+    operation: text('operation').notNull().default('transcribe'),
+    audio: text('audio', { mode: 'json' }).$type<{
+      size: number;
+      sha256: string;
+      filename: string;
+      mime: 'audio/mpeg';
+      duration: number;
+    }>(),
+    projectId: text('project_id'),
+    threadId: text('thread_id'),
+    requestKey: text('request_key'),
+    requestDigest: text('request_digest'),
+    state: text('state').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
+    error: text('error'),
+  },
+  (table) => [
+    index('transcription_owner_source').on(table.owner, table.sourceKey),
+    uniqueIndex('transcription_request_key').on(table.requestKey),
+  ],
+);

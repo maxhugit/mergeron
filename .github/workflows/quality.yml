@@ -31,6 +31,12 @@ env:
   CACHE_SCOPE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref == 'refs/heads/main' && 'main' || github.sha }}
 
 jobs:
+  transcription-image:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/transcription-image.yml
+    with:
+      publish: false
+
   checks:
     strategy:
       fail-fast: false
@@ -186,7 +192,15 @@ jobs:
         run: pnpm --dir web check:bundle
 
   quality:
-    needs: [checks, image, manager-image, browser-image, cli-runtime]
+    needs:
+      [
+        checks,
+        image,
+        manager-image,
+        browser-image,
+        cli-runtime,
+        transcription-image,
+      ]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -197,9 +211,14 @@ jobs:
           MANAGER_RESULT: ${{ needs.manager-image.result }}
           BROWSER_RESULT: ${{ needs.browser-image.result }}
           CLI_RESULT: ${{ needs.cli-runtime.result }}
+          TRANSCRIPTION_RESULT: ${{ needs.transcription-image.result }}
+          EXPECT_TRANSCRIPTION: ${{ github.event_name == 'pull_request' }}
           EXPECT_IMAGES: ${{ (github.event_name == 'pull_request' || inputs.validate_image == true) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         run: |
           test "$SOURCE_RESULT" = success
+          transcription_expected=skipped
+          if [ "$EXPECT_TRANSCRIPTION" = true ]; then transcription_expected=success; fi
+          test "$TRANSCRIPTION_RESULT" = "$transcription_expected"
           expected=skipped
           if [ "$EXPECT_IMAGES" = true ]; then expected=success; fi
           for result in "$IMAGE_RESULT" "$MANAGER_RESULT" "$BROWSER_RESULT" "$CLI_RESULT"; do

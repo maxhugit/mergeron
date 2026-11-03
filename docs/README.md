@@ -117,3 +117,5 @@ Le répertoire `upstream/` conserve des références officielles figées dans le
 Ces documents ne sont pas nécessaires à l’installation. Les guides fonctionnels
 suivent `main`/`edge` ; vérifier la révision installée et les notes de version
 avant de supposer qu’une ancienne version stable possède toutes ces fonctions.
+
+- [Transcription locale de fichiers audio/vidéo](file-transcription.md) : service facultatif, locuteurs, limites et exploitation.

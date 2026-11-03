@@ -21,9 +21,13 @@ it('upgrades an existing installation without inventing archival metadata', () =
       readFileSync('drizzle/meta/_journal.json', 'utf8'),
     ) as { entries: { tag: string }[] };
     mkdirSync(join(directory, 'meta'));
-    const entries = journal.entries.filter(
-      (entry) => entry.tag !== '0065_thread_archival',
+    const archivalIndex = journal.entries.findIndex(
+      (entry) => entry.tag === '0065_thread_archival',
     );
+    expect(archivalIndex).toBeGreaterThanOrEqual(0);
+    // Recreate the actual historical prefix; later migrations must not advance
+    // Drizzle's journal beyond the archival migration before it is tested.
+    const entries = journal.entries.slice(0, archivalIndex);
     writeFileSync(
       join(directory, 'meta/_journal.json'),
       JSON.stringify({ ...journal, entries }),

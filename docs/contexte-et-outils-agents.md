@@ -28,7 +28,7 @@ Exemples : « Liste les tâches du projet », « Consulte le livrable Présentat
 
 ### Noms des outils et compatibilité
 
-Le contrat du MCP interne passe à **1.8.0**, indépendamment des versions de
+Le contrat du MCP interne passe à **1.9.0**, indépendamment des versions de
 l’application et du CLI. Le serveur reste `mergeron_internal`. Les outils suivent
 la convention anglaise `ressource_action`, en minuscules avec des underscores :
 `project_task_list`, `project_preview_read`, `agent_rename`, etc. `list` désigne
@@ -506,3 +506,15 @@ en production.
 
 Références : [configuration MCP native de Codex](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 et [SDK TypeScript MCP](https://ts.sdk.modelcontextprotocol.io/server).
+
+### Audio et transcription de documents vidéo
+
+Le service facultatif de [traitement audio](file-transcription.md) est exposé par
+`project_media_read` et `project_media_manage`. Lire le statut et les versions des
+documents du livrable, puis démarrer `extract`, `transcribe` ou `both` sur une
+version observée. Le serveur lie la demande au projet, à la personne et à cette
+conversation. Aucune URL ni commande FFmpeg libre n’est acceptée. Attendre `ready`
+avant de proposer le téléchargement. La publication du MP3 dans un livrable
+existant suit le mécanisme de versions et requiert une demande humaine explicite,
+un tour administrateur avec écriture et un `requestId` stable. Une publication
+incertaine ne doit jamais être rejouée avec une autre clé.

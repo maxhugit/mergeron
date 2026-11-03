@@ -18,6 +18,12 @@ const sources: Record<
   string,
   { repository: string; host: string; scope: string; auth: string }
 > = {
+  transcription: {
+    repository: 'ghcr.io/maxhugit/mergeron-transcription',
+    host: 'ghcr.io',
+    scope: 'maxhugit/mergeron-transcription',
+    auth: 'https://ghcr.io/token?service=ghcr.io',
+  },
   appCatalog: {
     repository: 'ghcr.io/thephaseless/byparr',
     host: 'ghcr.io',

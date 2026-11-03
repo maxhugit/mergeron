@@ -51,6 +51,7 @@ test('the operator reference covers Manager settings consumed by the implementat
     'manager/src/browser-lifecycle.mjs',
     'manager/src/installer.mjs',
     'manager/src/previews.mjs',
+    'manager/src/transcription.mjs',
     'manager/src/integrations/host-platform.mjs',
   ]) {
     for (const [, name] of read(path).matchAll(

@@ -1,5 +1,5 @@
+import { FileTranscriptionPanel } from '../../transcriptions/file-transcription-panel';
 /** Native audio preview using the authenticated preview URL. */
-import { Music } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildPreviewUrl, type PreviewSource } from './preview-source';
@@ -27,18 +27,13 @@ export function AudioViewer({ source }: Props) {
     setError(false);
   }
 
-  if (error) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-        <Music className="h-8 w-8 opacity-40" />
-        <span className="text-sm">{t('failedToLoadAudio')}</span>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-8">
-      <Music className="h-10 w-10 text-muted-foreground opacity-50" />
+    <div className="flex h-full min-h-0 flex-col items-center gap-3 p-3">
+      {error && (
+        <p role="alert" className="text-sm text-muted-foreground">
+          {t('failedToLoadAudio')}
+        </p>
+      )}
       <audio
         key={key}
         src={buildPreviewUrl(source)}
@@ -46,6 +41,7 @@ export function AudioViewer({ source }: Props) {
         className="w-full max-w-xl"
         onError={() => setError(true)}
       />
+      <FileTranscriptionPanel key={key} source={source} />
     </div>
   );
 }
