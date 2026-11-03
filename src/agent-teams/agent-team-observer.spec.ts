@@ -52,7 +52,9 @@ beforeEach(() => {
     .run();
   observer = new AgentTeamObserver(store, {
     addListener() {},
-    addLifecycleListener() {},
+    addLifecycleListener() {
+      return () => {};
+    },
   } as unknown as CodexProcessManager);
 });
 afterEach(() => database.sqlite.close());

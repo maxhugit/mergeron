@@ -1,5 +1,10 @@
 /** Projects native collaboration evidence; never dispatches or replays work. */
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
 import { AgentTeamStore, type AssignmentStatus } from './agent-team-store';
 
@@ -19,14 +24,17 @@ const statuses: Record<string, AssignmentStatus> = {
 };
 
 @Injectable()
-export class AgentTeamObserver implements OnModuleInit {
+export class AgentTeamObserver implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AgentTeamObserver.name);
+  private stopped = false;
+  private readonly releaseLifecycle: () => void;
   constructor(
     private readonly store: AgentTeamStore,
     manager: CodexProcessManager,
   ) {
     manager.addListener('notification', (note) => this.observe(note));
-    manager.addLifecycleListener((event) => {
+    this.releaseLifecycle = manager.addLifecycleListener((event) => {
+      if (this.stopped) return;
       if (
         event.type === 'appServerRestarting' ||
         event.type === 'appServerUnavailable'
@@ -37,8 +45,13 @@ export class AgentTeamObserver implements OnModuleInit {
   onModuleInit() {
     this.store.markUncertain();
   }
+  onModuleDestroy() {
+    this.stopped = true;
+    this.releaseLifecycle();
+  }
 
   observe(value: unknown) {
+    if (this.stopped) return;
     try {
       const note = record(value),
         params = record(note.params),
