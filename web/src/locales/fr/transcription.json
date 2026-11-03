@@ -49,5 +49,6 @@
     "uncertainAssignment": "Certains passages restent sans locuteur attribué. Vérifiez-les à l’écoute.",
     "noSpeakersDetected": "Aucune voix exploitable détectée par la diarisation."
   },
-  "unattributed": "Non attribué"
+  "unattributed": "Non attribué",
+  "speakersDisabled": "La séparation des locuteurs est désactivée dans le Manager."
 }

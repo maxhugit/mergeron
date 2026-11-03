@@ -13,7 +13,7 @@ class Waveform:
 
 
 class InferenceContract(unittest.TestCase):
-    def recognize(self, failure=None):
+    def recognize(self, failure=None, enabled=True):
         waveform = Waveform()
         word = types.SimpleNamespace(start=0,end=1,word=' Bonjour')
         model = Mock()
@@ -38,12 +38,14 @@ class InferenceContract(unittest.TestCase):
         }
         with ExitStack() as stack:
             stack.enter_context(patch.dict('sys.modules',modules))
+            stack.enter_context(patch.dict(engine.os.environ,{'TRANSCRIPTION_DIARIZATION':'true' if enabled else 'false'}))
             stack.enter_context(patch.object(engine,'progress'))
             stack.enter_context(patch.object(engine,'read_pcm16',return_value=b'\x00\x00'))
             stack.enter_context(patch.object(engine.Path,'is_file',return_value=True))
             result = engine.recognize('owned-job','local.wav',1)
         whisper.WhisperModel.assert_called_once_with('/models/asr',device='cpu',compute_type='int8',cpu_threads=4,num_workers=1,local_files_only=True)
-        loader.assert_called_once_with('/models/diarization')
+        if enabled: loader.assert_called_once_with('/models/diarization')
+        else: loader.assert_not_called()
         return result, pipeline, waveform
 
     def test_uses_local_pipeline_and_regular_acoustic_turns_on_normalized_waveform(self):
@@ -64,5 +66,12 @@ class InferenceContract(unittest.TestCase):
         result, _, _ = self.recognize('inference')
         self.assertEqual(result['diarization'],{'state':'failed','reason':'diarization_failed'})
         self.assertNotIn('internal path',str(result))
+
+    def test_explicit_disable_skips_model_load_but_keeps_local_transcription(self):
+        result, pipeline, _ = self.recognize(enabled=False)
+        self.assertEqual(result['diarization'],{'state':'unavailable','reason':'disabled'})
+        self.assertEqual(result['text'],'Bonjour')
+        self.assertIsNone(result['segments'][0]['speaker'])
+        pipeline.assert_not_called()
 
 if __name__ == '__main__': unittest.main()

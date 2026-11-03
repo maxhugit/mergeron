@@ -49,5 +49,6 @@
     "uncertainAssignment": "Some passages have no assigned speaker. Check them by listening.",
     "noSpeakersDetected": "No usable voice detected by diarization."
   },
-  "unattributed": "Unattributed"
+  "unattributed": "Unattributed",
+  "speakersDisabled": "Speaker diarization is disabled in Manager."
 }

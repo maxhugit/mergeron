@@ -133,9 +133,11 @@ export function validateResult(value: unknown): TranscriptionResult {
                 ? v.diarization.reason === 'model_load_failed'
                   ? 'model_load_failed'
                   : 'diarization_failed'
-                : v.diarization.reason === 'no_speech_detected'
-                  ? 'no_speech_detected'
-                  : 'models_not_configured',
+                : v.diarization.reason === 'disabled'
+                  ? 'disabled'
+                  : v.diarization.reason === 'no_speech_detected'
+                    ? 'no_speech_detected'
+                    : 'models_not_configured',
           },
   };
 }

@@ -1,4 +1,5 @@
 """Private bounded job API. No account credentials, remote input URLs or request logs."""
+from functools import lru_cache
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -12,6 +13,23 @@ import sys
 import tempfile
 import threading
 import time
+
+from model_bundle import verify_bundle
+
+
+@lru_cache(maxsize=1)
+def models_ready():
+    # Immutable image files are verified once; do not hash on every health probe.
+    if os.environ.get('TRANSCRIPTION_DIARIZATION', 'true') == 'false':
+        return True
+    if os.environ.get('TRANSCRIPTION_DIARIZATION_SOURCE', 'bundled') == 'custom':
+        return Path('/models/diarization/config.yaml').is_file()
+    try:
+        verify_bundle('/models/diarization')
+        return True
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
 
 LIMIT = 128 * 1024**2
 UUID = re.compile(r"^[a-f0-9-]{36}$")
@@ -61,7 +79,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/healthz":
-            return self.reply(200, {"ready": Path("/models/asr/model.bin").is_file()})
+            return self.reply(200, {"ready": Path("/models/asr/model.bin").is_file() and models_ready()})
         if not self.authorized():
             return self.reply(401, {"code": "UNAUTHORIZED"})
         audio_request = self.path.endswith("/audio")

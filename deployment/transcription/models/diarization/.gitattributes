@@ -1,0 +1,4 @@
+# All checksummed files keep exact upstream bytes on every platform, without LFS.
+* -text -filter
+*.bin -diff -merge
+*.npz -diff -merge

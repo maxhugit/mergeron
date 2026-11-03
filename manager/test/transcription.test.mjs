@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   ManagedTranscription,
   TRANSCRIPTION_REPOSITORY,
@@ -15,7 +18,12 @@ function fixture(env = { MERGERON_TRANSCRIPTION_ENABLED: 'true' }) {
   const image = {
     Id: 'sha256:' + 'a'.repeat(64),
     RepoDigests: [TRANSCRIPTION_REPOSITORY + '@sha256:' + 'b'.repeat(64)],
-    Config: { Labels: {} },
+    Config: {
+      Labels: {
+        'io.mergeron.diarization.bundle': 'community-1',
+        'io.mergeron.diarization.revision': 'a'.repeat(40),
+      },
+    },
   };
   const missing = () => Object.assign(Error('missing'), { statusCode: 404 });
   const docker = {
@@ -40,7 +48,10 @@ function fixture(env = { MERGERON_TRANSCRIPTION_ENABLED: 'true' }) {
         Image: image.Id,
         Config: { ...spec },
         HostConfig: spec.HostConfig,
-        Mounts: [],
+        Mounts: (spec.HostConfig.Binds ?? []).map((bind) => {
+          const [Source, Destination, mode] = bind.split(':');
+          return { Source, Destination, Type: 'bind', RW: mode !== 'ro' };
+        }),
         NetworkSettings: { Networks: { 'test-isolated': {} } },
         State: { Running: false, Health: { Status: 'healthy' } },
       };
@@ -165,4 +176,107 @@ test('unhealthy running worker is reported rather than restarted on every renewa
   assert.equal(state.state, 'error');
   assert.equal(f.service.task, null);
   assert.equal(f.counts().starts, 1);
+});
+
+test('fresh installation uses image-bundled models without any host model directory or credential', async () => {
+  const f = fixture();
+  await f.service.lease({ owner });
+  await f.service.task;
+  assert.equal((await f.service.status()).state, 'ready');
+  assert.deepEqual(f.container.HostConfig.Binds, []);
+  assert.ok(f.container.Config.Env.includes('TRANSCRIPTION_DIARIZATION=true'));
+  assert.ok(
+    f.container.Config.Env.includes('TRANSCRIPTION_DIARIZATION_SOURCE=bundled'),
+  );
+  assert.equal((await f.service.status()).diarizationModelSource, 'bundled');
+  assert.equal(
+    f.container.Config.Env.some((e) => e.startsWith('HF_TOKEN=')),
+    false,
+  );
+});
+
+test('explicit disabling is passed to the worker even when the image contains models', async () => {
+  const f = fixture({
+    MERGERON_TRANSCRIPTION_ENABLED: 'true',
+    MERGERON_TRANSCRIPTION_DIARIZATION: 'false',
+  });
+  await f.service.lease({ owner });
+  await f.service.task;
+  assert.ok(f.container.Config.Env.includes('TRANSCRIPTION_DIARIZATION=false'));
+  assert.deepEqual(f.container.HostConfig.Binds, []);
+  assert.equal((await f.service.status()).diarizationEnabled, false);
+});
+
+test('an image missing the bundled-model capability fails before container creation', async () => {
+  const f = fixture();
+  f.docker.inspectImage = async () => ({ Config: { Labels: {} } });
+  await f.service.lease({ owner });
+  await f.service.task;
+  assert.equal(
+    (await f.service.status()).error,
+    'TRANSCRIPTION_BUNDLED_MODELS_UNAVAILABLE',
+  );
+  assert.equal(f.counts().creates, 0);
+});
+
+test('custom and legacy true preserve the read-only custom mount', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mergeron-custom-models-'));
+  try {
+    await mkdir(join(root, 'config/transcription-diarization'), {
+      recursive: true,
+    });
+    for (const mode of ['custom', 'true']) {
+      const f = fixture({
+        MERGERON_TRANSCRIPTION_ENABLED: 'true',
+        MERGERON_TRANSCRIPTION_DIARIZATION: mode,
+      });
+      f.service.configuration.hostStatePath = root;
+      await f.service.lease({ owner });
+      await f.service.task;
+      assert.equal((await f.service.status()).state, 'ready');
+      assert.deepEqual(f.container.HostConfig.Binds, [
+        '/data/config/transcription-diarization:/models/diarization:ro',
+      ]);
+      assert.ok(
+        f.container.Config.Env.includes(
+          'TRANSCRIPTION_DIARIZATION_SOURCE=custom',
+        ),
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('custom model directory symlink is rejected', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mergeron-custom-models-'));
+  try {
+    await mkdir(join(root, 'config'));
+    await mkdir(join(root, 'outside'));
+    await symlink(
+      join(root, 'outside'),
+      join(root, 'config/transcription-diarization'),
+    );
+    const f = fixture({
+      MERGERON_TRANSCRIPTION_ENABLED: 'true',
+      MERGERON_TRANSCRIPTION_DIARIZATION: 'custom',
+    });
+    f.service.configuration.hostStatePath = root;
+    await f.service.lease({ owner });
+    await f.service.task;
+    assert.equal(
+      (await f.service.status()).error,
+      'TRANSCRIPTION_DIARIZATION_PATH',
+    );
+    assert.equal(f.counts().creates, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('invalid model policy is rejected at startup', () => {
+  assert.throws(
+    () => fixture({ MERGERON_TRANSCRIPTION_DIARIZATION: 'remote' }),
+    /INVALID_DIARIZATION_POLICY/,
+  );
 });

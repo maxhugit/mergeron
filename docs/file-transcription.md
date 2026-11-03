@@ -69,7 +69,7 @@ Après publication de son image, configurer le Manager :
 ```dotenv
 MERGERON_TRANSCRIPTION_ENABLED=true
 MERGERON_TRANSCRIPTION_IDLE_SECONDS=300
-MERGERON_TRANSCRIPTION_DIARIZATION=false
+MERGERON_TRANSCRIPTION_DIARIZATION=bundled
 ```
 
 Les modèles Compose et Manager Unraid exposent ces options. Recréer uniquement
@@ -106,21 +106,38 @@ l’environnement avant sa validation sur de vrais fichiers synthétiques. Le pr
 d’installation pip est ensuite désinstallé du runtime : le service utilise
 uniquement les dépendances et les modèles déjà présents dans son image.
 
-Pour les locuteurs, préparer une copie **complète et fonctionnant hors ligne** de
-[Pyannote Community-1](https://huggingface.co/pyannote/speaker-diarization-community-1),
-après examen et acceptation de ses conditions d’accès et de sa licence. Suivre
-ses instructions officielles de fonctionnement hors ligne. Mergeron n’accepte
-pas ces conditions au nom de l’utilisateur.
+Les modèles [Pyannote Community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)
+sont désormais [versionnés dans le dépôt](../deployment/transcription/models/diarization/README.md)
+et inclus dans l’image de transcription. Ils sont distribués sous CC BY 4.0,
+avec les attributions et la licence conservées, à la révision
+`3533c8cf8e369892e6b79ff1bf80f7b0286a54ee`. Leurs poids ne sont ni modifiés
+ni téléchargés pendant le traitement. Le manifeste SHA-256 est vérifié à la
+construction et au démarrage du worker : une copie incomplète, corrompue ou un
+pointeur Git LFS ne peut pas être annoncé sain.
 
-Placer le modèle dans `config/transcription-diarization` sous la racine d’état,
-avec `config.yaml` et tous ses poids, lisibles par UID/GID `11003:11003`.
-Les répertoires de configuration et des modèles ne doivent pas être des liens
-symboliques. Activer `MERGERON_TRANSCRIPTION_DIARIZATION=true` avant la création
-du service : le Manager monte uniquement ce répertoire, en lecture seule.
-Ne pas y placer de jeton Hugging Face, compte Codex ni clé API. Si le conteneur
-existe avec un ancien montage, planifier sa recréation avant de modifier l’option.
-Sans modèle, le résultat indique explicitement la séparation indisponible ; un
-modèle incomplet produit un échec de cette étape sans remplacer le texte.
+Le mode par défaut `bundled` utilise automatiquement les modèles de l’image.
+Activer le service de transcription suffit ; aucun compte Hugging Face, jeton,
+répertoire de modèles sur l’hôte ou copie depuis la DEV n’est nécessaire.
+L’installation de l’image Docker reste une étape préalable ; une fois celle-ci
+présente, les enregistrements sont traités hors ligne sur le réseau interne.
+
+`MERGERON_TRANSCRIPTION_DIARIZATION=false` désactive explicitement la diarisation,
+même lorsque les modèles sont inclus dans l’image. La reconnaissance vocale
+reste disponible, avec une raison de désactivation distincte d’un modèle absent.
+
+Pour des modèles personnalisés, choisir `custom` et préparer une copie complète
+fonctionnant hors ligne dans `config/transcription-diarization`, sous la racine
+d’état. Le dossier est monté en lecture seule, lisible par UID/GID `11003:11003`,
+sans lien symbolique ni identifiant externe. La valeur historique `true` reste
+un alias de ce mode afin de préserver les anciennes configurations. Les dossiers
+existants ne sont ni remplacés ni supprimés par le mode `bundled`.
+
+Après une modification du mode ou de l’image, recréer le worker selon la procédure
+de maintenance, sans tâche ni bail actif : une mise à jour du Manager ne remplace
+pas arbitrairement un worker existant. Une ancienne image dépourvue du bundle
+est refusée explicitement en mode `bundled` ; utiliser l’image de transcription
+publiée avec cette version. Un échec de chargement personnalisé conserve le texte
+avec un avertissement ; il ne déclenche aucun téléchargement de secours.
 
 ## Isolation, données et reprise
 
@@ -154,38 +171,29 @@ avec FFprobe, sans modèle ni compte. La CI construit l’image CPU, la scanne s
 puis transcrit deux voix synthétiques, anglaise et française, dans le vrai worker
 avec `--network none`, sans port ni compte. Elle vérifie texte, langue, segments
 et suppression des tâches. Les étiquettes mobiles ne sont promues qu’après cette
-validation et les checks source. Les modèles Pyannote soumis à acceptation ne
-sont pas téléchargés par la CI : leur inférence doit être validée séparément,
-avec modèles autorisés et enregistrements de test consentis.
+validation et les checks source. La CI vérifie également le bundle Community-1
+et une inférence de diarisation réelle sur les voix synthétiques dans l’image, sans réseau, compte ni montage de
+modèles fourni par l’hôte. Ces contrôles ne remplacent pas l’évaluation sur des
+enregistrements réels autorisés.
 
-### Installation préalable et validation de la diarisation
+### Installation et validation de la diarisation
 
-La dépendance Pyannote est déjà présente dans l’image ; ses poids ne le sont pas.
-L’activation exige une installation préalable des modèles, distincte du traitement
-des médias. Après acceptation des conditions Community-1 avec votre compte,
-utiliser un environnement d’installation avec `huggingface_hub`, un jeton de
-lecture autorisé fourni via `HF_TOKEN` et la commande suivante :
+Une installation neuve utilise `bundled`. Le Manager crée le worker avec les
+modèles déjà présents dans son image en lecture seule ; il ne télécharge aucun
+modèle depuis Hugging Face. Les modèles se déploient ainsi avec l’image du
+service aussi bien en DEV qu’en production.
 
-```sh
-python3 scripts/install-diarization-models.py \
-  --revision 3533c8cf8e369892e6b79ff1bf80f7b0286a54ee \
-  --output /chemin/vers/etat/config/transcription-diarization
-```
+Pour les anciennes configurations, choisir `bundled` si l’on souhaite utiliser
+la copie fournie par Mergeron, puis recréer le worker à l’arrêt sur l’image de
+transcription correspondante. Les valeurs explicites `false` et `true` existantes
+sont conservées : `false` désactive la diarisation et `true` conserve le montage
+personnalisé historique. Aucun dossier existant n’est écrasé.
 
-Le script refuse les références mobiles et les destinations déjà existantes.
-Il conserve la révision et les empreintes SHA-256 dans `mergeron-models.json`,
-supprime les métadonnées temporaires de téléchargement et ne conserve aucun jeton.
-Le jeton est réservé à cet environnement d’installation : ne pas le configurer
-sur le Manager ni sur le worker. L’installation ne lit aucun média. Cette
-commande prépare les poids ; elle ne constitue pas une validation acoustique.
-Le chargement et une première inférence doivent ensuite être vérifiés avec
-le worker, son montage en lecture seule et son réseau interne sans accès externe.
-
-Activer ensuite `MERGERON_TRANSCRIPTION_DIARIZATION=true` sur le Manager,
-puis recréer le service facultatif sans tâche ni bail actif pour appliquer
-le montage. Une simple modification de la variable ne modifie pas un conteneur
-existant. Conserver son image validée et ses limites d’isolation. Ne pas remplacer
-une stack ou ses données pour ajouter ce montage.
+Le script `scripts/install-diarization-models.py` reste un outil d’import pour les
+mainteneurs qui préparent une nouvelle révision ou un bundle personnalisé. Il
+n’est pas exécuté lors d’une installation normale. Toute modification des poids
+embarqués exige une nouvelle vérification des licences, des empreintes et des
+contrôles acoustiques avant publication.
 
 Les résultats utilisent désormais `SPEAKER_00`, `SPEAKER_01`, etc., dans l’ordre
 de première apparition des voix dans l’enregistrement. Un même repère ne désigne

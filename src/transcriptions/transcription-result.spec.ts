@@ -90,3 +90,18 @@ describe('acoustic diarization metadata', () => {
     expect(() => validateResult(value)).toThrow('TRANSCRIPTION_INVALID_RESULT');
   });
 });
+
+describe('explicit diarization disable', () => {
+  it('keeps the disabled reason and never reports missing models', () => {
+    const value = {
+      ...result(),
+      diarization: { state: 'unavailable', reason: 'disabled' },
+    };
+    const clean = validateResult(value);
+    expect(clean.diarization).toEqual({
+      state: 'unavailable',
+      reason: 'disabled',
+    });
+    expect(clean.segments[0].speaker).toBeNull();
+  });
+});
