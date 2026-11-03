@@ -14,6 +14,7 @@ import {
   agentTeams,
   agentTeamAssignments,
   projectAgentThreads,
+  pendingServerRequests,
 } from '../database/schema';
 
 const text = z.string().trim().min(1).max(6000);
@@ -38,6 +39,146 @@ export type AssignmentStatus = typeof agentTeamAssignments.$inferSelect.status;
 export class AgentTeamStore {
   constructor(@Inject(DRIZZLE_DB) private readonly db: AppDatabase) {}
 
+  refreshCompletion(projectId: string, id: string) {
+    const team = this.read(projectId, id);
+    if (['stopping', 'stopped', 'completed', 'failed'].includes(team.state))
+      return;
+    if (
+      team.coordinatorStatus === 'completed' &&
+      team.assignments.length &&
+      team.assignments.every((a) => a.status === 'completed')
+    )
+      this.state(projectId, id, 'completed');
+    else if (
+      (team.coordinatorStatus === 'failed' ||
+        team.coordinatorStatus === 'interrupted') &&
+      team.assignments.every((a) =>
+        ['completed', 'failed', 'cancelled'].includes(a.status),
+      )
+    )
+      this.state(projectId, id, 'failed');
+  }
+
+  attention(projectId: string, id: string, generation: number) {
+    const team = this.read(projectId, id),
+      ids = [
+        team.coordinatorThreadId,
+        ...team.assignments.flatMap((a) =>
+          a.nativeThreadId ? [a.nativeThreadId] : [],
+        ),
+      ].slice(0, 65);
+    return this.db
+      .select({
+        threadId: pendingServerRequests.threadId,
+        status: pendingServerRequests.status,
+        method: pendingServerRequests.method,
+      })
+      .from(pendingServerRequests)
+      .where(
+        and(
+          inArray(pendingServerRequests.threadId, ids),
+          inArray(pendingServerRequests.status, ['pending', 'submitted']),
+          eq(pendingServerRequests.generation, generation),
+        ),
+      )
+      .all()
+      .map((row) => ({
+        threadId: row.threadId,
+        status: row.status,
+        kind:
+          row.method === 'item/tool/requestUserInput'
+            ? ('question' as const)
+            : ('approval' as const),
+      }));
+  }
+
+  state(
+    projectId: string,
+    id: string,
+    state: typeof agentTeams.$inferSelect.state,
+    lastError: string | null = null,
+  ) {
+    this.read(projectId, id);
+    this.db
+      .update(agentTeams)
+      .set({ state, lastError })
+      .where(eq(agentTeams.id, id))
+      .run();
+  }
+  requestStop(projectId: string, id: string, personId: string) {
+    this.read(projectId, id);
+    this.db
+      .update(agentTeams)
+      .set({
+        state: 'stopping',
+        stopRequestedAt: Date.now(),
+        stopPersonId: personId,
+        lastError: null,
+      })
+      .where(eq(agentTeams.id, id))
+      .run();
+  }
+  cancelPlanned(projectId: string, id: string) {
+    this.read(projectId, id);
+    this.db
+      .update(agentTeamAssignments)
+      .set({ status: 'cancelled', updatedAt: Date.now() })
+      .where(
+        and(
+          eq(agentTeamAssignments.teamId, id),
+          eq(agentTeamAssignments.status, 'planned'),
+        ),
+      )
+      .run();
+  }
+  bindChildTurn(childId: string, turnId: string) {
+    if (!turnId) return;
+    const owner = this.child(childId);
+    if (!owner) return;
+    const assignment = this.read(
+      owner.projectId,
+      owner.teamId,
+    ).assignments.find((a) => a.nativeThreadId === childId)!;
+    if (!assignment.nativeTurnId)
+      this.db
+        .update(agentTeamAssignments)
+        .set({ nativeTurnId: turnId })
+        .where(eq(agentTeamAssignments.id, assignment.id))
+        .run();
+  }
+  parentObservation(
+    threadId: string,
+    turnId: string,
+    status?: 'inProgress' | 'completed' | 'failed' | 'interrupted',
+    summary?: string,
+  ) {
+    if (!turnId) return;
+    this.db
+      .update(agentTeams)
+      .set({
+        ...(status ? { coordinatorStatus: status } : {}),
+        ...(summary !== undefined ? { summary: summary.slice(0, 100000) } : {}),
+      })
+      .where(
+        and(
+          eq(agentTeams.coordinatorThreadId, threadId),
+          eq(agentTeams.nativeTurnId, turnId),
+        ),
+      )
+      .run();
+    for (const team of this.db
+      .select()
+      .from(agentTeams)
+      .where(
+        and(
+          eq(agentTeams.coordinatorThreadId, threadId),
+          eq(agentTeams.nativeTurnId, turnId),
+        ),
+      )
+      .all())
+      this.refreshCompletion(team.projectId, team.id);
+  }
+
   /** Polling reads never hydrate prompts or potentially large final answers. */
   listSummaries(projectId: string, coordinatorThreadId: string) {
     const teams = this.db
@@ -47,6 +188,8 @@ export class AgentTeamStore {
         coordinatorThreadId: agentTeams.coordinatorThreadId,
         nativeTurnId: agentTeams.nativeTurnId,
         origin: agentTeams.origin,
+        state: agentTeams.state,
+        lastError: agentTeams.lastError,
         objective: agentTeams.objective,
         createdAt: agentTeams.createdAt,
       })
@@ -221,6 +364,11 @@ export class AgentTeamStore {
       .set({ status: 'unknown', updatedAt: Date.now() })
       .where(inArray(agentTeamAssignments.status, ['running']))
       .run();
+    this.db
+      .update(agentTeams)
+      .set({ state: 'unknown', lastError: 'TEAM_ENGINE_RESTART' })
+      .where(inArray(agentTeams.state, ['dispatching', 'running', 'stopping']))
+      .run();
   }
 
   saveResult(childId: string, result: string) {
@@ -299,6 +447,7 @@ export class AgentTeamStore {
           requestId: input.requestId,
           objective: input.objective,
           fingerprint,
+          state: 'draft',
           createdAt: now,
         })
         .run();
@@ -405,5 +554,6 @@ export class AgentTeamStore {
       })
       .where(eq(agentTeamAssignments.id, assignment.id))
       .run();
+    this.refreshCompletion(projectId, teamId);
   }
 }

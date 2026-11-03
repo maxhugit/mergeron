@@ -60,6 +60,33 @@ export class AgentTeamObserver implements OnModuleInit, OnModuleDestroy {
       if (!threadId) return;
       if (
         note.method === 'item/completed' &&
+        item.type === 'agentMessage' &&
+        (item.phase === 'final_answer' || item.phase === null)
+      )
+        this.store.parentObservation(
+          threadId,
+          string(params.turnId),
+          undefined,
+          string(item.text),
+        );
+      if (note.method === 'turn/started')
+        this.store.parentObservation(
+          threadId,
+          string(record(params.turn).id),
+          'inProgress',
+        );
+      if (note.method === 'turn/completed') {
+        const turn = record(params.turn),
+          status = string(turn.status);
+        if (
+          status === 'completed' ||
+          status === 'failed' ||
+          status === 'interrupted'
+        )
+          this.store.parentObservation(threadId, string(turn.id), status);
+      }
+      if (
+        note.method === 'item/completed' &&
         item.type === 'collabAgentToolCall' &&
         item.senderThreadId === threadId
       ) {
@@ -105,6 +132,8 @@ export class AgentTeamObserver implements OnModuleInit, OnModuleDestroy {
         (item.phase === 'final_answer' || item.phase === null)
       )
         this.store.saveResult(threadId, string(item.text));
+      if (note.method === 'turn/started')
+        this.store.bindChildTurn(threadId, string(record(params.turn).id));
       if (note.method === 'turn/started')
         this.store.observe(owner.projectId, owner.teamId, threadId, 'running');
       if (note.method === 'turn/completed') {

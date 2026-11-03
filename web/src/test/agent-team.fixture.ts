@@ -6,6 +6,12 @@ export const teamFixture = (): AgentTeamDetail => ({
   coordinatorThreadId: 'coordinator',
   nativeTurnId: 'turn',
   origin: 'observed',
+  state: 'observed',
+  lastError: null,
+  canRespond: false,
+  requests: [],
+  attention: [],
+  controlsLimited: false,
   objective: 'Dossier de conception',
   createdAt: 1,
   assignments: [

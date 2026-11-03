@@ -84,3 +84,21 @@ première phase.
 Les tests de `src/agent-teams/agent-team-store.spec.ts` utilisent SQLite et la
 chaîne réelle des migrations. Ils n’appellent aucun modèle et n’utilisent aucune
 connexion à la dev ou à la prod.
+
+## Contrôle et reprise de l’observation
+
+Le panneau propose aux administrateurs personnels un arrêt confirmé et une
+vérification de l’état réel. L’arrêt vise exclusivement le tour enregistré du
+coordinateur et les sous-agents dont le parent natif a été vérifié. Il conserve
+les fichiers et les résultats ; il ne crée ni nouveau tour ni reprise implicite.
+Après une coupure, un état inconnu reste inconnu tant qu’un résultat natif ne
+permet pas de le confirmer. Une conversation inactive ne prouve pas la fin d’une
+mission. Les commandes et les réponses aux approbations ne sont jamais rejouées.
+
+Les demandes affichées utilisent les mêmes composants, identifiants immuables et
+contrôles de génération que le chat. Les lecteurs voient le besoin d’intervention
+sans recevoir les paramètres sensibles d’une approbation. L’historique des messages
+d’un membre est chargé sur demande, par pages, après vérification de sa filiation.
+Les routes `POST :teamId/stop` et `POST :teamId/reconcile` sont réservées aux
+administrateurs ; `GET :teamId/assignments/:assignmentId/history` est soumis aux
+droits du projet et de la conversation coordinatrice.

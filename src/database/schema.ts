@@ -25,6 +25,31 @@ export const agentTeams = sqliteTable(
       .$type<'planned' | 'observed'>()
       .notNull()
       .default('planned'),
+    state: text('state')
+      .$type<
+        | 'observed'
+        | 'draft'
+        | 'preparing'
+        | 'dispatching'
+        | 'running'
+        | 'completed'
+        | 'failed'
+        | 'stopping'
+        | 'stopped'
+        | 'unknown'
+        | 'needs_attention'
+      >()
+      .notNull()
+      .default('observed'),
+    coordinatorStatus: text('coordinator_status').$type<
+      'inProgress' | 'completed' | 'failed' | 'interrupted'
+    >(),
+    stopRequestedAt: integer('stop_requested_at'),
+    stopPersonId: text('stop_person_id').references(() => people.id, {
+      onDelete: 'set null',
+    }),
+    lastError: text('last_error'),
+    summary: text('summary'),
     requestId: text('request_id').notNull(),
     fingerprint: text('fingerprint').notNull(),
     objective: text('objective').notNull(),
@@ -52,6 +77,7 @@ export const agentTeamAssignments = sqliteTable(
       .$type<string[]>()
       .notNull(),
     nativeThreadId: text('native_thread_id').unique(),
+    nativeTurnId: text('native_turn_id'),
     status: text('status')
       .$type<
         'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown'

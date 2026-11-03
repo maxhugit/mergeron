@@ -24,6 +24,11 @@ import {
 import { AgentTeamStore } from './agent-team-store';
 import { AgentTeamsService } from './agent-teams.service';
 import { AgentTeamsController } from './agent-teams.controller';
+import { AgentTeamControlsService } from './agent-team-controls.service';
+import { CodexProcessManager } from '../codex/codex-process-manager.service';
+import { ThreadHistoryService } from '../threads/thread-history.service';
+import { ThreadsService } from '../threads/threads.service';
+import { PendingApprovalsService } from '../pending-approvals/pending-approvals.service';
 
 let app: NestFastifyApplication, database: TestDatabase, teamId: string;
 const headers = (id = 'member') => ({
@@ -86,6 +91,14 @@ beforeEach(async () => {
     controllers: [AgentTeamsController],
     providers: [
       AgentTeamsService,
+      AgentTeamControlsService,
+      { provide: CodexProcessManager, useValue: { getGeneration: () => 1 } },
+      { provide: ThreadHistoryService, useValue: {} },
+      { provide: ThreadsService, useValue: {} },
+      {
+        provide: PendingApprovalsService,
+        useValue: { readPending: () => ({ requests: [] }) },
+      },
       AgentTeamStore,
       IdentityService,
       { provide: DRIZZLE_DB, useValue: database.db },
@@ -171,4 +184,17 @@ it('exposes neither a launch route nor an unfiltered list in the foundation', as
       })
     ).statusCode,
   ).toBe(404);
+});
+it('rejects reader stop and reconciliation at the HTTP authorization boundary', async () => {
+  for (const action of ['stop', 'reconcile']) {
+    const response = await app.inject({
+      url: `${base}/${teamId}/${action}`,
+      method: 'POST',
+      headers: headers(),
+    });
+    expect(response.statusCode).toBe(403);
+  }
+  expect(
+    new AgentTeamStore(database.db).read('p', teamId).stopRequestedAt,
+  ).toBeNull();
 });

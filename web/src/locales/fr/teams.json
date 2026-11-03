@@ -19,6 +19,27 @@
     "completed": "Terminé",
     "failed": "En échec",
     "cancelled": "Annulé",
-    "unknown": "État à vérifier"
-  }
+    "unknown": "État à vérifier",
+    "approval": "Approbation requise",
+    "question": "Réponse attendue"
+  },
+  "refreshRequest": "Actualisation de la demande avant de pouvoir y répondre…",
+  "unsupportedRequest": "Cette demande ne peut pas être traitée dans ce panneau.",
+  "stopUnconfirmed": "L’arrêt n’est pas confirmé. Vérifiez l’état ou réessayez explicitement ; le travail n’a pas été relancé.",
+  "stateNeedsVerification": "L’état de l’exécution doit être vérifié. Aucun travail ne sera relancé automatiquement.",
+  "controlsLimited": "Le contrôle groupé est indisponible pour les équipes de plus de 64 membres.",
+  "verifyState": "Vérifier l’état réel",
+  "stopTeam": "Arrêter l’équipe…",
+  "administratorRequired": "Un administrateur doit répondre à la demande en attente.",
+  "requestFromCoordinator": "Demande du coordinateur",
+  "requestFromMember": "Demande de {{name}}",
+  "hideHistory": "Masquer les messages",
+  "showHistory": "Voir les messages de l’agent",
+  "coordinatorMessage": "Consignes reçues",
+  "emptyHistory": "Aucun message n’est disponible dans cette page d’historique.",
+  "olderMessages": "Charger les messages précédents",
+  "stopTitle": "Arrêter cette équipe ?",
+  "stopDescription": "Le travail en cours sera interrompu lorsque son état peut être confirmé. Les modifications et résultats existants sont conservés. Un arrêt incertain sera signalé explicitement.",
+  "cancel": "Annuler",
+  "confirmStop": "Arrêter le travail"
 }
