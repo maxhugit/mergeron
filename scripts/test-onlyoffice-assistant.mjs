@@ -78,16 +78,17 @@ const output = resolve(
 );
 const channel = 'a'.repeat(64);
 const sdk = `
-window.fixtureState={text:'Introduction initiale.',selection:'',index:0,slides:[{text:'Contexte initial'}],edits:0};
+window.fixtureState={text:'Introduction initiale.',selection:'',index:0,slides:[],edits:0,events:{},clicks:{},menu:null};
 const state=window.fixtureState;
 const paragraph=(text='')=>({text,GetText(){return this.text},AddText(t){this.text+=t},SetFontSize(){},SetBold(){},SetColor(){}});
 const content=(text)=>({items:[paragraph(text)],GetAllParagraphs(){return this.items},RemoveAllElements(){this.items=[]},Push(p){this.items.push(p)}});
-const slide=(text='')=>({text,objects:[],GetAllShapes(){return [{GetDocContent:()=>content(this.text)}]},GetTheme(){return{}},GetLayout(){return{}},ApplyTheme(){},ApplyLayout(){},RemoveAllObjects(){this.objects=[]},AddObject(o){this.objects.push(o)}});
-const original=slide(state.slides[0].text);state.slides=[original];
+function drawing(kind='shape',text='',x=0,y=0,w=5000000,h=1000000){return {kind,x,y,w,h,content:content(text),GetClassType(){return this.kind},HasTextContent(){return this.content.items.some(p=>p.text.length>0)},GetDocContent(){if(kind==='shape'&&!this.HasTextContent())this.touched=true;return kind==='shape'?this.content:null},GetPosX(){return this.x},GetPosY(){return this.y},GetWidth(){return this.w},GetHeight(){return this.h},SetPosition(x,y){this.x=x;this.y=y},SetSize(w,h){this.w=w;this.h=h},SetTextFit(){},ToJSON(){return JSON.stringify({touched:!!this.touched,kind:this.kind,x:this.x,y:this.y,w:this.w,h:this.h,text:this.content.items.map(p=>p.text).join('\\n')})},Copy(){return drawing(this.kind,this.content.items.map(p=>p.text).join('\\n'),this.x,this.y,this.w,this.h)}};}
+const slide=(text='')=>({text,objects:[],visuals:[],GetAllShapes(){return [...(this.objects.length?this.objects.filter(o=>o.kind==='shape'):[drawing('shape',this.text)]),...this.visuals.filter(d=>d.kind==='shape')]},GetAllDrawings(){return [...(this.objects.length?this.objects:[drawing('shape',this.text)]),...this.visuals]},Copy(){return slide(this.text)},GetTheme(){return{}},GetLayout(){return{}},ApplyTheme(){},ApplyLayout(){},RemoveAllObjects(){this.objects=[];this.text='';this.visuals=[]},AddObject(o){this.objects.push(o)},Select(){state.index=state.slides.indexOf(this);return true}});
+const original=slide('Contexte initial');original.visuals=[drawing('image','',9000000,2000000,2000000,1000000),drawing('shape','',8500000,3500000,1000000,500000)];state.slides=[original];
 window.Api={GetDocument:()=>({GetAllParagraphs:()=>[paragraph(state.text)],GetRangeBySelect:()=>({GetText:()=>state.selection}),InsertContent(items){const text=items.map(p=>p.text).join('\\n');state.text=state.selection?state.text.replace(state.selection,text):state.text+text;state.edits++}}),CreateParagraph:()=>paragraph(),
 GetPresentation:()=>({GetCurSlideIndex:()=>state.index,GetSlidesCount:()=>state.slides.length,GetCurrentSlide:()=>state.slides[state.index],GetSelection:()=>({GetText:()=>state.selection}),GetWidth:()=>12192000,GetHeight:()=>6858000,AddSlide(s,i){state.slides.splice(i,0,s);state.edits++},EnterText(t){state.slides[state.index].text+=t;state.edits++;return true}}),
-ThemeColor:()=>({}),CreateSlide:()=>slide(),CreateNoFill:()=>({}),CreateStroke:()=>({}),CreateShape:()=>({content:content(''),SetPosition(){},GetDocContent(){return this.content}})};
-window.Asc={scope:{},plugin:{info:{options:{mergeronChannel:"${channel}",mergeronLang:"fr"}},executeMethod(name,args,done){done(state.selection)},callCommand(fn,close,recalc,done){setTimeout(()=>done(fn()),0)}}};
+ThemeColor:()=>({}),CreateSolidFill:()=>({}),CreateSlide:()=>slide(),CreateNoFill:()=>({}),CreateStroke:()=>({}),CreateShape:(kind,w,h)=>drawing('shape','',0,0,w,h)};
+window.Asc={scope:{},plugin:{guid:'asc.{7A57B7C9-3208-4C67-9722-3D6B7CFB5920}',info:{options:{mergeronChannel:"${channel}",mergeronLang:"fr"}},attachEditorEvent(name,fn){state.events[name]=fn},attachContextMenuClickEvent(id,fn){state.clicks[id]=fn},event_onContextMenuClick(id){const item=state.menu?.items[0]?.items.find(x=>x.id===id);if(item&&!item.items&&!item.disabled)state.clicks[id]?.()},executeMethod(name,args,done){if(name==='GetSelectedText')done(state.selection);else if(name==='AddContextMenuItem')state.menu=args[0];},callCommand(fn,close,recalc,done){setTimeout(()=>done(fn()),0)}}};
 `;
 const host = (
   kind,
@@ -98,7 +99,8 @@ function withBasePath(path){return path}
 window.fetch=async (url,options)=>{const body=JSON.parse(options.body);if(body.sessionId!=='host-only-session'||options.headers.Authorization!=='Bearer host-only-test-key')return new Response('{}',{status:403});let result;const method=url.endsWith('/context')?'context':url.endsWith('/proposals')?'propose':'read';window.calls.push({method,args:body});
 if(method==='context')result={project:{id:'p',name:'Projet Conception'},document:{name:'Dossier de conception',kind:'${kind}'},canRun:true,agents:[{id:'agent-a',name:'Rédaction du dossier'},{id:'agent-b',name:'Relecture'}]};
 if(method==='propose')result={id:'11111111-1111-4111-8111-111111111111',status:'running'};
-if(method==='read')result={id:'11111111-1111-4111-8111-111111111111',status:'ready',action:window.calls.findLast(x=>x.method==='propose').args.action,text:'Une proposition claire et précise.',title:window.calls.findLast(x=>x.method==='propose').args.action==='addSlide'?'Objectifs du projet':''};
+if(method==='read' && window.calls.findLast(x=>x.method==='propose').args.action==='redesignSlide')result={id:'11111111-1111-4111-8111-111111111111',status:'ready',action:'redesignSlide',title:'Un projet clair',layout:'columns',sections:[{heading:'Cadrer',body:'Conserver les 3 objectifs.'},{heading:'Livrer',body:'Valider avec l’équipe.'}],text:'Cadrer : conserver les 3 objectifs. Livrer : valider avec l’équipe.'};
+else if(method==='read')result={id:'11111111-1111-4111-8111-111111111111',status:'ready',action:window.calls.findLast(x=>x.method==='propose').args.action,text:'Une proposition claire et précise.',title:window.calls.findLast(x=>x.method==='propose').args.action==='addSlide'?'Objectifs du projet':''};
 return new Response(JSON.stringify(result),{status:200});};
 ${bridgeScript}
 connectOfficeAssistant({sessionId:'host-only-session',channel:'${channel}'});
@@ -224,6 +226,48 @@ try {
           await editor.evaluate(() => window.fixtureState.text),
           /Introduction initiale/,
         );
+        // Native context-menu action prepares a draft; it never applies it.
+        await editor.evaluate(() => {
+          window.fixtureState.selection = '';
+          window.fixtureState.events.onContextMenuShow();
+        });
+        let menu = await editor.evaluate(() => window.fixtureState.menu);
+        assert.equal(menu.items[0].items[0].disabled, true);
+        assert.equal(
+          menu.items[0].items.some((x) => x.id === 'mergeron-redesign'),
+          false,
+        );
+        await editor.evaluate(() => {
+          window.fixtureState.selection = 'Une proposition claire et précise.';
+          window.fixtureState.events.onContextMenuShow();
+        });
+        menu = await editor.evaluate(() => window.fixtureState.menu);
+        assert.equal(menu.items[0].items[0].disabled, false);
+        const beforeRewrite = await editor.evaluate(
+          () => window.fixtureState.edits,
+        );
+        await editor.evaluate(() =>
+          window.fixtureState.events.onContextMenuClick('mergeron-reformulate'),
+        );
+        await frame
+          .getByRole('button', { name: 'Appliquer dans le document' })
+          .waitFor();
+        assert.equal(
+          await editor.evaluate(() => window.fixtureState.edits),
+          beforeRewrite,
+        );
+        await frame
+          .getByRole('button', { name: 'Écarter', exact: true })
+          .click();
+        await editor.evaluate(() =>
+          window.fixtureState.events.onContextMenuClick('mergeron-replace'),
+        );
+        assert.equal(
+          await frame
+            .getByRole('combobox', { name: 'Modification', exact: true })
+            .inputValue(),
+          'replaceSelection',
+        );
         await page.close();
       }
       const page = await browser.newPage({
@@ -259,12 +303,119 @@ try {
       assert.equal(state.slides[0].text, 'Contexte initial');
       assert.equal(state.slides[1].objects.length, 2);
       await page.screenshot({ path: resolve(output, `${name}-slides.png`) });
+      const editor = page.frames().find((f) => f.url().includes('/plugin'));
+      await editor.evaluate(() =>
+        window.fixtureState.events.onContextMenuShow(),
+      );
+      assert.equal(
+        await editor.evaluate(() =>
+          window.fixtureState.menu.items[0].items.some(
+            (x) => x.id === 'mergeron-redesign',
+          ),
+        ),
+        true,
+      );
+      await editor.evaluate(() =>
+        window.fixtureState.events.onContextMenuClick('mergeron-redesign'),
+      );
+      await frame
+        .getByRole('button', { name: 'Ajouter la nouvelle slide', exact: true })
+        .waitFor();
+      await page.screenshot({
+        path: resolve(output, `${name}-redesign-proposal.png`),
+      });
+      // A visual-only coauthor edit must invalidate the design too.
+      await editor.evaluate(() => {
+        window.fixtureState.slides[0].visuals[0].x += 1000;
+      });
+      await frame
+        .getByRole('button', { name: 'Ajouter la nouvelle slide', exact: true })
+        .click();
+      await frame
+        .getByText(
+          'Le document ou la sélection a changé. Prépare une nouvelle proposition.',
+        )
+        .waitFor();
+      assert.equal(
+        await editor.evaluate(() => window.fixtureState.slides.length),
+        2,
+      );
+      const original = await editor.evaluate(() =>
+        JSON.stringify({
+          text: window.fixtureState.slides[0].text,
+          visuals: window.fixtureState.slides[0].visuals.map((d) => d.ToJSON()),
+        }),
+      );
+      await frame
+        .getByRole('button', { name: 'Préparer une proposition' })
+        .click();
+      await frame
+        .getByRole('button', { name: 'Ajouter la nouvelle slide', exact: true })
+        .waitFor();
+      await frame
+        .getByRole('button', { name: 'Ajouter la nouvelle slide', exact: true })
+        .click();
+      await frame
+        .getByText(
+          'Modification appliquée. Elle est enregistrée avec les autres modifications OnlyOffice.',
+        )
+        .waitFor();
+      assert.equal(
+        await editor.evaluate(() => window.fixtureState.slides.length),
+        3,
+      );
+      assert.equal(
+        await editor.evaluate(() =>
+          JSON.stringify({
+            text: window.fixtureState.slides[0].text,
+            visuals: window.fixtureState.slides[0].visuals.map((d) =>
+              d.ToJSON(),
+            ),
+          }),
+        ),
+        original,
+      );
+      const redesigned = await editor.evaluate(
+        () => window.fixtureState.slides[1].objects,
+      );
+      assert.equal(redesigned.filter((d) => d.kind === 'shape').length, 4);
+      const illustration = redesigned.find((d) => d.kind === 'image');
+      assert.ok(illustration.x >= 12192000 * 0.62);
+      assert.ok(illustration.x + illustration.w <= 12192000 * 0.92 + 1);
+      assert.equal(redesigned[1].y, redesigned[2].y);
+      assert.ok(redesigned[1].x < redesigned[2].x);
+      // Unsupported grouped content is refused before any generation/edit.
+      await editor.evaluate(() => {
+        window.fixtureState.index = 0;
+        window.fixtureState.slides[0].visuals[0].kind = 'group';
+      });
+      const requestsBefore = await page.evaluate(
+        () => window.calls.filter((x) => x.method === 'propose').length,
+      );
+      await frame
+        .getByRole('button', { name: 'Préparer une proposition' })
+        .click();
+      await frame
+        .getByText(
+          'Cette slide contient des éléments groupés ou non pris en charge. Dissocie-les dans une copie avant de la retravailler.',
+        )
+        .waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => window.calls.filter((x) => x.method === 'propose').length,
+        ),
+        requestsBefore,
+      );
+      assert.equal(
+        await editor.evaluate(() => window.fixtureState.slides.length),
+        3,
+      );
       await page.close();
     } finally {
       await browser.close();
     }
     console.log(
-      `${name}: desktop/mobile insertion, replacement, stale-edit rejection and slide addition passed`,
+      `${name}: desktop/mobile insertion, replacement, stale-edit rejection, slide redesign and native context menus passed`,
     );
   }
 } finally {
