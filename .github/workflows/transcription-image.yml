@@ -70,6 +70,10 @@ jobs:
         env:
           IMAGE: ghcr.io/maxhugit/mergeron-transcription@${{ steps.build.outputs.digest }}
         run: docker pull "$IMAGE"
+      - name: Inspect Python and embedded SBOM provenance
+        env:
+          IMAGE: ${{ inputs.publish && format('ghcr.io/maxhugit/mergeron-transcription@{0}', steps.build.outputs.digest) || format('ghcr.io/maxhugit/mergeron-transcription:candidate-{0}', github.sha) }}
+        run: docker run --rm --interactive --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --entrypoint python "$IMAGE" - < scripts/inspect-transcription-python.py
       - name: Scan transcription image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
