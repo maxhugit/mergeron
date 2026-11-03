@@ -14,6 +14,7 @@ import {
   downloadJobAudio,
   type MediaOperation,
   transcriptSrt,
+  transcriptTxt,
   type TranscriptionJob,
 } from './api';
 const done = new Set([
@@ -24,8 +25,15 @@ const done = new Set([
   'interrupted',
 ]);
 const MAX_BYTES = 128 * 1024 ** 2;
+
 export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
   const { t } = useTranslation('transcription');
+  const warningMessages = {
+    overlapping_speech: t('warnings.overlappingSpeech'),
+    short_turns: t('warnings.shortTurns'),
+    uncertain_assignment: t('warnings.uncertainAssignment'),
+    no_speakers_detected: t('warnings.noSpeakersDetected'),
+  };
   const client = useQueryClient();
   const sourceId =
     source.kind === 'file'
@@ -113,7 +121,7 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
     if (!job.result) return;
     const text =
       format === 'txt'
-        ? job.result.text
+        ? transcriptTxt(job.result)
         : format === 'srt'
           ? transcriptSrt(job.result)
           : JSON.stringify(job.result, null, 2);
@@ -241,9 +249,27 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
                       ? 'anonymous'
                       : job.result.diarization.state === 'failed'
                         ? 'speakersFailed'
-                        : 'speakersUnavailable',
+                        : job.result.diarization.reason === 'no_speech_detected'
+                          ? 'emptySpeech'
+                          : 'speakersUnavailable',
                   )}
                 </p>
+                {job.result.diarization.state === 'ready' && (
+                  <p className="text-xs">
+                    {t('speakerCount', {
+                      count: job.result.diarization.speakerCount ?? 0,
+                    })}
+                  </p>
+                )}
+                {job.result.diarization.warnings?.map((warning) => (
+                  <p
+                    role="status"
+                    key={warning.code}
+                    className="text-xs text-muted-foreground"
+                  >
+                    {warningMessages[warning.code]}
+                  </p>
+                ))}
                 <div className="flex gap-2">
                   {(['txt', 'srt', 'json'] as const).map((format) => (
                     <Button
@@ -310,8 +336,10 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
                         {Math.floor(s.start / 60)}:
                         {String(Math.floor(s.start % 60)).padStart(2, '0')}
                         {s.speaker
-                          ? ' · ' + t('speaker', { number: s.speaker.slice(8) })
-                          : ''}{' '}
+                          ? ' · ' + s.speaker
+                          : job.result?.diarization.state === 'ready'
+                            ? ' · ' + t('unattributed')
+                            : ''}{' '}
                       </span>
                       {s.text}
                     </p>

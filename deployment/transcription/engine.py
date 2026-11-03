@@ -7,8 +7,16 @@ import subprocess
 import sys
 import wave
 
+from diarization import attach_speakers, speaker_for, diarize_segments
+
 MAX_SECONDS = 7200
 MODEL_REVISION = "536b0662742c02347bc0e980a01041f333bce120"
+
+# Enforce offline inference even outside the shipped Docker image. No token or
+# network fallback is needed to load the separately provisioned local bundle.
+for key, value in {"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1",
+                   "HF_HUB_DISABLE_TELEMETRY": "1", "PYANNOTE_METRICS_ENABLED": "0"}.items():
+    os.environ[key] = value
 
 
 def progress(directory, phase):
@@ -16,42 +24,6 @@ def progress(directory, phase):
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps({"phase": phase}), encoding="utf8")
     temporary.replace(path)
-
-
-def speaker_for(start, end, turns):
-    overlaps = [(max(0, min(end, b) - max(start, a)), speaker) for a, b, speaker in turns]
-    best = max(overlaps, default=(0, None), key=lambda item: item[0])
-    return best[1] if best[0] > 0 else None
-
-
-def attach_speakers(segments, turns):
-    """Word-level attribution; do not invent a speaker for an unmatched interval."""
-    output = []
-    names = {}
-    turns = sorted(turns, key=lambda turn: turn[0])
-    cursor = 0
-    for segment in segments:
-        units = segment.get("words") or [segment]
-        for unit in units:
-            while cursor < len(turns) and turns[cursor][1] <= unit["start"]:
-                cursor += 1
-            candidate = cursor
-            overlapping = []
-            while candidate < len(turns) and turns[candidate][0] < unit["end"]:
-                overlapping.append(turns[candidate])
-                candidate += 1
-            name = speaker_for(unit["start"], unit["end"], overlapping)
-            if name is not None:
-                names.setdefault(name, f"speaker_{len(names) + 1}")
-            speaker = names.get(name)
-            if output and output[-1]["speaker"] == speaker and unit["start"] - output[-1]["end"] < 2:
-                output[-1]["text"] += unit.get("word", " " + unit.get("text", ""))
-                output[-1]["end"] = unit["end"]
-            else:
-                output.append({"start": unit["start"], "end": unit["end"], "text": unit.get("word", " " + unit.get("text", "")), "speaker": speaker})
-    for item in output:
-        item["text"] = item["text"].strip()
-    return output
 
 
 def transcribe(directory, operation="transcribe"):
@@ -129,15 +101,26 @@ def recognize(directory, decoded, duration):
             import torch
             from pyannote.audio import Pipeline
             torch.set_num_threads(4)
-            pipeline = Pipeline.from_pretrained("/models/diarization")
-            pipeline.to(torch.device("cpu"))
-            output = pipeline(str(decoded))
-            exclusive = output.exclusive_speaker_diarization
-            turns = [(turn.start, turn.end, str(speaker)) for turn, _, speaker in exclusive.itertracks(yield_label=True)]
-            result["segments"] = attach_speakers(segments, turns)
-            result["diarization"] = {"state": "ready", "speakerCount": len({s["speaker"] for s in result["segments"] if s["speaker"]}), "identitiesKnown": False}
+            try:
+                pipeline = Pipeline.from_pretrained("/models/diarization")
+                pipeline.to(torch.device("cpu"))
+            except Exception:
+                result["diarization"] = {"state": "failed", "reason": "model_load_failed"}
+                return strip_words(result)
+            # Reuse the normalized waveform: no secondary media decoder or URL.
+            output = pipeline({"waveform": torch.from_numpy(waveform).unsqueeze(0), "sample_rate": 16000})
+            # The exclusive annotation deliberately hides simultaneous voices.
+            # Keep the regular acoustic output so overlaps remain observable.
+            turns = [(turn.start, turn.end, str(speaker)) for turn, _, speaker in output.speaker_diarization.itertracks(yield_label=True)]
+            result["segments"], result["diarization"] = diarize_segments(segments, turns, duration)
         except Exception:
             result["diarization"] = {"state": "failed", "reason": "diarization_failed"}
+    if not segments:
+        result["diarization"] = {"state": "unavailable", "reason": "no_speech_detected"}
+    return strip_words(result)
+
+
+def strip_words(result):
     for segment in result["segments"]:
         segment.pop("words", None)
     return result

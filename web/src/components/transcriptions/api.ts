@@ -13,7 +13,17 @@ export interface Transcript {
   }[];
   diarization: {
     state: 'ready' | 'unavailable' | 'failed';
+    reason?: string;
     speakerCount?: number;
+    warnings?: {
+      code:
+        | 'overlapping_speech'
+        | 'short_turns'
+        | 'uncertain_assignment'
+        | 'no_speakers_detected';
+      count: number;
+      duration?: number;
+    }[];
   };
 }
 export type MediaOperation = 'transcribe' | 'extract' | 'both';
@@ -85,4 +95,31 @@ export async function downloadJobAudio(job: TranscriptionJob) {
   link.download = job.audio?.filename ?? 'audio.mp3';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** A new download only: never write back to the source or an existing document. */
+export function transcriptTxt(result: Transcript) {
+  const stamp = (time: number) => {
+    const ms = Math.round(time * 1000);
+    return `${String(Math.floor(ms / 3600000)).padStart(2, '0')}:${String(Math.floor(ms / 60000) % 60).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`;
+  };
+  return (
+    [
+      `Diarization: ${result.diarization.state}`,
+      ...(result.diarization.reason
+        ? [`Reason: ${result.diarization.reason}`]
+        : []),
+      ...(result.diarization.speakerCount === undefined
+        ? []
+        : [`Estimated speakers: ${result.diarization.speakerCount}`]),
+      ...(result.diarization.warnings ?? []).map(
+        (w) => `Warning: ${w.code} (${w.count})`,
+      ),
+      '',
+      ...result.segments.map(
+        (s) =>
+          `[${stamp(s.start)} --> ${stamp(s.end)}] ${s.speaker ?? '[unattributed]'}: ${s.text}`,
+      ),
+    ].join('\n') + '\n'
+  );
 }

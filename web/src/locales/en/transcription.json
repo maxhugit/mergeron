@@ -41,5 +41,13 @@
   "extract": "Extract audio",
   "both": "Audio + transcript",
   "downloadAudio": "Download audio",
-  "audioSize": "{{kilobytes}} KiB"
+  "audioSize": "{{kilobytes}} KiB",
+  "speakerCount": "Estimated speakers: {{count}}",
+  "warnings": {
+    "overlappingSpeech": "Overlapping speech detected: some passages remain unattributed; a voice may be missing from the text.",
+    "shortTurns": "Very short turns detected: attribution may be uncertain.",
+    "uncertainAssignment": "Some passages have no assigned speaker. Check them by listening.",
+    "noSpeakersDetected": "No usable voice detected by diarization."
+  },
+  "unattributed": "Unattributed"
 }

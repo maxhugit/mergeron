@@ -2,8 +2,8 @@
 
 Le service facultatif `mergeron-transcription` est distinct de la dictée au micro.
 Il transcrit la piste audio, détecte sa langue dominante et produit des segments
-horodatés. Avec des modèles locaux de diarisation, il ajoute « Locuteur 1 »,
-« Locuteur 2 », etc. Ces repères anonymes ne reconnaissent pas l’identité des
+horodatés. Avec des modèles locaux de diarisation, il ajoute `SPEAKER_00`,
+`SPEAKER_01`, etc. Ces repères anonymes ne reconnaissent pas l’identité des
 personnes. La qualité et les chevauchements de voix peuvent affecter l’attribution.
 
 ## Utilisation et limites
@@ -157,3 +157,67 @@ et suppression des tâches. Les étiquettes mobiles ne sont promues qu’après 
 validation et les checks source. Les modèles Pyannote soumis à acceptation ne
 sont pas téléchargés par la CI : leur inférence doit être validée séparément,
 avec modèles autorisés et enregistrements de test consentis.
+
+### Installation préalable et validation de la diarisation
+
+La dépendance Pyannote est déjà présente dans l’image ; ses poids ne le sont pas.
+L’activation exige une installation préalable des modèles, distincte du traitement
+des médias. Après acceptation des conditions Community-1 avec votre compte,
+utiliser un environnement d’installation avec `huggingface_hub`, un jeton de
+lecture autorisé fourni via `HF_TOKEN` et la commande suivante :
+
+```sh
+python3 scripts/install-diarization-models.py \
+  --revision 3533c8cf8e369892e6b79ff1bf80f7b0286a54ee \
+  --output /chemin/vers/etat/config/transcription-diarization
+```
+
+Le script refuse les références mobiles et les destinations déjà existantes.
+Il conserve la révision et les empreintes SHA-256 dans `mergeron-models.json`,
+supprime les métadonnées temporaires de téléchargement et ne conserve aucun jeton.
+Le jeton est réservé à cet environnement d’installation : ne pas le configurer
+sur le Manager ni sur le worker. L’installation ne lit aucun média. Cette
+commande prépare les poids ; elle ne constitue pas une validation acoustique.
+Le chargement et une première inférence doivent ensuite être vérifiés avec
+le worker, son montage en lecture seule et son réseau interne sans accès externe.
+
+Activer ensuite `MERGERON_TRANSCRIPTION_DIARIZATION=true` sur le Manager,
+puis recréer le service facultatif sans tâche ni bail actif pour appliquer
+le montage. Une simple modification de la variable ne modifie pas un conteneur
+existant. Conserver son image validée et ses limites d’isolation. Ne pas remplacer
+une stack ou ses données pour ajouter ce montage.
+
+Les résultats utilisent désormais `SPEAKER_00`, `SPEAKER_01`, etc., dans l’ordre
+de première apparition des voix dans l’enregistrement. Un même repère ne désigne
+pas nécessairement la même personne dans un autre enregistrement. L’analyse
+utilise les caractéristiques acoustiques ; elle ne déduit pas les voix du dialogue.
+Le nombre de locuteurs est une estimation issue de la diarisation, y compris
+les voix dont aucun mot ne peut être attribué avec assez de certitude.
+
+Le rapprochement s’effectue avec les horaires des mots. Il sépare les passages
+quand le locuteur change ; il ne devine pas comment découper un mot qui chevauche
+une frontière. Les mots couvrant plusieurs voix, trop peu couverts par une voix
+ou issus d’un tour acoustique de moins de 0,5 seconde restent sans attribution.
+Ces seuils temporels sont des heuristiques conservatrices, pas un score de
+confiance biométrique. Les avertissements structurés signalent les chevauchements,
+les interventions courtes, les attributions incertaines et l’absence de voix
+détectée. Whisper peut omettre l’une des voix simultanées : les avertissements
+ne signifient pas que toutes les paroles ont été transcrites.
+
+Le téléchargement TXT contient l’état, le nombre estimé de locuteurs, les
+avertissements et les passages avec horaires et étiquettes. Les passages sans
+attribution sont explicites. Il crée un téléchargement ; il n’enregistre ni ne
+remplace automatiquement un document d’un livrable. Les anciens résultats et TXT
+ne sont pas recalculés : relancer une nouvelle tâche sur le MP4 d’origine, vérifier
+le nouveau résultat puis choisir explicitement de le publier sous un nouveau nom.
+Les étiquettes antérieurement déduites du dialogue ne sont pas une preuve d’analyse
+vocale et ne doivent pas servir de référence acoustique.
+
+Avant de déclarer la diarisation validée, contrôler des enregistrements autorisés
+avec une, deux et trois voix connues, des échanges courts et des paroles simultanées.
+Conserver une référence horodatée attribuée par écoute, indépendante du texte et
+de la sortie du modèle. Comparer le nombre estimé de voix, la cohérence d’un même
+repère au fil de l’enregistrement, les frontières de changement et les passages
+laissés sans attribution. Noter séparément les erreurs de transcription et
+les erreurs de diarisation. Les tests unitaires de rapprochement et les voix
+synthétiques de la CI ne remplacent pas cette validation acoustique et humaine.
