@@ -229,3 +229,32 @@ repère au fil de l’enregistrement, les frontières de changement et les passa
 laissés sans attribution. Noter séparément les erreurs de transcription et
 les erreurs de diarisation. Les tests unitaires de rapprochement et les voix
 synthétiques de la CI ne remplacent pas cette validation acoustique et humaine.
+
+## Lecture vidéo et sous-titres SRT
+
+Le lecteur conserve une seule instance vidéo pendant les changements d’onglet et
+les mises à jour du panneau. L’onglet **Sous-titres synchronisés** affiche le SRT
+portant le même nom que la vidéo, dans son dossier : `réunion.mp4` utilise
+`réunion.srt`. La phrase courante est surlignée et le défilement suit la lecture.
+Cliquer une phrase positionne la vidéo à son début sans démarrer automatiquement
+la lecture. Le bouton **Suivre la lecture** permet de désactiver le défilement
+pour lire d’autres passages.
+
+**Charger un fichier SRT** permet de choisir un fichier d’un autre nom dans le
+même dossier, ou un fichier sur l’appareil. L’import depuis l’appareil est traité
+dans le navigateur ; il n’est pas envoyé au service de transcription et ne modifie
+pas les fichiers du projet. Le choix remplace les sous-titres pour cette lecture.
+L’onglet **Audio et transcription** conserve les outils d’extraction et de
+transcription existants ; le lecteur reste monté pendant la bascule.
+
+Le chargement du SRT voisin réutilise la route de prévisualisation authentifiée et
+ses permissions. Les entrées d’archive peuvent également lire leur SRT voisin ;
+le sélecteur de dossier concerne les fichiers de l’espace de travail. Une absence
+HTTP 404 est distinguée d’une erreur d’accès. Les lectures sont annulées lors
+d’un changement de vidéo et un choix manuel ne peut pas être remplacé par une
+ancienne lecture automatique encore en cours.
+
+Les SRT sont limités à 2 Mio et 10 000 sous-titres, avec au plus 200 lignes affichées
+par page. La limite s’applique aussi aux réponses sans `Content-Length`. Les
+timestamps sont validés et le texte est affiché sans interprétation HTML. Un SRT
+invalide est signalé ; la vidéo reste utilisable.

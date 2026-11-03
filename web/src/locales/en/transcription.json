@@ -50,5 +50,21 @@
     "noSpeakersDetected": "No usable voice detected by diarization."
   },
   "unattributed": "Unattributed",
-  "speakersDisabled": "Speaker diarization is disabled in Manager."
+  "speakersDisabled": "Speaker diarization is disabled in Manager.",
+  "subtitles": {
+    "title": "Synchronized subtitles",
+    "load": "Load an SRT file",
+    "loading": "Loading subtitles…",
+    "empty": "No matching SRT found. Load an SRT file to display the synchronized transcript.",
+    "invalid": "This SRT file is empty or contains invalid subtitles.",
+    "tooLarge": "The SRT exceeds the limit of 2 MiB or 10,000 subtitles.",
+    "loadFailed": "Could not load the subtitles. You can choose another SRT file.",
+    "follow": "Follow playback",
+    "videoError": "Could not play this video.",
+    "chooseDescription": "Choose an SRT from the video folder or a file on your device. Loading does not modify your files.",
+    "inFolder": "In the video folder",
+    "listFailed": "Could not read the folder. You can choose a file on your device.",
+    "noOtherFile": "No SRT files in this folder.",
+    "localFile": "Choose on this device"
+  }
 }
