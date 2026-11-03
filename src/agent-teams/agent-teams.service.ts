@@ -26,7 +26,7 @@ export class AgentTeamsService {
   list(identity: PlatformIdentity, projectId: string, coordinator: string) {
     this.authorize(identity, projectId, coordinator);
     return {
-      teams: this.store.list(projectId, coordinator),
+      teams: this.store.listSummaries(projectId, coordinator),
       launchAvailable: false,
     };
   }

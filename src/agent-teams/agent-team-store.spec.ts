@@ -55,6 +55,23 @@ beforeEach(() => {
 });
 afterEach(() => database.sqlite.close());
 describe('durable team foundation', () => {
+  it('keeps instructions and answers out of polling summaries', () => {
+    const team = store.create('p', 'coordinator', input());
+    store.bind('p', team.id, team.assignments[0].id, 'child', 'coordinator');
+    store.observe(
+      'p',
+      team.id,
+      'child',
+      'completed',
+      'A large retained answer',
+    );
+    const summary = store.listSummaries('p', 'coordinator')[0];
+    expect(summary.assignments[0]).not.toHaveProperty('instructions');
+    expect(summary.assignments[0]).not.toHaveProperty('result');
+    expect(store.read('p', team.id).assignments[0].result).toBe(
+      'A large retained answer',
+    );
+  });
   it('retains native ownership and results after closing and reopening SQLite', () => {
     const directory = mkdtempSync(join(tmpdir(), 'mergeron-team-'));
     const file = join(directory, 'teams.sqlite');

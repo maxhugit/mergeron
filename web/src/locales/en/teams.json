@@ -1,0 +1,24 @@
+{
+  "title": "Team",
+  "refresh": "Refresh the team",
+  "close": "Close the team panel",
+  "loading": "Loading the team…",
+  "empty": "Subagents delegated by this conversation will appear here.",
+  "mission": "Team mission",
+  "coordinator": "Your conversation remains the coordinator. Results are consolidated there.",
+  "members": "Team members",
+  "dependencies": "Waiting for: {{names}}",
+  "missingDependency": "Unavailable mission",
+  "instructions": "Assigned work",
+  "result": "Result",
+  "noResult": "No result has been received yet.",
+  "states": {
+    "planned": "Ready",
+    "running": "In progress",
+    "waiting": "Waiting for dependencies",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "unknown": "State to verify"
+  }
+}
