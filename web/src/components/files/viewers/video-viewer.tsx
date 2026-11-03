@@ -355,7 +355,10 @@ function VideoSession({ source }: { source: PreviewSource }) {
       {processingOpened && (
         <div
           hidden={tab !== 'processing'}
-          className="min-h-0 flex-1 overflow-hidden"
+          className={cn(
+            'min-h-0 flex-1 overflow-hidden',
+            tab === 'processing' ? 'flex' : 'hidden',
+          )}
         >
           <Suspense fallback={<p role="status">{t('subtitles.loading')}</p>}>
             <FileTranscriptionPanel source={source} />
