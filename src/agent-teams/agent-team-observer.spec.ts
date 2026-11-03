@@ -143,3 +143,76 @@ describe('native team observation', () => {
     expect(store.list('p', 'parent')[0].assignments[0].status).toBe('unknown');
   });
 });
+it('tracks a real child follow-up turn while rejecting late messages and completion from its previous turn', () => {
+  observer.observe(spawn());
+  const team = store.list('p', 'parent')[0];
+  observer.observe({
+    method: 'turn/started',
+    params: { threadId: 'child', turn: { id: 'first' } },
+  });
+  observer.observe({
+    method: 'item/completed',
+    params: {
+      threadId: 'child',
+      turnId: 'first',
+      item: {
+        type: 'agentMessage',
+        phase: 'final_answer',
+        text: 'First answer',
+      },
+    },
+  });
+  observer.observe({
+    method: 'turn/completed',
+    params: { threadId: 'child', turn: { id: 'first', status: 'completed' } },
+  });
+  expect(store.read('p', team.id).assignments[0].status).toBe('completed');
+  observer.observe({
+    method: 'turn/started',
+    params: { threadId: 'child', turn: { id: 'followup' } },
+  });
+  observer.observe({
+    method: 'item/completed',
+    params: {
+      threadId: 'child',
+      turnId: 'first',
+      item: {
+        type: 'agentMessage',
+        phase: 'final_answer',
+        text: 'Stale answer',
+      },
+    },
+  });
+  observer.observe({
+    method: 'turn/completed',
+    params: { threadId: 'child', turn: { id: 'first', status: 'completed' } },
+  });
+  expect(store.read('p', team.id).assignments[0]).toMatchObject({
+    status: 'running',
+    nativeTurnId: 'followup',
+    result: 'First answer',
+  });
+  observer.observe({
+    method: 'item/completed',
+    params: {
+      threadId: 'child',
+      turnId: 'followup',
+      item: {
+        type: 'agentMessage',
+        phase: 'final_answer',
+        text: 'Updated answer',
+      },
+    },
+  });
+  observer.observe({
+    method: 'turn/completed',
+    params: {
+      threadId: 'child',
+      turn: { id: 'followup', status: 'completed' },
+    },
+  });
+  expect(store.read('p', team.id).assignments[0]).toMatchObject({
+    status: 'completed',
+    result: 'Updated answer',
+  });
+});

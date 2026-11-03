@@ -349,3 +349,26 @@ it('refuses an ambiguous duplicate plan marker instead of choosing a turn', asyn
   expect(result).toMatchObject({ state: 'unknown', nativeTurnId: null });
   expect(runtime.startTurn).not.toHaveBeenCalled();
 });
+it('does not present a newer unrelated coordinator or child approval as this mission’s request', () => {
+  store.bindChildTurn('child', 'child-turn');
+  const correct = {
+    instanceId: 'correct',
+    threadId: 'parent',
+    turnId: 'parent-turn',
+    generation: 1,
+    status: 'pending',
+  };
+  pending.readPending.mockReturnValue({
+    requests: [
+      { ...correct, instanceId: 'different-parent', turnId: 'new-parent-turn' },
+      {
+        ...correct,
+        instanceId: 'different-child',
+        threadId: 'child',
+        turnId: 'new-child-turn',
+      },
+      correct,
+    ],
+  });
+  expect(controls.details(actor(), 'p', teamId).requests).toEqual([correct]);
+});

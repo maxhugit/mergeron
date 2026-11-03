@@ -89,12 +89,25 @@ export class AgentTeamControlsService {
       ),
     ];
     // The common request path retains immutable instance IDs, generation and grants.
-    const requests = canRespond
+    const observedRequests = canRespond
       ? accessContext.run(
           { identity: actor, identities: this.identities },
           () => this.pending.readPending(ids).requests,
         )
       : [];
+    const requests = observedRequests.filter((request) => {
+      if (request.threadId === team.coordinatorThreadId)
+        return !!team.nativeTurnId && request.turnId === team.nativeTurnId;
+      const assignment = team.assignments.find(
+        (a) => a.nativeThreadId === request.threadId,
+      );
+      return (
+        !!assignment &&
+        (!assignment.nativeTurnId ||
+          !request.turnId ||
+          assignment.nativeTurnId === request.turnId)
+      );
+    });
     return {
       ...team,
       canRespond,

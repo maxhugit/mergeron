@@ -227,3 +227,14 @@ et la [référence de configuration](https://learn.chatgpt.com/docs/config-file/
 Les contrats vérifiés avec un CLI réel complètent la documentation, notamment pour
 les différences entre versions. La présence d’un champ dans les types générés ne
 prouve pas que le moteur installé applique ce champ.
+
+Les approbations du coordinateur sont corrélées au tour enregistré de la mission :
+consulter une ancienne équipe ne permet pas de confondre sa demande avec celle
+d’un nouveau tour de la même conversation. Les décisions restent traitées par
+le circuit commun, avec leur instance et leur génération d’origine.
+
+Lorsqu’un enfant reçoit un nouveau tour natif pendant la même mission active,
+son état suit ce nouveau tour en conservant son résultat précédent. Un message
+ou une fin tardive du tour précédent ne remplace pas le résultat du tour courant.
+Une observation de statut sans identifiant de tour ne supplante pas une preuve
+native de tour déjà connue ; la réconciliation reste disponible après coupure.
