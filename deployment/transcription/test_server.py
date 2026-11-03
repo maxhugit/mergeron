@@ -8,6 +8,7 @@ import time
 import uuid
 import threading
 import unittest
+from types import SimpleNamespace
 import server
 
 class PrivateAPI(unittest.TestCase):
@@ -49,6 +50,54 @@ class PrivateAPI(unittest.TestCase):
             with server.LOCK:
                 server.JOBS.pop(identifier,None)
             server.remove(job)
+    def test_terminal_progress_waits_for_process_exit_and_a_complete_result(self):
+        # No inference or timing assumptions: hold the worker in its exact
+        # pre-exit window even after it has written the terminal progress file.
+        for terminal_phase, returncode in [('ready', 0), ('failed', 1)]:
+            with self.subTest(phase=terminal_phase), tempfile.TemporaryDirectory(prefix='media-terminal-fixture-') as path:
+                identifier=str(uuid.uuid4())
+                directory=Path(path)
+                process=SimpleNamespace(returncode=None)
+                process.poll=lambda: process.returncode
+                job={'directory':path,'process':process,'created':time.monotonic()}
+                with server.LOCK:
+                    server.JOBS[identifier]=job
+                auth={'Authorization':'Bearer '+server.TOKEN}
+                try:
+                    (directory/'progress.json').write_text(json.dumps({'phase':'transcribing'}))
+                    self.assertEqual(self.request('GET','/jobs/'+identifier,auth),(200,{'state':'transcribing'}))
+                    payload={'transcript':{'text':'synthetic speech'},'audio':None}
+                    (directory/'result.json').write_text(json.dumps(payload))
+                    (directory/'error.json').write_text(json.dumps({'code':'SYNTHETIC_FAILURE'}))
+                    (directory/'progress.json').write_text(json.dumps({'phase':terminal_phase}))
+                    self.assertEqual(self.request('GET','/jobs/'+identifier,auth),(200,{'state':'transcribing'}))
+                    process.returncode=returncode
+                    status,data=self.request('GET','/jobs/'+identifier,auth)
+                    self.assertEqual(status,200)
+                    if returncode==0:
+                        self.assertEqual(data,{'state':'ready','result':payload['transcript'],'audio':None,'transcriptionError':None})
+                    else:
+                        self.assertEqual(data,{'state':'failed','error':'SYNTHETIC_FAILURE'})
+                finally:
+                    with server.LOCK:
+                        server.JOBS.pop(identifier,None)
+
+    def test_ready_progress_on_first_poll_cannot_report_a_result_before_exit(self):
+        identifier=str(uuid.uuid4())
+        with tempfile.TemporaryDirectory(prefix='media-first-poll-fixture-') as path:
+            directory=Path(path)
+            (directory/'progress.json').write_text(json.dumps({'phase':'ready'}))
+            process=SimpleNamespace(poll=lambda:None)
+            with server.LOCK:
+                server.JOBS[identifier]={'directory':path,'process':process,'created':time.monotonic()}
+            try:
+                status,data=self.request('GET','/jobs/'+identifier,{'Authorization':'Bearer '+server.TOKEN})
+                self.assertEqual(status,200)
+                self.assertNotIn(data['state'],['ready','failed'])
+            finally:
+                with server.LOCK:
+                    server.JOBS.pop(identifier,None)
+
     def test_extracts_and_downloads_real_audio_through_private_api(self):
         identifier=str(uuid.uuid4())
         auth={'Authorization':'Bearer '+server.TOKEN}

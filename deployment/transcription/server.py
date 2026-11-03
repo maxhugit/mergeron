@@ -101,7 +101,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, {"state": "failed", "error": code})
             progress = directory / "progress.json"
             phase = json.loads(progress.read_text())["phase"] if progress.is_file() else "decoding"
-            return self.reply(200, {"state": phase})
+            # The engine writes terminal progress before it exits. Only the
+            # completed-process branch above may publish ready/result or failed.
+            # Keep reporting the last active phase until that commit boundary.
+            active_phases = {"decoding", "loading", "extracting", "transcribing", "diarizing"}
+            if phase in active_phases:
+                job["phase"] = phase
+            return self.reply(200, {"state": job.get("phase", "decoding")})
 
     def do_POST(self):
         if not self.authorized():
