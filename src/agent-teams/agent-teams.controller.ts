@@ -1,3 +1,4 @@
+import { AgentTeamBusinessService } from './agent-team-business.service';
 import {
   Body,
   Put,
@@ -21,6 +22,7 @@ export class AgentTeamsController {
     private readonly teams: AgentTeamsService,
     private readonly controls: AgentTeamControlsService,
     private readonly launchService: AgentTeamLaunchService,
+    private readonly business: AgentTeamBusinessService,
   ) {}
   @Get()
   @Header('Cache-Control', 'no-store')
@@ -80,6 +82,55 @@ export class AgentTeamsController {
     @Param('teamId') teamId: string,
   ) {
     return this.launchService.launch(req.platformIdentity!, projectId, teamId);
+  }
+  @Get('context')
+  @Header('Cache-Control', 'no-store')
+  context(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Query('coordinator') coordinator: string,
+  ) {
+    return this.business.context(req.platformIdentity!, projectId, coordinator);
+  }
+  @Get('contributions')
+  @Header('Cache-Control', 'no-store')
+  contributions(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Query('taskId') taskId?: string,
+    @Query('deliverableId') deliverableId?: string,
+  ) {
+    return this.business.contributions(
+      req.platformIdentity!,
+      projectId,
+      taskId,
+      deliverableId,
+    );
+  }
+  @Put(':teamId/links')
+  links(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Param('teamId') teamId: string,
+    @Body() body: unknown,
+  ) {
+    return this.business.links(req.platformIdentity!, projectId, teamId, body);
+  }
+  @Post(':teamId/assignments/:assignmentId/task')
+  createTask(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Param('teamId') teamId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Body() body: unknown,
+  ) {
+    return this.business.createTask(
+      req.platformIdentity!,
+      projectId,
+      teamId,
+      assignmentId,
+      body,
+    );
   }
   @Get(':teamId')
   @Header('Cache-Control', 'no-store')

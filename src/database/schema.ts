@@ -50,6 +50,8 @@ export const agentTeams = sqliteTable(
     }),
     lastError: text('last_error'),
     summary: text('summary'),
+    // Retain provenance after target deletion: SET NULL would silently widen access.
+    deliverableId: text('deliverable_id'),
     launchedBy: text('launched_by').references(() => people.id, {
       onDelete: 'set null',
     }),
@@ -81,6 +83,7 @@ export const agentTeamAssignments = sqliteTable(
       .notNull(),
     nativeThreadId: text('native_thread_id').unique(),
     nativeTurnId: text('native_turn_id'),
+    taskId: text('task_id'),
     status: text('status')
       .$type<
         'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown'

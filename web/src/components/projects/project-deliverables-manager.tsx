@@ -1,3 +1,4 @@
+import { AgentTeamContributions } from './agent-team-contributions';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
@@ -1216,6 +1217,13 @@ function DeliverableDetail({
               : 'w-full space-y-4 p-4 md:p-6'
           }
         >
+          {tab === 'overview' && (
+            <AgentTeamContributions
+              key={item.id}
+              projectId={base.split('/')[1]}
+              deliverableId={item.id}
+            />
+          )}
           {tab === 'overview' && (
             <Overview
               item={item}

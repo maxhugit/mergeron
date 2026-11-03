@@ -114,6 +114,12 @@ export class AgentTeamObserver implements OnModuleInit, OnModuleDestroy {
           if (!owner || owner.coordinatorThreadId !== threadId) continue;
           const state = record(raw),
             status = statuses[string(state.status)];
+          if (
+            owner.nativeTurnId &&
+            status &&
+            ['completed', 'failed', 'cancelled'].includes(status)
+          )
+            continue;
           if (status)
             this.store.observe(
               owner.projectId,
@@ -131,7 +137,8 @@ export class AgentTeamObserver implements OnModuleInit, OnModuleDestroy {
       if (
         note.method === 'item/completed' &&
         item.type === 'agentMessage' &&
-        (item.phase === 'final_answer' || item.phase === null)
+        (item.phase === 'final_answer' || item.phase === null) &&
+        (!owner.nativeTurnId || owner.nativeTurnId === string(params.turnId))
       )
         this.store.saveResult(threadId, string(item.text));
       if (note.method === 'turn/started')
@@ -139,6 +146,9 @@ export class AgentTeamObserver implements OnModuleInit, OnModuleDestroy {
       if (note.method === 'turn/started')
         this.store.observe(owner.projectId, owner.teamId, threadId, 'running');
       if (note.method === 'turn/completed') {
+        const turnId = string(record(params.turn).id);
+        if (owner.nativeTurnId && owner.nativeTurnId !== turnId) return;
+        if (!owner.nativeTurnId) this.store.bindChildTurn(threadId, turnId);
         const status = {
           completed: 'completed',
           interrupted: 'cancelled',

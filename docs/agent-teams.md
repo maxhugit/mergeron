@@ -3,15 +3,15 @@
 Cette fonctionnalité est développée en cinq étapes. Une mission enregistrée
 n’accorde aucune permission : le lancement passe par les contrôles natifs existants.
 
-## Fonctionnement prévu
+## Fonctionnement
 
 Une conversation existante sert de coordinateur. Une mission d’équipe appartient
 à son projet et contient des affectations avec un rôle, des instructions et des
-dépendances. Les analyses pourront avancer en parallèle ; le coordinateur restera
+dépendances. Les analyses peuvent avancer en parallèle ; le coordinateur reste
 responsable de la rédaction et de la synthèse pendant cette première phase.
 
-Les sous-agents temporaires seront regroupés sous la mission et ne remplaceront
-pas les agents permanents du projet. Le livrable ne sera pas validé automatiquement
+Les sous-agents temporaires sont regroupés sous la mission et ne remplacent
+pas les agents permanents du projet. Le livrable n’est pas validé automatiquement
 à la fin des analyses.
 
 ## Livraison
@@ -162,3 +162,79 @@ création des enfants. Elle ne rejoue aucun outil. Une absence ou une ambiguït�
 laisse l’état inconnu. Le test du vrai CLI vérifie également la persistance de
 cette référence dans `thread/turns/list` ; il ne suppose pas que le CLI conserve
 `clientUserMessageId` comme identifiant natif du message.
+
+## Tâches, livrables et contributions
+
+Dans un plan encore à l’état brouillon, le panneau permet de choisir un livrable
+standard du projet et une tâche existante pour chaque rôle. L’enregistrement des
+rattachements est explicite ; une sélection non enregistrée bloque le bouton de
+lancement. Les cibles sont revérifiées juste avant l’envoi natif. Le coordinateur
+reçoit leurs identifiants, puis consulte les détails avec le MCP du projet.
+L’ordre de dépendances est transmis au coordinateur ; Mergeron ne transforme pas
+ces consignes en interception de chaque appel natif.
+
+Les conversations étant partagées dans le projet, les livrables restreints ne sont
+pas proposés pour une nouvelle mission. Il faudrait d’abord une conversation dont
+les droits correspondent à ceux du livrable pour prendre en charge ce cas. Les
+vérifications de confidentialité restent appliquées à chaque lecture : un livrable
+qui devient restreint masque l’équipe aux personnes non autorisées. Une référence
+supprimée reste conservée et ne rend pas les anciens résultats publics ; un
+administrateur peut encore inspecter cette référence et arrêter le travail.
+Les tableaux internes d’exécution ne sont pas proposés comme tableaux généraux.
+
+Les fiches de tâches et de livrables proposent « Contributions des équipes ».
+L’ouverture charge les extraits des résultats associés ; « Voir cette équipe »
+ouvre la mission exacte, y compris lorsqu’elle ne fait plus partie des 50 plus
+récentes. Les résultats restent du texte, et ne sont pas exécutés comme du HTML.
+Le panneau présente aussi l’état global, le nombre de missions terminées et la
+synthèse du coordinateur lorsqu’elle est disponible.
+
+À partir d’un résultat terminé, en échec ou annulé, un administrateur peut proposer
+une nouvelle tâche. Il choisit le tableau puis relit et modifie le titre et la
+description avant de confirmer. La tâche créée reste manuelle, non affectée et dans
+le statut initial du tableau. Une réponse HTTP perdue peut être réessayée : le lien
+unique de l’affectation permet de retourner la tâche déjà créée sans doublon. Aucun
+livrable n’est validé, aucune tâche existante n’est terminée et aucun nouvel agent
+n’est lancé par cette opération.
+
+La migration `0069_agent_team_contributions` conserve les identifiants métier dans
+`agent_teams.deliverable_id` et `agent_team_assignments.task_id`. Ils sont validés
+par projet avant écriture et ne sont pas mis à `NULL` lors d’une suppression, afin
+de conserver la provenance nécessaire aux contrôles d’accès. La création métier
+et son lien sont enregistrés dans la même transaction SQLite ; la création réutilise
+`ProjectsService.createTask` avec le mode `manual` et l’identité de confirmation.
+Les écritures sont auditées sans recopier les résultats dans le journal du projet.
+
+Routes supplémentaires sous `/api/projects/:projectId/agent-teams` :
+
+- `GET context?coordinator=…` : cibles autorisées, limitées à 300 livrables et 500
+  tâches, avec indication lorsque le sélecteur est tronqué ;
+- `PUT :teamId/links` : `{deliverableId, assignments: [{id, taskId}]}`, réservé au
+  brouillon ; les champs de modèle, permissions ou statut ne sont pas acceptés ;
+- `POST :teamId/assignments/:assignmentId/task` :
+  `{confirmed: true, resourceId, title, description}`, confirmation obligatoire,
+  titre limité à 200 caractères et description à 10 000 ;
+- `GET contributions?taskId=…` ou `?deliverableId=…` : une seule cible, dans ce
+  projet, jusqu’à 20 équipes et des extraits de 4 000 caractères. Les droits du
+  projet, du coordinateur et des objets associés restent requis.
+
+## Références natives
+
+Le comportement de l’adaptateur s’appuie sur la
+[documentation de l’app-server](https://learn.chatgpt.com/docs/app-server), la
+[configuration des sous-agents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+et la [référence de configuration](https://learn.chatgpt.com/docs/config-file/config-reference).
+Les contrats vérifiés avec un CLI réel complètent la documentation, notamment pour
+les différences entre versions. La présence d’un champ dans les types générés ne
+prouve pas que le moteur installé applique ce champ.
+
+Les approbations du coordinateur sont corrélées au tour enregistré de la mission :
+consulter une ancienne équipe ne permet pas de confondre sa demande avec celle
+d’un nouveau tour de la même conversation. Les décisions restent traitées par
+le circuit commun, avec leur instance et leur génération d’origine.
+
+Lorsqu’un enfant reçoit un nouveau tour natif pendant la même mission active,
+son état suit ce nouveau tour en conservant son résultat précédent. Un message
+ou une fin tardive du tour précédent ne remplace pas le résultat du tour courant.
+Une observation de statut sans identifiant de tour ne supplante pas une preuve
+native de tour déjà connue ; la réconciliation reste disponible après coupure.

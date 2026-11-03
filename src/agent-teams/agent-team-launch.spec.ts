@@ -1,3 +1,5 @@
+import { AgentTeamBusinessService } from './agent-team-business.service';
+import { AgentTeamVisibilityService } from './agent-team-visibility.service';
 import { ProjectConnectionPolicyService } from '../threads/project-connection-policy.service';
 import type { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -82,7 +84,10 @@ beforeEach(() => {
     });
   service = new AgentTeamLaunchService(
     database.db,
-    new AgentTeamsService(store, identities),
+    new AgentTeamsService(store, identities, {
+      assert() {},
+      canRead: () => true,
+    } as unknown as AgentTeamVisibilityService),
     identities,
     { request } as unknown as CodexService,
     { startTurn: start } as unknown as ThreadsService,
@@ -92,6 +97,7 @@ beforeEach(() => {
       parentOf: () => null,
     } as unknown as ThreadExecutionInventoryService,
     { listPending: () => [] } as unknown as PendingApprovalsService,
+    { assertLaunch() {} } as unknown as AgentTeamBusinessService,
   );
 });
 afterEach(() => database.sqlite.close());

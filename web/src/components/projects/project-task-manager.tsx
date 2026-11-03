@@ -1,3 +1,4 @@
+import { AgentTeamContributions } from './agent-team-contributions';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Tooltip, Willow, WillowDark, type IApi } from '@svar-ui/react-gantt';
@@ -2205,6 +2206,7 @@ export function ProjectTaskManager({
             </div>
           )}
           <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto px-6 py-3">
+            {editing && <AgentTeamContributions key={editing.id} projectId={projectId} taskId={editing.id} />}
             <label className="grid gap-1 text-xs text-muted-foreground">
               {t('taskTitle')}
               <Input

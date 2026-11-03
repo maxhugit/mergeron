@@ -1,3 +1,6 @@
+import { AgentTeamVisibilityService } from './agent-team-visibility.service';
+import { AgentTeamBusinessService } from './agent-team-business.service';
+import { DeliverablesService } from '../deliverables/deliverables.service';
 import { AgentTeamObserver } from './agent-team-observer.service';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
@@ -93,6 +96,16 @@ beforeEach(async () => {
     controllers: [AgentTeamsController],
     providers: [
       AgentTeamsService,
+      AgentTeamVisibilityService,
+      { provide: AgentTeamBusinessService, useValue: {} },
+      {
+        provide: DeliverablesService,
+        useValue: {
+          get() {
+            throw new Error('Unexpected business read');
+          },
+        },
+      },
       { provide: AgentTeamLaunchService, useValue: {} },
       AgentTeamControlsService,
       { provide: AgentTeamObserver, useValue: { observe() {} } },
@@ -201,4 +214,31 @@ it('rejects reader stop and reconciliation at the HTTP authorization boundary', 
   expect(
     new AgentTeamStore(database.db).read('p', teamId).stopRequestedAt,
   ).toBeNull();
+});
+it('denies reader writes to business links and task proposals', async () => {
+  expect(
+    (
+      await app.inject({
+        url: `${base}/${teamId}/links`,
+        method: 'PUT',
+        headers: headers(),
+        payload: { deliverableId: null, assignments: [] },
+      })
+    ).statusCode,
+  ).toBe(403);
+  expect(
+    (
+      await app.inject({
+        url: `${base}/${teamId}/assignments/assignment/task`,
+        method: 'POST',
+        headers: headers(),
+        payload: {
+          confirmed: true,
+          resourceId: 'board',
+          title: 'Task',
+          description: '',
+        },
+      })
+    ).statusCode,
+  ).toBe(403);
 });

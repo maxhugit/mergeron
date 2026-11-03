@@ -6,6 +6,7 @@ import type { PendingServerRequestDto } from '@/generated/api';
 const assignment = z.object({
   id: z.string(),
   role: z.string(),
+  taskId: z.string().nullable().default(null),
   dependencies: z.array(z.string()),
   nativeThreadId: z.string().nullable(),
   status: z
@@ -36,6 +37,7 @@ const summary = z.object({
     .default('observed'),
   lastError: z.string().nullable().default(null),
   objective: z.string(),
+  deliverableId: z.string().nullable().default(null),
   createdAt: z.number(),
   assignments: z.array(assignment),
 });
@@ -44,6 +46,7 @@ const listing = z.object({
   launchAvailable: z.boolean(),
 });
 const detail = summary.extend({
+  summary: z.string().nullable().default(null),
   canRespond: z.boolean().default(false),
   requests: z.array(z.custom<PendingServerRequestDto>()).default([]),
   attention: z
@@ -197,5 +200,97 @@ export async function launchAgentTeam(projectId: string, teamId: string) {
     await projectsApi<unknown>(teamPath(projectId, teamId) + '/launch', {
       method: 'POST',
     }),
+  );
+}
+
+const businessContext = z.object({
+  boards: z.array(z.object({ id: z.string(), name: z.string() })),
+  deliverables: z.array(z.object({ id: z.string(), title: z.string() })),
+  tasks: z.array(
+    z.object({ id: z.string(), title: z.string(), resourceId: z.string() }),
+  ),
+  truncated: z.boolean(),
+});
+export async function readTeamContext(
+  projectId: string,
+  coordinator: string,
+  signal?: AbortSignal,
+) {
+  return businessContext.parse(
+    await projectsApi<unknown>(
+      teamPath(projectId, 'context') +
+        '?coordinator=' +
+        encodeURIComponent(coordinator),
+      { signal },
+    ),
+  );
+}
+export async function saveTeamLinks(
+  projectId: string,
+  teamId: string,
+  links: {
+    deliverableId: string | null;
+    assignments: Array<{ id: string; taskId: string | null }>;
+  },
+) {
+  return detail.parse(
+    await projectsApi<unknown>(teamPath(projectId, teamId) + '/links', {
+      method: 'PUT',
+      body: JSON.stringify(links),
+    }),
+  );
+}
+export async function createTaskFromContribution(
+  projectId: string,
+  teamId: string,
+  assignmentId: string,
+  input: {
+    confirmed: true;
+    resourceId: string;
+    title: string;
+    description: string;
+  },
+) {
+  return z
+    .object({ id: z.string() })
+    .parse(
+      await projectsApi<unknown>(
+        teamPath(projectId, teamId) +
+          '/assignments/' +
+          encodeURIComponent(assignmentId) +
+          '/task',
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
+    );
+}
+const contributionList = z.object({
+  teams: z.array(
+    z.object({
+      id: z.string(),
+      coordinatorThreadId: z.string(),
+      objective: z.string(),
+      state: z.string(),
+      assignments: z.array(
+        z.object({
+          id: z.string(),
+          role: z.string(),
+          status: z.string(),
+          result: z.string().nullable(),
+        }),
+      ),
+    }),
+  ),
+});
+export async function readTeamContributions(
+  projectId: string,
+  target: { taskId: string } | { deliverableId: string },
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams(target);
+  return contributionList.parse(
+    await projectsApi<unknown>(
+      teamPath(projectId, 'contributions') + '?' + query.toString(),
+      { signal },
+    ),
   );
 }

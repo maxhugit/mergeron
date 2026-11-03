@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { AgentTeamVisibilityService } from './agent-team-visibility.service';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   IdentityService,
   type PlatformIdentity,
@@ -10,6 +15,7 @@ export class AgentTeamsService {
   constructor(
     readonly store: AgentTeamStore,
     private readonly identities: IdentityService,
+    private readonly visibility: AgentTeamVisibilityService,
   ) {}
   authorize(
     identity: PlatformIdentity,
@@ -26,7 +32,9 @@ export class AgentTeamsService {
   list(identity: PlatformIdentity, projectId: string, coordinator: string) {
     const actor = this.authorize(identity, projectId, coordinator);
     return {
-      teams: this.store.listSummaries(projectId, coordinator),
+      teams: this.store
+        .listSummaries(projectId, coordinator)
+        .filter((team) => this.visibility.canRead(actor, projectId, team)),
       launchAvailable:
         actor.kind === 'person' &&
         actor.role === 'administrator' &&
@@ -39,7 +47,12 @@ export class AgentTeamsService {
       projectId,
     );
     const team = this.store.read(projectId, id);
-    this.authorize(identity, projectId, team.coordinatorThreadId);
+    const actor = this.authorize(identity, projectId, team.coordinatorThreadId);
+    try {
+      this.visibility.assert(actor, projectId, team);
+    } catch {
+      throw new NotFoundException('TEAM_NOT_FOUND');
+    }
     return team;
   }
 }
