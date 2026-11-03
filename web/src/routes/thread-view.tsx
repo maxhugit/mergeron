@@ -67,6 +67,11 @@ const AgentPreviewPanel = lazy(() =>
     default: m.AgentPreviewPanel,
   })),
 );
+const AgentTeamSidebar = lazy(() =>
+  import('@/components/chat/agent-team-sidebar').then((module) => ({
+    default: module.AgentTeamSidebar,
+  })),
+);
 const LocalBrowserSidebar = lazy(() =>
   import('@/components/chat/local-browser-sidebar').then((module) => ({
     default: module.LocalBrowserSidebar,
@@ -86,6 +91,7 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
   const { t: tb } = useTranslation('browser');
   const [browserChoice, setBrowserChoice] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [localBrowserOpen, setLocalBrowserOpen] = useState(false);
   const [localBrowserEnabled, setLocalBrowserEnabled] = useState(false);
   const [localBrowserStatus, setLocalBrowserStatus] = useState('disconnected');
@@ -102,6 +108,7 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
     setLocalBrowserOpen(false);
   }, [context, select]);
   const openLocalBrowser = () => {
+    setTeamOpen(false);
     setLocalBrowserEnabled(true);
     setLocalBrowserOpen(true);
   };
@@ -297,11 +304,14 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
             canCreateTerminal={session.isAdministrator}
             terminalCreationDisabled={creatingTerminal || !cwd}
             onExplorer={() => {
+              setTeamOpen(false);
               if (desktop)
                 useLayoutStore
                   .getState()
                   .setWorkspaceTreeCollapsed(
-                    !useLayoutStore.getState().workspaceTreeCollapsed,
+                    teamOpen
+                      ? false
+                      : !useLayoutStore.getState().workspaceTreeCollapsed,
                   );
               else setMobileTree(true);
             }}
@@ -309,6 +319,15 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
               session.isAdministrator ? () => setBrowserChoice(true) : undefined
             }
             localBrowserStatus={localBrowserStatus}
+            onTeam={
+              previewProject
+                ? () => {
+                    setTeamOpen((value) => !value);
+                    setMobileTree(false);
+                    setLocalBrowserOpen(false);
+                  }
+                : undefined
+            }
             onPreview={
               previewProject
                 ? () =>
@@ -486,27 +505,41 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
               })}
           </div>
         </div>
-        <WorkspaceTree
-          ref={explorerRef}
-          onGitRemoteFile={(target) =>
-            useWorkspaceStore.getState().openGitRemoteFile(context, target)
-          }
-          onGitGraph={(target) =>
-            useWorkspaceStore.getState().openGitGraph(context, target)
-          }
-          agentThreadId={threadId}
-          onGitDiff={(target) =>
-            useWorkspaceStore.getState().openGitDiff(context, target)
-          }
-          cwd={cwd ?? null}
-          project={project}
-          activeWorkspacePending={setActiveWorkspace.isPending}
-          onActiveWorkspaceChange={(path) => setActiveWorkspace.mutate(path)}
-          desktop={desktop}
-          mobileOpen={mobileTree}
-          onMobileClose={() => setMobileTree(false)}
-          onFile={(path) => openFile(context, path)}
-        />
+        <div className={teamOpen ? 'hidden' : 'contents'}>
+          <WorkspaceTree
+            ref={explorerRef}
+            onGitRemoteFile={(target) =>
+              useWorkspaceStore.getState().openGitRemoteFile(context, target)
+            }
+            onGitGraph={(target) =>
+              useWorkspaceStore.getState().openGitGraph(context, target)
+            }
+            agentThreadId={threadId}
+            onGitDiff={(target) =>
+              useWorkspaceStore.getState().openGitDiff(context, target)
+            }
+            cwd={cwd ?? null}
+            project={project}
+            activeWorkspacePending={setActiveWorkspace.isPending}
+            onActiveWorkspaceChange={(path) => setActiveWorkspace.mutate(path)}
+            desktop={desktop}
+            mobileOpen={mobileTree}
+            onMobileClose={() => setMobileTree(false)}
+            onFile={(path) => openFile(context, path)}
+          />
+        </div>
+        {teamOpen && previewProject && (
+          <Suspense fallback={null}>
+            <AgentTeamSidebar
+              projectId={previewProject.id}
+              coordinator={threadId}
+              open={teamOpen}
+              active={surfaceActive}
+              desktop={desktop}
+              onClose={() => setTeamOpen(false)}
+            />
+          </Suspense>
+        )}
         <BrowserModeDialog
           open={browserChoice}
           onOpenChange={setBrowserChoice}

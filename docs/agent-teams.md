@@ -33,13 +33,28 @@ inconnus et la délégation imbriquée ne sont pas automatiquement rattachés.
 Deux lectures authentifiées sont disponibles :
 
 - `GET /api/projects/:projectId/agent-teams?coordinator=:threadId` : les 50
-  dernières équipes de cette conversation ; `launchAvailable` reste faux.
+  dernières équipes de cette conversation, sous forme de résumés sans consignes
+  ni résultats ; `launchAvailable` reste faux.
 - `GET /api/projects/:projectId/agent-teams/:teamId` : détail de la mission et des
   affectations. Les droits du projet et du coordinateur sont revérifiés.
 
 Aucun endpoint de lancement ou de modification n'est installé à cette étape.
 Le service ne crée pas de nouveaux agents permanents dans la navigation.
 Au redémarrage, les états en cours deviennent inconnus ; ils ne sont pas relancés.
+
+## Panneau Équipe
+
+Le bouton Équipe, dans la barre d’outils de la conversation, ouvre un panneau à
+droite sur ordinateur et un volet sur téléphone. La conversation reste montée.
+Chaque mission montre ses membres, leurs états et leurs dépendances. Sélectionner
+un membre affiche son travail confié et son résultat, sous forme de texte.
+
+Les résumés et le détail sélectionné sont actualisés toutes les cinq secondes
+uniquement lorsque le panneau et sa conversation sont actifs. Les requêtes sont
+annulables et leurs clés de cache comprennent le projet et le coordinateur. Une
+erreur de lecture masque les anciens détails plutôt que de présenter un résultat
+potentiellement devenu inaccessible. À cette étape, le panneau ne lance aucun
+travail et ne propose aucune action d’approbation.
 
 ## Garanties du stockage
 

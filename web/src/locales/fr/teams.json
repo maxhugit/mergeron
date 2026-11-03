@@ -1,0 +1,24 @@
+{
+  "title": "Équipe",
+  "refresh": "Actualiser l’équipe",
+  "close": "Fermer le panneau Équipe",
+  "loading": "Chargement de l’équipe…",
+  "empty": "Les sous-agents délégués par cette conversation apparaîtront ici.",
+  "mission": "Mission de l’équipe",
+  "coordinator": "Votre conversation reste le coordinateur. Les résultats y sont consolidés.",
+  "members": "Membres de l’équipe",
+  "dependencies": "Dépend de : {{names}}",
+  "missingDependency": "Mission indisponible",
+  "instructions": "Travail confié",
+  "result": "Résultat",
+  "noResult": "Aucun résultat n’a encore été reçu.",
+  "states": {
+    "planned": "Prêt",
+    "running": "En cours",
+    "waiting": "Attend les dépendances",
+    "completed": "Terminé",
+    "failed": "En échec",
+    "cancelled": "Annulé",
+    "unknown": "État à vérifier"
+  }
+}

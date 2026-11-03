@@ -12,6 +12,7 @@
     }
   ],
   "namespaces": [
+    "teams",
     "browser",
     "previews",
     "pwa",

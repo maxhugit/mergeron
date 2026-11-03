@@ -38,6 +38,53 @@ export type AssignmentStatus = typeof agentTeamAssignments.$inferSelect.status;
 export class AgentTeamStore {
   constructor(@Inject(DRIZZLE_DB) private readonly db: AppDatabase) {}
 
+  /** Polling reads never hydrate prompts or potentially large final answers. */
+  listSummaries(projectId: string, coordinatorThreadId: string) {
+    const teams = this.db
+      .select({
+        id: agentTeams.id,
+        projectId: agentTeams.projectId,
+        coordinatorThreadId: agentTeams.coordinatorThreadId,
+        nativeTurnId: agentTeams.nativeTurnId,
+        origin: agentTeams.origin,
+        objective: agentTeams.objective,
+        createdAt: agentTeams.createdAt,
+      })
+      .from(agentTeams)
+      .where(
+        and(
+          eq(agentTeams.projectId, projectId),
+          eq(agentTeams.coordinatorThreadId, coordinatorThreadId),
+        ),
+      )
+      .orderBy(desc(agentTeams.createdAt), desc(agentTeams.id))
+      .limit(50)
+      .all();
+    if (!teams.length) return [];
+    const assignments = this.db
+      .select({
+        id: agentTeamAssignments.id,
+        teamId: agentTeamAssignments.teamId,
+        role: agentTeamAssignments.role,
+        dependencies: agentTeamAssignments.dependencies,
+        nativeThreadId: agentTeamAssignments.nativeThreadId,
+        status: agentTeamAssignments.status,
+        updatedAt: agentTeamAssignments.updatedAt,
+      })
+      .from(agentTeamAssignments)
+      .where(
+        inArray(
+          agentTeamAssignments.teamId,
+          teams.map((t) => t.id),
+        ),
+      )
+      .all();
+    return teams.map((team) => ({
+      ...team,
+      assignments: assignments.filter((a) => a.teamId === team.id),
+    }));
+  }
+
   list(projectId: string, coordinatorThreadId: string) {
     return this.db
       .select()

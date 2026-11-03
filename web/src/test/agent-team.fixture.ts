@@ -1,0 +1,43 @@
+import type { AgentTeamDetail } from '@/lib/agent-teams-api';
+
+export const teamFixture = (): AgentTeamDetail => ({
+  id: 'team',
+  projectId: 'p',
+  coordinatorThreadId: 'coordinator',
+  nativeTurnId: 'turn',
+  origin: 'observed',
+  objective: 'Dossier de conception',
+  createdAt: 1,
+  assignments: [
+    {
+      id: 'sources',
+      role: 'Sources',
+      instructions: 'Recenser les documents existants.',
+      dependencies: [],
+      nativeThreadId: 'child-sources',
+      status: 'running',
+      result: null,
+      updatedAt: 1,
+    },
+    {
+      id: 'requirements',
+      role: 'Exigences',
+      instructions: 'Analyser les besoins.',
+      dependencies: [],
+      nativeThreadId: 'child-requirements',
+      status: 'completed',
+      result: 'Douze exigences identifiées.',
+      updatedAt: 1,
+    },
+    {
+      id: 'review',
+      role: 'Vérification',
+      instructions: 'Contrôler le dossier rédigé par le coordinateur.',
+      dependencies: ['sources', 'requirements'],
+      nativeThreadId: null,
+      status: 'planned',
+      result: null,
+      updatedAt: 1,
+    },
+  ],
+});

@@ -13,6 +13,7 @@ import {
   Cloud,
   Globe,
   FlaskConical,
+  Network,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -30,6 +31,7 @@ interface Props {
   onExplorer: () => void;
   onBrowser?: () => void;
   onPreview?: () => void;
+  onTeam?: () => void;
   localBrowserStatus?: string;
   onNewTerminal: () => void;
   canCreateTerminal?: boolean;
@@ -46,6 +48,7 @@ export function WorkspaceControls({
   onExplorer,
   onBrowser,
   onPreview,
+  onTeam,
   localBrowserStatus = 'disconnected',
   onNewTerminal,
   canCreateTerminal = true,
@@ -307,6 +310,17 @@ export function WorkspaceControls({
           onClick={onPreview}
         >
           <FlaskConical className="h-4 w-4" />
+        </button>
+      )}
+      {onTeam && (
+        <button
+          type="button"
+          className="h-10 shrink-0 px-3 hover:bg-accent"
+          title={t('title', { ns: 'teams' })}
+          aria-label={t('title', { ns: 'teams' })}
+          onClick={onTeam}
+        >
+          <Network className="h-4 w-4" />
         </button>
       )}
       <button
