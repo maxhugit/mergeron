@@ -191,3 +191,45 @@ it('accepts native events arriving before the dispatch acknowledgement without r
   store.bindDispatchTurn('parent', 'different');
   expect(store.read('p', team.id).nativeTurnId).toBe('event-turn');
 });
+it('applies the native cap only to a project-bound active or quarantined team', async () => {
+  const { ProjectConnectionPolicyService } =
+    await import('../threads/project-connection-policy.service');
+  const { ActiveFoldersService } =
+    await import('../active-folders/active-folders.service');
+  const team = prepare();
+  store.state('p', team.id, 'preparing');
+  const policy = new ProjectConnectionPolicyService(
+    {
+      request: (method: string) =>
+        Promise.resolve(
+          method === 'config/read'
+            ? { config: {} }
+            : { data: [], nextCursor: null },
+        ),
+    } as unknown as CodexService,
+    database.db,
+    {
+      executionLocationForCwd: () => ({
+        projectId: 'p',
+        workspaceId: 'w',
+        readOnly: false,
+        sourceResourceId: null,
+        sourceRevision: null,
+      }),
+    } as unknown as InstanceType<typeof ActiveFoldersService>,
+  );
+  expect(
+    (await policy.policyForCwd('/p', 'p', 'parent'))?.config.agents,
+  ).toEqual({ max_threads: 2 });
+  expect(
+    (await policy.policyForCwd('/p', 'p', 'unrelated'))?.config.agents,
+  ).toBeUndefined();
+  store.state('p', team.id, 'unknown');
+  expect(
+    (await policy.policyForCwd('/p', 'p', 'parent'))?.config.agents,
+  ).toEqual({ max_threads: 2 });
+  store.state('p', team.id, 'completed');
+  expect(
+    (await policy.policyForCwd('/p', 'p', 'parent'))?.config.agents,
+  ).toBeUndefined();
+});
