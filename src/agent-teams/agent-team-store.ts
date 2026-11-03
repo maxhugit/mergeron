@@ -6,7 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
@@ -37,6 +37,157 @@ export type AssignmentStatus = typeof agentTeamAssignments.$inferSelect.status;
 @Injectable()
 export class AgentTeamStore {
   constructor(@Inject(DRIZZLE_DB) private readonly db: AppDatabase) {}
+
+  list(projectId: string, coordinatorThreadId: string) {
+    return this.db
+      .select()
+      .from(agentTeams)
+      .where(
+        and(
+          eq(agentTeams.projectId, projectId),
+          eq(agentTeams.coordinatorThreadId, coordinatorThreadId),
+        ),
+      )
+      .orderBy(desc(agentTeams.createdAt), desc(agentTeams.id))
+      .limit(50)
+      .all()
+      .map((team) => this.read(projectId, team.id));
+  }
+
+  child(childId: string) {
+    return this.db
+      .select({
+        projectId: agentTeams.projectId,
+        teamId: agentTeams.id,
+        coordinatorThreadId: agentTeams.coordinatorThreadId,
+      })
+      .from(agentTeamAssignments)
+      .innerJoin(agentTeams, eq(agentTeams.id, agentTeamAssignments.teamId))
+      .where(eq(agentTeamAssignments.nativeThreadId, childId))
+      .get();
+  }
+
+  /** Admission evidence comes exclusively from a completed native spawn tool. */
+  discoverSpawn(
+    parentId: string,
+    turnId: string,
+    childId: string,
+    prompt: string,
+  ) {
+    if (!parentId || !turnId || !childId || parentId === childId) return;
+    return this.db.transaction(() => {
+      const parent = this.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, parentId))
+        .get();
+      if (!parent) return; // Nested delegation and unowned sessions are not silently adopted.
+      const registeredChild = this.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, childId))
+        .get();
+      if (registeredChild && registeredChild.projectId !== parent.projectId)
+        throw new ConflictException('TEAM_CHILD_PROJECT_MISMATCH');
+      const existingChild = this.child(childId);
+      if (existingChild) {
+        if (
+          existingChild.coordinatorThreadId !== parentId ||
+          existingChild.projectId !== parent.projectId
+        )
+          throw new ConflictException('TEAM_CHILD_ALREADY_OWNED');
+        return existingChild;
+      }
+      let team = this.db
+        .select()
+        .from(agentTeams)
+        .where(
+          and(
+            eq(agentTeams.projectId, parent.projectId),
+            eq(agentTeams.coordinatorThreadId, parentId),
+            eq(agentTeams.nativeTurnId, turnId),
+          ),
+        )
+        .get();
+      const now = Date.now();
+      if (!team) {
+        const id = randomUUID();
+        const requestId =
+          'native-' + createHash('sha256').update(turnId).digest('hex');
+        this.db
+          .insert(agentTeams)
+          .values({
+            id,
+            projectId: parent.projectId,
+            coordinatorThreadId: parentId,
+            nativeTurnId: turnId,
+            origin: 'observed',
+            requestId,
+            fingerprint: requestId,
+            objective: 'Travail délégué par le coordinateur',
+            createdAt: now,
+          })
+          .run();
+        team = this.db
+          .select()
+          .from(agentTeams)
+          .where(eq(agentTeams.id, id))
+          .get()!;
+      }
+      // A prompt marker selects a definition; it is never an access grant.
+      const assignmentId = /\[mergeron-assignment:([a-f0-9-]{36})\]/i.exec(
+        prompt,
+      )?.[1];
+      const planned =
+        assignmentId &&
+        this.read(parent.projectId, team.id).assignments.find(
+          (a) =>
+            a.id === assignmentId &&
+            a.status === 'planned' &&
+            !a.nativeThreadId,
+        );
+      if (planned)
+        this.bind(parent.projectId, team.id, planned.id, childId, parentId);
+      else
+        this.db
+          .insert(agentTeamAssignments)
+          .values({
+            id: randomUUID(),
+            teamId: team.id,
+            role: 'Sous-agent',
+            instructions:
+              prompt.slice(0, 6000) || 'Mission déléguée par le coordinateur',
+            dependencies: [],
+            nativeThreadId: childId,
+            status: 'unknown',
+            updatedAt: now,
+          })
+          .run();
+      return this.child(childId);
+    });
+  }
+
+  /** A disconnected transport does not prove any execution ended. */
+  markUncertain() {
+    this.db
+      .update(agentTeamAssignments)
+      .set({ status: 'unknown', updatedAt: Date.now() })
+      .where(inArray(agentTeamAssignments.status, ['running']))
+      .run();
+  }
+
+  saveResult(childId: string, result: string) {
+    this.db
+      .update(agentTeamAssignments)
+      .set({ result: result.slice(0, 100000), updatedAt: Date.now() })
+      .where(
+        and(
+          eq(agentTeamAssignments.nativeThreadId, childId),
+          inArray(agentTeamAssignments.status, ['unknown', 'running']),
+        ),
+      )
+      .run();
+  }
 
   create(projectId: string, coordinatorThreadId: string, value: unknown) {
     const parsed = definition.safeParse(value);
@@ -153,6 +304,13 @@ export class AgentTeamStore {
       observedParentId !== team.coordinatorThreadId
     )
       throw new ConflictException('TEAM_INVALID_PARENT');
+    const registeredChild = this.db
+      .select()
+      .from(projectAgentThreads)
+      .where(eq(projectAgentThreads.threadId, childId))
+      .get();
+    if (registeredChild && registeredChild.projectId !== projectId)
+      throw new ConflictException('TEAM_CHILD_PROJECT_MISMATCH');
     const assignment = team.assignments.find((a) => a.id === assignmentId);
     if (!assignment) throw new NotFoundException('TEAM_ASSIGNMENT_NOT_FOUND');
     if (assignment.nativeThreadId === childId) return;
@@ -193,7 +351,11 @@ export class AgentTeamStore {
       throw new BadRequestException('TEAM_INVALID_OBSERVATION');
     this.db
       .update(agentTeamAssignments)
-      .set({ status, result, updatedAt: Date.now() })
+      .set({
+        status,
+        ...(result === null ? {} : { result }),
+        updatedAt: Date.now(),
+      })
       .where(eq(agentTeamAssignments.id, assignment.id))
       .run();
   }

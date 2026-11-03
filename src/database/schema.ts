@@ -20,6 +20,11 @@ export const agentTeams = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     coordinatorThreadId: text('coordinator_thread_id').notNull(),
+    nativeTurnId: text('native_turn_id'),
+    origin: text('origin')
+      .$type<'planned' | 'observed'>()
+      .notNull()
+      .default('planned'),
     requestId: text('request_id').notNull(),
     fingerprint: text('fingerprint').notNull(),
     objective: text('objective').notNull(),

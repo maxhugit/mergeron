@@ -2,6 +2,8 @@ CREATE TABLE `agent_teams` (
  `id` text PRIMARY KEY NOT NULL,
  `project_id` text NOT NULL REFERENCES `projects`(`id`) ON DELETE CASCADE,
  `coordinator_thread_id` text NOT NULL,
+ `native_turn_id` text,
+ `origin` text DEFAULT 'planned' NOT NULL,
  `request_id` text NOT NULL,
  `fingerprint` text NOT NULL,
  `objective` text NOT NULL,
