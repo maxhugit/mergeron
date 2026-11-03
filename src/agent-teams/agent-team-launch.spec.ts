@@ -1,3 +1,5 @@
+import { ProjectConnectionPolicyService } from '../threads/project-connection-policy.service';
+import type { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   createTestDatabase,
@@ -192,10 +194,6 @@ it('accepts native events arriving before the dispatch acknowledgement without r
   expect(store.read('p', team.id).nativeTurnId).toBe('event-turn');
 });
 it('applies the native cap only to a project-bound active or quarantined team', async () => {
-  const { ProjectConnectionPolicyService } =
-    await import('../threads/project-connection-policy.service');
-  const { ActiveFoldersService } =
-    await import('../active-folders/active-folders.service');
   const team = prepare();
   store.state('p', team.id, 'preparing');
   const policy = new ProjectConnectionPolicyService(
@@ -216,7 +214,7 @@ it('applies the native cap only to a project-bound active or quarantined team', 
         sourceResourceId: null,
         sourceRevision: null,
       }),
-    } as unknown as InstanceType<typeof ActiveFoldersService>,
+    } as unknown as ActiveFoldersService,
   );
   expect(
     (await policy.policyForCwd('/p', 'p', 'parent'))?.config.agents,
