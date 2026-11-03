@@ -1,3 +1,5 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { transcriptionRequest } from '../transcriptions/api';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SettingsPage } from './settings-page';
@@ -7,6 +9,20 @@ const route = vi.hoisted(() => ({ section: 'general' }));
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
     select({ location: { search: route } }),
+}));
+vi.mock('../transcriptions/api', async (original) => ({
+  ...(await original<typeof import('../transcriptions/api')>()),
+  transcriptionRequest: vi.fn(() =>
+    Promise.resolve({
+      enabled: false,
+      state: 'disabled',
+      containerId: null,
+      image: 'ghcr.io/maxhugit/mergeron-transcription:edge',
+      build: null,
+      updateAvailable: false,
+      updateCheckError: null,
+    }),
+  ),
 }));
 vi.mock('./manager-status-card', () => ({
   ManagerStatusCard: () => <div>Manager infrastructure inventory</div>,
@@ -68,7 +84,14 @@ it('opens CLI inside Codex through the legacy URL', async () => {
 });
 it('loads the Manager on the Infrastructure route without duplicating update controls', async () => {
   route.section = 'infrastructure';
-  render(<SettingsPage />);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <SettingsPage />
+    </QueryClientProvider>,
+  );
   expect(
     await screen.findByText('Manager infrastructure inventory'),
   ).toBeVisible();
@@ -76,11 +99,21 @@ it('loads the Manager on the Infrastructure route without duplicating update con
     screen.getByText('Manager infrastructure inventory').closest('.max-w-4xl'),
   ).toBeNull();
   expect(screen.queryByText('Application updates')).toBeNull();
+  expect(
+    await screen.findByText(
+      'The administrator must enable the transcription service in the Manager.',
+    ),
+  ).toBeVisible();
+  expect(transcriptionRequest).toHaveBeenCalledWith(
+    'status',
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
   expect(SETTINGS_SECTIONS).toContain('infrastructure');
   expect(settingsPageLabel('infrastructure')).toBe('managerInfrastructure');
   expect(settingsPageDescription('infrastructure')).toBe(
     'managerInfrastructureDescription',
   );
+  queryClient.clear();
 });
 
 it('keeps the former integrations URL inside the Codex integrations tab', async () => {
