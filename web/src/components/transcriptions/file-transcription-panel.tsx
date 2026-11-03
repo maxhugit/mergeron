@@ -249,9 +249,12 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
                       ? 'anonymous'
                       : job.result.diarization.state === 'failed'
                         ? 'speakersFailed'
-                        : job.result.diarization.reason === 'no_speech_detected'
-                          ? 'emptySpeech'
-                          : 'speakersUnavailable',
+                        : job.result.diarization.reason === 'disabled'
+                          ? 'speakersDisabled'
+                          : job.result.diarization.reason ===
+                              'no_speech_detected'
+                            ? 'emptySpeech'
+                            : 'speakersUnavailable',
                   )}
                 </p>
                 {job.result.diarization.state === 'ready' && (

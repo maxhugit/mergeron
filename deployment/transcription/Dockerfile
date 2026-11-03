@@ -16,12 +16,18 @@ RUN pip install --no-cache-dir --upgrade setuptools==81.0.0 wheel==0.46.3 \
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-small', revision='536b0662742c02347bc0e980a01041f333bce120', local_dir='/models/asr', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.*','preprocessor_config.json'])" \
  && rm -rf /models/asr/.cache \
  && addgroup -g 11003 transcription && adduser -D -H -u 11003 -G transcription transcription
-COPY engine.py server.py diarization.py ./
+COPY models/diarization/ /models/diarization/
+COPY engine.py server.py diarization.py model_bundle.py ./
+# Verify actual Git bytes, including missing/LFS-pointer detection, at build time.
+RUN python model_bundle.py /models/diarization
 ARG MERGERON_REVISION=unknown
 ARG MERGERON_VERSION=unknown
 ARG MERGERON_BUILD_DATE=unknown
 ARG MERGERON_RELEASE_CHANNEL=unknown
 LABEL org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \
+ io.mergeron.diarization.bundle="community-1" \
+ io.mergeron.diarization.revision="3533c8cf8e369892e6b79ff1bf80f7b0286a54ee" \
+ io.mergeron.diarization.license="CC-BY-4.0" \
  io.mergeron.version="${MERGERON_VERSION}" io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
  org.opencontainers.image.revision="${MERGERON_REVISION}" org.opencontainers.image.created="${MERGERON_BUILD_DATE}"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 PYANNOTE_METRICS_ENABLED=0 HF_HOME=/tmp/hf XDG_CACHE_HOME=/tmp/cache MPLCONFIGDIR=/tmp/matplotlib OMP_NUM_THREADS=4

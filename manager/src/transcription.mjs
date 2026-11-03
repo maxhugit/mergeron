@@ -34,7 +34,16 @@ export class ManagedTranscription {
       now,
     });
     this.enabled = env.MERGERON_TRANSCRIPTION_ENABLED === 'true';
-    this.diarization = env.MERGERON_TRANSCRIPTION_DIARIZATION === 'true';
+    const diarization = env.MERGERON_TRANSCRIPTION_DIARIZATION ?? 'bundled';
+    if (!['bundled', 'custom', 'true', 'false'].includes(diarization))
+      throw Error('TRANSCRIPTION_INVALID_DIARIZATION_POLICY');
+    this.diarization = diarization !== 'false';
+    // Preserve true as the legacy custom-directory mode for existing installs.
+    this.diarizationSource = !this.diarization
+      ? 'disabled'
+      : ['custom', 'true'].includes(diarization)
+        ? 'custom'
+        : 'bundled';
     this.name = manifest.stack + '-transcription';
     this.image =
       env.MERGERON_TRANSCRIPTION_IMAGE?.trim() ||
@@ -133,6 +142,8 @@ export class ManagedTranscription {
     this.prune();
     const value = {
       enabled: this.enabled,
+      diarizationEnabled: this.diarization,
+      diarizationModelSource: this.diarizationSource,
       state: this.task ? this.phase : 'stopped',
       activeLeases: this.leases.size,
       idleSeconds: this.idleMs / 1000,
@@ -201,6 +212,15 @@ export class ManagedTranscription {
       if (error.statusCode !== 404) throw error;
       await this.docker.pullImage(this.image);
     }
+    if (this.diarizationSource === 'bundled') {
+      const image = await this.docker.inspectImage(this.image);
+      const labels = image.Config?.Labels ?? {};
+      if (
+        labels['io.mergeron.diarization.bundle'] !== 'community-1' ||
+        !/^[a-f0-9]{40}$/.test(labels['io.mergeron.diarization.revision'] ?? '')
+      )
+        throw Error('TRANSCRIPTION_BUNDLED_MODELS_UNAVAILABLE');
+    }
     const inventory = await this.inventory();
     const app = inventory.components.find((c) => c.id === 'application');
     if (!app?.containerId || app.adoption !== 'managed')
@@ -216,7 +236,7 @@ export class ManagedTranscription {
     let item = await this.current();
     if (!item) {
       const binds = [];
-      if (this.diarization) {
+      if (this.diarizationSource === 'custom') {
         for (const name of ['config', 'config/transcription-diarization']) {
           const value = await lstat(
             join(this.configuration.hostStatePath, name),
@@ -237,7 +257,11 @@ export class ManagedTranscription {
         Image: this.image,
         User: '11003:11003',
         Labels: this.labels(),
-        Env: ['TRANSCRIPTION_TOKEN=' + randomBytes(32).toString('hex')],
+        Env: [
+          'TRANSCRIPTION_TOKEN=' + randomBytes(32).toString('hex'),
+          'TRANSCRIPTION_DIARIZATION=' + this.diarization,
+          'TRANSCRIPTION_DIARIZATION_SOURCE=' + this.diarizationSource,
+        ],
         NetworkingConfig: {
           EndpointsConfig: { [network.name]: { Aliases: [this.name] } },
         },

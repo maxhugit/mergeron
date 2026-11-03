@@ -104,7 +104,7 @@ tester une deuxième pile sur les données de production.
 | Variable                              | Défaut                                                                         | Fonction                                                                                                |
 | ------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | `MERGERON_TRANSCRIPTION_ENABLED`      | `false`                                                                        | Autorise la création à la demande du worker CPU de fichiers audio/vidéo.                                |
-| `MERGERON_TRANSCRIPTION_DIARIZATION`  | `false`                                                                        | Monte uniquement les modèles locaux préparés dans `config/transcription-diarization`, en lecture seule. |
+| `MERGERON_TRANSCRIPTION_DIARIZATION` | `bundled` | `bundled` utilise les modèles inclus dans l’image, sans compte ni copie manuelle. `false` désactive la diarisation. `custom` monte `config/transcription-diarization` en lecture seule ; `true` conserve ce comportement historique. |
 | `MERGERON_TRANSCRIPTION_IDLE_SECONDS` | `300`                                                                          | Délai sans bail avant arrêt ; entier de 30 à 86 400 secondes.                                           |
 | `MERGERON_TRANSCRIPTION_IMAGE`        | `ghcr.io/maxhugit/mergeron-transcription:edge` en Dev, `:latest` en production | Uniquement ce dépôt, avec tag explicite ou digest SHA-256. Pas de registre arbitraire.                  |
 

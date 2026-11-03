@@ -17,9 +17,12 @@ docker exec -i "$name" python - <<'PY'
 import hashlib, importlib.util, json, os, subprocess, time, urllib.request, urllib.error, uuid, wave
 from pathlib import Path
 from engine import recognize
+from model_bundle import verify_bundle
 import torch, torchcodec
 from pyannote.audio import Pipeline
 assert not torch.cuda.is_available()
+assert not os.environ.get('HF_TOKEN')
+assert verify_bundle('/models/diarization')['revision']=='3533c8cf8e369892e6b79ff1bf80f7b0286a54ee'
 assert importlib.util.find_spec("pip") is None
 base='http://127.0.0.1:8090'
 def request(path,method='GET',data=None,extra=None):
@@ -60,7 +63,9 @@ for filename,language,word in [('english.wav','en','hello'),('french.wav','fr','
     assert result['language']==language,result
     assert word in result['text'].lower(),result
     assert result['segments'] and result['duration']>0
-    assert result['diarization']['state']=='unavailable'
+    assert result['diarization']['state']=='ready', result['diarization']
+    assert result['diarization']['speakerCount']==1, result['diarization']
+    assert any(segment['speaker']=='SPEAKER_00' for segment in result['segments']),result['segments']
     if language=='en':
         with urllib.request.urlopen(urllib.request.Request(base+'/jobs/'+identifier+'/audio',headers={'Authorization':'Bearer '+os.environ['TRANSCRIPTION_TOKEN']}),timeout=30) as response:audio=response.read()
         assert hashlib.sha256(audio).hexdigest()==job['audio']['sha256']

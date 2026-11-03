@@ -1,0 +1,19 @@
+{
+  "formatVersion": 1,
+  "repository": "pyannote/speaker-diarization-community-1",
+  "revision": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+  "license": "CC-BY-4.0",
+  "files": {
+    ".gitattributes": "abac51e6cf7fa20cf9ff1c5e1ae3b5db89f1d0feddb1f07b79457f673e653067",
+    "LICENSE.txt": "9e5f1b3c610b9c2da5c313bf81d577a7d1acec686bdb0384edefa6df0f90cd94",
+    "MODEL_CARD.md": "e71f3c3739850dede010e902a4f22ea836b50b6fed3f387ede65be47a69a118d",
+    "README.md": "fc507e06ae14fd0a8acffb770e8b7d1103895e6b34eb3ba5d19352a9d76747d1",
+    "config.yaml": "42ef792d58956374c1f61688b30fcf63462d11f32dbecbe5015cd54c06644f1e",
+    "embedding/README.md": "fa9e5105ae95edb231d841476cdb91eef4be0621c372ed4f7d3421294b5f8ad7",
+    "embedding/pytorch_model.bin": "6f10ff60898a1d185fa22e1d11e0bfa8a92efec811f11bca48cb8cafebefd929",
+    "plda/README.md": "e1316dbbeb3261431478d48ceebbd4bba395c3587e7b80c254dbab00f1209d0a",
+    "plda/plda.npz": "9b77bcd840692710dd3496f62ecfeed8d8e5f002fd991b785079b244eab7d255",
+    "plda/xvec_transform.npz": "325f1ce8e48f7e55e9c8aa47e05d2766b7c48c4b25b8de8dd751e7a4cc5fbe8f",
+    "segmentation/pytorch_model.bin": "7ad24338d844fb95985486eb1a464e32d229f6d7a03c9abe60f978bacf3f816e"
+  }
+}

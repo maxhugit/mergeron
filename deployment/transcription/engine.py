@@ -95,6 +95,9 @@ def recognize(directory, decoded, duration):
         segments.append({"start": round(segment.start, 3), "end": round(segment.end, 3), "text": segment.text.strip(), "speaker": None, "words": [{"start": word.start, "end": word.end, "word": word.word} for word in segment.words or []]})
     del model
     result = {"text": " ".join(s["text"] for s in segments), "language": info.language if segments else "und", "languageProbability": info.language_probability if segments else 0, "duration": duration, "segments": segments, "diarization": {"state": "unavailable", "reason": "models_not_configured"}, "model": {"name": "faster-whisper-small", "revision": MODEL_REVISION}}
+    if os.environ.get('TRANSCRIPTION_DIARIZATION', 'true') == 'false':
+        result['diarization'] = {'state': 'unavailable', 'reason': 'disabled'}
+        return strip_words(result)
     if (Path("/models/diarization") / "config.yaml").is_file() and segments:
         progress(directory, "diarizing")
         try:
