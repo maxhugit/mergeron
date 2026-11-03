@@ -24,7 +24,7 @@ ARG MERGERON_RELEASE_CHANNEL=unknown
 LABEL org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \
  io.mergeron.version="${MERGERON_VERSION}" io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
  org.opencontainers.image.revision="${MERGERON_REVISION}" org.opencontainers.image.created="${MERGERON_BUILD_DATE}"
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 PYANNOTE_METRICS_ENABLED=0 HF_HOME=/tmp/hf OMP_NUM_THREADS=4
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 PYANNOTE_METRICS_ENABLED=0 HF_HOME=/tmp/hf XDG_CACHE_HOME=/tmp/cache MPLCONFIGDIR=/tmp/matplotlib OMP_NUM_THREADS=4
 USER 11003:11003
 HEALTHCHECK --interval=5s --timeout=3s --start-period=20s --retries=6 CMD ["python", "-c", "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8090/healthz',timeout=2))['ready']"]
 CMD ["python", "server.py"]

@@ -14,7 +14,9 @@ chmod 644 "$fixture"/*.wav "$fixture/video.mp4"
 docker run -d --name "$name" --network none --read-only --user 11003:11003 --cap-drop ALL --security-opt no-new-privileges:true --memory 6g --cpus 4 --pids-limit 128 --init --tmpfs /tmp:rw,nosuid,nodev,noexec,size=1g,mode=1777 --mount "type=bind,src=$fixture,dst=/fixtures,readonly" -e "TRANSCRIPTION_TOKEN=$(printf 'a%.0s' {1..64})" "$image" >/dev/null
 # -i is required to pass the fixture driver over stdin.
 docker exec -i "$name" python - <<'PY'
-import hashlib, importlib.util, json, os, subprocess, time, urllib.request, urllib.error, uuid
+import hashlib, importlib.util, json, os, subprocess, time, urllib.request, urllib.error, uuid, wave
+from pathlib import Path
+from engine import recognize
 import torch, torchcodec
 from pyannote.audio import Pipeline
 assert not torch.cuda.is_available()
@@ -44,6 +46,16 @@ for filename,language,word in [('english.wav','en','hello'),('french.wav','fr','
         time.sleep(1)
     else:raise AssertionError('real transcription timeout')
     result=job['result']
+    if result is None:
+        # Only synthetic fixtures run in this disposable container. Reproduce
+        # inference directly so CI gets the real exception, never real media.
+        for directory in Path('/tmp').glob('transcription-*'):
+            decoded=directory/'audio.wav'
+            if decoded.is_file():
+                with wave.open(str(decoded)) as audio:
+                    duration=audio.getnframes()/audio.getframerate()
+                recognize(directory,decoded,duration)
+        raise AssertionError(job)
     assert result['language']==language,result
     assert word in result['text'].lower(),result
     assert result['segments'] and result['duration']>0
