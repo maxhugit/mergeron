@@ -247,5 +247,8 @@
   "managerFullBackupSummary": "Toutes les données persistantes de cette installation.",
   "managerMinimalBackupSummary": "Base et configuration uniquement ; fichiers des projets et livrables exclus.",
   "managerNoBackupSummary": "Aucune sauvegarde : les données ne pourront pas être rétablies après un échec.",
-  "managerBackupPreferenceSummary": "Choix propre à cette installation. Chaque opération reste à confirmer."
+  "managerBackupPreferenceSummary": "Choix propre à cette installation. Chaque opération reste à confirmer.",
+  "optionalServiceStopped": "Arrêté · disponible à la demande",
+  "optionalServiceIdle": "Démarrage à la demande ; arrêt {{minutes}} min après libération des sessions.",
+  "byparrManagedUpdates": "Image approuvée mise à jour avec le Manager ; aucune installation automatique."
 }

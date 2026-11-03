@@ -13,6 +13,10 @@ import { onlyOfficeGetConfig } from '@/generated/api/sdk.gen';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import { Button } from '@/components/ui/button';
+import {
+  connectOfficeAssistant,
+  type OfficeAssistantBridge,
+} from './onlyoffice-assistant-bridge';
 
 interface Props {
   filePath: string;
@@ -63,6 +67,7 @@ export function OnlyOfficeViewer({ filePath, readOnly = false }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    let disconnectAssistant: (() => void) | undefined;
 
     void onlyOfficeGetConfig({
       query: { path: filePath, ...(readOnly ? { mode: 'view' as const } : {}) },
@@ -72,6 +77,10 @@ export function OnlyOfficeViewer({ filePath, readOnly = false }: Props) {
         await loadOnlyOfficeScript(data.scriptUrl);
         if (cancelled || !window.DocsAPI) return;
         editorRef.current?.destroyEditor?.();
+        const assistant = (
+          data as typeof data & { assistant?: OfficeAssistantBridge }
+        ).assistant;
+        if (assistant) disconnectAssistant = connectOfficeAssistant(assistant);
         const editorConfig = data.config.editorConfig as
           | { mode?: string }
           | undefined;
@@ -112,6 +121,7 @@ export function OnlyOfficeViewer({ filePath, readOnly = false }: Props) {
 
     return () => {
       cancelled = true;
+      disconnectAssistant?.();
       editorRef.current?.destroyEditor?.();
       editorRef.current = null;
     };

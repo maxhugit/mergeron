@@ -12,6 +12,7 @@ const sources = {
   egress: 'ubuntu/squid',
   browser: 'ghcr.io/maxhugit/mergeron-browser',
   manager: 'ghcr.io/maxhugit/mergeron-manager',
+  appCatalog: 'ghcr.io/thephaseless/byparr',
 };
 const notes = {
   application: 'https://github.com/maxhugit/mergeron/releases',
@@ -44,9 +45,17 @@ export class ImageUpdates {
 
   async discover() {
     const inventory = await this.inventory();
+    const observed = (this.manifest.observedComponents ?? []).filter(
+      (c) =>
+        !c.observational ||
+        inventory.components.some(
+          (item) => item.id === c.id && item.containerId,
+        ),
+    );
     const components = await Promise.all(
       [
         ...this.manifest.components,
+        ...observed,
         ...(inventory.manager
           ? [
               {
@@ -88,6 +97,7 @@ export class ImageUpdates {
           notesAvailable: false,
           migrationAvailable: false,
           checkError: null,
+          updateManagedBy: component.observational ? 'manager' : null,
         };
         try {
           if (!current?.containerId || current.adoption !== 'managed')

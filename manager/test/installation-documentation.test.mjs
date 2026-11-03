@@ -48,6 +48,7 @@ test('the operator reference covers Manager settings consumed by the implementat
   const settings = new Set();
   for (const path of [
     'manager/src/server.mjs',
+    'manager/src/browser-lifecycle.mjs',
     'manager/src/installer.mjs',
     'manager/src/previews.mjs',
     'manager/src/transcription.mjs',

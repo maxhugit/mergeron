@@ -1,3 +1,4 @@
+import { BrowserLifecycle } from './browser-lifecycle.mjs';
 import { ManagedTranscription } from './transcription.mjs';
 import http from 'node:http';
 import net from 'node:net';
@@ -105,6 +106,17 @@ const transcription = new ManagedTranscription({
     previews.busy ||
     codexCli.busy ||
     appCatalog.busy ||
+    updater.current?.status === 'recoveryRequired',
+});
+const browserLifecycle = new BrowserLifecycle({
+  docker,
+  manifest,
+  blocked: () =>
+    !ready ||
+    installing ||
+    adopting ||
+    updater.busy ||
+    codexCli.busy ||
     updater.current?.status === 'recoveryRequired',
 });
 startHealthDiagnostics();
@@ -299,6 +311,7 @@ const server = http.createServer(async (request, response) => {
         !ready ||
         installing ||
         adopting ||
+        browserLifecycle.busy ||
         updater.busy ||
         codexCli.busy ||
         updater.current?.status === 'recoveryRequired'
@@ -362,6 +375,25 @@ const server = http.createServer(async (request, response) => {
       });
     }
   }
+  if (request.url === '/v1/services/browser') {
+    try {
+      if (request.method === 'GET')
+        return json(response, 200, await browserLifecycle.status());
+      if (request.method === 'POST')
+        return json(
+          response,
+          200,
+          await browserLifecycle.lease(await readJsonBody(request)),
+        );
+      return json(response, 405, { error: 'methodNotAllowed' });
+    } catch (error) {
+      return json(response, 409, {
+        error: /^BROWSER_RUNTIME_[A-Z_]+$/.test(error.message ?? '')
+          ? error.message
+          : 'BROWSER_RUNTIME_UNAVAILABLE',
+      });
+    }
+  }
   if (request.url === '/healthz') {
     if (request.method !== 'GET') {
       json(response, 405, { error: 'methodNotAllowed' });
@@ -379,6 +411,17 @@ const server = http.createServer(async (request, response) => {
     json(response, 200, {
       ...snapshot,
       optionalServices: { transcription: await transcription.status() },
+      components: snapshot.components.map((component) =>
+        component.id === 'browser'
+          ? {
+              ...component,
+              lifecycle: {
+                onDemand: true,
+                idleSeconds: browserLifecycle.idleMs / 1000,
+              },
+            }
+          : component,
+      ),
       events: [...events],
       update: updater.status(),
       backupPolicy: environmentBackupPolicy(manifest),
@@ -389,6 +432,7 @@ const server = http.createServer(async (request, response) => {
         updateHistory: true,
         backupRestore: true,
         imageUpdates: true,
+        browserLifecycle: true,
         managedCodexCli: true,
         managedTranscription: true,
       },
@@ -411,6 +455,7 @@ const server = http.createServer(async (request, response) => {
         !ready ||
         installing ||
         adopting ||
+        browserLifecycle.busy ||
         updater.busy ||
         codexCli.busy ||
         previews.busy
@@ -447,6 +492,7 @@ const server = http.createServer(async (request, response) => {
           !ready ||
           installing ||
           adopting ||
+          browserLifecycle.busy ||
           updater.busy ||
           previews.busy ||
           updater.current?.status === 'recoveryRequired'
@@ -504,6 +550,7 @@ const server = http.createServer(async (request, response) => {
         !ready ||
         installing ||
         adopting ||
+        browserLifecycle.busy ||
         updater.busy ||
         previews.busy ||
         codexCli.busy ||
@@ -586,6 +633,7 @@ const server = http.createServer(async (request, response) => {
         (request.method === 'POST' &&
           (installing ||
             adopting ||
+            browserLifecycle.busy ||
             updater.busy ||
             previews.busy ||
             codexCli.busy ||
@@ -627,6 +675,7 @@ const server = http.createServer(async (request, response) => {
         !ready ||
         installing ||
         adopting ||
+        browserLifecycle.busy ||
         updater.busy ||
         previews.busy ||
         codexCli.busy ||
@@ -750,6 +799,22 @@ server.listen(socketPath, async () => {
     }
   }
   setInterval(() => void refresh(), pollInterval).unref();
+  setInterval(
+    () =>
+      void browserLifecycle
+        .tick()
+        .catch(() =>
+          console.error('Browser idle lifecycle requires attention'),
+        ),
+    10_000,
+  ).unref();
+  setInterval(
+    () =>
+      void imageUpdates
+        .status()
+        .catch(() => console.error('Image discovery requires attention')),
+    300_000,
+  ).unref();
   console.log(`Mergeron Manager socket ready at ${socketPath}`);
 });
 

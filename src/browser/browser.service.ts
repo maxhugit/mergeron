@@ -1,9 +1,11 @@
+import { BrowserRuntimeService } from './browser-runtime.service';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
   OnModuleDestroy,
+  Optional,
   ServiceUnavailableException,
   HttpException,
 } from '@nestjs/common';
@@ -79,7 +81,10 @@ export class BrowserService implements OnModuleDestroy {
       if (!session.busy && Date.now() - session.touched > 15 * 60_000)
         void this.close(key);
   }, 60_000).unref();
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @Optional() private readonly runtime?: BrowserRuntimeService,
+  ) {}
   async onModuleDestroy() {
     clearInterval(this.sweep);
     await Promise.all([...this.sessions.keys()].map((key) => this.close(key)));
@@ -89,6 +94,7 @@ export class BrowserService implements OnModuleDestroy {
     this.sessions.delete(key);
     session?.live?.abort.abort();
     await session?.browser.close().catch(() => {});
+    await this.runtime?.release(key);
   }
   private async session(key: string, allowPopups = true): Promise<Session> {
     const existing = this.sessions.get(key);
@@ -157,9 +163,14 @@ export class BrowserService implements OnModuleDestroy {
         });
       });
       this.sessions.set(key, session);
+      browser.on?.('disconnected', () => {
+        if (this.sessions.get(key) === session) void this.close(key);
+      });
+      this.runtime?.retain(key);
       return session;
     } catch {
       await browser?.close().catch(() => {});
+      await this.runtime?.release(key);
       throw new ServiceUnavailableException({
         code: 'BROWSER_RUNTIME_UNAVAILABLE',
         message: 'Browser runtime unavailable',
@@ -169,6 +180,30 @@ export class BrowserService implements OnModuleDestroy {
     }
   }
   async run(key: string, action: string, body: Record<string, unknown>) {
+    if (action === 'runtimeCancel') {
+      if (!this.sessions.has(key)) await this.runtime?.release(key);
+      return { cancelled: true };
+    }
+    if (action === 'runtime') {
+      if (!this.config.get<string>('MERGERON_BROWSER_ENDPOINT'))
+        throw new ServiceUnavailableException({
+          code: 'BROWSER_NOT_CONFIGURED',
+          message: 'Browser runtime is not configured',
+        });
+      return this.runtime ? this.runtime.prepare(key) : { state: 'external' };
+    }
+    if (
+      !['close', 'keepalive'].includes(action) &&
+      !(action === 'tabs' && body.restoreOnly === true) &&
+      !this.sessions.has(key)
+    ) {
+      if (!this.config.get<string>('MERGERON_BROWSER_ENDPOINT'))
+        throw new ServiceUnavailableException({
+          code: 'BROWSER_NOT_CONFIGURED',
+          message: 'Browser runtime is not configured',
+        });
+      await this.runtime?.ready(key);
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([

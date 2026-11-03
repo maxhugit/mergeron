@@ -251,3 +251,38 @@ it('makes a missing manager non-blocking for the current installation', async ()
     ),
   ).toBeVisible();
 });
+
+it('shows Byparr in infrastructure and a stopped on-demand browser without an unhealthy indicator', async () => {
+  const component = protectedStatus.components[0];
+  fixture.queryClient.setQueryData(managerStatusQueryKey, {
+    ...protectedStatus,
+    components: [
+      component,
+      {
+        ...component,
+        id: 'appCatalog',
+        displayName: 'Byparr',
+        containerName: 'mergeron-byparr',
+        observational: true,
+        state: 'stopped',
+      },
+      {
+        ...component,
+        id: 'browser',
+        displayName: 'Mergeron Browser',
+        containerName: 'mergeron-browser',
+        state: 'stopped',
+        lifecycle: { onDemand: true, idleSeconds: 300 },
+      },
+    ],
+  });
+  fixture.render(<ManagerStatusCard />);
+  expect(await screen.findByText('Byparr')).toBeVisible();
+  expect(screen.getByText(/Starts on demand; stops 5 min/)).toBeVisible();
+  expect(
+    screen
+      .getByText('Mergeron Browser')
+      .closest('li')
+      ?.querySelector('[aria-hidden]'),
+  ).not.toHaveClass('bg-destructive');
+});

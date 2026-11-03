@@ -23,7 +23,8 @@ function target(item?: ComponentImageUpdate) {
     !item?.targetImage ||
     !item.targetDigest ||
     !/^sha256:[a-f0-9]{64}$/.test(item.targetDigest) ||
-    item.id === 'manager'
+    item.id === 'manager' ||
+    item.updateManagedBy === 'manager'
   )
     return null;
   if ((!item.updateAvailable || item.checkError) && !item.migrationAvailable)
@@ -86,11 +87,20 @@ export function InstalledVersions({
           },
         ]
       : []),
-    ...['ingress', 'egress'].map((id) => {
+    ...[
+      'ingress',
+      'egress',
+      ...(components.some((c) => c.id === 'appCatalog') ? ['appCatalog'] : []),
+    ].map((id) => {
       const item = components.find((component) => component.id === id);
       return {
         id,
-        name: id === 'ingress' ? 'Ingress · Nginx' : 'Squid',
+        name:
+          id === 'ingress'
+            ? 'Ingress · Nginx'
+            : id === 'egress'
+              ? 'Squid'
+              : 'Byparr',
         build: item?.build,
         imageId: item?.imageId,
       };
@@ -221,6 +231,12 @@ export function InstalledVersions({
                   </td>
                   <th scope="row" className="whitespace-nowrap p-3 font-medium">
                     {row.name}
+                    {components.find((c) => c.id === row.id)?.state ===
+                      'stopped' && (
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                        {t('optionalServiceStopped')}
+                      </span>
+                    )}
                   </th>
                   <td className="p-3">
                     <span>{row.build?.version ?? t('versionUnknown')}</span>
@@ -304,7 +320,11 @@ export function InstalledVersions({
                     )}
                   </td>
                   <td className="p-3">
-                    {row.id === 'manager' ? (
+                    {row.id === 'appCatalog' ? (
+                      <span className="text-xs text-muted-foreground">
+                        {t('byparrManagedUpdates')}
+                      </span>
+                    ) : row.id === 'manager' ? (
                       <Button
                         size="sm"
                         variant="outline"

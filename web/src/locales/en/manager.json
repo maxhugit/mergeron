@@ -247,5 +247,8 @@
   "managerFullBackupSummary": "All persistent data for this installation.",
   "managerMinimalBackupSummary": "Database and configuration only; project files and deliverables excluded.",
   "managerNoBackupSummary": "No backup: data cannot be restored after a failure.",
-  "managerBackupPreferenceSummary": "Saved for this installation. Each operation still requires confirmation."
+  "managerBackupPreferenceSummary": "Saved for this installation. Each operation still requires confirmation.",
+  "optionalServiceStopped": "Stopped · available on demand",
+  "optionalServiceIdle": "Starts on demand; stops {{minutes}} min after sessions are released.",
+  "byparrManagedUpdates": "Reviewed image updated with the Manager; no automatic installation."
 }

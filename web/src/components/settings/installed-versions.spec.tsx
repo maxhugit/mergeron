@@ -88,3 +88,34 @@ it('reports unknown with an older/offline Manager instead of copying the applica
     expect(within(row).queryByRole('link')).not.toBeInTheDocument();
   }
 });
+
+it('includes a stopped Byparr companion and identifies its reviewed Manager update policy', async () => {
+  await i18n.changeLanguage('en');
+  draw(
+    <InstalledVersions
+      application={build}
+      status={
+        {
+          available: true,
+          components: [
+            {
+              id: 'appCatalog',
+              state: 'stopped',
+              build: {
+                version: '2.2.0',
+                revision: null,
+                builtAt: null,
+                channel: 'unknown',
+              },
+            },
+          ],
+        } as ManagerStatus
+      }
+    />,
+  );
+  const row = screen.getByRole('row', { name: /Byparr/ });
+  expect(within(row).getByText('2.2.0')).toBeVisible();
+  expect(within(row).getByText(/Stopped/)).toBeVisible();
+  expect(within(row).getByText(/Reviewed image/)).toBeVisible();
+  expect(within(row).queryByRole('button', { name: 'Update' })).toBeNull();
+});

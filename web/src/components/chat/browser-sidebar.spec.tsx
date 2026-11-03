@@ -55,6 +55,7 @@ beforeEach(async () => {
       new File(['image'], 'annotation.png', { type: 'image/png' }),
     );
   api.mockReset().mockImplementation((path: string) => {
+    if (path.endsWith('/runtime')) return Promise.resolve({ state: 'ready' });
     if (path.endsWith('/tabs')) return Promise.resolve({ tabs: [] });
     if (path.endsWith('/new'))
       return Promise.resolve({
@@ -409,4 +410,47 @@ it('shows a configuration/error state without embedding remote HTML', async () =
   );
   expect(container.querySelector('iframe')).toBeNull();
   expect(insert).not.toHaveBeenCalled();
+});
+
+it('waits for a stopped runtime to become healthy before opening a page, and cancellation opens no page', async () => {
+  const standard = api.getMockImplementation()!;
+  api.mockImplementation((path: string, ...rest) =>
+    path.endsWith('/runtime')
+      ? Promise.resolve({ state: 'starting' })
+      : standard(path, ...rest),
+  );
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Starting the browser',
+  });
+  expect(dialog).toBeVisible();
+  expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
+    false,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel waiting' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(
+    api.mock.calls.some(([path]) => String(path).endsWith('/navigate')),
+  ).toBe(false);
+});
+
+it('opens the page only after the Manager reports a healthy runtime', async () => {
+  const standard = api.getMockImplementation()!;
+  let readyRuntime = false;
+  api.mockImplementation((path: string, ...rest) =>
+    path.endsWith('/runtime')
+      ? Promise.resolve({ state: readyRuntime ? 'ready' : 'starting' })
+      : standard(path, ...rest),
+  );
+  render(<BrowserSidebar threadId="thread-a" onClose={vi.fn()} />);
+  await screen.findByRole('dialog', { name: 'Starting the browser' });
+  readyRuntime = true;
+  await waitFor(
+    () =>
+      expect(
+        api.mock.calls.some(([path]) => String(path).endsWith('/new')),
+      ).toBe(true),
+    { timeout: 2000 },
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });

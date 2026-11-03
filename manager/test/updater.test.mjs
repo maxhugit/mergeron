@@ -901,172 +901,188 @@ for (const selected of ['ingress', 'egress']) {
   });
 }
 
-for (const [environment, local] of [
-  ['development', false],
-  ['development', true],
-  ['production', false],
-])
-  test(`managed ${environment} browser participates in update and rollback with persistent public DNS (local image: ${local})`, async (t) => {
-    const { updater, docker } = await fixture(t, environment);
-    const stack = updater.manifest.stack;
-    const localId = 'sha256:' + 'c'.repeat(64);
-    const localTag = 'mergeron-dev-browser:existing';
-    if (local) {
-      const image = docker.image.bind(docker);
-      const inspectImage = docker.inspectImage.bind(docker);
-      docker.image = (reference) =>
-        [localTag, localId].includes(reference) ? localId : image(reference);
-      docker.inspectImage = async (reference) =>
-        [localTag, localId].includes(reference)
-          ? { Id: localId, RepoTags: [localTag], RepoDigests: [] }
-          : inspectImage(reference);
-    }
-    const browser = {
-      id: 'browser',
-      displayName: 'Mergeron Browser',
-      canonicalName: `${stack}-browser`,
-      stackName: stack,
-      legacyNames: [],
-      allowedImageRepositories: [
-        'ghcr.io/maxhugit/mergeron-browser',
-        ...(environment === 'development' ? ['mergeron-dev-browser'] : []),
-      ],
-      requiredNetworks: [`${stack}-browser-control`, `${stack}-browser-egress`],
-      protectedMounts: [],
-      dns: ['1.1.1.1'],
-    };
-    updater.manifest = {
-      ...updater.manifest,
-      environment,
-      components: [...updater.manifest.components, browser],
-    };
-    docker.inspectNetwork = async (name) => ({
-      Name: name,
-      Driver: 'bridge',
-      Internal: name.endsWith('-browser-control'),
-    });
-    docker.values.set(
-      'original-browser',
-      docker.inspect(
+for (const sleeping of [false, true])
+  for (const [environment, local] of [
+    ['development', false],
+    ['development', true],
+    ['production', false],
+  ])
+    test(`managed ${environment} browser participates in update and rollback with persistent public DNS (local image: ${local}, stopped: ${sleeping})`, async (t) => {
+      const { updater, docker } = await fixture(t, environment);
+      const stack = updater.manifest.stack;
+      const localId = 'sha256:' + 'c'.repeat(64);
+      const localTag = 'mergeron-dev-browser:existing';
+      if (local) {
+        const image = docker.image.bind(docker);
+        const inspectImage = docker.inspectImage.bind(docker);
+        docker.image = (reference) =>
+          [localTag, localId].includes(reference) ? localId : image(reference);
+        docker.inspectImage = async (reference) =>
+          [localTag, localId].includes(reference)
+            ? { Id: localId, RepoTags: [localTag], RepoDigests: [] }
+            : inspectImage(reference);
+      }
+      const browser = {
+        id: 'browser',
+        displayName: 'Mergeron Browser',
+        canonicalName: `${stack}-browser`,
+        stackName: stack,
+        legacyNames: [],
+        allowedImageRepositories: [
+          'ghcr.io/maxhugit/mergeron-browser',
+          ...(environment === 'development' ? ['mergeron-dev-browser'] : []),
+        ],
+        requiredNetworks: [
+          `${stack}-browser-control`,
+          `${stack}-browser-egress`,
+        ],
+        protectedMounts: [],
+        dns: ['1.1.1.1'],
+      };
+      updater.manifest = {
+        ...updater.manifest,
+        environment,
+        components: [...updater.manifest.components, browser],
+      };
+      docker.inspectNetwork = async (name) => ({
+        Name: name,
+        Driver: 'bridge',
+        Internal: name.endsWith('-browser-control'),
+      });
+      docker.values.set(
         'original-browser',
-        browser.canonicalName,
-        {
-          Image: local
-            ? localTag
-            : 'ghcr.io/maxhugit/mergeron-browser:previous',
-          User: 'pwuser',
-          Env: ['BROWSER_WS_PATH=' + 'x'.repeat(32)],
-          Labels: {
-            'io.mergeron.managed': 'true',
-            'io.mergeron.component': 'browser',
-            'io.mergeron.stack': stack,
+        docker.inspect(
+          'original-browser',
+          browser.canonicalName,
+          {
+            Image: local
+              ? localTag
+              : 'ghcr.io/maxhugit/mergeron-browser:previous',
+            User: 'pwuser',
+            Env: ['BROWSER_WS_PATH=' + 'x'.repeat(32)],
+            Labels: {
+              'io.mergeron.managed': 'true',
+              'io.mergeron.component': 'browser',
+              'io.mergeron.stack': stack,
+            },
+            Healthcheck: { Test: ['CMD', 'true'] },
+            HostConfig: {
+              Dns: [],
+              ReadonlyRootfs: true,
+              CapDrop: ['ALL'],
+              SecurityOpt: [
+                'no-new-privileges:true',
+                'seccomp=reviewed-profile',
+              ],
+            },
+            NetworkingConfig: {
+              EndpointsConfig: Object.fromEntries(
+                browser.requiredNetworks.map((name) => [
+                  name,
+                  { Aliases: [browser.canonicalName] },
+                ]),
+              ),
+            },
           },
-          Healthcheck: { Test: ['CMD', 'true'] },
-          HostConfig: {
-            Dns: [],
-            ReadonlyRootfs: true,
-            CapDrop: ['ALL'],
-            SecurityOpt: ['no-new-privileges:true', 'seccomp=reviewed-profile'],
-          },
-          NetworkingConfig: {
-            EndpointsConfig: Object.fromEntries(
-              browser.requiredNetworks.map((name) => [
-                name,
-                { Aliases: [browser.canonicalName] },
-              ]),
-            ),
-          },
+          true,
+        ),
+      );
+      if (sleeping) {
+        const value = docker.values.get('original-browser');
+        value.State.Running = false;
+        value.State.Status = 'exited';
+      }
+      // Reject network drift and all existing sandbox regressions before any stop.
+      const originalBrowser = docker.values.get('original-browser');
+      for (const change of [
+        (c) => {
+          c.HostConfig.Privileged = true;
         },
-        true,
-      ),
-    );
-    // Reject network drift and all existing sandbox regressions before any stop.
-    const originalBrowser = docker.values.get('original-browser');
-    for (const change of [
-      (c) => {
-        c.HostConfig.Privileged = true;
-      },
-      (c) => {
-        c.HostConfig.ReadonlyRootfs = false;
-      },
-      (c) => {
-        c.HostConfig.CapAdd = ['SYS_ADMIN'];
-      },
-      (c) => {
-        c.HostConfig.PortBindings = { '3000/tcp': [{ HostPort: '3000' }] };
-      },
-      (c) => {
-        c.Mounts = [{ Source: '/secret', Destination: '/secret' }];
-      },
-      (c) => {
-        c.Config.User = 'root';
-      },
-      (c) => {
-        c.HostConfig.SecurityOpt = ['seccomp=unconfined'];
-      },
-      (c) => {
-        c.NetworkSettings.Networks['other-egress'] = {};
-      },
-    ]) {
-      const invalid = structuredClone(originalBrowser);
-      change(invalid);
-      docker.values.set('original-browser', invalid);
+        (c) => {
+          c.HostConfig.ReadonlyRootfs = false;
+        },
+        (c) => {
+          c.HostConfig.CapAdd = ['SYS_ADMIN'];
+        },
+        (c) => {
+          c.HostConfig.PortBindings = { '3000/tcp': [{ HostPort: '3000' }] };
+        },
+        (c) => {
+          c.Mounts = [{ Source: '/secret', Destination: '/secret' }];
+        },
+        (c) => {
+          c.Config.User = 'root';
+        },
+        (c) => {
+          c.HostConfig.SecurityOpt = ['seccomp=unconfined'];
+        },
+        (c) => {
+          c.NetworkSettings.Networks['other-egress'] = {};
+        },
+      ]) {
+        const invalid = structuredClone(originalBrowser);
+        change(invalid);
+        docker.values.set('original-browser', invalid);
+        assert.ok(
+          (await updater.plan(images)).blockers.includes(
+            'browser:updateIsolationRequired',
+          ),
+        );
+      }
+      docker.values.set('original-browser', originalBrowser);
+      const inspectNetwork = docker.inspectNetwork;
+      docker.inspectNetwork = async (name) => ({
+        ...(await inspectNetwork(name)),
+        Internal: false,
+      });
       assert.ok(
         (await updater.plan(images)).blockers.includes(
           'browser:updateIsolationRequired',
         ),
       );
-    }
-    docker.values.set('original-browser', originalBrowser);
-    const inspectNetwork = docker.inspectNetwork;
-    docker.inspectNetwork = async (name) => ({
-      ...(await inspectNetwork(name)),
-      Internal: false,
+      docker.inspectNetwork = async () => {
+        throw new Error('network unavailable');
+      };
+      assert.ok(
+        (await updater.plan(images)).blockers.includes(
+          'browser:updateIsolationRequired',
+        ),
+      );
+      docker.inspectNetwork = inspectNetwork;
+      await begin(updater);
+      assert.equal(updater.current.status, 'succeeded');
+      const active = () =>
+        [...docker.values.values()].find((c) => c.Name === `/${stack}-browser`);
+      assert.equal(active().State.Running, !sleeping);
+      assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
+      assert.deepEqual(active().Config.Env, [
+        'BROWSER_WS_PATH=' + 'x'.repeat(32),
+      ]);
+      const application = [...docker.values.values()].find(
+        (c) => c.Name === `/${stack}-ui`,
+      );
+      assert.ok(
+        application.Config.Env.includes(
+          `MERGERON_BROWSER_ENDPOINT=ws://${stack}-browser:3000/` +
+            'x'.repeat(32),
+        ),
+      );
+      assert.ok(
+        application.NetworkSettings.Networks[`${stack}-browser-control`],
+      );
+      assert.ok(!JSON.stringify(updater.status()).includes('x'.repeat(32)));
+      assert.ok(
+        docker.calls.some(
+          ([action, id]) => action === 'stop' && id === 'original-browser',
+        ) === !sleeping,
+      );
+      await updater.rollback();
+      assert.equal(active().State.Running, !sleeping);
+      assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
+      assert.deepEqual(active().Config.Env, [
+        'BROWSER_WS_PATH=' + 'x'.repeat(32),
+      ]);
     });
-    assert.ok(
-      (await updater.plan(images)).blockers.includes(
-        'browser:updateIsolationRequired',
-      ),
-    );
-    docker.inspectNetwork = async () => {
-      throw new Error('network unavailable');
-    };
-    assert.ok(
-      (await updater.plan(images)).blockers.includes(
-        'browser:updateIsolationRequired',
-      ),
-    );
-    docker.inspectNetwork = inspectNetwork;
-    await begin(updater);
-    assert.equal(updater.current.status, 'succeeded');
-    const active = () =>
-      [...docker.values.values()].find((c) => c.Name === `/${stack}-browser`);
-    assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
-    assert.deepEqual(active().Config.Env, [
-      'BROWSER_WS_PATH=' + 'x'.repeat(32),
-    ]);
-    const application = [...docker.values.values()].find(
-      (c) => c.Name === `/${stack}-ui`,
-    );
-    assert.ok(
-      application.Config.Env.includes(
-        `MERGERON_BROWSER_ENDPOINT=ws://${stack}-browser:3000/` +
-          'x'.repeat(32),
-      ),
-    );
-    assert.ok(application.NetworkSettings.Networks[`${stack}-browser-control`]);
-    assert.ok(!JSON.stringify(updater.status()).includes('x'.repeat(32)));
-    assert.ok(
-      docker.calls.some(
-        ([action, id]) => action === 'stop' && id === 'original-browser',
-      ),
-    );
-    await updater.rollback();
-    assert.deepEqual(active().HostConfig.Dns, ['1.1.1.1']);
-    assert.deepEqual(active().Config.Env, [
-      'BROWSER_WS_PATH=' + 'x'.repeat(32),
-    ]);
-  });
 
 test('removed fast mode is rejected in development and production before any Docker write', async (t) => {
   for (const environment of ['production', 'development']) {

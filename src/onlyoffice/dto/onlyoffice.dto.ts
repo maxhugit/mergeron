@@ -8,6 +8,13 @@ export class OnlyOfficeConfigResponseDto {
 
   @ApiProperty({ type: Object })
   config!: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    type: Object,
+    description:
+      'Editor-local bridge; never forward this to OnlyOffice or plugin URLs.',
+  })
+  assistant?: { sessionId: string; channel: string };
 }
 
 /**

@@ -98,5 +98,12 @@
   "draftUnavailable": "Could not add to this conversation’s draft. Check that it is writable.",
   "unavailable": "Browser unavailable. Check your connection, administrator access and isolated browser configuration.",
   "privacy": "Temporary remote session. Screenshots may show text entered in fields: review them before sending. Only annotations added to the draft and sent reach the agent.",
-  "frame": "Embedded frame: the marker identifies the frame, not its contents"
+  "frame": "Embedded frame: the marker identifies the frame, not its contents",
+  "runtimeStartingTitle": "Starting the browser",
+  "runtimeStartingDescription": "The browser was stopped. The Manager is starting it and checking availability before opening your page.",
+  "runtimeStartingHealth": "Waiting for the browser health check…",
+  "runtimeCancelWait": "Cancel waiting",
+  "runtimeStartTimedOut": "The browser did not become ready within the startup deadline. Retry or check Infrastructure.",
+  "runtimeUnhealthy": "The browser health check failed. Check Infrastructure before retrying.",
+  "runtimeIsolation": "The Manager refused to start the browser: its isolation configuration needs to be checked."
 }
