@@ -239,3 +239,90 @@ it('does not enable the plugin in spreadsheets or unowned paths', () => {
     expect(service.create(join(root, 'unowned.docx'), 'word')).toBeUndefined();
   });
 });
+
+it('prepares a bounded slide redesign as structured content and refuses it in Word', async () => {
+  await as('admin', async () => {
+    const word = service.create(path, 'word')!;
+    await expect(
+      service.propose(word.sessionId, body({ action: 'redesignSlide' })),
+    ).rejects.toThrow('Unsupported');
+    const slide = service.create(path, 'slide')!;
+    threads.runProjectStructuredPrompt.mockResolvedValue(
+      JSON.stringify({
+        title: 'Un projet en deux étapes',
+        layout: 'columns',
+        sections: [
+          { heading: 'Cadrer', body: 'Conserver les 3 objectifs.' },
+          { heading: 'Livrer', body: 'Valider le résultat avec l’équipe.' },
+        ],
+      }),
+    );
+    const request = await service.propose(
+      slide.sessionId,
+      body({ action: 'redesignSlide' }),
+    );
+    await vi.waitFor(async () =>
+      expect(await service.read(slide.sessionId, request.id)).toMatchObject({
+        status: 'ready',
+        action: 'redesignSlide',
+        layout: 'columns',
+        sections: [
+          { heading: 'Cadrer', body: 'Conserver les 3 objectifs.' },
+          { heading: 'Livrer', body: 'Valider le résultat avec l’équipe.' },
+        ],
+      }),
+    );
+    const prompt = threads.runProjectStructuredPrompt.mock.calls[0][0] as {
+      instructions: string;
+      outputSchema: { required: string[] };
+    };
+    expect(prompt.instructions).toContain('NEW additional slide');
+    expect(prompt.outputSchema.required).toContain('sections');
+  });
+});
+it('rejects malformed and oversized redesign plans instead of accepting executable layouts', async () => {
+  await as('admin', async () => {
+    for (const plan of [
+      {
+        title: 'Title',
+        layout: 'eval(1)',
+        sections: [{ heading: '', body: 'Text' }],
+      },
+      {
+        title: 'Title',
+        layout: 'columns',
+        sections: [{ heading: '', body: 'Text' }],
+      },
+      {
+        title: 'Title',
+        layout: 'cards',
+        sections: [{ heading: '', body: 'Text' }],
+      },
+      {
+        title: 'Title',
+        layout: 'stack',
+        sections: [{ heading: '', body: 'x'.repeat(501) }],
+      },
+      {
+        title: 'x'.repeat(161),
+        layout: 'stack',
+        sections: [{ heading: '', body: 'Text' }],
+      },
+      { title: 'Title', layout: 'stack', sections: [null] },
+    ]) {
+      const grant = service.create(path, 'slide')!;
+      threads.runProjectStructuredPrompt.mockResolvedValue(
+        JSON.stringify(plan),
+      );
+      const request = await service.propose(
+        grant.sessionId,
+        body({ action: 'redesignSlide' }),
+      );
+      await vi.waitFor(async () =>
+        expect(await service.read(grant.sessionId, request.id)).toMatchObject({
+          status: 'failed',
+        }),
+      );
+    }
+  });
+});

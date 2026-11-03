@@ -6,6 +6,24 @@ Les actions disponibles sont l’ajout de texte au curseur, le remplacement expl
 
 Le plugin est annoncé par la configuration de cet éditeur seulement : il n’est ni installé globalement ni publié dans la marketplace. Les autres applications utilisant le même serveur OnlyOffice ne le chargent pas. Les aperçus en lecture seule et les tableurs ne l’activent pas. Cette intégration vise **OnlyOffice Docs 10** ; une API indisponible produit un message et ne déclenche pas une modification de remplacement sur le fichier.
 
+## Retravailler une slide brouillon
+
+Dans une présentation, choisir **Retravailler cette slide (nouvelle version)** et préciser les changements souhaités. L’agent reçoit le texte et la structure de la slide courante ; il propose un titre, un texte clarifié et une composition : sections empilées, deux colonnes ou cartes. Le panneau montre un aperçu de cette organisation.
+
+**Ajouter la nouvelle slide** l’insère immédiatement après la source et la sélectionne. La source reste inchangée : comparer les deux puis choisir soi-même laquelle conserver. Le thème de la source est repris ; les illustrations, graphiques et tableaux sont copiés et regroupés dans une zone latérale, sans réécrire leur contenu ni interpréter les pixels des images. Les groupes et objets non pris en charge sont refusés explicitement, pour éviter de perdre du contenu. Dissocier les objets dans une copie si nécessaire. Limites : 50 objets, 12 000 caractères de texte source, trois sections au plus et 500 caractères par section proposée.
+
+Si le texte, une illustration ou sa position change pendant la préparation, refaire la proposition. Aucun code généré par l’agent n’est exécuté : seules les compositions prévues par le plugin peuvent être appliquées.
+
+## Actions au clic droit
+
+Lorsque le plugin Mergeron est actif dans cet éditeur, le menu contextuel propose un sous-menu **Mergeron** :
+
+- **Reformuler la sélection** prépare directement une proposition à relire.
+- **Remplacer la sélection…** place le panneau sur cette action pour saisir une consigne.
+- **Retravailler cette slide** est disponible dans les présentations et prépare une version supplémentaire.
+
+Sans sélection textuelle, les deux premières actions sont désactivées. Les actions sont aussi désactivées pendant une préparation ou lorsque le compte ne peut pas lancer d’agent. Le clic droit ne remplace jamais directement le contenu : la validation reste dans le panneau. Si le plugin a été fermé, le rouvrir depuis les modules complémentaires pour retrouver ces actions ; replier son panneau conserve le plugin actif.
+
 ## Agents et propositions
 
 La liste contient uniquement les agents actifs, non archivés et accessibles du projet propriétaire du document. Un changement de projet d’un agent, une désactivation du compte ou une révocation des droits est contrôlé aussi côté serveur, avant une proposition et avant son application. L’exécution reste soumise aux droits existants de Mergeron : les administrateurs peuvent lancer les agents ; les autres membres autorisés peuvent consulter leur liste.
@@ -28,7 +46,7 @@ Le SDK officiel relit son manifeste public et évalue le code d’initialisation
 
 - Backend : `pnpm exec vitest run src/onlyoffice/`.
 - Pont du navigateur : `pnpm --dir web exec vitest run --project unit src/components/files/viewers/onlyoffice-assistant-bridge.spec.ts src/components/files/viewers/onlyoffice-viewer.spec.tsx`.
-- Plugin et pont réels avec API d’éditeur simulée : installer les navigateurs du projet, puis `node scripts/test-onlyoffice-assistant.mjs`. Chromium et WebKit vérifient insertion, remplacement, refus d’une proposition périmée et ajout de slide ; les captures ordinateur/mobile sont dans `artifacts/onlyoffice-assistant/` (surcharge possible par `OFFICE_ASSISTANT_SCREENSHOTS`). Ce test n’utilise aucun compte ni document réel.
+- Plugin et pont réels avec API d’éditeur simulée : installer les navigateurs du projet, puis `node scripts/test-onlyoffice-assistant.mjs`. Chromium et WebKit vérifient insertion, remplacement, refus d’une proposition périmée (y compris une illustration déplacée), ajout et recomposition de slide, et actions du menu contextuel ; les captures ordinateur/mobile sont dans `artifacts/onlyoffice-assistant/` (surcharge possible par `OFFICE_ASSISTANT_SCREENSHOTS`). Ce test n’utilise aucun compte ni document réel.
 
 Pour une recette avec un serveur Docs réel, utiliser deux fichiers synthétiques DOCX/PPTX dans un projet de test : vérifier le panneau, choisir un agent, appliquer une proposition, annuler, sauvegarder puis rouvrir. Ouvrir ensuite un document depuis une autre solution connectée au même serveur : le panneau doit être absent.
 
