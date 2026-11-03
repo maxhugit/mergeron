@@ -7,13 +7,17 @@ const vendorVersions = new Map();
 
 export function installedImageBuild(image, component) {
   const labels = image?.Config?.Labels ?? {};
-  if (['ingress', 'egress'].includes(component)) {
+  if (['ingress', 'egress', 'appCatalog'].includes(component)) {
     const version =
       component === 'ingress'
         ? image?.Config?.Env?.find((entry) =>
             entry.startsWith('NGINX_VERSION='),
           )?.slice(14)
-        : null;
+        : component === 'appCatalog'
+          ? image?.Config?.Env?.find((e) => e.startsWith('VERSION='))
+              ?.slice(8)
+              .replace(/^v/, '')
+          : null;
     return {
       version: /^\d+(?:\.\d+){1,3}$/.test(version ?? '') ? version : null,
       revision: null,

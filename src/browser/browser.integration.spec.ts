@@ -174,12 +174,11 @@ it.skipIf(!process.env.MERGERON_BROWSER_TEST_EXECUTABLE)(
         x: 80,
         y: 50,
       });
-      expect('selection' in selection && selection.selection.element.tag).toBe(
-        'button',
-      );
-      expect('selection' in selection && selection.selection.element.text).toBe(
-        'Change this button',
-      );
+      expect(selection).toMatchObject({
+        selection: {
+          element: { tag: 'button', text: 'Change this button' },
+        },
+      });
       expect('image' in selection && selection.image).toMatch(
         /^data:image\/jpeg;base64,/,
       );

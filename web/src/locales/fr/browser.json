@@ -98,5 +98,12 @@
   "draftUnavailable": "Impossible d’ajouter au brouillon de cette conversation. Vérifiez qu’elle est accessible en écriture.",
   "unavailable": "Le navigateur n’est pas disponible. Vérifiez votre connexion, votre accès administrateur et la configuration du service du navigateur isolé.",
   "privacy": "Session distante temporaire. Les captures peuvent montrer le texte des champs : vérifiez-les avant l’envoi. Seules les annotations ajoutées au brouillon puis envoyées sont transmises à l’agent.",
-  "frame": "Cadre intégré : le repère désigne le cadre, pas son contenu"
+  "frame": "Cadre intégré : le repère désigne le cadre, pas son contenu",
+  "runtimeStartingTitle": "Démarrage du navigateur",
+  "runtimeStartingDescription": "Le navigateur était arrêté. Le Manager le démarre et vérifie sa disponibilité avant d’ouvrir votre page.",
+  "runtimeStartingHealth": "En attente du contrôle de santé du navigateur…",
+  "runtimeCancelWait": "Annuler l’attente",
+  "runtimeStartTimedOut": "Le navigateur n’est pas devenu disponible dans le délai prévu. Réessayez ou consultez Infrastructure.",
+  "runtimeUnhealthy": "Le contrôle de santé du navigateur a échoué. Consultez Infrastructure avant de réessayer.",
+  "runtimeIsolation": "Le Manager a refusé de démarrer le navigateur : sa configuration d’isolation doit être vérifiée."
 }

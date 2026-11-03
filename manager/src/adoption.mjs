@@ -5,7 +5,8 @@ import { dirname } from 'node:path';
 export const ADOPTION_CONFIRMATION = 'ADOPT_EXISTING_INSTALLATION';
 
 function snapshotComponents(inventory) {
-  return [...inventory.components]
+  return inventory.components
+    .filter((c) => !c.observational)
     .sort((left, right) => left.id.localeCompare(right.id))
     .map((component) => ({
       id: component.id,
@@ -54,7 +55,9 @@ export function inventoryFingerprint(inventory) {
 
 function adoptionBlockers(inventory) {
   const blockers = [...inventory.dataSafety.blockers];
-  for (const component of inventory.components) {
+  for (const component of inventory.components.filter(
+    (c) => !c.observational,
+  )) {
     if (!component.containerId)
       blockers.push(`${component.id}:containerUnavailable`);
     if (component.imageRepositoryAllowed === false)
@@ -104,6 +107,11 @@ function isManagedBrowserExtension(inventory, record) {
 }
 
 export function evaluateAdoption(inventory, record = null) {
+  const observed = inventory.components.filter((c) => c.observational);
+  inventory = {
+    ...inventory,
+    components: inventory.components.filter((c) => !c.observational),
+  };
   const fingerprint = inventoryFingerprint(inventory);
   const blockers = adoptionBlockers(inventory);
   const alreadyManaged =
@@ -129,10 +137,13 @@ export function evaluateAdoption(inventory, record = null) {
   }
   return {
     ...inventory,
-    components: inventory.components.map((component) => ({
-      ...component,
-      adoption: state === 'adopted' ? 'managed' : component.adoption,
-    })),
+    components: [
+      ...observed,
+      ...inventory.components.map((component) => ({
+        ...component,
+        adoption: state === 'adopted' ? 'managed' : component.adoption,
+      })),
+    ],
     adoption: {
       state,
       fingerprint,

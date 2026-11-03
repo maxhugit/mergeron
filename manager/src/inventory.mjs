@@ -59,6 +59,7 @@ export function scopeManifest(
     ingress: `${stackPrefix}-ingress`,
     egress: `${stackPrefix}-squid`,
     browser: `${stackPrefix}-browser`,
+    appCatalog: `${stackPrefix}-byparr`,
   };
   const components = [...manifest.components];
   if (browser.enabled)
@@ -80,6 +81,7 @@ export function scopeManifest(
       protectedMounts: [],
       dns: browserDns,
       existingOnly: true,
+      onDemand: true,
     });
   return {
     ...manifest,
@@ -89,6 +91,19 @@ export function scopeManifest(
       ...network,
       name: scopedNetwork(network.name),
     })),
+    observedComponents: [
+      {
+        id: 'appCatalog',
+        displayName: 'Byparr · Catalogue d’applications',
+        canonicalName: `${stackPrefix}-byparr`,
+        stackName: stackPrefix,
+        legacyNames: [],
+        allowedImageRepositories: ['ghcr.io/thephaseless/byparr'],
+        requiredNetworks: [`${stackPrefix}-isolated`],
+        protectedMounts: [],
+        observational: true,
+      },
+    ],
     components: components.map((component) => ({
       ...component,
       stackName: stackPrefix,
@@ -168,6 +183,7 @@ async function inspectComponent(component, containers, docker) {
   if (candidates.length === 0) {
     return {
       id: component.id,
+      ...(component.observational ? { observational: true } : {}),
       displayName: component.displayName,
       state: 'missing',
       adoption: 'missing',
@@ -191,6 +207,7 @@ async function inspectComponent(component, containers, docker) {
   if (candidates.length > 1) {
     return {
       id: component.id,
+      ...(component.observational ? { observational: true } : {}),
       displayName: component.displayName,
       state: 'conflict',
       adoption: 'conflict',
@@ -229,6 +246,7 @@ async function inspectComponent(component, containers, docker) {
   }
   return {
     id: component.id,
+    ...(component.observational ? { observational: true } : {}),
     displayName: component.displayName,
     state: componentState(inspect),
     adoption:
@@ -280,9 +298,9 @@ export async function collectInventory(manifest, docker, now = new Date()) {
     throw new Error('Docker container inventory is invalid');
   const [components, manager] = await Promise.all([
     Promise.all(
-      manifest.components.map((component) =>
-        inspectComponent(component, containers, docker),
-      ),
+      [...manifest.components, ...(manifest.observedComponents ?? [])]
+        .filter((c) => !c.observational || candidatesFor(c, containers).length)
+        .map((component) => inspectComponent(component, containers, docker)),
     ),
     inspectManagerBuild(manifest, containers, docker),
   ]);
@@ -294,7 +312,10 @@ export async function collectInventory(manifest, docker, now = new Date()) {
   );
   const blockers = [
     ...components
-      .filter((component) => component.state === 'conflict')
+      .filter(
+        (component) =>
+          !component.observational && component.state === 'conflict',
+      )
       .map((component) => `${component.id}:multipleContainers`),
     ...protectedMounts
       .filter((mount) => !mount.present || !mount.writable)

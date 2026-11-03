@@ -33,17 +33,20 @@ export class ManagerStatusService {
       // Planning and durable acceptance can exceed the short polling budget
       // while Docker or the persistent filesystem is busy. The actual update
       // remains asynchronous; never retry a write whose outcome is uncertain.
-      const timeoutMs = path.startsWith('/v1/images/updates')
-        ? 30_000
-        : path === '/v1/codex-cli/install'
-          ? 210_000
-          : path === '/v1/backups/delete'
-            ? 120_000
-            : path === '/v1/backups' ||
-                path === '/v1/update' ||
-                path.startsWith('/v1/update/')
-              ? 30_000
-              : 3_000;
+      const timeoutMs =
+        path === '/v1/services/browser'
+          ? 15_000
+          : path.startsWith('/v1/images/updates')
+            ? 30_000
+            : path === '/v1/codex-cli/install'
+              ? 210_000
+              : path === '/v1/backups/delete'
+                ? 120_000
+                : path === '/v1/backups' ||
+                    path === '/v1/update' ||
+                    path.startsWith('/v1/update/')
+                  ? 30_000
+                  : 3_000;
       const unavailable = () =>
         new HttpException('mergeronManagerUnavailable', 503);
       const invalidResponse = () =>
@@ -119,6 +122,10 @@ export class ManagerStatusService {
       if (body) request.write(body);
       request.end();
     });
+  }
+
+  browserRuntime(payload: { owner: string; release: boolean }) {
+    return this.requestManager('/v1/services/browser', 'POST', payload);
   }
 
   async status() {

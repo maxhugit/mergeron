@@ -18,6 +18,12 @@ const sources: Record<
   string,
   { repository: string; host: string; scope: string; auth: string }
 > = {
+  appCatalog: {
+    repository: 'ghcr.io/thephaseless/byparr',
+    host: 'ghcr.io',
+    scope: 'thephaseless/byparr',
+    auth: 'https://ghcr.io/token?service=ghcr.io',
+  },
   manager: {
     repository: 'ghcr.io/maxhugit/mergeron-manager',
     host: 'ghcr.io',
@@ -104,10 +110,26 @@ export class RegistryImageIdentityService {
       throw Error('Config integrity failure');
     const labels = object(object(object(config.value).config).Labels);
     // Vendor OCI versions can describe the base distribution, not its software.
-    const version = ['application', 'browser', 'manager'].includes(id)
-      ? (labels['io.mergeron.version'] ??
-        (id === 'browser' ? null : labels['org.opencontainers.image.version']))
+    const vendorEnv = object(object(config.value).config).Env;
+    const byparrVersion = Array.isArray(vendorEnv)
+      ? vendorEnv
+          .find(
+            (entry: unknown): entry is string =>
+              typeof entry === 'string' &&
+              /^VERSION=v?\d+\.\d+\.\d+$/.test(entry),
+          )
+          ?.slice(8)
+          .replace(/^v/, '')
       : null;
+    const version =
+      id === 'appCatalog'
+        ? byparrVersion
+        : ['application', 'browser', 'manager'].includes(id)
+          ? (labels['io.mergeron.version'] ??
+            (id === 'browser'
+              ? null
+              : labels['org.opencontainers.image.version']))
+          : null;
     const revision = labels['org.opencontainers.image.revision'];
     const created = object(config.value).created;
     const build = {

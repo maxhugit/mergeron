@@ -23,25 +23,27 @@ test('automatically opens the configured default page without internal tabs', as
   await page.viewport(1214, 988);
   api.mockImplementation((path: string) =>
     Promise.resolve(
-      path.endsWith('/new')
-        ? {
-            id: 'created',
-            tabs: [{ id: 'created', url: 'about:blank', title: '' }],
-          }
-        : path.endsWith('/navigate')
+      path.endsWith('/runtime')
+        ? { state: 'ready' }
+        : path.endsWith('/new')
           ? {
-              frameId: 'frame',
-              url: 'https://example.org/',
-              title: 'Example',
-              image:
-                'data:image/svg+xml,' +
-                encodeURIComponent(
-                  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><text x="20" y="40">Example</text></svg>',
-                ),
-              width: 600,
-              height: 200,
+              id: 'created',
+              tabs: [{ id: 'created', url: 'about:blank', title: '' }],
             }
-          : { tabs: [] },
+          : path.endsWith('/navigate')
+            ? {
+                frameId: 'frame',
+                url: 'https://example.org/',
+                title: 'Example',
+                image:
+                  'data:image/svg+xml,' +
+                  encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><text x="20" y="40">Example</text></svg>',
+                  ),
+                width: 600,
+                height: 200,
+              }
+            : { tabs: [] },
     ),
   );
   render(
@@ -121,3 +123,30 @@ test('renders the numbered annotation into a real PNG attachment', async () => {
     URL.revokeObjectURL(url);
   }
 });
+
+test.each([390, 1200])(
+  'shows a bounded startup waiting dialog at %ipx without opening a page early',
+  async (width) => {
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    await page.viewport(width, 800);
+    api.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.endsWith('/runtime') ? { state: 'starting' } : { tabs: [] },
+      ),
+    );
+    render(<BrowserSidebar threadId="fixture" onClose={() => {}} />);
+    const dialog = page.getByRole('dialog', {
+      name: 'Démarrage du navigateur',
+    });
+    await expect.element(dialog).toBeVisible();
+    expect(api.mock.calls.some(([path]) => String(path).endsWith('/new'))).toBe(
+      false,
+    );
+    await dialog.screenshot({
+      path: `../../../.vitest-screenshots/browser-runtime-starting-${width}-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}.png`,
+    });
+    await dialog.getByRole('button', { name: 'Annuler l’attente' }).click();
+    await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+  },
+);

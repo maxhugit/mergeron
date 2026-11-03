@@ -3,6 +3,7 @@ import { withBasePath } from '@/base-path';
 import type { InstalledBuild } from './manager-status-api';
 
 export interface ComponentImageUpdate {
+  updateManagedBy?: 'manager' | null;
   id: string;
   displayName: string;
   installedImage: string | null;

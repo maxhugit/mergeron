@@ -283,7 +283,9 @@ export async function createInstallPlan(
     }
   }
 
-  for (const component of inventory.components) {
+  for (const component of inventory.components.filter(
+    (c) => !c.observational,
+  )) {
     if (component.state === 'conflict') {
       blockers.push(`${component.id}:multipleContainers`);
       continue;
@@ -323,7 +325,8 @@ export async function createInstallPlan(
       blockers.push(`${component.id}:networkTopologyMismatch`);
     if (
       component.adoption === 'managed' &&
-      ['created', 'stopped'].includes(component.state)
+      ['created', 'stopped'].includes(component.state) &&
+      !manifest.components.find((c) => c.id === component.id)?.onDemand
     )
       actions.push({
         type: 'startContainer',

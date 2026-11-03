@@ -28,6 +28,17 @@ test('separates installed builds, registry image and GitHub release on desktop a
     manager: { build: { ...build, revision: 'b'.repeat(40) } },
     components: [
       {
+        id: 'appCatalog',
+        state: 'stopped',
+        observational: true,
+        build: {
+          ...build,
+          version: '2.2.0',
+          channel: 'unknown',
+          revision: null,
+        },
+      },
+      {
         id: 'browser',
         build: {
           ...build,
@@ -93,9 +104,16 @@ test('separates installed builds, registry image and GitHub release on desktop a
       expect(within(rows[1]).getByText('aaaaaaa')).toBeVisible();
       expect(within(rows[2]).getByText('bbbbbbb')).toBeVisible();
       expect(within(rows[3]).queryByText('24.04')).toBeNull();
+      expect(screen.getByRole('row', { name: /Byparr/ })).toBeInTheDocument();
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       await page.screenshot({
         path: `../../../.vitest-screenshots/versions-installed-${width}.png`,
+      });
+      screen
+        .getByRole('row', { name: /Byparr/ })
+        .scrollIntoView({ block: 'end' });
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/versions-byparr-${width}-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}.png`,
       });
       // The candidate now shares the current-version table with the installed build.
       expect(within(rows[1]).getByText('ddddddd')).toBeVisible();

@@ -92,17 +92,24 @@ export function ManagerImageUpdates({
             </a>
           )}
           <div>
+            {item.updateManagedBy === 'manager' && (
+              <p className="text-xs text-muted-foreground">
+                {t('byparrManagedUpdates')}
+              </p>
+            )}
             <Button
               size="sm"
               variant="outline"
               disabled={
                 disabled ||
+                item.updateManagedBy === 'manager' ||
                 (!item.updateAvailable && !item.migrationAvailable) ||
                 (!!item.checkError && !item.migrationAvailable) ||
                 !item.targetDigest ||
                 !item.targetImage
               }
               onClick={() => {
+                if (item.updateManagedBy === 'manager') return;
                 if (
                   !item.targetImage ||
                   !item.targetDigest ||

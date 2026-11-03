@@ -43,9 +43,11 @@ function ComponentRow({ component }: { component: ManagerComponent }) {
   const { t } = useTranslation();
   const { t: tm } = useTranslation('manager');
   const healthy = component.state === 'healthy';
-  const warning = ['unhealthy', 'stopped', 'conflict', 'missing'].includes(
-    component.state,
-  );
+  const sleeping =
+    component.lifecycle?.onDemand && component.state === 'stopped';
+  const warning =
+    !sleeping &&
+    ['unhealthy', 'stopped', 'conflict', 'missing'].includes(component.state);
   return (
     <li className="space-y-2 rounded-lg border border-border bg-background/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -58,7 +60,9 @@ function ComponentRow({ component }: { component: ManagerComponent }) {
                 ? 'bg-emerald-500'
                 : warning
                   ? 'bg-destructive'
-                  : 'bg-amber-500',
+                  : sleeping
+                    ? 'bg-muted-foreground'
+                    : 'bg-amber-500',
             )}
           />
           <span className="truncate text-sm font-medium">
@@ -69,6 +73,18 @@ function ComponentRow({ component }: { component: ManagerComponent }) {
           {t(translationKey(stateLabels[component.state]))}
         </span>
       </div>
+      {component.lifecycle?.onDemand && (
+        <p className="text-xs text-muted-foreground">
+          {tm('optionalServiceIdle', {
+            minutes: component.lifecycle.idleSeconds / 60,
+          })}
+        </p>
+      )}
+      {component.id === 'appCatalog' && (
+        <p className="text-xs text-muted-foreground">
+          {tm('byparrManagedUpdates')}
+        </p>
+      )}
       <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
         <span>
           {t('managerAdoption')}:{' '}
@@ -158,10 +174,14 @@ export function ManagerStatusCard() {
     retry: false,
   });
   const data = query.data;
+  const core = data?.components.filter((c) => !c.observational) ?? [];
   const nativelyManaged =
-    data?.components.length === 3 &&
-    new Set(data.components.map((component) => component.id)).size === 3 &&
-    data.components.every((component) => component.adoption === 'managed');
+    [3, 4].includes(core.length) &&
+    new Set(core.map((c) => c.id)).size === core.length &&
+    ['application', 'ingress', 'egress'].every((id) =>
+      core.some((c) => c.id === id),
+    ) &&
+    core.every((c) => c.adoption === 'managed');
   const canAdopt =
     !!data?.available &&
     data.adoption?.state === 'eligible' &&

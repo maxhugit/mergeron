@@ -139,3 +139,32 @@ fournisseur SSO : les deux domaines doivent résoudre vers des adresses publique
   Le test utilise un serveur HTTP loopback éphémère sans données utilisateur,
   vérifie une page `X-Frame-Options: DENY` et sélectionne son bouton. Cette
   exception de fixture ne modifie pas la politique réseau de production.
+
+## Démarrage à la demande et arrêt après inactivité
+
+Cette évolution nécessite un Manager et une application qui la prennent en charge. Les versions
+antérieures conservent leur raccordement direct ; la publication du code ne modifie pas une installation existante.
+
+Lorsque le navigateur est géré par le Manager, ouvrir un navigateur distant demande sa mise en route.
+Si le service n’est pas encore disponible, une fenêtre « Démarrage du navigateur » attend le contrôle
+de santé avant de créer une page. L’utilisateur peut annuler l’attente ; aucune navigation ne sera
+lancée ensuite par cette demande. Un échec ou un délai dépassé est signalé sans exposer l’endpoint
+privé, les jetons ou les diagnostics Docker. Le mode extension locale n’utilise pas ce conteneur.
+
+Chaque processus applicatif renouvelle une réservation tant qu’il conserve des sessions de navigateur.
+Changer de conversation ou masquer le panneau ne ferme donc pas les pages conservées. Les règles
+existantes d’expiration des sessions restent applicables. Après fermeture ou expiration de toutes
+les sessions, le Manager attend cinq minutes par défaut, puis arrête uniquement le navigateur de
+sa pile. Le délai est défini par `MERGERON_BROWSER_IDLE_SECONDS` ; le délai de démarrage par
+`MERGERON_BROWSER_STARTUP_SECONDS`. Une réservation abandonnée expire après 90 secondes.
+Le redémarrage du Manager accorde un nouveau délai d’inactivité pour permettre leur renouvellement.
+
+L’arrêt du conteneur libère sa mémoire ; il ne constitue pas une sauvegarde des pages ou des connexions.
+Les réservations empêchent l’arrêt automatique d’un navigateur conservant encore une session active.
+Aucun volume de profil, privilège supplémentaire, port hôte ou accès au socket Docker n’est ajouté.
+Avant tout démarrage ou arrêt, le Manager vérifie son identité, l’image, les deux réseaux privés/prévus,
+le DNS et les protections Chromium. Une dérive bloque l’opération.
+
+La vérification périodique des images continue lorsque le navigateur est arrêté. Une transaction de
+mise à jour ou de retour arrière conserve cet état arrêté ; elle ne démarre pas ce service uniquement
+pour effectuer les contrôles des autres composants. La fenêtre d’attente vérifiera sa santé au prochain réveil.
