@@ -1,3 +1,4 @@
+import { AgentTeamObserver } from './agent-team-observer.service';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { APP_GUARD } from '@nestjs/core';
@@ -94,6 +95,7 @@ beforeEach(async () => {
       AgentTeamsService,
       { provide: AgentTeamLaunchService, useValue: {} },
       AgentTeamControlsService,
+      { provide: AgentTeamObserver, useValue: { observe() {} } },
       { provide: CodexProcessManager, useValue: { getGeneration: () => 1 } },
       { provide: ThreadHistoryService, useValue: {} },
       { provide: ThreadsService, useValue: {} },

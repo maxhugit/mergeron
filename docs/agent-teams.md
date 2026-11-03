@@ -154,3 +154,11 @@ Le contrat a aussi été vérifié localement avec les CLI 0.153.2 et 0.166.0-al
 Le chat affiche une demande courte de lancement. Les instructions techniques
 d’orchestration sont masquées dans les messages courants et historiques ; le plan
 complet reste consultable dans le panneau et dans la confirmation.
+
+La réconciliation peut retrouver un accusé de réception perdu grâce à une
+référence de mission unique conservée dans le plan natif. Elle relit au maximum
+20 tours, exige une correspondance unique puis reprojette les observations de
+création des enfants. Elle ne rejoue aucun outil. Une absence ou une ambiguïté
+laisse l’état inconnu. Le test du vrai CLI vérifie également la persistance de
+cette référence dans `thread/turns/list` ; il ne suppose pas que le CLI conserve
+`clientUserMessageId` comme identifiant natif du message.

@@ -147,12 +147,33 @@ const server = http.createServer(async (request, response) => {
     input: [
       {
         type: 'text',
-        text: 'ROOT_FIXTURE: delegate independent tasks using native subagents.',
+        text: 'ROOT_FIXTURE [mergeron-team:fixture]: delegate independent tasks using native subagents.',
         text_elements: [],
       },
     ],
   });
   await done;
+  const history = await rpc('thread/turns/list', {
+    threadId: rootId,
+    limit: 1,
+    sortDirection: 'desc',
+    itemsView: 'full',
+  });
+  assert.equal(
+    history.data.filter((turn) =>
+      turn.items.some(
+        (item) =>
+          item.type === 'userMessage' &&
+          item.content.some(
+            (block) =>
+              block.type === 'text' &&
+              block.text.includes('[mergeron-team:fixture]'),
+          ),
+      ),
+    ).length,
+    1,
+    'An uncertain dispatch must be correlatable without replay',
+  );
   assert.equal(rootRequests, 4);
   const successful = spawns.filter(
     (item) => item.tool === 'spawnAgent' && item.status === 'completed',

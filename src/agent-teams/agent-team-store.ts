@@ -286,6 +286,37 @@ export class AgentTeamStore {
         .get();
       if (registeredChild && registeredChild.projectId !== parent.projectId)
         throw new ConflictException('TEAM_CHILD_PROJECT_MISMATCH');
+      const markerId = /\[mergeron-assignment:([a-f0-9-]{36})\]/i.exec(
+        prompt,
+      )?.[1];
+      if (markerId) {
+        const target = this.db
+          .select({ team: agentTeams })
+          .from(agentTeamAssignments)
+          .innerJoin(agentTeams, eq(agentTeams.id, agentTeamAssignments.teamId))
+          .where(eq(agentTeamAssignments.id, markerId))
+          .get()?.team;
+        if (
+          target &&
+          target.projectId === parent.projectId &&
+          target.coordinatorThreadId === parentId &&
+          target.origin === 'planned' &&
+          !target.nativeTurnId &&
+          ['dispatching', 'unknown'].includes(target.state)
+        ) {
+          // A completed native spawn carries both the parent turn and our assignment nonce.
+          this.db
+            .update(agentTeams)
+            .set({ nativeTurnId: turnId })
+            .where(
+              and(
+                eq(agentTeams.id, target.id),
+                sql`${agentTeams.nativeTurnId} IS NULL`,
+              ),
+            )
+            .run();
+        }
+      }
       const existingChild = this.child(childId);
       if (existingChild) {
         if (
@@ -391,6 +422,22 @@ export class AgentTeamStore {
       .run();
   }
 
+  bindRecoveredTurn(projectId: string, id: string, turnId: string) {
+    if (!turnId) return;
+    this.db
+      .update(agentTeams)
+      .set({ nativeTurnId: turnId })
+      .where(
+        and(
+          eq(agentTeams.id, id),
+          eq(agentTeams.projectId, projectId),
+          eq(agentTeams.origin, 'planned'),
+          eq(agentTeams.state, 'unknown'),
+          sql`${agentTeams.nativeTurnId} IS NULL`,
+        ),
+      )
+      .run();
+  }
   bindDispatchTurn(threadId: string, turnId: string) {
     if (!turnId) return;
     this.db

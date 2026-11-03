@@ -198,6 +198,7 @@ export class AgentTeamLaunchService implements OnModuleInit {
       await this.capability();
       this.idle(identity, projectId, teamId);
       const instructions = [
+        `Team dispatch reference: [mergeron-team:${team.id}]`,
         'Execute the explicitly approved team plan below using your native subagent tools. Do not simulate delegation.',
         'At most two open subagents at once. Do not delegate recursively. Close completed children before opening another.',
         'Children analyze and report without modifying files. This instruction does not change inherited native permissions. You alone write and consolidate; no parallel file edits.',
