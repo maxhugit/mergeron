@@ -76,7 +76,6 @@ import {
   TASK_ADVICE_SCHEMA,
 } from './project-ai-schemas';
 
-const ORPHAN_ASSOCIATION_GRACE_MS = 5 * 60_000;
 const REASONING_EFFORTS = new Set([
   'none',
   'minimal',
@@ -1031,23 +1030,8 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         { thread: effectiveThreads[index], archived: entry.archived },
       ]),
     );
-    // Active folders are explicit choices. Upstream cwd observations never
-    // rewrite them: a running turn retains the snapshot it started with.
-    // Codex does not expose empty placeholders as conversations. Keep a short
-    // grace period for a freshly-created agent, then discard only its WebUI
-    // association when it never became visible or was deleted elsewhere.
-    if (snapshot) {
-      const orphanCutoff = Date.now() - ORPHAN_ASSOCIATION_GRACE_MS;
-      for (const agent of agents)
-        if (
-          !threadMetadata.has(agent.threadId) &&
-          agent.updatedAt < orphanCutoff
-        )
-          this.db
-            .delete(projectAgentThreads)
-            .where(eq(projectAgentThreads.threadId, agent.threadId))
-            .run();
-    }
+    // Missing list metadata is not deletion evidence (empty agents, stale
+    // discovery and restarts). Only explicit deletion may remove membership.
     return this.db
       .select()
       .from(projects)

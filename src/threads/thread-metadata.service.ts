@@ -1,7 +1,9 @@
 /** Shared, in-memory input to sidebar projections; never used to authorize deletion. */
+import { AgentProjectMembershipService } from '../active-folders/agent-project-membership.service';
 import {
   Injectable,
   Logger,
+  Optional,
   OnModuleDestroy,
   OnModuleInit,
   ServiceUnavailableException,
@@ -90,13 +92,17 @@ export class ThreadMetadataService implements OnModuleInit, OnModuleDestroy {
   /** Started conversations not yet listable upstream, with an expiry. */
   private readonly pendingListing = new Map<string, number>();
   /** Empty conversations created here but not returned by thread/list yet. */
+  private readonly deletedThreadIds = new Set<string>();
   private readonly provisionalThreads = new Map<string, v2.Thread>();
 
   constructor(
     private readonly codex: CodexService,
     private readonly manager: CodexProcessManager,
+    @Optional() private readonly memberships?: AgentProjectMembershipService,
   ) {
     manager.addListener('notification', (notification: ServerNotification) => {
+      if (notification.method === 'thread/deleted')
+        this.deletedThreadIds.add(notification.params.threadId);
       if (notification.method === 'thread/deleted' && this.collection) {
         // Positive deletion evidence can update the last usable collection
         // immediately. A failed later discovery must not make this row reappear.
@@ -414,6 +420,54 @@ export class ThreadMetadataService implements OnModuleInit, OnModuleDestroy {
           } while (cursor);
         }
         if (this.stopped) return;
+        // Recover project ownership after native/agent-tool creations or a
+        // crash between upstream creation and the local response commit.
+        for (const entry of entries) this.memberships?.observe(entry.thread);
+        // The upstream list may omit empty or temporarily undiscovered agents.
+        // Read known members by ID without resuming or running them, including
+        // after an application restart when the provisional map is empty.
+        for (const member of this.memberships?.listMembers() ?? []) {
+          const threadId = member.id;
+          if (
+            this.deletedThreadIds.has(threadId) ||
+            ids.has(threadId) ||
+            this.provisionalThreads.has(threadId)
+          )
+            continue;
+          try {
+            const response = await this.codex.request<v2.ThreadReadResponse>(
+              'thread/read',
+              { threadId, includeTurns: false },
+            );
+            if (response.thread.id !== threadId || response.thread.ephemeral)
+              continue;
+            const previous = this.collection?.entries.find(
+              (e) => e.thread.id === threadId,
+            );
+            entries.push({
+              thread: response.thread,
+              archived: previous?.archived ?? member.archivedAt !== null,
+            });
+            ids.add(threadId);
+          } catch {
+            // Discovery failure is not permission to erase durable ownership.
+            const previous = this.collection?.entries.find(
+              (e) => e.thread.id === threadId,
+            );
+            if (previous) {
+              entries.push(previous);
+              ids.add(threadId);
+            }
+          }
+        }
+        if (
+          this.stopped ||
+          generation !== this.manager.getGeneration() ||
+          sequence !== this.changeSequence
+        ) {
+          superseded = true;
+          return;
+        }
         const provisionalEntries = [...this.provisionalThreads.values()]
           .filter((thread) => !ids.has(thread.id))
           .map((thread) => ({ thread, archived: false }));
