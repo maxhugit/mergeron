@@ -54,11 +54,13 @@ export function AgentTeamActions({
   team,
   assignmentId,
   onChanged,
+  launchBlocked = false,
 }: {
   projectId: string;
   team: AgentTeamDetail;
   assignmentId: string;
   onChanged: () => void;
+  launchBlocked?: boolean;
 }) {
   const { t } = useTranslation('teams');
   const [confirmStop, setConfirmStop] = useState(false),
@@ -107,7 +109,11 @@ export function AgentTeamActions({
       {team.state === 'draft' && team.canRespond && (
         <>
           <p className="text-xs text-muted-foreground">{t('draftReady')}</p>
-          <Button size="sm" onClick={() => setConfirmLaunch(true)}>
+          <Button
+            size="sm"
+            disabled={launchBlocked}
+            onClick={() => setConfirmLaunch(true)}
+          >
             {t('launchTeam')}
           </Button>
         </>

@@ -60,10 +60,15 @@ export class AgentTeamStore {
       (team.coordinatorStatus === 'failed' ||
         team.coordinatorStatus === 'interrupted') &&
       team.assignments.every((a) =>
-        ['completed', 'failed', 'cancelled'].includes(a.status),
+        ['planned', 'completed', 'failed', 'cancelled'].includes(a.status),
       )
     )
       this.state(projectId, id, 'failed');
+    else if (
+      team.coordinatorStatus === 'failed' ||
+      team.coordinatorStatus === 'interrupted'
+    )
+      this.state(projectId, id, 'needs_attention', 'TEAM_COORDINATOR_FAILED');
   }
 
   attention(projectId: string, id: string, generation: number) {
@@ -198,6 +203,7 @@ export class AgentTeamStore {
         state: agentTeams.state,
         lastError: agentTeams.lastError,
         objective: agentTeams.objective,
+        deliverableId: agentTeams.deliverableId,
         createdAt: agentTeams.createdAt,
       })
       .from(agentTeams)
@@ -216,6 +222,7 @@ export class AgentTeamStore {
         id: agentTeamAssignments.id,
         teamId: agentTeamAssignments.teamId,
         role: agentTeamAssignments.role,
+        taskId: agentTeamAssignments.taskId,
         dependencies: agentTeamAssignments.dependencies,
         nativeThreadId: agentTeamAssignments.nativeThreadId,
         status: agentTeamAssignments.status,

@@ -191,3 +191,14 @@ describe('durable team foundation', () => {
     });
   });
 });
+it('reports a coordinator failure before delegation as failure instead of leaving the team running', () => {
+  const team = store.create('p', 'coordinator', input());
+  store.state('p', team.id, 'dispatching');
+  store.bindDispatchTurn('coordinator', 'failed-turn');
+  store.state('p', team.id, 'running');
+  store.parentObservation('coordinator', 'failed-turn', 'failed');
+  expect(store.read('p', team.id).state).toBe('failed');
+  expect(
+    store.read('p', team.id).assignments.every((a) => a.status === 'planned'),
+  ).toBe(true);
+});

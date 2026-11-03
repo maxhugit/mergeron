@@ -1,3 +1,4 @@
+import { AgentTeamVisibilityService } from './agent-team-visibility.service';
 import { AgentTeamObserver } from './agent-team-observer.service';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -143,7 +144,10 @@ beforeEach(() => {
   runtime.resumeThread.mockReset();
   pending.readPending.mockReset().mockReturnValue({ requests: [] });
   controls = new AgentTeamControlsService(
-    new AgentTeamsService(store, identities),
+    new AgentTeamsService(store, identities, {
+      assert() {},
+      canRead: () => true,
+    } as unknown as AgentTeamVisibilityService),
     identities,
     history as unknown as ThreadHistoryService,
     runtime as unknown as ThreadsService,

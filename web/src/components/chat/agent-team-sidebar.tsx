@@ -1,5 +1,6 @@
+import { AgentTeamBusinessContext } from './agent-team-business-context';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Bot,
@@ -23,6 +24,7 @@ import {
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
 import { AgentTeamPrepare } from './agent-team-prepare';
+import { AgentTeamMissionStatus } from './agent-team-mission-status';
 import { AgentTeamActions } from './agent-team-actions';
 
 const icons = {
@@ -55,6 +57,7 @@ export function AgentTeamSidebar({
   active,
   desktop,
   onClose,
+  initialTeamId,
 }: {
   projectId: string;
   coordinator: string;
@@ -62,8 +65,11 @@ export function AgentTeamSidebar({
   active: boolean;
   desktop: boolean;
   onClose: () => void;
+  initialTeamId?: string;
 }) {
   const { t } = useTranslation('teams');
+  const client = useQueryClient();
+  const [businessDirty, setBusinessDirty] = useState(false);
   const labels = {
     planned: t('states.planned'),
     running: t('states.running'),
@@ -75,7 +81,9 @@ export function AgentTeamSidebar({
     approval: t('states.approval'),
     question: t('states.question'),
   };
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(
+    initialTeamId ?? null,
+  );
   const [selectedAssignment, setSelectedAssignment] = useState<string | null>(
     null,
   );
@@ -86,13 +94,34 @@ export function AgentTeamSidebar({
     refetchInterval: open && active ? 5000 : false,
   });
   const teams = listing.isError ? [] : (listing.data?.teams ?? []);
-  const team = teams.find((team) => team.id === selectedTeam) ?? teams[0];
+  const selectedId = selectedTeam ?? teams[0]?.id;
+  const summary = teams.find((team) => team.id === selectedId);
   const details = useQuery({
-    queryKey: ['agent-team', projectId, team?.id],
-    queryFn: ({ signal }) => readAgentTeam(projectId, team!.id, signal),
-    enabled: open && active && !!team && !listing.isError,
+    queryKey: ['agent-team', projectId, selectedId],
+    queryFn: ({ signal }) => readAgentTeam(projectId, selectedId!, signal),
+    enabled: open && active && !!selectedId && !listing.isError,
     refetchInterval: open && active ? 5000 : false,
   });
+  const team =
+    summary ??
+    (!details.isError &&
+    !!details.data &&
+    details.data.id === selectedId &&
+    details.data.coordinatorThreadId === coordinator
+      ? details.data
+      : undefined);
+  const availableTeams =
+    team && !teams.some((row) => row.id === team.id) ? [team, ...teams] : teams;
+  const changed = () => {
+    void listing.refetch();
+    void details.refetch();
+    void client.invalidateQueries({
+      queryKey: ['agent-team-contributions', projectId],
+    });
+    void client.invalidateQueries({
+      queryKey: ['project-resource', projectId],
+    });
+  };
   const assignments = team?.assignments ?? [];
   const selected =
     assignments.find((a) => a.id === selectedAssignment) ?? assignments[0];
@@ -146,10 +175,16 @@ export function AgentTeamSidebar({
             }}
           />
         )}
-        {!listing.isPending && !listing.isError && !teams.length && (
-          <p className="text-muted-foreground">{t('empty')}</p>
+        {!listing.isPending &&
+          !listing.isError &&
+          !teams.length &&
+          !selectedId && <p className="text-muted-foreground">{t('empty')}</p>}
+        {details.isError && !team && (
+          <p role="alert" className="break-words text-destructive">
+            {getApiErrorMessage(details.error)}
+          </p>
         )}
-        {!!teams.length && (
+        {!!team && (
           <>
             <label className="block space-y-1">
               <span>{t('mission')}</span>
@@ -161,7 +196,7 @@ export function AgentTeamSidebar({
                   setSelectedAssignment(null);
                 }}
               >
-                {teams.map((team) => (
+                {availableTeams.map((team) => (
                   <option value={team.id} key={team.id}>
                     {team.objective}
                   </option>
@@ -169,6 +204,20 @@ export function AgentTeamSidebar({
               </select>
             </label>
             <p className="text-xs text-muted-foreground">{t('coordinator')}</p>
+            {!details.isError && details.data && (
+              <AgentTeamMissionStatus team={details.data} />
+            )}
+            {!details.isError && details.data && (
+              <AgentTeamBusinessContext
+                key={team.id}
+                projectId={projectId}
+                team={details.data}
+                assignmentId={selected?.id ?? ''}
+                active={active && open}
+                onChanged={changed}
+                onDirtyChange={setBusinessDirty}
+              />
+            )}
             <div className="space-y-2" aria-label={t('members')}>
               {assignments.map((assignment) => {
                 const pending = details.isError
@@ -263,10 +312,8 @@ export function AgentTeamSidebar({
                 projectId={projectId}
                 team={details.data}
                 assignmentId={selected.id}
-                onChanged={() => {
-                  void listing.refetch();
-                  void details.refetch();
-                }}
+                launchBlocked={businessDirty}
+                onChanged={changed}
               />
             )}
           </>

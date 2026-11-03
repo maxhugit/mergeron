@@ -1,3 +1,4 @@
+import { AgentTeamBusinessService } from './agent-team-business.service';
 /** Durable, explicit native dispatch. An uncertain send is never replayed. */
 import {
   BadRequestException,
@@ -34,6 +35,7 @@ export class AgentTeamLaunchService implements OnModuleInit {
     private readonly threads: ThreadsService,
     private readonly inventory: ThreadExecutionInventoryService,
     private readonly pending: PendingApprovalsService,
+    private readonly business: AgentTeamBusinessService,
   ) {}
   onModuleInit() {
     // Preparing precedes the synchronous beforeSend boundary: no input was sent.
@@ -116,6 +118,7 @@ export class AgentTeamLaunchService implements OnModuleInit {
   private idle(identity: PlatformIdentity, projectId: string, teamId: string) {
     const team = this.teams.read(identity, projectId, teamId);
     this.actor(identity, projectId, team.coordinatorThreadId);
+    this.business.assertLaunch(identity, projectId, team);
     if (
       !['preparing', 'dispatching'].includes(team.state) ||
       team.stopRequestedAt
@@ -157,6 +160,7 @@ export class AgentTeamLaunchService implements OnModuleInit {
   async launch(identity: PlatformIdentity, projectId: string, teamId: string) {
     const team = this.teams.read(identity, projectId, teamId),
       actor = this.actor(identity, projectId, team.coordinatorThreadId);
+    this.business.assertLaunch(identity, projectId, team);
     if (team.state !== 'draft' || team.nativeTurnId)
       throw new ConflictException('TEAM_ALREADY_DISPATCHED');
     // SQLite claim survives another HTTP request or process replacement.
@@ -206,10 +210,12 @@ export class AgentTeamLaunchService implements OnModuleInit {
         'Put the exact assignment marker at the beginning of each child message, followed by its instructions. Preserve that marker; never substitute another assignment.',
         'Do not create or complete business tasks, validate deliverables, merge or deploy unless separately authorized. Report blocked or failed assignments honestly.',
         `Objective: ${team.objective}`,
+        `Linked deliverable ID: ${team.deliverableId ?? 'none'}. Consult business details through the project MCP when needed.`,
         ...team.assignments.map((a) =>
           JSON.stringify({
             marker: `[mergeron-assignment:${a.id}]`,
             role: a.role,
+            taskId: a.taskId,
             instructions: a.instructions,
             dependsOn: a.dependencies,
           }),
