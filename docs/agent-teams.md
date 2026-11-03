@@ -150,3 +150,7 @@ un dossier temporaire sans compte, avec un fournisseur Responses déterministe
 sur localhost. Il vérifie la limite native, le refus du troisième enfant, la
 filiation et l’historique paginé. Il est exécuté dans les contrôles backend CI.
 Le contrat a aussi été vérifié localement avec les CLI 0.153.2 et 0.166.0-alpha.5.1.
+
+Le chat affiche une demande courte de lancement. Les instructions techniques
+d’orchestration sont masquées dans les messages courants et historiques ; le plan
+complet reste consultable dans le panneau et dans la confirmation.

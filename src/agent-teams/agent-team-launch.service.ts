@@ -220,7 +220,24 @@ export class AgentTeamLaunchService implements OnModuleInit {
           this.threads.startTurn(
             {
               threadId: team.coordinatorThreadId,
-              input: [{ type: 'text', text: instructions, text_elements: [] }],
+              input: [
+                {
+                  type: 'text',
+                  text:
+                    '<mergeron_team_plan>\n' +
+                    instructions.replaceAll(
+                      '</mergeron_team_plan>',
+                      '< /mergeron_team_plan>',
+                    ) +
+                    '\n</mergeron_team_plan>',
+                  text_elements: [],
+                },
+                {
+                  type: 'text',
+                  text: `Lancer l’équipe : ${team.objective}`,
+                  text_elements: [],
+                },
+              ],
             },
             {
               assertIdle: () => this.idle(identity, projectId, teamId),

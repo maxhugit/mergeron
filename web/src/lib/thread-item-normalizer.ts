@@ -165,7 +165,11 @@ function normalizeUserMessage(
             /^<document_publication>\n[\s\S]*?\n<\/document_publication>\n*/,
             '',
           );
-        if (message) text.push(message);
+        const visible = message.replace(
+          /^<mergeron_team_plan>\n[\s\S]*?\n<\/mergeron_team_plan>\n*/,
+          '',
+        );
+        if (visible) text.push(visible);
       } else if (
         block.type === 'localImage' &&
         typeof block.path === 'string'

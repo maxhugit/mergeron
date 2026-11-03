@@ -303,6 +303,28 @@ describe('normalizeThreadItem', () => {
       },
     });
   });
+  it('keeps generated team orchestration out of chat while retaining the mission request', () => {
+    for (const completed of [false, true]) {
+      expect(
+        normalizeThreadItem(
+          {
+            type: 'userMessage',
+            content: [
+              {
+                type: 'text',
+                text: '<mergeron_team_plan>\nNative tool instructions and role markers\n</mergeron_team_plan>',
+              },
+              { type: 'text', text: 'Lancer l’équipe : Préparer le dossier' },
+            ],
+          },
+          completed,
+        ),
+      ).toMatchObject({
+        kind: 'userMessage',
+        message: { text: 'Lancer l’équipe : Préparer le dossier' },
+      });
+    }
+  });
   it('hides current and historical project snapshots while preserving user text and attachments', () => {
     const context =
       '<mergeron_project_context>\nCurrent server-provided project snapshot; supersedes earlier snapshots.\n{"tasks":["secret"]}\n</mergeron_project_context>';
