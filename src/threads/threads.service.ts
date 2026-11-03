@@ -1,6 +1,7 @@
 /**
  * Handles thread and turn operations by delegating to Codex app-server.
  */
+import { AgentProjectMembershipService } from '../active-folders/agent-project-membership.service';
 import { assertCopyPermissionProfile } from '../projects/agent-copy-permissions';
 import { boundedApprovalPolicy } from './agent-approval-policy';
 import {
@@ -143,6 +144,7 @@ export class ThreadsService {
     private readonly metadata: ThreadMetadataService,
     private readonly projectConnections: ProjectConnectionPolicyService,
     private readonly activeFolders: ActiveFoldersService,
+    private readonly memberships: AgentProjectMembershipService,
     @Optional() private readonly knowledge?: ProjectKnowledgeService,
     @Optional() private readonly deliverables?: DeliverablesService,
     @Optional() private readonly gitMutations?: GitMutationGateService,
@@ -172,6 +174,7 @@ export class ThreadsService {
   ): Promise<v2.ThreadStartResponse> {
     requireExecutionAccess();
     this.connections?.assertOpen();
+    const location = this.memberships.requireLocation(params.cwd);
     await this.processManager?.ensureDocumentIsolation(params.cwd);
     const settingsGeneration = this.resumeRegistry.getGeneration();
     const projectPolicy = await this.projectConnections.policyForCwd(
@@ -243,6 +246,18 @@ export class ThreadsService {
         message,
         { threadId: response.thread.id },
       );
+    }
+    if (!params.ephemeral) {
+      try {
+        this.memberships.bind(
+          response.thread.id,
+          params.cwd!,
+          location.projectId,
+        );
+      } catch (error) {
+        await this.deleteUntrackedThread(response.thread.id);
+        throw error;
+      }
     }
     this.resumeRegistry.cacheResponse(
       response.thread.id,
@@ -1107,6 +1122,7 @@ export class ThreadsService {
         'deferGoalContinuation cannot be combined with ephemeral forks',
       );
     }
+    this.memberships.requireSource(threadId);
     const source = await this.history.readThreadMetadata(threadId);
     if (source.thread.id !== threadId) {
       throw new BusinessException(
@@ -1161,12 +1177,14 @@ export class ThreadsService {
     }
 
     try {
-      this.branchMutations.recordLocalFork({
-        sourceThreadId: threadId,
-        childThreadId,
-        treeRootThreadId,
-        inheritedTurnIds,
-      });
+      this.memberships.withInherited(threadId, childThreadId, () =>
+        this.branchMutations.recordLocalFork({
+          sourceThreadId: threadId,
+          childThreadId,
+          treeRootThreadId,
+          inheritedTurnIds,
+        }),
+      );
     } catch (err) {
       // A durable edge is the commit boundary. Never compensate after it, even
       // if a later local projection unexpectedly fails.

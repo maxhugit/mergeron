@@ -5,6 +5,19 @@ importer, fermer les projets et ouvrir les projets. L’import garde ses contrô
 administrateur habituels. Fermer et ouvrir replient ou déplient seulement les
 groupes visibles dans la barre latérale : aucun agent ni conteneur n’est arrêté.
 
+## Rattachement des agents
+
+Un agent de travail est rattaché à un projet avant que le serveur confirme sa
+création, qu’il soit créé depuis le projet, un livrable ou une autre action.
+Sans dossier de projet valide, la création est refusée. Les branches et les
+sous-agents conservent le projet de leur agent d’origine.
+
+Le rattachement est enregistré durablement. Une absence temporaire dans la liste
+Codex, un agent encore vide ou un redémarrage ne le suppriment pas. Le serveur
+peut relire les métadonnées d’un agent connu sans lancer son exécution. Les liens
+explicites de dossier permettent aussi de réparer un rattachement ancien manquant.
+Seule une suppression explicite doit retirer le lien au projet.
+
 ## Se concentrer sur un projet
 
 L’œil est placé avant le **+**, qui reste aligné à droite. Il isole un projet

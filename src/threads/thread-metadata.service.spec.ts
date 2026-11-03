@@ -21,6 +21,10 @@ describe('ThreadMetadataService', () => {
         params: v2.ThreadListParams,
       ) => Promise<v2.ThreadListResponse>
     >();
+  const memberships = {
+    observe: vi.fn(),
+    listMembers: vi.fn(() => [] as { id: string; archivedAt: number | null }[]),
+  };
   let generation: number;
   let service: ThreadMetadataService;
   const page = (
@@ -36,6 +40,7 @@ describe('ThreadMetadataService', () => {
     vi.useFakeTimers();
     events.removeAllListeners();
     generation = 1;
+    memberships.listMembers.mockReset().mockReturnValue([]);
     request
       .mockReset()
       .mockImplementation((_method, params) =>
@@ -53,6 +58,7 @@ describe('ThreadMetadataService', () => {
         getGeneration: () => generation,
         getClient: () => ({}),
       } as unknown as CodexProcessManager,
+      memberships as never,
     );
   });
   afterEach(() => {
@@ -219,6 +225,50 @@ describe('ThreadMetadataService', () => {
       (await service.read()).entries.map((entry) => entry.thread.id),
     ).toEqual(['archived']);
     expect((await service.read()).freshness.stale).toBe(true);
+  });
+  it('rediscovers durable project members absent from thread/list after restart, without resuming them', async () => {
+    memberships.listMembers.mockReturnValue([
+      { id: 'bound', archivedAt: null },
+    ]);
+    request.mockImplementation(((
+      method: string,
+      params: { archived?: boolean },
+    ) =>
+      Promise.resolve(
+        method === 'thread/read'
+          ? {
+              thread: makeThreadFixture({
+                id: 'bound',
+                name: 'Deliverable agent',
+              }),
+            }
+          : page(params.archived ? ['archived'] : ['active']),
+      )) as never);
+    const snapshot = await service.read();
+    expect(snapshot.entries.map((e) => e.thread.id)).toContain('bound');
+    expect(request).toHaveBeenCalledWith('thread/read', {
+      threadId: 'bound',
+      includeTurns: false,
+    });
+    expect(
+      request.mock.calls.some(([method]) => method === 'thread/resume'),
+    ).toBe(false);
+  });
+
+  it('keeps the last metadata when an explicitly bound agent is missing from both discovery and a temporary read failure', async () => {
+    await service.read();
+    memberships.listMembers.mockReturnValue([
+      { id: 'active', archivedAt: null },
+    ]);
+    request.mockImplementation((method: string) =>
+      method === 'thread/read'
+        ? Promise.reject(Error('temporarily unavailable'))
+        : Promise.resolve(page([])),
+    );
+    await service.refresh();
+    expect((await service.read()).entries.map((e) => e.thread.id)).toContain(
+      'active',
+    );
   });
 });
 

@@ -653,6 +653,15 @@ export class DeliverablesService implements OnModuleInit {
     const folder = this.activeFolders.get('deliverable', id);
     if (!folder || folder.state !== 'ready')
       throw new ConflictException('Deliverable active folder is unresolved');
+    const bound = this.db
+      .select()
+      .from(projectAgentThreads)
+      .where(eq(projectAgentThreads.threadId, threadId))
+      .get();
+    if (bound && bound.projectId !== projectId)
+      throw new ConflictException(
+        'Conversations cannot be moved between projects',
+      );
     const now = Date.now();
     this.db.transaction((tx) => {
       if (existing) {
@@ -671,6 +680,7 @@ export class DeliverablesService implements OnModuleInit {
             createdAt: now,
             updatedAt: now,
           })
+          .onConflictDoNothing({ target: projectAgentThreads.threadId })
           .run();
       if (
         !tx

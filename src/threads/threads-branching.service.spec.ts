@@ -38,6 +38,11 @@ describe('ThreadsBranchingService', () => {
       mockResumeRegistry as unknown as ThreadResumeRegistryService,
       mockBranches as unknown as ConversationBranchesService,
       mockHistory as unknown as ThreadHistoryService,
+      {
+        requireSource: vi.fn(),
+        withInherited: <T>(_s: string, _c: string, commit: () => T): T =>
+          commit(),
+      } as never,
     );
     mockCodex.request.mockReset();
     Object.values(mockResumeRegistry).forEach((mock) => mock.mockReset());

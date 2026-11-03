@@ -1,3 +1,4 @@
+import { AgentProjectMembershipService } from '../active-folders/agent-project-membership.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ThreadsService } from './threads.service';
 import { CodexService } from '../codex/codex.service';
@@ -41,6 +42,14 @@ function localBranchState(threadId: string) {
 
 describe('ThreadsService', () => {
   let service: ThreadsService;
+  const mockMemberships = {
+    requireLocation: vi.fn(() => ({ projectId: 'p' })),
+    bind: vi.fn(),
+    requireSource: vi.fn(),
+    withInherited: vi.fn(
+      <T>(_source: string, _child: string, commit: () => T): T => commit(),
+    ),
+  };
   const mockCodex = { request: vi.fn() };
   const mockResumeRegistry = {
     isResumed: vi.fn(() => true),
@@ -106,6 +115,7 @@ describe('ThreadsService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: AgentProjectMembershipService, useValue: mockMemberships },
         { provide: ActiveFoldersService, useValue: mockActiveFolders },
         { provide: ProjectKnowledgeService, useValue: mockKnowledge },
         { provide: ProjectAgentToolsService, useValue: mockProjectTools },
@@ -144,6 +154,16 @@ describe('ThreadsService', () => {
     }).compile();
 
     service = module.get(ThreadsService);
+    mockMemberships.requireLocation
+      .mockReset()
+      .mockReturnValue({ projectId: 'p' });
+    mockMemberships.bind.mockReset();
+    mockMemberships.requireSource.mockReset();
+    mockMemberships.withInherited
+      .mockReset()
+      .mockImplementation(
+        <T>(_s: string, _c: string, commit: () => T): T => commit(),
+      );
     mockPreferences.forTurn.mockReset().mockReturnValue({});
     mockCodex.request.mockReset();
     mockInternalMcp.prepare.mockReset().mockReturnValue(null);
@@ -191,6 +211,46 @@ describe('ThreadsService', () => {
     mockBranches.resolveTreeRootThreadId.mockImplementation(
       (threadId: string): string => threadId,
     );
+  });
+
+  it('rejects projectless creation before contacting Codex', async () => {
+    mockMemberships.requireLocation.mockImplementationOnce(() => {
+      throw Error('Select a project folder');
+    });
+    await expect(service.startThread({ cwd: '/outside' })).rejects.toThrow(
+      'Select a project folder',
+    );
+    expect(mockCodex.request).not.toHaveBeenCalled();
+  });
+
+  it('persists project membership before publishing a newly created agent', async () => {
+    const response = { thread: { id: 'new', historyMode: 'paginated' } };
+    mockCodex.request.mockResolvedValue(response);
+    await service.startThread({ cwd: '/p/livrables/d' });
+    expect(mockMemberships.bind).toHaveBeenCalledWith(
+      'new',
+      '/p/livrables/d',
+      'p',
+    );
+    expect(mockMemberships.bind.mock.invocationCallOrder[0]).toBeLessThan(
+      mockMetadata.publishStartedThread.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('fails creation and compensates if durable membership cannot be recorded', async () => {
+    mockCodex.request.mockResolvedValue({
+      thread: { id: 'new', historyMode: 'paginated' },
+    });
+    mockMemberships.bind.mockImplementationOnce(() => {
+      throw Error('membership failed');
+    });
+    await expect(service.startThread({ cwd: '/p' })).rejects.toThrow(
+      'membership failed',
+    );
+    expect(mockMetadata.publishStartedThread).not.toHaveBeenCalled();
+    expect(mockCodex.request).toHaveBeenCalledWith('thread/delete', {
+      threadId: 'new',
+    });
   });
 
   it('starts new threads in paginated history mode', async () => {

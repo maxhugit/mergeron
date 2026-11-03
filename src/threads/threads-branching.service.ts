@@ -1,4 +1,5 @@
 /** Implements tracked message-level branching on top of thread/fork. */
+import { AgentProjectMembershipService } from '../active-folders/agent-project-membership.service';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { CodexService } from '../codex/codex.service';
 import type { v2 } from '../codex/codex-schema';
@@ -57,6 +58,7 @@ export class ThreadsBranchingService {
     private readonly resumeRegistry: ThreadResumeRegistryService,
     private readonly branches: ConversationBranchesService,
     private readonly history: ThreadHistoryService,
+    private readonly memberships: AgentProjectMembershipService,
   ) {}
 
   /**
@@ -70,6 +72,7 @@ export class ThreadsBranchingService {
     sourceThreadId: string,
     body: CreateMessageBranchDto,
   ): Promise<CreateMessageBranchResult> {
+    this.memberships.requireSource(sourceThreadId);
     const editedTurnId = this.readEditedTurnId(body);
     const branchPreviewText = this.readBranchPreviewText(body);
     let sourceTurnIds: string[];
@@ -182,16 +185,21 @@ export class ThreadsBranchingService {
       ConversationBranchesService['recordMessageBranch']
     >;
     try {
-      recorded = this.branches.recordMessageBranch({
+      recorded = this.memberships.withInherited(
         sourceThreadId,
         childThreadId,
-        treeRootThreadId,
-        commonPrefixTurnId,
-        editedTurnId,
-        inheritedTurnIds: expectedPrefixTurnIds,
-        originalPreviewText,
-        branchPreviewText,
-      });
+        () =>
+          this.branches.recordMessageBranch({
+            sourceThreadId,
+            childThreadId,
+            treeRootThreadId,
+            commonPrefixTurnId,
+            editedTurnId,
+            inheritedTurnIds: expectedPrefixTurnIds,
+            originalPreviewText,
+            branchPreviewText,
+          }),
+      );
     } catch (err) {
       // `recordMessageBranch` builds its response DTO after committing. A
       // projection failure must never delete a child whose edge is durable.

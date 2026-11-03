@@ -75,3 +75,38 @@ it('projects archive metadata only for archived agents, without inventing legacy
     archivedByName: null,
   });
 });
+
+it('never removes durable project membership because an agent is absent from discovery', async () => {
+  database.db
+    .insert(projects)
+    .values({
+      id: 'p',
+      name: 'P',
+      workspacePath: '/p',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  database.db
+    .insert(projectAgentThreads)
+    .values({
+      threadId: 'delayed',
+      projectId: 'p',
+      workspacePath: '/p',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  const service = Object.create(ProjectsService.prototype) as ProjectsService;
+  Object.assign(service, {
+    db: database.db,
+    ensurePrimaryWorkspaces: vi.fn().mockResolvedValue(undefined),
+    metadata: { read: () => Promise.resolve({ entries: [] }) },
+    overrides: { applyToThreads: (threads: unknown[]) => threads },
+  });
+  await service.list();
+  await service.list();
+  expect(database.db.select().from(projectAgentThreads).all()).toMatchObject([
+    { threadId: 'delayed', projectId: 'p' },
+  ]);
+});
