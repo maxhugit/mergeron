@@ -22,6 +22,7 @@ import {
 } from '@/lib/agent-teams-api';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
+import { AgentTeamPrepare } from './agent-team-prepare';
 import { AgentTeamActions } from './agent-team-actions';
 
 const icons = {
@@ -133,6 +134,17 @@ export function AgentTeamSidebar({
           <p role="alert" className="break-words text-destructive">
             {getApiErrorMessage(listing.error)}
           </p>
+        )}
+        {!listing.isError && listing.data?.launchAvailable && (
+          <AgentTeamPrepare
+            projectId={projectId}
+            coordinator={coordinator}
+            onPrepared={(id) => {
+              setSelectedTeam(id);
+              setSelectedAssignment(null);
+              void listing.refetch();
+            }}
+          />
         )}
         {!listing.isPending && !listing.isError && !teams.length && (
           <p className="text-muted-foreground">{t('empty')}</p>

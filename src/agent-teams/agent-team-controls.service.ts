@@ -14,6 +14,7 @@ import { CodexProcessManager } from '../codex/codex-process-manager.service';
 import { ThreadHistoryService } from '../threads/thread-history.service';
 import { ThreadsService } from '../threads/threads.service';
 import { PendingApprovalsService } from '../pending-approvals/pending-approvals.service';
+import { AgentTeamObserver } from './agent-team-observer.service';
 import { AgentTeamsService } from './agent-teams.service';
 import type { AssignmentStatus } from './agent-team-store';
 
@@ -39,6 +40,7 @@ export class AgentTeamControlsService {
     private readonly threads: ThreadsService,
     private readonly manager: CodexProcessManager,
     private readonly pending: PendingApprovalsService,
+    private readonly observer: AgentTeamObserver,
   ) {}
 
   private actor(identity: PlatformIdentity, projectId: string, teamId: string) {
@@ -169,7 +171,49 @@ export class AgentTeamControlsService {
   ) {
     const { team } = this.actor(identity, projectId, teamId),
       generation = this.manager.getGeneration();
-    for (const assignment of team.assignments) {
+    const parent = await this.history.listTurns({
+      threadId: team.coordinatorThreadId,
+      limit: 20,
+      sortDirection: 'desc',
+      itemsView: 'full',
+    });
+    this.generation(generation);
+    this.actor(identity, projectId, teamId);
+    let turnId = team.nativeTurnId;
+    if (!turnId && team.state === 'unknown' && team.origin === 'planned') {
+      const matches = parent.data.filter((turn) =>
+        turn.items.some(
+          (item) =>
+            item.type === 'userMessage' &&
+            item.content.some(
+              (block) =>
+                block.type === 'text' &&
+                block.text.includes('<mergeron_team_plan>\n') &&
+                block.text.includes(`[mergeron-team:${team.id}]`),
+            ),
+        ),
+      );
+      if (matches.length === 1) {
+        this.teams.store.bindRecoveredTurn(projectId, teamId, matches[0].id);
+        turnId = this.teams.store.read(projectId, teamId).nativeTurnId;
+      }
+    }
+    const turn = parent.data.find((t) => t.id === turnId);
+    if (turn) {
+      // Reproject trusted persisted native tool evidence, never commands or decisions.
+      for (const item of turn.items)
+        if (item.type === 'collabAgentToolCall')
+          this.observer.observe({
+            method: 'item/completed',
+            params: {
+              threadId: team.coordinatorThreadId,
+              turnId: turn.id,
+              item,
+            },
+          });
+    }
+    for (const assignment of this.teams.store.read(projectId, teamId)
+      .assignments) {
       if (!assignment.nativeThreadId || terminal(assignment.status)) continue;
       await this.nativeChild(
         team.coordinatorThreadId,
@@ -206,15 +250,6 @@ export class AgentTeamControlsService {
           status,
         );
     }
-    const parent = await this.history.listTurns({
-      threadId: team.coordinatorThreadId,
-      limit: 20,
-      sortDirection: 'desc',
-      itemsView: 'summary',
-    });
-    this.generation(generation);
-    this.actor(identity, projectId, teamId);
-    const turn = parent.data.find((t) => t.id === team.nativeTurnId);
     if (turn?.status === 'inProgress' && !team.stopRequestedAt)
       this.teams.store.state(projectId, teamId, 'running');
     if (turn && turn.status !== 'inProgress')
@@ -236,6 +271,12 @@ export class AgentTeamControlsService {
 
   async stop(identity: PlatformIdentity, projectId: string, teamId: string) {
     const { team, actor } = this.actor(identity, projectId, teamId);
+    if (['draft', 'preparing'].includes(team.state) && !team.nativeTurnId) {
+      this.teams.store.requestStop(projectId, teamId, actor.personId!);
+      this.teams.store.cancelPlanned(projectId, teamId);
+      this.teams.store.state(projectId, teamId, 'stopped');
+      return this.details(identity, projectId, teamId);
+    }
     if (['completed', 'stopped'].includes(team.state))
       return this.details(identity, projectId, teamId);
     if (this.stopping.has(teamId))

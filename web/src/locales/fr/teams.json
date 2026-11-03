@@ -41,5 +41,19 @@
   "stopTitle": "Arrêter cette équipe ?",
   "stopDescription": "Le travail en cours sera interrompu lorsque son état peut être confirmé. Les modifications et résultats existants sont conservés. Un arrêt incertain sera signalé explicitement.",
   "cancel": "Annuler",
-  "confirmStop": "Arrêter le travail"
+  "confirmStop": "Arrêter le travail",
+  "prepareTeam": "Préparer une équipe",
+  "objective": "Objectif",
+  "launchSafeguards": "Deux sous-agents natifs au maximum travaillent simultanément. Ils héritent des permissions de cet agent. Les rôles demandent une analyse sans modification de fichiers ; seul le coordinateur rédige et consolide. L’écriture parallèle isolée n’est pas encore disponible.",
+  "roleName": "Rôle",
+  "chooseDependencies": "Attendre les résultats de ces rôles",
+  "removeRole": "Retirer ce rôle",
+  "addRole": "Ajouter un rôle",
+  "saveProfiles": "Enregistrer les profils du projet",
+  "profilesSaved": "Profils du projet enregistrés. Les missions existantes sont conservées.",
+  "reviewPlan": "Préparer le plan",
+  "draftReady": "Plan enregistré. Relisez tous les rôles avant de confirmer le lancement.",
+  "launchTeam": "Lancer cette équipe…",
+  "launchTitle": "Lancer le plan relu ?",
+  "confirmLaunch": "Confirmer le lancement"
 }

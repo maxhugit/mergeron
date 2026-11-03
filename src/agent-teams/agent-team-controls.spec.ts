@@ -1,3 +1,4 @@
+import { AgentTeamObserver } from './agent-team-observer.service';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
@@ -148,6 +149,10 @@ beforeEach(() => {
     runtime as unknown as ThreadsService,
     { getGeneration: () => generation } as CodexProcessManager,
     pending as unknown as PendingApprovalsService,
+    new AgentTeamObserver(store, {
+      addListener: () => {},
+      addLifecycleListener: () => () => {},
+    } as unknown as CodexProcessManager),
   );
 });
 afterEach(() => database.sqlite.close());
@@ -265,4 +270,78 @@ describe('team execution controls', () => {
     );
     expect(runtime.resumeThread).not.toHaveBeenCalled();
   });
+});
+it('recovers a lost acknowledgement from persisted native plan and spawn evidence without sending work', async () => {
+  const planned = store.create('p', 'parent', {
+    requestId: 'lost',
+    objective: 'Recover this mission',
+    assignments: [{ key: 'read', role: 'Reader', instructions: 'Analyze' }],
+  });
+  store.state('p', planned.id, 'unknown', 'TEAM_DISPATCH_UNCERTAIN');
+  const accepted = turn('accepted-turn', 'completed');
+  accepted.items = [
+    {
+      type: 'userMessage',
+      id: 'native-user',
+      content: [
+        {
+          type: 'text',
+          text: `<mergeron_team_plan>\nTeam dispatch reference: [mergeron-team:${planned.id}]\n</mergeron_team_plan>`,
+          text_elements: [],
+        },
+      ],
+    },
+    {
+      type: 'collabAgentToolCall',
+      id: 'native-spawn',
+      tool: 'spawnAgent',
+      status: 'completed',
+      senderThreadId: 'parent',
+      receiverThreadIds: ['recovered-child'],
+      prompt: `[mergeron-assignment:${planned.assignments[0].id}] Analyze`,
+      agentsStates: {
+        'recovered-child': { status: 'completed', message: 'Recovered answer' },
+      },
+    },
+  ];
+  nativeTurns.parent = [accepted];
+  const result = await controls.reconcile(actor(), 'p', planned.id);
+  expect(result).toMatchObject({
+    state: 'completed',
+    nativeTurnId: 'accepted-turn',
+  });
+  expect(result.assignments[0]).toMatchObject({
+    nativeThreadId: 'recovered-child',
+    status: 'completed',
+    result: 'Recovered answer',
+  });
+  expect(runtime.startTurn).not.toHaveBeenCalled();
+  expect(runtime.resumeThread).not.toHaveBeenCalled();
+});
+it('refuses an ambiguous duplicate plan marker instead of choosing a turn', async () => {
+  const planned = store.create('p', 'parent', {
+    requestId: 'ambiguous',
+    objective: 'Keep uncertain',
+    assignments: [{ key: 'read', role: 'Reader', instructions: 'Analyze' }],
+  });
+  store.state('p', planned.id, 'unknown');
+  nativeTurns.parent = ['one', 'two'].map((id) => ({
+    ...turn(id, 'completed'),
+    items: [
+      {
+        type: 'userMessage',
+        id: `user-${id}`,
+        content: [
+          {
+            type: 'text',
+            text: `<mergeron_team_plan>\n[mergeron-team:${planned.id}]\n</mergeron_team_plan>`,
+            text_elements: [],
+          },
+        ],
+      },
+    ],
+  }));
+  const result = await controls.reconcile(actor(), 'p', planned.id);
+  expect(result).toMatchObject({ state: 'unknown', nativeTurnId: null });
+  expect(runtime.startTurn).not.toHaveBeenCalled();
 });

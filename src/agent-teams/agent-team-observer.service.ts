@@ -69,12 +69,14 @@ export class AgentTeamObserver implements OnModuleInit, OnModuleDestroy {
           undefined,
           string(item.text),
         );
-      if (note.method === 'turn/started')
+      if (note.method === 'turn/started') {
+        this.store.bindDispatchTurn(threadId, string(record(params.turn).id));
         this.store.parentObservation(
           threadId,
           string(record(params.turn).id),
           'inProgress',
         );
+      }
       if (note.method === 'turn/completed') {
         const turn = record(params.turn),
           status = string(turn.status);

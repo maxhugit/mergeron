@@ -41,5 +41,19 @@
   "stopTitle": "Stop this team?",
   "stopDescription": "The current work will be interrupted where its state can be confirmed. Existing changes and results are kept. An uncertain stop will be reported explicitly.",
   "cancel": "Cancel",
-  "confirmStop": "Stop the work"
+  "confirmStop": "Stop the work",
+  "prepareTeam": "Prepare a team",
+  "objective": "Objective",
+  "launchSafeguards": "At most two native subagents run at once. They inherit this agent’s permissions. Roles request analysis without file edits; only the coordinator writes and consolidates. Isolated parallel writing is not available yet.",
+  "roleName": "Role",
+  "chooseDependencies": "Wait for these roles",
+  "removeRole": "Remove role",
+  "addRole": "Add role",
+  "saveProfiles": "Save project role profiles",
+  "profilesSaved": "Project profiles saved. Existing missions are unchanged.",
+  "reviewPlan": "Prepare the plan",
+  "draftReady": "Plan saved. Review all roles before confirming the launch.",
+  "launchTeam": "Launch this team…",
+  "launchTitle": "Launch the reviewed plan?",
+  "confirmLaunch": "Confirm launch"
 }

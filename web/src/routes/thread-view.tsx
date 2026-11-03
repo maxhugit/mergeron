@@ -531,6 +531,7 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
         {teamOpen && previewProject && (
           <Suspense fallback={null}>
             <AgentTeamSidebar
+              key={`${previewProject.id}:${threadId}`}
               projectId={previewProject.id}
               coordinator={threadId}
               open={teamOpen}

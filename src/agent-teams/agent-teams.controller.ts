@@ -1,4 +1,6 @@
 import {
+  Body,
+  Put,
   Controller,
   Get,
   Header,
@@ -8,6 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { AgentTeamLaunchService } from './agent-team-launch.service';
 import type { IdentityRequest } from '../auth/platform-access.guard';
 import { AgentTeamsService } from './agent-teams.service';
 import { AgentTeamControlsService } from './agent-team-controls.service';
@@ -17,6 +20,7 @@ export class AgentTeamsController {
   constructor(
     private readonly teams: AgentTeamsService,
     private readonly controls: AgentTeamControlsService,
+    private readonly launchService: AgentTeamLaunchService,
   ) {}
   @Get()
   @Header('Cache-Control', 'no-store')
@@ -26,6 +30,56 @@ export class AgentTeamsController {
     @Query('coordinator') coordinator: string,
   ) {
     return this.teams.list(req.platformIdentity!, projectId, coordinator);
+  }
+  @Get('profiles')
+  @Header('Cache-Control', 'no-store')
+  profiles(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Query('coordinator') coordinator: string,
+  ) {
+    return this.launchService.profiles(
+      req.platformIdentity!,
+      projectId,
+      coordinator,
+    );
+  }
+  @Put('profiles')
+  profilesWrite(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Query('coordinator') coordinator: string,
+    @Body() body: unknown,
+  ) {
+    return this.launchService.saveProfiles(
+      req.platformIdentity!,
+      projectId,
+      coordinator,
+      body,
+    );
+  }
+  @Post('prepare')
+  prepare(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Query('coordinator') coordinator: string,
+    @Body() body: unknown,
+  ) {
+    return this.launchService.prepare(
+      req.platformIdentity!,
+      projectId,
+      coordinator,
+      body,
+    );
+  }
+  @Post(':teamId/launch')
+  @HttpCode(200)
+  launch(
+    @Req() req: IdentityRequest,
+    @Param('projectId') projectId: string,
+    @Param('teamId') teamId: string,
+  ) {
+    return this.launchService.launch(req.platformIdentity!, projectId, teamId);
   }
   @Get(':teamId')
   @Header('Cache-Control', 'no-store')
