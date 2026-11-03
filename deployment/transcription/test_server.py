@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import subprocess
 import sys
+import time
 import uuid
 import threading
 import unittest
@@ -48,4 +49,31 @@ class PrivateAPI(unittest.TestCase):
             with server.LOCK:
                 server.JOBS.pop(identifier,None)
             server.remove(job)
+    def test_extracts_and_downloads_real_audio_through_private_api(self):
+        identifier=str(uuid.uuid4())
+        auth={'Authorization':'Bearer '+server.TOKEN}
+        with tempfile.TemporaryDirectory(prefix='media-api-fixture-') as path:
+            video=Path(path)/'video.mp4'
+            subprocess.run(['ffmpeg','-nostdin','-v','error','-f','lavfi','-i','color=c=blue:s=64x64:r=10:d=1','-f','lavfi','-i','sine=frequency=440:duration=1','-t','1','-c:v','mpeg4','-c:a','aac',str(video)],check=True,timeout=30)
+            self.assertEqual(self.request('POST','/jobs',{**auth,'X-Job-Id':identifier,'X-Media-Operation':'extract'},video.read_bytes())[0],202)
+            try:
+                deadline=time.monotonic()+30
+                while time.monotonic()<deadline:
+                    _,job=self.request('GET','/jobs/'+identifier,auth)
+                    self.assertNotEqual(job['state'],'failed',job)
+                    if job['state']=='ready':break
+                    time.sleep(.1)
+                else:self.fail('real audio extraction timed out')
+                self.assertIsNone(job['result'])
+                connection=http.client.HTTPConnection('127.0.0.1',self.http.server_port,timeout=5)
+                connection.request('GET','/jobs/'+identifier+'/audio',headers=auth)
+                response=connection.getresponse();data=response.read();connection.close()
+                self.assertEqual(response.status,200)
+                self.assertEqual(response.getheader('Content-Type'),'audio/mpeg')
+                self.assertEqual(len(data),job['audio']['size'])
+                directory=server.JOBS[identifier]['directory']
+            finally:
+                self.request('DELETE','/jobs/'+identifier,auth)
+            self.assertNotIn(identifier,server.JOBS)
+            self.assertFalse(Path(directory).exists())
 if __name__=='__main__':unittest.main()

@@ -1776,6 +1776,18 @@ export const transcriptionJobs = sqliteTable(
     owner: text('owner').notNull(),
     filename: text('filename').notNull(),
     sourceKey: text('source_key').notNull(),
+    operation: text('operation').notNull().default('transcribe'),
+    audio: text('audio', { mode: 'json' }).$type<{
+      size: number;
+      sha256: string;
+      filename: string;
+      mime: 'audio/mpeg';
+      duration: number;
+    }>(),
+    projectId: text('project_id'),
+    threadId: text('thread_id'),
+    requestKey: text('request_key'),
+    requestDigest: text('request_digest'),
     state: text('state').notNull(),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
@@ -1784,5 +1796,6 @@ export const transcriptionJobs = sqliteTable(
   },
   (table) => [
     index('transcription_owner_source').on(table.owner, table.sourceKey),
+    uniqueIndex('transcription_request_key').on(table.requestKey),
   ],
 );

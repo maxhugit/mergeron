@@ -11,11 +11,11 @@ import {
 
 describe('internal MCP public names and stable execution identities', () => {
   it('gives every schema exactly one canonical definition and localized title', () => {
-    expect(INTERNAL_MCP_TOOLS).toHaveLength(21);
+    expect(INTERNAL_MCP_TOOLS).toHaveLength(23);
     expect(INTERNAL_MCP_TOOLS.map((t) => t.operation)).toEqual(
       INTERNAL_MCP_IDENTITIES.map((t) => t.operation),
     );
-    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(21);
+    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(23);
     for (const tool of INTERNAL_MCP_TOOLS) {
       expect(tool.titleFr).toContain(' — ');
       expect(tool.title).toContain(' — ');
@@ -107,8 +107,12 @@ describe('internal MCP public names and stable execution identities', () => {
             'agent_monitor_report',
           ].includes(operation),
       );
-      expect(tool.policy.administratorOnly).toBe(tool.handler !== 'project');
-      expect(tool.policy.forbidImpersonation).toBe(tool.handler !== 'project');
+      expect(tool.policy.administratorOnly).toBe(
+        tool.handler !== 'project' || operation === 'project_media_manage',
+      );
+      expect(tool.policy.forbidImpersonation).toBe(
+        tool.handler !== 'project' || operation === 'project_media_manage',
+      );
     }
     expect(internalMcpTransportApprovals()).toEqual({
       agent_monitor_manage: { approval_mode: 'approve' },

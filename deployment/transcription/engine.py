@@ -1,4 +1,5 @@
 """Offline CPU inference. Called in an owned subprocess so cancellation releases RAM."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -53,7 +54,7 @@ def attach_speakers(segments, turns):
     return output
 
 
-def transcribe(directory):
+def transcribe(directory, operation="transcribe"):
     directory = Path(directory)
     progress(directory, "decoding")
     decoded = directory / "audio.wav"
@@ -63,6 +64,36 @@ def transcribe(directory):
         duration = audio.getnframes() / audio.getframerate()
         if duration <= 0 or duration > MAX_SECONDS:
             raise ValueError("TRANSCRIPTION_DURATION")
+    audio_result = None
+    if operation in {"extract", "both"}:
+        progress(directory, "extracting")
+        target_audio = directory / "audio.mp3"
+        subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-protocol_whitelist", "file,pipe", "-i", str(directory / "input"), "-map", "0:a:0", "-vn", "-map_metadata", "-1", "-c:a", "libmp3lame", "-b:a", "96k", "-ar", "44100", "-ac", "2", str(target_audio)], check=True, timeout=300, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        size = target_audio.stat().st_size
+        if not 0 < size <= 128 * 1024**2:
+            raise ValueError("TRANSCRIPTION_AUDIO_LIMIT")
+        with target_audio.open("rb") as audio_file:
+            digest = hashlib.file_digest(audio_file, "sha256").hexdigest()
+        audio_result = {"size": size, "sha256": digest, "mime": "audio/mpeg", "duration": duration}
+    result = None
+    transcription_error = None
+    if operation != "extract":
+        try:
+            result = recognize(directory, decoded, duration)
+        except Exception:
+            if operation != "both":
+                raise
+            transcription_error = "TRANSCRIPTION_ENGINE_FAILED"
+    payload = {"transcript": result, "audio": audio_result, "transcriptionError": transcription_error}
+    target = directory / "result.json"
+    target.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf8")
+    if target.stat().st_size > 4 * 1024**2:
+        target.unlink()
+        raise ValueError("TRANSCRIPTION_RESULT_LIMIT")
+    progress(directory, "ready")
+
+
+def recognize(directory, decoded, duration):
     progress(directory, "loading")
     from faster_whisper import WhisperModel
     model = WhisperModel("/models/asr", device="cpu", compute_type="int8", cpu_threads=2, num_workers=1, local_files_only=True)
@@ -90,23 +121,21 @@ def transcribe(directory):
             result["diarization"] = {"state": "failed", "reason": "diarization_failed"}
     for segment in result["segments"]:
         segment.pop("words", None)
-    target = directory / "result.json"
-    target.write_text(json.dumps(result, ensure_ascii=False), encoding="utf8")
-    if target.stat().st_size > 4 * 1024**2:
-        target.unlink()
-        raise ValueError("TRANSCRIPTION_RESULT_LIMIT")
-    progress(directory, "ready")
+    return result
 
 
 if __name__ == "__main__":
     try:
-        transcribe(sys.argv[1])
+        operation = sys.argv[2] if len(sys.argv) > 2 else "transcribe"
+        if operation not in {"transcribe", "extract", "both"}:
+            raise ValueError("TRANSCRIPTION_INVALID_OPERATION")
+        transcribe(sys.argv[1], operation)
     except Exception as error:
-        code = str(error) if str(error) in {"TRANSCRIPTION_DURATION", "TRANSCRIPTION_RESULT_LIMIT"} else "TRANSCRIPTION_PROCESSING_FAILED"
+        code = str(error) if str(error) in {"TRANSCRIPTION_DURATION", "TRANSCRIPTION_RESULT_LIMIT", "TRANSCRIPTION_AUDIO_LIMIT", "TRANSCRIPTION_INVALID_OPERATION"} else "TRANSCRIPTION_PROCESSING_FAILED"
         if code == "TRANSCRIPTION_PROCESSING_FAILED":
             try:
                 phase = json.loads((Path(sys.argv[1]) / "progress.json").read_text())["phase"]
-                code = {"decoding": "TRANSCRIPTION_DECODE_FAILED", "loading": "TRANSCRIPTION_MODEL_UNAVAILABLE", "transcribing": "TRANSCRIPTION_ENGINE_FAILED"}.get(phase, code)
+                code = {"decoding": "TRANSCRIPTION_DECODE_FAILED", "extracting": "TRANSCRIPTION_EXTRACTION_FAILED", "loading": "TRANSCRIPTION_MODEL_UNAVAILABLE", "transcribing": "TRANSCRIPTION_ENGINE_FAILED"}.get(phase, code)
             except (OSError, ValueError, KeyError):
                 pass
         progress(sys.argv[1], "failed")

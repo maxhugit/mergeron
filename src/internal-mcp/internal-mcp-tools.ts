@@ -65,6 +65,24 @@ const definitions = {
     handler: 'project',
     policy: monitorWrite,
   },
+  project_media_read: {
+    name: 'project_media_read',
+    title: 'Media — Read service, documents or job',
+    titleFr: 'Médias — Consulter le service, les documents ou une tâche',
+    handler: 'project',
+    policy: projectRead,
+  },
+  project_media_manage: {
+    name: 'project_media_manage',
+    title: 'Media — Extract, transcribe or publish audio',
+    titleFr: 'Médias — Extraire, transcrire ou publier l’audio',
+    handler: 'project',
+    policy: {
+      ...projectWrite,
+      administratorOnly: true,
+      forbidImpersonation: true,
+    },
+  },
   project_preview_read: {
     name: 'project_preview_read',
     title: 'Test environment — Read status or logs',

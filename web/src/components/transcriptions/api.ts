@@ -16,7 +16,16 @@ export interface Transcript {
     speakerCount?: number;
   };
 }
+export type MediaOperation = 'transcribe' | 'extract' | 'both';
 export interface TranscriptionJob {
+  operation?: MediaOperation;
+  audio?: {
+    filename: string;
+    size: number;
+    duration: number;
+    sha256: string;
+    mime: 'audio/mpeg';
+  } | null;
   id: string;
   filename: string;
   state: string;
@@ -59,4 +68,21 @@ export function transcriptSrt(result: Transcript) {
         `${i + 1}\n${stamp(s.start)} --> ${stamp(s.end)}\n${s.speaker ? s.speaker + ': ' : ''}${s.text}\n`,
     )
     .join('\n');
+}
+
+export async function downloadJobAudio(job: TranscriptionJob) {
+  const headers = new Headers();
+  const auth = getAuthorizationHeader();
+  if (auth) headers.set('Authorization', auth);
+  const response = await fetch(
+    withBasePath('/api/transcriptions/jobs/' + job.id + '/audio'),
+    { headers, credentials: 'same-origin' },
+  );
+  if (!response.ok) throw Error('HTTP ' + response.status);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = job.audio?.filename ?? 'audio.mp3';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

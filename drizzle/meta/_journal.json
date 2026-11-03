@@ -470,6 +470,13 @@
       "when": 1793617800000,
       "tag": "0066_transcription_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1793704200000,
+      "tag": "0067_media_audio_extraction",
+      "breakpoints": true
     }
   ]
 }

@@ -8,10 +8,13 @@ personnes. La qualité et les chevauchements de voix peuvent affecter l’attrib
 
 ## Utilisation et limites
 
-Ouvrir un audio ou une vidéo dans l’explorateur, puis choisir **Transcrire**.
+Ouvrir un audio ou une vidéo dans l’explorateur, puis choisir **Extraire l’audio**,
+**Transcrire** ou **Audio + transcription**. L’extraction seule ne charge aucun
+modèle de reconnaissance vocale. Elle convertit la première piste audio en MP3
+stéréo 96 kbit/s, 44,1 kHz ; le fichier vidéo original reste inchangé.
 L’interface indique l’attente du service, le décodage, le chargement du modèle,
 la transcription et la séparation éventuelle des locuteurs. Télécharger ensuite
-le résultat en TXT, SRT ou JSON. Annuler interrompt le traitement et supprime son
+le MP3 extrait et, si demandée, la transcription en TXT, SRT ou JSON. Annuler interrompt le traitement et supprime son
 résultat. Un échec de diarisation conserve le texte avec un avertissement explicite.
 
 Limites : 128 Mio et deux heures par fichier, une tâche exécutée à la fois,
@@ -21,6 +24,42 @@ administrateur ; les identités techniques ne peuvent pas utiliser ces API.
 Le plafond de conservation est de 100 résultats par personne et 1 000 au total.
 Supprimer un ancien résultat libère une place : aucun résultat existant n’est
 supprimé arbitrairement pour accepter une demande.
+
+## Demande à l’agent et publication dans un livrable
+
+Ajouter la vidéo comme document d’un livrable du projet, puis demander par exemple :
+« Extrais la piste audio de cette vidéo et ajoute le MP3 à ce livrable ».
+L’agent dispose de `project_media_read` (service, documents et versions, état d’une
+tâche) et `project_media_manage` (démarrer, annuler, publier). Les modes sont
+`extract`, `transcribe` et `both`. Aucun chemin libre ni URL distante n’est accepté.
+Le dépôt initial dans un livrable reste soumis à sa limite existante de 100 Mio.
+Le MP3 à 96 kbit/s reste sous cette limite pour deux heures d’audio.
+Le projet et la conversation sont liés par le serveur ; le document est lu depuis
+sa version immuable et son empreinte est revérifiée à la copie.
+
+L’agent doit annoncer une réussite complète uniquement lorsque l’état est `ready`.
+Avec le mode combiné, un échec de reconnaissance conserve le MP3 déjà extrait :
+l’état `partial` indique explicitement que seule la piste audio est prête, sans
+annoncer de réussite de la transcription.
+La publication ajoute un nouveau document MP3 au livrable choisi, via le mécanisme
+normal de versions, sans écraser un fichier existant. Elle nécessite une demande
+humaine explicite et un tour administrateur avec écriture. Les clés `requestId`
+restent identiques lors d’une vérification/reprise ; une publication incertaine
+nécessite une inspection, pas une nouvelle tentative sous un autre identifiant.
+Les droits du tour sont revérifiés au moment de la publication effective.
+Les tâches sont privées à leur personne, leur projet et leur conversation ; une
+conversation ne peut pas consulter ou annuler le travail d’un autre agent.
+
+Les fichiers audio privés occupent au maximum 512 Mio par personne et 2 Gio au
+total, avec réservation d’espace pour les tâches déjà acceptées. Ils sont conservés
+dans `transcription-media/<id>/audio.mp3` à côté de la base SQLite pendant la même
+durée que les résultats. Ces MP3 privés ne sont pas inclus dans une sauvegarde
+limitée à la base et à la configuration. Une restauration sans ces fichiers est
+détectée au redémarrage : Mergeron les signale manquants au lieu de les annoncer
+comme prêts. La taille et l’empreinte SHA-256 du téléchargement depuis
+le worker sont vérifiées avant de présenter le fichier comme prêt. Suppression
+et rétention nettoient également ces fichiers. Une copie publiée dans un livrable
+suit ensuite la conservation et les sauvegardes propres à ce livrable.
 
 ## Activation et ressources
 
@@ -102,7 +141,8 @@ tronqués, redémarrage, validation des résultats, baux, locuteurs anonymes et 
 privée. Les essais visuels utilisent des résultats synthétiques et ne prouvent
 pas une inférence réelle.
 
-La CI construit l’image CPU, la scanne selon la politique HIGH/CRITICAL existante,
+Un test local utilise FFmpeg sur une véritable vidéo synthétique et vérifie le MP3
+avec FFprobe, sans modèle ni compte. La CI construit l’image CPU, la scanne selon la politique HIGH/CRITICAL existante,
 puis transcrit deux voix synthétiques, anglaise et française, dans le vrai worker
 avec `--network none`, sans port ni compte. Elle vérifie texte, langue, segments
 et suppression des tâches. Les étiquettes mobiles ne sont promues qu’après cette

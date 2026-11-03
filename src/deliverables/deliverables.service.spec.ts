@@ -94,6 +94,28 @@ describe('project deliverables', () => {
       new ActiveFoldersService(database.db),
     );
   });
+
+  it('rejects a lost live-turn authorization before committing an uploaded audio document', async () => {
+    const item = await service.create('p', 'r', { title: 'Audio publication' });
+    async function* upload() {
+      await Promise.resolve();
+      yield {
+        filename: 'audio.mp3',
+        stream: Readable.from(['synthetic audio']),
+      };
+    }
+    await expect(
+      service.uploadDocuments('p', 'r', item.id, upload(), {
+        beforeCommit: () => {
+          throw Error('NO_ACTIVE_TURN');
+        },
+      }),
+    ).rejects.toThrow('NO_ACTIVE_TURN');
+    expect(service.documents('p', 'r', item.id)).toEqual([]);
+    await expect(
+      fs.stat(path.join(root, 'livrables', item.id, 'audio.mp3')),
+    ).rejects.toThrow();
+  });
   it.each([false, true])(
     'synchronizes explorer create, upload, save, rename and recoverable delete (protected=%s)',
     async (protectedSource) => {

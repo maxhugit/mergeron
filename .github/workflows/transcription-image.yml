@@ -25,6 +25,8 @@ jobs:
       tags: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install synthetic media tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
       - name: Check anonymous speaker mapping and bounded private API
         run: python3 -m unittest discover -s deployment/transcription -p 'test_*.py'
       - name: Resolve build identity
@@ -77,8 +79,6 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: false
           exit-code: '1'
-      - name: Install synthetic speech generator
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends espeak-ng
       - name: Transcribe synthetic audio offline in the real image
         env:
           IMAGE: ${{ inputs.publish && format('ghcr.io/maxhugit/mergeron-transcription@{0}', steps.build.outputs.digest) || format('ghcr.io/maxhugit/mergeron-transcription:candidate-{0}', github.sha) }}

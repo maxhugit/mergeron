@@ -1,10 +1,10 @@
 {
-  "title": "File transcription",
+  "title": "Audio and transcription",
   "start": "Transcribe",
   "uploading": "Preparing upload…",
   "cancel": "Cancel",
   "delete": "Delete result",
-  "privacy": "Local processing · 128 MiB / 2 hours maximum. Results kept for 30 days; temporary audio is deleted after processing.",
+  "privacy": "Local processing · 128 MiB / 2 hours maximum. Private results and MP3 files kept for 30 days; temporary copies deleted after processing.",
   "tooLarge": "File exceeds 128 MiB.",
   "failed": "Transcription failed.",
   "serviceError": "Cannot reach the transcription service.",
@@ -25,7 +25,9 @@
     "ready": "Complete",
     "failed": "Failed",
     "cancelled": "Cancelled",
-    "interrupted": "Interrupted by a restart"
+    "interrupted": "Interrupted by a restart",
+    "extracting": "Extracting audio",
+    "partial": "Audio ready · transcription failed"
   },
   "refresh": "Refresh",
   "serviceState": "State: {{state}}",
@@ -35,5 +37,9 @@
   "entryPoint": "Open an audio or video file in Mergeron and click Transcribe.",
   "emptySpeech": "No speech detected.",
   "previous": "Previous",
-  "next": "Next"
+  "next": "Next",
+  "extract": "Extract audio",
+  "both": "Audio + transcript",
+  "downloadAudio": "Download audio",
+  "audioSize": "{{kilobytes}} KiB"
 }

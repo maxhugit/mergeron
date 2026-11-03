@@ -1,10 +1,10 @@
 {
-  "title": "Transcription du fichier",
+  "title": "Audio et transcription",
   "start": "Transcrire",
   "uploading": "Préparation de l’envoi…",
   "cancel": "Annuler",
   "delete": "Supprimer le résultat",
-  "privacy": "Traitement local · 128 Mio / 2 heures maximum. Résultats conservés 30 jours ; audio temporaire supprimé après traitement.",
+  "privacy": "Traitement local · 128 Mio / 2 heures maximum. Résultats et MP3 privés conservés 30 jours ; copies temporaires supprimées après traitement.",
   "tooLarge": "Le fichier dépasse 128 Mio.",
   "failed": "La transcription a échoué.",
   "serviceError": "Le service de transcription est inaccessible.",
@@ -25,7 +25,9 @@
     "ready": "Terminée",
     "failed": "Échec",
     "cancelled": "Annulée",
-    "interrupted": "Interrompue par un redémarrage"
+    "interrupted": "Interrompue par un redémarrage",
+    "extracting": "Extraction audio",
+    "partial": "Audio prêt · transcription échouée"
   },
   "refresh": "Actualiser",
   "serviceState": "État : {{state}}",
@@ -35,5 +37,9 @@
   "entryPoint": "Ouvrez un fichier audio ou vidéo dans Mergeron puis cliquez sur Transcrire.",
   "emptySpeech": "Aucune parole détectée.",
   "previous": "Précédent",
-  "next": "Suivant"
+  "next": "Suivant",
+  "extract": "Extraire l’audio",
+  "both": "Audio + transcription",
+  "downloadAudio": "Télécharger l’audio",
+  "audioSize": "{{kilobytes}} Kio"
 }

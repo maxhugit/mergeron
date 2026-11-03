@@ -42,6 +42,14 @@ for (const width of [1280, 390])
                       state: 'ready',
                       createdAt: 1793617800000,
                       result,
+                      operation: 'both',
+                      audio: {
+                        filename: 'réunion.mp3',
+                        size: 10240,
+                        duration: 300,
+                        sha256: 'a'.repeat(64),
+                        mime: 'audio/mpeg',
+                      },
                       error: null,
                     },
                   ],
@@ -68,8 +76,17 @@ for (const width of [1280, 390])
     await expect
       .element(await screen.findByText('Langue : fr · confiance 97 %'))
       .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Extraire l’audio' }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Audio + transcription' }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Télécharger l’audio' }))
+      .toBeVisible();
     const panel = screen.getByRole('region', {
-      name: 'Transcription du fichier',
+      name: 'Audio et transcription',
     });
     const scroller = panel.querySelector('.overflow-y-auto') as HTMLElement;
     await expect

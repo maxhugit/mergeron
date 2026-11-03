@@ -11,10 +11,18 @@ import {
 import {
   mediaSourceKey,
   transcriptionRequest,
+  downloadJobAudio,
+  type MediaOperation,
   transcriptSrt,
   type TranscriptionJob,
 } from './api';
-const done = new Set(['ready', 'failed', 'cancelled', 'interrupted']);
+const done = new Set([
+  'ready',
+  'partial',
+  'failed',
+  'cancelled',
+  'interrupted',
+]);
 const MAX_BYTES = 128 * 1024 ** 2;
 export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
   const { t } = useTranslation('transcription');
@@ -56,7 +64,7 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
   const control = useRef<AbortController | null>(null);
   useEffect(() => () => control.current?.abort(), []);
   const create = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (operation: MediaOperation) => {
       const abort = new AbortController();
       control.current = abort;
       try {
@@ -85,7 +93,7 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
         const form = new FormData();
         form.append('file', new Blob(chunks), filename);
         return await transcriptionRequest<TranscriptionJob>(
-          'jobs?sourceKey=' + key,
+          'jobs?sourceKey=' + key + '&operation=' + operation,
           { method: 'POST', body: form, signal: abort.signal },
         );
       } finally {
@@ -100,6 +108,7 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
       transcriptionRequest('jobs/' + id, { method: 'DELETE' }),
     onSuccess: () => void client.invalidateQueries({ queryKey }),
   });
+  const audioDownload = useMutation({ mutationFn: downloadJobAudio });
   const download = (job: TranscriptionJob, format: 'txt' | 'srt' | 'json') => {
     if (!job.result) return;
     const text =
@@ -124,18 +133,35 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
     >
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-medium">{t('title')}</h3>
-        <Button
-          size="sm"
-          disabled={
-            !key ||
-            status.data?.enabled !== true ||
-            create.isPending ||
-            jobs.data?.some((job) => !done.has(job.state))
-          }
-          onClick={() => create.mutate()}
-        >
-          {create.isPending ? t('uploading') : t('start')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-1">
+          {(['extract', 'transcribe', 'both'] as const).map((operation) => (
+            <Button
+              key={operation}
+              size="sm"
+              variant={operation === 'transcribe' ? 'default' : 'outline'}
+              disabled={
+                !key ||
+                status.data?.enabled !== true ||
+                create.isPending ||
+                jobs.data?.some((job) => !done.has(job.state))
+              }
+              onClick={() => create.mutate(operation)}
+            >
+              {t(
+                operation === 'extract'
+                  ? 'extract'
+                  : operation === 'both'
+                    ? 'both'
+                    : 'start',
+              )}
+            </Button>
+          ))}
+          {create.isPending && (
+            <span className="text-xs" role="status">
+              {t('uploading')}
+            </span>
+          )}
+        </div>
         {create.isPending && (
           <Button
             size="sm"
@@ -154,7 +180,7 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
       ) : status.data?.enabled === false ? (
         <p className="text-sm text-muted-foreground">{t('disabled')}</p>
       ) : null}
-      {(create.isError || remove.isError) && (
+      {(create.isError || remove.isError || audioDownload.isError) && (
         <p role="alert" className="text-sm text-destructive">
           {create.error instanceof Error ? create.error.message : t('failed')}
         </p>
@@ -180,6 +206,24 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
               <p role="alert" className="text-sm text-destructive">
                 {t('failed')} ({job.error})
               </p>
+            )}
+            {job.audio && ['ready', 'partial'].includes(job.state) && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={audioDownload.isPending}
+                  onClick={() => audioDownload.mutate(job)}
+                >
+                  {t('downloadAudio')}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  MP3 ·{' '}
+                  {t('audioSize', {
+                    kilobytes: Math.ceil(job.audio.size / 1024),
+                  })}
+                </span>
+              </div>
             )}
             {job.result && (
               <>
