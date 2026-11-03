@@ -11,6 +11,58 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+/** Team definitions are not execution grants. Dispatch is installed separately. */
+export const agentTeams = sqliteTable(
+  'agent_teams',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    coordinatorThreadId: text('coordinator_thread_id').notNull(),
+    nativeTurnId: text('native_turn_id'),
+    origin: text('origin')
+      .$type<'planned' | 'observed'>()
+      .notNull()
+      .default('planned'),
+    requestId: text('request_id').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    objective: text('objective').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('idx_agent_team_request').on(
+      t.projectId,
+      t.coordinatorThreadId,
+      t.requestId,
+    ),
+  ],
+);
+
+export const agentTeamAssignments = sqliteTable(
+  'agent_team_assignments',
+  {
+    id: text('id').primaryKey(),
+    teamId: text('team_id')
+      .notNull()
+      .references(() => agentTeams.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    instructions: text('instructions').notNull(),
+    dependencies: text('dependencies', { mode: 'json' })
+      .$type<string[]>()
+      .notNull(),
+    nativeThreadId: text('native_thread_id').unique(),
+    status: text('status')
+      .$type<
+        'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown'
+      >()
+      .notNull(),
+    result: text('result'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('idx_agent_team_assignments_team').on(t.teamId)],
+);
+
 /** Durable idempotency receipts for project-scoped agent business tools. */
 export const projectAgentToolRequests = sqliteTable(
   'project_agent_tool_requests',

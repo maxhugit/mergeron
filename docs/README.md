@@ -58,6 +58,7 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 - [Extension locale Chrome, Edge et Safari sur Mac](local-browser-extension.md)
 - [Navigateur annoté et déploiement du service](navigateur-annote.md)
 - [Administration Codex](administration-codex.md)
+- [Équipes d’agents](agent-teams.md) : missions, délégation et suivi des contributions.
 - [Gestionnaire de tâches](gestionnaire-de-taches.md)
 - [Contexte projet et outils des agents](contexte-et-outils-agents.md) :
   fonctionnement utilisateur, permissions, créations et architecture technique.

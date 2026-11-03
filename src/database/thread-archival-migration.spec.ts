@@ -21,9 +21,13 @@ it('upgrades an existing installation without inventing archival metadata', () =
       readFileSync('drizzle/meta/_journal.json', 'utf8'),
     ) as { entries: { tag: string }[] };
     mkdirSync(join(directory, 'meta'));
-    const entries = journal.entries.filter(
-      (entry) => entry.tag !== '0065_thread_archival',
+    // Build the actual predecessor, not a database with newer migrations
+    // applied but archival missing: Drizzle would then skip the older timestamp.
+    const target = journal.entries.findIndex(
+      (entry) => entry.tag === '0065_thread_archival',
     );
+    expect(target).toBeGreaterThan(0);
+    const entries = journal.entries.slice(0, target);
     writeFileSync(
       join(directory, 'meta/_journal.json'),
       JSON.stringify({ ...journal, entries }),

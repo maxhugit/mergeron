@@ -37,6 +37,7 @@ import { TurnErrorsModule } from './turn-errors/turn-errors.module';
 import { PreviewsModule } from './previews/previews.module';
 import { PushModule } from './push/push.module';
 import { AgentMonitorsModule } from './agent-monitors/agent-monitors.module';
+import { AgentTeamsModule } from './agent-teams/agent-teams.module';
 import { setStaticHtmlSecurityHeaders } from './static-html-security';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -104,6 +105,7 @@ const PINO_REDACT = {
 @Module({
   imports: [
     AgentMonitorsModule,
+    AgentTeamsModule,
     BrowserModule,
     ConfigModule.forRoot({ isGlobal: true }),
     LoggerModule.forRoot({
