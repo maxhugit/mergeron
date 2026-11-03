@@ -24,10 +24,13 @@ export class AgentTeamsService {
     return actor;
   }
   list(identity: PlatformIdentity, projectId: string, coordinator: string) {
-    this.authorize(identity, projectId, coordinator);
+    const actor = this.authorize(identity, projectId, coordinator);
     return {
       teams: this.store.listSummaries(projectId, coordinator),
-      launchAvailable: false,
+      launchAvailable:
+        actor.kind === 'person' &&
+        actor.role === 'administrator' &&
+        !actor.impersonation,
     };
   }
   read(identity: PlatformIdentity, projectId: string, id: string) {

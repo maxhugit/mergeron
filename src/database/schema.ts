@@ -50,6 +50,9 @@ export const agentTeams = sqliteTable(
     }),
     lastError: text('last_error'),
     summary: text('summary'),
+    launchedBy: text('launched_by').references(() => people.id, {
+      onDelete: 'set null',
+    }),
     requestId: text('request_id').notNull(),
     fingerprint: text('fingerprint').notNull(),
     objective: text('objective').notNull(),
@@ -88,6 +91,23 @@ export const agentTeamAssignments = sqliteTable(
   },
   (t) => [index('idx_agent_team_assignments_team').on(t.teamId)],
 );
+
+export const agentTeamProfiles = sqliteTable('agent_team_profiles', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  profiles: text('profiles', { mode: 'json' })
+    .$type<
+      Array<{
+        key: string;
+        role: string;
+        instructions: string;
+        dependencies: string[];
+      }>
+    >()
+    .notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
 
 /** Durable idempotency receipts for project-scoped agent business tools. */
 export const projectAgentToolRequests = sqliteTable(

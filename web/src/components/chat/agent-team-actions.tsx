@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   controlAgentTeam,
+  launchAgentTeam,
   readTeamHistory,
   type AgentTeamDetail,
 } from '@/lib/agent-teams-api';
@@ -62,6 +63,16 @@ export function AgentTeamActions({
   const { t } = useTranslation('teams');
   const [confirmStop, setConfirmStop] = useState(false),
     [showHistory, setShowHistory] = useState(false);
+  const [confirmLaunch, setConfirmLaunch] = useState(false);
+  const launch = useMutation({
+    mutationFn: () => launchAgentTeam(projectId, team.id),
+    retry: false,
+    onSuccess: () => {
+      setConfirmLaunch(false);
+      onChanged();
+    },
+    onError: () => onChanged(),
+  });
   const assignment = team.assignments.find((a) => a.id === assignmentId);
   const mutation = useMutation({
     mutationFn: (action: 'stop' | 'reconcile') =>
@@ -93,6 +104,14 @@ export function AgentTeamActions({
     team.attention.some((request) => sources.has(request.threadId));
   return (
     <div className="space-y-3 border-t pt-3">
+      {team.state === 'draft' && team.canRespond && (
+        <>
+          <p className="text-xs text-muted-foreground">{t('draftReady')}</p>
+          <Button size="sm" onClick={() => setConfirmLaunch(true)}>
+            {t('launchTeam')}
+          </Button>
+        </>
+      )}
       {team.lastError && (
         <p
           role="alert"
@@ -198,6 +217,58 @@ export function AgentTeamActions({
           )}
         </div>
       )}
+      <Dialog
+        open={confirmLaunch}
+        onOpenChange={(value) => {
+          if (!launch.isPending) setConfirmLaunch(value);
+        }}
+      >
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('launchTitle')}</DialogTitle>
+            <DialogDescription>{t('launchSafeguards')}</DialogDescription>
+          </DialogHeader>
+          <p className="break-words font-medium">{team.objective}</p>
+          <ul className="space-y-2">
+            {team.assignments.map((a) => (
+              <li key={a.id} className="break-words">
+                <strong>{a.role}</strong>
+                <p className="whitespace-pre-wrap text-xs">{a.instructions}</p>
+                {!!a.dependencies.length && (
+                  <p className="text-xs">
+                    {t('dependencies', {
+                      names: a.dependencies
+                        .map(
+                          (id) =>
+                            team.assignments.find((item) => item.id === id)
+                              ?.role ?? t('missingDependency'),
+                        )
+                        .join(', '),
+                    })}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          {launch.isError && (
+            <p role="alert" className="break-words text-destructive">
+              {getApiErrorMessage(launch.error)}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={launch.isPending}
+              onClick={() => setConfirmLaunch(false)}
+            >
+              {t('cancel')}
+            </Button>
+            <Button disabled={launch.isPending} onClick={() => launch.mutate()}>
+              {t('confirmLaunch')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={confirmStop}
         onOpenChange={(value) => {

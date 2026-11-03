@@ -10,7 +10,7 @@ import { INTERNAL_MCP_NAME } from '../internal-mcp/internal-mcp-catalog';
 import { agentCopyPermissions } from '../projects/agent-copy-permissions';
 import { randomUUID } from 'node:crypto';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { currentAccess } from '../auth/access-context';
 import { CodexService } from '../codex/codex.service';
 import { transportOverrides } from '../codex/config-overrides';
@@ -18,6 +18,7 @@ import type { v2 } from '../codex/codex-schema';
 import type { JsonValue } from '../codex/codex-schema/serde_json/JsonValue';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
+  agentTeams,
   projectActivity,
   projectAgentThreads,
   projects,
@@ -214,6 +215,28 @@ export class ProjectConnectionPolicyService {
       model: project.agentModel,
       reasoningEffort: project.agentReasoningEffort,
       config: {
+        ...(threadId &&
+        this.db
+          .select({ id: agentTeams.id })
+          .from(agentTeams)
+          .where(
+            and(
+              eq(agentTeams.coordinatorThreadId, threadId),
+              eq(agentTeams.projectId, location.projectId),
+              eq(agentTeams.origin, 'planned'),
+              inArray(agentTeams.state, [
+                'preparing',
+                'dispatching',
+                'running',
+                'stopping',
+                'unknown',
+                'needs_attention',
+              ]),
+            ),
+          )
+          .get()
+          ? { agents: { max_threads: 2 } }
+          : {}),
         ...(project.appIds.length === 0 ? { features: { apps: false } } : {}),
         default_permissions: location.readOnly
           ? copyPermissions.readOnly

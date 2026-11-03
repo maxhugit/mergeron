@@ -139,3 +139,63 @@ export function assignmentState(
     ? 'waiting'
     : 'planned';
 }
+const profileSchema = z.object({
+  key: z.string(),
+  role: z.string(),
+  instructions: z.string(),
+  dependencies: z.array(z.string()),
+});
+export type TeamProfile = z.infer<typeof profileSchema>;
+export async function readTeamProfiles(
+  projectId: string,
+  coordinator: string,
+  signal?: AbortSignal,
+) {
+  return z
+    .array(profileSchema)
+    .parse(
+      await projectsApi<unknown>(
+        teamPath(projectId, 'profiles') +
+          '?coordinator=' +
+          encodeURIComponent(coordinator),
+        { signal },
+      ),
+    );
+}
+export async function saveTeamProfiles(
+  projectId: string,
+  coordinator: string,
+  profiles: TeamProfile[],
+) {
+  return z
+    .array(profileSchema)
+    .parse(
+      await projectsApi<unknown>(
+        teamPath(projectId, 'profiles') +
+          '?coordinator=' +
+          encodeURIComponent(coordinator),
+        { method: 'PUT', body: JSON.stringify(profiles) },
+      ),
+    );
+}
+export async function prepareAgentTeam(
+  projectId: string,
+  coordinator: string,
+  input: { requestId: string; objective: string; profiles: TeamProfile[] },
+) {
+  return detail.parse(
+    await projectsApi<unknown>(
+      teamPath(projectId, 'prepare') +
+        '?coordinator=' +
+        encodeURIComponent(coordinator),
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
+  );
+}
+export async function launchAgentTeam(projectId: string, teamId: string) {
+  return detail.parse(
+    await projectsApi<unknown>(teamPath(projectId, teamId) + '/launch', {
+      method: 'POST',
+    }),
+  );
+}

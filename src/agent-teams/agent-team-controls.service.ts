@@ -236,6 +236,12 @@ export class AgentTeamControlsService {
 
   async stop(identity: PlatformIdentity, projectId: string, teamId: string) {
     const { team, actor } = this.actor(identity, projectId, teamId);
+    if (['draft', 'preparing'].includes(team.state) && !team.nativeTurnId) {
+      this.teams.store.requestStop(projectId, teamId, actor.personId!);
+      this.teams.store.cancelPlanned(projectId, teamId);
+      this.teams.store.state(projectId, teamId, 'stopped');
+      return this.details(identity, projectId, teamId);
+    }
     if (['completed', 'stopped'].includes(team.state))
       return this.details(identity, projectId, teamId);
     if (this.stopping.has(teamId))

@@ -71,3 +71,87 @@ test.each([390, 1280])(
     });
   },
 );
+test('mobile preparation and confirmation dispatch exactly one reviewed team', async () => {
+  await page.viewport(390, 988);
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  let prepared = false,
+    launched = false;
+  const draft = {
+    ...teamFixture(),
+    id: 'prepared',
+    state: 'draft',
+    canRespond: true,
+  };
+  api.mockReset().mockImplementation((path: string, options?: RequestInit) => {
+    if (path.includes('/profiles'))
+      return Promise.resolve([
+        {
+          key: 'sources',
+          role: 'Sources',
+          instructions: 'Lire les sources',
+          dependencies: [],
+        },
+      ]);
+    if (path.includes('/prepare?')) {
+      prepared = true;
+      return Promise.resolve(draft);
+    }
+    if (path.endsWith('/launch')) {
+      launched = true;
+      return Promise.resolve({ ...draft, state: 'running' });
+    }
+    if (options?.method === 'POST') throw new Error('Unexpected write');
+    if (path.includes('?'))
+      return Promise.resolve({
+        teams: prepared ? [draft] : [],
+        launchAvailable: true,
+      });
+    return Promise.resolve(draft);
+  });
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <AgentTeamSidebar
+        projectId="p"
+        coordinator="coordinator"
+        open
+        active
+        desktop={false}
+        onClose={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  await page.getByRole('button', { name: 'Préparer une équipe' }).click();
+  await page.getByLabelText('Objectif').fill('Préparer le dossier');
+  await expect.element(page.getByLabelText('Travail confié')).toBeVisible();
+  await page.getByRole('button', { name: 'Préparer le plan' }).click();
+  await page.getByRole('button', { name: 'Lancer cette équipe…' }).click();
+  await expect
+    .element(page.getByRole('dialog', { name: 'Lancer le plan relu ?' }))
+    .toBeVisible();
+  await Promise.all(
+    Array.from(
+      document.querySelectorAll(
+        '[data-slot="dialog-content"], [data-slot="dialog-overlay"]',
+      ),
+    ).flatMap((element) =>
+      element
+        .getAnimations()
+        .map((animation) => animation.finished.catch(() => {})),
+    ),
+  );
+  await page.screenshot({
+    path: '../../../.vitest-screenshots/agent-team-launch-390.png',
+  });
+  expect(launched).toBe(false);
+  await page.getByRole('button', { name: 'Confirmer le lancement' }).click();
+  await expect.poll(() => launched).toBe(true);
+  expect(
+    api.mock.calls.filter(([path]) => String(path).endsWith('/launch')),
+  ).toHaveLength(1);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+});

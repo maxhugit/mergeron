@@ -22,6 +22,7 @@ import {
   projectAgentThreads,
 } from '../database/schema';
 import { AgentTeamStore } from './agent-team-store';
+import { AgentTeamLaunchService } from './agent-team-launch.service';
 import { AgentTeamsService } from './agent-teams.service';
 import { AgentTeamsController } from './agent-teams.controller';
 import { AgentTeamControlsService } from './agent-team-controls.service';
@@ -91,6 +92,7 @@ beforeEach(async () => {
     controllers: [AgentTeamsController],
     providers: [
       AgentTeamsService,
+      { provide: AgentTeamLaunchService, useValue: {} },
       AgentTeamControlsService,
       { provide: CodexProcessManager, useValue: { getGeneration: () => 1 } },
       { provide: ThreadHistoryService, useValue: {} },
@@ -171,7 +173,7 @@ it('rechecks revoked membership without relying on a previously cached identity'
   expect(response.statusCode).toBe(403);
   expect(response.body).not.toContain('Private project findings');
 });
-it('exposes neither a launch route nor an unfiltered list in the foundation', async () => {
+it('exposes no unfiltered list and denies readers the launch route', async () => {
   expect((await app.inject({ url: base, headers: headers() })).statusCode).toBe(
     400,
   );
@@ -183,7 +185,7 @@ it('exposes neither a launch route nor an unfiltered list in the foundation', as
         headers: headers(),
       })
     ).statusCode,
-  ).toBe(404);
+  ).toBe(403);
 });
 it('rejects reader stop and reconciliation at the HTTP authorization boundary', async () => {
   for (const action of ['stop', 'reconcile']) {

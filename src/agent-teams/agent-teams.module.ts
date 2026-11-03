@@ -1,3 +1,4 @@
+import { AgentTeamLaunchService } from './agent-team-launch.service';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { CodexModule } from '../codex/codex.module';
@@ -23,6 +24,7 @@ import { AgentTeamControlsService } from './agent-team-controls.service';
     AgentTeamObserver,
     AgentTeamsService,
     AgentTeamControlsService,
+    AgentTeamLaunchService,
   ],
   controllers: [AgentTeamsController],
 })

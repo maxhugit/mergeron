@@ -6,7 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
@@ -49,6 +49,13 @@ export class AgentTeamStore {
       team.assignments.every((a) => a.status === 'completed')
     )
       this.state(projectId, id, 'completed');
+    else if (
+      team.coordinatorStatus === 'completed' &&
+      team.assignments.every((a) =>
+        ['planned', 'completed', 'failed', 'cancelled'].includes(a.status),
+      )
+    )
+      this.state(projectId, id, 'needs_attention', 'TEAM_INCOMPLETE_PLAN');
     else if (
       (team.coordinatorStatus === 'failed' ||
         team.coordinatorStatus === 'interrupted') &&
@@ -384,25 +391,46 @@ export class AgentTeamStore {
       .run();
   }
 
-  create(projectId: string, coordinatorThreadId: string, value: unknown) {
-    const parsed = definition.safeParse(value);
-    if (!parsed.success)
-      throw new BadRequestException('TEAM_INVALID_DEFINITION');
-    const input = parsed.data;
-    const keys = new Set(input.assignments.map((a) => a.key));
-    if (keys.size !== input.assignments.length)
+  bindDispatchTurn(threadId: string, turnId: string) {
+    if (!turnId) return;
+    this.db
+      .update(agentTeams)
+      .set({ nativeTurnId: turnId, coordinatorStatus: 'inProgress' })
+      .where(
+        and(
+          eq(agentTeams.coordinatorThreadId, threadId),
+          eq(agentTeams.origin, 'planned'),
+          eq(agentTeams.state, 'dispatching'),
+          sql`${agentTeams.nativeTurnId} IS NULL`,
+        ),
+      )
+      .run();
+  }
+  validateAssignments(
+    assignments: Array<{ key: string; dependencies: string[] }>,
+  ) {
+    const keys = new Set(assignments.map((a) => a.key));
+    if (keys.size !== assignments.length)
       throw new BadRequestException('TEAM_DUPLICATE_MISSION');
     const visited = new Set<string>();
     const visit = (key: string, path = new Set<string>()) => {
       if (path.has(key)) throw new BadRequestException('TEAM_DEPENDENCY_CYCLE');
       if (visited.has(key)) return;
-      const assignment = input.assignments.find((a) => a.key === key);
+      const assignment = assignments.find((a) => a.key === key);
       if (!assignment) throw new BadRequestException('TEAM_UNKNOWN_DEPENDENCY');
       for (const dependency of assignment.dependencies)
         visit(dependency, new Set([...path, key]));
       visited.add(key);
     };
     keys.forEach((key) => visit(key));
+  }
+
+  create(projectId: string, coordinatorThreadId: string, value: unknown) {
+    const parsed = definition.safeParse(value);
+    if (!parsed.success)
+      throw new BadRequestException('TEAM_INVALID_DEFINITION');
+    const input = parsed.data;
+    this.validateAssignments(input.assignments);
     const fingerprint = createHash('sha256')
       .update(JSON.stringify(input))
       .digest('hex');

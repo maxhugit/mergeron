@@ -127,6 +127,10 @@ jobs:
           node scripts/test-local-browser-extension.mjs
           node scripts/test-local-browser-webkit.mjs
 
+      - name: Verify native subagent cap and parent contract without an external model
+        if: matrix.part == 'backend'
+        run: node scripts/test-native-agent-teams.cjs
+
       - name: Test complete backend suite
         if: matrix.part == 'backend'
         run: pnpm test
