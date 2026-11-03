@@ -80,7 +80,7 @@ Ouvrir l’inventaire ne télécharge ni ne démarre le service.
 
 À la première transcription, le Manager télécharge si nécessaire l’image et crée
 `<préfixe-de-stack>-transcription`. Le premier démarrage peut prendre plusieurs
-minutes. Le conteneur est limité à **6 Gio de RAM, 2 CPU et 128 processus**, avec
+minutes. Le conteneur est limité à **6 Gio de RAM, 4 CPU et 128 processus**, avec
 1 Gio de temporaire en tmpfs. Prévoir aussi l’espace disque de l’image, contenant
 les bibliothèques CPU et les poids. L’image initiale cible Linux amd64. Aucun GPU n’est nécessaire. Le service
 s’arrête après le délai d’inactivité ; les tâches actives renouvellent leur bail.

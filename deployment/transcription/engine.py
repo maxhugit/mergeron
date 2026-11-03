@@ -96,7 +96,7 @@ def transcribe(directory, operation="transcribe"):
 def recognize(directory, decoded, duration):
     progress(directory, "loading")
     from faster_whisper import WhisperModel
-    model = WhisperModel("/models/asr", device="cpu", compute_type="int8", cpu_threads=2, num_workers=1, local_files_only=True)
+    model = WhisperModel("/models/asr", device="cpu", compute_type="int8", cpu_threads=4, num_workers=1, local_files_only=True)
     progress(directory, "transcribing")
     stream, info = model.transcribe(str(decoded), language=None, word_timestamps=True, vad_filter=True, language_detection_segments=3)
     segments = []
@@ -109,7 +109,7 @@ def recognize(directory, decoded, duration):
         try:
             import torch
             from pyannote.audio import Pipeline
-            torch.set_num_threads(2)
+            torch.set_num_threads(4)
             pipeline = Pipeline.from_pretrained("/models/diarization")
             pipeline.to(torch.device("cpu"))
             output = pipeline(str(decoded))

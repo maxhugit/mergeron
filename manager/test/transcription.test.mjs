@@ -107,6 +107,7 @@ test('concurrent requests share start; only private lease reveals transport; idl
   assert.equal(f.counts().starts, 1);
   assert.equal(f.container.HostConfig.ReadonlyRootfs, true);
   assert.equal(f.container.HostConfig.Memory, 6 * 1024 ** 3);
+  assert.equal(f.container.HostConfig.NanoCpus, 4e9);
   assert.deepEqual(f.container.HostConfig.CapDrop, ['ALL']);
   assert.equal(f.container.HostConfig.PortBindings, undefined);
   f.time(91_000);

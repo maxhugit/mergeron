@@ -90,7 +90,7 @@ export class ManagedTranscription {
         )) ||
       host.Privileged ||
       host.Memory !== 6 * 1024 ** 3 ||
-      host.NanoCpus !== 2e9 ||
+      host.NanoCpus !== 4e9 ||
       host.PidsLimit !== 128 ||
       host.PidMode ||
       host.IpcMode === 'host' ||
@@ -247,7 +247,7 @@ export class ManagedTranscription {
           CapDrop: ['ALL'],
           SecurityOpt: ['no-new-privileges:true'],
           Memory: 6 * 1024 ** 3,
-          NanoCpus: 2e9,
+          NanoCpus: 4e9,
           PidsLimit: 128,
           Init: true,
           Binds: binds,

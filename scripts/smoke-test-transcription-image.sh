@@ -11,7 +11,7 @@ espeak-ng -v fr-fr -s 140 -w "$fixture/french.wav" 'Bonjour. Ceci est un test de
 ffmpeg -nostdin -v error -f lavfi -i color=c=blue:s=64x64:r=10 -i "$fixture/english.wav" -shortest -c:v mpeg4 -c:a aac "$fixture/video.mp4"
 chmod 755 "$fixture"
 chmod 644 "$fixture"/*.wav "$fixture/video.mp4"
-docker run -d --name "$name" --network none --read-only --user 11003:11003 --cap-drop ALL --security-opt no-new-privileges:true --memory 6g --cpus 2 --pids-limit 128 --init --tmpfs /tmp:rw,nosuid,nodev,noexec,size=1g,mode=1777 --mount "type=bind,src=$fixture,dst=/fixtures,readonly" -e "TRANSCRIPTION_TOKEN=$(printf 'a%.0s' {1..64})" "$image" >/dev/null
+docker run -d --name "$name" --network none --read-only --user 11003:11003 --cap-drop ALL --security-opt no-new-privileges:true --memory 6g --cpus 4 --pids-limit 128 --init --tmpfs /tmp:rw,nosuid,nodev,noexec,size=1g,mode=1777 --mount "type=bind,src=$fixture,dst=/fixtures,readonly" -e "TRANSCRIPTION_TOKEN=$(printf 'a%.0s' {1..64})" "$image" >/dev/null
 # -i is required to pass the fixture driver over stdin.
 docker exec -i "$name" python - <<'PY'
 import hashlib, json, os, subprocess, time, urllib.request, urllib.error, uuid
