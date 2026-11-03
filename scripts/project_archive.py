@@ -31,7 +31,7 @@ CAPABILITIES = {'relational-v1', 'workspace-tree-v1', 'simple-chat-v1',
                 'tasks-v1', 'deliverables-v1', 'knowledge-v1', 'automation-v1',
                 'workspace-connections-v1', 'conversation-branches-v1', 'codex-history-0.153',
                 'agent-display-detail-v1', 'codex-history-state5-v2', 'autonomous-branches-v1',
-                'operational-path-relocation-v1', 'system-spaces-v1'}
+                'operational-path-relocation-v1', 'system-spaces-v1', 'document-labels-v1'}
 MAX_BYTES = 1024 ** 3
 MAX_ZIP = 96 * 1024 ** 2
 MAX_ENTRY = 256 * 1024 ** 2
@@ -163,7 +163,7 @@ def durable_text(file, text):
 
 def allowed_table(name):
     return (name == 'projects' or name.startswith('project_') or
-            name in THREAD_TABLES or name in {'simple_chat_threads', 'simple_chat_messages', 'people', 'settings'}) and name not in EXCLUDED
+            name in THREAD_TABLES or name in {'simple_chat_threads', 'simple_chat_messages', 'people', 'settings', 'deliverable_document_organizations'}) and name not in EXCLUDED
 
 
 def agent_codec(version):
@@ -340,6 +340,10 @@ def select_project(db, project_id, warnings=None, relocations=None):
                 records[json_bytes(record)] = record
         selected[name] = list(records.values())
     autonomous_branches(db, selected, thread_ids, warnings if warnings is not None else [])
+    for organization in selected.get('deliverable_document_organizations', []):
+        organization['automatic_actor_id'] = None
+    if not selected.get('deliverable_document_organizations'):
+        selected.pop('deliverable_document_organizations', None)
     person_ids = {v for records in selected.values() for r in records for k, v in r.items()
                   if (k.endswith('person_id') or k == 'assignee_id') and isinstance(v, str)}
     selected['people'] = scoped_rows(db, 'people', 'id', person_ids)
@@ -549,7 +553,7 @@ def export_snapshot(options, source_db):
         safe_file(file, upload_root)
         roots.append({'key': 'attachment-' + str(len(roots)), 'source': file, 'kind': 'attachment'})
     manifest = {'kind': 'mergeron.project', 'formatVersion': FORMAT,
-                'requiredCapabilities': sorted((CAPABILITIES - set(AGENT_CODECS.values()) - {'autonomous-branches-v1', 'operational-path-relocation-v1', 'system-spaces-v1'}) | ({codec} if native else set()) | ({'autonomous-branches-v1'} if warnings else set()) | ({'operational-path-relocation-v1'} if relocations else set()) | ({'system-spaces-v1'} if separated_system else set())),
+                'requiredCapabilities': sorted((CAPABILITIES - set(AGENT_CODECS.values()) - {'autonomous-branches-v1', 'operational-path-relocation-v1', 'system-spaces-v1', 'document-labels-v1'}) | ({'document-labels-v1'} if data.get('deliverable_document_organizations') else set()) | ({codec} if native else set()) | ({'autonomous-branches-v1'} if warnings else set()) | ({'operational-path-relocation-v1'} if relocations else set()) | ({'system-spaces-v1'} if separated_system else set())),
                 'applicationVersion': options.get('version', 'unknown'), 'exportedAt': int(time.time() * 1000),
                 'project': {'id': options['projectId'], 'name': data['projects'][0]['name']},
                 'tables': data, 'schemas': {n: columns(source_db, n) for n in data},
@@ -769,6 +773,24 @@ def validate_project_content(manifest):
             entry = inventory.get(file['snapshotPath'])
             if not entry or entry['sha256'] != file['sha256']:
                 fail('Une ancienne version de livrable est absente ou altérée.')
+    for organization in manifest['tables'].get('deliverable_document_organizations', []):
+        try:
+            labels = json.loads(organization['labels'])
+            assignments = json.loads(organization['assignments'])
+            valid_documents = {d['id'] for d in manifest['tables'].get('project_deliverable_documents', []) if d['deliverable_id'] == organization['deliverable_id']}
+            if not isinstance(labels, list) or len(labels) > 50 or not isinstance(assignments, dict) or len(assignments) > 500 or organization.get('automatic_actor_id') is not None:
+                raise ValueError()
+            label_ids, names = set(), set()
+            for label in labels:
+                if not isinstance(label, dict) or not isinstance(label.get('id'), str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', label['id']) or not isinstance(label.get('name'), str) or not 1 <= len(label['name'].strip()) <= 80 or any(ord(c) < 32 for c in label['name']) or label['id'] in label_ids or label['name'].lower() in names:
+                    raise ValueError()
+                label_ids.add(label['id'])
+                names.add(label['name'].lower())
+            for doc, values in assignments.items():
+                if doc not in valid_documents or not isinstance(values, list) or len(values) > 10 or any(not isinstance(value, str) or value not in label_ids for value in values) or len(set(values)) != len(values):
+                    raise ValueError()
+        except (ValueError, TypeError, KeyError):
+            fail('Le classement documentaire de l’archive est invalide. Aucune autorisation IA ne peut être importée.')
     for snapshot in manifest['tables'].get('project_deliverable_snapshots', []):
         for document in json.loads(snapshot['documents']):
             version = versions.get(document['documentVersionId'])
@@ -1038,6 +1060,9 @@ def import_archive(options, archive, manifest):
         paths[record['source']] = str(location)
         root_targets[key] = location
     records = remap(manifest['tables'], ids, paths)
+    for original, organization in zip(manifest['tables'].get('deliverable_document_organizations', []), records.get('deliverable_document_organizations', [])):
+        organization['automatic_actor_id'] = None
+        organization['assignments'] = json.dumps({ids.get(doc, doc): labels for doc, labels in json.loads(original['assignments']).items()}, ensure_ascii=False)
     if source_project.get('workspace_layout_version', 0) >= 3:
         records['projects'][0]['workspace_layout_version'] = 2
     # Existing identities are referenced, never overwritten with archive profiles.

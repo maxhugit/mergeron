@@ -24,6 +24,22 @@ vi.mock('@/lib/file-change-events', () => ({
   finishFileMutation: mocks.finish,
 }));
 
+vi.mock('./document-organization', () => ({
+  DOCUMENT_DRAG_TYPE: 'application/x-mergeron-deliverable-document',
+  DocumentOrganizationPanel: ({
+    item,
+    children,
+  }: {
+    item: Deliverable;
+    children: (
+      documents: Deliverable['documents'],
+      labels: never[],
+      assignments: Record<string, string[]>,
+      classify: undefined,
+    ) => import('react').ReactNode;
+  }) => children(item.documents, [], {}, undefined),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.api.mockReset().mockResolvedValue({
@@ -177,6 +193,8 @@ it('uploads a new version through the scoped staging endpoint instead of overwri
     fireEvent.change(screen.getByLabelText('Save a new version'), {
       target: { files: [new File(['new content'], 'report.docx')] },
     });
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create new version' }));
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(

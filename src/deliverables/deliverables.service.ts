@@ -11,6 +11,7 @@ import {
   NotFoundException,
   Logger,
   OnModuleInit,
+  ForbiddenException,
 } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createHash, randomUUID } from 'node:crypto';
@@ -124,7 +125,24 @@ export class DeliverablesService implements OnModuleInit {
         `Moved ${result.migrated} retained document(s) to their deliverable root; history unchanged`,
       );
   }
+  onDocumentVersion?: (
+    projectId: string,
+    resourceId: string,
+    deliverableId: string,
+    documentId: string,
+  ) => void;
   private readonly onlyOfficeSessions = new Map<string, OnlyOfficeSession>();
+  private readonly observedDocumentFiles = new Map<
+    string,
+    {
+      path: string;
+      version: number;
+      mtime: number;
+      ctime: number;
+      size: number;
+      inode: number;
+    }
+  >();
   private readonly documentWrites = new Map<string, Promise<void>>();
 
   private async serializeDocumentWrite<T>(
@@ -1368,6 +1386,75 @@ export class DeliverablesService implements OnModuleInit {
     );
     return created;
   }
+  async linkPrimaryTask(
+    projectId: string,
+    resourceId: string,
+    input: {
+      taskId: string;
+      expectedTaskUpdatedAt: number;
+      deliverableId?: string;
+      expectedVersion?: number;
+      title?: string;
+    },
+  ) {
+    if (
+      !input ||
+      typeof input.taskId !== 'string' ||
+      !input.taskId ||
+      !Number.isSafeInteger(input.expectedTaskUpdatedAt)
+    )
+      throw new BadRequestException('Invalid task association');
+    this.resource(projectId, resourceId);
+    const check = () => {
+      const task = this.db
+        .select({ task: projectTasks, resource: projectResources })
+        .from(projectTasks)
+        .innerJoin(
+          projectResources,
+          eq(projectResources.id, projectTasks.resourceId),
+        )
+        .where(eq(projectTasks.id, input.taskId))
+        .get();
+      if (
+        !task ||
+        task.resource.projectId !== projectId ||
+        task.task.parentTaskId !== null ||
+        task.task.updatedAt !== input.expectedTaskUpdatedAt
+      )
+        throw new ConflictException(
+          'Task changed. Reload before linking a deliverable.',
+        );
+      const attached = this.db
+        .select()
+        .from(items)
+        .where(eq(items.primaryTaskId, input.taskId))
+        .get();
+      if (attached)
+        throw new ConflictException(
+          'This task already has a primary deliverable',
+        );
+    };
+    check();
+    if (input.deliverableId) {
+      const item = this.get(projectId, resourceId, input.deliverableId);
+      this.requireDocumentMutable(item);
+      if (item.primaryTaskId)
+        throw new ConflictException(
+          'This deliverable already has a primary task',
+        );
+      return this.update(projectId, resourceId, item.id, {
+        primaryTaskId: input.taskId,
+        version: input.expectedVersion,
+      });
+    }
+    return this.create(
+      projectId,
+      resourceId,
+      { title: input.title, primaryTaskId: input.taskId },
+      check,
+    );
+  }
+
   update(
     projectId: string,
     resourceId: string,
@@ -1554,7 +1641,14 @@ export class DeliverablesService implements OnModuleInit {
       );
   }
   remove(projectId: string, resourceId: string, id: string, version: number) {
-    this.get(projectId, resourceId, id);
+    const current = this.get(projectId, resourceId, id);
+    if (
+      ['finalized', 'archived'].includes(current.lifecycleStatus) &&
+      currentAccess()?.identity.role !== 'administrator'
+    )
+      throw new ForbiddenException(
+        'Only an administrator can delete a finalized or archived deliverable',
+      );
     if (
       !this.db
         .delete(items)
@@ -1567,6 +1661,105 @@ export class DeliverablesService implements OnModuleInit {
     this.activeFolders.removeContext('deliverable', id);
     return { ok: true, filesPreserved: true };
   }
+  /** Reconcile retained sources by document identity, independently of agent/deliverable links.
+   * Immutable prior snapshots are retained; attribution is explicitly observational.
+   */
+  async captureChangedProjectDocuments(
+    projectId: string,
+    actor: DeliverableDocumentActor,
+  ) {
+    requireProjectAccess(projectId);
+    const resources = this.db
+      .select()
+      .from(projectResources)
+      .where(
+        and(
+          eq(projectResources.projectId, projectId),
+          eq(projectResources.type, 'deliverable_board'),
+        ),
+      )
+      .all();
+    let captured = 0;
+    for (const resource of resources) {
+      const board = this.board(projectId, resource.id);
+      for (const item of board.deliverables) {
+        if (this.blockingOnlyOfficeSession(item.id)) continue;
+        if (!['draft', 'in_constitution'].includes(item.lifecycleStatus))
+          continue;
+        for (const document of item.documents) {
+          if (
+            document.deletedAt !== null ||
+            !this.canReadSource(document.sourcePath)
+          )
+            continue;
+          const latest = document.versions.find(
+            (version) => version.number === document.currentVersionNumber,
+          );
+          if (!latest) continue;
+          await this.serializeDocumentWrite(item.id, async () => {
+            const fresh = this.getDocument(item.id, document.id);
+            if (
+              fresh.currentVersionNumber !== document.currentVersionNumber ||
+              fresh.deletedAt !== null
+            )
+              return;
+            const stat = await fs.lstat(fresh.sourcePath);
+            if (
+              !stat.isFile() ||
+              stat.isSymbolicLink() ||
+              stat.nlink !== 1 ||
+              stat.size > MAX_FILE
+            )
+              throw new ConflictException('Invalid retained document source');
+            const observed = {
+              path: fresh.sourcePath,
+              version: fresh.currentVersionNumber,
+              mtime: stat.mtimeMs,
+              ctime: stat.ctimeMs,
+              size: stat.size,
+              inode: stat.ino,
+            };
+            const previous = this.observedDocumentFiles.get(document.id);
+            if (
+              previous &&
+              Object.keys(observed).every(
+                (key) =>
+                  previous[key as keyof typeof previous] ===
+                  observed[key as keyof typeof observed],
+              )
+            )
+              return;
+            if (this.observedDocumentFiles.size > 10000)
+              this.observedDocumentFiles.clear();
+            if ((await this.hash(fresh.sourcePath)).sha256 === latest.sha256) {
+              this.observedDocumentFiles.set(document.id, observed);
+              return;
+            }
+            const saved = await this.addDocumentVersionUnlocked(
+              projectId,
+              resource.id,
+              item.id,
+              {
+                path: fresh.sourcePath,
+                expectedVersion: fresh.currentVersionNumber,
+                comment:
+                  'Modification du fichier conservé détectée pendant le tour de cet agent ; attribution observée, non exclusive.',
+              },
+              actor,
+              document.id,
+            );
+            this.observedDocumentFiles.set(document.id, {
+              ...observed,
+              version: saved.version.number,
+            });
+            captured++;
+          });
+        }
+      }
+    }
+    return captured;
+  }
+
   private async hash(file: string) {
     const digest = createHash('sha256');
     let size = 0;
@@ -2019,7 +2212,7 @@ export class DeliverablesService implements OnModuleInit {
       }
       beforeCommit?.();
       const now = Date.now();
-      return this.db.transaction((tx) => {
+      const saved = this.db.transaction((tx) => {
         if (!document) {
           document = tx
             .insert(documents)
@@ -2109,6 +2302,14 @@ export class DeliverablesService implements OnModuleInit {
         }
         return { document, version };
       });
+      try {
+        this.onDocumentVersion?.(projectId, resourceId, deliverableId, id);
+      } catch {
+        new Logger(DeliverablesService.name).warn(
+          'Document saved, but automatic label classification could not be scheduled',
+        );
+      }
+      return saved;
     } catch (error) {
       if (folder) await fs.rm(folder, { recursive: true, force: true });
       if (replacedProjection && latest && projectionPath)
@@ -2437,6 +2638,12 @@ export class DeliverablesService implements OnModuleInit {
         } catch {
           previousFileRetained = true;
         }
+        this.onDocumentVersion?.(
+          projectId,
+          resourceId,
+          deliverableId,
+          documentId,
+        );
         return {
           oldPath: document.sourcePath,
           newPath: target,

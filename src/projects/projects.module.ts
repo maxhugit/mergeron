@@ -1,3 +1,5 @@
+import { DocumentOrganizationController } from '../deliverables/document-organization.controller';
+import { DocumentLabelsAiAdapter } from './document-labels-ai-adapter.service';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { DeliverablesModule } from '../deliverables/deliverables.module';
@@ -38,6 +40,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     ProjectKnowledgeModule,
   ],
   controllers: [
+    DocumentOrganizationController,
     ProjectLocationsController,
     ProjectConnectionsController,
     ProjectLocationTransfersController,
@@ -49,6 +52,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     WorkspaceResourcesController,
   ],
   providers: [
+    DocumentLabelsAiAdapter,
     ProjectConnectionToolsService,
     {
       provide: 'PROJECT_CONNECTION_AGENT_TOOLS',

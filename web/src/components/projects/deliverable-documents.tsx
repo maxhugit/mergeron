@@ -1,4 +1,9 @@
 import {
+  DocumentOrganizationPanel,
+  DOCUMENT_DRAG_TYPE,
+} from './document-organization';
+import type { DocumentLabel } from '@/lib/document-organization';
+import {
   Fragment,
   useEffect,
   useMemo,
@@ -22,6 +27,8 @@ import {
   RotateCcw,
   Trash2,
   Upload,
+  Tags,
+  UploadCloud,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,6 +90,11 @@ export function DeliverableDocuments({
   const { t } = useTranslation();
   const { t: documentText } = useTranslation('deliverables');
   const [comment, setComment] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+  const [pendingReplacement, setPendingReplacement] = useState<{
+    document: DeliverableDocument;
+    file: File;
+  } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [renaming, setRenaming] = useState<DeliverableDocument | null>(null);
@@ -141,8 +153,15 @@ export function DeliverableDocuments({
     onSettled: finishFileMutation,
     mutationFn: async (files: File[]) => {
       for (const file of files) {
+        const existing = active.find((document) => document.name === file.name);
         await uploadDocument(file, `${base}/${item.id}/documents/upload`, {
           comment,
+          ...(existing
+            ? {
+                documentId: existing.id,
+                expectedVersion: String(existing.currentVersionNumber),
+              }
+            : {}),
         });
       }
     },
@@ -170,14 +189,24 @@ export function DeliverableDocuments({
       document: DeliverableDocument;
       file: File;
     }) => {
-      if (file.name !== document.name) throw new Error('filename');
-      await uploadDocument(file, `${base}/${item.id}/documents/upload`, {
-        documentId: document.id,
-        expectedVersion: String(document.currentVersionNumber),
-        comment,
-      });
+      if (
+        file.name.split('.').pop()?.toLowerCase() !==
+        document.format.toLowerCase()
+      )
+        throw new Error('filename');
+      await uploadDocument(
+        file,
+        `${base}/${item.id}/documents/upload`,
+        {
+          documentId: document.id,
+          expectedVersion: String(document.currentVersionNumber),
+          comment,
+        },
+        document.name,
+      );
     },
     onSuccess: async () => {
+      setPendingReplacement(null);
       emitFileChange({
         source: 'local',
         kind: 'invalidate',
@@ -230,6 +259,90 @@ export function DeliverableDocuments({
     rename.isPending;
   const mutationError = request.error || addDocument.error || addVersion.error;
 
+  const renderDocuments = (
+    documents: DeliverableDocument[],
+    labels: DocumentLabel[],
+    assignments: Record<string, string[]>,
+    classify: ((document: DeliverableDocument) => void) | undefined,
+  ) => (
+    <div
+      className={
+        contextDocument ? 'contents' : 'overflow-visible rounded-lg border'
+      }
+      onDragOver={(event) => {
+        if (!busy && event.dataTransfer.types.includes('Files'))
+          event.preventDefault();
+      }}
+    >
+      {!contextDocument && (
+        <div className="hidden grid-cols-[minmax(0,1fr)_4rem_minmax(9rem,0.7fr)_3rem] gap-3 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
+          <span>{t('documentName')}</span>
+          <span>{t('versions')}</span>
+          <span>{t('lastModified')}</span>
+          <span className="sr-only">{t('actions')}</span>
+        </div>
+      )}
+      {documents.map((document) => (
+        <DocumentRow
+          key={document.id}
+          document={document}
+          busy={busy}
+          labels={labels.filter((label) =>
+            assignments[document.id]?.includes(label.id),
+          )}
+          onClassify={classify ? () => classify(document) : undefined}
+          contextTrigger={contextDocument ? children : undefined}
+          onAttachToChat={contextDocument ? onAttachToChat : undefined}
+          extraActions={extraActions}
+          menuLabel={menuLabel}
+          onView={() => setDetail({ document, tab: 'preview' })}
+          onHistory={() => setDetail({ document, tab: 'versions' })}
+          onRename={() => {
+            rename.reset();
+            setNewName(document.name);
+            setRenaming(document);
+          }}
+          onDownload={() => {
+            const version = currentDocumentVersion(document);
+            if (version)
+              void downloadVersion(
+                base,
+                item.id,
+                document,
+                version,
+                onError,
+                document.name,
+              );
+            else onError();
+          }}
+          onFile={(file) => setPendingReplacement({ document, file })}
+          onSnapshot={() =>
+            request.mutate({
+              suffix: `/documents/${document.id}/versions`,
+              body: {
+                path: document.sourcePath,
+                comment,
+                expectedVersion: document.currentVersionNumber,
+              },
+            })
+          }
+          onDelete={() => {
+            if (
+              window.confirm(
+                t('deleteDocumentConfirmation', { name: document.name }),
+              )
+            )
+              request.mutate({
+                suffix: `/documents/${document.id}`,
+                method: 'DELETE',
+                body: { expectedVersion: document.currentVersionNumber },
+              });
+          }}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <section className={contextDocument ? 'contents' : 'space-y-3'}>
       {!contextDocument && (
@@ -248,75 +361,47 @@ export function DeliverableDocuments({
       {!contextDocument && !active.length && (
         <p className="text-sm text-muted-foreground">{t('noDocumentYet')}</p>
       )}
-      {!!active.length && (
-        <div
-          className={
-            contextDocument ? 'contents' : 'overflow-visible rounded-lg border'
-          }
-        >
-          {!contextDocument && (
-            <div className="hidden grid-cols-[minmax(0,1fr)_7rem_minmax(12rem,0.7fr)_3rem] gap-3 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
-              <span>{t('documentName')}</span>
-              <span>{t('versions')}</span>
-              <span>{t('lastModified')}</span>
-              <span className="sr-only">{t('actions')}</span>
-            </div>
-          )}
-          {active.map((document) => (
-            <DocumentRow
-              key={document.id}
-              document={document}
-              busy={busy}
-              contextTrigger={contextDocument ? children : undefined}
-              onAttachToChat={contextDocument ? onAttachToChat : undefined}
-              extraActions={extraActions}
-              menuLabel={menuLabel}
-              onView={() => setDetail({ document, tab: 'preview' })}
-              onHistory={() => setDetail({ document, tab: 'versions' })}
-              onRename={() => {
-                rename.reset();
-                setNewName(document.name);
-                setRenaming(document);
-              }}
-              onDownload={() => {
-                const version = currentDocumentVersion(document);
-                if (version)
-                  void downloadVersion(
-                    base,
-                    item.id,
-                    document,
-                    version,
-                    onError,
-                    document.name,
-                  );
-                else onError();
-              }}
-              onFile={(file) => addVersion.mutate({ document, file })}
-              onSnapshot={() =>
-                request.mutate({
-                  suffix: `/documents/${document.id}/versions`,
-                  body: {
-                    path: document.sourcePath,
-                    comment,
-                    expectedVersion: document.currentVersionNumber,
-                  },
-                })
+      {contextDocument ? (
+        renderDocuments(active, [], {}, undefined)
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={busy}
+            className={`flex w-full items-center justify-center gap-3 rounded-lg border border-dashed p-5 text-sm ${dragActive ? 'border-primary bg-primary/10' : 'bg-muted/20'}`}
+            onClick={() => setAddOpen(true)}
+            onDragOver={(event) => {
+              if (!busy && event.dataTransfer.types.includes('Files')) {
+                event.preventDefault();
+                setDragActive(true);
               }
-              onDelete={() => {
-                if (
-                  window.confirm(
-                    t('deleteDocumentConfirmation', { name: document.name }),
-                  )
-                )
-                  request.mutate({
-                    suffix: `/documents/${document.id}`,
-                    method: 'DELETE',
-                    body: { expectedVersion: document.currentVersionNumber },
-                  });
-              }}
-            />
-          ))}
-        </div>
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              if (!busy) {
+                setPendingFiles(Array.from(event.dataTransfer.files));
+                setAddOpen(true);
+              }
+            }}
+          >
+            <UploadCloud className="h-5 w-5 shrink-0" />
+            <span>
+              {documentText('documentsDrop')}
+              <span className="block text-xs text-muted-foreground">
+                {documentText('documentsDropVersion')}
+              </span>
+            </span>
+          </button>
+          <DocumentOrganizationPanel
+            item={item}
+            base={base}
+            disabled={disabled}
+          >
+            {renderDocuments}
+          </DocumentOrganizationPanel>
+        </>
       )}
       {!contextDocument && !!archived.length && (
         <details>
@@ -352,11 +437,49 @@ export function DeliverableDocuments({
         <p role="alert" className="text-sm text-destructive">
           {mutationError instanceof Error &&
           mutationError.message === 'filename'
-            ? t('newVersionMustKeepTheSameFileName')
+            ? documentText('documentsSameFormat')
             : t('unableToUpdateDocument')}
         </p>
       )}
 
+      <Dialog
+        open={!!pendingReplacement}
+        onOpenChange={(open) =>
+          !open && !addVersion.isPending && setPendingReplacement(null)
+        }
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{documentText('documentsReplaceTitle')}</DialogTitle>
+            <DialogDescription>
+              {documentText('documentsReplaceExplanation', {
+                name: pendingReplacement?.document.name,
+                version:
+                  (pendingReplacement?.document.currentVersionNumber ?? 0) + 1,
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="break-words text-sm">{pendingReplacement?.file.name}</p>
+          {addVersion.isError&&<p role="alert" className="text-sm text-destructive">{addVersion.error instanceof Error&&addVersion.error.message==='filename'?documentText('documentsSameFormat'):t('unableToUpdateDocument')}</p>}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={addVersion.isPending}
+              onClick={() => setPendingReplacement(null)}
+            >
+              {t('cancel')}
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                pendingReplacement && addVersion.mutate(pendingReplacement)
+              }
+            >
+              {documentText('documentsCreateVersion')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={renaming !== null}
         onOpenChange={(open) => {
@@ -431,6 +554,13 @@ export function DeliverableDocuments({
               }
             />
           </label>
+          {pendingFiles.some((file) =>
+            active.some((doc) => doc.name === file.name),
+          ) && (
+            <p role="alert" className="text-sm text-muted-foreground">
+              {documentText('documentsDuplicateVersion')}
+            </p>
+          )}
           <label
             className="grid gap-1 text-sm"
             htmlFor={`document-comment-${item.id}`}
@@ -724,6 +854,8 @@ function formatBytes(bytes: number) {
 function DocumentRow({
   document,
   busy,
+  labels = [],
+  onClassify,
   onView,
   onHistory,
   onRename,
@@ -737,6 +869,8 @@ function DocumentRow({
   menuLabel,
 }: {
   document: DeliverableDocument;
+  labels?: DocumentLabel[];
+  onClassify?: () => void;
   busy: boolean;
   onView: () => void;
   onHistory: () => void;
@@ -784,6 +918,16 @@ function DocumentRow({
     { label: t('preview'), icon: Eye, action: 'view' },
     { label: t('download'), icon: Download, action: 'download' },
     { label: t('history'), icon: History, action: 'history' },
+    ...(onClassify
+      ? [
+          {
+            label: t('labelsClassify', { ns: 'deliverables' }),
+            icon: Tags,
+            action: 'classify',
+            disabled: busy,
+          },
+        ]
+      : []),
     { label: t('rename'), icon: Pencil, action: 'rename', disabled: busy },
     {
       label: t('uploadNewVersion'),
@@ -822,6 +966,8 @@ function DocumentRow({
         return onDownload();
       case 'history':
         return onHistory();
+      case 'classify':
+        return onClassify?.();
       case 'rename':
         return onRename();
       case 'upload':
@@ -879,7 +1025,30 @@ function DocumentRow({
       </>
     );
   return (
-    <article className="grid gap-2 border-t px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(12rem,0.7fr)_3rem] sm:items-center sm:gap-3">
+    <article
+      draggable={!busy}
+      onDragStart={(event) =>
+        event.dataTransfer.setData(DOCUMENT_DRAG_TYPE, document.id)
+      }
+      onDragOver={(event) => {
+        if (!busy && event.dataTransfer.types.includes('Files'))
+          event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!busy && event.dataTransfer.types.includes('Files')) {
+          event.preventDefault();
+          event.stopPropagation();
+          const files = Array.from(event.dataTransfer.files);
+          if (files.length === 1) onFile(files[0]);
+          else
+            showSnackbar(
+              t('documentsDropSingle', { ns: 'deliverables' }),
+              'warning',
+            );
+        }
+      }}
+      className="grid gap-2 border-t px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_4rem_minmax(9rem,0.7fr)_3rem] sm:items-center sm:gap-3"
+    >
       <a
         href={withBasePath(
           `/document?path=${encodeURIComponent(document.sourcePath)}`,
@@ -889,7 +1058,21 @@ function DocumentRow({
         className="flex min-w-0 items-center gap-2 text-left hover:underline"
       >
         <FileText className="h-4 w-4 shrink-0 text-primary" />
-        <strong className="truncate">{document.name}</strong>
+        <span className="min-w-0">
+          <strong className="block truncate" title={document.name}>
+            {document.name}
+          </strong>
+          <span className="mt-1 flex flex-wrap gap-1">
+            {labels.map((label) => (
+              <span
+                key={label.id}
+                className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+              >
+                {label.name}
+              </span>
+            ))}
+          </span>
+        </span>
       </a>
       <span className="text-sm text-muted-foreground">
         <span className="sm:hidden">{t('versions')}: </span>
@@ -940,9 +1123,10 @@ async function uploadDocument(
   file: File,
   endpoint: string,
   input: Record<string, string>,
+  filename = file.name,
 ): Promise<void> {
   const form = new FormData();
-  form.append('files', file, file.name);
+  form.append('files', file, filename);
   const authorization = getAuthorizationHeader();
   const response = await fetch(
     withBasePath(`/api/projects${endpoint}?${new URLSearchParams(input)}`),

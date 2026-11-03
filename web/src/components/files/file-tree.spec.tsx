@@ -11,6 +11,8 @@ const projects = vi.hoisted(() => vi.fn());
 const session = vi.hoisted(() => ({ isAdministrator: true }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => session,
+  readAuthResource: vi.fn(),
+  updateAuthResource: vi.fn(),
 }));
 vi.mock('@/lib/projects-api', () => ({ projectsApi: projects }));
 vi.mock('@/socket', () => ({
@@ -414,4 +416,79 @@ it('still offers the create row when the current listing cannot be read', async 
       expect.objectContaining({ body: { path: '/work/project' } }),
     ),
   );
+});
+
+it('opens the same real document in two collapsible virtual folders', async () => {
+  useFilesStore.setState({ rootDir: '/work/livrables/d', selectedFile: null });
+  const project = {
+    id: 'p',
+    workspacePath: '/work',
+    workspaces: [{ id: 'w', path: '/work', primary: true }],
+    resources: [{ id: 'r', type: 'deliverable_board' }],
+  } as unknown as ProjectSummary;
+  const doc = {
+    id: 'doc',
+    name: 'report.txt',
+    sourcePath: '/work/livrables/d/report.txt',
+    deletedAt: null,
+    currentVersionNumber: 1,
+    versions: [],
+  };
+  projects.mockImplementation(async (url: string) => {
+    if (url.includes('/organization'))
+      return {
+        labels: [
+          { id: 'a', name: 'Sources' },
+          { id: 'b', name: 'Textes' },
+        ],
+        assignments: { doc: ['a', 'b'] },
+        revision: 1,
+        fingerprint: 'x',
+        jobs: [],
+        automaticEnabled: true,
+      };
+    if (url.includes('/tree'))
+      return [{ path: doc.sourcePath, name: doc.name, type: 'file' }];
+    return {
+      resource: { id: 'r' },
+      deliverables: [
+        {
+          id: 'd',
+          title: 'Report',
+          directory: '/work/livrables/d',
+          version: 1,
+          lifecycleStatus: 'in_constitution',
+          documents: [doc],
+        },
+      ],
+    };
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.setQueryData(['agent-document-view', 'person', 'agent'], {
+    mode: 'labels',
+  });
+  const clicked = vi.fn();
+  render(
+    <QueryClientProvider client={client}>
+      <FileTree
+        project={project}
+        agentThreadId="agent"
+        personId="person"
+        onFileClick={clicked}
+      />
+    </QueryClientProvider>,
+  );
+  const a = await screen.findByRole('button', { name: /Sources/ }),
+    b = screen.getByRole('button', { name: /Textes/ });
+  fireEvent.click(a);
+  fireEvent.click(b);
+  await waitFor(() =>
+    expect(screen.getAllByText('report.txt')).toHaveLength(2),
+  );
+  fireEvent.click(screen.getAllByText('report.txt')[1]);
+  expect(clicked).toHaveBeenCalledWith(doc.sourcePath);
+  fireEvent.click(a);
+  expect(screen.getAllByText('report.txt')).toHaveLength(1);
 });

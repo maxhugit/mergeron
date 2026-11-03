@@ -51,6 +51,7 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 - [Droits d’accès aux projets](droits-acces-projets.md)
 - [Organisation des personnes](organisation-personnes-projets.md)
 - [Gestion des livrables](gestion-des-livrables.md)
+- [Documents, étiquettes et versions](document-labels.md)
 - [Assistant de projet dans OnlyOffice](onlyoffice-assistant.md) : propositions
   de texte et diapositives, validation et intégration privée par document.
 - [Workspaces des projets](workspaces-projets.md)

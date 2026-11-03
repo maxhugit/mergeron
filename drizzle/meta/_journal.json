@@ -477,6 +477,20 @@
       "when": 1793704200000,
       "tag": "0067_media_audio_extraction",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1793742216510,
+      "tag": "0068_document_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1793742615450,
+      "tag": "0069_person_agent_document_view",
+      "breakpoints": true
     }
   ]
 }

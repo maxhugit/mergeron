@@ -23,6 +23,7 @@ import {
   Search,
   ShieldCheck,
   UserRound,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,6 +126,7 @@ export function ProjectDeliverablesManager({
   onModalClose?: () => void;
 }) {
   const { t } = useTranslation();
+  const session = usePlatformSession();
   const client = useQueryClient();
   const key = ['project-deliverables', projectId, resourceId];
   const base = `/${projectId}/resources/${resourceId}/deliverables`;
@@ -185,6 +187,14 @@ export function ProjectDeliverablesManager({
       setSelected(item.id);
       await client.invalidateQueries({ queryKey: key });
     },
+  });
+  const remove = useMutation({
+    mutationFn: (item: Deliverable) =>
+      projectsApi(`${base}/${item.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ version: item.version }),
+      }),
+    onSuccess: () => client.invalidateQueries({ queryKey: key }),
   });
   const board = query.data;
   const visible = useMemo(
@@ -391,6 +401,11 @@ export function ProjectDeliverablesManager({
               </Button>
             </div>
           </div>
+          {remove.isError && (
+            <p role="alert" className="p-3 text-sm text-destructive">
+              {t('unableToSaveDeliverable')}
+            </p>
+          )}
           {!visible.length ? (
             <div className="p-10 text-center text-muted-foreground">
               {board.deliverables.length
@@ -401,6 +416,17 @@ export function ProjectDeliverablesManager({
             <DeliverablesList
               items={visible}
               board={board}
+              isAdministrator={session.isAdministrator}
+              onDelete={(item) => {
+                if (
+                  window.confirm(
+                    t(
+                      'removeThisDeliverableRecordAndItsVersionHistoryAllFilesWillBePreserved',
+                    ),
+                  )
+                )
+                  remove.mutate(item);
+              }}
               onSelect={(id, tab = 'overview') => {
                 setSelectedTab(tab);
                 setSelected(id);
@@ -476,7 +502,11 @@ export function DeliverablesList({
   items,
   board,
   onSelect,
+  onDelete,
+  isAdministrator = false,
 }: {
+  isAdministrator?: boolean;
+  onDelete?: (item: Deliverable) => void;
   items: Deliverable[];
   board: DeliverablesBoard;
   onSelect: (id: string, tab?: DetailTab) => void;
@@ -611,6 +641,8 @@ export function DeliverablesList({
                     <td className="px-1 py-3">
                       <DeliverableRowActions
                         item={item}
+                        isAdministrator={isAdministrator}
+                        onDelete={onDelete ? () => onDelete(item) : undefined}
                         onSelect={onSelect}
                         onTask={task ? () => setOpenTask(task) : undefined}
                       />
@@ -669,6 +701,15 @@ export function DeliverablesList({
                     ))}
                   </ul>
                 </div>
+                <div className="col-start-2 row-start-4 flex justify-end">
+                  <DeliverableRowActions
+                    item={item}
+                    isAdministrator={isAdministrator}
+                    onSelect={onSelect}
+                    onDelete={onDelete ? () => onDelete(item) : undefined}
+                    onTask={task ? () => setOpenTask(task) : undefined}
+                  />
+                </div>
                 <span
                   data-testid={`deliverable-status-${item.id}`}
                   className="col-start-2 row-start-1 justify-self-end @min-[68rem]:col-auto @min-[68rem]:row-auto @min-[68rem]:justify-self-auto"
@@ -724,12 +765,19 @@ function DeliverableRowActions({
   item,
   onSelect,
   onTask,
+  onDelete,
+  isAdministrator = false,
 }: {
+  onDelete?: () => void;
+  isAdministrator?: boolean;
   item: Deliverable;
   onSelect: (id: string, tab?: DetailTab) => void;
   onTask?: () => void;
 }) {
   const { t } = useTranslation();
+  const canDelete =
+    isAdministrator ||
+    !['finalized', 'archived'].includes(item.lifecycleStatus);
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -777,6 +825,29 @@ function DeliverableRowActions({
         >
           {t('primaryTask')}
         </Button>
+        {onDelete && (
+          <>
+            <div className="my-1 border-t" />
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-start text-destructive"
+              disabled={!canDelete}
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {t('delete')}
+            </Button>
+            {!canDelete && (
+              <p className="px-2 py-1 text-xs text-muted-foreground">
+                {t('deleteProtectedDeliverable', { ns: 'deliverables' })}
+              </p>
+            )}
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -1340,7 +1411,11 @@ function DeliverableDetail({
             </Button>
             <Button
               variant="outline"
-              disabled={busy || item.lifecycleStatus === 'archived'}
+              disabled={
+                busy ||
+                (!session.isAdministrator &&
+                  ['finalized', 'archived'].includes(item.lifecycleStatus))
+              }
               onClick={() => {
                 if (
                   window.confirm(
@@ -2268,13 +2343,15 @@ export function DeliverableHistory({
       author: event.actorName,
       content: (
         <>
-          {t(
-            event.action === 'deliverable_document_deleted'
-              ? 'deliverableDocumentRemoved'
-              : event.action === 'deliverable_document_restored'
-                ? 'deliverableDocumentReattached'
-                : 'deliverableDetailsChanged',
-          )}
+          {event.action.startsWith('document_label')
+            ? t('labelsHistoryChanged', { ns: 'deliverables' })
+            : t(
+                event.action === 'deliverable_document_deleted'
+                  ? 'deliverableDocumentRemoved'
+                  : event.action === 'deliverable_document_restored'
+                    ? 'deliverableDocumentReattached'
+                    : 'deliverableDetailsChanged',
+              )}
           {' — '}
           {event.label}
           {event.action === 'deliverable_updated' &&

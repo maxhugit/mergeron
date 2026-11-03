@@ -36,6 +36,15 @@ export class DeliverablesController {
     private readonly metadata: ThreadMetadataService,
     private readonly mutations: GitMutationGateService,
   ) {}
+  @Post('link-task')
+  linkTask(
+    @Param('projectId') p: string,
+    @Param('resourceId') r: string,
+    @Body() body: Parameters<DeliverablesService['linkPrimaryTask']>[2],
+  ) {
+    return this.service.linkPrimaryTask(p, r, body);
+  }
+
   @Post(':id/documents/upload')
   uploadDocuments(
     @Param('projectId') p: string,
