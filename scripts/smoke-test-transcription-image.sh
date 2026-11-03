@@ -45,6 +45,7 @@ for filename,language,word in [('english.wav','en','hello'),('french.wav','fr','
         if job['state']=='ready':break
         time.sleep(1)
     else:raise AssertionError('real transcription timeout')
+    assert 'result' in job, job
     result=job['result']
     if result is None:
         # Only synthetic fixtures run in this disposable container. Reproduce
@@ -74,6 +75,7 @@ while time.monotonic()<deadline:
     if job['state']=='ready':break
     time.sleep(1)
 else:raise AssertionError('video extraction timeout')
+assert 'result' in job, job
 assert job['result'] is None
 with urllib.request.urlopen(urllib.request.Request(base+'/jobs/'+identifier+'/audio',headers={'Authorization':'Bearer '+os.environ['TRANSCRIPTION_TOKEN']}),timeout=30) as response:audio=response.read()
 assert len(audio)==job['audio']['size']
