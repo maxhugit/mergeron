@@ -145,7 +145,7 @@ class ManagerDeploymentTest(unittest.TestCase):
             "Require no HIGH or CRITICAL Manager vulnerabilities",
             self.quality_workflow,
         )
-        self.assertIn("needs: [checks, image, manager-image, browser-image, cli-runtime]", self.quality_workflow)
+        self.assertRegex(self.quality_workflow, r"needs:\s*\[\s*checks,\s*image,\s*manager-image,\s*browser-image,\s*cli-runtime,\s*transcription-image,?\s*\]")
         self.assertIn("CLI_RESULT: ${{ needs.cli-runtime.result }}", self.quality_workflow)
 
     def test_manager_runtime_is_distroless_and_contains_no_npm_tree(self) -> None:

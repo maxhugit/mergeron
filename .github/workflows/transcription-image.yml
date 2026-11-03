@@ -75,10 +75,26 @@ jobs:
         with:
           version: v0.76.1
           image-ref: ${{ inputs.publish && format('ghcr.io/maxhugit/mergeron-transcription@{0}', steps.build.outputs.digest) || format('ghcr.io/maxhugit/mergeron-transcription:candidate-{0}', github.sha) }}
+          format: json
+          output: trivy-transcription-results.json
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: false
           exit-code: '1'
+      - name: Report exact vulnerable package locations
+        if: always()
+        run: |
+          if [ -f trivy-transcription-results.json ]; then
+            jq -c '.Results[]? | .Target as $target | .Vulnerabilities[]? | {target: $target, package: .PkgName, path: .PkgPath, installed: .InstalledVersion, fixed: .FixedVersion, cve: .VulnerabilityID}' trivy-transcription-results.json
+          fi
+      - name: Preserve transcription security report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-transcription-report-${{ github.sha }}
+          path: trivy-transcription-results.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Transcribe synthetic audio offline in the real image
         env:
           IMAGE: ${{ inputs.publish && format('ghcr.io/maxhugit/mergeron-transcription@{0}', steps.build.outputs.digest) || format('ghcr.io/maxhugit/mergeron-transcription:candidate-{0}', github.sha) }}
