@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir --upgrade setuptools==81.0.0 wheel==0.46.3 \
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-small', revision='536b0662742c02347bc0e980a01041f333bce120', local_dir='/models/asr', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.*','preprocessor_config.json'])" \
  && rm -rf /models/asr/.cache \
  && addgroup -g 11003 transcription && adduser -D -H -u 11003 -G transcription transcription
-COPY engine.py server.py ./
+COPY engine.py server.py diarization.py ./
 ARG MERGERON_REVISION=unknown
 ARG MERGERON_VERSION=unknown
 ARG MERGERON_BUILD_DATE=unknown

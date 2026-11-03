@@ -19,12 +19,20 @@ for (const width of [1280, 390])
       language: 'fr',
       languageProbability: 0.97,
       duration: 300,
-      diarization: { state: 'ready', speakerCount: 2 },
+      diarization: {
+        state: 'ready',
+        speakerCount: 2,
+        warnings: [
+          { code: 'overlapping_speech', count: 1, duration: 0.5 },
+          { code: 'short_turns', count: 1, duration: 0.2 },
+          { code: 'uncertain_assignment', count: 1 },
+        ],
+      },
       segments: Array.from({ length: 40 }, (_, i) => ({
         start: i * 6,
         end: i * 6 + 5,
         text: 'Bonjour et bienvenue à notre réunion. Nous préparons les prochaines étapes du projet.',
-        speaker: 'speaker_' + ((i % 2) + 1),
+        speaker: i % 3 === 2 ? null : 'SPEAKER_0' + (i % 3),
       })),
     };
     vi.stubGlobal(
@@ -101,7 +109,13 @@ for (const width of [1280, 390])
       screen.getByRole('button', { name: 'Transcrire' }).getBoundingClientRect()
         .top,
     ).toBe(before);
-    expect(screen.getAllByText(/Locuteur 1/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/SPEAKER_00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Non attribué/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Nombre estimé de locuteurs : 2')).toBeTruthy();
+    expect(screen.getByText(/Paroles simultanées détectées/)).toBeTruthy();
+    expect(
+      screen.getByText(/Interventions très courtes détectées/),
+    ).toBeTruthy();
     scroller.scrollTop = 0;
     await page.screenshot({
       path: `../../../.vitest-screenshots/transcription-${width}.png`,

@@ -41,5 +41,13 @@
   "extract": "Extraire l’audio",
   "both": "Audio + transcription",
   "downloadAudio": "Télécharger l’audio",
-  "audioSize": "{{kilobytes}} Kio"
+  "audioSize": "{{kilobytes}} Kio",
+  "speakerCount": "Nombre estimé de locuteurs : {{count}}",
+  "warnings": {
+    "overlappingSpeech": "Paroles simultanées détectées : certains passages restent sans attribution ; une voix peut manquer dans le texte.",
+    "shortTurns": "Interventions très courtes détectées : leur attribution peut être incertaine.",
+    "uncertainAssignment": "Certains passages restent sans locuteur attribué. Vérifiez-les à l’écoute.",
+    "noSpeakersDetected": "Aucune voix exploitable détectée par la diarisation."
+  },
+  "unattributed": "Non attribué"
 }
