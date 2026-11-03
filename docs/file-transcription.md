@@ -97,7 +97,7 @@ pas le conteneur facultatif. Planifier sa maintenance sans tâche active.
 La transcription et la langue fonctionnent sans compte externe au runtime.
 L’image embarque [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper) et le
 modèle Small converti, révision `536b0662742c02347bc0e980a01041f333bce120`.
-La base Wolfi conserve les métadonnées de ses paquets pour le scan de sécurité.
+Le runtime Python 3.12 sur base Wolfi conserve les métadonnées de ses paquets pour le scan de sécurité.
 Son paquet [FFmpeg 9](https://github.com/wolfi-dev/os/blob/main/ffmpeg-9.0.yaml)
 fournit les bibliothèques partagées nécessaires à
 [TorchCodec 0.17](https://github.com/meta-pytorch/torchcodec/blob/v0.17.0/README.md).

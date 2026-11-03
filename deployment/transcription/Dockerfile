@@ -2,8 +2,8 @@ FROM cgr.dev/chainguard/wolfi-base:latest
 WORKDIR /opt/transcription
 # Keep FFmpeg shared libraries for TorchCodec, using the maintained FFmpeg 9
 # package rather than Debian's older codec stack. Retain APK provenance for scans.
-RUN apk add --no-cache python-3.11 ffmpeg-9.0 libgomp \
- && python3.11 -m venv /opt/venv
+RUN apk add --no-cache python-3.12 ffmpeg-9.0 libgomp \
+ && python3.12 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 COPY requirements.txt ./
 # CPU wheels only. The constraints prevent PyPI from replacing them with CUDA builds.
