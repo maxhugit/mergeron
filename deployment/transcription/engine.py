@@ -93,12 +93,31 @@ def transcribe(directory, operation="transcribe"):
     progress(directory, "ready")
 
 
+def read_pcm16(decoded):
+    """Read only the mono/16-kHz PCM contract produced by our FFmpeg step."""
+    with wave.open(str(decoded)) as audio:
+        if (audio.getnchannels(), audio.getsampwidth(), audio.getframerate(), audio.getcomptype()) != (1, 2, 16000, "NONE"):
+            raise ValueError("TRANSCRIPTION_DECODE_FAILED")
+        frames = audio.getnframes()
+        if not 0 < frames <= MAX_SECONDS * 16000:
+            raise ValueError("TRANSCRIPTION_DURATION")
+        samples = audio.readframes(frames)
+        if len(samples) != frames * 2:
+            raise ValueError("TRANSCRIPTION_DECODE_FAILED")
+        return samples
+
+
 def recognize(directory, decoded, duration):
     progress(directory, "loading")
+    import numpy as np
     from faster_whisper import WhisperModel
+    # FFmpeg already decoded and normalized the input. Pass the supported
+    # waveform API instead of decoding it again through PyAV (whose newer
+    # av.open no longer accepts Faster-Whisper 1.2.1's metadata_errors option).
+    waveform = np.frombuffer(read_pcm16(decoded), dtype="<i2").astype(np.float32) / 32768.0
     model = WhisperModel("/models/asr", device="cpu", compute_type="int8", cpu_threads=4, num_workers=1, local_files_only=True)
     progress(directory, "transcribing")
-    stream, info = model.transcribe(str(decoded), language=None, word_timestamps=True, vad_filter=True, language_detection_segments=3)
+    stream, info = model.transcribe(waveform, language=None, word_timestamps=True, vad_filter=True, language_detection_segments=3)
     segments = []
     for segment in stream:
         segments.append({"start": round(segment.start, 3), "end": round(segment.end, 3), "text": segment.text.strip(), "speaker": None, "words": [{"start": word.start, "end": word.end, "word": word.word} for word in segment.words or []]})
