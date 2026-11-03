@@ -66,7 +66,7 @@ beforeEach(async () => {
   mocks.api
     .mockReset()
     .mockImplementation(
-      (url: string, input?: { method: string; body: string }) => {
+      (_url: string, input?: { method: string; body: string }) => {
         if (!input) return Promise.resolve(structuredClone(organization));
         if (input.method === 'DELETE') {
           organization.labels = organization.labels.filter(
@@ -139,7 +139,6 @@ test.each([390, 1180])(
     fireEvent.click(
       within(confirmation).getByRole('button', {
         name: 'Supprimer',
-        exact: true,
       }),
     );
     await waitFor(() => expect(organization.assignments.doc).toEqual(['text']));

@@ -151,9 +151,7 @@ it('creates a label and warns before unassigning a used label', async () => {
     '2 document(s)',
   );
   expect(data.labels.some((l) => l.id === 'source')).toBe(true);
-  fireEvent.click(
-    within(confirmation).getByRole('button', { name: 'Delete', exact: true }),
-  );
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Delete' }));
   await waitFor(() => expect(data.assignments.a).toEqual(['text']));
   expect(item.documents).toHaveLength(2);
 });

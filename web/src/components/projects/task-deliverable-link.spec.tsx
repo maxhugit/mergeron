@@ -53,7 +53,7 @@ it('links an editable existing deliverable with observed task and document revis
   expect(screen.queryByRole('option', { name: 'Final' })).toBeNull();
   expect(screen.queryByRole('option', { name: 'Already linked' })).toBeNull();
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'free' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Link', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Link' }));
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
   expect(api).toHaveBeenCalledWith(
     '/p/resources/r/deliverables/link-task',
@@ -94,7 +94,7 @@ it('preserves the dialog on a conflicting association so the user can refresh', 
   const close = setup();
   api.mockRejectedValue(new Error('Conflict'));
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'free' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Link', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Link' }));
   await screen.findByRole('alert');
   expect(close).not.toHaveBeenCalled();
 });
