@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import type { AppDatabase } from '../database/database.constants';
 import { projects } from '../database/schema';
 import {
@@ -18,6 +18,66 @@ export function projectSystemAlias(db: AppDatabase | undefined, input: string) {
     if (project.workspaceLayoutVersion < 3) continue;
     if (project.workspaceLayoutVersion >= 4) {
       const root = project.workspacePath;
+      const currentRoots = [
+        path.join(root, 'dossiers'),
+        projectSystemPath(root),
+        projectDraftPath(root),
+      ];
+      if (
+        currentRoots.some(
+          (current) =>
+            value === current || value.startsWith(current + path.sep),
+        )
+      )
+        return input;
+      // Rare legacy free-folder links use the actual, owned migration plan.
+      if (value.startsWith(root + path.sep)) {
+        const journalPath = path.join(
+          projectSystemPath(root),
+          'layout-v4.json',
+        );
+        try {
+          const stat = lstatSync(journalPath);
+          if (
+            stat.isFile() &&
+            !stat.isSymbolicLink() &&
+            stat.size <= 1024 * 1024
+          ) {
+            const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
+              projectId?: unknown;
+              version?: unknown;
+              completed?: unknown;
+              moves?: Array<{ from: string; to: string }>;
+            };
+            if (
+              journal.projectId === project.id &&
+              journal.version === 4 &&
+              Array.isArray(journal.moves) &&
+              journal.completed === journal.moves.length
+            ) {
+              const moves = journal.moves
+                .filter(
+                  (move) =>
+                    typeof move?.from === 'string' &&
+                    typeof move?.to === 'string' &&
+                    path.resolve(move.from) === move.from &&
+                    path.resolve(move.to) === move.to &&
+                    move.from.startsWith(root + path.sep) &&
+                    move.to.startsWith(root + path.sep),
+                )
+                .sort((a, b) => b.from.length - a.from.length);
+              const match = moves.find(
+                (move) =>
+                  value === move.from || value.startsWith(move.from + path.sep),
+              );
+              if (match)
+                return path.join(match.to, path.relative(match.from, value));
+            }
+          }
+        } catch {
+          /* An absent/unreadable journal never grants an alternate path. */
+        }
+      }
       const direct = [
         [projectSystemPath(root, 3), projectSystemPath(root)],
         [projectDraftPath(root, 3), projectDraftPath(root)],
@@ -27,6 +87,10 @@ export function projectSystemAlias(db: AppDatabase | undefined, input: string) {
           path.join(projectSystemPath(root), 'livrables'),
         ],
         [path.join(root, 'documents'), path.join(root, 'dossiers')],
+        [
+          path.join(root, 'sources'),
+          path.join(root, 'dossiers', 'sources-importees'),
+        ],
       ];
       for (const [from, to] of direct) {
         if (value !== from && !value.startsWith(from + path.sep)) continue;
@@ -61,7 +125,11 @@ export function projectSystemAlias(db: AppDatabase | undefined, input: string) {
           if (value === business || value.startsWith(business + path.sep))
             return path.join(
               project.workspacePath,
-              category,
+              ...(project.workspaceLayoutVersion >= 4
+                ? category === 'sources'
+                  ? ['dossiers', 'sources-importees']
+                  : ['dossiers']
+                : [category]),
               sub,
               path.relative(business, value),
             );

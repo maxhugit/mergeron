@@ -139,31 +139,22 @@ try {
     'V1',
   );
   assert.equal(fs.readFileSync(path.join(history, 'v1.docx'), 'utf8'), 'V1');
-  if (
-    process.argv[3] === '--netlink-route' &&
-    process.env.MERGERON_NETLINK_EVIDENCE
-  ) {
+  if (process.argv[3] === '--netlink-route' && process.env.MERGERON_NETLINK_EVIDENCE) {
     const source = path.join(workspace, 'artifacts/native-backend-visual');
     for (const name of ['desktop.png', 'mobile.png', 'report.json']) {
       const file = path.join(source, name);
       assert(fs.lstatSync(file).isFile());
       const bytes = fs.readFileSync(file);
       assert(bytes.length < 15 * 1024 * 1024);
-      if (name.endsWith('.png'))
-        assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-      const destination = path.join(
-        process.env.MERGERON_NETLINK_EVIDENCE,
-        name,
-      );
+      if (name.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+      const destination = path.join(process.env.MERGERON_NETLINK_EVIDENCE, name);
       fs.writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 });
       // Only these synthetic fixture outputs are public CI artifacts. The
       // uploader uses the host runner UID, not the container's application UID.
       // Explicit chmod also handles a restrictive umask without changing it.
       fs.chmodSync(destination, 0o644);
     }
-    console.log(
-      'PASS: desktop/mobile evidence exported by the trusted outer fixture',
-    );
+    console.log('PASS: desktop/mobile evidence exported by the trusted outer fixture');
   }
 } finally {
   fs.rmSync(workspace, { recursive: true });

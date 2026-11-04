@@ -426,4 +426,21 @@ describe('managed project layout v4', () => {
       ),
     ).toBe('keep document');
   });
+  it('resolves old links to additional user folders through the completed journal', async () => {
+    await fs.mkdir(path.join(root, 'designs'));
+    await fs.writeFile(path.join(root, 'designs', 'note.txt'), 'kept');
+    await migrateManagedProject(database.db, 'p', root);
+    const mapped = projectSystemAlias(
+      database.db,
+      path.join(root, 'designs', 'note.txt'),
+    );
+    expect(mapped).toBe(path.join(root, 'dossiers', 'designs', 'note.txt'));
+    expect(await fs.readFile(mapped, 'utf8')).toBe('kept');
+    expect(
+      projectSystemAlias(
+        database.db,
+        path.join(root, '.mergeron', 'imported-attachments', 'note.txt'),
+      ),
+    ).toBe(path.join(root, 'dossiers', 'imported-attachments', 'note.txt'));
+  });
 });
