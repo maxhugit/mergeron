@@ -21,7 +21,7 @@ VERSION = '2.12.7+dfsg+really2.9.14-2.1+deb13u3+webui1'
 
 
 def run(*args, **kwargs):
-    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=60, **kwargs)
+    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=90, env={**os.environ, 'SAL_USE_VCLPLUGIN': 'svp'}, **kwargs)
 
 
 def main():

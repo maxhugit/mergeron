@@ -14,3 +14,6 @@ les données métier ne sont pas stockés ici : ils appartiennent aux espaces du
 
 Voir [Gestion des livrables](../docs/gestion-des-livrables.md) et
 [Contexte et outils des agents](../docs/contexte-et-outils-agents.md).
+
+Le [guide de l’environnement Office](../docs/office-agent-runtime.md) explique
+les pivots natifs, le rendu PDF/PNG, les validations et le montage de licence.

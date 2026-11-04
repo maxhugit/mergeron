@@ -112,6 +112,7 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 - [Rétroportage des correctifs libxml2](../security/libxml2-backport.md).
 - [Rétroportage des correctifs OpenSSH](../security/openssh-backport.md).
 - [Compétence de travail sur les fichiers bureautiques](../skills/office-files/SKILL.md).
+- [Environnement Office des agents](office-agent-runtime.md) : pivots natifs, licence, rendu PDF/PNG et validation.
 - [Organisation des catalogues de traduction](../web/src/locales/README.md).
 
 Le répertoire `upstream/` conserve des références officielles figées dans leur langue d’origine.

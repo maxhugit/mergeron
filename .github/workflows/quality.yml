@@ -411,7 +411,7 @@ jobs:
         env:
           IMAGE_REF: mergeron:quality-${{ github.sha }}
         run: |
-          scripts/smoke-test-office-image.sh "$IMAGE_REF" > office-xml-evidence.json
+          OFFICE_RENDER_EVIDENCE="$PWD/artifacts/office-render" scripts/smoke-test-office-image.sh "$IMAGE_REF" > office-xml-evidence.json
           python3 scripts/audit-libxml2-backport.py trivy-quality-results.raw.json office-xml-evidence.json
 
       - name: Verify corrected OpenSSH sources and retain raw scan findings
@@ -430,6 +430,7 @@ jobs:
             trivy-quality-results.raw.json
             trivy-quality-results.headers.json
             office-xml-evidence.json
+            artifacts/office-render/
             security/libxml2-patches/manifest.json
             ssh-client-evidence.json
             system-component-evidence.json

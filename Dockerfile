@@ -91,6 +91,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV HOME=/home/codex
 ENV MISE_YES=1
 ENV NODE_ENV=production
+# Aspose ships a .NET runtime whose autodetection misses Trixie ICU 76.
+# Use the installed ICU rather than disabling Unicode/culture support.
+ENV CLR_ICU_VERSION_OVERRIDE=76
 ENV PATH="/opt/office-venv/bin:/home/codex/.local/bin:/home/codex/.local/share/mise/shims:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 RUN mkdir -p /home/codex
@@ -114,6 +117,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libreoffice-writer \
     libreoffice-calc \
     libreoffice-impress \
+    libgdiplus \
+    poppler-utils \
+    ghostscript \
+    fontconfig \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
+    fonts-noto-core \
     fonts-dejavu \
     fonts-liberation \
     bubblewrap \
@@ -201,6 +211,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN python3 -m venv /opt/office-venv \
  && /opt/office-venv/bin/pip install --no-cache-dir --no-binary=lxml \
       "Pillow==${PILLOW_VERSION}" \
+      "aspose-cells-python==26.10.0" \
       "XlsxWriter==3.2.9" \
       "charset-normalizer==3.5.2" \
       "et-xmlfile==2.0.0" \

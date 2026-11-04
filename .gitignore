@@ -98,3 +98,7 @@ web/.vitest-screenshots
 # Generated Python bytecode.
 __pycache__/
 *.pyc
+
+# Aspose licenses are runtime-only secrets, never build context or source.
+*.lic
+*.lic.xml
