@@ -374,6 +374,8 @@ export class DocumentOrganizationService
     );
   }
   enqueueAutomatic(p: string, r: string, id: string, doc: string) {
+    // Automatic jobs outlive request context and would otherwise use the project's cloud default.
+    if (currentAccess()?.localAgentThreadId) return;
     let observed:
       | ReturnType<DocumentOrganizationService['context']>
       | undefined;

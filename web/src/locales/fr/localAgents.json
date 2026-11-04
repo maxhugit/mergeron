@@ -1,0 +1,19 @@
+{
+  "localAgentsTitle": "Agents locaux · Ollama",
+  "localAgentCreate": "Créer un agent local",
+  "localAgentsScope": "Le modèle s’exécute sur votre serveur Ollama, sans repli vers le cloud. Les outils gardent leurs permissions réseau ; ce mode n’est pas entièrement hors ligne.",
+  "localAgentsEnable": "Activer les agents locaux",
+  "localAgentsUrl": "URL privée d’Ollama",
+  "localAgentsModels": "Noms des modèles autorisés (séparés par des virgules)",
+  "localAgentsContext": "Fenêtre de contexte (tokens)",
+  "localAgentsContextHelp": "Installez d’abord des modèles compatibles avec les outils dans Ollama. Configurez le même num_ctx sur chaque modèle. Aucun modèle n’est téléchargé automatiquement.",
+  "localAgentsCheck": "Vérifier la configuration enregistrée",
+  "localAgentsSaveError": "Enregistrement impossible. Vérifiez l’URL privée, les noms des modèles et la taille du contexte.",
+  "localAgentsSaved": "Configuration des agents locaux enregistrée.",
+  "localAgentsUnavailable": "Ollama ou un modèle autorisé est indisponible. Vérifiez Paramètres → Codex → Agents locaux. Aucun modèle cloud ne sera utilisé à sa place.",
+  "localAgentsReady_one": "{{count}} modèle local prêt.",
+  "localAgentsReady_other": "{{count}} modèles locaux prêts.",
+  "localAgentsLoadError": "Impossible de charger la configuration des agents locaux.",
+  "localAgentsWorkspace": "Dossier de travail du projet",
+  "localAgentsCreationHelp": "Crée un nouvel agent dans ce projet. Son fournisseur reste local, y compris après redémarrage ou duplication. L’historique d’une conversation existante n’est pas copié."
+}

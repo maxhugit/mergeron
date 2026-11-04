@@ -32,10 +32,45 @@ const fast = {
   hidden: true,
 };
 afterEach(() => {
+  vi.unstubAllGlobals();
   cleanup();
   project.mockReset();
   useModelStore.getState().clearOverrides();
   useTimelineStore.setState({ threadId: null });
+});
+it('uses only the local catalog for a persisted local agent, even with a cloud project default', async () => {
+  useTimelineStore.setState({ threadId: 'local-agent' });
+  project.mockReturnValue({ agentModel: 'project' });
+  useModelStore
+    .getState()
+    .recordPreferences('local-agent', {
+      revision: 1,
+      local: true,
+      model: 'ollama:local',
+    });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        available: true,
+        error: null,
+        data: [
+          {
+            ...standard,
+            model: 'ollama:local',
+            displayName: 'Ollama · local',
+            isDefault: false,
+          },
+        ],
+      }),
+    ),
+  );
+  const { result } = mount('server');
+  await waitFor(() =>
+    expect(result.current.activeModel?.model).toBe('ollama:local'),
+  );
+  expect(result.current.models.map((m) => m.model)).toEqual(['ollama:local']);
+  expect(result.current.hiddenModels).toEqual([]);
 });
 function mount(configModel: string | null, models = [standard, fast]) {
   const client = new QueryClient({

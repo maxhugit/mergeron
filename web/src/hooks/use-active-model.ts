@@ -15,6 +15,11 @@ import type { ModelDto } from '@/generated/api';
 import { useModelStore } from '@/stores/model-store';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { useCurrentProject } from './use-current-project';
+import {
+  localAgentsApi,
+  localAgentModelsKey,
+  type LocalAgentCatalog,
+} from '@/lib/local-agents';
 
 export interface ActiveModel {
   /** Models the picker lists by default, in catalog order. */
@@ -42,6 +47,17 @@ export function useActiveModel(): ActiveModel {
     threadId ? s.preferencesByThread[threadId]?.model : s.modelOverride,
   );
   const project = useCurrentProject();
+  const local = useModelStore((s) =>
+    threadId ? s.preferencesByThread[threadId]?.local === true : false,
+  );
+  const localModels = useQuery({
+    queryKey: localAgentModelsKey,
+    queryFn: ({ signal }) =>
+      localAgentsApi<LocalAgentCatalog>('models', undefined, signal),
+    enabled: local,
+    staleTime: 30000,
+    retry: false,
+  });
 
   // Config model from status (lightweight, cached)
   const { data: statusData } = useQuery({
@@ -59,7 +75,7 @@ export function useActiveModel(): ActiveModel {
   const configModel = (
     statusData?.config.data as { model?: string } | undefined
   )?.model;
-  const all = modelsData?.data ?? [];
+  const all = local ? (localModels.data?.data ?? []) : (modelsData?.data ?? []);
   const models = all.filter((m) => !m.hidden);
   // A durable administrator choice on this agent replaces the project default.
   // Unbound/global overrides still cannot replace a project's model.

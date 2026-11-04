@@ -1,5 +1,6 @@
 /** Thread-scoped command primitives used by the browser composer surface. */
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { LocalAgentsService } from '../local-agents/local-agents.service';
 import type {
   CollaborationMode,
   ModeKind,
@@ -34,6 +35,7 @@ export class ThreadCommandsService {
     private readonly resumeRegistry: ThreadResumeRegistryService,
     private readonly deletionRegistry: ThreadDeletionRegistryService,
     private readonly settingsObserver: ThreadSettingsObserverService,
+    @Optional() private readonly localAgents?: LocalAgentsService,
   ) {}
 
   /** Lists collaboration mode presets provided by the Codex app-server. */
@@ -79,7 +81,14 @@ export class ThreadCommandsService {
     this.deletionRegistry.assertMutable(threadId);
 
     const preset = await this.getCollaborationModePreset(mode);
-    const model = preset.model ?? this.resolveCurrentThreadModel(threadId);
+    const local = this.localAgents?.binding(threadId);
+    const model =
+      local?.model ?? preset.model ?? this.resolveCurrentThreadModel(threadId);
+    const presetEffort = local
+      ? local.model.startsWith('gpt-oss:')
+        ? 'low'
+        : 'none'
+      : preset.reasoningEffort;
     const currentEffort = this.resolveCurrentThreadEffort(threadId);
     const alreadyInMode =
       this.settingsObserver.readCollaborationMode(threadId).mode === mode;
@@ -89,7 +98,7 @@ export class ThreadCommandsService {
     // thread effort, and app-server keeps no history of the previous value.
     // Remember it on the way in so leaving the mode can put it back; re-entering
     // the same mode must not overwrite the saved value with the preset's own.
-    const displaced = preset.reasoningEffort
+    const displaced = presetEffort
       ? alreadyInMode
         ? savedDisplaced
         : { value: currentEffort }
@@ -105,7 +114,7 @@ export class ThreadCommandsService {
         // effort-dictating mode displaced — including an explicit null, which
         // is why the saved value is wrapped rather than compared against null.
         reasoning_effort:
-          preset.reasoningEffort ??
+          presetEffort ??
           (savedDisplaced ? savedDisplaced.value : currentEffort),
         // Null tells app-server to use the built-in developer instructions for
         // this collaboration mode instead of treating WebUI as the instruction

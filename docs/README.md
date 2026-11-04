@@ -42,6 +42,9 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 ## Guides d’utilisation
 
+- [Agents locaux avec Ollama](local-agents.md) : modèles installés sur un serveur
+  privé, création par projet et absence de repli cloud.
+
 - [Explorateur Dossiers, Livrables et Sources](explorateur-projet.md) : références
   des agents, organisation physique, migration et protections.
 

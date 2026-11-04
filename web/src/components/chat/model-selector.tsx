@@ -49,7 +49,7 @@ function modelLabel(model: ModelDto): string {
 
 /** Displays model picker and reasoning effort selector. */
 export function ModelSelector() {
-  const { t } = useTranslation(['common', 'workspaces'], {
+  const { t } = useTranslation(['common', 'workspaces', 'localAgents'], {
     nsMode: 'fallback',
   });
   const { isAdministrator } = usePlatformSession();
@@ -58,6 +58,7 @@ export function ModelSelector() {
   const setServiceTierOverride = useModelStore((s) => s.setServiceTierOverride);
   const selectedThreadId = useTimelineStore((s) => s.threadId);
   const preferences = useThreadExecutionPreferences(selectedThreadId);
+  const local = preferences.preferences?.local === true;
   const effortOverride = useModelStore((s) =>
     selectedThreadId
       ? s.preferencesByThread[selectedThreadId]?.effort
@@ -90,9 +91,12 @@ export function ModelSelector() {
     activeModel?.defaultReasoningEffort ??
     null;
 
-  const displayModel = activeModel
-    ? modelLabel(activeModel)
-    : (activeModelId ?? t('default'));
+  const displayModel =
+    local && preferences.preferences?.localModelName
+      ? `Ollama · ${preferences.preferences.localModelName}`
+      : activeModel
+        ? modelLabel(activeModel)
+        : (activeModelId ?? t('default'));
   const displayEffort = activeEffort ?? '';
 
   if (preferences.error && !preferences.preferences) {
@@ -195,7 +199,12 @@ export function ModelSelector() {
         <p className="text-xs text-muted-foreground">
           {t('appliesToThisConversationFromTheNextMessage')}
         </p>
-        {project?.agentModel && selectedThreadId && (
+        {local && (
+          <p className="text-xs text-muted-foreground">
+            {t('localAgentsScope')}
+          </p>
+        )}
+        {project?.agentModel && selectedThreadId && !local && (
           <OptionRow
             label={t('definedByProject')}
             description={`${[...models, ...hiddenModels].find((model) => model.model === project.agentModel)?.displayName || project.agentModel || t('serverDefault')} · ${project.agentReasoningEffort || t('modelDefault')}`}
@@ -236,7 +245,7 @@ export function ModelSelector() {
                       ? t('hidden')
                       : undefined
                 }
-                description={catalogCopy(model.description)}
+                description={local ? undefined : catalogCopy(model.description)}
                 label={modelLabel(model)}
                 onSelect={() => handleModelSelect(model)}
               />
