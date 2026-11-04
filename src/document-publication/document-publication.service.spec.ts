@@ -266,7 +266,7 @@ describe('agent saves retained documents as new versions', () => {
   });
 
   it('keeps versions in the separate system space while the current file remains in the working space', async () => {
-    const system = projectSystemPath(root);
+    const system = projectSystemPath(root, 3);
     await fs.mkdir(path.dirname(system), { recursive: true });
     await fs.rename(path.join(root, '.mergeron'), system);
     database.db.update(projects).set({ workspaceLayoutVersion: 3 }).run();

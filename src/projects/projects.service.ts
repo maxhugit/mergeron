@@ -3496,13 +3496,23 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     if (confirmation !== project.name)
       throw new BadRequestException('Project confirmation does not match');
     const systemLayout = new ProjectWorkspaceLayout(this.db);
-    // Reject unsafe ownership before removing any agents.
-    await systemLayout.prepareSystemRemoval(project);
     const attached = this.db
       .select()
       .from(projectWorkspaces)
       .where(eq(projectWorkspaces.projectId, id))
       .all();
+    const preserveEmbeddedContent =
+      project.workspaceLayoutVersion >= 4 &&
+      !attached.some(
+        (workspace) =>
+          workspace.primary && deleteWorkspaceIds.includes(workspace.id),
+      );
+    // Reject unsafe ownership before removing any agents.
+    await systemLayout.prepareSystemRemoval(
+      project,
+      preserveEmbeddedContent,
+      deleteWorkspaceIds,
+    );
     const selectedWorkspaceIds = new Set(deleteWorkspaceIds);
     const workspacesToDelete = attached.filter((workspace) =>
       selectedWorkspaceIds.has(workspace.id),
@@ -3540,7 +3550,11 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       .where(eq(projectResources.projectId, id))
       .all();
     // Agent shutdown may have left new private drafts since the preflight.
-    const systemRemoval = await systemLayout.prepareSystemRemoval(project);
+    const systemRemoval = await systemLayout.prepareSystemRemoval(
+      project,
+      preserveEmbeddedContent,
+      deleteWorkspaceIds,
+    );
     await systemRemoval.stage();
     try {
       this.db.transaction((tx) => {
@@ -3571,6 +3585,15 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     }
     await systemRemoval.purge();
     for (const workspace of workspacesToDelete) {
+      if (
+        systemRemoval.paths.includes(workspace.path) ||
+        workspacesToDelete.some(
+          (parent) =>
+            parent.id !== workspace.id &&
+            workspace.path.startsWith(parent.path + path.sep),
+        )
+      )
+        continue;
       if (workspace.primary)
         await this.files.deleteManagedWorkspace(workspace.path);
       else await this.files.deletePath(workspace.path, true);
@@ -3580,7 +3603,13 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       deletedSystemWorkspaces: systemRemoval.paths,
       deletedWorkspaces: workspacesToDelete.map((workspace) => workspace.path),
       preservedWorkspaces: attached
-        .filter((workspace) => !selectedWorkspaceIds.has(workspace.id))
+        .filter(
+          (workspace) =>
+            !selectedWorkspaceIds.has(workspace.id) &&
+            !workspacesToDelete.some((parent) =>
+              workspace.path.startsWith(parent.path + path.sep),
+            ),
+        )
         .map((workspace) => workspace.path),
     };
   }

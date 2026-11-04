@@ -210,7 +210,7 @@
   "gitDisabledHelp": "Cette connexion est désactivée. Activez-la dans l’onglet Emplacements et connexions du projet.",
   "gitWorkingCopy": "Copie de travail",
   "gitActiveForAgent": "Active pour cet agent",
-  "gitUseForAgent": "Utiliser pour cet agent",
+  "gitUseForAgent": "Utiliser comme référence de l’agent",
   "gitDetached": "Révision détachée",
   "gitTracking": "↑ {{ahead}} d’avance · ↓ {{behind}} de retard",
   "gitNoUpstream": "Aucune branche suivie",
@@ -352,5 +352,9 @@
   "gitRestoreClose": "Fermer",
   "gitRestoreUnsafe": "Cette copie contient des fichiers spéciaux, un index partiel ou des modifications trop volumineuses pour une restauration sûre. Inspectez-la avant de continuer.",
   "gitRestoreCollision": "Un fichier non versionné ou ignoré serait écrasé. Déplacez-le vous-même en lieu sûr, puis recommencez l’aperçu.",
-  "gitRestoreGithubRequired": "Cette action nécessite une connexion GitHub configurée."
+  "gitRestoreGithubRequired": "Cette action nécessite une connexion GitHub configurée.",
+  "agentReference": "Référence de l’agent",
+  "explorerFolders": "Dossiers",
+  "explorerDeliverables": "Livrables",
+  "explorerSources": "Sources"
 }

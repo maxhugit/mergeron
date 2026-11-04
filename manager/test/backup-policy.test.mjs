@@ -141,3 +141,25 @@ test('essential selection preserves documents, historical versions, drafts and u
     );
   }
 });
+
+test('embedded project data survives cache-looking directory names in a full backup', () => {
+  for (const relative of [
+    'workspace/project/dossiers/node_modules',
+    'workspace/project/.mergeron-agent-drafts/agent/node_modules',
+    'workspace/project/.mergeron-system/history/node_modules',
+    'workspace/project/.mergeron-system/livrables/output/node_modules',
+    'workspace/project/.mergeron-system/knowledge/node_modules',
+  ])
+    assert.equal(
+      excludesBackupDirectory(PRODUCTION_ESSENTIAL, relative),
+      false,
+      relative,
+    );
+  assert.equal(
+    excludesBackupDirectory(
+      PRODUCTION_ESSENTIAL,
+      'workspace/project/.mergeron-system/sources/connection/copies/copy/node_modules',
+    ),
+    true,
+  );
+});

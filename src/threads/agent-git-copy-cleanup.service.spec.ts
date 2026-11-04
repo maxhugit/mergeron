@@ -36,7 +36,14 @@ const mutate = vi.fn();
 beforeEach(async () => {
   database = createTestDatabase();
   root = await mkdtemp(path.join(tmpdir(), 'agent-copy-cleanup-'));
-  checkout = path.join(root, 'sources', '.external', 'remote', 'copy');
+  checkout = path.join(
+    root,
+    '.mergeron-system',
+    'sources',
+    'remote',
+    'copies',
+    'copy',
+  );
   await mkdir(path.join(checkout, '.git'), { recursive: true });
   await writeFile(path.join(checkout, 'uncommitted.txt'), 'local changes');
   database.db

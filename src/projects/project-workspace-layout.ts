@@ -1,3 +1,5 @@
+import { serializeProjectLayout } from './project-layout-lock';
+import { migrateManagedProject } from './managed-project-layout';
 import { ConflictException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
@@ -18,13 +20,13 @@ import {
   simpleChatThreads,
   projectTasks,
   projectActiveFolders,
+  projectWorkspaceCopies,
 } from '../database/schema';
 import {
-  WORKSPACE_LAYOUT_VERSION,
+  WORKSPACE_LAYOUT_VERSION as CURRENT_LAYOUT_VERSION,
   PROJECT_SYSTEM_DIRECTORY,
   LEGACY_PROJECT_SYSTEM_DIRECTORY,
-  PROJECT_CONTENT_DIRECTORIES,
-  PROJECT_WORKSPACE_INSTRUCTIONS,
+  SEPARATE_PROJECT_WORKSPACE_INSTRUCTIONS as PROJECT_WORKSPACE_INSTRUCTIONS,
   LEGACY_PROJECT_WORKSPACE_INSTRUCTIONS,
   projectSystemPath,
   PROJECT_SYSTEM_SPACES_DIRECTORY,
@@ -33,10 +35,18 @@ import {
 } from './workspace-structure';
 
 /** Files belong to the primary workspace; the database only records their location. */
-export class ProjectWorkspaceLayout {
+const WORKSPACE_LAYOUT_VERSION = 3;
+
+const PROJECT_CONTENT_DIRECTORIES = [
+  'documents',
+  'sources',
+  'livrables',
+] as const;
+
+export class LegacyProjectWorkspaceLayout {
   constructor(
-    private readonly db: AppDatabase,
-    private readonly root = '/workspaces',
+    protected readonly db: AppDatabase,
+    protected readonly root = '/workspaces',
   ) {}
 
   primaryPath(id: string) {
@@ -46,11 +56,15 @@ export class ProjectWorkspaceLayout {
   }
 
   /** Quarantine owned internal data before deleting its DB owner; restore on DB failure. */
-  async prepareSystemRemoval(project: {
-    id: string;
-    workspacePath: string;
-    workspaceLayoutVersion: number;
-  }) {
+  async prepareSystemRemoval(
+    project: {
+      id: string;
+      workspacePath: string;
+      workspaceLayoutVersion: number;
+    },
+    preserveEmbeddedContent = false,
+    selectedWorkspaceIds: readonly string[] = [],
+  ) {
     const entries: Array<{
       original: string;
       staged: string;
@@ -80,7 +94,10 @@ export class ProjectWorkspaceLayout {
           ? [path.join(root, LEGACY_PROJECT_SYSTEM_DIRECTORY)]
           : []),
       ];
-      for (const original of new Set([...systems, projectDraftPath(root)])) {
+      for (const original of new Set([
+        ...systems,
+        projectDraftPath(root, project.workspaceLayoutVersion),
+      ])) {
         const stat = await this.statIfPresent(original);
         if (!stat) continue;
         await validateParent(original);
@@ -99,6 +116,47 @@ export class ProjectWorkspaceLayout {
           ino: stat.ino,
           dev: stat.dev,
           ownsMarker: systems.includes(original),
+        });
+      }
+    }
+    if (project.workspaceLayoutVersion >= 4 && preserveEmbeddedContent) {
+      // Keeping the project folder includes its current documents, histories and Git copies.
+      // Only explicitly selected managed copies are quarantined separately.
+      entries.length = 0;
+      const physicalRoot = await fs.realpath(project.workspacePath);
+      for (const copy of this.db
+        .select()
+        .from(projectWorkspaceCopies)
+        .where(eq(projectWorkspaceCopies.projectId, project.id))
+        .all()) {
+        if (!selectedWorkspaceIds.includes(copy.localWorkspaceId)) continue;
+        const workspace = this.db
+          .select()
+          .from(projectWorkspaces)
+          .where(eq(projectWorkspaces.id, copy.localWorkspaceId))
+          .get();
+        const expected = path.join(
+          physicalRoot,
+          '.mergeron-system',
+          'sources',
+          copy.sourceResourceId,
+          'copies',
+          copy.id,
+        );
+        if (!workspace || (await fs.realpath(workspace.path)) !== expected)
+          throw new ConflictException('Unsafe managed copy deletion');
+        const stat = await fs.lstat(workspace.path);
+        if (!stat.isDirectory() || stat.isSymbolicLink())
+          throw new ConflictException('Unsafe managed copy deletion');
+        entries.push({
+          original: workspace.path,
+          staged: path.join(
+            path.dirname(workspace.path),
+            `.${copy.id}.deleting-${randomUUID()}`,
+          ),
+          ino: stat.ino,
+          dev: stat.dev,
+          ownsMarker: false,
         });
       }
     }
@@ -173,6 +231,10 @@ export class ProjectWorkspaceLayout {
   }
 
   async prepare(id: string): Promise<string> {
+    return this.preparePrimary(id);
+  }
+
+  private async preparePrimary(id: string): Promise<string> {
     const target = this.primaryPath(id);
     const owner = this.db
       .select()
@@ -224,7 +286,7 @@ export class ProjectWorkspaceLayout {
         );
       await this.migrateSystemDirectory(target, id);
     }
-    const system = projectSystemPath(target);
+    const system = projectSystemPath(target, 3);
     await this.ensureSystemParent(target);
     if (created && (await this.statIfPresent(system)))
       await this.readMarker(system, id);
@@ -288,7 +350,7 @@ export class ProjectWorkspaceLayout {
         this.migrateHistoryReferences(project.id, project.workspacePath);
         continue;
       }
-      const target = await this.prepare(project.id);
+      const target = await this.preparePrimary(project.id);
       const now = Date.now();
       this.db.transaction((tx) => {
         const attached = tx
@@ -381,7 +443,9 @@ export class ProjectWorkspaceLayout {
         throw new ConflictException(
           'Primary workspace belongs to another project',
         );
-      if (![1, 2, WORKSPACE_LAYOUT_VERSION].includes(marker.layoutVersion ?? 0))
+      if (
+        ![1, 2, 3, CURRENT_LAYOUT_VERSION].includes(marker.layoutVersion ?? 0)
+      )
         throw new ConflictException('Unsupported workspace layout version');
       return marker;
     } catch (error) {
@@ -403,7 +467,7 @@ export class ProjectWorkspaceLayout {
       );
     const legacy = path.join(root, LEGACY_PROJECT_SYSTEM_DIRECTORY);
     const embedded = path.join(root, PROJECT_SYSTEM_DIRECTORY);
-    const destination = projectSystemPath(root);
+    const destination = projectSystemPath(root, 3);
     const [oldStat, newStat] = await Promise.all([
       this.statIfPresent(legacy),
       this.statIfPresent(embedded),
@@ -481,7 +545,7 @@ export class ProjectWorkspaceLayout {
         );
       await fs.rename(from, to);
     }
-    const draft = projectDraftPath(root);
+    const draft = projectDraftPath(root, 3);
     const draftStat = await this.statIfPresent(draft);
     if (draftStat) {
       if (!draftStat.isDirectory() || draftStat.isSymbolicLink())
@@ -535,7 +599,7 @@ export class ProjectWorkspaceLayout {
 
   /** Replayable after a crash between the filesystem rename and this transaction. */
   private migrateHistoryReferences(projectId: string, root: string) {
-    const destination = projectSystemPath(root);
+    const destination = projectSystemPath(root, 3);
     const relocate = (value: string) => {
       for (const name of [
         LEGACY_PROJECT_SYSTEM_DIRECTORY,
@@ -759,5 +823,50 @@ export class ProjectWorkspaceLayout {
         .where(eq(projects.id, projectId))
         .run();
     });
+  }
+}
+
+/** Version 4 keeps managed data below each project, with replayable path migration. */
+export class ProjectWorkspaceLayout extends LegacyProjectWorkspaceLayout {
+  override async prepare(id: string): Promise<string> {
+    const existing = this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, id))
+      .get();
+    if (existing?.workspaceLayoutVersion === CURRENT_LAYOUT_VERSION) {
+      const stat = await fs.lstat(existing.workspacePath);
+      const system = projectSystemPath(existing.workspacePath);
+      const systemStat = await fs.lstat(system);
+      const marker = JSON.parse(
+        await fs.readFile(path.join(system, 'project.json'), 'utf8'),
+      ) as { projectId?: unknown } | null;
+      if (
+        !stat.isDirectory() ||
+        stat.isSymbolicLink() ||
+        !systemStat.isDirectory() ||
+        systemStat.isSymbolicLink() ||
+        marker?.projectId !== id
+      )
+        throw new ConflictException('Invalid project layout owner');
+      return existing.workspacePath;
+    }
+    const target = await super.prepare(id);
+    await migrateManagedProject(this.db, id, target);
+    return target;
+  }
+  override async migrate(onlyProjectId?: string): Promise<void> {
+    return serializeProjectLayout(this.db, () =>
+      this.migrateSequential(onlyProjectId),
+    );
+  }
+  private async migrateSequential(onlyProjectId?: string): Promise<void> {
+    await super.migrate(onlyProjectId);
+    for (const project of this.db.select().from(projects).all()) {
+      if (onlyProjectId && project.id !== onlyProjectId) continue;
+      if (project.workspaceLayoutVersion >= CURRENT_LAYOUT_VERSION) continue;
+      if (!(await fs.lstat(project.workspacePath).catch(() => null))) continue;
+      await migrateManagedProject(this.db, project.id, project.workspacePath);
+    }
   }
 }

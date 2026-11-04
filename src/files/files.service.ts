@@ -1,3 +1,4 @@
+import { managedContentAccess } from '../projects/managed-content-access';
 /**
  * File system operations with workspace root security enforcement.
  * All paths are resolved to real paths and validated against allowed workspace roots.
@@ -1090,9 +1091,11 @@ export class FilesService implements OnModuleDestroy {
       return path.join(fsSync.realpathSync(current), ...tail);
     };
     const target = canonical(targetPath);
+    const managed = managedContentAccess(this.db, target);
     if (
-      isPrivateProjectSpace(target) ||
-      isPrivateProjectSpace(path.resolve(targetPath))
+      (isPrivateProjectSpace(target) ||
+        isPrivateProjectSpace(path.resolve(targetPath))) &&
+      !(managed?.kind === 'source' && target !== managed.root)
     )
       throw BusinessException.conflict(
         ErrorCode.files.cannotModifyRoot,
@@ -1113,9 +1116,10 @@ export class FilesService implements OnModuleDestroy {
           contains(path.join(root, name), target),
         ) ||
         (project.workspaceLayoutVersion >= 2 &&
-          PROJECT_CONTENT_DIRECTORIES.some((name) =>
-            contains(target, path.join(root, name)),
-          ))
+          (project.workspaceLayoutVersion >= 4
+            ? PROJECT_CONTENT_DIRECTORIES
+            : ['documents', 'sources', 'livrables']
+          ).some((name: string) => contains(target, path.join(root, name))))
       ) {
         throw BusinessException.conflict(
           ErrorCode.files.cannotModifyRoot,

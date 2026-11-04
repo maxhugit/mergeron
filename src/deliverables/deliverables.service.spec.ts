@@ -31,7 +31,7 @@ import { IdentityService } from '../auth/identity.service';
 import { accessContext } from '../auth/access-context';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 
-describe('project deliverables', () => {
+describe.each([1, 4])('project deliverables (layout %i)', (layoutVersion) => {
   let database: TestDatabase,
     root: string,
     service: DeliverablesService,
@@ -41,7 +41,10 @@ describe('project deliverables', () => {
     root = await fs.realpath(
       await fs.mkdtemp(path.join(os.tmpdir(), 'deliverables-')),
     );
-    await fs.mkdir(path.join(root, '.mergeron'));
+    await fs.mkdir(
+      path.join(root, layoutVersion >= 4 ? '.mergeron-system' : '.mergeron'),
+    );
+    if (layoutVersion >= 4) await fs.mkdir(path.join(root, '.mergeron'));
     const now = Date.now();
     database.db
       .insert(projects)
@@ -49,7 +52,7 @@ describe('project deliverables', () => {
         id: 'p',
         name: 'Project',
         workspacePath: root,
-        workspaceLayoutVersion: 1,
+        workspaceLayoutVersion: layoutVersion,
         createdAt: now,
         updatedAt: now,
       })
@@ -113,7 +116,15 @@ describe('project deliverables', () => {
     ).rejects.toThrow('NO_ACTIVE_TURN');
     expect(service.documents('p', 'r', item.id)).toEqual([]);
     await expect(
-      fs.stat(path.join(root, 'livrables', item.id, 'audio.mp3')),
+      fs.stat(
+        path.join(
+          root,
+          ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+          'livrables',
+          item.id,
+          'audio.mp3',
+        ),
+      ),
     ).rejects.toThrow();
   });
   it.each([false, true])(
@@ -125,7 +136,13 @@ describe('project deliverables', () => {
       );
       try {
         const item = await service.create('p', 'r', { title: 'Explorer' });
-        const source = path.join(root, 'livrables', item.id, 'report.txt');
+        const source = path.join(
+          root,
+          ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+          'livrables',
+          item.id,
+          'report.txt',
+        );
         await files.createFile(source, 'First');
         let document = service.documents('p', 'r', item.id)[0];
         expect(document).toMatchObject({
@@ -174,7 +191,12 @@ describe('project deliverables', () => {
   );
   it('guards explorer mutations and uploads before touching retained files', async () => {
     const item = await service.create('p', 'r', { title: 'Explorer guards' });
-    const directory = path.join(root, 'livrables', item.id);
+    const directory = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+    );
     const source = path.join(directory, 'report.txt');
     await files.createFile(source, 'Original');
     const document = service.documents('p', 'r', item.id)[0];
@@ -192,7 +214,15 @@ describe('project deliverables', () => {
     const importDirectory = path.join(root, 'incoming');
     await fs.mkdir(importDirectory);
     await expect(
-      files.copyPath(importDirectory, path.join(root, 'livrables'), true),
+      files.copyPath(
+        importDirectory,
+        path.join(
+          root,
+          ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+          'livrables',
+        ),
+        true,
+      ),
     ).rejects.toThrow();
     await expect(
       files.movePath(source, path.join(root, 'moved.txt')),
@@ -233,7 +263,13 @@ describe('project deliverables', () => {
       );
       try {
         const item = await service.create('p', 'r', { title: 'Rename' });
-        const source = path.join(root, 'livrables', item.id, 'report.docx');
+        const source = path.join(
+          root,
+          ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+          'livrables',
+          item.id,
+          'report.docx',
+        );
         await fs.writeFile(source, 'Version one');
         await service.addDocumentVersion(
           'p',
@@ -306,7 +342,13 @@ describe('project deliverables', () => {
   );
   it('retains unregistered files before explorer removal and rolls back failed version writes', async () => {
     const item = await service.create('p', 'r', { title: 'Explorer recovery' });
-    const source = path.join(root, 'livrables', item.id, 'legacy.txt');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'legacy.txt',
+    );
     await fs.writeFile(source, 'Legacy content');
     await files.deletePath(source);
     const removed = service.documents('p', 'r', item.id)[0];
@@ -332,12 +374,25 @@ describe('project deliverables', () => {
       1,
     );
     expect(
-      await fs.readdir(path.join(root, 'livrables', '.version-staging')),
+      await fs.readdir(
+        path.join(
+          root,
+          ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+          'livrables',
+          '.version-staging',
+        ),
+      ),
     ).toEqual([]);
   });
   it('rejects conflicting names, unsafe names, stale requests and active editors without changing the original', async () => {
     const item = await service.create('p', 'r', { title: 'Rename guards' });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Original');
     await service.addDocumentVersion(
       'p',
@@ -390,7 +445,13 @@ describe('project deliverables', () => {
   });
   it('rejects a symlink substituted for the registered document', async () => {
     const item = await service.create('p', 'r', { title: 'Rename symlink' });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Original');
     await service.addDocumentVersion(
       'p',
@@ -423,7 +484,13 @@ describe('project deliverables', () => {
     const item = await service.create('p', 'r', {
       title: 'Rename concurrency',
     });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Original');
     await service.addDocumentVersion(
       'p',
@@ -453,7 +520,13 @@ describe('project deliverables', () => {
   });
   it('keeps renamed paths reserved and safely finishes interrupted cleanup on restart', async () => {
     const item = await service.create('p', 'r', { title: 'Rename recovery' });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Original');
     await service.addDocumentVersion(
       'p',
@@ -483,7 +556,13 @@ describe('project deliverables', () => {
     expect(await fs.readFile(document.versions[0].snapshotPath, 'utf8')).toBe(
       'Original',
     );
-    const second = path.join(root, 'livrables', item.id, 'second.docx');
+    const second = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'second.docx',
+    );
     await fs.writeFile(second, 'Second');
     await service.addDocumentVersion(
       'p',
@@ -518,7 +597,13 @@ describe('project deliverables', () => {
   });
   it('preserves the original when the rename database commit fails', async () => {
     const item = await service.create('p', 'r', { title: 'Rename rollback' });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Original');
     await service.addDocumentVersion(
       'p',
@@ -591,7 +676,13 @@ describe('project deliverables', () => {
   });
   it('retains document deletion and restoration events across repeated cycles', async () => {
     const item = await service.create('p', 'r', { title: 'Audited documents' });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Report');
     const created = await service.addDocumentVersion(
       'p',
@@ -896,6 +987,29 @@ describe('project deliverables', () => {
     });
     const asPerson = <T>(id: string, action: () => T) =>
       accessContext.run({ identity: identity(id), identities }, action);
+    if (layoutVersion >= 4) {
+      const retained = path.join(
+        root,
+        '.mergeron-system',
+        'livrables',
+        item.id,
+        'restricted.txt',
+      );
+      await fs.writeFile(retained, 'confidential');
+      await service.addDocumentVersion(
+        'p',
+        'r',
+        item.id,
+        { path: retained },
+        { name: 'Author', personId: null },
+      );
+      await expect(
+        asPerson('alice', () => files.resolveSafePath(retained)),
+      ).resolves.toBe(retained);
+      await expect(
+        asPerson('bob', () => files.resolveSafePath(retained)),
+      ).rejects.toThrow('Deliverable access denied');
+    }
     expect(
       asPerson('alice', () => service.board('p', 'r').deliverables),
     ).toHaveLength(1);
@@ -931,7 +1045,13 @@ describe('project deliverables', () => {
       title: 'Report',
       criteria: 'Readable',
     });
-    const source = path.join(root, 'livrables', item.id, 'report.txt');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.txt',
+    );
     await fs.writeFile(source, 'First');
     const first = await service.submit('p', 'r', item.id, {
       paths: [source],
@@ -971,8 +1091,20 @@ describe('project deliverables', () => {
   });
   it('versions every document independently and restores history as a new version', async () => {
     const item = await service.create('p', 'r', { title: 'Document set' });
-    const report = path.join(root, 'livrables', item.id, 'report.docx');
-    const sheet = path.join(root, 'livrables', item.id, 'budget.xlsx');
+    const report = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
+    const sheet = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'budget.xlsx',
+    );
     await fs.writeFile(report, 'Report V1');
     await service.addDocumentVersion(
       'p',
@@ -1060,7 +1192,13 @@ describe('project deliverables', () => {
   });
   it('validates an immutable snapshot and marks pending requests outdated after document changes', async () => {
     const item = await service.create('p', 'r', { title: 'Approval pack' });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Version 1');
     await service.addDocumentVersion(
       'p',
@@ -1166,7 +1304,13 @@ describe('project deliverables', () => {
   });
   it('cancels an active request before validation can be disabled', async () => {
     const item = await service.create('p', 'r', { title: 'Optional review' });
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Version 1');
     await service.addDocumentVersion(
       'p',
@@ -1239,7 +1383,13 @@ describe('project deliverables', () => {
       }),
     ).toThrow('at least one document');
 
-    const source = path.join(root, 'livrables', item.id, 'report.docx');
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'report.docx',
+    );
     await fs.writeFile(source, 'Version 1');
     await service.addDocumentVersion(
       'p',
@@ -1384,7 +1534,12 @@ describe('project deliverables', () => {
     });
     expect(service.contextForConversation('agent')).toContain('My brief');
     expect(service.contextForConversation('agent')).toContain(
-      path.join(root, 'livrables', item.id),
+      path.join(
+        root,
+        ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+        'livrables',
+        item.id,
+      ),
     );
     expect(service.contextForConversation('unrelated')).toBeNull();
     const updated = service.update('p', 'r', item.id, {
@@ -1392,7 +1547,12 @@ describe('project deliverables', () => {
       version: 1,
     });
     expect(service.board('p', 'r').deliverables[0].directory).toBe(
-      path.join(root, 'livrables', updated.id),
+      path.join(
+        root,
+        ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+        'livrables',
+        updated.id,
+      ),
     );
   });
   it('returns existing optional managers and enforces singleton inserts in SQLite', () => {
@@ -1600,7 +1760,14 @@ describe('project deliverables', () => {
     expect(database.db.select().from(projectTasks).all()).toEqual([]);
     expect(
       new ActiveFoldersService(database.db).resolve('agent', 'direct-agent'),
-    ).toBe(path.join(root, 'livrables', item.id));
+    ).toBe(
+      path.join(
+        root,
+        ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+        'livrables',
+        item.id,
+      ),
+    );
     expect(() =>
       service.registerAgent('p', 'r', item.id, item.version, 'stale-direct'),
     ).toThrow('changed');
@@ -1683,7 +1850,12 @@ describe('project deliverables', () => {
       primaryTaskId: 'main-task',
     });
     expect(service.agentWorkspace('p', 'r', item.id, 1)).toBe(
-      path.join(root, 'livrables', item.id),
+      path.join(
+        root,
+        ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+        'livrables',
+        item.id,
+      ),
     );
     database.db
       .insert(projectAgentThreads)

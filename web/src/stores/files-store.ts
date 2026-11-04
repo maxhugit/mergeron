@@ -17,7 +17,7 @@ interface FilesState {
   removePaths: (deletedPath: string) => void;
 }
 
-const createFilesStore = () =>
+export const createFilesStore = () =>
   create<FilesState>((set, get) => ({
     rootDir: null,
     selectedFile: null,

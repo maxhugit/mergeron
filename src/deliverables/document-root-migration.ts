@@ -1,3 +1,5 @@
+import { serializeProjectLayout } from '../projects/project-layout-lock';
+import { projectDeliverablesPath } from '../projects/workspace-structure';
 import * as fs from 'node:fs/promises';
 import { constants, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -44,8 +46,17 @@ export async function regularPath(root: string, file: string) {
   return fs.stat(file);
 }
 
-function managedPath(root: string, deliverableId: string, source: string) {
-  const published = path.join(root, 'livrables', deliverableId, 'published');
+function managedPath(
+  root: string,
+  deliverableId: string,
+  source: string,
+  version: number,
+) {
+  const published = path.join(
+    projectDeliverablesPath(root, version),
+    deliverableId,
+    'published',
+  );
   const relative = path.relative(published, source);
   const parts = relative.split(path.sep);
   return (
@@ -92,7 +103,7 @@ export async function retireProjection(
 }
 
 /** Startup-only relocation. Each document is independently restartable; no snapshots are touched. */
-export async function migrateDeliverableDocumentRoots(
+async function migrateDocumentRoots(
   db: AppDatabase,
   warn: (message: string) => void,
 ) {
@@ -116,15 +127,23 @@ export async function migrateDeliverableDocumentRoots(
       project.workspacePath,
       document.deliverableId,
       document.sourcePath,
+      project.workspaceLayoutVersion,
     );
     const retired = document.previousSourcePaths.filter(
       (former) =>
-        managedPath(project.workspacePath, document.deliverableId, former) ||
+        managedPath(
+          project.workspacePath,
+          document.deliverableId,
+          former,
+          project.workspaceLayoutVersion,
+        ) ||
         (former !== document.sourcePath &&
           path.dirname(former) ===
             path.join(
-              project.workspacePath,
-              'livrables',
+              projectDeliverablesPath(
+                project.workspacePath,
+                project.workspaceLayoutVersion,
+              ),
               document.deliverableId,
             )),
     );
@@ -138,8 +157,7 @@ export async function migrateDeliverableDocumentRoots(
       )
         throw new Error('Invalid document name');
       const target = path.join(
-        root,
-        'livrables',
+        projectDeliverablesPath(root, project.workspaceLayoutVersion),
         document.deliverableId,
         document.name,
       );
@@ -220,4 +238,11 @@ export async function migrateDeliverableDocumentRoots(
     }
   }
   return result;
+}
+
+export function migrateDeliverableDocumentRoots(
+  db: AppDatabase,
+  warn: (message: string) => void,
+) {
+  return serializeProjectLayout(db, () => migrateDocumentRoots(db, warn));
 }

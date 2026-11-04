@@ -8,6 +8,8 @@ export interface DocumentIsolationPlan {
   writableRoots: string[];
   publishedRoots: string[];
   privateRoots?: string[];
+  managedReadRoots?: string[];
+  managedWriteRoots?: string[];
   unavailableRoots?: string[];
 }
 
@@ -114,8 +116,25 @@ export function documentIsolationArgs(
   for (const root of [...new Set(plan.privateRoots ?? [])].sort()) {
     if (!root.startsWith('/workspaces/'))
       throw new Error('Invalid system workspace boundary');
-    result.push('--tmpfs', root, '--remount-ro', root);
+    result.push('--tmpfs', root);
   }
+  // Expose only registered projections/copies below an otherwise empty system namespace.
+  for (const [mode, managedRoots] of [
+    ['--ro-bind', plan.managedReadRoots ?? []],
+    ['--bind', plan.managedWriteRoots ?? []],
+  ] as const) {
+    for (const root of [...new Set(managedRoots)].sort()) {
+      if (
+        !plan.privateRoots?.some((parent) => root.startsWith(parent + path.sep))
+      )
+        throw new Error(
+          'Managed visibility must be scoped below a private project space',
+        );
+      result.push(mode, root, root);
+    }
+  }
+  for (const root of [...new Set(plan.privateRoots ?? [])].sort())
+    result.push('--remount-ro', root);
   // Missing paths are masked inside the namespace only, never recreated on disk.
   for (const root of [...new Set(plan.unavailableRoots ?? [])].sort()) {
     if (!root.startsWith('/workspaces/'))

@@ -42,6 +42,9 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 ## Guides d’utilisation
 
+- [Explorateur Dossiers, Livrables et Sources](explorateur-projet.md) : références
+  des agents, organisation physique, migration et protections.
+
 - [Navigation des projets et archives](navigation-projets-et-archives.md) : focus,
   réordonnancement, menu des projets et traçabilité de l’archivage.
 - [Guide utilisateur intégré et maintenance](guide-utilisateur.md) : sommaire

@@ -1,3 +1,7 @@
+import {
+  projectSystemPath,
+  projectSourcesPath,
+} from '../projects/workspace-structure';
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { lstat, realpath, rm } from 'node:fs/promises';
@@ -74,13 +78,13 @@ export class AgentGitCopyCleanupService {
     if (!workspace || !primary)
       throw new ConflictException('Working copy is detached');
     const target = path.resolve(workspace.path);
-    const allowed = path.resolve(primary.path, 'sources', '.external');
+    const allowed = projectSourcesPath(primary.path);
     if (
       workspace.primary ||
       workspace.projectId !== copy.projectId ||
       !/^[A-Za-z0-9_-]+$/.test(copy.sourceResourceId) ||
       !/^[A-Za-z0-9_-]+$/.test(copy.id) ||
-      target !== path.join(allowed, copy.sourceResourceId, copy.id)
+      target !== path.join(allowed, copy.sourceResourceId, 'copies', copy.id)
     )
       throw new ConflictException('GIT_COPY_PATH_UNSAFE');
 
@@ -88,8 +92,9 @@ export class AgentGitCopyCleanupService {
     // Never follow a symlink, including a symlink in an ancestor directory.
     // An already absent checkout is still eligible for metadata cleanup.
     for (const candidate of [
-      path.join(primary.path, 'sources'),
+      projectSystemPath(primary.path),
       allowed,
+      path.dirname(path.dirname(target)),
       path.dirname(target),
       target,
     ]) {
@@ -155,10 +160,9 @@ export class AgentGitCopyCleanupService {
       }),
     ];
     const canonicalTarget = path.join(
-      root,
-      'sources',
-      '.external',
+      projectSourcesPath(root),
       copy.sourceResourceId,
+      'copies',
       copy.id,
     );
     for (const reference of references) {

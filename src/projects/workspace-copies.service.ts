@@ -1,3 +1,4 @@
+import { projectSystemPath, projectSourcesPath } from './workspace-structure';
 import {
   BadRequestException,
   ConflictException,
@@ -127,17 +128,17 @@ export class WorkspaceCopiesService {
     if (!primary) throw new ConflictException('Primary workspace is missing');
     const id = randomUUID();
     const parent = path.join(
-      primary.path,
-      'sources',
-      '.external',
+      projectSourcesPath(primary.path),
       sourceResourceId,
+      'copies',
     );
     const target = path.join(parent, id);
     const primaryRoot = await realpath(primary.path);
     const verifyParent = async () => {
       for (const directory of [
-        path.join(primary.path, 'sources'),
-        path.join(primary.path, 'sources', '.external'),
+        projectSystemPath(primary.path),
+        projectSourcesPath(primary.path),
+        path.dirname(parent),
         parent,
       ]) {
         const entry = await lstat(directory);
@@ -146,13 +147,14 @@ export class WorkspaceCopiesService {
       }
       if (
         (await realpath(parent)) !==
-        path.join(primaryRoot, 'sources', '.external', sourceResourceId)
+        path.join(projectSourcesPath(primaryRoot), sourceResourceId, 'copies')
       )
         throw new ConflictException('GIT_COPY_PATH_UNSAFE');
     };
     for (const directory of [
-      path.join(primary.path, 'sources'),
-      path.join(primary.path, 'sources', '.external'),
+      projectSystemPath(primary.path),
+      projectSourcesPath(primary.path),
+      path.dirname(parent),
       parent,
     ]) {
       await mkdir(directory, { recursive: false }).catch(
@@ -294,7 +296,7 @@ export class WorkspaceCopiesService {
       )
       .get();
     if (!primary) throw new ConflictException('Primary workspace is missing');
-    const allowed = path.resolve(primary.path, 'sources', '.external');
+    const allowed = projectSourcesPath(primary.path);
     const target = path.resolve(workspace.path);
     if (expectedPath !== workspace.path)
       throw new ConflictException('GIT_STALE');
@@ -302,13 +304,14 @@ export class WorkspaceCopiesService {
       workspace.primary ||
       !target.startsWith(allowed + path.sep) ||
       !/^[A-Za-z0-9_-]+$/.test(copy.sourceResourceId) ||
-      target !== path.join(allowed, copy.sourceResourceId, copy.id)
+      target !== path.join(allowed, copy.sourceResourceId, 'copies', copy.id)
     )
       throw new ConflictException('Working copy path is outside its project');
     const root = await realpath(primary.path);
     for (const candidate of [
-      path.join(primary.path, 'sources'),
+      projectSystemPath(primary.path),
       allowed,
+      path.dirname(path.dirname(target)),
       path.dirname(target),
       target,
     ]) {
@@ -319,7 +322,12 @@ export class WorkspaceCopiesService {
     const canonicalTarget = await realpath(target);
     if (
       canonicalTarget !==
-      path.join(root, 'sources', '.external', copy.sourceResourceId, copy.id)
+      path.join(
+        projectSourcesPath(root),
+        copy.sourceResourceId,
+        'copies',
+        copy.id,
+      )
     )
       throw new ConflictException('GIT_COPY_PATH_UNSAFE');
     const contains = (value: string) =>
@@ -366,7 +374,7 @@ export class WorkspaceCopiesService {
     for (const value of paths)
       if (contains(await realpath(value).catch(() => path.resolve(value))))
         throw new ConflictException('GIT_COPY_IN_USE');
-    const trash = path.join(root, 'sources', '.external', '.trash');
+    const trash = path.join(projectSourcesPath(root), '.trash');
     await mkdir(trash, { recursive: true, mode: 0o700 });
     if (
       (await lstat(trash)).isSymbolicLink() ||

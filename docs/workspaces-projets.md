@@ -10,12 +10,13 @@ Chaque projet possède un workspace principal permanent dans `/workspaces/<id-du
 
 Chaque agent, conversation simple, tâche et livrable possède son propre dossier actif. Le choix d'un dossier actif ne change pas le principal du projet. Parcourir un dossier dans l'explorateur ne change pas non plus le contexte d'exécution.
 
-Dans la sidebar de l’agent, **Espace système** est présenté en premier aux
-administrateurs, en lecture seule. **Espace de travail** contient les fichiers
-du projet. L’étoile colorée indique le dossier de travail actif ; les menus
-contextuels permettent de parcourir un autre emplacement sans le rendre actif.
+La sidebar présente les vues **Dossiers**, **Livrables** et **Sources**. La référence
+courante de l’agent est affichée indépendamment de la vue parcourue. Les menus
+contextuels proposent **Utiliser comme référence de l’agent**. Les détails de
+l’interface, de l’organisation et des protections sont dans le
+[guide de l’explorateur](explorateur-projet.md).
 
-À la création, un agent ou une conversation simple utilise le principal. Une tâche utilise le dossier explicitement choisi, celui de sa tâche parente, puis le principal. Un livrable utilise son propre sous-dossier dans `livrables/`. Lorsqu'un agent est lié à une tâche, le dossier actif de la tâche est prioritaire sur le défaut de l'agent.
+À la création, un agent ou une conversation simple utilise le principal. Une tâche utilise le dossier explicitement choisi, celui de sa tâche parente, puis le principal. Un livrable utilise son propre sous-dossier dans `.mergeron-system/livrables/`. Lorsqu'un agent est lié à une tâche, le dossier actif de la tâche est prioritaire sur le défaut de l'agent.
 
 Le serveur résout la ressource et le chemin relatif avant chaque nouvelle opération. Il vérifie leur appartenance au projet, l'existence du dossier, son confinement dans la ressource et l'absence de lien symbolique. Un changement s'applique aux opérations suivantes ; une exécution déjà lancée conserve le contexte résolu à son démarrage.
 
@@ -40,24 +41,26 @@ via le MCP interne](contexte-et-outils-agents.md#connexions-du-projet-et-utilisa
 
 ### Structure
 
-La structure actuelle est en version **3** et sépare deux racines :
+La structure actuelle est en version **4** :
 
-| Racine / chemin | Usage |
-| --- | --- |
-| `/workspaces/<id>/` | Espace de travail permanent du projet |
-| `AGENTS.md` | Explication de l’organisation du dossier de travail |
-| `documents/`, `sources/`, `livrables/` | Contenu de travail utilisateur sous cette racine |
-| `/workspaces/.mergeron-system/<id>/` | Espace système séparé, réservé aux administrateurs |
-| `project.json` | Marqueur de propriété et version, sous la racine système |
-| `knowledge/AGENTS.md`, `knowledge/CONNAISSANCES.md`, `knowledge/DECISIONS.md` | Connaissances partagées, sous la racine système |
-| `history/` | Versions et historique applicatif, sous la racine système |
+| Racine / chemin                                            | Usage                                         |
+| ---------------------------------------------------------- | --------------------------------------------- |
+| `/workspaces/<id>/`                                        | Racine permanente du projet                   |
+| `AGENTS.md`                                                | Instructions de l’organisation du projet      |
+| `dossiers/`                                                | Organisation libre des fichiers utilisateur   |
+| `.mergeron-system/`                                        | Données gérées, masquées hors des vues métier |
+| `.mergeron-system/livrables/<livrable>/`                   | Documents courants                            |
+| `.mergeron-system/sources/<connexion>/copies/<copie>/`     | Copies Git autonomes                          |
+| `.mergeron-system/knowledge/`, `.mergeron-system/history/` | Connaissances et versions                     |
+| `.mergeron-agent-drafts/`                                  | Préparation des documents par les agents      |
 
-Les brouillons isolés des agents utilisent une racine privée sœur
-`.mergeron-agent-drafts/<id>/`, pas un dossier de documents utilisateur.
+Ces chemins sont relatifs à la racine permanente. Les connexions secondaires
+conservent leur emplacement d’origine. Le niveau `.external` est supprimé de
+l’organisation des copies Git.
 
 L'onglet **Connaissances** des paramètres du projet permet aux administrateurs de consulter et modifier les trois fichiers Markdown avec un seul bouton d'enregistrement. Il contient aussi les propositions de mémoire des conversations. L’espace système ne s’édite pas via l’API de fichiers générique ; utiliser les actions métier dédiées. Un utilisateur non administrateur ne peut pas le consulter par un chemin direct.
 
-Les dossiers de premier niveau `documents/`, `sources/` et `livrables/` constituent la structure imposée des projets en version 2. Les opérations génériques ne peuvent pas les renommer, les déplacer, les supprimer ou les remplacer. Leur contenu reste modifiable : création de sous-dossiers, édition, renommage et suppression de fichiers. Les mêmes protections s'appliquent aux chemins résolus par un alias symbolique. L'ancien nom `.webui` reste également réservé pour éviter sa réutilisation comme dossier utilisateur.
+Les dossiers de premier niveau `documents/`, `sources/` et `livrables/` constituaient la structure imposée des projets en version 2. En version 4, `dossiers/` est le niveau utilisateur permanent et les données gérées rejoignent l’espace système. Les opérations génériques ne peuvent pas les renommer, les déplacer, les supprimer ou les remplacer. Leur contenu reste modifiable : création de sous-dossiers, édition, renommage et suppression de fichiers. Les mêmes protections s'appliquent aux chemins résolus par un alias symbolique. L'ancien nom `.webui` reste également réservé pour éviter sa réutilisation comme dossier utilisateur.
 
 L'évolution distingue le principal, les dossiers actifs, les connexions externes, leurs copies Git et les transferts explicites. Son [découpage en cinq PR](evolution-workspaces.md) décrit les garanties appliquées à chaque étape. La synchronisation bidirectionnelle reste volontairement hors périmètre.
 
@@ -107,13 +110,17 @@ Routes réservées aux administrateurs : `GET /api/projects/:id/knowledge/propos
 
 ## Migration de l'existant
 
+La [migration vers la version 4](explorateur-projet.md#migration-et-reprise)
+succède aux étapes historiques décrites ci-dessous. Elle déplace les contenus
+gérés sous le projet, conserve les données et actualise les références en base.
+
 La migration SQL `0031_knowledge_proposals` ajoute les instantanés transmis aux agents et les propositions avec leur historique de validation. Elle ne modifie pas les fichiers de connaissances existants.
 
 Les migrations SQL existantes fournissent `workspace_layout_version` et imposent au plus un workspace marqué principal par projet. Avant de démarrer les automatisations, le service projets migre les projets de version 0 :
 
 1. Il crée `/workspaces/<id>/` et sa structure réservée.
 2. Il conserve l'ancien dossier comme secondaire, en ajoutant son rattachement s'il manquait.
-3. Une transaction remplace le chemin principal du projet, normalise les rôles et inscrit la version de structure courante (aujourd’hui 3).
+3. Une transaction remplace le chemin principal du projet, normalise les rôles et inscrit la version de structure courante (version 3 intermédiaire, puis version 4).
 
 Aucun fichier existant n'est déplacé ou supprimé. Les chemins des conversations d'agents, des conversations simples et des tâches restent inchangés. Les conversations simples utilisant Codex exécutent désormais dans leur chemin conservé, plutôt que dans le nouveau principal.
 

@@ -91,7 +91,7 @@ const validationRequirementActions = {
   disabled: 'Validation disabled',
   cancelled: 'Validation request cancelled',
 } as const;
-type DetailTab =
+export type DetailTab =
   | 'overview'
   | 'documents'
   | 'validation'
@@ -114,6 +114,7 @@ export function ProjectDeliverablesManager({
   projectId,
   resourceId,
   initialDeliverableId,
+  initialTab = 'overview',
   onBackToList,
   modalOnly = false,
   onModalClose,
@@ -121,6 +122,7 @@ export function ProjectDeliverablesManager({
   projectId: string;
   resourceId: string;
   initialDeliverableId?: string;
+  initialTab?: DetailTab;
   onBackToList?: () => void;
   modalOnly?: boolean;
   onModalClose?: () => void;
@@ -137,7 +139,7 @@ export function ProjectDeliverablesManager({
   });
   const [title, setTitle] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<DetailTab>('overview');
+  const [selectedTab, setSelectedTab] = useState<DetailTab>(initialTab);
   const [selected, setSelected] = useState<string | null>(
     initialDeliverableId ?? null,
   );
@@ -761,14 +763,16 @@ export function DeliverablesList({
   );
 }
 
-function DeliverableRowActions({
+export function DeliverableRowActions({
   item,
   onSelect,
   onTask,
   onDelete,
+  onReference,
   isAdministrator = false,
 }: {
   onDelete?: () => void;
+  onReference?: () => void;
   isAdministrator?: boolean;
   item: Deliverable;
   onSelect: (id: string, tab?: DetailTab) => void;
@@ -825,6 +829,22 @@ function DeliverableRowActions({
         >
           {t('primaryTask')}
         </Button>
+        {onReference && (
+          <>
+            <div className="my-1 border-t" />
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => {
+                setOpen(false);
+                onReference();
+              }}
+            >
+              {t('useAsAgentReference', { ns: 'deliverables' })}
+            </Button>
+          </>
+        )}
         {onDelete && (
           <>
             <div className="my-1 border-t" />

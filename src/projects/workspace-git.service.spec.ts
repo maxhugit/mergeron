@@ -2431,7 +2431,7 @@ describe('confirmed actions', () => {
     gate.recordIsolation('observer', {
       writableCopyPath: null,
       readOnlyRoots: [
-        await realpath(path.join(root, 'project/sources/.external')),
+        await realpath(path.join(root, 'project/.mergeron-system/sources')),
       ],
     });
     active = ['alice', 'bob', 'observer'];

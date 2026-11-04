@@ -233,9 +233,8 @@ export class DocumentPublicationService implements OnModuleDestroy {
       if (!project || project.workspaceLayoutVersion < 1)
         throw new Error('A primary project workspace is required');
       const root = await fs.realpath(project.workspacePath);
-      const directory = await this.protection.directory(path.dirname(root), [
+      const directory = await this.protection.directory(root, [
         '.mergeron-agent-drafts',
-        path.basename(root),
         createHash('sha256').update(threadId).digest('hex'),
         randomUUID(),
       ]);
@@ -402,7 +401,13 @@ export class DocumentPublicationService implements OnModuleDestroy {
           request!.resourceId,
           request!.deliverableId,
         );
+        const project = this.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, scope.projectId))
+          .get()!;
         stage = await this.protection.directory(scope.root, [
+          ...(project.workspaceLayoutVersion >= 4 ? ['.mergeron-system'] : []),
           'livrables',
           '.version-staging',
           randomUUID(),
@@ -425,6 +430,8 @@ export class DocumentPublicationService implements OnModuleDestroy {
             name: scope.agentName,
           },
           request!.documentId,
+          false,
+          true,
         );
       };
       let result: Awaited<ReturnType<typeof operation>>;

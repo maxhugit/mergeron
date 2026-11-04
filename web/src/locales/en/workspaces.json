@@ -210,7 +210,7 @@
   "gitDisabledHelp": "This connection is disabled. Enable it in the project’s Locations and connections tab.",
   "gitWorkingCopy": "Working copy",
   "gitActiveForAgent": "Active for this agent",
-  "gitUseForAgent": "Use for this agent",
+  "gitUseForAgent": "Use as agent reference",
   "gitDetached": "Detached HEAD",
   "gitTracking": "↑ {{ahead}} ahead · ↓ {{behind}} behind",
   "gitNoUpstream": "No tracking branch",
@@ -352,5 +352,9 @@
   "gitRestoreClose": "Close",
   "gitRestoreUnsafe": "This copy contains special files, a partial index or changes too large for safe restoration. Inspect it before continuing.",
   "gitRestoreCollision": "An untracked or ignored file would be overwritten. Move it to safety yourself, then review again.",
-  "gitRestoreGithubRequired": "This action requires a configured GitHub connection."
+  "gitRestoreGithubRequired": "This action requires a configured GitHub connection.",
+  "agentReference": "Agent reference",
+  "explorerFolders": "Folders",
+  "explorerDeliverables": "Deliverables",
+  "explorerSources": "Sources"
 }
