@@ -1,3 +1,5 @@
+import { managedContentAccess } from '../projects/managed-content-access';
+import { projectDeliverablesPath } from '../projects/workspace-structure';
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
@@ -173,6 +175,8 @@ export class DocumentProtectionService {
       );
     const publishedRoots: string[] = [];
     const privateRoots: string[] = [];
+    const managedReadRoots: string[] = [];
+    const managedWriteRoots: string[] = [];
     for (const project of this.db.select().from(projects).all()) {
       if (project.workspaceLayoutVersion < 1) continue;
       const root = await fs
@@ -188,19 +192,39 @@ export class DocumentProtectionService {
           'Protected projects require a primary workspace under /workspaces',
         );
       try {
-        publishedRoots.push(await this.directory(root, ['livrables']));
-        if (project.workspaceLayoutVersion >= 3) {
+        if (project.workspaceLayoutVersion >= 4) {
           const system = projectSystemPath(root);
-          const parent = path.dirname(system);
-          for (const directory of [parent, system]) {
-            const stat = await fs.lstat(directory);
-            if (!stat.isDirectory() || stat.isSymbolicLink())
-              throw new Error('Invalid system workspace boundary');
-            if (directory === parent)
-              privateRoots.push(await fs.realpath(parent));
+          const stat = await fs.lstat(system);
+          if (!stat.isDirectory() || stat.isSymbolicLink())
+            throw new Error('Invalid managed project boundary');
+          privateRoots.push(system);
+          const documents = await this.directory(root, [
+            '.mergeron-system',
+            'livrables',
+          ]);
+          managedReadRoots.push(documents);
+          publishedRoots.push(system, documents);
+          for (const workspace of workspaceRoots) {
+            if (
+              workspace.projectId === project.id &&
+              workspace.root &&
+              managedContentAccess(this.db, workspace.root)?.kind === 'source'
+            )
+              managedWriteRoots.push(workspace.root);
           }
-          publishedRoots.push(await fs.realpath(system));
-        } else publishedRoots.push(await this.directory(root, ['.mergeron']));
+        } else {
+          publishedRoots.push(await this.directory(root, ['livrables']));
+          if (project.workspaceLayoutVersion >= 3) {
+            const system = projectSystemPath(root, 3);
+            for (const directory of [path.dirname(system), system]) {
+              const stat = await fs.lstat(directory);
+              if (!stat.isDirectory() || stat.isSymbolicLink())
+                throw new Error('Invalid system workspace boundary');
+            }
+            privateRoots.push(path.dirname(system));
+            publishedRoots.push(system);
+          } else publishedRoots.push(await this.directory(root, ['.mergeron']));
+        }
       } catch (error) {
         if (!this.unavailableFile(error)) throw error;
         await quarantine(root);
@@ -259,9 +283,10 @@ export class DocumentProtectionService {
         throw new Error(
           'Retained document sources must not share writable hardlinks',
         );
-      if (source.startsWith(path.join(root, 'livrables') + path.sep)) continue;
+      if (source.startsWith(projectDeliverablesPath(root) + path.sep)) continue;
       // Preserve the original as a draft: relocation never deletes user files.
       const folder = await this.directory(root, [
+        ...(project.workspaceLayoutVersion >= 4 ? ['.mergeron-system'] : []),
         'livrables',
         document.deliverableId,
       ]);
@@ -342,6 +367,8 @@ export class DocumentProtectionService {
       writableRoots: [...writableRoots].sort(),
       publishedRoots: [...new Set([...publishedRoots, ...boundaries])].sort(),
       privateRoots: [...new Set(privateRoots)].sort(),
+      managedReadRoots,
+      managedWriteRoots,
       unavailableRoots: [...missingBoundaries].sort(),
     };
     // Validate broad roots before starting or restarting a process.

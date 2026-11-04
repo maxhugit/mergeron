@@ -15,6 +15,7 @@ import {
   FolderPlus,
   FolderUp,
   GitBranch,
+  MapPin,
   MessageSquarePlus,
   Move,
   Pencil,
@@ -41,6 +42,7 @@ export interface FileContextMenuActions {
   onDownload?: () => void;
   onUploadFiles?: () => void;
   onUploadFolder?: () => void;
+  onReference?: () => void;
   onAttachToChat?: () => void;
 }
 export interface FileExtraAction {
@@ -257,6 +259,7 @@ export function FileListingContextMenu({
     | 'onUploadFiles'
     | 'onUploadFolder'
     | 'onRefresh'
+    | 'onReference'
   >;
   children: React.ReactNode;
 }) {
@@ -266,6 +269,15 @@ export function FileListingContextMenu({
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-48" onCloseAutoFocus={afterClose}>
+        {actions.onReference && (
+          <>
+            <ContextMenuItem onSelect={() => select(actions.onReference)}>
+              <MapPin className="h-3.5 w-3.5" />
+              {t('useAsAgentReference', { ns: 'deliverables' })}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         {actions.onNewFile && (
           <ContextMenuItem onSelect={() => select(actions.onNewFile)}>
             <FilePlus className="h-3.5 w-3.5" />

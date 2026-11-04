@@ -7,13 +7,17 @@ const {
   documentIsolationArgs,
   documentAgentEnvironment,
 } = require('/app/dist/document-publication/document-isolation.js');
-const { agentEnvironmentCommand } = require('/app/dist/codex/agent-environment.js');
+const {
+  agentEnvironmentCommand,
+} = require('/app/dist/codex/agent-environment.js');
 
 const workspace = fs.mkdtempSync('/workspaces/.document-isolation-probe-');
 const temporary = fs.mkdtempSync('/tmp/document-isolation-probe-');
 // Core intentionally refuses executable helper aliases in a /tmp CODEX_HOME.
 // This home is disposable RAM in the networkless container, never a host home.
-const nativeHome = process.argv[2] ? fs.mkdtempSync('/home/codex/.native-profile-') : null;
+const nativeHome = process.argv[2]
+  ? fs.mkdtempSync('/home/codex/.native-profile-')
+  : null;
 try {
   const home = path.join(nativeHome || path.join(temporary, 'home'), '.codex');
   fs.mkdirSync(home, { recursive: true });
@@ -29,6 +33,11 @@ try {
   const system = path.join(workspace, 'system');
   fs.mkdirSync(system);
   fs.writeFileSync(path.join(system, 'private-state'), 'private-canary');
+  const managedDocuments = path.join(system, 'livrables');
+  const managedCopy = path.join(system, 'sources', 'copy');
+  fs.mkdirSync(managedDocuments);
+  fs.mkdirSync(managedCopy, { recursive: true });
+  fs.writeFileSync(path.join(managedDocuments, 'current.docx'), 'V4');
   fs.writeFileSync(path.join(retained, 'report.docx'), 'V1');
   fs.writeFileSync(path.join(history, 'v1.docx'), 'V1');
   const databasePath = path.join(home, 'webui.sqlite');
@@ -43,6 +52,11 @@ try {
     fs.writeFileSync(root+'/main.js','code-editable');
     fs.writeFileSync(root+'/sources/new-clone/main.js','clone-editable');
     assert.equal(fs.existsSync(root+'/system/private-state'),false);
+    assert.equal(fs.readFileSync(root+'/system/livrables/current.docx','utf8'),'V4');
+    assert.throws(()=>fs.writeFileSync(root+'/system/livrables/current.docx','no'));
+    assert.throws(()=>fs.renameSync(root+'/system/livrables',root+'/steal-documents'));
+    fs.writeFileSync(root+'/system/sources/copy/dirty.txt','source-editable');
+    assert.throws(()=>fs.renameSync(root+'/system/sources/copy',root+'/steal-copy'));
     assert.throws(()=>fs.writeFileSync(root+'/system/tampered','no'),e=>e.code==='EROFS'||e.code==='EACCES');
     assert.throws(()=>fs.writeFileSync(root+'/missing-project/tampered','no'),e=>e.code==='EROFS'||e.code==='EACCES');
     assert.equal(fs.readFileSync(root+'/livrables/report.docx','utf8'),'V1');
@@ -82,7 +96,15 @@ try {
     console.log('PASS: code writable; versions immutable; rename/hardlink refused; private state hidden');
     console.log('PASS: private caches writable; pnpm available offline; loopback and sandboxed Chromium ready inside bwrap');
   `;
-  const command = agentEnvironmentCommand(process.execPath, ['-e', probe, workspace, databasePath, ssh, ...(process.argv[2] ? [process.argv[2]] : []), ...(process.argv[3]==='--netlink-route'?['--netlink-route']:[])]);
+  const command = agentEnvironmentCommand(process.execPath, [
+    '-e',
+    probe,
+    workspace,
+    databasePath,
+    ssh,
+    ...(process.argv[2] ? [process.argv[2]] : []),
+    ...(process.argv[3] === '--netlink-route' ? ['--netlink-route'] : []),
+  ]);
   const args = documentIsolationArgs(
     {
       home,
@@ -90,6 +112,8 @@ try {
       writableRoots: ['/workspaces', workspace, clone],
       publishedRoots: [retained, history],
       privateRoots: [system],
+      managedReadRoots: [managedDocuments],
+      managedWriteRoots: [managedCopy],
       unavailableRoots: [path.join(workspace, 'missing-project')],
     },
     command.binary,
@@ -115,22 +139,31 @@ try {
     'V1',
   );
   assert.equal(fs.readFileSync(path.join(history, 'v1.docx'), 'utf8'), 'V1');
-  if (process.argv[3] === '--netlink-route' && process.env.MERGERON_NETLINK_EVIDENCE) {
+  if (
+    process.argv[3] === '--netlink-route' &&
+    process.env.MERGERON_NETLINK_EVIDENCE
+  ) {
     const source = path.join(workspace, 'artifacts/native-backend-visual');
     for (const name of ['desktop.png', 'mobile.png', 'report.json']) {
       const file = path.join(source, name);
       assert(fs.lstatSync(file).isFile());
       const bytes = fs.readFileSync(file);
       assert(bytes.length < 15 * 1024 * 1024);
-      if (name.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-      const destination = path.join(process.env.MERGERON_NETLINK_EVIDENCE, name);
+      if (name.endsWith('.png'))
+        assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+      const destination = path.join(
+        process.env.MERGERON_NETLINK_EVIDENCE,
+        name,
+      );
       fs.writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 });
       // Only these synthetic fixture outputs are public CI artifacts. The
       // uploader uses the host runner UID, not the container's application UID.
       // Explicit chmod also handles a restrictive umask without changing it.
       fs.chmodSync(destination, 0o644);
     }
-    console.log('PASS: desktop/mobile evidence exported by the trusted outer fixture');
+    console.log(
+      'PASS: desktop/mobile evidence exported by the trusted outer fixture',
+    );
   }
 } finally {
   fs.rmSync(workspace, { recursive: true });

@@ -1,4 +1,8 @@
 import {
+  managedContentAccess,
+  managedDeliverableReadable,
+} from '../projects/managed-content-access';
+import {
   BadRequestException,
   ForbiddenException,
   Inject,
@@ -13,6 +17,7 @@ import {
   PROJECT_SYSTEM_DIRECTORY,
   LEGACY_PROJECT_SYSTEM_DIRECTORY,
 } from '../projects/workspace-structure';
+import { registeredDocumentPath } from '../deliverables/document-path-alias';
 import { projectSystemAlias } from '../projects/project-system-paths';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { LocalAuthService } from './local-auth.service';
@@ -764,8 +769,16 @@ export class IdentityService {
     };
     const aliased = projectSystemAlias(this.db, value);
     const target = canonical(aliased);
+    const managed = managedContentAccess(this.db, target);
+    if (
+      identity &&
+      managed &&
+      !managedDeliverableReadable(this.db, managed, identity)
+    )
+      throw new ForbiddenException('Deliverable access denied');
     if (
       identity?.role !== 'administrator' &&
+      !managedContentAccess(this.db, target) &&
       (isPrivateProjectSpace(target) ||
         isPrivateProjectSpace(value) ||
         this.db
@@ -959,11 +972,18 @@ export class IdentityService {
       .get();
     if (
       !session ||
-      session.path !== path ||
       session.expiresAt <= Date.now() ||
       (writable && !session.writable)
     )
       return false;
+    try {
+      const alias = (value: string) =>
+        registeredDocumentPath(this.db, projectSystemAlias(this.db, value));
+      path = alias(path);
+      if (alias(session.path) !== path) return false;
+    } catch {
+      return false;
+    }
     if (session.impersonation) {
       const context = session.impersonation;
       const active = [...this.impersonations.values()].some(

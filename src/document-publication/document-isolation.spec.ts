@@ -85,6 +85,41 @@ describe('protected document execution boundary', () => {
       documentIsolationArgs({ ...plan, privateRoots: ['/etc'] }, 'codex', []),
     ).toThrow('Invalid system');
   });
+  it('exposes only bounded managed projections after masking the system and keeps the parent immutable', () => {
+    const system = '/workspaces/p/.mergeron-system';
+    const documents = system + '/livrables';
+    const copy = system + '/sources/connection/copies/copy';
+    const args = documentIsolationArgs(
+      {
+        ...plan,
+        privateRoots: [system],
+        managedReadRoots: [documents],
+        managedWriteRoots: [copy],
+      },
+      'codex',
+      [],
+    );
+    const mask = args.indexOf(system);
+    const visible = args.indexOf(documents);
+    const writable = args.indexOf(copy);
+    expect(args[mask - 1]).toBe('--tmpfs');
+    expect(visible).toBeGreaterThan(mask);
+    expect(args[visible - 1]).toBe('--ro-bind');
+    expect(args[writable - 1]).toBe('--bind');
+    expect(args.lastIndexOf(system)).toBeGreaterThan(writable);
+    expect(args[args.lastIndexOf(system) - 1]).toBe('--remount-ro');
+    expect(() =>
+      documentIsolationArgs(
+        {
+          ...plan,
+          privateRoots: [system],
+          managedWriteRoots: ['/workspaces/another-project'],
+        },
+        'codex',
+        [],
+      ),
+    ).toThrow('scoped');
+  });
   it('does not forward the backend key, identity settings or manager configuration', () => {
     expect(
       documentAgentEnvironment({

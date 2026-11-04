@@ -72,7 +72,11 @@ it.each([true, false])(
     session.isAdministrator = administrator;
     api.read.mockResolvedValue({
       data: [
-        { path: '/work/.mergeron', name: '.mergeron', type: 'directory' },
+        {
+          path: '/work/.mergeron-system',
+          name: '.mergeron-system',
+          type: 'directory',
+        },
         { path: '/work/.git', name: '.git', type: 'directory' },
         { path: '/work/.env', name: '.env', type: 'file' },
         { path: '/work/document.docx', name: 'document.docx', type: 'file' },
@@ -96,7 +100,7 @@ it.each([true, false])(
         'Mergeron internal data is hidden in this listing.',
       ),
     ).toBeVisible();
-    expect(screen.queryByText('.mergeron')).toBeNull();
+    expect(screen.queryByText('.mergeron-system')).toBeNull();
     expect(screen.getByText('.git')).toBeVisible();
     expect(screen.getByText('.env')).toBeVisible();
     expect(screen.getByText('document.docx')).toBeVisible();
@@ -106,11 +110,11 @@ it.each([true, false])(
           name: 'Show internal data (administrator)',
         }),
       );
-      expect(screen.getByText('.mergeron')).toBeVisible();
+      expect(screen.getByText('.mergeron-system')).toBeVisible();
       fireEvent.click(
         screen.getByRole('button', { name: 'Hide internal data' }),
       );
-      expect(screen.queryByText('.mergeron')).toBeNull();
+      expect(screen.queryByText('.mergeron-system')).toBeNull();
     } else
       expect(
         screen.queryByRole('button', {

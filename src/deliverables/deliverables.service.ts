@@ -1,3 +1,4 @@
+import { projectDeliverablesPath } from '../projects/workspace-structure';
 import {
   requireProjectAccess,
   currentAccess,
@@ -237,7 +238,7 @@ export class DeliverablesService implements OnModuleInit {
       .all();
     for (const row of rows) {
       const root = await canonical(row.project.workspacePath);
-      const directory = path.join(root, 'livrables', row.item.id);
+      const directory = path.join(this.deliverablesRoot(root), row.item.id);
       const registered = this.db
         .select()
         .from(documents)
@@ -270,8 +271,15 @@ export class DeliverablesService implements OnModuleInit {
       )
         continue;
       this.get(row.project.id, row.resource.id, row.item.id);
-      this.identities.requireWorkspacePath(requested);
-      this.files.assertProjectPathMutable(requested);
+      if (
+        !(
+          row.project.workspaceLayoutVersion >= 4 &&
+          within(directory, requested)
+        )
+      ) {
+        this.identities.requireWorkspacePath(requested);
+        this.files.assertProjectPathMutable(requested);
+      }
       this.requireDocumentMutable(row.item);
       if (this.blockingOnlyOfficeSession(row.item.id))
         throw new ConflictException(
@@ -1060,7 +1068,10 @@ export class DeliverablesService implements OnModuleInit {
         ),
         directory:
           this.activeFolders.get('deliverable', item.id)?.effectivePath ??
-          path.join(context.project.workspacePath, 'livrables', item.id),
+          path.join(
+            this.deliverablesRoot(context.project.workspacePath),
+            item.id,
+          ),
         versions: history.filter(
           (version) =>
             version.deliverableId === item.id &&
@@ -1303,19 +1314,29 @@ export class DeliverablesService implements OnModuleInit {
       .get();
     if (!project || project.workspaceLayoutVersion < 1)
       throw new ConflictException('Primary workspace is required');
-    const system =
-      parts[0] === PROJECT_SYSTEM_DIRECTORY &&
-      project.workspaceLayoutVersion >= 3;
-    let directory = system
-      ? path.dirname(project.workspacePath)
-      : project.workspacePath;
-    const resolvedParts = system
-      ? [
-          path.basename(path.dirname(projectSystemPath(project.workspacePath))),
-          path.basename(project.workspacePath),
-          ...parts.slice(1),
-        ]
-      : parts;
+    const target =
+      parts[0] === PROJECT_SYSTEM_DIRECTORY
+        ? path.join(
+            projectSystemPath(
+              project.workspacePath,
+              project.workspaceLayoutVersion,
+            ),
+            ...parts.slice(1),
+          )
+        : parts[0] === 'livrables' && project.workspaceLayoutVersion >= 4
+          ? path.join(
+              this.deliverablesRoot(project.workspacePath),
+              ...parts.slice(1),
+            )
+          : path.join(project.workspacePath, ...parts);
+    let directory =
+      project.workspaceLayoutVersion === 3
+        ? path.dirname(project.workspacePath)
+        : project.workspacePath;
+    const resolvedParts = path
+      .relative(directory, target)
+      .split(path.sep)
+      .filter(Boolean);
     for (const part of ['', ...resolvedParts]) {
       if (part) {
         directory = path.join(directory, part);
@@ -1379,8 +1400,9 @@ export class DeliverablesService implements OnModuleInit {
       'deliverable',
       id,
       path.join(
-        this.resource(projectId, resourceId).project.workspacePath,
-        'livrables',
+        this.deliverablesRoot(
+          this.resource(projectId, resourceId).project.workspacePath,
+        ),
         id,
       ),
     );
@@ -1819,14 +1841,24 @@ export class DeliverablesService implements OnModuleInit {
         const sourcePath = await this.files.resolveSafePath(source);
         // Snapshots are shared project outputs, so never copy server credentials
         // into a project even when an administrator attached a broad workspace.
-        this.identities.requireWorkspacePath(sourcePath);
+        const ownedProjection =
+          this.resource(projectId, resourceId).project.workspaceLayoutVersion >=
+            4 &&
+          path.dirname(sourcePath) ===
+            path.join(
+              this.deliverablesRoot(
+                this.resource(projectId, resourceId).project.workspacePath,
+              ),
+              id,
+            );
+        if (!ownedProjection) this.identities.requireWorkspacePath(sourcePath);
         if (
           !roots.some((root) => root && sourcePath.startsWith(root + path.sep))
         )
           throw new BadRequestException(
             'Files must belong to a project workspace',
           );
-        this.files.assertProjectPathMutable(sourcePath);
+        if (!ownedProjection) this.files.assertProjectPathMutable(sourcePath);
         const stat = await fs.stat(sourcePath);
         if (
           !stat.isFile() ||
@@ -2007,6 +2039,7 @@ export class DeliverablesService implements OnModuleInit {
     actor: DeliverableDocumentActor,
     documentId?: string,
     trustedOnlyOffice = false,
+    stagedUpload = false,
   ) {
     return this.serializeDocumentWrite(deliverableId, () =>
       this.addDocumentVersionUnlocked(
@@ -2017,6 +2050,7 @@ export class DeliverablesService implements OnModuleInit {
         actor,
         documentId,
         trustedOnlyOffice,
+        stagedUpload,
       ),
     );
   }
@@ -2037,8 +2071,38 @@ export class DeliverablesService implements OnModuleInit {
     if (typeof input.path !== 'string' || !input.path.trim())
       throw new BadRequestException('Document path is required');
     const comment = this.text(input.comment ?? '', 4000);
-    let sourcePath = await this.files.resolveSafePath(input.path);
-    if (!trustedOnlyOffice) this.identities.requireWorkspacePath(sourcePath);
+    const project = this.resource(projectId, resourceId).project;
+    const projectionRoot = path.join(
+      await fs.realpath(this.deliverablesRoot(project.workspacePath)),
+      deliverableId,
+    );
+    const ownedProjection =
+      project.workspaceLayoutVersion >= 4 &&
+      path.dirname(path.resolve(input.path)) === projectionRoot;
+    let sourcePath: string;
+    if (ownedProjection) {
+      sourcePath = await fs.realpath(input.path);
+      if (
+        path.dirname(sourcePath) !== projectionRoot ||
+        sourcePath !== path.resolve(input.path)
+      )
+        throw new BadRequestException('Invalid document projection');
+    } else if (stagedUpload) {
+      sourcePath = await fs.realpath(input.path);
+      const stagingRoot = path.join(
+        await fs.realpath(this.deliverablesRoot(project.workspacePath)),
+        '.version-staging',
+      );
+      const relative = path.relative(stagingRoot, sourcePath).split(path.sep);
+      if (
+        relative.length !== 2 ||
+        relative.some((part) => !part || part === '..') ||
+        sourcePath !== path.resolve(input.path)
+      )
+        throw new BadRequestException('Invalid publication stage');
+    } else sourcePath = await this.files.resolveSafePath(input.path);
+    if (!trustedOnlyOffice && !stagedUpload && !ownedProjection)
+      this.identities.requireWorkspacePath(sourcePath);
     const workspaces = this.db
       .select()
       .from(projectWorkspaces)
@@ -2053,7 +2117,8 @@ export class DeliverablesService implements OnModuleInit {
       throw new BadRequestException(
         'Document must belong to a project workspace',
       );
-    this.files.assertProjectPathMutable(sourcePath);
+    if (!stagedUpload && !trustedOnlyOffice && !ownedProjection)
+      this.files.assertProjectPathMutable(sourcePath);
     let stat = await fs.stat(sourcePath);
     if (!stat.isFile() || stat.size > MAX_FILE)
       throw new BadRequestException('Invalid document file');
@@ -2504,8 +2569,20 @@ export class DeliverablesService implements OnModuleInit {
           'Close the document editor before renaming',
         );
       const source = await this.files.resolveSafePath(document.sourcePath);
-      this.identities.requireWorkspacePath(source);
-      this.files.assertProjectPathMutable(source);
+      const managedProjection =
+        this.resource(projectId, resourceId).project.workspaceLayoutVersion >=
+          4 &&
+        path.dirname(source) ===
+          path.join(
+            this.deliverablesRoot(
+              this.resource(projectId, resourceId).project.workspacePath,
+            ),
+            deliverableId,
+          );
+      if (!managedProjection) {
+        this.identities.requireWorkspacePath(source);
+        this.files.assertProjectPathMutable(source);
+      }
       const workspacePaths = this.db
         .select()
         .from(projectWorkspaces)
@@ -2531,7 +2608,7 @@ export class DeliverablesService implements OnModuleInit {
           'Document must belong to a project workspace',
         );
       const target = path.join(path.dirname(source), name);
-      this.files.assertProjectPathMutable(target);
+      if (!managedProjection) this.files.assertProjectPathMutable(target);
       if (
         this.db
           .select()
@@ -3301,5 +3378,13 @@ export class DeliverablesService implements OnModuleInit {
         .run();
       return this.get(projectId, resourceId, id);
     });
+  }
+  private deliverablesRoot(root: string) {
+    const project = this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.workspacePath, root))
+      .get();
+    return projectDeliverablesPath(root, project?.workspaceLayoutVersion ?? 4);
   }
 }

@@ -142,7 +142,7 @@ export function excludesBackupDirectory(policy, relativePath) {
   if (root !== 'workspace') return false;
   // All document versions and agent drafts are irreplaceable, even when a
   // user gives a document/folder a name that looks like a dependency/cache.
-  if (parts[0] === '.mergeron-agent-drafts') return false;
+  if (parts.includes('.mergeron-agent-drafts')) return false;
   // Back up pre-migration histories/drafts too, before a newer app moves them.
   if (
     parts.some((part) =>
@@ -152,7 +152,13 @@ export function excludesBackupDirectory(policy, relativePath) {
     return false;
   if (parts[0] === '.mergeron-system')
     return parts.length === 3 && parts[2] === 'previews';
-  if (['documents', 'livrables'].includes(parts[1])) return false;
+  const systemIndex = parts.indexOf('.mergeron-system');
+  if (
+    systemIndex >= 0 &&
+    ['livrables', 'history', 'knowledge'].includes(parts[systemIndex + 1])
+  )
+    return false;
+  if (['documents', 'dossiers', 'livrables'].includes(parts[1])) return false;
   const name = parts.at(-1);
   return [
     'node_modules',

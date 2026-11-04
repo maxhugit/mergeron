@@ -22,8 +22,13 @@ import {
   projectParticipants,
   projectKnowledgeSnapshots,
 } from '../database/schema';
-import { ProjectWorkspaceLayout } from './project-workspace-layout';
-import { projectSystemPath, projectDraftPath } from './workspace-structure';
+import { LegacyProjectWorkspaceLayout as ProjectWorkspaceLayout } from './project-workspace-layout';
+import {
+  projectSystemPath as systemPath,
+  projectDraftPath as draftPath,
+} from './workspace-structure';
+const projectSystemPath = (root: string) => systemPath(root, 3);
+const projectDraftPath = (root: string) => draftPath(root, 3);
 import { FilesService } from '../files/files.service';
 import type { SettingsService } from '../settings/settings.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
@@ -34,11 +39,11 @@ import { accessContext } from '../auth/access-context';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import {
-  PROJECT_WORKSPACE_INSTRUCTIONS,
+  SEPARATE_PROJECT_WORKSPACE_INSTRUCTIONS as PROJECT_WORKSPACE_INSTRUCTIONS,
   LEGACY_PROJECT_WORKSPACE_INSTRUCTIONS,
 } from './workspace-structure';
 
-describe('permanent project workspaces', () => {
+describe('legacy permanent project workspace migration (v1–v3)', () => {
   let database: TestDatabase;
   let root: string;
   let legacy: string;
@@ -733,10 +738,13 @@ describe('permanent project workspaces', () => {
     const project = await service.create('Renamable project');
     expect(project.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(project.workspacePath).toBe(path.join(root, project.id));
-    expect(project.workspaceLayoutVersion).toBe(3);
+    expect(project.workspaceLayoutVersion).toBe(4);
     expect(
       await fs.stat(
-        path.join(projectSystemPath(project.workspacePath), 'history'),
+        path.join(
+          systemPath(project.workspacePath, project.workspaceLayoutVersion),
+          'history',
+        ),
       ),
     ).toMatchObject({});
     await expect(service.create('Custom', legacy)).rejects.toThrow(

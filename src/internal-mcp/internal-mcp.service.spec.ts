@@ -117,7 +117,7 @@ describe('native internal MCP over HTTP', () => {
           id: 'p',
           name: 'Tests 2',
           workspacePath: root,
-          workspaceLayoutVersion: 3,
+          workspaceLayoutVersion: 4,
           createdAt: now,
           updatedAt: now,
         },

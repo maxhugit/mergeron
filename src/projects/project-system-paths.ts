@@ -4,6 +4,8 @@ import type { AppDatabase } from '../database/database.constants';
 import { projects } from '../database/schema';
 import {
   projectSystemPath,
+  projectDraftPath,
+  projectSourcesPath,
   PROJECT_SYSTEM_DIRECTORY,
   LEGACY_PROJECT_SYSTEM_DIRECTORY,
 } from './workspace-structure';
@@ -14,6 +16,30 @@ export function projectSystemAlias(db: AppDatabase | undefined, input: string) {
   const value = path.resolve(input);
   for (const project of db.select().from(projects).all()) {
     if (project.workspaceLayoutVersion < 3) continue;
+    if (project.workspaceLayoutVersion >= 4) {
+      const root = project.workspacePath;
+      const direct = [
+        [projectSystemPath(root, 3), projectSystemPath(root)],
+        [projectDraftPath(root, 3), projectDraftPath(root)],
+        [path.join(root, 'sources', '.external'), projectSourcesPath(root)],
+        [
+          path.join(root, 'livrables'),
+          path.join(projectSystemPath(root), 'livrables'),
+        ],
+        [path.join(root, 'documents'), path.join(root, 'dossiers')],
+      ];
+      for (const [from, to] of direct) {
+        if (value !== from && !value.startsWith(from + path.sep)) continue;
+        if (from === path.join(root, 'sources', '.external')) {
+          const [connection, ...tail] = path
+            .relative(from, value)
+            .split(path.sep);
+          if (!connection || connection === '.trash') return input;
+          return path.join(to, connection, 'copies', ...tail);
+        }
+        return path.join(to, path.relative(from, value));
+      }
+    }
     for (const [name, suffix] of [
       [PROJECT_SYSTEM_DIRECTORY, ''],
       [LEGACY_PROJECT_SYSTEM_DIRECTORY, ''],
@@ -43,7 +69,10 @@ export function projectSystemAlias(db: AppDatabase | undefined, input: string) {
       }
       if (value === old || value.startsWith(old + path.sep))
         return path.join(
-          projectSystemPath(project.workspacePath),
+          projectSystemPath(
+            project.workspacePath,
+            project.workspaceLayoutVersion,
+          ),
           suffix,
           path.relative(old, value),
         );

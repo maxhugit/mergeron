@@ -74,6 +74,7 @@ interface FileTreeProps {
     path: string,
   ) => { unstaged: boolean; actions: FileExtraAction[] } | undefined;
   workspaceRoot?: { path: string; name: string };
+  onReferenceDirectory?: (path: string) => void;
   onFileClick?: (filePath: string) => void;
   project?: ProjectSummary;
 }
@@ -86,6 +87,7 @@ export function FileTree({
   project,
   workspaceRoot,
   gitFileState,
+  onReferenceDirectory,
 }: FileTreeProps = {}) {
   const directoryAliases = useDeliverableDirectoryAliases(project);
   const browserStore = useFileBrowserStoreApi();
@@ -227,6 +229,9 @@ export function FileTree({
       />
       <FileListingContextMenu
         actions={{
+          onReference: onReferenceDirectory
+            ? () => onReferenceDirectory(rootDir)
+            : undefined,
           onNewFile: () => startBackgroundCreate('newFile'),
           onNewFolder: () => startBackgroundCreate('newFolder'),
           onUploadFiles: () => uploadInputRef.current?.click(),
@@ -268,6 +273,7 @@ export function FileTree({
                 agentThreadId={agentThreadId}
                 personId={personId}
                 gitFileState={gitFileState}
+                onReferenceDirectory={onReferenceDirectory}
                 project={project}
                 systemDirectory={projectSystemDirectory(project)}
                 directoryAliases={directoryAliases}
@@ -408,6 +414,7 @@ interface FlatDirectoryProps {
   agentThreadId?: string;
   personId?: string | null;
   gitFileState?: FileTreeProps['gitFileState'];
+  onReferenceDirectory?: (path: string) => void;
   project?: ProjectSummary;
   systemDirectory?: string;
   directoryAliases: Record<string, string>;
@@ -568,7 +575,19 @@ function FlatDirectory(props: FlatDirectoryProps) {
     const row = (
       <FileBrowserEntry
         gitState={
-          entry.type === 'file' ? props.gitFileState?.(entry.path) : undefined
+          entry.type === 'file'
+            ? props.gitFileState?.(entry.path)
+            : props.onReferenceDirectory
+              ? {
+                  unstaged: false,
+                  actions: [
+                    {
+                      label: documentText('useAsAgentReference'),
+                      onSelect: () => props.onReferenceDirectory?.(entry.path),
+                    },
+                  ],
+                }
+              : undefined
         }
         key={key}
         entryKey={key}

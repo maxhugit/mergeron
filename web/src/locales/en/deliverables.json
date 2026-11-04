@@ -77,5 +77,12 @@
   "taskCreateAndLink": "Create and link",
   "taskLink": "Link",
   "documentsSameFormat": "The new version must keep the document format.",
-  "labelsHistoryChanged": "Document organization updated"
+  "labelsHistoryChanged": "Document organization updated",
+  "useAsAgentReference": "Use as agent reference",
+  "explorerLoading": "Loading deliverables",
+  "explorerLoadFailed": "Unable to load deliverables",
+  "explorerEmpty": "No deliverables in this project",
+  "explorerDocuments": "documents",
+  "explorerDeleteConfirm": "Delete deliverable “{{name}}”?",
+  "explorerDeleteFailed": "Unable to delete this deliverable"
 }

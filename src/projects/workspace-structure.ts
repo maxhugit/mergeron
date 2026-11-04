@@ -1,22 +1,28 @@
 /** Stable names shared by workspace creation, file guards and project modules. */
 import * as path from 'node:path';
-export const WORKSPACE_LAYOUT_VERSION = 3;
+export const WORKSPACE_LAYOUT_VERSION = 4;
 export const PROJECT_SYSTEM_SPACES_DIRECTORY = '.mergeron-system';
 export const PROJECT_DRAFT_SPACES_DIRECTORY = '.mergeron-agent-drafts';
-/** A sibling, not a child of the agent's working directory. */
+/** Versioned system location; v4 is embedded below the project. */
 export function projectSystemPath(
   root: string,
   version = WORKSPACE_LAYOUT_VERSION,
 ) {
-  return version >= 3
-    ? path.join(
-        path.dirname(root),
-        PROJECT_SYSTEM_SPACES_DIRECTORY,
-        path.basename(root),
-      )
-    : path.join(root, PROJECT_SYSTEM_DIRECTORY);
+  return version >= 4
+    ? path.join(root, PROJECT_SYSTEM_SPACES_DIRECTORY)
+    : version >= 3
+      ? path.join(
+          path.dirname(root),
+          PROJECT_SYSTEM_SPACES_DIRECTORY,
+          path.basename(root),
+        )
+      : path.join(root, PROJECT_SYSTEM_DIRECTORY);
 }
-export function projectDraftPath(root: string) {
+export function projectDraftPath(
+  root: string,
+  version = WORKSPACE_LAYOUT_VERSION,
+) {
+  if (version >= 4) return path.join(root, PROJECT_DRAFT_SPACES_DIRECTORY);
   return path.join(
     path.dirname(root),
     PROJECT_DRAFT_SPACES_DIRECTORY,
@@ -34,18 +40,34 @@ export function isPrivateProjectSpace(value: string) {
 }
 export const PROJECT_SYSTEM_DIRECTORY = '.mergeron';
 export const LEGACY_PROJECT_SYSTEM_DIRECTORY = '.webui';
-export const PROJECT_CONTENT_DIRECTORIES = [
-  'documents',
-  'sources',
-  'livrables',
-] as const;
+export const PROJECT_CONTENT_DIRECTORIES = ['dossiers'] as const;
 
 export const EMBEDDED_PROJECT_WORKSPACE_INSTRUCTIONS =
   '# Organisation du projet\n\nLes fichiers réservés à Mergeron sont dans `.mergeron/`. Les documents de travail peuvent être rangés dans `documents/`, `sources/` et `livrables/`.\n\nLes instructions, connaissances et décisions partagées sont gérées depuis l’onglet Connaissances du projet et stockées dans `.mergeron/knowledge/`. Mergeron les fournit aux conversations à chaque nouvel échange.\n';
 
-export const PROJECT_WORKSPACE_INSTRUCTIONS =
+export const SEPARATE_PROJECT_WORKSPACE_INSTRUCTIONS =
   '# Organisation du projet\n\nCet espace de travail contient les documents, sources et livrables du projet, dans `documents/`, `sources/` et `livrables/`. Les données internes, connaissances et historiques sont conservés dans un espace système séparé réservé aux administrateurs, et ne doivent pas être modifiés directement.\n\nLes instructions, connaissances et décisions partagées sont gérées depuis l’onglet Connaissances du projet. Mergeron les fournit aux conversations à chaque nouvel échange.\n';
 
 /** Only this exact generated text may be replaced during migration. */
 export const LEGACY_PROJECT_WORKSPACE_INSTRUCTIONS =
   '# Organisation du projet\n\nLes fichiers réservés à WebUI sont dans `.webui/`. Les documents de travail peuvent être rangés dans `documents/`, `sources/` et `livrables/`.\n\nLes instructions, connaissances et décisions partagées sont gérées depuis l’onglet Connaissances du projet et stockées dans `.webui/knowledge/`. WebUI les fournit aux conversations à chaque nouvel échange.\n';
+
+/** Managed content is never exposed through the general-purpose file tree. */
+export function projectDeliverablesPath(
+  root: string,
+  version = WORKSPACE_LAYOUT_VERSION,
+) {
+  return path.join(
+    version >= 4 ? projectSystemPath(root, version) : root,
+    'livrables',
+  );
+}
+export function projectSourcesPath(root: string) {
+  return path.join(projectSystemPath(root), 'sources');
+}
+export function projectFoldersPath(root: string) {
+  return path.join(root, 'dossiers');
+}
+
+export const PROJECT_WORKSPACE_INSTRUCTIONS =
+  '# Organisation du projet\n\nRangez librement les fichiers de travail dans `dossiers/`. Les livrables et copies Git sont gérés depuis les vues Livrables et Sources et conservés dans `.mergeron-system/`. Ne modifiez jamais directement les historiques, connaissances ou métadonnées internes. Les brouillons des agents sont isolés dans `.mergeron-agent-drafts/`. Utilisez les outils MCP pour consulter le projet et publier les documents dans un livrable.\n';

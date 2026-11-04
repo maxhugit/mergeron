@@ -290,7 +290,7 @@ it('reserves a copy to its agent and disables creating a second copy for that ag
     screen.getByRole('button', { name: 'Préparer une copie de travail' }),
   ).toBeDisabled();
   expect(
-    screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
+    screen.getByRole('button', { name: 'Utiliser comme référence de l’agent' }),
   ).toBeEnabled();
 });
 
@@ -303,7 +303,7 @@ it('does not expose another agent’s copy as this agent’s local copy', async 
     screen.getByRole('button', { name: 'Parcourir les fichiers locaux' }),
   ).toBeDisabled();
   expect(
-    screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
+    screen.getByRole('button', { name: 'Utiliser comme référence de l’agent' }),
   ).toBeDisabled();
   expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
   expect(api.mock.calls.some(([url]) => url.endsWith('/copies/copy'))).toBe(
@@ -330,7 +330,9 @@ it('creates an explicit isolated copy and never selects it for the agent automat
     { target: { value: 'feature/test' } },
   );
   fireEvent.click(screen.getByRole('button', { name: 'Créer la copie' }));
-  await screen.findByRole('button', { name: 'Utiliser pour cet agent' });
+  await screen.findByRole('button', {
+    name: 'Utiliser comme référence de l’agent',
+  });
   expect(api).toHaveBeenCalledWith(
     '/p/connections/git/copies',
     expect.objectContaining({
@@ -354,11 +356,13 @@ it('separates browsing files from using the copy as the agent workspace', async 
   expect(onActive).not.toHaveBeenCalled();
   await waitFor(() =>
     expect(
-      screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
+      screen.getByRole('button', {
+        name: 'Utiliser comme référence de l’agent',
+      }),
     ).toBeEnabled(),
   );
   fireEvent.click(
-    screen.getByRole('button', { name: 'Utiliser pour cet agent' }),
+    screen.getByRole('button', { name: 'Utiliser comme référence de l’agent' }),
   );
   expect(onActive).toHaveBeenCalledWith('/copy');
 });

@@ -75,6 +75,31 @@ class ProjectArchiveTest(unittest.TestCase):
             self.assertEqual(db.execute('SELECT workspace_layout_version FROM projects').fetchone()[0], 2)
         # Layout 2 is intentional until the app atomically separates this imported root.
 
+    def test_embedded_v4_system_roundtrip_preserves_documents_and_folder_layout(self):
+        system = self.project / '.mergeron-system'
+        (system / 'history').mkdir(parents=True)
+        (system / 'knowledge').mkdir()
+        (system / 'livrables').mkdir()
+        (system / 'history' / 'version.bin').write_bytes(b'v4-history')
+        (system / 'livrables' / 'report.txt').write_text('retained')
+        (system / 'project.json').write_text(json.dumps({'projectId': 'project-source', 'layoutVersion': 4}))
+        (system / 'layout-v4.json').write_text('old migration evidence')
+        (self.project / 'dossiers').mkdir()
+        (self.project / 'dossiers' / 'note.txt').write_text('user file')
+        with engine.connect(self.source_db) as db:
+            db.execute('UPDATE projects SET workspace_layout_version=4')
+        self.export()
+        archive, manifest = self.load()
+        self.assertEqual([r for r in manifest['roots'] if r['kind'] == 'system'], [])
+        result = engine.import_archive(self.target, archive, manifest)
+        restored = self.target_root / result['projectId']
+        self.assertEqual((restored / '.mergeron-system/history/version.bin').read_bytes(), b'v4-history')
+        self.assertEqual((restored / 'dossiers/note.txt').read_text(), 'user file')
+        self.assertFalse((restored / '.mergeron-system/layout-v4.json').exists())
+        self.assertEqual(json.loads((restored / '.mergeron-system/project.json').read_text())['projectId'], result['projectId'])
+        with engine.connect(self.target_db) as db:
+            self.assertEqual(db.execute('SELECT workspace_layout_version FROM projects').fetchone()[0], 4)
+
     def test_missing_or_forged_system_inventory_is_rejected(self):
         self.export()
         self.rewrite_manifest(lambda m: m['roots'].append({'key': 'system', 'kind': 'system', 'source': '/unrelated/private'}))

@@ -293,7 +293,7 @@ describe('WorkspaceCopiesService', () => {
       filesystem: Record<string, string>;
     };
     expect(
-      writable.filesystem[path.join(primary, 'sources', '.external')],
+      writable.filesystem[path.join(primary, '.mergeron-system', 'sources')],
     ).toBe('read');
     expect(writable.filesystem[own.localPath!]).toBe('write');
     expect(writable.filesystem[foreign.localPath!]).toBe('read');
@@ -362,8 +362,8 @@ describe('WorkspaceCopiesService', () => {
   });
 
   it('refuses a symlinked copy container before cloning into another agent’s directory', async () => {
-    await mkdir(path.join(primary, 'sources'), { recursive: true });
-    await symlink(remote, path.join(primary, 'sources', '.external'));
+    await mkdir(path.join(primary, '.mergeron-system'), { recursive: true });
+    await symlink(remote, path.join(primary, '.mergeron-system', 'sources'));
     await expect(copies.create('project', 'git-source', {})).rejects.toThrow(
       'GIT_COPY_PATH_UNSAFE',
     );

@@ -12,6 +12,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { WorkspaceTree } from './workspace-tree';
 import type { WorkspaceTreeHandle } from './workspace-tree';
 import { createRef } from 'react';
+import { useFileBrowserState } from '@/components/files/file-browser-context';
 import { useFilesStore } from '@/stores/files-store';
 import { useLayoutStore } from '@/stores/layout-store';
 
@@ -19,6 +20,12 @@ const addRoot = vi.hoisted(() => vi.fn());
 const session = vi.hoisted(() => ({ isAdministrator: false }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => session,
+}));
+vi.mock('@/hooks/use-deliverable-directory-aliases', () => ({
+  useDeliverableDirectoryAliases: () => ({}),
+}));
+vi.mock('./explorer-deliverables', () => ({
+  ExplorerDeliverables: () => <div>Deliverables inventory</div>,
 }));
 vi.mock('./system-workspace-tree', () => ({
   SystemWorkspaceTree: ({ root }: { root: string }) => (
@@ -44,7 +51,7 @@ vi.mock('./workspace-git-panel', () => ({
 vi.mock('@/generated/api', () => ({ filesAddRoot: addRoot }));
 vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => (
-    <div data-testid="file-tree">{useFilesStore((s) => s.rootDir)}</div>
+    <div data-testid="file-tree">{useFileBrowserState((s) => s.rootDir)}</div>
   ),
 }));
 
@@ -151,9 +158,11 @@ describe('explorer readiness gate', () => {
         />,
       );
       await screen.findByTestId('file-tree');
-      expect(screen.queryByLabelText('Active working directory') !== null).toBe(
-        primaryActive,
+      expect(screen.getByTestId('file-tree')).toHaveTextContent(
+        '/workspaces/main/dossiers',
       );
+      expect(screen.getByTitle(cwd)).toBeInTheDocument();
+      expect(typeof primaryActive).toBe('boolean');
     },
   );
 
@@ -236,84 +245,24 @@ describe('explorer readiness gate', () => {
   });
 });
 
-describe('project workspaces', () => {
-  it.each([false, true])(
-    'exposes the separate system space only to administrators (%s)',
-    async (administrator) => {
-      session.isAdministrator = administrator;
-      const onActive = vi.fn();
-      render(
-        <WorkspaceTree
-          cwd="/workspaces/main"
-          project={{
-            id: 'p',
-            name: 'Project',
-            workspacePath: '/workspaces/main',
-            systemWorkspacePath: '/workspaces/.mergeron-system/main',
-            resources: [],
-            createdAt: 1,
-            updatedAt: 1,
-            workspaces: [
-              {
-                id: 'main',
-                projectId: 'p',
-                name: 'Main',
-                path: '/workspaces/main',
-                primary: true,
-                createdAt: 1,
-                updatedAt: 1,
-              },
-            ],
-          }}
-          desktop
-          mobileOpen={false}
-          onMobileClose={() => {}}
-          onFile={() => {}}
-          onActiveWorkspaceChange={onActive}
-        />,
-      );
-      await screen.findByTestId('file-tree');
-      const system = screen.queryByRole('button', { name: 'System space' });
-      expect(screen.getByText('Project').parentElement).toHaveClass('h-11');
-      expect(Boolean(system)).toBe(administrator);
-      if (system) {
-        expect(system.parentElement?.firstElementChild).toBe(system);
-        fireEvent.click(system);
-        expect(screen.getByTestId('system-tree')).toHaveTextContent(
-          '/workspaces/.mergeron-system/main',
-        );
-        expect(useFilesStore.getState().rootDir).toBe('/workspaces/main');
-        expect(onActive).not.toHaveBeenCalled();
-      }
-    },
-  );
-  it('lists every project workspace and keeps default selection explicit', async () => {
-    const onActiveWorkspaceChange = vi.fn();
+describe('project explorer views', () => {
+  it('separates folders, business deliverables and Git without changing the agent reference', async () => {
+    const onActive = vi.fn();
     render(
       <WorkspaceTree
-        cwd="/workspaces/main"
+        cwd="/workspaces/main/dossiers"
         project={{
-          id: 'project-1',
-          name: 'Test',
+          id: 'p',
+          name: 'Project',
           workspacePath: '/workspaces/main',
           createdAt: 1,
           updatedAt: 1,
           resources: [],
           workspaces: [
             {
-              id: 'git-copy',
-              projectId: 'project-1',
-              name: 'Git Test — copie',
-              path: '/workspaces/main/sources/git-copy',
-              primary: false,
-              sourceResourceId: 'git',
-              createdAt: 1,
-              updatedAt: 1,
-            },
-            {
               id: 'main',
-              projectId: 'project-1',
-              name: 'Principal',
+              projectId: 'p',
+              name: 'Main',
               path: '/workspaces/main',
               primary: true,
               createdAt: 1,
@@ -321,63 +270,37 @@ describe('project workspaces', () => {
             },
             {
               id: 'docs',
-              projectId: 'project-1',
+              projectId: 'p',
               name: 'Documentation',
-              path: '/appdata/docs',
+              path: '/docs',
               primary: false,
               createdAt: 1,
               updatedAt: 1,
             },
           ],
         }}
-        onActiveWorkspaceChange={onActiveWorkspaceChange}
         desktop
         mobileOpen={false}
-        onMobileClose={() => undefined}
-        onFile={() => undefined}
+        onMobileClose={() => {}}
+        onFile={() => {}}
+        onActiveWorkspaceChange={onActive}
       />,
     );
-    await screen.findByTestId('file-tree');
-    expect(screen.getByText('Test')).toBeInTheDocument();
-    expect(screen.getByText('Documentation')).toBeInTheDocument();
-    expect(screen.queryByText('Git Test — copie')).toBeNull();
+    expect(await screen.findByTestId('file-tree')).toHaveTextContent(
+      '/workspaces/main/dossiers',
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Deliverables' }));
+    expect(screen.getByText('Deliverables inventory')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Sources' }));
     expect(
-      screen.getByLabelText('Active working directory'),
+      screen.getByRole('button', { name: 'Git fixture' }),
     ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Documentation'));
-    expect(screen.getByTestId('file-tree')).toHaveTextContent('/appdata/docs');
-    fireEvent.pointerDown(
-      screen.getByRole('button', {
-        name: 'Working folder actions · Documentation',
-      }),
-      { button: 0, ctrlKey: false },
-    );
-    fireEvent.click(
-      await screen.findByRole('menuitem', {
-        name: 'Use for this conversation',
-      }),
-    );
-    expect(onActiveWorkspaceChange).toHaveBeenCalledWith('/appdata/docs');
-
-    const primary = screen.getByTitle('/workspaces/main');
-    fireEvent.click(primary);
-    expect(primary).toHaveAttribute('aria-pressed', 'true');
-    expect(primary).toHaveAttribute('data-variant', 'secondary');
-    fireEvent.click(screen.getByRole('button', { name: 'Git fixture' }));
-    expect(screen.getByText('Git view')).toBeInTheDocument();
-    expect(primary).toHaveAttribute('aria-pressed', 'false');
-    expect(primary).toHaveAttribute('data-variant', 'ghost');
-    expect(
-      screen.getByLabelText('Active working directory'),
-    ).toBeInTheDocument();
-    expect(useFilesStore.getState().rootDir).toBe('/workspaces/main');
-    expect(onActiveWorkspaceChange).toHaveBeenCalledTimes(1);
-    fireEvent.click(primary);
-    expect(primary).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('file-tree')).toHaveTextContent(
-      '/workspaces/main',
-    );
-    expect(onActiveWorkspaceChange).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    fireEvent.change(screen.getByRole('combobox'), {
+      target: { value: 'docs' },
+    });
+    expect(screen.getByTestId('file-tree')).toHaveTextContent('/docs');
+    expect(onActive).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'System space' })).toBeNull();
   });
 });

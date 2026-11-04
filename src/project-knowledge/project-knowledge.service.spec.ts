@@ -38,7 +38,7 @@ describe('shared project knowledge', () => {
         id: 'p',
         name: 'Project',
         workspacePath: primary,
-        workspaceLayoutVersion: 3,
+        workspaceLayoutVersion: 4,
         createdAt: 1,
         updatedAt: 1,
       })
@@ -135,13 +135,14 @@ describe('shared project knowledge', () => {
   });
 
   it('does not leak knowledge from a different project', async () => {
+    await new ProjectWorkspaceLayout(database.db, root).prepare('other');
     database.db
       .insert(projects)
       .values({
         id: 'other',
         name: 'Other',
         workspacePath: path.join(root, 'other'),
-        workspaceLayoutVersion: 3,
+        workspaceLayoutVersion: 4,
         createdAt: 1,
         updatedAt: 1,
       })

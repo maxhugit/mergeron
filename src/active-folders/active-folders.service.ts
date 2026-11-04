@@ -1,3 +1,5 @@
+import { managedContentAccess } from '../projects/managed-content-access';
+import { projectDeliverablesPath } from '../projects/workspace-structure';
 import {
   BadRequestException,
   ConflictException,
@@ -13,6 +15,7 @@ import { claimAgentCopy } from '../projects/git-copy-ownership';
 import { isPrivateProjectSpace } from '../projects/workspace-structure';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
+  projects,
   projectActiveFolders,
   projectAgentThreads,
   projectDeliverables,
@@ -136,7 +139,7 @@ export class ActiveFoldersService {
     cwd: string,
   ): string | null {
     const target = path.resolve(cwd);
-    if (isPrivateProjectSpace(target))
+    if (isPrivateProjectSpace(target) && !managedContentAccess(this.db, target))
       throw new ConflictException('System workspaces cannot be used by agents');
     const workspaces = this.db.select().from(projectWorkspaces).all();
     const copy = this.db
@@ -199,7 +202,8 @@ export class ActiveFoldersService {
     const inspected = this.inspect(workspace, relativePath);
     if (
       inspected.effectivePath &&
-      isPrivateProjectSpace(inspected.effectivePath)
+      isPrivateProjectSpace(inspected.effectivePath) &&
+      !managedContentAccess(this.db, inspected.effectivePath)
     )
       throw new ConflictException('System workspaces cannot be used by agents');
     if (inspected.state !== 'ready')
@@ -503,7 +507,10 @@ export class ActiveFoldersService {
         'deliverable',
         item.id,
         resource.projectId,
-        path.join(this.primary(resource.projectId).path, 'livrables', item.id),
+        path.join(
+          this.deliverablesRoot(this.primary(resource.projectId).path),
+          item.id,
+        ),
       );
     }
   }
@@ -562,7 +569,10 @@ export class ActiveFoldersService {
   ): Pick<ActiveFolderView, 'effectivePath' | 'state'> {
     const root = path.resolve(workspace.path);
     const candidate = path.resolve(root, relativePath || '.');
-    if (isPrivateProjectSpace(candidate))
+    if (
+      isPrivateProjectSpace(candidate) &&
+      !managedContentAccess(this.db, candidate)
+    )
       return { effectivePath: null, state: 'invalid' };
     if (candidate !== root && !candidate.startsWith(root + path.sep))
       return { effectivePath: null, state: 'invalid' };
@@ -577,7 +587,10 @@ export class ActiveFoldersService {
       }
       const physicalRoot = realpathSync(root);
       const physicalCandidate = realpathSync(candidate);
-      if (isPrivateProjectSpace(physicalCandidate))
+      if (
+        isPrivateProjectSpace(physicalCandidate) &&
+        !managedContentAccess(this.db, physicalCandidate)
+      )
         return { effectivePath: null, state: 'invalid' };
       if (
         physicalCandidate !== physicalRoot &&
@@ -779,5 +792,13 @@ export class ActiveFoldersService {
       throw new ConflictException(
         'Active-folder context belongs to another project',
       );
+  }
+  private deliverablesRoot(root: string) {
+    const project = this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.workspacePath, root))
+      .get();
+    return projectDeliverablesPath(root, project?.workspaceLayoutVersion ?? 4);
   }
 }

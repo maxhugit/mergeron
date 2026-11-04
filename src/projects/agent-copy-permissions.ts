@@ -1,3 +1,4 @@
+import { projectDraftPath, projectSourcesPath } from './workspace-structure';
 /** Native filesystem profiles: a writable project root never grants sibling copies. */
 import { ConflictException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
@@ -41,7 +42,11 @@ export function agentCopyPermissions(
     const root = canonical(workspace.path);
     // Protect lexical and physical names, including symlinked primary workspaces.
     for (const location of new Set([path.resolve(workspace.path), root]))
-      filesystem[path.join(location, 'sources', '.external')] = 'read';
+      filesystem[projectSourcesPath(location)] = 'read';
+  }
+  for (const workspace of workspaces.filter((w) => w.primary)) {
+    const drafts = projectDraftPath(canonical(workspace.path));
+    filesystem[drafts] = 'read';
   }
   const locations = db.select().from(projectLocations).all();
   const connections = db.select().from(projectConnections).all();

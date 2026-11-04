@@ -513,7 +513,7 @@ def export_snapshot(options, source_db):
     for workspace in data.get('project_workspaces', []):
         roots.append({'key': 'workspace-' + str(len(roots)), 'source': workspace['path'], 'kind': 'workspace'})
     primary = data['projects'][0]['workspace_path']
-    separated_system = data['projects'][0].get('workspace_layout_version', 0) >= 3
+    separated_system = data['projects'][0].get('workspace_layout_version', 0) == 3
     if separated_system:
         system = Path(primary).parent / '.mergeron-system' / Path(primary).name
         if system.is_symlink() or not system.is_dir():
@@ -825,7 +825,7 @@ def preview(options, manifest):
         fail('L’espace principal est absent du ZIP.')
     primary = manifest['tables']['projects'][0]['workspace_path']
     systems = [r for r in manifest['roots'] if r['kind'] == 'system']
-    needs_system = manifest['tables']['projects'][0].get('workspace_layout_version', 0) >= 3
+    needs_system = manifest['tables']['projects'][0].get('workspace_layout_version', 0) == 3
     expected_system = str(Path(primary).parent / '.mergeron-system' / Path(primary).name)
     if (needs_system and (len(systems) != 1 or systems[0]['source'] != expected_system or 'system-spaces-v1' not in manifest['requiredCapabilities'])) or (not needs_system and systems):
         fail('Inventaire de l’espace système invalide.')
@@ -1063,7 +1063,7 @@ def import_archive(options, archive, manifest):
     for original, organization in zip(manifest['tables'].get('deliverable_document_organizations', []), records.get('deliverable_document_organizations', [])):
         organization['automatic_actor_id'] = None
         organization['assignments'] = json.dumps({ids.get(doc, doc): labels for doc, labels in json.loads(original['assignments']).items()}, ensure_ascii=False)
-    if source_project.get('workspace_layout_version', 0) >= 3:
+    if source_project.get('workspace_layout_version', 0) == 3:
         records['projects'][0]['workspace_layout_version'] = 2
     # Existing identities are referenced, never overwritten with archive profiles.
     existing = {value for value in person_mappings.values() if value is not None}
@@ -1258,7 +1258,9 @@ def import_archive(options, archive, manifest):
                 else:
                     fail('Format d’historique d’agent non reconnu.')
             sync_directory(agent_dir)
-        marker = staging / '.mergeron' / 'project.json'
+        if records['projects'][0].get('workspace_layout_version', 0) >= 4:
+            (staging / '.mergeron-system' / 'layout-v4.json').unlink(missing_ok=True)
+        marker = staging / ('.mergeron-system' if records['projects'][0].get('workspace_layout_version', 0) >= 4 else '.mergeron') / 'project.json'
         marker.parent.mkdir(exist_ok=True)
         for name in ('knowledge', 'history'):
             (marker.parent / name).mkdir(exist_ok=True)
