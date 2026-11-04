@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { ThreadWorkspaceOverridesService } from '../threads/thread-workspace-overrides.service';
+import { ThreadExecutionPreferencesService } from '../threads/thread-execution-preferences.service';
 import { IdentityService } from '../auth/identity.service';
 import { ProjectsService } from './projects.service';
 import { ProjectWorkspaceLayout } from './project-workspace-layout';
@@ -19,6 +21,7 @@ import {
   documentAccessSessions,
   projectActiveFolders,
   projectWorkspaceCopies,
+  settings,
 } from '../database/schema';
 import { migrateManagedProject } from './managed-project-layout';
 import { projectSystemPath, projectDraftPath } from './workspace-structure';
@@ -442,5 +445,129 @@ describe('managed project layout v4', () => {
         path.join(root, '.mergeron', 'imported-attachments', 'note.txt'),
       ),
     ).toBe(path.join(root, 'dossiers', 'imported-attachments', 'note.txt'));
+  });
+  it('moves a persisted conversation cwd used by resume and keeps other project settings untouched', async () => {
+    const old = path.join(root, 'sources', '.external', 'git', 'copy');
+    for (const [key, value] of [
+      ['thread-workspace:agent', old],
+      ['thread-workspace:foreign', '/another-project/source'],
+      ['integration.secret', old],
+    ])
+      database.db
+        .insert(settings)
+        .values({
+          key,
+          value,
+          type: 'string',
+          category: 'test',
+          description: 'test',
+          defaultValue: '',
+          constraints: '{}',
+          updatedAt: 1,
+        })
+        .run();
+    await migrateManagedProject(database.db, 'p', root);
+    expect(new ThreadWorkspaceOverridesService(database.db).get('agent')).toBe(
+      path.join(root, '.mergeron-system', 'sources', 'git', 'copies', 'copy'),
+    );
+    expect(
+      new ThreadWorkspaceOverridesService(database.db).get('foreign'),
+    ).toBe('/another-project/source');
+    expect(
+      database.db
+        .select()
+        .from(settings)
+        .all()
+        .find((row) => row.key === 'integration.secret')?.value,
+    ).toBe(old);
+  });
+  it('relocates explicit sandbox roots without changing model, effort or approval choices', async () => {
+    const old = path.join(root, 'sources', '.external', 'git', 'copy');
+    const saved = {
+      revision: 3,
+      model: 'test-model',
+      effort: 'medium',
+      security: {
+        approvalMode: 'automatic',
+        approvalPolicy: 'on-request',
+        sandboxPolicy: {
+          type: 'workspaceWrite',
+          writableRoots: [old, '/another-project/source'],
+          networkAccess: false,
+          excludeTmpdirEnvVar: true,
+          excludeSlashTmp: true,
+        },
+      },
+    };
+    database.db
+      .insert(settings)
+      .values({
+        key: 'thread-execution-preferences:agent',
+        value: JSON.stringify(saved),
+        type: 'json',
+        category: 'thread-execution-preferences',
+        description: 'test',
+        defaultValue: '',
+        constraints: '{}',
+        updatedAt: 1,
+      })
+      .run();
+    await migrateManagedProject(database.db, 'p', root);
+    expect(
+      new ThreadExecutionPreferencesService(database.db).read('agent'),
+    ).toMatchObject({
+      ...saved,
+      security: {
+        ...saved.security,
+        sandboxPolicy: {
+          ...saved.security.sandboxPolicy,
+          writableRoots: [
+            path.join(
+              root,
+              '.mergeron-system',
+              'sources',
+              'git',
+              'copies',
+              'copy',
+            ),
+            '/another-project/source',
+          ],
+        },
+      },
+    });
+  });
+  it('repairs a stale durable cwd on an already migrated v4 project without moving files again', async () => {
+    const old = path.join(root, 'sources', '.external', 'git', 'copy');
+    await migrateManagedProject(database.db, 'p', root);
+    database.db
+      .insert(settings)
+      .values({
+        key: 'thread-workspace:agent',
+        value: old,
+        type: 'string',
+        category: 'thread-workspace',
+        description: 'test',
+        defaultValue: '',
+        constraints: '{}',
+        updatedAt: 1,
+      })
+      .run();
+    const snapshot = await fs.readFile(
+      path.join(projectSystemPath(root), 'layout-v4.json'),
+      'utf8',
+    );
+    await new ProjectWorkspaceLayout(database.db, parent).migrate();
+    expect(new ThreadWorkspaceOverridesService(database.db).get('agent')).toBe(
+      path.join(root, '.mergeron-system', 'sources', 'git', 'copies', 'copy'),
+    );
+    expect(
+      await fs.readFile(
+        path.join(projectSystemPath(root), 'layout-v4.json'),
+        'utf8',
+      ),
+    ).toBe(snapshot);
+    expect(
+      await fs.readFile(path.join(root, 'dossiers', 'note.txt'), 'utf8'),
+    ).toBe('keep note');
   });
 });

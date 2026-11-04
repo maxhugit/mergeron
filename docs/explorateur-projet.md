@@ -66,7 +66,9 @@ Au démarrage, `ProjectWorkspaceLayout` termine d’abord les anciennes migratio
    dans l’espace système et n’est pas exposé dans Dossiers. Une interruption
    avant la transaction en base permet de reprendre les déplacements déjà faits.
 4. Mise à jour transactionnelle des chemins typés en base, des références de
-   dossiers et des liens documentaires. Les anciens chemins de documents restent
+   dossiers et des liens documentaires. Les chemins de conversation mémorisés et
+   les racines explicites du bac à sable sont relocalisés sans modifier les choix
+   de modèle, d’effort, d’approbation ou d’accès. Les anciens chemins de documents restent
    des alias ; aucun lien symbolique n’est créé pour les rendre accessibles.
 
 Les copies Git autonomes sont déplacées sans checkout, reset, stash ni nettoyage :

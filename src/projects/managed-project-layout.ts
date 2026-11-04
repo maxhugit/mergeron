@@ -26,6 +26,60 @@ const exists = (p: string) =>
     throw e;
   });
 
+/** Relocate only durable conversation cwd and explicit sandbox roots, never credentials or policy choices. */
+export function migrateSavedAgentPaths(
+  db: Pick<AppDatabase, 'select' | 'update'>,
+  remap: (value: string) => string,
+): void {
+  for (const row of db.select().from(schema.settings).all()) {
+    if (typeof row.value !== 'string') continue;
+    let value = row.value;
+    if (row.key.startsWith('thread-workspace:')) {
+      value = remap(value);
+    } else if (row.key.startsWith('thread-execution-preferences:')) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        continue;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+        continue;
+      const preferences = parsed as Record<string, unknown>;
+      const security = preferences.security as
+        | Record<string, unknown>
+        | undefined;
+      const policy = security?.sandboxPolicy as
+        | Record<string, unknown>
+        | undefined;
+      if (
+        policy?.type !== 'workspaceWrite' ||
+        !Array.isArray(policy.writableRoots) ||
+        !policy.writableRoots.every(
+          (root): root is string => typeof root === 'string',
+        )
+      )
+        continue;
+      const writableRoots = policy.writableRoots.map(remap);
+      if (
+        writableRoots.every(
+          (root, index) => root === policy.writableRoots![index],
+        )
+      )
+        continue;
+      value = JSON.stringify({
+        ...preferences,
+        security: { ...security, sandboxPolicy: { ...policy, writableRoots } },
+      });
+    }
+    if (value !== row.value)
+      db.update(schema.settings)
+        .set({ value })
+        .where(eq(schema.settings.key, row.key))
+        .run();
+  }
+}
+
 /** No merging, copying over files, symlink traversal, or deletion during migration. */
 export async function migrateManagedProject(
   db: AppDatabase,
@@ -257,6 +311,7 @@ export async function migrateManagedProject(
   await fs.mkdir(projectSourcesPath(root), { recursive: true });
   await fs.mkdir(projectDraftPath(root), { recursive: true });
   db.transaction((tx) => {
+    migrateSavedAgentPaths(tx, remap);
     const tables = [
       [schema.projectWorkspaces, ['path']],
       [schema.projectLocations, ['path']],
