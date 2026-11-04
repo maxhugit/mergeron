@@ -43,3 +43,11 @@ it.each([
 it('bounds subtitle payloads before rendering', () => {
   expect(() => parseSrt('x'.repeat(MAX_SRT_BYTES + 1))).toThrow('tooLarge');
 });
+
+it('accepts extra blank separator lines and surrounding whitespace from subtitle editors', () => {
+  expect(
+    parseSrt(
+      ' 1\n00:00:01,000 --> 00:00:02,000\nBonjour\n\n\n\n 2\n00:00:03,000 --> 00:00:04,000\nSuite\n\n',
+    ),
+  ).toHaveLength(2);
+});

@@ -24,7 +24,8 @@ export function parseSrt(text: string): SubtitleCue[] {
     .replace(/\r\n?/g, '\n')
     .trim()
     .split(/\n[ \t]*\n/)) {
-    const lines = block.split('\n');
+    if (!block.trim()) continue;
+    const lines = block.trim().split('\n');
     if (/^\d+\s*$/.test(lines[0] ?? '')) lines.shift();
     const timing = /^(\S+)\s+-->\s+(\S+)(?:\s+.*)?$/.exec(
       lines.shift()?.trim() ?? '',
@@ -46,6 +47,7 @@ export function parseSrt(text: string): SubtitleCue[] {
     cues.push({ start, end, text: content });
     if (cues.length > MAX_SRT_CUES) throw new Error('tooLarge');
   }
+  if (!cues.length) throw new Error('invalid');
   return cues.sort((a, b) => a.start - b.start || a.end - b.end);
 }
 export function cueAtOrBefore(cues: SubtitleCue[], time: number): number {
