@@ -1799,3 +1799,76 @@ export const transcriptionJobs = sqliteTable(
     uniqueIndex('transcription_request_key').on(table.requestKey),
   ],
 );
+
+/** Virtual document folders: identities and assignments never move retained files. */
+export const deliverableDocumentOrganizations = sqliteTable(
+  'deliverable_document_organizations',
+  {
+    deliverableId: text('deliverable_id')
+      .primaryKey()
+      .references(() => projectDeliverables.id, { onDelete: 'cascade' }),
+    labels: text('labels', { mode: 'json' })
+      .$type<Array<{ id: string; name: string }>>()
+      .notNull()
+      .default([]),
+    assignments: text('assignments', { mode: 'json' })
+      .$type<Record<string, string[]>>()
+      .notNull()
+      .default({}),
+    revision: integer('revision').notNull().default(1),
+    automaticActorId: text('automatic_actor_id').references(() => people.id, {
+      onDelete: 'set null',
+    }),
+    updatedAt: integer('updated_at').notNull(),
+  },
+);
+export const deliverableDocumentLabelJobs = sqliteTable(
+  'deliverable_document_label_jobs',
+  {
+    id: text('id').primaryKey(),
+    deliverableId: text('deliverable_id')
+      .notNull()
+      .references(() => projectDeliverables.id, { onDelete: 'cascade' }),
+    documentId: text('document_id').references(
+      () => projectDeliverableDocuments.id,
+      { onDelete: 'cascade' },
+    ),
+    mode: text('mode').$type<'proposal' | 'automatic'>().notNull(),
+    status: text('status')
+      .$type<
+        'queued' | 'running' | 'proposed' | 'applied' | 'failed' | 'stale'
+      >()
+      .notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    result: text('result', { mode: 'json' }).$type<{
+      labels: Array<{ id: string; name: string }>;
+      assignments: Record<string, string[]>;
+      reason: string;
+    }>(),
+    error: text('error'),
+    actorId: text('actor_id').references(() => people.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: integer('created_at').notNull(),
+    completedAt: integer('completed_at'),
+  },
+  (table) => [
+    index('idx_document_label_jobs_deliverable').on(
+      table.deliverableId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const personAgentDocumentViews = sqliteTable(
+  'person_agent_document_views',
+  {
+    personId: text('person_id')
+      .notNull()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id').notNull(),
+    mode: text('mode').$type<'plain' | 'labels'>().notNull().default('plain'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.personId, table.threadId] })],
+);

@@ -15,6 +15,7 @@ import {
 type EntryType = 'file' | 'directory';
 
 interface FileBrowserEntryProps {
+  entryKey?: string;
   icon: EntryType;
   name: string;
   displayName?: string;
@@ -40,6 +41,7 @@ interface FileBrowserEntryProps {
 
 /** Keeps dnd-kit on the outer div and native upload/menu/keyboard interaction on the entry. */
 export function FileBrowserEntry({
+  entryKey,
   icon,
   name,
   displayName,
@@ -62,13 +64,13 @@ export function FileBrowserEntry({
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { ref: dragRef, isDragging } = useDraggable({
-    id: `drag-${entryPath}`,
+    id: `drag-${entryKey ?? entryPath}`,
     disabled: Boolean(documentActions),
     data: { path: entryPath, name, type: icon },
     plugins: [Feedback.configure({ feedback: 'clone' })],
   });
   const { ref: dropRef, isDropTarget } = useDroppable({
-    id: `drop-${entryPath}`,
+    id: `drop-${entryKey ?? entryPath}`,
     disabled: !isDir,
     data: { path: entryPath },
   });

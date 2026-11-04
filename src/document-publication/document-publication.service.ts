@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { constants, createWriteStream } from 'node:fs';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -103,6 +103,15 @@ interface PublicationScope {
  */
 @Injectable()
 export class DocumentPublicationService implements OnModuleDestroy {
+  private readonly reconciliations = new Map<
+    string,
+    {
+      projectId: string;
+      agentName: string;
+      access: ReturnType<typeof currentAccess>;
+    }
+  >();
+  private readonly reconciliationTasks = new Map<string, Promise<void>>();
   private readonly scopes = new Map<string, PublicationScope>();
 
   constructor(
@@ -122,6 +131,8 @@ export class DocumentPublicationService implements OnModuleDestroy {
       }
       if (note.method !== 'turn/completed' && note.method !== 'turn/started')
         return;
+      if (note.method === 'turn/completed')
+        void this.reconcile(note.params.threadId);
       const scope = this.scopes.get(note.params.threadId);
       if (!scope) return;
       if (note.method === 'turn/started') {
@@ -148,11 +159,13 @@ export class DocumentPublicationService implements OnModuleDestroy {
   }
 
   revoke(threadId: string): void {
+    this.reconciliations.delete(threadId);
     const scope = this.scopes.get(threadId);
     if (scope) void this.finish(scope);
   }
 
   private stopAll(): void {
+    this.reconciliations.clear();
     for (const scope of this.scopes.values()) {
       scope.revoked = true;
       clearInterval(scope.timer);
@@ -167,6 +180,11 @@ export class DocumentPublicationService implements OnModuleDestroy {
       .where(eq(projectAgentThreads.threadId, threadId))
       .get();
     if (!binding) return null;
+    this.reconciliations.set(threadId, {
+      projectId: binding.projectId,
+      agentName: `Agent — ${agentName || threadId} (modification détectée)`,
+      access: currentAccess(),
+    });
     const boards = this.db
       .select()
       .from(projectResources)
@@ -287,6 +305,46 @@ export class DocumentPublicationService implements OnModuleDestroy {
         void this.finish(active);
       },
     };
+  }
+
+  async reconcile(threadId: string): Promise<void> {
+    const pending = this.reconciliationTasks.get(threadId);
+    if (pending) return pending;
+    const observed = this.reconciliations.get(threadId);
+    if (!observed) return;
+    const task = (async () => {
+      try {
+        const binding = this.db
+          .select()
+          .from(projectAgentThreads)
+          .where(eq(projectAgentThreads.threadId, threadId))
+          .get();
+        if (binding?.projectId !== observed.projectId) return;
+        const capture = () =>
+          this.deliverables.captureChangedProjectDocuments(observed.projectId, {
+            personId: observed.access?.identity.personId ?? null,
+            name: observed.agentName,
+          });
+        if (observed.access) {
+          const identity = observed.access.identity.personId
+            ? observed.access.identities.resolvePerson(
+                observed.access.identity.personId,
+              )
+            : observed.access.identity;
+          observed.access.identities.requireActive(identity);
+          observed.access.identities.requireAdministrator(identity);
+          await accessContext.run({ ...observed.access, identity }, capture);
+        } else await capture();
+      } catch {
+        new Logger(DocumentPublicationService.name).warn(
+          'Retained document reconciliation failed; an unsaved change may remain. No previous version was removed.',
+        );
+      }
+    })().finally(() => {
+      this.reconciliationTasks.delete(threadId);
+    });
+    this.reconciliationTasks.set(threadId, task);
+    return task;
   }
 
   private async finish(scope: PublicationScope): Promise<void> {

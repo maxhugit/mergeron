@@ -1,6 +1,7 @@
 /** REST controller for API-key, local-session and OIDC authentication flows. */
 import {
   Body,
+  ForbiddenException,
   Controller,
   HttpCode,
   HttpStatus,
@@ -51,6 +52,29 @@ export class AuthController {
     private readonly localAuth: LocalAuthService,
     private readonly oidcAuth: OidcAuthService,
   ) {}
+
+  @Get('me/document-explorer/:threadId')
+  documentExplorer(
+    @Param('threadId') id: string,
+    @Req() request: IdentityRequest,
+  ) {
+    return this.identities.documentExplorerView(request.platformIdentity, id);
+  }
+  @Patch('me/document-explorer/:threadId')
+  setDocumentExplorer(
+    @Param('threadId') id: string,
+    @Req() request: IdentityRequest,
+    @Body() body: { mode?: unknown; personId?: unknown },
+  ) {
+    if (body.personId !== request.platformIdentity?.personId)
+      throw new ForbiddenException('Identity changed');
+    if (body.mode === undefined) body.mode = null;
+    return this.identities.documentExplorerView(
+      request.platformIdentity,
+      id,
+      body.mode,
+    );
+  }
 
   /** Public capability discovery used by the login page. */
   @Public()

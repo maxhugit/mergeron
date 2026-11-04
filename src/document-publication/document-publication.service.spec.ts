@@ -205,6 +205,48 @@ describe('agent saves retained documents as new versions', () => {
     };
   }
 
+  it('captures a modified retained source for an agent not associated with the deliverable and preserves V1', async () => {
+    expect((await request({})).result.status).toBe('published');
+    const document = deliverables.board('p', 'r').deliverables[0].documents[0];
+    expect(deliverables.get('p', 'r', item.id).conversations).toEqual([]);
+    await fs.writeFile(
+      document.sourcePath,
+      'Modification outside explicit publication',
+    );
+    await publication.reconcile('agent');
+    const updated = deliverables.board('p', 'r').deliverables[0].documents[0];
+    expect(updated.currentVersionNumber).toBe(2);
+    expect(updated.versions[1].authorName).toContain('Agent — Writer');
+    expect(
+      await fs.readFile(
+        updated.versions.find((v) => v.number === 1)!.snapshotPath,
+        'utf8',
+      ),
+    ).toBe('Version one');
+    expect(
+      await fs.readFile(
+        updated.versions.find((v) => v.number === 2)!.snapshotPath,
+        'utf8',
+      ),
+    ).toBe('Modification outside explicit publication');
+    await publication.reconcile('agent');
+    expect(
+      deliverables.board('p', 'r').deliverables[0].documents[0]
+        .currentVersionNumber,
+    ).toBe(2);
+    const originalStat = await fs.stat(updated.sourcePath);
+    await fs.writeFile(
+      updated.sourcePath,
+      'Another edit with restored modification time',
+    );
+    await fs.utimes(updated.sourcePath, originalStat.atime, originalStat.mtime);
+    await publication.reconcile('agent');
+    expect(
+      deliverables.board('p', 'r').deliverables[0].documents[0]
+        .currentVersionNumber,
+    ).toBe(3);
+  });
+
   it('retains a protected source, immutable V1, actor and version comment', async () => {
     const { result } = await request({});
     expect(result.status).toBe('published');

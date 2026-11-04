@@ -95,6 +95,18 @@ const board: DeliverablesBoard = {
   tasks: [],
   conversations: [],
 };
+vi.mock('@/lib/document-organization', () => ({
+  useDocumentOrganization: () => ({
+    data: {
+      labels: [],
+      assignments: {},
+      revision: 0,
+      fingerprint: 'test',
+      jobs: [],
+      automaticEnabled: false,
+    },
+  }),
+}));
 beforeEach(() => {
   api.mockReset();
   api.mockImplementation((_path, input) => Promise.resolve(input ? {} : board));
@@ -392,7 +404,7 @@ async function setup(
       <ProjectDeliverablesManager projectId="p" resourceId="r" />
     </QueryClientProvider>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: /Report/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Report/ }));
 }
 async function setupList(data = board) {
   api.mockImplementation((_path, input) => Promise.resolve(input ? {} : data));
@@ -410,7 +422,7 @@ async function setupList(data = board) {
       <ProjectDeliverablesManager projectId="p" resourceId="r" />
     </QueryClientProvider>,
   );
-  await screen.findByRole('button', { name: /Report/ });
+  await screen.findByRole('button', { name: /^Report/ });
 }
 
 it('aligns all compact badges to the right and preserves desktop column alignment', async () => {
@@ -735,9 +747,9 @@ it('filters the deliverables list and resets all filters', async () => {
   fireEvent.change(screen.getByLabelText('Filter by task association'), {
     target: { value: 'linked' },
   });
-  expect(screen.queryByRole('button', { name: /Report/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Report/ })).toBeNull();
   expect(
-    screen.getByRole('button', { name: /Restricted architecture/ }),
+    screen.getByRole('button', { name: /^Restricted architecture/ }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Approve architecture' }));
   expect(screen.getByRole('dialog', { name: 'task' })).toBeInTheDocument();
@@ -748,7 +760,7 @@ it('filters the deliverables list and resets all filters', async () => {
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
-  expect(screen.getByRole('button', { name: /Report/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^Report/ })).toBeInTheDocument();
 });
 it.each([
   {
@@ -789,21 +801,21 @@ it.each([
     fireEvent.change(screen.getByLabelText('Filter by status'), {
       target: { value: expected },
     });
-    expect(screen.getByRole('button', { name: /Report/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Report/ })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Filter by status'), {
       target: {
         value: expected === 'finalized' ? 'awaiting_validation' : 'finalized',
       },
     });
     expect(
-      screen.queryByRole('button', { name: /Report/ }),
+      screen.queryByRole('button', { name: /^Report/ }),
     ).not.toBeInTheDocument();
   },
 );
 it('keeps the table search visible and exposes filters through a mobile toggle', async () => {
   await setupList();
 
-  expect(screen.getByRole('button', { name: /Report/ })).toHaveClass(
+  expect(screen.getByRole('button', { name: /^Report/ })).toHaveClass(
     'col-start-1',
     'row-start-1',
   );
@@ -1457,6 +1469,7 @@ it('uploads a version candidate without overwriting the protected retained sourc
   fireEvent.change(screen.getByLabelText('Save a new version'), {
     target: { files: [new File(['candidate'], 'report.docx')] },
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Create new version' }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   expect(String(fetchMock.mock.calls[0][0])).toContain(
     '/api/projects/p/resources/r/deliverables/d/documents/upload?documentId=doc&expectedVersion=2',

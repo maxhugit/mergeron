@@ -597,6 +597,7 @@ class ProjectArchiveTest(unittest.TestCase):
             db.execute("INSERT INTO project_deliverable_document_versions(id,document_id,number,file_name,source_path,snapshot_path,size,sha256,author_person_id,author_name,created_at) VALUES('document-version','document',1,'report.docx',?,?,16,?,'person','Alice',1)", (str(live), str(snapshot), digest))
             composition = json.dumps([{'documentId': 'document', 'documentVersionId': 'document-version', 'versionNumber': 1, 'sha256': digest}])
             db.execute("INSERT INTO project_deliverable_snapshots(id,deliverable_id,documents,created_by_person_id,created_by_name,created_at) VALUES('snapshot','deliverable',?,'person','Alice',1)", (composition,))
+            db.execute("INSERT INTO deliverable_document_organizations(deliverable_id,labels,assignments,revision,automatic_actor_id,updated_at) VALUES('deliverable',?,?,1,'person',1)", (json.dumps([{'id':'label-source','name':'Sources'}]), json.dumps({'document':['label-source']})))
         self.export()
         self.target['selection'] = ['work']  # must pull tasks, snapshots and files together
         self.import_project()
@@ -611,6 +612,11 @@ class ProjectArchiveTest(unittest.TestCase):
             self.assertEqual(delivery['current_snapshot_id'], snapshot_row['id'])
             self.assertNotIn('/deliverable/', document['source_path'])
             self.assertEqual(version['author_name'], 'Alice')
+            organization = db.execute('SELECT * FROM deliverable_document_organizations').fetchone()
+            self.assertEqual(organization['deliverable_id'], delivery['id'])
+            self.assertEqual(json.loads(organization['assignments']), {document['id']: ['label-source']})
+            self.assertEqual(json.loads(organization['labels'])[0]['name'], 'Sources')
+            self.assertIsNone(organization['automatic_actor_id'])
 
     def test_refuses_document_version_without_its_immutable_snapshot(self):
         self.export()

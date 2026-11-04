@@ -651,6 +651,141 @@ describe('project deliverables', () => {
         .deliverables.find((entry) => entry.id === other.id)?.activityEvents,
     ).toEqual([]);
   });
+  it('links an existing deliverable or creates one from an unlinked task, rejecting stale and duplicate associations', async () => {
+    const now = Date.now();
+    database.db
+      .insert(projectResources)
+      .values({
+        id: 'tasks',
+        projectId: 'p',
+        name: 'Tasks',
+        type: 'task_board',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    database.db
+      .insert(projectTaskStatuses)
+      .values({
+        id: 'todo',
+        resourceId: 'tasks',
+        name: 'To do',
+        color: 'slate',
+        kind: 'unassigned',
+        position: 0,
+        system: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    database.db
+      .insert(projectTasks)
+      .values(
+        ['first', 'second', 'third'].map((id) => ({
+          id,
+          resourceId: 'tasks',
+          statusId: 'todo',
+          title: id,
+          position: 0,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      )
+      .run();
+    const existing = await service.create('p', 'r', { title: 'Existing' });
+    await expect(
+      service.linkPrimaryTask('p', 'r', {
+        taskId: 'first',
+        expectedTaskUpdatedAt: now - 1,
+        deliverableId: existing.id,
+        expectedVersion: existing.version,
+      }),
+    ).rejects.toThrow();
+    const linked = await service.linkPrimaryTask('p', 'r', {
+      taskId: 'first',
+      expectedTaskUpdatedAt: now,
+      deliverableId: existing.id,
+      expectedVersion: existing.version,
+    });
+    expect(linked.primaryTaskId).toBe('first');
+    await expect(
+      service.linkPrimaryTask('p', 'r', {
+        taskId: 'first',
+        expectedTaskUpdatedAt: now,
+        title: 'Duplicate',
+      }),
+    ).rejects.toThrow();
+    await expect(
+      service.linkPrimaryTask('p', 'r', {
+        taskId: 'second',
+        expectedTaskUpdatedAt: now,
+        deliverableId: existing.id,
+        expectedVersion: linked.version,
+      }),
+    ).rejects.toThrow();
+    const created = await service.linkPrimaryTask('p', 'r', {
+      taskId: 'second',
+      expectedTaskUpdatedAt: now,
+      title: 'New linked',
+    });
+    expect(created.primaryTaskId).toBe('second');
+    expect(created.title).toBe('New linked');
+    await expect(
+      service.linkPrimaryTask('p', 'r', {
+        taskId: 'third',
+        expectedTaskUpdatedAt: now,
+        deliverableId: created.id,
+        expectedVersion: created.version,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('protects finalized and archived deliverables from deletion except for an administrator', async () => {
+    const item = await service.create('p', 'r', { title: 'Protected' });
+    database.db
+      .insert(people)
+      .values({
+        id: 'admin',
+        reference: 'admin',
+        name: 'Admin',
+        role: 'administrator',
+        active: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .run();
+    const identities = new IdentityService(database.db);
+    const access = {
+      identity: {
+        kind: 'person' as const,
+        personId: 'admin',
+        name: 'Admin',
+        role: 'administrator' as const,
+        active: true,
+      },
+      identities,
+    };
+    const source = path.join(root, 'final.txt');
+    await fs.writeFile(source, 'Final');
+    await service.addDocumentVersion(
+      'p',
+      'r',
+      item.id,
+      { path: source },
+      { personId: null, name: 'Test' },
+    );
+    service.transitionLifecycle('p', 'r', item.id, {
+      version: service.get('p', 'r', item.id).version,
+      target: 'finalized',
+    });
+    const current = service.get('p', 'r', item.id);
+    expect(() => service.remove('p', 'r', item.id, current.version)).toThrow();
+    accessContext.run(access, () =>
+      service.remove('p', 'r', item.id, current.version),
+    );
+    expect(() => service.get('p', 'r', item.id)).toThrow();
+  });
+
   it('associates one main task from the project and clears it when the task is deleted', async () => {
     const now = Date.now();
     database.db

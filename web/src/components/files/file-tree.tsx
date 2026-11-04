@@ -1,6 +1,14 @@
+import { useAgentDocumentView } from '@/hooks/use-agent-document-view';
+import { useDocumentOrganization } from '@/lib/document-organization';
 /** Flat Explorer-style browser with drag/drop, context menus, and inline edits. */
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Folder, Loader2, UploadCloud } from 'lucide-react';
+import {
+  Folder,
+  Loader2,
+  UploadCloud,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { DragDropProvider } from '@dnd-kit/react';
@@ -60,6 +68,8 @@ const CLOSED: DialogState = {
 };
 
 interface FileTreeProps {
+  agentThreadId?: string;
+  personId?: string | null;
   gitFileState?: (
     path: string,
   ) => { unstaged: boolean; actions: FileExtraAction[] } | undefined;
@@ -70,6 +80,8 @@ interface FileTreeProps {
 
 /** Owns flat navigation and delegates layout-independent edits and entry actions. */
 export function FileTree({
+  agentThreadId,
+  personId,
   onFileClick,
   project,
   workspaceRoot,
@@ -253,6 +265,8 @@ export function FileTree({
           <ScrollArea className="h-full">
             <DragDropProvider onDragEnd={handleDragEnd}>
               <FlatDirectory
+                agentThreadId={agentThreadId}
+                personId={personId}
                 gitFileState={gitFileState}
                 project={project}
                 systemDirectory={projectSystemDirectory(project)}
@@ -391,6 +405,8 @@ export function FileTree({
 }
 
 interface FlatDirectoryProps {
+  agentThreadId?: string;
+  personId?: string | null;
   gitFileState?: FileTreeProps['gitFileState'];
   project?: ProjectSummary;
   systemDirectory?: string;
@@ -445,6 +461,32 @@ function FlatDirectory(props: FlatDirectoryProps) {
             }))
         : [];
     }),
+  );
+  const { t: documentText } = useTranslation('deliverables');
+  const preference = useAgentDocumentView(props.personId, props.agentThreadId);
+  const [openLabels, setOpenLabels] = useState<Record<string, boolean>>({});
+  const deliverable = boards
+    .flatMap((board, index) =>
+      (board.data?.deliverables ?? []).map((item) => ({
+        item,
+        resourceId:
+          board.data?.resource?.id ??
+          props.project?.resources.filter(
+            (resource) => resource.type === 'deliverable_board',
+          )[index]?.id,
+      })),
+    )
+    .find(
+      ({ item }) =>
+        item.directory.replace(/\/+$/, '') ===
+        props.dirPath.replace(/\/+$/, ''),
+    );
+  const organization = useDocumentOrganization(
+    preference.mode === 'labels' && deliverable?.resourceId && props.project
+      ? `/${props.project.id}/resources/${deliverable.resourceId}/deliverables`
+      : undefined,
+    deliverable?.item.id,
+    deliverable?.item.version,
   );
   const globalOptions = filesReadTreeOptions({
     query: { root: props.dirPath },
@@ -522,6 +564,48 @@ function FlatDirectory(props: FlatDirectoryProps) {
         />
       </div>
     );
+  const renderEntry = (entry: FileEntryDto, key = entry.path) => {
+    const row = (
+      <FileBrowserEntry
+        gitState={
+          entry.type === 'file' ? props.gitFileState?.(entry.path) : undefined
+        }
+        key={key}
+        entryKey={key}
+        icon={entry.type === 'directory' ? 'directory' : 'file'}
+        name={entry.name}
+        documentActions={documentContexts.find(
+          (context) => context.contextDocument.sourcePath === entry.path,
+        )}
+        displayName={
+          entry.type === 'directory'
+            ? props.directoryAliases[entry.path.replace(/\/+$/, '')]
+            : undefined
+        }
+        path={entry.path}
+        selected={entry.path === props.selectedFile}
+        onClick={() => entry.type === 'file' && props.onFileClick(entry.path)}
+        onDoubleClick={
+          entry.type === 'directory'
+            ? () => props.onDirClick(entry.path)
+            : undefined
+        }
+        openDialog={props.openDialog}
+        ops={props.ops}
+        onUpload={props.onUpload}
+        edit={props.edit}
+        setEdit={props.setEdit}
+        commitEdit={props.commitEdit}
+        onNavigateCreate={(kind) => props.onRowCreate(entry.path, kind)}
+      />
+    );
+    return entry.path.replace(/\/+$/, '') === props.systemDirectory ? (
+      <ProjectSystemFiles key={key}>{row}</ProjectSystemFiles>
+    ) : (
+      row
+    );
+  };
+  const virtual = preference.mode === 'labels' && !!deliverable;
 
   return (
     <div className="py-1">
@@ -536,50 +620,131 @@ function FlatDirectory(props: FlatDirectoryProps) {
           {t('cannotLoadDirectories')}
         </div>
       )}
-      {data?.map((entry) => {
-        const row = (
-          <FileBrowserEntry
-            gitState={
-              entry.type === 'file'
-                ? props.gitFileState?.(entry.path)
-                : undefined
-            }
-            key={entry.path}
-            icon={entry.type === 'directory' ? 'directory' : 'file'}
-            name={entry.name}
-            documentActions={documentContexts.find(
-              (context) => context.contextDocument.sourcePath === entry.path,
+      {preference.available &&
+        (deliverable ||
+          props.dirPath.replace(/\/+$/, '').endsWith('/livrables')) && (
+          <div className="border-b px-3 py-2">
+            <label className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              {documentText('labelsExplorerDisplay')}
+              <select
+                aria-label={documentText('labelsExplorerDisplay')}
+                value={preference.mode}
+                disabled={preference.loading}
+                onChange={(event) =>
+                  preference.setMode(event.target.value as 'plain' | 'labels')
+                }
+                className="min-w-0 rounded-md border bg-background px-2 py-1"
+              >
+                <option value="plain">
+                  {documentText('labelsExplorerPlain')}
+                </option>
+                <option value="labels">
+                  {documentText('labelsExplorerVirtual')}
+                </option>
+              </select>
+            </label>
+            {preference.error && (
+              <p role="alert" className="mt-1 text-xs text-destructive">
+                {documentText('labelsPreferenceFailed')}
+              </p>
             )}
-            displayName={
-              entry.type === 'directory'
-                ? props.directoryAliases[entry.path.replace(/\/+$/, '')]
-                : undefined
-            }
-            path={entry.path}
-            selected={entry.path === props.selectedFile}
-            onClick={() =>
-              entry.type === 'file' && props.onFileClick(entry.path)
-            }
-            onDoubleClick={
-              entry.type === 'directory'
-                ? () => props.onDirClick(entry.path)
-                : undefined
-            }
-            openDialog={props.openDialog}
-            ops={props.ops}
-            onUpload={props.onUpload}
-            edit={props.edit}
-            setEdit={props.setEdit}
-            commitEdit={props.commitEdit}
-            onNavigateCreate={(kind) => props.onRowCreate(entry.path, kind)}
-          />
-        );
-        return entry.path.replace(/\/+$/, '') === props.systemDirectory ? (
-          <ProjectSystemFiles key={entry.path}>{row}</ProjectSystemFiles>
-        ) : (
-          row
-        );
-      })}
+          </div>
+        )}
+      {virtual && organization.isError && (
+        <p role="alert" className="px-3 py-2 text-xs text-destructive">
+          {documentText('labelsError')}
+        </p>
+      )}
+      {virtual && organization.data ? (
+        <>
+          {organization.data.labels.map((label) => {
+            const entries =
+              data?.filter((entry) =>
+                deliverable?.item.documents.some(
+                  (doc) =>
+                    doc.deletedAt === null &&
+                    doc.sourcePath === entry.path &&
+                    organization.data!.assignments[doc.id]?.includes(label.id),
+                ),
+              ) ?? [];
+            const key = `${deliverable?.item.id}:${label.id}`,
+              open = !!openLabels[key];
+            return (
+              <section key={label.id}>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
+                  onClick={() =>
+                    setOpenLabels((previous) => ({ ...previous, [key]: !open }))
+                  }
+                >
+                  {open ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  <Folder className="h-4 w-4 text-primary" />
+                  <span className="min-w-0 flex-1 truncate">{label.name}</span>
+                  <span className="text-muted-foreground">
+                    {entries.length}
+                  </span>
+                </button>
+                {open && (
+                  <div className="ml-4 border-l">
+                    {entries.map((entry) =>
+                      renderEntry(entry, `${label.id}:${entry.path}`),
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+          <section>
+            <button
+              type="button"
+              aria-expanded={!!openLabels.unassigned}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
+              onClick={() =>
+                setOpenLabels((previous) => ({
+                  ...previous,
+                  unassigned: !previous.unassigned,
+                }))
+              }
+            >
+              {openLabels.unassigned ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+              <Folder className="h-4 w-4" />
+              {documentText('labelsUnassigned')}
+            </button>
+            {openLabels.unassigned && (
+              <div className="ml-4 border-l">
+                {data
+                  ?.filter(
+                    (entry) =>
+                      !deliverable?.item.documents.some(
+                        (doc) =>
+                          doc.deletedAt !== null &&
+                          doc.sourcePath === entry.path,
+                      ) &&
+                      !deliverable?.item.documents.some(
+                        (doc) =>
+                          doc.deletedAt === null &&
+                          doc.sourcePath === entry.path &&
+                          organization.data!.assignments[doc.id]?.length,
+                      ),
+                  )
+                  .map((entry) => renderEntry(entry))}
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        data?.map((entry) => renderEntry(entry))
+      )}
       {createRow}
       {!query.isLoading && !isError && !data?.length && !props.edit && (
         <div className="px-3 py-8 text-center text-xs italic text-muted-foreground">

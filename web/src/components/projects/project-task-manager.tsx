@@ -1,3 +1,4 @@
+import { TaskDeliverableLink } from './task-deliverable-link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Tooltip, Willow, WillowDark, type IApi } from '@svar-ui/react-gantt';
@@ -363,6 +364,7 @@ export function ProjectTaskManager({
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskError, setTaskError] = useState('');
   const [savingTask, setSavingTask] = useState(false);
+  const [linkDeliverableOpen,setLinkDeliverableOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectTaskSummary | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [folderOpen, setFolderOpen] = useState(false);
@@ -2573,6 +2575,7 @@ export function ProjectTaskManager({
                 )}
               </div>
             </fieldset>
+            {linkDeliverableOpen && editing && deliverableResource && <TaskDeliverableLink projectId={projectId} resourceId={deliverableResource.id} task={editing} deliverables={deliverables.data?.deliverables??[]} onClose={()=>setLinkDeliverableOpen(false)}/>}
             {!draft.parentTaskId && deliverableResource && (
               <div className="grid gap-1 text-xs text-muted-foreground">
                 <span>{t('linkedDeliverable')}</span>
@@ -2597,10 +2600,11 @@ export function ProjectTaskManager({
                     <ChevronRight className="h-4 w-4 shrink-0" />
                   </button>
                 ) : (
-                  <div className="flex h-10 items-center gap-2 rounded-lg border bg-muted/30 px-3 text-sm text-muted-foreground">
+                  <button type="button" disabled={!editing || savingTask} onClick={()=>setLinkDeliverableOpen(true)} className="flex h-10 items-center gap-2 rounded-lg border bg-muted/30 px-3 text-left text-sm text-muted-foreground hover:bg-muted disabled:opacity-50">
                     <PackageOpen className="h-4 w-4" />
                     {t('noLinkedDeliverable')}
-                  </div>
+                    <ChevronRight className="ml-auto h-4 w-4 shrink-0"/>
+                  </button>
                 )}
               </div>
             )}

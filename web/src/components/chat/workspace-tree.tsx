@@ -271,6 +271,8 @@ export function WorkspaceTree({
             />
           ) : cwd && adoptedCwd === cwd && currentRoot ? (
             <FileTree
+              agentThreadId={agentThreadId}
+              personId={session.data?.personId}
               project={project}
               onFileClick={(path) => {
                 onFile(path);

@@ -23,6 +23,7 @@ import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   people,
   personNavigationPreferences,
+  personAgentDocumentViews,
   projects,
   projectWorkspaces,
   projectResources,
@@ -72,6 +73,59 @@ export class IdentityService {
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     @Optional() private readonly localAuth?: LocalAuthService,
   ) {}
+
+  documentExplorerView(
+    identity: PlatformIdentity | undefined,
+    threadId: string,
+    mode?: unknown,
+  ) {
+    if (!identity?.personId || identity.kind !== 'person')
+      throw new ForbiddenException('A person is required');
+    this.requireActive(identity);
+    this.requireThread(identity, threadId);
+    if (
+      !this.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, threadId))
+        .get()
+    )
+      throw new BadRequestException('Unknown agent');
+    if (mode !== undefined) {
+      if (mode !== 'plain' && mode !== 'labels')
+        throw new BadRequestException('Invalid document explorer display');
+      this.db
+        .insert(personAgentDocumentViews)
+        .values({
+          personId: identity.personId,
+          threadId,
+          mode,
+          updatedAt: Date.now(),
+        })
+        .onConflictDoUpdate({
+          target: [
+            personAgentDocumentViews.personId,
+            personAgentDocumentViews.threadId,
+          ],
+          set: { mode, updatedAt: Date.now() },
+        })
+        .run();
+    }
+    return {
+      personId: identity.personId,
+      mode:
+        this.db
+          .select()
+          .from(personAgentDocumentViews)
+          .where(
+            and(
+              eq(personAgentDocumentViews.personId, identity.personId),
+              eq(personAgentDocumentViews.threadId, threadId),
+            ),
+          )
+          .get()?.mode ?? 'plain',
+    };
+  }
 
   resolveOriginal(
     headers: IdentityHeaders,
