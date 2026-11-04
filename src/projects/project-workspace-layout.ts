@@ -1,5 +1,9 @@
+import { projectSystemAlias } from './project-system-paths';
 import { serializeProjectLayout } from './project-layout-lock';
-import { migrateManagedProject } from './managed-project-layout';
+import {
+  migrateManagedProject,
+  migrateSavedAgentPaths,
+} from './managed-project-layout';
 import { ConflictException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
@@ -868,5 +872,9 @@ export class ProjectWorkspaceLayout extends LegacyProjectWorkspaceLayout {
       if (!(await fs.lstat(project.workspacePath).catch(() => null))) continue;
       await migrateManagedProject(this.db, project.id, project.workspacePath);
     }
+    // Repair v4 installations upgraded before durable cwd/settings relocation was added.
+    this.db.transaction((tx) =>
+      migrateSavedAgentPaths(tx, (value) => projectSystemAlias(this.db, value)),
+    );
   }
 }
