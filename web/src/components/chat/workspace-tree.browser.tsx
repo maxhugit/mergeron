@@ -2,13 +2,18 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { commands, page } from 'vitest/browser';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkspaceTree } from './workspace-tree';
 import { useLayoutStore } from '@/stores/layout-store';
 import '@/index.css';
 import i18n, { i18nReady } from '@/i18n';
 
-vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
-vi.mock('@/lib/platform-session', () => ({
+vi.mock('@/generated/api', async (original) => ({
+  ...(await original<typeof import('@/generated/api')>()),
+  filesAddRoot: async () => ({}),
+}));
+vi.mock('@/lib/platform-session', async (original) => ({
+  ...(await original<typeof import('@/lib/platform-session')>()),
   usePlatformSession: () => ({ isAdministrator: false }),
 }));
 vi.mock('@/components/files/file-tree', () => ({
@@ -26,16 +31,18 @@ declare module 'vitest/browser' {
 
 export function Fixture({ width = 800 }: { width?: number }) {
   return (
-    <div style={{ display: 'flex', width, height: 500 }}>
-      <div data-content style={{ flex: 1, minWidth: 0 }} />
-      <WorkspaceTree
-        cwd="/fixture"
-        desktop
-        mobileOpen={false}
-        onMobileClose={() => undefined}
-        onFile={() => undefined}
-      />
-    </div>
+    <QueryClientProvider client={new QueryClient()}>
+      <div style={{ display: 'flex', width, height: 500 }}>
+        <div data-content style={{ flex: 1, minWidth: 0 }} />
+        <WorkspaceTree
+          cwd="/fixture"
+          desktop
+          mobileOpen={false}
+          onMobileClose={() => undefined}
+          onFile={() => undefined}
+        />
+      </div>
+    </QueryClientProvider>
   );
 }
 
