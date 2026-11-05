@@ -1,3 +1,5 @@
+import { LocalModelCatalogService } from './catalog/local-model-catalog.service';
+import type { v2 } from './codex-schema';
 /**
  * Thin facade over CodexProcessManager for business modules.
  * Provides typed request helpers that map to app-server JSON-RPC methods.
@@ -13,6 +15,7 @@ export class CodexService {
   constructor(
     private readonly processManager: CodexProcessManager,
     @Optional() private readonly localAgents?: LocalAgentsService,
+    @Optional() private readonly localCatalog?: LocalModelCatalogService,
   ) {}
 
   /**
@@ -36,6 +39,13 @@ export class CodexService {
    * @returns The response result
    */
   async request<T = unknown>(method: string, params?: unknown): Promise<T> {
+    if (method === 'config/read' && this.localCatalog) {
+      const response = await this.getClient().request<v2.ConfigReadResponse>(
+        method,
+        params,
+      );
+      return this.localCatalog.sourceConfig(response) as T;
+    }
     if (this.localAgents)
       return this.localAgents.request<T>(this.getClient(), method, params);
     return this.getClient().request<T>(method, params);

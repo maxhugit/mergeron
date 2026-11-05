@@ -2,6 +2,7 @@ import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 import type { ModelDto } from '@/generated/api';
 export interface LocalAgentConfiguration {
+  metadataRestartRequired?: boolean;
   enabled: boolean;
   url: string;
   models: string;

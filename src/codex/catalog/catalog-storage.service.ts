@@ -24,6 +24,7 @@ export class CatalogReferencedError extends Error {}
 export class CatalogStorageService {
   /** Paths loaded by this app-server generation, retained until its process has exited. */
   readonly runningPaths = new Set<string>();
+  readonly runtimePaths = new Set<string>();
   /** Startup snapshot for warnings; editing the disk file does not reload the child catalog. */
   runningContent: string | null = null;
   constructor(readonly paths: CatalogPathsService) {}
@@ -160,7 +161,7 @@ export class CatalogStorageService {
   }
   /** Refuses direct paths, symlinks and hard-link aliases mentioned in config or loaded by the process. */
   assertUnreferenced(path: string): void {
-    const references = [...this.runningPaths];
+    const references = [...this.runningPaths, ...this.runtimePaths];
     const visit = (value: unknown): void => {
       if (!value || typeof value !== 'object') return;
       for (const [key, child] of Object.entries(value)) {

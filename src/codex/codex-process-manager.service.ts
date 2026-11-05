@@ -1,3 +1,5 @@
+import type { v2 } from './codex-schema';
+import { LocalModelCatalogService } from './catalog/local-model-catalog.service';
 /** Owns one Codex child, controlled catalog restarts, and generation-scoped recovery events. */
 import {
   Injectable,
@@ -124,6 +126,7 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
     private readonly storage: CatalogStorageService,
     private readonly settings: SettingsService,
     @Optional() private readonly documentProtection?: DocumentProtectionService,
+    @Optional() private readonly localCatalog?: LocalModelCatalogService,
   ) {}
 
   /** New project folders cannot enter an already running mount namespace. */
@@ -298,8 +301,18 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
       );
     }
     const isolation = (await this.documentProtection?.plan()) ?? null;
+    const localSignature = this.localCatalog?.signature();
+    const localPlan = (await this.localCatalog?.prepare()) ?? null;
     const binary = this.storage.paths.binary;
-    const args = ['app-server', '--listen', 'stdio://', ...oauthArgs];
+    const args = [
+      'app-server',
+      '--listen',
+      'stdio://',
+      ...oauthArgs,
+      ...(localPlan
+        ? ['-c', `model_catalog_json=${JSON.stringify(localPlan.path)}`]
+        : []),
+    ];
     const command = agentEnvironmentCommand(binary, args);
     const environment = {
       ...process.env,
@@ -346,6 +359,8 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
       this.client = null;
       this.initResult = null;
       this.storage.runningPaths.clear();
+      this.storage.runtimePaths.clear();
+      this.localCatalog?.clear();
       this.storage.runningContent = null;
       this.emitLifecycle({
         type: 'appServerUnavailable',
@@ -379,9 +394,14 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
         capabilities: { experimentalApi: true, requestAttestation: false },
       });
       // Resolve startup-effective layering before recording which files must not be overwritten.
-      const response = await current.request<{
-        config: Record<string, unknown>;
-      }>('config/read', { includeLayers: true });
+      const rawConfig = await current.request<v2.ConfigReadResponse>(
+        'config/read',
+        { includeLayers: true },
+      );
+      const response = this.localCatalog
+        ? await this.localCatalog.capture(rawConfig, localPlan)
+        : rawConfig;
+      if (localPlan) this.storage.runtimePaths.add(localPlan.path);
       const pointer = response.config.model_catalog_json;
       if (typeof pointer === 'string')
         this.storage.runningPaths.add(this.storage.resolvePointer(pointer));
@@ -392,6 +412,7 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
       await current.request('model/list', { includeHidden: true, limit: 1 });
       if (this.client !== current)
         throw new Error('App-server exited during initialization');
+      this.localCatalog?.accept(localPlan, localSignature);
       beforeReady();
       this.initResult = initialized;
       this.generation += 1;
@@ -438,6 +459,8 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
     });
     if (this.client === current) this.client = null;
     this.storage.runningPaths.clear();
+    this.storage.runtimePaths.clear();
+    this.localCatalog?.clear();
     this.storage.runningContent = null;
   }
   private scheduleRestart(): void {

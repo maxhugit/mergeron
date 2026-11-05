@@ -15,5 +15,7 @@
   "localAgentsReady_other": "{{count}} modèles locaux prêts.",
   "localAgentsLoadError": "Impossible de charger la configuration des agents locaux.",
   "localAgentsWorkspace": "Dossier de travail du projet",
-  "localAgentsCreationHelp": "Crée un nouvel agent dans ce projet. Son fournisseur reste local, y compris après redémarrage ou duplication. L’historique d’une conversation existante n’est pas copié."
+  "localAgentsCreationHelp": "Crée un nouvel agent dans ce projet. Son fournisseur reste local, y compris après redémarrage ou duplication. L’historique d’une conversation existante n’est pas copié.",
+  "localAgentsMetadataRestart": "Les métadonnées des modèles locaux doivent être rechargées. Redémarrez Codex lorsque les agents sont inactifs pour appliquer les modèles et leur contexte. Aucun fichier du catalogue administrateur ne sera modifié.",
+  "localAgentsRestartBlocked": "Codex ne peut pas être redémarré pour le moment. Vérifiez les travaux en cours et les approbations en attente, puis réessayez."
 }

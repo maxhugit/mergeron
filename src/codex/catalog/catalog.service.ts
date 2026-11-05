@@ -1,9 +1,11 @@
+import { LocalModelCatalogService } from './local-model-catalog.service';
 /** Coordinates full catalog drafts, native validation, pointer activation and independent repair. */
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import {
   CodexProcessManager,
@@ -39,6 +41,7 @@ export class CatalogService {
     private readonly manager: CodexProcessManager,
     private readonly activity: CatalogActivityService,
     private readonly admission: CatalogAdmissionService,
+    @Optional() private readonly localCatalog?: LocalModelCatalogService,
   ) {}
 
   /** Returns control-plane status even if config or the recovery record is malformed. */
@@ -310,10 +313,12 @@ export class CatalogService {
         );
       }
       this.manager.suspendRetries();
-      const config = await client.request<v2.ConfigReadResponse>(
+      const nativeConfig = await client.request<v2.ConfigReadResponse>(
         'config/read',
         { includeLayers: true },
       );
+      const config =
+        this.localCatalog?.sourceConfig(nativeConfig) ?? nativeConfig;
       const user = config?.layers?.find(
         (layer) => layer.name.type === 'user' && !layer.name.profile,
       );

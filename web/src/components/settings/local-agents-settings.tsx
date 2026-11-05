@@ -1,3 +1,4 @@
+import { catalogRestartMutation } from '@/generated/api/@tanstack/react-query.gen';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -18,12 +19,30 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
   const [draft, setDraft] = useState(initial);
   const save = useMutation({
     mutationFn: () =>
-      localAgentsApi<LocalAgentConfiguration>('configuration', draft),
+      localAgentsApi<LocalAgentConfiguration>('configuration', {
+        enabled: draft.enabled,
+        url: draft.url,
+        models: draft.models,
+        context: draft.context,
+      }),
     onSuccess: async (value) => {
       client.setQueryData(['local-agent-configuration'], value);
       await client.invalidateQueries({ queryKey: localAgentModelsKey });
     },
   });
+  const restart = useMutation({
+    ...catalogRestartMutation(),
+    onSuccess: async () => {
+      await client.invalidateQueries({
+        queryKey: ['local-agent-configuration'],
+      });
+      await client.invalidateQueries({ queryKey: localAgentModelsKey });
+    },
+  });
+  const configured =
+    client.getQueryData<LocalAgentConfiguration>([
+      'local-agent-configuration',
+    ]) ?? initial;
   const models = useQuery({
     queryKey: localAgentModelsKey,
     queryFn: ({ signal }) =>
@@ -36,7 +55,7 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
       className="space-y-3 rounded-xl border border-border p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        save.mutate();
+        if (!save.isPending && !restart.isPending) save.mutate();
       }}
     >
       <h3 className="font-medium">{t('localAgentsTitle')}</h3>
@@ -81,13 +100,13 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
         {t('localAgentsContextHelp')}
       </p>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={save.isPending || restart.isPending}>
           {t('save')}
         </Button>
         <Button
           type="button"
           variant="outline"
-          disabled={models.isFetching || save.isPending}
+          disabled={models.isFetching || save.isPending || restart.isPending}
           onClick={() => void models.refetch()}
         >
           {t('localAgentsCheck')}
@@ -101,6 +120,24 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
       {save.isSuccess && (
         <p role="status" className="text-sm">
           {t('localAgentsSaved')}
+        </p>
+      )}
+      {configured.metadataRestartRequired && (
+        <div role="status" className="space-y-2 rounded border p-3 text-sm">
+          <p>{t('localAgentsMetadataRestart')}</p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={restart.isPending || save.isPending}
+            onClick={() => restart.mutate({})}
+          >
+            {t('restartCodex')}
+          </Button>
+        </div>
+      )}
+      {restart.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {t('localAgentsRestartBlocked')}
         </p>
       )}
       {(models.isError || models.data?.error) && (
