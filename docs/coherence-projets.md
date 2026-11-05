@@ -83,3 +83,23 @@ les chemins non conformes et symboliques, les pertes documentaires, les référe
 obsolètes, les confirmations, le refus d’un diagnostic périmé et l’absence de
 modification des politiques de sécurité. Les tests d’interface vérifient la
 confirmation, l’annulation, le rafraîchissement et les erreurs de lecture.
+
+## Référence vers une connexion supprimée
+
+Chaque anomalie de connexion absente identifie l’agent, la tâche, le livrable ou
+la conversation concernée, ainsi que l’identifiant de la connexion mémorisée.
+Les tâches, livrables et conversations affichent leur titre : plusieurs références
+vers la même ancienne connexion ne sont plus des cartes indifférenciées.
+
+**Utiliser Dossiers comme référence…** propose explicitement le dossier
+`/workspaces/<projet>/dossiers`. La confirmation ne restaure pas la connexion
+supprimée ; elle remplace uniquement la référence de cet élément. Pour une autre
+destination, choisir la référence dans l’explorateur de l’élément. Aucun fichier
+n’est déplacé ni supprimé, aucun droit ni tour déjà en cours n’est modifié.
+
+L’action n’est proposée que pour un contexte encore rattaché au projet et un
+dossier principal validé par le service de sélection existant. Le serveur
+recalcule le diagnostic, contrôle son empreinte, applique la sélection avec les
+contrôles habituels et journalise l’ancienne connexion et la nouvelle destination
+dans la même transaction. Les diagnostics incomplets et transferts en cours
+continuent de bloquer les corrections.

@@ -11,6 +11,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
+import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import * as schema from '../database/schema';
 import { projectSystemAlias } from './project-system-paths';
@@ -22,8 +23,20 @@ export type IntegrityIssue = {
   path: string;
   entityId?: string;
   severity: 'error' | 'warning';
-  action: 'create-directory' | 'realign-agent' | 'realign-override' | null;
+  action:
+    | 'create-directory'
+    | 'realign-agent'
+    | 'realign-override'
+    | 'select-project-folder'
+    | null;
   expectedPath?: string;
+  reference?: {
+    contextType: schema.ProjectActiveFolder['contextType'];
+    contextId: string;
+    label: string;
+    resourceId: string;
+    relativePath: string;
+  };
 };
 export type IntegrityReport = {
   projectId: string;
@@ -81,12 +94,16 @@ export class ProjectIntegrityService {
       action: IntegrityIssue['action'] = null,
       entityId?: string,
       expectedPath?: string,
+      reference?: IntegrityIssue['reference'],
     ) => {
       if (issues.length >= 500 && kind !== 'scan-limited') {
         limited = true;
         return;
       }
-      const id = digest([kind, p, entityId]).slice(0, 32);
+      const id = digest([kind, p, entityId, reference?.contextType]).slice(
+        0,
+        32,
+      );
       if (seenIssues.has(id)) return;
       seenIssues.add(id);
       issues.push({
@@ -97,6 +114,7 @@ export class ProjectIntegrityService {
         action,
         ...(entityId ? { entityId } : {}),
         ...(expectedPath ? { expectedPath } : {}),
+        ...(reference ? { reference } : {}),
       });
     };
     // Walk every ancestor with lstat; do not inspect a symlink target, including an external connection.
@@ -328,6 +346,40 @@ export class ProjectIntegrityService {
           root,
         );
     }
+    const tasks = this.db
+      .select()
+      .from(schema.projectTasks)
+      .all()
+      .filter((t) => resourceIds.has(t.resourceId));
+    const chats = this.db
+      .select()
+      .from(schema.simpleChatThreads)
+      .all()
+      .filter((t) => t.projectId === projectId);
+    facts.push(tasks, chats);
+    const primary = workspaces.find((w) => w.primary && w.path === root);
+    const foldersPath = path.join(root, 'dossiers');
+    let canSelectFolders =
+      editable &&
+      !!primary &&
+      (await safe(foldersPath)) &&
+      (await stat(foldersPath))?.isDirectory();
+    const locations = this.db
+      .select()
+      .from(schema.projectLocations)
+      .where(eq(schema.projectLocations.projectId, projectId))
+      .all();
+    facts.push(locations);
+    if (canSelectFolders) {
+      try {
+        new ActiveFoldersService(this.db).validateSelection(projectId, {
+          resourceId: primary!.id,
+          relativePath: 'dossiers',
+        });
+      } catch {
+        canSelectFolders = false;
+      }
+    }
     for (const folder of folders) {
       const workspace = workspaces.find((w) => w.id === folder.resourceId);
       if (!workspace) {
@@ -335,8 +387,32 @@ export class ProjectIntegrityService {
           'active-folder-registration-missing',
           root,
           'warning',
-          null,
+          canSelectFolders &&
+            (folder.contextType === 'agent'
+              ? agents.some((a) => a.threadId === folder.contextId)
+              : folder.contextType === 'task'
+                ? tasks.some((t) => t.id === folder.contextId)
+                : folder.contextType === 'deliverable'
+                  ? deliverables.some((d) => d.id === folder.contextId)
+                  : chats.some((c) => c.id === folder.contextId))
+            ? 'select-project-folder'
+            : null,
           folder.contextId,
+          canSelectFolders ? foldersPath : undefined,
+          {
+            contextType: folder.contextType,
+            contextId: folder.contextId,
+            label:
+              (folder.contextType === 'task'
+                ? tasks.find((t) => t.id === folder.contextId)?.title
+                : folder.contextType === 'deliverable'
+                  ? deliverables.find((d) => d.id === folder.contextId)?.title
+                  : folder.contextType === 'simple_chat'
+                    ? chats.find((c) => c.id === folder.contextId)?.title
+                    : null) ?? folder.contextId,
+            resourceId: folder.resourceId,
+            relativePath: folder.relativePath,
+          },
         );
         continue;
       }
@@ -587,6 +663,26 @@ export class ProjectIntegrityService {
       if (issue.action === 'create-directory')
         await this.createAnchoredDirectory(report.root, issue.path);
       this.db.transaction(() => {
+        if (issue.action === 'select-project-folder') {
+          const reference = issue.reference!;
+          const primary = this.db
+            .select()
+            .from(schema.projectWorkspaces)
+            .where(eq(schema.projectWorkspaces.projectId, projectId))
+            .all()
+            .find((w) => w.primary && w.path === report.root);
+          if (
+            !primary ||
+            issue.expectedPath !== path.join(report.root, 'dossiers')
+          )
+            throw new ConflictException('Project folder changed');
+          new ActiveFoldersService(this.db).set(
+            projectId,
+            reference.contextType,
+            reference.contextId,
+            { resourceId: primary.id, relativePath: 'dossiers' },
+          );
+        }
         if (issue.action === 'realign-agent') {
           const current = this.db
             .select()
@@ -632,6 +728,7 @@ export class ProjectIntegrityService {
               path: issue.path,
               action: issue.action,
               expectedPath: issue.expectedPath,
+              reference: issue.reference,
             },
             actorPersonId: actor.personId,
             actorName: actor.name,

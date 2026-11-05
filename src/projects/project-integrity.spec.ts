@@ -79,6 +79,100 @@ describe('project integrity', () => {
     ).toBe(before);
     expect((await service.inspect('p')).fingerprint).toBe(report.fingerprint);
   });
+  const missingReference = () => {
+    database.db
+      .insert(schema.projectAgentThreads)
+      .values({
+        threadId: 'agent',
+        projectId: 'p',
+        workspacePath: root,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(schema.projectActiveFolders)
+      .values({
+        contextType: 'agent',
+        contextId: 'agent',
+        projectId: 'p',
+        resourceId: 'detached',
+        relativePath: '',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+  };
+  it('identifies a detached reference and explicitly rebinds it without changing files or agent permissions', async () => {
+    missingReference();
+    await fs.writeFile(path.join(root, 'dossiers', 'keep.txt'), 'keep');
+    const report = await service.inspect('p');
+    const issue = report.issues.find(
+      (i) => i.kind === 'active-folder-registration-missing',
+    )!;
+    expect(issue.reference).toMatchObject({
+      contextType: 'agent',
+      contextId: 'agent',
+      resourceId: 'detached',
+    });
+    expect(issue.action).toBe('select-project-folder');
+    expect(issue.expectedPath).toBe(path.join(root, 'dossiers'));
+    await expect(
+      service.repair(
+        'p',
+        { fingerprint: report.fingerprint, issueId: issue.id },
+        actor,
+      ),
+    ).rejects.toThrow('confirmation');
+    const next = await service.repair('p', correction(report, issue.id), actor);
+    expect(next.issues).toEqual([]);
+    expect(
+      database.db.select().from(schema.projectActiveFolders).get(),
+    ).toMatchObject({ resourceId: 'primary', relativePath: 'dossiers' });
+    expect(
+      database.db.select().from(schema.projectAgentThreads).get()
+        ?.workspacePath,
+    ).toBe(root);
+    expect(
+      await fs.readFile(path.join(root, 'dossiers', 'keep.txt'), 'utf8'),
+    ).toBe('keep');
+    expect(
+      database.db.select().from(schema.projectActivity).get()?.details,
+    ).toMatchObject({ reference: { resourceId: 'detached' } });
+  });
+  it('refuses a stale repair after the reference is changed', async () => {
+    missingReference();
+    const report = await service.inspect('p');
+    const issue = report.issues.find(
+      (i) => i.action === 'select-project-folder',
+    )!;
+    database.db
+      .update(schema.projectActiveFolders)
+      .set({ resourceId: 'primary' })
+      .run();
+    await expect(
+      service.repair('p', correction(report, issue.id), actor),
+    ).rejects.toThrow('changed');
+  });
+  it('does not offer a replacement if the target is a symlink or its location is detached', async () => {
+    missingReference();
+    database.db.delete(schema.projectLocations).run();
+    expect(
+      (await service.inspect('p')).issues.find(
+        (i) => i.kind === 'active-folder-registration-missing',
+      )?.action,
+    ).toBeNull();
+    await fs.rename(
+      path.join(root, 'dossiers'),
+      path.join(parent, 'kept-folders'),
+    );
+    await fs.symlink(parent, path.join(root, 'dossiers'));
+    expect(
+      (await service.inspect('p')).issues.every(
+        (i) => i.action !== 'select-project-folder',
+      ),
+    ).toBe(true);
+  });
   it('reports a symlink without reading or enumerating its target', async () => {
     const outside = path.join(parent, 'outside');
     await fs.mkdir(outside);

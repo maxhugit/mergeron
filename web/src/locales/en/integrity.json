@@ -60,8 +60,17 @@
     "directoryMissing": "An empty directory can only be recreated when its identity and parent are verified and no registered content needs restoring.",
     "agentReferenceObsolete": "The migrated directory exists. The database reference can be realigned without moving data or changing permissions.",
     "agentOverrideObsolete": "The migrated directory exists. The remembered conversation directory can be realigned without changing its security policy.",
-    "activeFolderRegistrationMissing": "Choose a new reference in the agent explorer or the related activity. This tool does not guess which directory to use.",
+    "activeFolderRegistrationMissing": "This item’s saved connection no longer exists. Confirm using Folders below, or choose another reference in its explorer.",
     "unregisteredCopy": "Inspect files and unpublished Git changes before relinking or cleaning up. No repository is deleted automatically."
   },
-  "unknown": "Issue to review"
+  "unknown": "Issue to review",
+  "selectProjectFolder": "Use Folders as reference…",
+  "confirmProjectFolder": "This reference will point to the project Folders directory shown below. No files will be moved, permissions broadened or running turns changed. To choose another folder, use the affected item’s explorer.",
+  "missingConnection": "Missing connection: {{id}}",
+  "context": {
+    "agent": "Agent",
+    "task": "Task",
+    "deliverable": "Deliverable",
+    "simpleChat": "Conversation"
+  }
 }
