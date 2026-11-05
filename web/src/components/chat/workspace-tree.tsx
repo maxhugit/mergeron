@@ -265,28 +265,7 @@ export function WorkspaceTree({
                 onFile(path);
                 onMobileClose();
               }}
-            >
-              {cwd && adoptedCwd === cwd ? (
-                <FileTree
-                  agentThreadId={agentThreadId}
-                  personId={session.data?.personId}
-                  project={project}
-                  onReferenceDirectory={onActiveWorkspaceChange}
-                  onFileClick={(path) => {
-                    onFile(path);
-                    onMobileClose();
-                  }}
-                />
-              ) : (
-                <div
-                  role="status"
-                  className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground"
-                >
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {t('loadingb04ba49f')}
-                </div>
-              )}
-            </WorkspaceGitPanel>
+            />
           </FileBrowserContext.Provider>
         ) : (
           <>

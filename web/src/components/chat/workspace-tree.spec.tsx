@@ -50,8 +50,10 @@ vi.mock('./workspace-git-panel', () => ({
 }));
 vi.mock('@/generated/api', () => ({ filesAddRoot: addRoot }));
 vi.mock('@/components/files/file-tree', () => ({
-  FileTree: () => (
-    <div data-testid="file-tree">{useFileBrowserState((s) => s.rootDir)}</div>
+  FileTree: ({ workspaceRoot }: { workspaceRoot?: { path: string } }) => (
+    <div data-testid="file-tree" data-bound-root={workspaceRoot?.path}>
+      {useFileBrowserState((s) => s.rootDir)}
+    </div>
   ),
 }));
 
@@ -246,61 +248,66 @@ describe('explorer readiness gate', () => {
 });
 
 describe('project explorer views', () => {
-  it('separates folders, business deliverables and Git without changing the agent reference', async () => {
-    const onActive = vi.fn();
-    render(
-      <WorkspaceTree
-        cwd="/workspaces/main/dossiers"
-        project={{
-          id: 'p',
-          name: 'Project',
-          workspacePath: '/workspaces/main',
-          createdAt: 1,
-          updatedAt: 1,
-          resources: [],
-          workspaces: [
-            {
-              id: 'main',
-              projectId: 'p',
-              name: 'Main',
-              path: '/workspaces/main',
-              primary: true,
-              createdAt: 1,
-              updatedAt: 1,
-            },
-            {
-              id: 'docs',
-              projectId: 'p',
-              name: 'Documentation',
-              path: '/docs',
-              primary: false,
-              createdAt: 1,
-              updatedAt: 1,
-            },
-          ],
-        }}
-        desktop
-        mobileOpen={false}
-        onMobileClose={() => {}}
-        onFile={() => {}}
-        onActiveWorkspaceChange={onActive}
-      />,
-    );
-    expect(await screen.findByTestId('file-tree')).toHaveTextContent(
-      '/workspaces/main/dossiers',
-    );
-    fireEvent.click(screen.getByRole('tab', { name: 'Deliverables' }));
-    expect(screen.getByText('Deliverables inventory')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Sources' }));
-    expect(
-      screen.getByRole('button', { name: 'Git fixture' }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
-    fireEvent.change(screen.getByRole('combobox'), {
-      target: { value: 'docs' },
-    });
-    expect(screen.getByTestId('file-tree')).toHaveTextContent('/docs');
-    expect(onActive).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'System space' })).toBeNull();
-  });
+  it.each(['/workspaces/main/dossiers', null])(
+    'bounds folders to the project and separates sources while agent cwd is %s',
+    async (cwd) => {
+      const onActive = vi.fn();
+      render(
+        <WorkspaceTree
+          cwd={cwd}
+          project={{
+            id: 'p',
+            name: 'Project',
+            workspacePath: '/workspaces/main',
+            createdAt: 1,
+            updatedAt: 1,
+            resources: [],
+            workspaces: [
+              {
+                id: 'main',
+                projectId: 'p',
+                name: 'Main',
+                path: '/workspaces/main',
+                primary: true,
+                createdAt: 1,
+                updatedAt: 1,
+              },
+              {
+                id: 'docs',
+                projectId: 'p',
+                name: 'Documentation',
+                path: '/docs',
+                primary: false,
+                createdAt: 1,
+                updatedAt: 1,
+              },
+            ],
+          }}
+          desktop
+          mobileOpen={false}
+          onMobileClose={() => {}}
+          onFile={() => {}}
+          onActiveWorkspaceChange={onActive}
+        />,
+      );
+      expect(await screen.findByTestId('file-tree')).toHaveAttribute(
+        'data-bound-root',
+        '/workspaces/main/dossiers',
+      );
+      fireEvent.click(screen.getByRole('tab', { name: 'Deliverables' }));
+      expect(screen.getByText('Deliverables inventory')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('tab', { name: 'Sources' }));
+      expect(screen.queryByTestId('file-tree')).toBeNull();
+      expect(
+        screen.getByRole('button', { name: 'Git fixture' }),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+      fireEvent.change(screen.getByRole('combobox'), {
+        target: { value: 'docs' },
+      });
+      expect(screen.getByTestId('file-tree')).toHaveTextContent('/docs');
+      expect(onActive).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'System space' })).toBeNull();
+    },
+  );
 });

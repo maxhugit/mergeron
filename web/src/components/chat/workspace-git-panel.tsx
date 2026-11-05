@@ -1,5 +1,5 @@
 import { GitIntegrateBranch } from './git-integrate-branch';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -72,7 +72,6 @@ interface Props {
   onGitDiff?: (target: GitDiffTarget) => void;
   onGitGraph?: (target: GitGraphTarget) => void;
   onGitRemoteFile?: (target: GitRemoteFileTarget) => void;
-  children: ReactNode;
 }
 
 type EntryAction = 'local' | 'remote' | 'clone' | 'info' | 'release' | 'delete';
@@ -257,7 +256,21 @@ export function WorkspaceGitPanel(props: Props) {
           )}
         />
       ) : (
-        props.children
+        !inventory.error && (
+          <div role="status" className="p-4 text-sm text-muted-foreground">
+            {inventory.isPending
+              ? t('gitLoading')
+              : (inventory.data?.copies ?? []).some(
+                    (copy) =>
+                      copy.state === 'ready' &&
+                      copyOwnedByAgent(copy, props.agentThreadId),
+                  )
+                ? t('explorerSelectSource')
+                : resources.length
+                  ? t('explorerNoAgentCopy')
+                  : t('explorerNoSource')}
+          </div>
+        )
       )}
     </>
   );
