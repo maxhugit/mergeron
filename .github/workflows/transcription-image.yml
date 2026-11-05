@@ -25,6 +25,8 @@ jobs:
       tags: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure reliable signed Ubuntu downloads
+        run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_OS python3 scripts/configure-ci-apt.py
       - name: Install synthetic media tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
       - name: Check anonymous speaker mapping and bounded private API

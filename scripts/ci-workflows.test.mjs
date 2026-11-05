@@ -883,3 +883,31 @@ test('the legacy browser check remains a failing gate if either shard fails or i
     assert.equal(run.status === 0, result === 'success');
   }
 });
+
+test('browser/backend and transcription runners prepare signed Ubuntu downloads before APT installs', () => {
+  const checks = job(quality, 'checks');
+  const prepare =
+    'sudo --preserve-env=GITHUB_ACTIONS,RUNNER_OS python3 scripts/configure-ci-apt.py';
+  assert.ok(checks.includes(prepare));
+  assert.ok(
+    checks.indexOf(prepare) < checks.indexOf('--with-deps chromium webkit'),
+  );
+  assert.match(
+    checks,
+    /if: matrix.part != 'frontend'\n        run: sudo --preserve-env/,
+  );
+  const transcription = read('.github/workflows/transcription-image.yml');
+  assert.ok(
+    transcription.indexOf(prepare) <
+      transcription.indexOf('sudo apt-get update'),
+  );
+  assert.ok(
+    quality.includes(
+      'python3 -m unittest discover -s scripts -p test_ci_apt.py',
+    ),
+  );
+  assert.doesNotMatch(
+    read('scripts/configure-ci-apt.py'),
+    /AllowUnauthenticated|AllowInsecureRepositories|Verify-Peer.*false|trusted=yes/,
+  );
+});

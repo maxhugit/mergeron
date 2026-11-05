@@ -20,6 +20,10 @@ test(
       api: false,
     });
     try {
+      const chromium = ctx.projects.find((p) => p.name.includes('chromium'));
+      const webkit = ctx.projects.find((p) => p.name.includes('webkit'));
+      assert.equal(chromium.config.maxWorkers, 2);
+      assert.equal(webkit.config.browser.fileParallelism, false);
       const specs = await ctx.globTestSpecifications();
       assert.ok(specs.length > 0);
       const key = (spec) => `${spec.project.name}:${spec.moduleId}`;

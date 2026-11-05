@@ -58,6 +58,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Configure reliable signed Ubuntu downloads
+        if: matrix.part != 'frontend'
+        run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_OS python3 scripts/configure-ci-apt.py
+
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -96,6 +100,7 @@ jobs:
           node --test manager/test/*.test.mjs
           node --test runtime/*.test.cjs
           python3 -m unittest discover -s scripts -p 'test_*vex.py'
+          python3 -m unittest discover -s scripts -p test_ci_apt.py
           python3 -m unittest discover -s scripts -p test_openssh_backport.py
           python3 -m unittest discover -s scripts -p test_libxml2_backport.py
           python3 -m unittest discover -s scripts -p test_mergeron_migration.py

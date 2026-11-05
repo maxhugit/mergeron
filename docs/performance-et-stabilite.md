@@ -176,6 +176,14 @@ l’ensemble de la matrice, y compris si un shard échoue ou est annulé. Le nom
 `checks (frontend-browser)` est conservé par un gate agrégé pour les règles de
 protection de branche existantes.
 
+Un suivi en direct a aussi identifié des installations de paquets bloquées sur
+`azure.archive.ubuntu.com` : les tests n’avaient pas encore commencé. Les runners
+Ubuntu jetables utilisent désormais `archive.ubuntu.com` en HTTPS pour ces
+références, avec deux reprises réseau et des délais de connexion/inactivité de
+30 secondes. Les suites, composants, priorités et clés de signature APT restent
+inchangés. Ce réglage ne s’exécute ni sur les installations Mergeron ni dans
+leurs conteneurs ; il ne désactive aucune vérification de signature ou TLS.
+
 Les scans de vulnérabilités, tests natifs Linux/SSH/Office, preuves de sandbox et
 validation du couple application/Manager restent obligatoires avant promotion.
 La publication et le déploiement restent des opérations distinctes.
