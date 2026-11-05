@@ -18,6 +18,13 @@ docker run --rm --network none --read-only --cap-drop ALL \
   --pids-limit 256 --memory 1g --entrypoint node "$image_ref" --input-type=module -e '
   import { chromium } from "playwright-core";
   import { existsSync } from "node:fs";
+  import { execFileSync, spawnSync } from "node:child_process";
+  // Validate actual installed binaries/libraries, independently of scan DB freshness.
+  for (const name of ["apt", "libapt-pkg6.0t64"]) {
+    const version = execFileSync("dpkg-query", ["-W", "-f=${Version}", name], { encoding: "utf8" }).trim();
+    if (spawnSync("dpkg", ["--compare-versions", version, "ge", "2.8.4ubuntu0.1"]).status !== 0)
+      throw new Error("Unpatched browser APT package: " + name);
+  }
   if (!existsSync(chromium.executablePath())) throw new Error("Chromium missing");
   for (const root of ["/usr/lib/node_modules/", "/usr/local/lib/node_modules/"]) {
     for (const name of ["npm", "yarn"]) {

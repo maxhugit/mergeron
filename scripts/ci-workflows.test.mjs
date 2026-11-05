@@ -722,11 +722,22 @@ test('browser identity does not invalidate dependencies and cleanup', () => {
       dockerfile.indexOf('COPY public-proxy.mjs server.mjs'),
   );
   assert.match(dockerfile, /apt-get purge --yes gstreamer1\.0-plugins-bad/);
-  assert.match(dockerfile, /apt-get update/);
+  assert.match(dockerfile, /apt-get -o Acquire::Retries=0 update/);
   assert.match(
     dockerfile,
-    /apt-get install --yes --no-install-recommends --only-upgrade libbrotli1/,
+    /apt-get -o Acquire::Retries=0 install --yes --no-install-recommends --only-upgrade apt libapt-pkg6\.0t64 libbrotli1/,
   );
+  for (const name of ['apt', 'libapt-pkg6.0t64']) {
+    assert.match(
+      dockerfile,
+      new RegExp(
+        `dpkg --compare-versions.*${name.replaceAll('.', '\\.')}.*ge '2\\.8\\.4ubuntu0\\.1'`,
+      ),
+    );
+    assert.ok(
+      read('scripts/smoke-test-browser-image.sh').includes(`"${name}"`),
+    );
+  }
   assert.match(
     dockerfile,
     /dpkg --compare-versions.*libbrotli1.*ge '1\.1\.0-2ubuntu0\.1'/,
