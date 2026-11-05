@@ -165,7 +165,8 @@ backports, tests de régression et scans ne sont pas retirés ; les changements
 de base système peuvent toujours imposer une reconstruction complète.
 
 Les tests navigateur utilisent deux shards Vitest sur deux runners. Chaque shard
-conserve Chromium et WebKit ; WebKit reste séquentiel à l’intérieur de son runner.
+conserve Chromium et WebKit ; Chromium est borné à deux pages parallèles et
+WebKit reste séquentiel à l’intérieur de son runner.
 Un test utilisant la découverte réelle et le séquenceur installé vérifie que
 l’union des deux lots couvre exactement les spécifications attendues, sans trou
 ni doublon. Une nouvelle fixture est découverte automatiquement. L’assistant

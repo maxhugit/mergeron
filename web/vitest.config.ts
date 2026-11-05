@@ -262,6 +262,9 @@ export default mergeConfig(
           extends: true,
           test: {
             name: 'browser',
+            // Bound pages on small runners; machine-level parallelism comes
+            // from CI shards, not an unbounded browser page burst.
+            maxWorkers: 2,
             include: ['src/**/*.browser.{ts,tsx}'],
             // Failure annotations copy screenshots too; keep those copies
             // under the same ignored and per-run-cleared directory.

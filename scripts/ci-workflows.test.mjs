@@ -841,7 +841,11 @@ test('parallel APT stages keep independent locked archives and package lists', (
   }
 });
 
-test('browser shards retain both engines, serial WebKit, unique evidence and one Office check', () => {
+test('browser shards retain both engines, serial WebKit, bounded pages, unique evidence and one Office check', () => {
+  assert.match(
+    read('web/vitest.config.ts'),
+    /name: 'browser',[\s\S]*?maxWorkers: 2,/,
+  );
   assert.match(
     quality,
     /name: preview-ui-evidence-\$\{\{ github.sha \}\}-\$\{\{ matrix.shard \}\}/,
