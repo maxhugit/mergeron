@@ -1665,5 +1665,7 @@
   "transferActionUnchanged": "Inchangé",
   "questionReplyHint": "Vous pouvez répondre quand vous êtes prêt, même si l’agent continue. Un choix prépare votre message sans l’envoyer.",
   "retiredQuestionReplyHint": "Cette demande est terminée. Vous pouvez encore préparer une réponse à envoyer comme message dans la conversation.",
-  "prepareQuestionReply": "Préparer une réponse"
+  "prepareQuestionReply": "Préparer une réponse",
+  "projectIntegrityTitle": "Cohérence des projets",
+  "projectIntegrityDescription": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite, sans suppression ni écrasement."
 }

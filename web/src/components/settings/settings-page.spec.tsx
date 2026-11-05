@@ -35,6 +35,9 @@ vi.mock('./codex-settings', () => ({
     <div>Codex {initialTab} tabs</div>
   ),
 }));
+vi.mock('./project-integrity-settings', () => ({
+  ProjectIntegritySettings: () => <div>Project integrity diagnostics</div>,
+}));
 vi.mock('./internal-mcp-settings', () => ({
   InternalMcpSettings: () => <div>Native MCP technical reference</div>,
 }));
@@ -121,4 +124,13 @@ it('keeps the former integrations URL inside the Codex integrations tab', async 
   render(<SettingsPage />);
   expect(await screen.findByText('Codex integrations tabs')).toBeVisible();
   expect(settingsPageLabel('integrations')).toBe('Codex');
+});
+
+it('opens project consistency from its settings route', async () => {
+  route.section = 'projectIntegrity';
+  render(<SettingsPage />);
+  expect(
+    await screen.findByText('Project integrity diagnostics'),
+  ).toBeVisible();
+  expect(settingsPageLabel('projectIntegrity')).toBe('projectIntegrityTitle');
 });

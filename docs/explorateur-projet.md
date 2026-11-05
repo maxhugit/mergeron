@@ -111,3 +111,6 @@ les liens symboliques, la reprise, les références, l’état Git, les opérati
 métier sur les documents, le connecteur MCP et les trois vues. Le test Linux
 `smoke-test-document-isolation.cjs` vérifie les montages et l’impossibilité de
 modifier ou déplacer les documents protégés à travers un parent inscriptible.
+
+Pour contrôler les références en base et les dossiers présents, utiliser
+[Cohérence des projets](coherence-projets.md) dans les paramètres globaux.

@@ -46,6 +46,7 @@ const sectionIcons = {
   security: ShieldCheck,
   integrations: Plug,
   internalMcp: Network,
+  projectIntegrity: FolderCog,
 } satisfies Record<(typeof SETTINGS_SECTIONS)[number], typeof ServerCog>;
 
 function ServerUpdateIndicator() {
