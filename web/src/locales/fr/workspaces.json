@@ -356,5 +356,8 @@
   "agentReference": "Référence de l’agent",
   "explorerFolders": "Dossiers",
   "explorerDeliverables": "Livrables",
-  "explorerSources": "Sources"
+  "explorerSources": "Sources",
+  "explorerNoAgentCopy": "Aucune copie locale de source n’est disponible pour cet agent. Sélectionnez une source ci-dessus, puis utilisez « Préparer une copie de travail » dans son menu.",
+  "explorerSelectSource": "Sélectionnez une source ci-dessus pour consulter sa copie locale ou le dépôt distant.",
+  "explorerNoSource": "Aucune source n’est connectée à ce projet. Ajoutez une connexion Git dans les paramètres du projet, puis préparez une copie de travail pour cet agent."
 }

@@ -253,9 +253,7 @@ function show(
         onFile={onFile}
         onGitDiff={onGitDiff}
         onGitGraph={() => undefined}
-      >
-        <div>Local tree</div>
-      </WorkspaceGitPanel>
+      />
     </QueryClientProvider>,
   );
 }
@@ -282,6 +280,33 @@ it.each([
   },
 );
 
+it('shows copy preparation guidance for a new agent, never a generic filesystem tree', async () => {
+  inventory.copies = [{ ...copy, ownerAgentIds: ['another-agent'] }];
+  show(null);
+  expect(
+    await screen.findByText(/Aucune copie locale de source/),
+  ).toHaveTextContent('Préparer une copie de travail');
+  expect(screen.queryByTestId('git-files')).toBeNull();
+  expect(addRoot).not.toHaveBeenCalled();
+  expect(onActive).not.toHaveBeenCalled();
+});
+it('invites selecting an existing owned source without changing cwd automatically', async () => {
+  inventory.copies = [copy];
+  show(null);
+  expect(
+    await screen.findByText(/Sélectionnez une source ci-dessus pour consulter/),
+  ).toBeInTheDocument();
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(onActive).not.toHaveBeenCalled();
+});
+it('explains how to connect a source when the project has none', async () => {
+  inventory.resources = [];
+  show(null);
+  expect(
+    await screen.findByText(/Aucune source n’est connectée/),
+  ).toBeInTheDocument();
+  expect(screen.queryByTestId('git-files')).toBeNull();
+});
 it('reserves a copy to its agent and disables creating a second copy for that agent', async () => {
   inventory.copies = [{ ...copy, ownerAgentIds: ['work-agent'] }];
   show('git', 'work-agent');

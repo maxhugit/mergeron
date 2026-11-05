@@ -356,5 +356,8 @@
   "agentReference": "Agent reference",
   "explorerFolders": "Folders",
   "explorerDeliverables": "Deliverables",
-  "explorerSources": "Sources"
+  "explorerSources": "Sources",
+  "explorerNoAgentCopy": "No local source copy is available for this agent. Select a source above, then choose “Prepare a working copy” in its menu.",
+  "explorerSelectSource": "Select a source above to browse its local copy or remote repository.",
+  "explorerNoSource": "No source is connected to this project. Add a Git connection in the project settings, then prepare a working copy for this agent."
 }

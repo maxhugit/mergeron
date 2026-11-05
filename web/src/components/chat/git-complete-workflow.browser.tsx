@@ -160,9 +160,7 @@ test.each([390, 1100])(
             activeWorkspacePending={false}
             onActiveWorkspaceChange={() => {}}
             onFile={() => {}}
-          >
-            <span>Files</span>
-          </WorkspaceGitPanel>
+          />
         </div>
       </QueryClientProvider>,
     );

@@ -206,9 +206,7 @@ export function Fixture() {
               useWorkspaceStore.getState().openGitGraph(context, target);
               if (!desktop) setExplorerOpen(false);
             }}
-          >
-            <span>Explorateur</span>
-          </WorkspaceGitPanel>
+          />
         </aside>
       )}
     </div>

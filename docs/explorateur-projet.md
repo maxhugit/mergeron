@@ -16,6 +16,10 @@ répertoire ne change pas le dossier de référence de l’agent.
   avec son identité, ses versions et ses contrôles de concurrence.
 - **Sources** conserve les connexions Git, leurs copies locales et les actions
   Git existantes. Une connexion et sa copie sont des objets distincts.
+  Sans copie locale propre à l’agent, un message explique comment en préparer une
+  depuis le menu de la source. Aucun explorateur des racines du serveur n’est
+  affiché par défaut dans cette vue. Si une copie est déjà disponible, le message
+  invite à sélectionner sa source, sans changer automatiquement la référence.
 
 L’action **Utiliser comme référence de l’agent** se trouve dans le menu contextuel
 ou le menu d’actions du dossier, du livrable ou de la source Git. La référence est
@@ -41,6 +45,12 @@ reste refusé ; choisir une référence ne donne aucun droit supplémentaire.
     │                                # Dépôts Git autonomes, inchangés
     └── operations/                   # Archives techniques de migration
 ```
+
+Les anciens fichiers et dossiers libres du projet sont conservés dans `dossiers/`,
+y compris les dossiers cachés. Voir un dossier nommé `.aws` ou `.codex` à cet
+endroit ne signifie pas qu’il s’agit du répertoire système du serveur : il peut
+s’agir d’un ancien dossier du projet préservé par la migration. Son accès reste
+soumis aux contrôles habituels, dès la création de l’agent.
 
 Les connexions secondaires externes conservent leur emplacement : elles ne sont
 pas déplacées dans le projet. Le niveau `.external` n’existe plus dans la nouvelle
