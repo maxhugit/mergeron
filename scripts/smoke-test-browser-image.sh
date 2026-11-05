@@ -18,6 +18,16 @@ docker run --rm --network none --read-only --cap-drop ALL \
   --pids-limit 256 --memory 1g --entrypoint node "$image_ref" --input-type=module -e '
   import { chromium } from "playwright-core";
   import { existsSync } from "node:fs";
+  import { spawnSync } from "node:child_process";
+  // APT is a build dependency; neither its client nor library belongs in this runtime.
+  for (const name of ["apt", "libapt-pkg6.0t64"]) {
+    const result = spawnSync("dpkg-query", ["-W", "-f=${db:Status-Status}", name], { encoding: "utf8" });
+    if (result.error || result.status === 0 && result.stdout.trim() === "installed")
+      throw new Error("Build-only APT package remains in browser runtime: " + name);
+  }
+  for (const path of ["/usr/bin/apt", "/usr/bin/apt-get", "/usr/lib/x86_64-linux-gnu/libapt-pkg.so.6.0"]) {
+    if (existsSync(path)) throw new Error("Build-only APT binary remains: " + path);
+  }
   if (!existsSync(chromium.executablePath())) throw new Error("Chromium missing");
   for (const root of ["/usr/lib/node_modules/", "/usr/local/lib/node_modules/"]) {
     for (const name of ["npm", "yarn"]) {

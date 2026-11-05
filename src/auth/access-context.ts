@@ -5,6 +5,8 @@ import type { IdentityService, PlatformIdentity } from './identity.service';
 export const accessContext = new AsyncLocalStorage<{
   identity: PlatformIdentity;
   identities: IdentityService;
+  /** Trusted origin of work requested by a local agent; never accepted from request bodies. */
+  localAgentThreadId?: string;
 }>();
 
 export function currentAccess() {

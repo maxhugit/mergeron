@@ -1,4 +1,5 @@
 import { AgentProjectObserverService } from './agent-project-observer.service';
+import { LocalAgentsModule } from '../local-agents/local-agents.module';
 import { Module } from '@nestjs/common';
 import { ThreadExecutionPreferencesModule } from './thread-execution-preferences.module';
 import { ThreadExecutionPreferencesController } from './thread-execution-preferences.controller';
@@ -49,6 +50,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
 
 @Module({
   imports: [
+    LocalAgentsModule,
     ThreadExecutionPreferencesModule,
     PreviewsModule,
     SettingsModule,

@@ -2,11 +2,17 @@ FROM mcr.microsoft.com/playwright:v1.64.1-noble
 WORKDIR /opt/browser
 # Ubuntu USN-8956-1 / CVE-2026-111497: refresh Brotli even when the
 # pinned Playwright base still contains the original Noble library.
+# USN-8996-1 / CVE-2026-109518: Noble APT must be at least 2.8.4ubuntu0.1.
+# Disable retries while using the inherited, not-yet-patched APT client.
+# APT is marked Essential by Ubuntu packaging, but is build-only in this runtime.
 RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund playwright-core@1.64.1 \
- && apt-get update \
- && apt-get install --yes --no-install-recommends --only-upgrade libbrotli1 \
+ && apt-get -o Acquire::Retries=0 update \
+ && apt-get -o Acquire::Retries=0 install --yes --no-install-recommends --only-upgrade apt libapt-pkg6.0t64 libbrotli1 \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge '2.8.4ubuntu0.1' \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg6.0t64)" ge '2.8.4ubuntu0.1' \
  && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libbrotli1)" ge '1.1.0-2ubuntu0.1' \
  && apt-get purge --yes gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-0 \
+ && apt-get purge --yes --allow-remove-essential apt libapt-pkg6.0t64 \
  && rm -rf /var/lib/apt/lists/* /usr/lib/node_modules/npm /usr/lib/node_modules/yarn \
            /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/yarn \
  && rm -f /usr/bin/npm /usr/bin/npx /usr/bin/yarn /usr/bin/yarnpkg \

@@ -66,6 +66,7 @@ interface Props {
   onOpenArchivedDetail: (projectId: string) => void;
   onOpenWorkspaceDetail: (cwd: string) => void;
   onCreateAgentInWorkspace: (group: WorkspaceGroup) => void;
+  onCreateLocalAgent?: (group: WorkspaceGroup) => void;
   onCreateSimpleChatInWorkspace: (group: WorkspaceGroup) => void;
   onCreateTaskBoard: (group: WorkspaceGroup) => void;
   onCreateAutomationBoard?: (group: WorkspaceGroup) => void;
@@ -102,6 +103,7 @@ export function WorkspaceOverview({
   onOpenArchivedDetail,
   onOpenWorkspaceDetail,
   onCreateAgentInWorkspace,
+  onCreateLocalAgent,
   onCreateSimpleChatInWorkspace,
   onCreateTaskBoard,
   onCreateAutomationBoard,
@@ -118,7 +120,7 @@ export function WorkspaceOverview({
   renderSimpleChatRow,
   movingThread,
 }: Props) {
-  const { t } = useTranslation(['common', 'projectArchives'], {
+  const { t } = useTranslation(['common', 'projectArchives', 'localAgents'], {
     nsMode: 'fallback',
   });
   const { t: tw } = useTranslation('workspaces');
@@ -258,6 +260,19 @@ export function WorkspaceOverview({
                       <Bot className="h-3.5 w-3.5" />
                       {t('workAgent')}
                     </Button>
+                    {onCreateLocalAgent && (
+                      <Button
+                        variant="ghost"
+                        className="h-8 w-full justify-start gap-2 px-2 text-xs"
+                        onClick={() => {
+                          setOpenMenu(null);
+                          onCreateLocalAgent(group);
+                        }}
+                      >
+                        <Bot className="h-3.5 w-3.5" />
+                        {t('localAgentCreate')}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       className="h-8 w-full justify-start gap-2 px-2 text-xs"

@@ -38,6 +38,7 @@ import {
 } from '@/generated/api/@tanstack/react-query.gen';
 import type { ThreadDto } from '@/generated/api';
 import { createProjectAgent } from '@/lib/project-agent-creation';
+import { LocalAgentDialog } from './local-agent-dialog';
 import { selectSidebarRows } from '@/lib/sidebar-rows';
 import { createSidebarActivitySelector } from '@/lib/sidebar-activity';
 import { useTimelineStore } from '@/stores/timeline-store';
@@ -189,6 +190,9 @@ export function ThreadSidebar() {
 
   // ── Local UI state (ephemeral) ─────────────────────────────────────
   const [cursor, setCursor] = useState<string | null>(null);
+  const [localAgentGroup, setLocalAgentGroup] = useState<WorkspaceGroup | null>(
+    null,
+  );
   const [cursorStack, setCursorStack] = useState<Array<string | null>>([]);
   const [renameThread, setRenameThread] = useState<ThreadDto | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -1212,6 +1216,9 @@ export function ThreadSidebar() {
               onCreateAgentInWorkspace={(group) =>
                 requestConversation('agent', group)
               }
+              onCreateLocalAgent={
+                session.isAdministrator ? setLocalAgentGroup : undefined
+              }
               onCreateSimpleChatInWorkspace={(group) =>
                 requestConversation('simple', group)
               }
@@ -1335,6 +1342,21 @@ export function ThreadSidebar() {
           open
           onOpenChange={(open) => {
             if (!open) setExportProjectId(null);
+          }}
+        />
+      )}
+      {localAgentGroup && (
+        <LocalAgentDialog
+          key={localAgentGroup.cwd}
+          group={localAgentGroup}
+          pending={createThread.isPending}
+          onClose={() => setLocalAgentGroup(null)}
+          onCreate={(input) => {
+            if (localAgentGroup.projectId)
+              createThread.mutate(
+                { projectId: localAgentGroup.projectId, ...input },
+                { onSuccess: () => setLocalAgentGroup(null) },
+              );
           }}
         />
       )}

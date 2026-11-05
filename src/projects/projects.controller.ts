@@ -647,11 +647,20 @@ export class ProjectsController {
   @Post(':id/agents')
   createAgent(
     @Param('id') id: string,
-    @Body() body: { workspacePath?: string },
+    @Body() body: { workspacePath?: string; model?: string },
   ) {
     if (typeof body?.workspacePath !== 'string' || !body.workspacePath.trim())
       throw new BadRequestException('Select a project workspace');
-    return this.projects.createAgent(id, body.workspacePath);
+    if (
+      body.model !== undefined &&
+      (typeof body.model !== 'string' ||
+        !body.model.startsWith('ollama:') ||
+        body.model.length > 240)
+    )
+      throw new BadRequestException('Select an allowed local model');
+    return body.model
+      ? this.projects.createAgent(id, body.workspacePath, body.model)
+      : this.projects.createAgent(id, body.workspacePath);
   }
 
   @Put(':id/agents/:threadId')

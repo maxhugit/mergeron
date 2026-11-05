@@ -27,6 +27,7 @@
     "projectArchives",
     "workspaces",
     "integrations",
-    "transcription"
+    "transcription",
+    "localAgents"
   ]
 }

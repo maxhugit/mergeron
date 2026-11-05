@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
   Optional,
 } from '@nestjs/common';
+import { LocalAgentsService } from '../local-agents/local-agents.service';
 import {
   createServer,
   type IncomingMessage,
@@ -67,6 +68,7 @@ export class InternalMcpService implements OnModuleDestroy {
     manager: CodexProcessManager,
     private readonly admission: CatalogAdmissionService,
     @Optional() private readonly localBrowser?: LocalBrowserService,
+    @Optional() private readonly localAgents?: LocalAgentsService,
   ) {
     manager.addLifecycleListener(() => {
       for (const cap of this.capabilities.values()) this.revoke(cap.threadId);
@@ -252,51 +254,60 @@ export class InternalMcpService implements OnModuleDestroy {
         );
         const release = this.admission.enter('Internal MCP tool');
         try {
-          return await accessContext.run({ ...lease!.access, identity }, () => {
-            if (tool.handler !== 'project') {
-              if (!this.localBrowser || identity.impersonation)
-                throw new Error('ACCESS_DENIED');
-              lease!.access.identities.requireAdministrator(identity);
-              const owner =
-                identity.personId ?? identity.subject ?? identity.kind;
-              if (tool.handler === 'localBrowserRead') {
-                if (args.operation === 'status')
-                  return this.localBrowser.status(owner, cap.threadId!);
-                if (args.operation === 'result')
-                  return this.localBrowser.result(
+          return await accessContext.run(
+            {
+              ...lease!.access,
+              identity,
+              ...(this.localAgents?.binding(cap.threadId!)
+                ? { localAgentThreadId: cap.threadId! }
+                : {}),
+            },
+            () => {
+              if (tool.handler !== 'project') {
+                if (!this.localBrowser || identity.impersonation)
+                  throw new Error('ACCESS_DENIED');
+                lease!.access.identities.requireAdministrator(identity);
+                const owner =
+                  identity.personId ?? identity.subject ?? identity.kind;
+                if (tool.handler === 'localBrowserRead') {
+                  if (args.operation === 'status')
+                    return this.localBrowser.status(owner, cap.threadId!);
+                  if (args.operation === 'result')
+                    return this.localBrowser.result(
+                      owner,
+                      cap.threadId!,
+                      String(args.sessionId),
+                      String(args.commandId),
+                    );
+                  return this.localBrowser.request(
                     owner,
                     cap.threadId!,
                     String(args.sessionId),
-                    String(args.commandId),
+                    'observe',
+                    {},
+                    check,
                   );
+                }
+                const { sessionId, action, ...parameters } = args;
                 return this.localBrowser.request(
                   owner,
                   cap.threadId!,
-                  String(args.sessionId),
-                  'observe',
-                  {},
+                  String(sessionId),
+                  action,
+                  parameters,
                   check,
                 );
               }
-              const { sessionId, action, ...parameters } = args;
-              return this.localBrowser.request(
-                owner,
+              return this.tools.execute(
                 cap.threadId!,
-                String(sessionId),
-                action,
-                parameters,
+                // Stable execution key preserves existing requestId fingerprints.
+                { ...args, tool: tool.operation },
                 check,
+                lease!.turnId,
+                lease!.writes,
               );
-            }
-            return this.tools.execute(
-              cap.threadId!,
-              // Stable execution key preserves existing requestId fingerprints.
-              { ...args, tool: tool.operation },
-              check,
-              lease!.turnId,
-              lease!.writes,
-            );
-          });
+            },
+          );
         } finally {
           release();
         }

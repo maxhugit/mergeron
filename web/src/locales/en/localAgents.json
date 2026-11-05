@@ -1,0 +1,19 @@
+{
+  "localAgentsTitle": "Local agents · Ollama",
+  "localAgentCreate": "Create a local agent",
+  "localAgentsScope": "The model runs on your Ollama server, with no cloud fallback. Tools keep their own network permissions; this is not a fully offline mode.",
+  "localAgentsEnable": "Enable local agents",
+  "localAgentsUrl": "Private Ollama URL",
+  "localAgentsModels": "Allowed model names (comma-separated)",
+  "localAgentsContext": "Context window (tokens)",
+  "localAgentsContextHelp": "Install tool-capable models in Ollama first. Configure the same num_ctx on each model. No models are downloaded automatically.",
+  "localAgentsCheck": "Check saved configuration",
+  "localAgentsSaveError": "Unable to save. Check the private URL, model names and context size.",
+  "localAgentsSaved": "Local agent configuration saved.",
+  "localAgentsUnavailable": "Ollama or an allowed model is unavailable. Check Settings → Codex → Local agents. No cloud model will be used instead.",
+  "localAgentsReady_one": "{{count}} local model ready.",
+  "localAgentsReady_other": "{{count}} local models ready.",
+  "localAgentsLoadError": "Unable to load local agent configuration.",
+  "localAgentsWorkspace": "Project workspace",
+  "localAgentsCreationHelp": "Creates a new agent in this project. Its provider stays local, including after restart or duplication. Existing conversation history is not copied."
+}

@@ -20,9 +20,10 @@ import { CatalogActivityService } from './catalog/catalog-activity.service';
 import { CatalogService } from './catalog/catalog.service';
 import { SettingsModule } from '../settings/settings.module';
 import { DocumentProtectionModule } from '../document-publication/document-protection.module';
+import { LocalAgentsModule } from '../local-agents/local-agents.module';
 
 @Module({
-  imports: [SettingsModule, DocumentProtectionModule],
+  imports: [SettingsModule, DocumentProtectionModule, LocalAgentsModule],
   controllers: [
     CodexCliController,
     CodexStatusController,

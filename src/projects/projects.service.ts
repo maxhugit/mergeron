@@ -1116,7 +1116,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Complete project membership before returning a newly created conversation. */
-  async createAgent(projectId: string, workspacePath: string) {
+  async createAgent(projectId: string, workspacePath: string, model?: string) {
     requireExecutionAccess();
     const folder = this.folders.validateAbsoluteSelection(
       projectId,
@@ -1126,6 +1126,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('Active folder is unresolved');
     const response = await this.threads.startThread({
       cwd: folder.effectivePath,
+      ...(model ? { model } : {}),
     });
     try {
       // No rollout exists before the first turn: do not resume a fresh thread.

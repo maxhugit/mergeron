@@ -4,12 +4,17 @@ import { projectsApi } from './projects-api';
 export function createProjectAgent({
   projectId,
   workspacePath,
+  model,
 }: {
   projectId: string;
   workspacePath: string;
+  model?: string;
 }) {
   return projectsApi<ThreadStartResponseDto>(
     `/${encodeURIComponent(projectId)}/agents`,
-    { method: 'POST', body: JSON.stringify({ workspacePath }) },
+    {
+      method: 'POST',
+      body: JSON.stringify({ workspacePath, ...(model ? { model } : {}) }),
+    },
   );
 }
