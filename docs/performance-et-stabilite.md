@@ -11,6 +11,20 @@ corrigées, puis désinstalle APT et sa bibliothèque, inutiles dans le navigate
 en fonctionnement. Le test de l’image vérifie leur absence. Les scans HIGH/CRITICAL et le test
 Chromium non privilégié restent obligatoires avant publication.
 
+## Terminal d’un projet sans copie Git
+
+Le sandbox extérieur prépare un répertoire `sources` vide dans chaque espace
+système masqué avant de verrouiller cet espace en lecture seule. Les profils
+natifs peuvent ainsi monter leur frontière de lecture même sur un projet neuf.
+Ce répertoire existe uniquement dans le namespace : aucun fichier du serveur
+n’est créé et le contenu du dossier système réel n’est pas exposé. Les copies
+Git enregistrées conservent leurs montages et leur isolation par agent.
+
+La régression Linux vérifie le montage natif imbriqué sur un projet sans copie,
+l’absence d’une sentinelle privée et l’impossibilité d’écrire dans ce conteneur
+de sources. Les contrôles des livrables immuables et des copies éditables restent
+exigés dans la même sonde, sans service d’inférence ni réseau.
+
 L’audit porte sur les lectures du backend, les mises à jour de l’interface et la
 validation CI/CD. Les corrections évitent des requêtes et des rendus inutiles,
 réduisent les parcours quadratiques et renforcent la découverte des tests.

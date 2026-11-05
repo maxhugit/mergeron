@@ -40,6 +40,13 @@ try {
   fs.writeFileSync(path.join(managedDocuments, 'current.docx'), 'V4');
   fs.writeFileSync(path.join(retained, 'report.docx'), 'V1');
   fs.writeFileSync(path.join(history, 'v1.docx'), 'V1');
+  const emptySystem = path.join(workspace, 'empty-system');
+  fs.mkdirSync(path.join(emptySystem, 'sources'), { recursive: true });
+  fs.writeFileSync(path.join(emptySystem, 'private-state'), 'private-canary');
+  fs.writeFileSync(
+    path.join(emptySystem, 'sources', 'hidden'),
+    'private-canary',
+  );
   const databasePath = path.join(home, 'webui.sqlite');
   for (const suffix of ['', '-wal', '-shm', '-journal'])
     fs.writeFileSync(databasePath + suffix, 'private-canary');
@@ -82,6 +89,13 @@ try {
       fs.writeFileSync(process.env[key]+'/probe','writable');
     }
     const cp=require('child_process');
+    const emptySources=root+'/empty-system/sources';
+    assert.equal(fs.existsSync(root+'/empty-system/private-state'),false);
+    assert.deepEqual(fs.readdirSync(emptySources),[]);
+    assert.throws(()=>fs.writeFileSync(emptySources+'/tampered','no'));
+    // Reproduce the inner native profile's read-only source mount on a fresh project.
+    assert.equal(cp.execFileSync('/usr/bin/bwrap',['--unshare-user','--ro-bind','/','/','--ro-bind',emptySources,emptySources,'--','/bin/printf','EMPTY_PROJECT_TOOL_OK'],{encoding:'utf8',timeout:10000}), 'EMPTY_PROJECT_TOOL_OK');
+
     const env={...process.env,COREPACK_ENABLE_NETWORK:'0',COREPACK_ENABLE_PROJECT_SPEC:'0',HTTPS_PROXY:'',https_proxy:'',HTTP_PROXY:'',http_proxy:''};
     const pnpm=cp.execFileSync('pnpm',['--version'],{env,encoding:'utf8',timeout:15000}).trim();
     assert.match(pnpm,/^\\d+\\.\\d+\\.\\d+$/);
@@ -111,7 +125,8 @@ try {
       databasePath,
       writableRoots: ['/workspaces', workspace, clone],
       publishedRoots: [retained, history],
-      privateRoots: [system],
+      privateRoots: [system, emptySystem],
+      managedDirectoryRoots: [path.join(emptySystem, 'sources')],
       managedReadRoots: [managedDocuments],
       managedWriteRoots: [managedCopy],
       unavailableRoots: [path.join(workspace, 'missing-project')],
@@ -139,22 +154,31 @@ try {
     'V1',
   );
   assert.equal(fs.readFileSync(path.join(history, 'v1.docx'), 'utf8'), 'V1');
-  if (process.argv[3] === '--netlink-route' && process.env.MERGERON_NETLINK_EVIDENCE) {
+  if (
+    process.argv[3] === '--netlink-route' &&
+    process.env.MERGERON_NETLINK_EVIDENCE
+  ) {
     const source = path.join(workspace, 'artifacts/native-backend-visual');
     for (const name of ['desktop.png', 'mobile.png', 'report.json']) {
       const file = path.join(source, name);
       assert(fs.lstatSync(file).isFile());
       const bytes = fs.readFileSync(file);
       assert(bytes.length < 15 * 1024 * 1024);
-      if (name.endsWith('.png')) assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-      const destination = path.join(process.env.MERGERON_NETLINK_EVIDENCE, name);
+      if (name.endsWith('.png'))
+        assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+      const destination = path.join(
+        process.env.MERGERON_NETLINK_EVIDENCE,
+        name,
+      );
       fs.writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 });
       // Only these synthetic fixture outputs are public CI artifacts. The
       // uploader uses the host runner UID, not the container's application UID.
       // Explicit chmod also handles a restrictive umask without changing it.
       fs.chmodSync(destination, 0o644);
     }
-    console.log('PASS: desktop/mobile evidence exported by the trusted outer fixture');
+    console.log(
+      'PASS: desktop/mobile evidence exported by the trusted outer fixture',
+    );
   }
 } finally {
   fs.rmSync(workspace, { recursive: true });

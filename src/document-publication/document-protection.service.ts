@@ -175,6 +175,7 @@ export class DocumentProtectionService {
       );
     const publishedRoots: string[] = [];
     const privateRoots: string[] = [];
+    const managedDirectoryRoots: string[] = [];
     const managedReadRoots: string[] = [];
     const managedWriteRoots: string[] = [];
     for (const project of this.db.select().from(projects).all()) {
@@ -198,6 +199,7 @@ export class DocumentProtectionService {
           if (!stat.isDirectory() || stat.isSymbolicLink())
             throw new Error('Invalid managed project boundary');
           privateRoots.push(system);
+          managedDirectoryRoots.push(path.join(system, 'sources'));
           const documents = await this.directory(root, [
             '.mergeron-system',
             'livrables',
@@ -367,6 +369,7 @@ export class DocumentProtectionService {
       writableRoots: [...writableRoots].sort(),
       publishedRoots: [...new Set([...publishedRoots, ...boundaries])].sort(),
       privateRoots: [...new Set(privateRoots)].sort(),
+      managedDirectoryRoots,
       managedReadRoots,
       managedWriteRoots,
       unavailableRoots: [...missingBoundaries].sort(),

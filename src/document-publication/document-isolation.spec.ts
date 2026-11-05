@@ -120,6 +120,28 @@ describe('protected document execution boundary', () => {
       ),
     ).toThrow('scoped');
   });
+  it('prepares empty source placeholders before sealing the private namespace without binding host sources', () => {
+    const system = '/workspaces/new/.mergeron-system';
+    const sources = system + '/sources';
+    const args = documentIsolationArgs(
+      { ...plan, privateRoots: [system], managedDirectoryRoots: [sources] },
+      'codex',
+      [],
+    );
+    expect(args[args.indexOf(sources) - 1]).toBe('--dir');
+    expect(args.filter((value) => value === sources)).toHaveLength(1);
+    expect(args.indexOf(sources)).toBeGreaterThan(args.indexOf(system));
+    expect(args.indexOf(sources)).toBeLessThan(args.lastIndexOf(system));
+    expect(args[args.lastIndexOf(system) - 1]).toBe('--remount-ro');
+    for (const outside of ['/etc', system, system + '/../escape'])
+      expect(() =>
+        documentIsolationArgs(
+          { ...plan, privateRoots: [system], managedDirectoryRoots: [outside] },
+          'codex',
+          [],
+        ),
+      ).toThrow('scoped');
+  });
   it('does not forward the backend key, identity settings or manager configuration', () => {
     expect(
       documentAgentEnvironment({
