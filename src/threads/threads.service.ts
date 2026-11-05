@@ -81,6 +81,7 @@ import { ThreadExecutionPreferencesService } from './thread-execution-preference
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import { projectAgentThreads } from '../database/schema';
 import { eq } from 'drizzle-orm';
+import { isLocalModel } from '../local-agents/local-agents.service';
 
 /** Maximum ancestors walked when a fork chain is not locally tracked. */
 const MAX_FORK_CHAIN_WALK = 32;
@@ -197,7 +198,9 @@ export class ThreadsService {
         ? { sandbox: defaults.sandbox }
         : {}),
       ...(projectPolicy?.readOnly ? { sandbox: 'read-only' as const } : {}),
-      ...(projectPolicy?.model ? { model: projectPolicy.model } : {}),
+      ...(projectPolicy?.model && !isLocalModel(params.model)
+        ? { model: projectPolicy.model }
+        : {}),
       ...(projectConfig || defaults.config
         ? {
             config: {

@@ -5,6 +5,8 @@ import type { ReasoningEffort } from '@/stores/model-store';
 import { currentThreadEpoch } from './thread-recovery-epoch';
 
 export interface AgentExecutionPreferences {
+  local?: boolean;
+  localModelName?: string;
   revision: number;
   model?: string | null;
   effort?: ReasoningEffort | null;

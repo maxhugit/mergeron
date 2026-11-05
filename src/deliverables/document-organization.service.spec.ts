@@ -299,6 +299,20 @@ it('automatically classifies two documents independently without creating labels
       .map((d) => d.currentVersionNumber),
   ).toEqual([1, 1]);
 });
+it('does not queue cloud-default automatic classification for changes from a local agent', async () => {
+  create();
+  const runner = vi.fn();
+  service.setRunner(runner);
+  asAdmin(() =>
+    accessContext.run(
+      { ...accessContext.getStore()!, localAgentThreadId: 'local-agent' },
+      () => service.enqueueAutomatic('p', 'r', 'd', 'one'),
+    ),
+  );
+  await service.drain();
+  expect(runner).not.toHaveBeenCalled();
+  expect(read().jobs).toHaveLength(0);
+});
 it('refuses automatic taxonomy changes and preserves human organization on failure', async () => {
   create();
   service.setRunner(async (input) => {

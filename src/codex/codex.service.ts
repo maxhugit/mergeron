@@ -2,14 +2,18 @@
  * Thin facade over CodexProcessManager for business modules.
  * Provides typed request helpers that map to app-server JSON-RPC methods.
  */
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { LocalAgentsService } from '../local-agents/local-agents.service';
 import { CodexProcessManager } from './codex-process-manager.service';
 import type { CodexJsonRpcClient } from './codex-jsonrpc-client';
 import { CodexUnavailableError } from './codex-errors';
 
 @Injectable()
 export class CodexService {
-  constructor(private readonly processManager: CodexProcessManager) {}
+  constructor(
+    private readonly processManager: CodexProcessManager,
+    @Optional() private readonly localAgents?: LocalAgentsService,
+  ) {}
 
   /**
    * Returns the active JSON-RPC client.
@@ -32,6 +36,8 @@ export class CodexService {
    * @returns The response result
    */
   async request<T = unknown>(method: string, params?: unknown): Promise<T> {
+    if (this.localAgents)
+      return this.localAgents.request<T>(this.getClient(), method, params);
     return this.getClient().request<T>(method, params);
   }
 }

@@ -99,6 +99,38 @@ export const DEFAULT_EXCLUDED_DIRS =
  */
 export const SETTINGS_DEFINITIONS = [
   {
+    key: 'general.localAgentsEnabled',
+    type: 'boolean',
+    category: 'general',
+    description: 'Enable explicitly selected Ollama agents. No cloud fallback.',
+    defaultValue: false,
+  },
+  {
+    key: 'general.localAgentsUrl',
+    type: 'string',
+    category: 'general',
+    description:
+      'Private Ollama server URL, reachable from the application container.',
+    defaultValue: '',
+  },
+  {
+    key: 'general.localAgentsModels',
+    type: 'string',
+    category: 'general',
+    description:
+      'Comma-separated allowlist of locally installed tool-capable Ollama models.',
+    defaultValue: '',
+  },
+  {
+    key: 'general.localAgentsContext',
+    type: 'number',
+    category: 'general',
+    description:
+      'Agent context window. Configure the same num_ctx in the Ollama model.',
+    defaultValue: 16384,
+    constraints: { min: 8192, max: 131072, integer: true },
+  },
+  {
     key: GENERAL_SETTING_KEYS.updateBackupMode,
     type: 'string',
     category: 'general',

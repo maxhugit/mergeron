@@ -30,6 +30,7 @@ import { IntegrationsPanel } from '@/components/integrations/integrations-panel'
 import { RawConfigEditor } from './raw-config-editor';
 import { SettingsSaveBar } from './settings-save-bar';
 import { loadAdminModels } from './admin-model-options';
+import { LocalAgentsSettings } from './local-agents-settings';
 import { CatalogSettings } from './catalog/catalog-settings';
 import { AccountSettings } from './account/account-settings';
 import { CodexCliSettings } from './codex-cli-settings';
@@ -79,6 +80,7 @@ const SECURITY_READONLY_KEYS = ['sandbox_workspace_write'] as const;
 type CodexSettingsTab =
   | 'account'
   | 'cli'
+  | 'local'
   | 'profile'
   | 'model'
   | 'chatAudio'
@@ -91,6 +93,7 @@ type CodexSettingsTab =
 const CODEX_SETTINGS_TABS = [
   { id: 'account', label: 'Account', icon: UserCircle },
   { id: 'cli', label: 'Codex CLI', icon: PackageOpen },
+  { id: 'local', label: 'localAgentsTitle', icon: Bot },
   { id: 'profile', label: 'Profile', icon: UserCog },
   { id: 'model', label: 'Model', icon: Bot },
   { id: 'chatAudio', label: 'chatAudioTitle', icon: Bot },
@@ -154,7 +157,9 @@ const isSandboxModeValue = (value: unknown): value is SandboxModeValue =>
 export function CodexSettings({
   initialTab = 'account',
 }: { initialTab?: 'account' | 'cli' | 'chatAudio' | 'integrations' } = {}) {
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useTranslation(['common', 'localAgents'], {
+    nsMode: 'fallback',
+  });
   const isNonEnglish = !i18n.language.startsWith('en');
   const queryClient = useQueryClient();
   const [requestedTab, setActiveTab] = useState<CodexSettingsTab>(initialTab);
@@ -176,6 +181,7 @@ export function CodexSettings({
   const activeTab =
     connected ||
     requestedTab === 'cli' ||
+    requestedTab === 'local' ||
     requestedTab === 'chatAudio' ||
     requestedTab === 'instructions' ||
     requestedTab === 'integrations'
@@ -426,6 +432,7 @@ export function CodexSettings({
     'raw',
     'account',
     'cli',
+    'local',
     'chatAudio',
     'integrations',
   ].includes(activeTab);
@@ -518,6 +525,7 @@ export function CodexSettings({
               disabled={
                 id !== 'account' &&
                 id !== 'cli' &&
+                id !== 'local' &&
                 id !== 'chatAudio' &&
                 id !== 'instructions' &&
                 id !== 'integrations' &&
@@ -577,6 +585,11 @@ export function CodexSettings({
           </div>
         )}
         {/* Keep catalog repair available even when structured config cannot load. */}
+        {activeTab === 'local' && (
+          <div id="codex-settings-panel" role="tabpanel">
+            <LocalAgentsSettings />
+          </div>
+        )}
         {activeTab === 'model' && <CatalogSettings />}
         {needsStructuredConfig &&
         (!config || configQuery.isError || configQuery.isLoading) ? (

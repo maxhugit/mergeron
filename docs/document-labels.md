@@ -30,6 +30,10 @@ supprimer. Les droits de l’administrateur sont revérifiés au début et à la
 Si ce compte devient inactif ou perd son rôle, la tâche échoue sans modifier le
 classement. Les modifications sont inscrites dans l’historique du livrable.
 
+Une modification publiée par un [agent local](local-agents.md) ne déclenche pas
+ce classement automatique : la tâche différée ne doit pas envoyer ses métadonnées
+au modèle cloud configuré par défaut sur le projet.
+
 L’inférence utilise le Codex CLI déjà configuré, dans un tour éphémère en lecture
 seule. La réponse structurée est validée côté serveur ; aucun chemin ni commande
 n’est accepté comme opération de classement. Le traitement est borné et sérialisé.

@@ -1,5 +1,13 @@
 # Administration Codex : listes, enregistrement et version du CLI
 
+## Agents locaux
+
+L’onglet **Agents locaux · Ollama**, accessible sans connexion au compte OpenAI,
+permet de configurer un serveur Ollama privé et ses modèles autorisés. Le menu
+**+** d’un projet permet ensuite de **Créer un agent local**. Consulter le
+[guide des agents locaux](local-agents.md) pour préparer les modèles, régler le
+contexte et comprendre les limites réseau de ce mode.
+
 ## Intégrations
 
 **Paramètres → Codex → Intégrations** regroupe les plugins, applications et

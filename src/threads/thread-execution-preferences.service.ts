@@ -5,7 +5,12 @@ import {
   Inject,
   Injectable,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import {
+  LocalAgentsService,
+  localModelId,
+} from '../local-agents/local-agents.service';
 import { eq } from 'drizzle-orm';
 import { isDeepStrictEqual } from 'node:util';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
@@ -121,7 +126,10 @@ export class ThreadExecutionPreferencesService {
   private readonly logger = new Logger(ThreadExecutionPreferencesService.name);
   private readonly pending = new Map<string, Selection>();
   private readonly failures = new Set<string>();
-  constructor(@Inject(DRIZZLE_DB) private readonly db: AppDatabase) {}
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
+    @Optional() private readonly localAgents?: LocalAgentsService,
+  ) {}
 
   private fail(threadId: string) {
     this.failures.add(threadId);
@@ -151,8 +159,19 @@ export class ThreadExecutionPreferencesService {
   }
   read(threadId: string) {
     this.expire(threadId);
+    const binding = this.localAgents?.binding(threadId);
+    const stored = this.stored(threadId);
     return {
-      ...this.stored(threadId),
+      ...stored,
+      ...(binding
+        ? {
+            local: true,
+            model: stored.model || localModelId(binding.model),
+            localModelName: stored.model?.startsWith('ollama:')
+              ? Buffer.from(stored.model.slice(7), 'base64url').toString()
+              : binding.model,
+          }
+        : {}),
       securitySaveState: this.failures.has(threadId)
         ? ('failed' as const)
         : this.pending.has(threadId)
@@ -190,11 +209,14 @@ export class ThreadExecutionPreferencesService {
   }
   set(threadId: string, input: unknown) {
     const patch = choices(input);
+    if ('model' in patch)
+      this.localAgents?.validateChoice(threadId, patch.model);
     // A different model must not inherit an effort or tier selected for the old one.
-    return this.write(threadId, {
+    this.write(threadId, {
       ...('model' in patch ? { effort: null, serviceTier: null } : {}),
       ...patch,
     });
+    return this.read(threadId);
   }
   forTurn(threadId: string): Partial<v2.TurnStartParams> {
     this.expire(threadId);

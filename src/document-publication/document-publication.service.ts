@@ -1,4 +1,11 @@
-import { Inject, Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  OnModuleDestroy,
+  Logger,
+  Optional,
+} from '@nestjs/common';
+import { LocalAgentsService } from '../local-agents/local-agents.service';
 import { constants, createWriteStream } from 'node:fs';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -119,6 +126,7 @@ export class DocumentPublicationService implements OnModuleDestroy {
     private readonly deliverables: DeliverablesService,
     private readonly protection: DocumentProtectionService,
     manager: CodexProcessManager,
+    @Optional() private readonly localAgents?: LocalAgentsService,
   ) {
     manager.addListener('notification', (note: ServerNotification) => {
       if (
@@ -183,7 +191,7 @@ export class DocumentPublicationService implements OnModuleDestroy {
     this.reconciliations.set(threadId, {
       projectId: binding.projectId,
       agentName: `Agent — ${agentName || threadId} (modification détectée)`,
-      access: currentAccess(),
+      access: this.localAgents?.accessForThread(threadId) ?? currentAccess(),
     });
     const boards = this.db
       .select()
@@ -245,7 +253,7 @@ export class DocumentPublicationService implements OnModuleDestroy {
         directoryInode: (await fs.stat(directory)).ino,
         threadId,
         agentName: `Agent — ${agentName || threadId}`,
-        access: currentAccess(),
+        access: this.localAgents?.accessForThread(threadId) ?? currentAccess(),
         seen: new Set(),
         expiresAt: Date.now() + 60 * 60 * 1000,
         timer: setInterval(() => {

@@ -29,6 +29,34 @@ async function renderModel() {
   await waitFor(() => expect(tab).toBeEnabled());
   fireEvent.click(tab);
 }
+it('configures Ollama without an OpenAI account', async () => {
+  vi.stubGlobal('fetch', (input: string | URL, init?: RequestInit) =>
+    fixture.fetch(new Request(new URL(input, 'http://localhost'), init)),
+  );
+  const disconnected = {
+    ...useAccountStore.getState().account!,
+    account: null,
+  };
+  fixture.server.overrides.set('GET /api/account', () => json(disconnected));
+  fixture.server.overrides.set('GET /api/local-agents/configuration', () =>
+    json({ enabled: false, url: '', models: '', context: 16384 }),
+  );
+  fixture.server.overrides.set('GET /api/local-agents/models', () =>
+    json({ available: false, error: null, data: [] }),
+  );
+  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), disconnected);
+  useAccountStore.getState().setAccount(disconnected);
+  fixture.render(<CodexSettings />);
+  const local = screen.getByRole('tab', { name: 'Local agents · Ollama' });
+  expect(local).toBeEnabled();
+  fireEvent.click(local);
+  expect(
+    await screen.findByRole('heading', { name: 'Local agents · Ollama' }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('checkbox', { name: 'Enable local agents' }),
+  ).toBeVisible();
+});
 
 it('puts Account first, disables other tabs without a connection and responds to login/logout without reloading', async () => {
   const connected = useAccountStore.getState().account!;
@@ -44,9 +72,12 @@ it('puts Account first, disables other tabs without a connection and responds to
   expect(tabs[1]).toBeEnabled();
   for (const tab of tabs.slice(2)) {
     if (
-      ['Chat and Audio', 'Instructions', 'Integrations'].includes(
-        tab.textContent ?? '',
-      )
+      [
+        'Chat and Audio',
+        'Instructions',
+        'Integrations',
+        'Local agents · Ollama',
+      ].includes(tab.textContent ?? '')
     )
       expect(tab).toBeEnabled();
     else expect(tab).toBeDisabled();
@@ -75,9 +106,12 @@ it('puts Account first, disables other tabs without a connection and responds to
   );
   for (const tab of screen.getAllByRole('tab').slice(2)) {
     if (
-      ['Chat and Audio', 'Instructions', 'Integrations'].includes(
-        tab.textContent ?? '',
-      )
+      [
+        'Chat and Audio',
+        'Instructions',
+        'Integrations',
+        'Local agents · Ollama',
+      ].includes(tab.textContent ?? '')
     )
       expect(tab).toBeEnabled();
     else expect(tab).toBeDisabled();
@@ -120,6 +154,7 @@ beforeEach(() => {
   useAccountStore.getState().setAccount(account);
 });
 afterEach(() => {
+  vi.unstubAllGlobals();
   fixture.dispose();
   useAccountStore.getState().setAccount(null);
 });
