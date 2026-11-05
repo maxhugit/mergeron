@@ -742,7 +742,7 @@ test('browser identity does not invalidate dependencies and cleanup', () => {
     dockerfile,
     /dpkg --compare-versions.*libbrotli1.*ge '1\.1\.0-2ubuntu0\.1'/,
   );
-  assert.match(dockerfile, /apt-get purge --yes apt libapt-pkg6\.0t64/);
+  assert.match(dockerfile, /apt-get purge --yes --allow-remove-essential apt libapt-pkg6\.0t64/);
   assert.match(
     read('scripts/smoke-test-browser-image.sh'),
     /Build-only APT package remains/,
