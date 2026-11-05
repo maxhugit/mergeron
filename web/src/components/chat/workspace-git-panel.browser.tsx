@@ -206,9 +206,7 @@ test.each([
             onGitDiff={onDiff}
             onActiveWorkspaceChange={() => {}}
             activeWorkspacePending={false}
-          >
-            <div>Local</div>
-          </WorkspaceGitPanel>
+          />
         </div>
       </QueryClientProvider>,
     );
@@ -408,9 +406,7 @@ test.each([260, 330, 600])(
             onActiveWorkspaceChange={() => {}}
             activeWorkspacePending={false}
             onFile={() => {}}
-          >
-            <div>Local</div>
-          </WorkspaceGitPanel>
+          />
         </div>
       </QueryClientProvider>,
     );
