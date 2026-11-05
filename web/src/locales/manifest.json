@@ -8,7 +8,7 @@
     },
     {
       "code": "fr",
-      "nativeLabel": "Fran\u00e7ais"
+      "nativeLabel": "Français"
     }
   ],
   "namespaces": [
@@ -28,6 +28,7 @@
     "workspaces",
     "integrations",
     "transcription",
-    "localAgents"
+    "localAgents",
+    "integrity"
   ]
 }

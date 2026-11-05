@@ -13,6 +13,7 @@ export const SETTINGS_SECTIONS = [
   'security',
   'integrations',
   'internalMcp',
+  'projectIntegrity',
 ] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 

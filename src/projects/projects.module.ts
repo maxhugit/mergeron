@@ -1,3 +1,5 @@
+import { ProjectIntegrityService } from './project-integrity.service';
+import { ProjectIntegrityController } from './project-integrity.controller';
 import { DocumentOrganizationController } from '../deliverables/document-organization.controller';
 import { DocumentLabelsAiAdapter } from './document-labels-ai-adapter.service';
 import { Module } from '@nestjs/common';
@@ -40,6 +42,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     ProjectKnowledgeModule,
   ],
   controllers: [
+    ProjectIntegrityController,
     DocumentOrganizationController,
     ProjectLocationsController,
     ProjectConnectionsController,
@@ -52,6 +55,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     WorkspaceResourcesController,
   ],
   providers: [
+    ProjectIntegrityService,
     DocumentLabelsAiAdapter,
     ProjectConnectionToolsService,
     {

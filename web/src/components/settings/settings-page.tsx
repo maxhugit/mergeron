@@ -7,6 +7,12 @@ import { useTranslation } from 'react-i18next';
 import type { SettingsSection } from './settings-sections';
 import { cn } from '@/lib/utils';
 
+const ProjectIntegritySettings = lazy(() =>
+  import('./project-integrity-settings').then((module) => ({
+    default: module.ProjectIntegritySettings,
+  })),
+);
+
 const GeneralSettings = lazy(() =>
   import('./general-settings').then((module) => ({
     default: module.GeneralSettings,
@@ -99,6 +105,7 @@ export function SettingsPage() {
           }
         >
           {section === 'general' && <GeneralSettings />}
+          {section === 'projectIntegrity' && <ProjectIntegritySettings />}
           {section === 'internalMcp' && <InternalMcpSettings />}
           {section === 'infrastructure' && <InfrastructureSettings />}
           {section === 'onlyOffice' && <OnlyOfficeSettings />}
