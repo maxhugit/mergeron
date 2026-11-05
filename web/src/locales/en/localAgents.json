@@ -15,5 +15,7 @@
   "localAgentsReady_other": "{{count}} local models ready.",
   "localAgentsLoadError": "Unable to load local agent configuration.",
   "localAgentsWorkspace": "Project workspace",
-  "localAgentsCreationHelp": "Creates a new agent in this project. Its provider stays local, including after restart or duplication. Existing conversation history is not copied."
+  "localAgentsCreationHelp": "Creates a new agent in this project. Its provider stays local, including after restart or duplication. Existing conversation history is not copied.",
+  "localAgentsMetadataRestart": "Local model metadata needs reloading. Restart Codex when agents are idle to apply the models and context. Administrator catalog files will remain unchanged.",
+  "localAgentsRestartBlocked": "Codex cannot restart now. Check running work and pending approvals, then retry."
 }

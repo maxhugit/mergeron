@@ -1,3 +1,7 @@
+import { Logger } from '@nestjs/common';
+import { LocalModelMetadataState } from './local-model-metadata-state';
+import { LocalModelCatalogService } from '../codex/catalog/local-model-catalog.service';
+import { CatalogNativeService } from '../codex/catalog/catalog-native.service';
 /** Runs the real pinned app-server through the local gateway; all inference is synthetic loopback HTTP. */
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -19,7 +23,16 @@ it('keeps real native inference on Ollama after a process restart and a fork', a
   const fixture = catalogFixture();
   const database = createTestDatabase();
   const settings = new SettingsService(database.db, new ConfigService());
-  let local = new LocalAgentsService(settings, database.db);
+  const metadata = new LocalModelMetadataState(settings);
+  const localCatalog = new LocalModelCatalogService(
+    fixture.storage,
+    new CatalogNativeService(fixture.paths),
+    metadata,
+  );
+  const warnings = vi
+    .spyOn(Logger.prototype, 'warn')
+    .mockImplementation(() => undefined);
+  let local = new LocalAgentsService(settings, database.db, metadata);
   const seen: Array<{ path: string; model?: string; authorization?: string }> =
     [];
   const ollama = createServer((req, res) => {
@@ -80,16 +93,21 @@ it('keeps real native inference on Ollama after a process restart and a fork', a
   local.configure({
     enabled: true,
     url: `http://127.0.0.1:${(ollama.address() as AddressInfo).port}`,
-    models: 'gpt-oss:local',
+    models: 'gpt-oss:mergeron-dev-20b',
     context: 16384,
   });
   writeFileSync(
     fixture.paths.configFile,
     `model_catalog_json=${JSON.stringify(resolve('docs/upstream/model-catalog-0.153.2.json'))}\n[features]\nplugins=false\n`,
   );
-  const manager = new CodexProcessManager(fixture.storage, {
-    getStringSetting: () => null,
-  } as unknown as SettingsService);
+  const manager = new CodexProcessManager(
+    fixture.storage,
+    {
+      getStringSetting: () => null,
+    } as unknown as SettingsService,
+    undefined,
+    localCatalog,
+  );
   try {
     await manager.onModuleInit();
     let client = manager.getClient();
@@ -99,12 +117,17 @@ it('keeps real native inference on Ollama after a process restart and a fork', a
       client,
       'thread/start',
       {
-        model: localModelId('gpt-oss:local'),
+        model: localModelId('gpt-oss:mergeron-dev-20b'),
         cwd: fixture.home,
         sandbox: 'read-only',
       },
     );
     expect(start.modelProvider).toBe(LOCAL_PROVIDER);
+    expect(fixture.storage.pointer()).toBe(
+      resolve('docs/upstream/model-catalog-0.153.2.json'),
+    );
+    expect(fixture.storage.runtimePaths.size).toBe(1);
+    expect(metadata.requiresRestart()).toBe(false);
     async function turn(id: string) {
       const activeClient = manager.getClient()!;
       const completed = new Promise<void>((done, reject) => {
@@ -132,7 +155,7 @@ it('keeps real native inference on Ollama after a process restart and a fork', a
     await turn(start.thread.id);
     await manager.restartControlled();
     local.onModuleDestroy();
-    local = new LocalAgentsService(settings, database.db);
+    local = new LocalAgentsService(settings, database.db, metadata);
     client = manager.getClient();
     if (!client) throw new Error('Missing restarted client');
     const resumed = await local.request<v2.ThreadResumeResponse>(
@@ -147,11 +170,25 @@ it('keeps real native inference on Ollama after a process restart and a fork', a
       { threadId: start.thread.id },
     );
     await turn(fork.thread.id);
-    expect(local.binding(fork.thread.id)?.model).toBe('gpt-oss:local');
+    expect(local.binding(fork.thread.id)?.model).toBe(
+      'gpt-oss:mergeron-dev-20b',
+    );
     expect(seen).toHaveLength(2);
     expect(
+      warnings.mock.calls
+        .flat()
+        .map(String)
+        .filter((text) =>
+          /metadata.*gpt-oss|Unknown model.*gpt-oss|fallback.*metadata/i.test(
+            text,
+          ),
+        ),
+    ).toEqual([]);
+    expect(
       seen.every(
-        (r) => r.model === 'gpt-oss:local' && r.authorization === undefined,
+        (r) =>
+          r.model === 'gpt-oss:mergeron-dev-20b' &&
+          r.authorization === undefined,
       ),
     ).toBe(true);
   } finally {
@@ -166,5 +203,6 @@ it('keeps real native inference on Ollama after a process restart and a fork', a
     await new Promise<void>((done) => ollama.close(() => done()));
     database.sqlite.close();
     fixture.cleanup();
+    warnings.mockRestore();
   }
 }, 45000);

@@ -1,3 +1,4 @@
+import { LocalModelCatalogService } from './catalog/local-model-catalog.service';
 import { Module } from '@nestjs/common';
 import { CodexCliController } from './cli/codex-cli.controller';
 import { CodexCliService } from './cli/codex-cli.service';
@@ -39,6 +40,7 @@ import { LocalAgentsModule } from '../local-agents/local-agents.module';
     CatalogPathsService,
     CatalogStorageService,
     CatalogNativeService,
+    LocalModelCatalogService,
     CatalogAdmissionService,
     CatalogActivityService,
     CatalogService,

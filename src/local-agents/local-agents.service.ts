@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   OnModuleDestroy,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createServer, type Server } from 'node:http';
@@ -20,12 +21,11 @@ import { currentAccess } from '../auth/access-context';
 export const LOCAL_PROVIDER = 'mergeron_ollama';
 export const LOCAL_MODEL_PREFIX = 'ollama:';
 const BINDING_PREFIX = 'local-agent:';
-export const LOCAL_KEYS = {
-  enabled: 'general.localAgentsEnabled',
-  url: 'general.localAgentsUrl',
-  models: 'general.localAgentsModels',
-  context: 'general.localAgentsContext',
-} as const;
+export { LOCAL_KEYS } from './local-model-metadata-state';
+import {
+  LOCAL_KEYS,
+  LocalModelMetadataState,
+} from './local-model-metadata-state';
 export const localModelId = (model: string) =>
   LOCAL_MODEL_PREFIX + Buffer.from(model).toString('base64url');
 export const isLocalModel = (model: unknown): model is string =>
@@ -76,6 +76,7 @@ export class LocalAgentsService implements OnModuleDestroy {
   constructor(
     private readonly config: SettingsService,
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
+    @Optional() private readonly metadata?: LocalModelMetadataState,
   ) {}
 
   configuration() {
@@ -85,6 +86,9 @@ export class LocalAgentsService implements OnModuleDestroy {
       models: this.config.getStringSetting(LOCAL_KEYS.models) ?? '',
       context: this.config.getNumberSetting(LOCAL_KEYS.context),
     };
+  }
+  metadataRestartRequired() {
+    return this.metadata?.requiresRestart() ?? false;
   }
   configure(input: unknown) {
     if (!input || typeof input !== 'object' || Array.isArray(input))
@@ -410,6 +414,15 @@ export class LocalAgentsService implements OnModuleDestroy {
     method: string,
     raw?: unknown,
   ): Promise<T> {
+    if (method === 'model/list' && this.metadata) {
+      const result = await client.request<v2.ModelListResponse>(method, raw);
+      return {
+        ...result,
+        data: result.data.filter(
+          (model) => !this.metadata!.isGenerated(model.model),
+        ),
+      } as T;
+    }
     let params =
       raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
     const threadId =
@@ -470,6 +483,7 @@ export class LocalAgentsService implements OnModuleDestroy {
     const model = isLocalModel(params.model)
       ? this.decode(params.model)
       : binding.model;
+    this.metadata?.assertReady();
     try {
       await this.check(model);
     } catch {
