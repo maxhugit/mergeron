@@ -64,12 +64,18 @@ const browserFiles = new Set(
     .map((file) => `src/${file}`),
 );
 const requireBrowserCoverage = (...files) => {
-  assert.match(quality, /part: \[backend, frontend, frontend-browser\]/);
+  assert.match(
+    quality,
+    /include:\n          - part: backend\n            shard: 1\n          - part: frontend\n            shard: 1\n          - part: frontend-browser\n            shard: 1\n          - part: frontend-browser\n            shard: 2/,
+  );
   assert.match(
     quality,
     /name: Test all browser workflows in Chromium and WebKit\n        if: matrix.part == 'frontend-browser'/,
   );
-  assert.match(quality, /pnpm --dir web test:browser\s*\n/);
+  assert.match(
+    quality,
+    /pnpm --dir web test:browser --shard=\$\{\{ matrix\.shard \}\}\/2\s*\n/,
+  );
   const command = JSON.parse(read('web/package.json')).scripts['test:browser'];
   assert.match(command, /vitest run --project browser$/);
   const config = read('web/vitest.config.ts');
@@ -152,7 +158,7 @@ test('mobile viewport geometry is checked in both engines without replacing the 
   );
 });
 
-test('browser checks cover all fixtures once and run independently of unit/build work', () => {
+test('browser shards cover all fixtures and run independently of unit/build work', () => {
   requireBrowserCoverage(
     'src/components/chat/voice-dictation-button.browser.tsx',
     'src/components/chat/agent-preview.browser.tsx',
@@ -161,7 +167,11 @@ test('browser checks cover all fixtures once and run independently of unit/build
   );
   assert.ok(browserFiles.size >= 57);
   assert.equal(
-    (quality.match(/pnpm --dir web test:browser\s*\n/g) ?? []).length,
+    (
+      quality.match(
+        /pnpm --dir web test:browser --shard=\$\{\{ matrix\.shard \}\}\/2\s*\n/g,
+      ) ?? []
+    ).length,
     1,
   );
   assert.doesNotMatch(quality, /vitest run --project browser src\//);
@@ -742,7 +752,10 @@ test('browser identity does not invalidate dependencies and cleanup', () => {
     dockerfile,
     /dpkg --compare-versions.*libbrotli1.*ge '1\.1\.0-2ubuntu0\.1'/,
   );
-  assert.match(dockerfile, /apt-get purge --yes --allow-remove-essential apt libapt-pkg6\.0t64/);
+  assert.match(
+    dockerfile,
+    /apt-get purge --yes --allow-remove-essential apt libapt-pkg6\.0t64/,
+  );
   assert.match(
     read('scripts/smoke-test-browser-image.sh'),
     /Build-only APT package remains/,
@@ -780,5 +793,89 @@ test('browser identity does not invalidate dependencies and cleanup', () => {
     'deployment/config/squid.conf',
   ]) {
     assert.ok(managerContext.includes(`!${path}\n`), path);
+  }
+});
+
+test('application identity is appended after stable runtime content and permissions', () => {
+  const dockerfile = read('Dockerfile');
+  const identity = dockerfile.indexOf('ARG MERGERON_VERSION=unknown');
+  for (const input of [
+    'RUN groupadd --gid 11002',
+    'COPY --from=toolchain-builder /opt/codex-home-seed.tar.zst',
+    'COPY --from=office-builder /opt/office-venv',
+    'COPY --from=app-deps-builder /app/node_modules',
+    'RUN chmod +x /usr/local/bin/entrypoint.sh',
+  ])
+    assert.ok(identity > dockerfile.indexOf(input), input);
+  assert.ok(dockerfile.indexOf('> /app/build-info.json') > identity);
+  assert.ok(dockerfile.indexOf('USER 11002:11002') > identity);
+  assert.match(
+    dockerfile,
+    /org\.opencontainers\.image\.revision="\$\{MERGERON_REVISION\}"/,
+  );
+  for (const excluded of [
+    'artifacts',
+    'web/.vitest-screenshots',
+    'web/test-results',
+  ])
+    assert.ok(read('.dockerignore').split('\n').includes(excluded));
+});
+
+test('parallel APT stages keep independent locked archives and package lists', () => {
+  const dockerfile = read('Dockerfile');
+  let stage;
+  for (const line of dockerfile.split('\n')) {
+    if (line.startsWith('FROM ')) stage = line.split(' ').at(-1);
+    if (line.includes('target=/var/cache/apt'))
+      assert.ok(
+        line.includes(`id=${stage}-apt-archives,`) &&
+          line.includes('sharing=locked'),
+        line,
+      );
+    if (line.includes('target=/var/lib/apt'))
+      assert.ok(
+        line.includes(`id=${stage}-apt-lists,`) &&
+          line.includes('sharing=locked'),
+        line,
+      );
+  }
+});
+
+test('browser shards retain both engines, serial WebKit, unique evidence and one Office check', () => {
+  assert.match(
+    quality,
+    /name: preview-ui-evidence-\$\{\{ github.sha \}\}-\$\{\{ matrix.shard \}\}/,
+  );
+  assert.match(
+    quality,
+    /name: Test OnlyOffice assistant once\n        if: matrix.part == 'frontend-browser' && matrix.shard == 1/,
+  );
+  assert.equal(
+    (quality.match(/run: node scripts\/test-onlyoffice-assistant.mjs/g) ?? [])
+      .length,
+    1,
+  );
+  assert.match(
+    read('web/vitest.config.ts'),
+    /\{ browser: 'webkit', fileParallelism: false \}/,
+  );
+  assert.doesNotMatch(
+    job(quality, 'checks'),
+    /--changed|--passWithNoTests|continue-on-error/,
+  );
+});
+
+test('the legacy browser check remains a failing gate if either shard fails or is cancelled', () => {
+  const gate = job(quality, 'browser-coverage');
+  assert.match(gate, /name: checks \(frontend-browser\)/);
+  assert.match(gate, /needs: checks/);
+  assert.match(gate, /if: always\(\)/);
+  assert.match(gate, /CHECKS_RESULT: \$\{\{ needs.checks.result \}\}/);
+  const script = gate.match(/run: (.+)/)[1];
+  for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
+    const run = spawnSync('bash', ['-e', '-c', script], {
+      env: { ...process.env, CHECKS_RESULT: result },
+    });
+    assert.equal(run.status === 0, result === 'success');
   }
 });
