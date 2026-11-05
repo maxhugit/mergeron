@@ -8,6 +8,8 @@ export interface DocumentIsolationPlan {
   writableRoots: string[];
   publishedRoots: string[];
   privateRoots?: string[];
+  /** Empty namespace directories, never host bind mounts or new disk files. */
+  managedDirectoryRoots?: string[];
   managedReadRoots?: string[];
   managedWriteRoots?: string[];
   unavailableRoots?: string[];
@@ -117,6 +119,18 @@ export function documentIsolationArgs(
     if (!root.startsWith('/workspaces/'))
       throw new Error('Invalid system workspace boundary');
     result.push('--tmpfs', root);
+  }
+  // Native per-agent profiles must find the sources container even before a Git copy exists.
+  // Create an empty directory inside the masked namespace, without exposing its host contents.
+  for (const root of [...new Set(plan.managedDirectoryRoots ?? [])].sort()) {
+    if (
+      path.resolve(root) !== root ||
+      !plan.privateRoots?.some((parent) => root.startsWith(parent + path.sep))
+    )
+      throw new Error(
+        'Managed directories must be scoped below a private project space',
+      );
+    result.push('--dir', root);
   }
   // Expose only registered projections/copies below an otherwise empty system namespace.
   for (const [mode, managedRoots] of [

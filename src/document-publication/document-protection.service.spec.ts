@@ -194,6 +194,18 @@ describe('unavailable document project isolation', () => {
     );
   });
 
+  it('prepares only empty source-container placeholders for embedded project layouts', async () => {
+    const plan = await service(false, 4).plan();
+    expect(plan?.managedDirectoryRoots).toEqual([
+      '/workspaces/broken/.mergeron-system/sources',
+    ]);
+    expect(plan?.managedReadRoots).not.toContain(
+      '/workspaces/broken/.mergeron-system/sources',
+    );
+    expect(plan?.managedWriteRoots).not.toContain(
+      '/workspaces/broken/.mergeron-system/sources',
+    );
+  });
   it('quarantines the working space when its system space is unavailable instead of recreating it', async () => {
     files.missing.add('/workspaces/.mergeron-system/broken');
     const protection = service(false, 3);
