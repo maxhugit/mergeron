@@ -6,8 +6,9 @@ L’image navigateur met à jour APT et `libapt-pkg6.0t64` vers au moins
 `2.8.4ubuntu0.1` sur Ubuntu Noble pour corriger
 [CVE-2026-109518](https://ubuntu.com/security/CVE-2026-109518).
 Les tentatives automatiques APT sont désactivées pendant cette mise à niveau,
-car le client hérité peut être vulnérable. La construction et le test de l’image
-vérifient les versions réellement installées. Les scans HIGH/CRITICAL et le test
+car le client hérité peut être vulnérable. La construction vérifie les versions
+corrigées, puis désinstalle APT et sa bibliothèque, inutiles dans le navigateur
+en fonctionnement. Le test de l’image vérifie leur absence. Les scans HIGH/CRITICAL et le test
 Chromium non privilégié restent obligatoires avant publication.
 
 L’audit porte sur les lectures du backend, les mises à jour de l’interface et la
