@@ -73,6 +73,11 @@ export function ManagerUpdateProgressDialog({
   const { t: common } = useTranslation();
   const client = useQueryClient();
   const expectedId = initialOperation?.id ?? expectedOperationId;
+  const monitorUrl = expectedId
+    ? `/_mergeron-update/?operation=${encodeURIComponent(expectedId)}`
+    : excludedOperationId
+      ? `/_mergeron-update/?exclude=${encodeURIComponent(excludedOperationId)}`
+      : '/_mergeron-update/';
   const query = useQuery({
     queryKey: ['administration', 'manager-update-progress', session],
     queryFn: async () => {
@@ -184,14 +189,14 @@ export function ManagerUpdateProgressDialog({
           <div className="space-y-2">
             <a
               className="text-primary underline"
-              href="/_mergeron-update/"
+              href={monitorUrl}
               target="_blank"
               rel="noreferrer"
             >
               {t('independentMonitorOpen')}
             </a>
             <iframe
-              src="/_mergeron-update/"
+              src={monitorUrl}
               title={t('independentMonitorOpen')}
               className="h-[45vh] w-full rounded border"
             />
