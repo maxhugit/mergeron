@@ -62,7 +62,7 @@ beforeEach(async () => {
   fixture.queryClient.setQueryData(componentUpdatesKey, updates);
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('image-updates')) return json(updates);
       if (url.endsWith('/manager/status')) return json(currentManager);
@@ -82,7 +82,7 @@ beforeEach(async () => {
         return json({
           applicable: true,
           fingerprint: 'plan',
-          images: JSON.parse(String(init?.body)).images,
+          images: { browser: `ghcr.io/maxhugit/mergeron-browser@${digest}` },
           backupPolicy: 'full-v1',
           backupMode: 'full',
           blockers: [],
@@ -100,15 +100,20 @@ it('shows Browser and prepares its exact immutable update before confirmation', 
   fixture.render(<ServerVersionCard view="current" />);
   const row = await screen.findByRole('row', { name: /Mergeron Browser/ });
   expect(within(row).getByText('0.6.1')).toBeVisible();
-  const button = within(row).getByRole('button', { name: 'Update' });
+  expect(
+    within(row).queryByRole('button', { name: 'Update' }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  const button = screen.getByRole('button', { name: 'Update Mergeron' });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
   expect(await screen.findByRole('alertdialog')).toBeVisible();
   const calls = vi
     .mocked(fetch)
     .mock.calls.filter(([url]) => String(url).endsWith('/update/plan'));
-  expect(JSON.parse(String(calls[0][1]?.body)).images).toEqual({
-    browser: `ghcr.io/maxhugit/mergeron-browser@${digest}`,
+  expect(JSON.parse(String(calls[0][1]?.body))).toEqual({
+    automatic: true,
+    backupMode: 'full',
   });
   expect(
     vi
@@ -126,7 +131,7 @@ it('requires a new Manager instead of component writes with an older protocol', 
     ),
   ).toBeVisible();
   expect(
-    screen.getByRole('button', { name: 'Update selected (1)' }),
+    screen.getByRole('button', { name: 'Update Mergeron' }),
   ).toBeDisabled();
 });
 it('places history and restoration on separate tabs with keyboard navigation', async () => {
@@ -153,6 +158,6 @@ it('keeps installed versions readable when Manager is unavailable', async () => 
   fixture.render(<ServerVersionCard />);
   expect(await screen.findByText('0.6.0')).toBeVisible();
   expect(
-    screen.getByRole('button', { name: 'Update selected (1)' }),
+    screen.getByRole('button', { name: 'Update Mergeron' }),
   ).toBeDisabled();
 });
