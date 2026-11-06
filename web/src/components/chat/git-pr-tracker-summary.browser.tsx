@@ -1,5 +1,11 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+  within,
+} from '@testing-library/react';
 import {
   createRootRoute,
   createRoute,
@@ -129,7 +135,7 @@ test.each([390, 1180])(
       getParentRoute: () => root,
       path: '/',
       component: () => (
-        <aside className="ml-auto flex min-h-[650px] w-full max-w-sm flex-col border-l bg-background text-foreground">
+        <aside className="ml-auto flex h-[calc(100dvh-16px)] min-h-0 w-full max-w-sm flex-col border-l bg-background text-foreground">
           <WorkspaceGitPanel
             projectId="p"
             resourceId="r"
@@ -160,14 +166,41 @@ test.each([390, 1180])(
       </QueryClientProvider>,
     );
     await page.getByRole('tab', { name: 'GitHub', exact: true }).click();
-    await screen.findByText('En vérification');
+    const list = await screen.findByRole('region', {
+      name: 'Liste des PR ouvertes',
+    });
+    await within(list).findByText('En vérification');
     const link = screen.getByRole('link', { name: 'Agent créateur · Inactif' });
     expect(link.getAttribute('href')).toBe('/t/creator0');
     expect(view.container.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
-    await screen.findByText('En erreur');
-    await screen.findByText('Prête à fusionner');
+    await within(list).findByText('En erreur');
+    await within(list).findByText('Prête à fusionner');
+    expect(within(list).queryByText('feature/12 → main')).toBeNull();
+    expect(
+      within(list).queryByRole('link', { name: 'Voir sur GitHub' }),
+    ).toBeNull();
+    const detail = screen.getByRole('region', { name: 'Détail de la PR #12' });
+    expect(
+      within(detail).getByRole('heading', { name: 'Contrôles GitHub' }),
+    ).toBeVisible();
+    expect(
+      within(detail).queryByRole('link', { name: 'Agent créateur · Inactif' }),
+    ).toBeNull();
+    await page
+      .getByRole('button', { name: '#13 Corriger les documents', exact: true })
+      .click();
+    const nextDetail = await screen.findByRole('region', {
+      name: 'Détail de la PR #13',
+    });
+    await within(nextDetail).findByText('Échec');
+    expect(
+      screen.getByRole('button', {
+        name: '#13 Corriger les documents',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(list.contains(nextDetail)).toBe(false);
     await page.screenshot({
       path: `../../../.vitest-screenshots/pr-tracker-${width}.png`,
     });

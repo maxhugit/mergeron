@@ -690,7 +690,9 @@ it('keeps remote GitHub data usable without a local copy and keeps synchronizati
   show();
   await screen.findByRole('tab', { name: 'Local' });
   tab('GitHub');
-  expect(await screen.findByText(/#12 Feature/)).toBeVisible();
+  expect(
+    await screen.findByRole('button', { name: '#12 Feature' }),
+  ).toBeVisible();
   expect(screen.queryByRole('region', { name: 'Synchronisation' })).toBeNull();
   tab('Synchronisation');
   expect(

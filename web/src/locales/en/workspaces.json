@@ -376,5 +376,15 @@
   "gitPrAgentIdle": "Inactive",
   "gitPrAgentWorking": "Working on this PR",
   "gitPrAgentWatching": "Monitoring checks",
-  "gitPrAgentAttention": "Needs intervention"
+  "gitPrAgentAttention": "Needs intervention",
+  "gitPrTracker": "PR tracker",
+  "gitPrOpenCount": "Open PRs ({{count}})",
+  "gitPrPageSummary": "{{failures}} failed · {{agents}} active agents",
+  "gitPrList": "Open pull requests",
+  "gitPrDetail": "PR #{{number}} details",
+  "gitPrChecks": "GitHub checks",
+  "gitPrChecksCount": "{{passed}} / {{total}} passed",
+  "gitPrChecksDetails": "Check details",
+  "gitPrViewGithub": "View on GitHub",
+  "gitPrLastChecked": "Last checked: {{date}}"
 }
