@@ -38,16 +38,29 @@ jobs:
       publish: false
 
   checks:
+    name: ${{ matrix.part == 'frontend-browser' && format('checks (frontend-browser, shard {0}/2)', matrix.shard) || format('checks ({0})', matrix.part) }}
     strategy:
       fail-fast: false
       matrix:
-        part: [backend, frontend, frontend-browser]
+        include:
+          - part: backend
+            shard: 1
+          - part: frontend
+            shard: 1
+          - part: frontend-browser
+            shard: 1
+          - part: frontend-browser
+            shard: 2
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure reliable signed Ubuntu downloads
+        if: matrix.part != 'frontend'
+        run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_OS python3 scripts/configure-ci-apt.py
 
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -87,6 +100,7 @@ jobs:
           node --test manager/test/*.test.mjs
           node --test runtime/*.test.cjs
           python3 -m unittest discover -s scripts -p 'test_*vex.py'
+          python3 -m unittest discover -s scripts -p test_ci_apt.py
           python3 -m unittest discover -s scripts -p test_openssh_backport.py
           python3 -m unittest discover -s scripts -p test_libxml2_backport.py
           python3 -m unittest discover -s scripts -p test_mergeron_migration.py
@@ -102,6 +116,10 @@ jobs:
       - name: Validate translation catalogs
         if: matrix.part == 'frontend'
         run: pnpm --dir web check:i18n
+
+      - name: Verify complete browser shard coverage
+        if: matrix.part == 'frontend'
+        run: node --test web/scripts/browser-sharding.test.mjs
 
       - name: Install reviewed 7-Zip for archive tests
         if: matrix.part == 'backend'
@@ -146,20 +164,23 @@ jobs:
         run: pnpm --dir web test
 
       # Browser checks do not depend on unit tests or the production build.
-      # Discover every browser fixture once instead of restarting Vite six times
-      # and maintaining a partial list that silently misses new regressions.
+      # Native Vitest sharding discovers every fixture in both engines. Each
+      # runner owns disjoint specifications; WebKit stays serial per runner.
       - name: Test all browser workflows in Chromium and WebKit
         if: matrix.part == 'frontend-browser'
         run: |
           pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
-          pnpm --dir web test:browser
-          node scripts/test-onlyoffice-assistant.mjs
+          pnpm --dir web test:browser --shard=${{ matrix.shard }}/2
+
+      - name: Test OnlyOffice assistant once
+        if: matrix.part == 'frontend-browser' && matrix.shard == 1
+        run: node scripts/test-onlyoffice-assistant.mjs
 
       - name: Preserve preview interface screenshots
         if: always() && matrix.part == 'frontend-browser'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: preview-ui-evidence-${{ github.sha }}
+          name: preview-ui-evidence-${{ github.sha }}-${{ matrix.shard }}
           path: |
             web/.vitest-screenshots/
             artifacts/onlyoffice-assistant/
@@ -257,6 +278,20 @@ jobs:
           name: managed-cli-evidence
           path: ${{ runner.temp }}/managed-cli-evidence/
           if-no-files-found: warn
+
+  # Preserve the pre-sharding check name for existing branch protection rules.
+  # needs.checks is the result of the whole matrix, including both browser shards.
+  browser-coverage:
+    name: checks (frontend-browser)
+    needs: checks
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require both browser shards and source checks
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+        run: test "$CHECKS_RESULT" = success
 
   image:
     outputs:
