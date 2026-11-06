@@ -7,7 +7,7 @@ import {
   replacementFingerprint,
 } from './manager-replacement.mjs';
 import { publishMonitor } from './update-monitor-journal.mjs';
-import { probeManager } from './health-probe.mjs';
+import { probeManagerReadiness } from './health-probe.mjs';
 
 export async function runManagerReplacement({
   docker,
@@ -17,7 +17,7 @@ export async function runManagerReplacement({
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   timeoutMs = 180000,
   appTimeoutMs = 6 * 3600000,
-  probe = () => probeManager({ socketPath: '/manager-run/manager.sock' }),
+  probe,
 }) {
   if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('updateReplacementInvalid');
   const path = join(directory, 'replacements', id + '.json');
@@ -31,6 +31,13 @@ export async function runManagerReplacement({
     !/^ghcr.io\/maxhugit\/mergeron-manager@sha256:[a-f0-9]{64}$/.test(job.image)
   )
     throw new Error('updateReplacementInvalid');
+  const readinessProbe =
+    probe ??
+    (() =>
+      probeManagerReadiness({
+        socketPath: '/manager-run/manager.sock',
+        stack: job.stack,
+      }));
   if (['cancelled'].includes(job.stage)) return job;
   let operation;
   if (['succeeded', 'rolledBack', 'recoveryRequired'].includes(job.stage)) {
@@ -163,7 +170,7 @@ export async function runManagerReplacement({
         throw new Error('updateManagerHealthFailed');
       if (
         inspect.State.Health?.Status === 'healthy' &&
-        (await probe()).healthy
+        (await readinessProbe()).healthy
       ) {
         healthy = true;
         break;
