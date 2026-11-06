@@ -142,7 +142,10 @@ export class SettingsController {
       backupMode?: unknown;
     },
   ) {
-    return this.managerStatus.updateOperation('plan', body);
+    return this.managerStatus.updateOperation('plan', {
+      ...body,
+      automatic: true,
+    });
   }
 
   @Get('manager/backups')
