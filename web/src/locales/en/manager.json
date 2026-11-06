@@ -250,5 +250,8 @@
   "managerBackupPreferenceSummary": "Saved for this installation. Each operation still requires confirmation.",
   "optionalServiceStopped": "Stopped · available on demand",
   "optionalServiceIdle": "Starts on demand; stops {{minutes}} min after sessions are released.",
-  "byparrManagedUpdates": "Reviewed image updated with the Manager; no automatic installation."
+  "byparrManagedUpdates": "Reviewed image updated with the Manager; no automatic installation.",
+  "globalUpdateAction": "Update Mergeron",
+  "globalUpdateManaged": "Managed by the global update",
+  "globalUpdateHelp": "Mergeron determines which components need updating and their order. Review the plan and backup before confirming."
 }

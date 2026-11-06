@@ -129,7 +129,13 @@ export class SettingsController {
   @Post('manager/update/plan')
   @ApiOperation({ summary: 'Preview a transactional stack update' })
   managerUpdatePlan(
-    @Body() body: { images?: unknown; mode?: unknown; backupMode?: unknown },
+    @Body()
+    body: {
+      images?: unknown;
+      automatic?: boolean;
+      mode?: unknown;
+      backupMode?: unknown;
+    },
   ) {
     return this.managerStatus.updateOperation('plan', body);
   }

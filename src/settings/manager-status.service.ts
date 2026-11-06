@@ -314,6 +314,7 @@ export class ManagerStatusService {
       | 'checkpoint',
     input: {
       images?: unknown;
+      automatic?: boolean;
       confirmation?: unknown;
       expectedFingerprint?: unknown;
       operationId?: unknown;
@@ -322,6 +323,42 @@ export class ManagerStatusService {
       actor?: { id: string; name: string | null };
     },
   ) {
+    if (action === 'plan' && input.automatic) {
+      const discovery = await this.imageUpdates(true);
+      const components = discovery.components as
+        | Record<string, unknown>[]
+        | undefined;
+      if (!Array.isArray(components))
+        throw new HttpException('updateDiscoveryUnavailable', 503);
+      const managed = components.filter(
+        (item) => item.id !== 'manager' && item.updateManagedBy !== 'manager',
+      );
+      if (
+        managed.some(
+          (item) => item.checkError || item.versionStatus === 'unknown',
+        )
+      )
+        throw new HttpException('updateDiscoveryIncomplete', 409);
+      const images = Object.fromEntries(
+        managed
+          .filter((item) => item.updateAvailable || item.migrationAvailable)
+          .map((item) => {
+            if (
+              typeof item.targetDigest !== 'string' ||
+              !/^sha256:[a-f0-9]{64}$/.test(item.targetDigest) ||
+              typeof item.targetImage !== 'string'
+            )
+              throw new HttpException('updateDiscoveryIncomplete', 409);
+            return [
+              String(item.id),
+              `${item.targetImage.replace(/:[^/:]+$/, '')}@${item.targetDigest}`,
+            ];
+          }),
+      );
+      if (!Object.keys(images).length)
+        throw new HttpException('updateNoChanges', 409);
+      input = { ...input, images };
+    }
     const path = action === 'apply' ? '/v1/update' : `/v1/update/${action}`;
     if (input?.mode !== undefined && input.mode !== 'standard')
       throw new HttpException('updateInvalidMode', 400);

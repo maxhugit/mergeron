@@ -184,10 +184,10 @@ export function ManagerUpdateControls({
           !backupPreference.ready ||
           backupPreference.saving,
         ),
-        onUpdate: (images) =>
+        onUpdate: () =>
           mutation.mutate({
             action: 'plan',
-            input: { images, ...backupInput },
+            input: { automatic: true, ...backupInput },
           }),
       })}
       <div hidden={!!renderUpdates}>
