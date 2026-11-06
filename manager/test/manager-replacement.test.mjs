@@ -262,7 +262,22 @@ test('coordinator binds both component plans to one fingerprint and validates co
   assert.match(result.requestedId, /^[a-f0-9-]{36}$/);
   assert.equal(result.expectedFingerprint, 'base');
   assert.deepEqual(result.images, base.images);
+  assert.equal(launch.length, 0);
+  await updater.prepareManager({
+    id: result.requestedId,
+    managerTarget: result.managerTarget,
+    managerFingerprint: result.managerFingerprint,
+  });
   assert.equal(launch.length, 1);
+  await assert.rejects(
+    () =>
+      updater.prepareManager({
+        id: result.requestedId,
+        managerTarget: target,
+        managerFingerprint: 'stale',
+      }),
+    /updatePlanChanged/,
+  );
 });
 
 test('rejects an application-only rollback after a coordinated Manager replacement', async () => {

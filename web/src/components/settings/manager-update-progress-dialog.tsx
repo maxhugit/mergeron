@@ -189,7 +189,7 @@ export function ManagerUpdateProgressDialog({
       }}
     >
       <DialogContent
-        className="flex max-h-[85dvh] flex-col sm:max-w-2xl"
+        className="flex max-h-[85dvh] flex-col overflow-y-auto sm:max-w-2xl"
         showCloseButton={false}
         onEscapeKeyDown={(event) => {
           if (locked) event.preventDefault();
