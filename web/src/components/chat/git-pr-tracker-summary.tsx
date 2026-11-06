@@ -25,6 +25,7 @@ export function GitPrTrackerSummary({
   observation,
   showAgents = true,
   canAssign = false,
+  compact = false,
 }: {
   projectId: string;
   resourceId: string;
@@ -32,6 +33,7 @@ export function GitPrTrackerSummary({
   observation?: { data?: GitChecks; isPending: boolean; isError: boolean };
   showAgents?: boolean;
   canAssign?: boolean;
+  compact?: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const statusLabels = {
@@ -92,7 +94,13 @@ export function GitPrTrackerSummary({
       Number(a.threadId === tracking?.creator?.threadId),
   );
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+    <div
+      className={
+        compact
+          ? 'flex min-w-0 flex-col gap-1'
+          : 'flex flex-wrap items-center justify-between gap-x-2 gap-y-1'
+      }
+    >
       <div className={`flex items-center gap-1 ${color}`} role="status">
         <Icon
           aria-hidden="true"
@@ -101,14 +109,27 @@ export function GitPrTrackerSummary({
         {statusLabels[status]}
       </div>
       {checks.isError && checks.data && (
-        <p className="text-muted-foreground">
+        <p
+          className={
+            compact ? 'truncate text-muted-foreground' : 'text-muted-foreground'
+          }
+          title={t('gitPrStale', {
+            date: new Date(checks.data.inspectedAt).toLocaleTimeString(),
+          })}
+        >
           {t('gitPrStale', {
             date: new Date(checks.data.inspectedAt).toLocaleTimeString(),
           })}
         </p>
       )}
       {showAgents && (
-        <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+        <div
+          className={
+            compact
+              ? 'flex min-w-0 items-center gap-3 overflow-x-auto'
+              : 'flex min-w-0 flex-wrap gap-x-3 gap-y-1'
+          }
+        >
           {agents.length ? (
             agents.map((agent) => {
               const Activity =
@@ -125,7 +146,7 @@ export function GitPrTrackerSummary({
                   to="/t/$threadId"
                   params={{ threadId: agent.threadId }}
                   aria-label={`${agent.name} · ${phaseLabels[agent.phase]}`}
-                  className="inline-flex min-w-0 max-w-full items-center gap-1 text-primary underline underline-offset-2"
+                  className={`inline-flex min-w-0 max-w-full items-center gap-1 text-primary underline underline-offset-2 ${compact ? 'shrink-0' : ''}`}
                   title={`${t(agent.threadId === tracking?.creator?.threadId ? 'gitPrCreator' : 'gitPrAssociated')} · ${phaseLabels[agent.phase]}`}
                 >
                   <Bot aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />

@@ -198,7 +198,7 @@ export function GitPullRequestTracker({
         <>
           <div
             role="region"
-            className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2"
+            className="min-h-0 flex-1 overflow-y-auto px-2 pb-2"
             aria-label={t('gitPrList')}
           >
             {rows.map((pr, i) => {
@@ -212,41 +212,45 @@ export function GitPullRequestTracker({
               return (
                 <article
                   key={pr.number}
-                  className={`rounded-lg p-2 ${open ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50'}`}
+                  className={`relative rounded-lg p-2 after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:border-b after:border-border/60 last:after:hidden ${open ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50'}`}
                 >
-                  <button
-                    type="button"
-                    className="mb-1 flex w-full cursor-pointer items-start gap-2 break-words text-left font-medium"
-                    aria-label={`#${pr.number} ${pr.title}`}
-                    aria-expanded={open}
-                    aria-controls={`git-pr-detail-${resourceId}-${pr.number}`}
-                    onClick={() =>
-                      setExpanded((current) => {
-                        const next = new Set(current);
-                        if (next.has(pr.number)) next.delete(pr.number);
-                        else next.add(pr.number);
-                        return next;
-                      })
-                    }
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="mr-1 text-muted-foreground">
-                        #{pr.number}
+                  <div className="h-28 min-w-0">
+                    <button
+                      type="button"
+                      className="mb-2 flex h-8 w-full cursor-pointer items-start gap-2 text-left font-medium"
+                      title={`#${pr.number} ${pr.title}`}
+                      aria-label={`#${pr.number} ${pr.title}`}
+                      aria-expanded={open}
+                      aria-controls={`git-pr-detail-${resourceId}-${pr.number}`}
+                      onClick={() =>
+                        setExpanded((current) => {
+                          const next = new Set(current);
+                          if (next.has(pr.number)) next.delete(pr.number);
+                          else next.add(pr.number);
+                          return next;
+                        })
+                      }
+                    >
+                      <span className="line-clamp-2 min-w-0 flex-1 break-words leading-4">
+                        <span className="mr-1 text-muted-foreground">
+                          #{pr.number}
+                        </span>
+                        {pr.title}
                       </span>
-                      {pr.title}
-                    </span>
-                    <ChevronDown
-                      aria-hidden="true"
-                      className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${open ? 'rotate-180' : ''}`}
+                      <ChevronDown
+                        aria-hidden="true"
+                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${open ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    <GitPrTrackerSummary
+                      projectId={projectId}
+                      resourceId={resourceId}
+                      pr={pr}
+                      observation={observation}
+                      canAssign={canWrite}
+                      compact
                     />
-                  </button>
-                  <GitPrTrackerSummary
-                    projectId={projectId}
-                    resourceId={resourceId}
-                    pr={pr}
-                    observation={observation}
-                    canAssign={canWrite}
-                  />
+                  </div>
                   {open && (
                     <section
                       id={`git-pr-detail-${resourceId}-${pr.number}`}
