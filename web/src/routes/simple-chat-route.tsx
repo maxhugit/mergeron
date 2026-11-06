@@ -229,8 +229,8 @@ export function SimpleChatRoute() {
 
   const send = async (event?: FormEvent) => {
     event?.preventDefault();
-    const text = input.trim();
-    if (!text || sending || !status?.configured) return;
+    const text = input;
+    if (!text.trim() || sending || !status?.configured) return;
     const threadId = activeThreadId;
     if (!threadId) {
       setError('Crée d’abord une conversation depuis un workspace.');

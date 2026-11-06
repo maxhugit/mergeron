@@ -27,6 +27,17 @@ export function responseClipboardPayload(element: HTMLElement) {
     const target = allowed.has(tag) ? document.createElement(tag) : fragment;
     if (target instanceof HTMLElement) {
       if (styles[tag]) target.setAttribute('style', styles[tag]);
+      const lines = node.getAttribute('data-message-blank-lines');
+      if (lines && /^\d+$/.test(lines) && Number(lines) > 0) {
+        for (let i = 0; i < Math.min(Number(lines), 10_000); i++)
+          target.appendChild(document.createElement('br'));
+      }
+      if (
+        ['td', 'th'].includes(tag) &&
+        ['left', 'right', 'center'].includes(node.style.textAlign)
+      ) {
+        target.style.textAlign = node.style.textAlign;
+      }
       if (tag === 'a') {
         const href = node.getAttribute('href') ?? '';
         if (/^(https?:|mailto:)/i.test(href)) target.setAttribute('href', href);
@@ -34,19 +45,54 @@ export function responseClipboardPayload(element: HTMLElement) {
       if (tag === 'ol' && /^\d+$/.test(node.getAttribute('start') ?? ''))
         target.setAttribute('start', node.getAttribute('start')!);
     }
-    for (const child of node.childNodes) target.appendChild(clean(child));
+    for (const child of node.childNodes) {
+      // remark-rehype adds a formatting LF after <br>; exporting both that
+      // text node and the break would double every preserved chat newline.
+      if (
+        child.nodeType === Node.TEXT_NODE &&
+        child.previousSibling instanceof HTMLElement &&
+        child.previousSibling.tagName === 'BR' &&
+        child.textContent?.startsWith('\n')
+      ) {
+        target.appendChild(document.createTextNode(child.textContent.slice(1)));
+      } else target.appendChild(clean(child));
+    }
     return target;
   };
   const output = document.createElement('div');
   output.appendChild(clean(element));
-  const plain = output.cloneNode(true) as HTMLElement;
-  plain
-    .querySelectorAll('td,th')
-    .forEach((node) => node.appendChild(document.createTextNode('\t')));
-  plain
-    .querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,tr,pre,blockquote,br')
-    .forEach((node) => node.appendChild(document.createTextNode('\n')));
-  return { html: output.innerHTML, text: plain.textContent?.trim() ?? '' };
+  const textOf = (node: Node, parent = ''): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent ?? '';
+      // Whitespace between generated block elements is HTML pretty-printing,
+      // not another user-requested paragraph separator.
+      if (
+        ['div', 'ul', 'ol', 'table', 'thead', 'tbody', 'tr'].includes(parent) &&
+        /^\s*\n\s*$/.test(text)
+      )
+        return '';
+      return text;
+    }
+    if (!(node instanceof HTMLElement)) return '';
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'br') return '\n';
+    const text = Array.from(node.childNodes)
+      .map((child) => textOf(child, tag))
+      .join('');
+    if (tag === 'td' || tag === 'th') return text + '\t';
+    if (tag === 'li' || tag === 'tr') return text.replace(/\n+$/, '') + '\n';
+    if (
+      ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'blockquote'].includes(
+        tag,
+      )
+    )
+      return text + '\n\n';
+    return text;
+  };
+  return {
+    html: output.innerHTML,
+    text: textOf(output).replace(/^\n+|\n+$/g, ''),
+  };
 }
 
 /** Rich and plain representations are written together for the paste destination. */

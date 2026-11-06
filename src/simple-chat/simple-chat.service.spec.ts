@@ -88,6 +88,28 @@ describe('SimpleChatService execution backend', () => {
     ).toHaveLength(2);
   });
 
+  it('preserves the submitted whitespace in storage and in the model request', async () => {
+    service.setBackend('codex');
+    const created = service.createThread({ projectId: 'project-1' });
+    runProjectStructuredPrompt.mockResolvedValue('Réponse');
+    const message = '\n\n  Bonjour\r\nSuite\n\n';
+    await service.respond(created.thread.id, { message });
+    const stored = database.db
+      .select()
+      .from(simpleChatMessages)
+      .where(eq(simpleChatMessages.threadId, created.thread.id))
+      .all()
+      .find((m) => m.role === 'user');
+    expect(stored?.content).toBe(message);
+    const request = runProjectStructuredPrompt.mock.calls[0]?.[0] as
+      | { prompt?: unknown }
+      | undefined;
+    expect(request?.prompt).toContain(message);
+    await expect(
+      service.respond(created.thread.id, { message: ' \n\n ' }),
+    ).rejects.toThrow('message is required');
+  });
+
   it('rejects an unknown backend', () => {
     expect(() => service.setBackend('other')).toThrow(
       'Invalid Simple Chat backend',

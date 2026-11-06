@@ -15,6 +15,8 @@ import {
 } from 'react';
 import Markdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { remarkMessageLayout } from '@/lib/remark-message-layout';
+import { messageBlockComponents } from './message-block-components';
 import { Copy, Check, FileText } from 'lucide-react';
 import { showSnackbar } from '@/stores/snackbar-store';
 import { useTranslation } from 'react-i18next';
@@ -130,7 +132,7 @@ const agentUrlTransform: NonNullable<
 };
 
 /** Stable plugin list; a fresh array each render would rebuild the tree. */
-const REMARK_PLUGINS = [remarkGfm, remarkFileReferences()];
+const REMARK_PLUGINS = [remarkGfm, remarkMessageLayout, remarkFileReferences()];
 
 /** Clickable file reference, shared by link destinations and inline-code tokens. */
 function FileReferenceMark({
@@ -269,45 +271,7 @@ const components = (
   completed: boolean,
   onOpenFileReference?: (reference: FileReference) => void,
 ): ComponentProps<typeof Markdown>['components'] => ({
-  h1: ({ children, node }) => (
-    <h1
-      data-reading-block={node?.position?.start.offset}
-      className="mb-3 mt-5 text-xl font-bold first:mt-0"
-    >
-      {children}
-    </h1>
-  ),
-  h2: ({ children, node }) => (
-    <h2
-      data-reading-block={node?.position?.start.offset}
-      className="mb-2 mt-4 text-lg font-semibold first:mt-0"
-    >
-      {children}
-    </h2>
-  ),
-  h3: ({ children, node }) => (
-    <h3
-      data-reading-block={node?.position?.start.offset}
-      className="mb-2 mt-3 text-base font-semibold first:mt-0"
-    >
-      {children}
-    </h3>
-  ),
-  p: ({ children, node }) => (
-    <p
-      data-reading-block={node?.position?.start.offset}
-      className="mb-2 last:mb-0"
-    >
-      {children}
-    </p>
-  ),
-  ul: ({ children }) => (
-    <ul className="mb-2 ml-4 list-disc space-y-1">{children}</ul>
-  ),
-  ol: ({ children }) => (
-    <ol className="mb-2 ml-4 list-decimal space-y-1">{children}</ol>
-  ),
-  li: ({ children }) => <li className="text-sm">{children}</li>,
+  ...messageBlockComponents,
   blockquote: ({ children }) => (
     <blockquote className="my-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground">
       {children}
@@ -347,24 +311,6 @@ const components = (
       </PreviewLink>
     );
   },
-  table: ({ children }) => (
-    <div className="my-2 overflow-auto">
-      <table className="min-w-full border-collapse text-sm">{children}</table>
-    </div>
-  ),
-  thead: ({ children }) => (
-    <thead className="border-b border-border">{children}</thead>
-  ),
-  th: ({ children }) => (
-    <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground">
-      {children}
-    </th>
-  ),
-  td: ({ children }) => (
-    <td className="border-t border-border/50 px-3 py-1.5 text-sm">
-      {children}
-    </td>
-  ),
   hr: () => <hr className="my-4 border-border/50" />,
   strong: ({ children }) => (
     <strong className="font-semibold">{children}</strong>
