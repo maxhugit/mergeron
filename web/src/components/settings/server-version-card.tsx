@@ -98,7 +98,12 @@ export function ServerVersionCard({
                 status={manager.data}
                 release={release.data}
                 {...controls}
-                trailingActions={refreshControl}
+                trailingActions={
+                  <>
+                    {refreshControl}
+                    {controls.monitorAction}
+                  </>
+                }
               />
             )}
           />

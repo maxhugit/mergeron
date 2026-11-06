@@ -18,3 +18,17 @@ export async function prepareUpdateMonitor() {
   });
   if (!session.ok) throw new Error('updateMonitorUnavailable');
 }
+
+/** Reopening progress must work even when this browser did not start the update. */
+export async function ensureUpdateMonitor() {
+  const response = await fetch('/_mergeron-update/status', {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  if (
+    response.ok &&
+    response.headers.get('content-type')?.includes('application/json')
+  )
+    return;
+  await prepareUpdateMonitor();
+}
