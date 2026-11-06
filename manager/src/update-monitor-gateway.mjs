@@ -60,7 +60,11 @@ export function createUpdateGateway({
     if (req.headers.host?.split(':')[0] !== hostname)
       return send(res, 421, '{}');
     if (req.url === '/_gateway-health') return send(res, 200, '{}');
-    if (req.url === prefix || req.url === prefix + '/')
+    if (
+      req.url === prefix ||
+      req.url === prefix + '/' ||
+      req.url?.startsWith(prefix + '/?')
+    )
       return req.method === 'GET' ? page(res) : send(res, 405, '{}');
     if (req.url === prefix + '/monitor.js')
       return send(res, 200, monitorScript, 'text/javascript; charset=utf-8');
