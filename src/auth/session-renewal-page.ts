@@ -1,10 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
-import { BadRequestException } from '@nestjs/common';
 
 export function renewalRequest(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-f0-9]{32}$/.test(value))
-    throw new BadRequestException('Invalid renewal request');
+    throw new TypeError('Invalid renewal request');
   return value;
 }
 

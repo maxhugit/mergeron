@@ -2,6 +2,7 @@ import { isSsoProxySource } from './sso-proxy-source';
 /** REST controller for API-key, local-session and OIDC authentication flows. */
 import {
   Body,
+  BadRequestException,
   ForbiddenException,
   Controller,
   HttpCode,
@@ -41,7 +42,18 @@ import {
   SilentOidcFailure,
   silentReturnPath,
 } from './oidc-auth.service';
-import { renewalRequest, sendRenewalPage } from './session-renewal-page';
+import {
+  renewalRequest as validateRenewalRequest,
+  sendRenewalPage,
+} from './session-renewal-page';
+
+function renewalRequest(value: unknown): string {
+  try {
+    return validateRenewalRequest(value);
+  } catch {
+    throw new BadRequestException('Invalid renewal request');
+  }
+}
 
 function getRequestId(request: FastifyRequest): string | undefined {
   const id = (request as unknown as { id?: unknown }).id;
