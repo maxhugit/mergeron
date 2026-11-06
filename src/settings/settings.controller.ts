@@ -126,6 +126,11 @@ export class SettingsController {
   }
 
   /** Lists runtime settings with optional category filtering. */
+  @Post('manager/update/monitor')
+  managerUpdateMonitor() {
+    return this.managerStatus.updateOperation('monitor', {});
+  }
+
   @Post('manager/update/plan')
   @ApiOperation({ summary: 'Preview a transactional stack update' })
   managerUpdatePlan(

@@ -76,6 +76,7 @@ export interface ManagerStatus {
   manager?: { build: InstalledBuild; imageId: string } | null;
   backupPolicy?: ManagerBackupPolicy;
   capabilities?: {
+    independentMonitor?: boolean;
     updateHistory?: boolean;
     backupRestore?: boolean;
     backupManagement?: boolean;

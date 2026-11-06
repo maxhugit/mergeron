@@ -1,3 +1,4 @@
+import { publishMonitor } from './update-monitor-journal.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -1033,6 +1034,10 @@ export class TransactionalUpdater {
     this.current.status = status;
     this.current.events.push({ at: new Date().toISOString(), phase, status });
     await atomicJson(join(this.directory, 'transaction.json'), this.current);
+    await publishMonitor(
+      join(this.directory, '..', 'maintenance'),
+      this.current,
+    );
   }
 
   async plan(images, mode = 'standard', backupMode) {

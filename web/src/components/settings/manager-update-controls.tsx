@@ -1,3 +1,4 @@
+import { prepareUpdateMonitor } from './update-monitor-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -113,13 +114,17 @@ export function ManagerUpdateControls({
     receipt?.excludedOperationId ?? null,
   );
   const mutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       action,
       input,
     }: {
       action: 'plan' | 'apply' | 'rollback' | 'recover';
       input: Record<string, unknown>;
-    }) => requestManagerUpdate(action, input),
+    }) => {
+      if (action === 'apply' && status.capabilities?.independentMonitor)
+        await prepareUpdateMonitor();
+      return requestManagerUpdate(action, input);
+    },
     onSuccess: (result, variables) => {
       const reviewed =
         variables.action === 'plan' && 'applicable' in result ? result : null;
@@ -470,6 +475,7 @@ export function ManagerUpdateControls({
       </AlertDialog>
       {showBackups && <ManagerBackups status={status} showPreference={false} />}
       <ManagerUpdateProgressDialog
+        independent={status.capabilities?.independentMonitor === true}
         open={progressOpen}
         onOpenChange={(open) => {
           setProgressOpen(open);

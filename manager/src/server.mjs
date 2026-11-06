@@ -1,3 +1,4 @@
+import { grantMonitor } from './update-monitor-journal.mjs';
 import { BrowserLifecycle } from './browser-lifecycle.mjs';
 import { ManagedTranscription } from './transcription.mjs';
 import http from 'node:http';
@@ -432,6 +433,8 @@ const server = http.createServer(async (request, response) => {
         updateHistory: true,
         backupRestore: true,
         imageUpdates: true,
+        independentMonitor:
+          process.env.MERGERON_UPDATE_MONITOR_ENABLED === 'true',
         browserLifecycle: true,
         managedCodexCli: true,
         managedTranscription: true,
@@ -531,6 +534,13 @@ const server = http.createServer(async (request, response) => {
     } catch {
       return json(response, 503, { error: 'managerImageDiscoveryUnavailable' });
     }
+  }
+  if (request.url === '/v1/update/monitor' && request.method === 'POST') {
+    return json(
+      response,
+      200,
+      await grantMonitor(`${dirname(adoptionPath)}/maintenance`),
+    );
   }
   if (
     [
