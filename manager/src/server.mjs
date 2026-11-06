@@ -552,11 +552,15 @@ const server = http.createServer(async (request, response) => {
     }
   }
   if (request.url === '/v1/update/monitor' && request.method === 'POST') {
-    return json(
-      response,
-      200,
-      await grantMonitor(`${dirname(adoptionPath)}/maintenance`),
-    );
+    try {
+      return json(
+        response,
+        200,
+        await grantMonitor(`${dirname(adoptionPath)}/maintenance`),
+      );
+    } catch {
+      return json(response, 503, { error: 'updateMonitorUnavailable' });
+    }
   }
   if (
     [

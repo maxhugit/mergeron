@@ -10,6 +10,7 @@ import {
 } from '../src/update-monitor-journal.mjs';
 import { createUpdateGateway } from '../src/update-monitor-gateway.mjs';
 import {
+  installGateways,
   gatewaySpecification,
   gatewayRouting,
 } from '../scripts/install-update-gateway.mjs';
@@ -209,4 +210,41 @@ test('a connected upstream may send delayed headers without the connection deadl
   const result = await f.request('/long-office-operation');
   assert.equal(result.status, 200);
   assert.equal(result.body, 'delayed response');
+});
+
+test('keeps existing gateway replicas untouched when an upgrade has not been drained by the proxy', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'gateway-install-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const config = {
+    stack: 'mergeron-dev',
+    hostname: 'dev.example.com',
+    image: `ghcr.io/maxhugit/mergeron-manager@sha256:${'a'.repeat(64)}`,
+    stateRoot: root,
+    network: 'proxy',
+  };
+  const spec = gatewaySpecification(config);
+  let stopped = false;
+  const docker = {
+    listContainers: async () => [
+      { Id: 'existing', Names: ['/mergeron-dev-update-gateway-a'] },
+    ],
+    inspectContainer: async () => ({
+      Config: {
+        Image: 'previous-image',
+        User: spec.User,
+        Env: spec.Env,
+        Labels: spec.Labels,
+      },
+      HostConfig: spec.HostConfig,
+      State: { Running: true, Health: { Status: 'healthy' } },
+    }),
+    stopContainer: async () => {
+      stopped = true;
+    },
+  };
+  await assert.rejects(
+    () => installGateways(config, docker),
+    /prior proxy draining/,
+  );
+  assert.equal(stopped, false);
 });

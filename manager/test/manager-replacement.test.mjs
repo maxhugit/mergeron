@@ -277,3 +277,22 @@ test('rejects an application-only rollback after a coordinated Manager replaceme
     /updateCoordinatedRollbackRequired/,
   );
 });
+
+test('rejects an incompatible target Manager image before creating a replacement job', async (t) => {
+  const f = await fixture(t);
+  const inspect = f.docker.inspectImage.bind(f.docker);
+  f.docker.inspectImage = (reference) =>
+    reference === target
+      ? Promise.resolve({ Id: nextImage, Config: { Labels: {} } })
+      : inspect(reference);
+  const before = f.docker.calls.length;
+  await assert.rejects(
+    () => f.manager.launch(f.plan, 'another-operation'),
+    /updateManagerImageInvalid/,
+  );
+  assert(
+    !f.docker.calls
+      .slice(before)
+      .some((call) => ['create', 'stop', 'rename', 'remove'].includes(call[0])),
+  );
+});

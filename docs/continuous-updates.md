@@ -101,3 +101,17 @@ débordement horizontal. Il conserve les captures et `report.json`. Le contrôle
 HTTP final arrête le serveur applicatif local et exige toujours une réponse 200
 de la page de maintenance. Ces simulations complètent les tests transactionnels ;
 elles ne remplacent pas l’essai d’une mise à jour réelle sur la dev.
+
+
+Les images anciennes du Manager ne contiennent pas l’auxiliaire de remplacement.
+La première activation nécessite donc une installation contrôlée du Manager
+compatible sur l’hôte, avec conservation de son ancien conteneur. Le label
+`io.mergeron.continuous-updates=1` est vérifié dans l’image immuable source et
+cible. Les mises à jour supervisées suivantes utilisent cet auxiliaire.
+
+Les relais et le proxy TLS forment l’infrastructure stable, hors de la transaction
+applicative. L’installateur refuse de remplacer un relais existant par une autre
+image sans une procédure de retrait du routage ; il conserve les instances en
+place. Leur propre évolution nécessite une maintenance distincte avec retrait,
+remplacement et vérification d’une seule instance à la fois. Une modification de
+leurs protections ou un échec de santé bloque l’activation du nouveau routage.

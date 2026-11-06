@@ -85,7 +85,10 @@ export class ManagerReplacement {
       throw new Error('updateManagerIdentityChanged');
     await this.docker.pullImage(plan.image);
     const target = await this.docker.inspectImage(plan.image);
-    if (!/^sha256:[a-f0-9]{64}$/.test(target.Id ?? ''))
+    if (
+      !/^sha256:[a-f0-9]{64}$/.test(target.Id ?? '') ||
+      target.Config?.Labels?.['io.mergeron.continuous-updates'] !== '1'
+    )
       throw new Error('updateManagerImageInvalid');
     const id = randomUUID();
     const job = {
