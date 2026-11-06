@@ -26,6 +26,7 @@ let db: TestDatabase;
 let tracker: PullRequestTrackerService;
 let turns: string[];
 let waiting: boolean;
+let discovered: { archived: boolean; thread: { id: string; name: string } }[];
 beforeEach(() => {
   db = createTestDatabase();
   for (const id of ['p', 'other'])
@@ -52,12 +53,17 @@ beforeEach(() => {
       .run();
   turns = ['turn-1'];
   waiting = false;
+  discovered = ['a', 'b'].map((id) => ({
+    archived: false,
+    thread: { id, name: 'Agent ' + id },
+  }));
   tracker = new PullRequestTrackerService(
     db.db,
     {
       activeTurnIds: () => turns,
     } as unknown as ThreadExecutionInventoryService,
     {
+      read: () => Promise.resolve({ entries: discovered }),
       getHeldThread: (id: string) => ({
         name: 'Agent ' + id,
         status: {
@@ -107,12 +113,14 @@ it('assigns an idle agent persistently without inventing a creator or execution'
   );
 });
 
-it('offers only readable, non-archived agents in this project and rejects invalid assignment', () => {
+it('offers only readable, non-archived agents in this project and rejects invalid assignment', async () => {
   db.sqlite
     .prepare('UPDATE project_agent_threads SET archived_at=1 WHERE thread_id=?')
     .run('b');
-  expect(tracker.candidates('p')).toEqual([{ threadId: 'a', name: 'Agent a' }]);
-  expect(tracker.candidates('other')).toEqual([]);
+  expect(await tracker.candidates('p')).toEqual([
+    { threadId: 'a', name: 'Agent a' },
+  ]);
+  expect(await tracker.candidates('other')).toEqual([]);
   expect(() => tracker.assign('p', 'o/r', 12, 'b')).toThrow(
     'PR_AGENT_UNAVAILABLE',
   );
@@ -129,7 +137,9 @@ it('offers only readable, non-archived agents in this project and rejects invali
       },
     } as unknown as IdentityService,
   };
-  expect(accessContext.run(context, () => tracker.candidates('p'))).toEqual([]);
+  expect(
+    await accessContext.run(context, () => tracker.candidates('p')),
+  ).toEqual([]);
   expect(() =>
     accessContext.run(context, () => tracker.assign('p', 'o/r', 12, 'a')),
   ).toThrow('denied');
@@ -254,4 +264,16 @@ it('cleans agent associations when an agent is deleted, without reattributing th
     creator: null,
     agents: [],
   });
+});
+
+it('excludes missing and upstream-archived history without deleting membership', async () => {
+  discovered = [
+    { archived: false, thread: { id: 'a', name: 'Nom disponible' } },
+  ];
+  expect(await tracker.candidates('p')).toEqual([
+    { threadId: 'a', name: 'Nom disponible' },
+  ]);
+  discovered[0].archived = true;
+  expect(await tracker.candidates('p')).toEqual([]);
+  expect(db.db.select().from(projectAgentThreads).all()).toHaveLength(2);
 });

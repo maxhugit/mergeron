@@ -23,7 +23,10 @@ function fixture(accessMode = 'read_write') {
         },
       }),
     } as unknown as WorkspaceResourcesService,
-    { assign } as unknown as PullRequestTrackerService,
+    {
+      assign,
+      candidates: () => Promise.resolve([{ threadId: 'a', name: 'Agent a' }]),
+    } as unknown as PullRequestTrackerService,
   );
   const remote = vi
     .spyOn(service, 'pullRequest')
@@ -74,4 +77,12 @@ it('rejects read-only, malformed input and unauthorized callers before mutation'
     ),
   ).rejects.toThrow('denied');
   expect(other.assign).not.toHaveBeenCalled();
+});
+
+it('rechecks the available inventory before associating a disappeared conversation', async () => {
+  const { service, assign } = fixture();
+  await expect(
+    service.assignPullRequestAgent('p', 'r', '12', { threadId: 'missing' }),
+  ).rejects.toThrow('PR_AGENT_UNAVAILABLE');
+  expect(assign).not.toHaveBeenCalled();
 });

@@ -117,10 +117,10 @@ export class WorkspaceGitService {
     );
   }
 
-  pullRequestAgents(projectId: string, resourceId: string) {
+  async pullRequestAgents(projectId: string, resourceId: string) {
     this.github(projectId, resourceId);
     if (!this.tracker) throw new ConflictException('PR_TRACKER_UNAVAILABLE');
-    return { agents: this.tracker.candidates(projectId) };
+    return { agents: await this.tracker.candidates(projectId) };
   }
 
   async assignPullRequestAgent(
@@ -147,6 +147,9 @@ export class WorkspaceGitService {
     const repo = this.github(projectId, resourceId);
     if (!repo || !this.tracker)
       throw new ConflictException('PR_TRACKER_UNAVAILABLE');
+    const candidates = await this.tracker.candidates(projectId);
+    if (!candidates.some((agent) => agent.threadId === body.threadId))
+      throw new ConflictException('PR_AGENT_UNAVAILABLE');
     return this.tracker.assign(
       projectId,
       `${repo.owner}/${repo.repo}`,
