@@ -10,7 +10,9 @@ avant sa fusion et de publier des composants identifiables par leur révision.
 
 - `workflows/quality.yml` exécute les contrôles de code, tests et constructions isolées.
   Le backend, le frontend et la suite Chromium/WebKit sont validés en parallèle ;
-  tous les fichiers de tests navigateur sont découverts automatiquement.
+  tous les fichiers de tests navigateur sont découverts automatiquement et répartis
+  en deux shards, chacun conservant Chromium et WebKit. Leur couverture exacte
+  est vérifiée avec le séquenceur Vitest installé.
 - `workflows/docker-publish.yml` construit, vérifie et promeut les images de
   l’application, du Manager et du navigateur, ainsi que les publications associées.
 - `workflows/cleanup-ghcr.yml` applique la politique de conservation du registre.

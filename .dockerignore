@@ -18,3 +18,11 @@ coverage
 *.log
 *.pid
 *.seed
+
+# Local/CI evidence is never an image input. Keep web/public and all sources.
+artifacts
+web/dist
+web/.vitest-screenshots
+web/test-results
+web/playwright-report
+.build-cache

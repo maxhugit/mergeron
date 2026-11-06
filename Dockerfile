@@ -30,8 +30,8 @@ RUN pnpm build
 # ── Stage 2: Backend build ───────────────────────────────────────────
 FROM node:22-bookworm-slim AS backend-builder
 ARG PNPM_VERSION
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=backend-builder-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=backend-builder-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++
 RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
@@ -54,8 +54,8 @@ RUN pnpm build
 # Build dependencies and the server used for tests never enter the final image.
 FROM debian:trixie-slim AS openssh-builder
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=openssh-builder-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=openssh-builder-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl build-essential dpkg-dev debhelper dh-exec dh-runit \
     dh-sequence-installsysusers libaudit-dev libcrypt-dev libedit-dev libfido2-dev \
@@ -68,8 +68,8 @@ RUN bash /tmp/build-openssh-backport.sh
 # Backport maintained 2.9.14 security fixes without replacing LibreOffice's ABI.
 FROM debian:trixie-slim AS libxml2-builder
 ENV DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=libxml2-builder-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=libxml2-builder-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl build-essential dpkg-dev debhelper quilt autoconf automake \
     libtool liblzma-dev pkg-config rename zlib1g-dev python3
@@ -96,8 +96,8 @@ ENV PATH="/opt/office-venv/bin:/home/codex/.local/bin:/home/codex/.local/share/m
 RUN mkdir -p /home/codex
 
 # System dependencies
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=runtime-base-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=runtime-base-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -126,8 +126,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Replace the actual Debian libxml2 package; retain the established SONAME and
 # exported-symbol contract. Development headers remain in the Office builder.
 COPY --from=libxml2-builder /out/ /tmp/libxml2-backport/
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=runtime-base-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=runtime-base-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update \
  && apt-get install -y --no-install-recommends /tmp/libxml2-backport/libxml2_*_amd64.deb \
  && mkdir -p /usr/local/share/libxml2-backport \
@@ -137,8 +137,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Install real rebuilt Debian packages, replacing the old client rather than
 # shadowing it in PATH. GSSAPI preserves the capabilities of Trixie's client.
 COPY --from=openssh-builder /out/ /tmp/openssh-backport/
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=runtime-base-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=runtime-base-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update \
  && apt-get install -y --no-install-recommends systemd-standalone-sysusers /tmp/openssh-backport/*.deb \
  && mkdir -p /usr/local/share/openssh-backport \
@@ -171,8 +171,8 @@ RUN curl --fail --silent --show-error --location \
 # builder prevents every development header from becoming a runtime layer.
 FROM runtime-base AS python-builder-base
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=python-builder-base-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=python-builder-base-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
@@ -192,8 +192,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 FROM python-builder-base AS office-builder
 
 COPY --from=libxml2-builder /out/libxml2-dev_*_amd64.deb /tmp/libxml2-dev.deb
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=office-builder-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=office-builder-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update \
  && apt-get install -y --no-install-recommends python3-dev libxslt1-dev /tmp/libxml2-dev.deb \
  && rm /tmp/libxml2-dev.deb
@@ -300,8 +300,8 @@ CMD ["/bin/bash", "-euc", "git init --bare /tmp/remote.git && exec /usr/sbin/ssh
 FROM runtime-base AS visual-runtime-base
 # Debian 13 packages from Playwright's debian13-x64 registry. Install as root at
 # build time, never in the running agent container.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=visual-runtime-base-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=visual-runtime-base-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     fonts-noto-color-emoji fonts-freefont-ttf \
     libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
@@ -315,32 +315,12 @@ FROM visual-runtime-base AS runtime
 # Refresh this package even when the expensive runtime/toolchain base is cached.
 # Debian fixes CVE-2026-99083 in 6.12.115-2; retain all scan findings and gates.
 ARG LINUX_LIBC_DEV_MIN_VERSION=6.12.115-2
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=runtime-apt-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=runtime-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update \
  && apt-get install -y --no-install-recommends --only-upgrade linux-libc-dev \
  && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' linux-libc-dev)" ge "${LINUX_LIBC_DEV_MIN_VERSION}"
 
-ARG MERGERON_VERSION=unknown
-ARG MERGERON_REVISION=unknown
-ARG MERGERON_BUILD_DATE=unknown
-ARG MERGERON_RELEASE_CHANNEL=edge
-
-LABEL org.opencontainers.image.title="Mergeron" \
-      io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
-      io.mergeron.cli-policy="1" \
-      io.mergeron.agent-visual-testing="1" \
-      org.opencontainers.image.description="Plateforme collaborative auto-hébergée de gestion de projets et d'agents" \
-      org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \
-      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      org.opencontainers.image.version="${MERGERON_VERSION}" \
-      org.opencontainers.image.revision="${MERGERON_REVISION}" \
-      org.opencontainers.image.created="${MERGERON_BUILD_DATE}"
-
-ENV MERGERON_VERSION="${MERGERON_VERSION}" \
-    MERGERON_REVISION="${MERGERON_REVISION}" \
-    MERGERON_BUILD_DATE="${MERGERON_BUILD_DATE}" \
-    MERGERON_RELEASE_CHANNEL="${MERGERON_RELEASE_CHANNEL}"
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/mergeron-playwright
 
 # runtime-base sets HOME before installing system packages. Some installers may
@@ -355,14 +335,6 @@ RUN groupadd --gid 11002 codex \
  && ! find /home/codex -mindepth 1 -maxdepth 1 -print -quit | grep -q .
 
 WORKDIR /app
-
-RUN jq -n \
-      --arg version "${MERGERON_VERSION}" \
-      --arg revision "${MERGERON_REVISION}" \
-      --arg builtAt "${MERGERON_BUILD_DATE}" \
-      --arg channel "${MERGERON_RELEASE_CHANNEL}" \
-      '{version: $version, revision: $revision, builtAt: $builtAt, channel: $channel}' \
-      > /app/build-info.json
 
 # The toolchain exists only once in the final image and is restored into a
 # mounted /home/codex on first start.
@@ -461,6 +433,36 @@ exec "$@"
 ENTRYPOINT_EOF
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Commit identity is deliberately last: changing a revision/date must not
+# invalidate user setup, toolchain/Office copies, permissions or the entrypoint.
+ARG MERGERON_VERSION=unknown
+ARG MERGERON_REVISION=unknown
+ARG MERGERON_BUILD_DATE=unknown
+ARG MERGERON_RELEASE_CHANNEL=edge
+
+LABEL org.opencontainers.image.title="Mergeron" \
+      io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
+      io.mergeron.cli-policy="1" \
+      io.mergeron.agent-visual-testing="1" \
+      org.opencontainers.image.description="Plateforme collaborative auto-hébergée de gestion de projets et d'agents" \
+      org.opencontainers.image.source="https://github.com/maxhugit/mergeron" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
+      org.opencontainers.image.version="${MERGERON_VERSION}" \
+      org.opencontainers.image.revision="${MERGERON_REVISION}" \
+      org.opencontainers.image.created="${MERGERON_BUILD_DATE}"
+
+ENV MERGERON_VERSION="${MERGERON_VERSION}" \
+    MERGERON_REVISION="${MERGERON_REVISION}" \
+    MERGERON_BUILD_DATE="${MERGERON_BUILD_DATE}" \
+    MERGERON_RELEASE_CHANNEL="${MERGERON_RELEASE_CHANNEL}"
+RUN jq -n \
+      --arg version "${MERGERON_VERSION}" \
+      --arg revision "${MERGERON_REVISION}" \
+      --arg builtAt "${MERGERON_BUILD_DATE}" \
+      --arg channel "${MERGERON_RELEASE_CHANNEL}" \
+      '{version: $version, revision: $revision, builtAt: $builtAt, channel: $channel}' \
+      > /app/build-info.json
 
 USER 11002:11002
 
