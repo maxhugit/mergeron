@@ -29,6 +29,7 @@
     "integrations",
     "transcription",
     "localAgents",
-    "integrity"
+    "integrity",
+    "runtimeSettings"
   ]
 }

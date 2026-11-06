@@ -1,0 +1,8 @@
+{
+  "connectionsPerformance": "Connexions et performances",
+  "idleConversationsLabel": "Conversations inactives conservées en connexion",
+  "idleConversationsHelp": "Limite les abonnements du navigateur aux conversations inactives. Les conversations actives ou en attente d’approbation restent connectées.",
+  "applicationCatalogAdvanced": "Applications — paramètres avancés",
+  "applicationCatalogSourceLabel": "Source du catalogue d’applications",
+  "applicationCatalogSourceHelp": "Native utilise le catalogue standard. Byparr utilise un instantané quotidien côté serveur comme solution de compatibilité."
+}

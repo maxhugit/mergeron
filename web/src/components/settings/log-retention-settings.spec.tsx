@@ -4,10 +4,12 @@ import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import frCommon from '@/locales/fr/common.json';
 import frLogs from '@/locales/fr/logs.json';
+import frRuntimeSettings from '@/locales/fr/runtimeSettings.json';
 import { LogRetentionDialog } from '@/components/logs/log-retention-dialog';
 import type { LogStorage } from '@/lib/logs-api';
 import { catalogFixture, json } from './catalog/catalog.testing';
 import { GeneralSettings } from './general-settings';
+import { RuntimePlacementSettings } from './runtime-placement-settings';
 
 vi.mock('./server-version-card', () => ({ ServerVersionCard: () => null }));
 const saveLogRetentionRule = vi.hoisted(() => vi.fn());
@@ -63,20 +65,14 @@ it('excludes retention from the server form and its batched saves without changi
       ],
     }),
   );
-  fixture.render(<GeneralSettings />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Socket' }));
+  fixture.render(<RuntimePlacementSettings kind="connections" />);
   const input = await screen.findByRole('spinbutton');
   expect(screen.queryByText('Log Retention')).not.toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   expect(fixture.server.writes).toHaveLength(0);
   fireEvent.change(input, { target: { value: '20' } });
-  fireEvent.click(screen.getByRole('tab', { name: 'Update history' }));
-  expect(input).not.toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Socket' }));
   expect(input).toHaveValue(20);
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Save runtime settings' }),
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(fixture.server.writes).toHaveLength(1));
   expect(fixture.server.writes[0].body).toEqual({
     updates: [{ key: 'general.maxIdleSubscriptions', value: 20 }],
@@ -128,3 +124,127 @@ it('uses French labels and saves only the selected current rule from the Logs di
   );
   expect(close).not.toHaveBeenCalled();
 });
+
+it('removes the Socket tab and all generic runtime editors from Server', () => {
+  fixture.render(<GeneralSettings />);
+  expect(screen.queryByRole('tab', { name: 'Socket' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+});
+
+it('saves only the catalog source from the applications advanced settings', async () => {
+  fixture.server.overrides.set('GET /api/settings', () =>
+    json({
+      settings: [
+        {
+          key: 'general.applicationCatalogSource',
+          category: 'general',
+          type: 'string',
+          value: 'native',
+          defaultValue: 'native',
+          source: 'default',
+          description: 'catalog',
+          constraints: { enum: ['native', 'byparr'] },
+        },
+        {
+          key: 'general.agentInstructions',
+          category: 'general',
+          type: 'string',
+          value: 'private instructions',
+          defaultValue: '',
+          source: 'db',
+          description: 'instructions',
+          constraints: {},
+        },
+      ],
+    }),
+  );
+  fixture.render(<RuntimePlacementSettings kind="applications" />);
+  fireEvent.change(await screen.findByRole('combobox'), {
+    target: { value: 'byparr' },
+  });
+  expect(
+    screen.queryByDisplayValue('private instructions'),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(fixture.server.writes).toHaveLength(1));
+  expect(fixture.server.writes[0].body).toEqual({
+    updates: [{ key: 'general.applicationCatalogSource', value: 'byparr' }],
+  });
+});
+
+it.each(['connections', 'applications'] as const)(
+  'loads dedicated French runtime translations for %s without changing the common actions',
+  async (kind) => {
+    const localized = createInstance();
+    await localized.init({
+      lng: 'fr',
+      fallbackLng: false,
+      defaultNS: 'common',
+      ns: ['runtimeSettings', 'common'],
+      resources: {
+        fr: { common: frCommon, runtimeSettings: frRuntimeSettings },
+      },
+    });
+    fixture.server.overrides.set('GET /api/settings', () =>
+      json({
+        settings: [
+          {
+            key: 'general.maxIdleSubscriptions',
+            category: 'general',
+            type: 'number',
+            value: 30,
+            defaultValue: 30,
+            source: 'db',
+            description: 'subscriptions',
+            constraints: {},
+          },
+          {
+            key: 'general.applicationCatalogSource',
+            category: 'general',
+            type: 'string',
+            value: 'native',
+            defaultValue: 'native',
+            source: 'db',
+            description: 'catalog',
+            constraints: { enum: ['native', 'byparr'] },
+          },
+        ],
+      }),
+    );
+    fixture.render(
+      <I18nextProvider i18n={localized}>
+        <RuntimePlacementSettings kind={kind} />
+      </I18nextProvider>,
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name:
+          kind === 'connections'
+            ? frRuntimeSettings.connectionsPerformance
+            : frRuntimeSettings.applicationCatalogAdvanced,
+      }),
+    ).toBeInTheDocument();
+    if (kind === 'connections') {
+      expect(
+        await screen.findByRole('heading', {
+          name: frRuntimeSettings.idleConversationsLabel,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(frRuntimeSettings.idleConversationsHelp),
+      ).toBeInTheDocument();
+    } else {
+      expect(
+        await screen.findByRole('combobox', {
+          name: frRuntimeSettings.applicationCatalogSourceLabel,
+        }),
+      ).toHaveValue('native');
+      expect(
+        screen.getByText(frRuntimeSettings.applicationCatalogSourceHelp),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Réinitialiser' }),
+      ).toBeInTheDocument();
+    }
+  },
+);

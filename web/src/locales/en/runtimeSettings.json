@@ -1,0 +1,8 @@
+{
+  "connectionsPerformance": "Connections and performance",
+  "idleConversationsLabel": "Inactive conversations kept connected",
+  "idleConversationsHelp": "Limits inactive conversation subscriptions kept by the browser. Active conversations and those awaiting approval remain connected.",
+  "applicationCatalogAdvanced": "Applications — advanced settings",
+  "applicationCatalogSourceLabel": "Application catalog source",
+  "applicationCatalogSourceHelp": "Native uses the standard catalog. Byparr uses a daily server snapshot as a compatibility workaround."
+}
