@@ -52,6 +52,12 @@ export class ManagerReplacement {
     );
     if (!state || !socket || !run)
       throw new Error('updateManagerMountsInvalid');
+    const source = await this.docker.inspectImage(inspect.Image);
+    if (
+      source.Id !== inspect.Image ||
+      source.Config?.Labels?.['io.mergeron.continuous-updates'] !== '1'
+    )
+      throw new Error('updateManagerUpgradeRequired');
     const original = specification(inspect, inspect.Image);
     const identity = {
       id: inspect.Id,
@@ -114,7 +120,7 @@ export class ManagerReplacement {
           Memory: 128 * 1024 * 1024,
           RestartPolicy: { Name: 'on-failure', MaximumRetryCount: 3 },
           Binds: [
-            `${plan.dockerSource}:/var/run/docker.sock`,
+            `${plan.dockerSource}:/var/run/docker.sock:ro`,
             `${plan.stateSource}:/state`,
             `${plan.runSource}:/manager-run:ro`,
           ],

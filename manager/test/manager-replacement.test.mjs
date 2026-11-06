@@ -64,8 +64,11 @@ class Docker {
   async pullImage(image) {
     this.calls.push(['pull', image]);
   }
-  async inspectImage() {
-    return { Id: nextImage };
+  async inspectImage(reference) {
+    return {
+      Id: reference === oldImage ? oldImage : nextImage,
+      Config: { Labels: { 'io.mergeron.continuous-updates': '1' } },
+    };
   }
   async createContainer(name, spec) {
     const id = 'new-' + this.values.size;

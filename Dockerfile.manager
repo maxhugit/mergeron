@@ -60,7 +60,8 @@ ARG MERGERON_REVISION=unknown
 ARG MERGERON_BUILD_DATE=unknown
 ARG MERGERON_RELEASE_CHANNEL=edge
 
-LABEL org.opencontainers.image.title="Mergeron Manager" \
+LABEL io.mergeron.continuous-updates="1" \
+      org.opencontainers.image.title="Mergeron Manager" \
       io.mergeron.channel="${MERGERON_RELEASE_CHANNEL}" \
       io.mergeron.codex-runtime="0.164.0-mergeron.1" \
       org.opencontainers.image.description="Gestionnaire local de la pile Mergeron" \
