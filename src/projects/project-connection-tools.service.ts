@@ -30,6 +30,7 @@ import {
   readProjectGitInput,
   publishProjectGitInput,
   prepareProjectGitOperationInput,
+  trackProjectPullRequestInput,
 } from './project-connection-tools.schema';
 
 /** Bound project operations; no credential, arbitrary host, shell or local-path argument. */
@@ -48,6 +49,7 @@ export class ProjectConnectionToolsService {
     threadId: string,
     input: Record<string, unknown>,
     assertActive: () => void,
+    turnId?: string,
   ) {
     const check = () => {
       assertActive();
@@ -67,6 +69,27 @@ export class ProjectConnectionToolsService {
     };
     check();
     const { tool, ...raw } = input;
+    if (tool === 'track_project_pull_request') {
+      if (!turnId)
+        throw new ForbiddenException('PR_AUTHENTICATED_TURN_REQUIRED');
+      const args = trackProjectPullRequestInput.parse(raw);
+      check();
+      const result = await this.git.trackPullRequest(
+        projectId,
+        args.connectionId,
+        args.number,
+        threadId,
+        args.phase,
+        turnId,
+        args.monitorId,
+        check,
+      );
+      return {
+        connectionId: args.connectionId,
+        number: args.number,
+        ...result,
+      };
+    }
     if (tool === 'list_project_connections') {
       const args = listProjectConnectionsInput.parse(raw);
       const inventory = this.locations.list(projectId);

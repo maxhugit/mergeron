@@ -359,5 +359,22 @@
   "explorerSources": "Sources",
   "explorerNoAgentCopy": "Aucune copie locale de source n’est disponible pour cet agent. Sélectionnez une source ci-dessus, puis utilisez « Préparer une copie de travail » dans son menu.",
   "explorerSelectSource": "Sélectionnez une source ci-dessus pour consulter sa copie locale ou le dépôt distant.",
-  "explorerNoSource": "Aucune source n’est connectée à ce projet. Ajoutez une connexion Git dans les paramètres du projet, puis préparez une copie de travail pour cet agent."
+  "explorerNoSource": "Aucune source n’est connectée à ce projet. Ajoutez une connexion Git dans les paramètres du projet, puis préparez une copie de travail pour cet agent.",
+  "gitPrStale": "Dernier contrôle : {{date}} · actualisation échouée",
+  "gitPrCreator": "Agent créateur",
+  "gitPrAssociated": "Agent associé",
+  "gitPrNoAgent": "Agent non identifié",
+  "gitPrPrevious": "Précédentes",
+  "gitPrNext": "Suivantes",
+  "gitPrStatusDraft": "Brouillon",
+  "gitPrStatusChecking": "En vérification",
+  "gitPrStatusError": "En erreur",
+  "gitPrStatusConflict": "Conflit",
+  "gitPrStatusBlocked": "Validation requise",
+  "gitPrStatusReady": "Prête à fusionner",
+  "gitPrStatusUnknown": "État non confirmé",
+  "gitPrAgentIdle": "Inactif",
+  "gitPrAgentWorking": "Travaille sur cette PR",
+  "gitPrAgentWatching": "Surveille les checks",
+  "gitPrAgentAttention": "Attend une intervention"
 }

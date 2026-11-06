@@ -160,6 +160,20 @@ libération ou suppression gardent leurs confirmations et leurs blocages quand
 la copie est utilisée ; aucun travail non publié n’est supprimé implicitement.
 
 Le panneau sépare **Local**, **GitHub** et **Synchronisation**.
+Dans la sidebar droite, **GitHub → PR** suit les PR ouvertes du dépôt sélectionné,
+par groupes de cinq. Chaque ligne distingue le statut GitHub du travail des agents :
+brouillon, vérification en cours, erreur, conflit, validation requise, prête à
+fusionner ou état non confirmé. « Prête à fusionner » exige une observation complète
+du SHA courant et une fusion autorisée par l’état GitHub ; des tests verts seuls
+ne prouvent pas qu’une revue est approuvée. Un échec d’actualisation retire le statut
+confirmé et conserve l’heure de la dernière observation.
+Le nom de l’agent créateur reste cliquable pendant les vérifications, même inactif.
+Les autres agents explicitement associés sont également accessibles. Une branche
+commune ou un agent actif ailleurs ne prouvent ni l’auteur ni une prise en charge.
+Le statut de travail est lié à un tour précis ; le statut de surveillance exige un
+contrôle programmé actif. Il n’existe aucun bouton de fusion automatique ajouté
+par ce suivi. Les confirmations et les protections de fusion existantes restent
+applicables.
 Dans l’onglet **Modifications**, deux zones partagent la hauteur disponible :
 les modifications à préparer en haut et les fichiers prévus dans le commit en
 bas. Chacune dispose de son propre défilement ; les titres, le bouton

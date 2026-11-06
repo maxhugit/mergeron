@@ -125,6 +125,13 @@ const definitions = {
     handler: 'project',
     policy: gitRead,
   },
+  track_project_pull_request: {
+    name: 'project_git_pr_manage',
+    title: 'Git — Report this agent’s work on a pull request',
+    titleFr: 'Git — Déclarer le suivi d’une PR par cet agent',
+    handler: 'project',
+    policy: { ...conversationWrite, openWorld: true },
+  },
   prepare_project_git: {
     name: 'project_git_local_manage',
     title: 'Git — Stage, commit, integrate or restore local changes',

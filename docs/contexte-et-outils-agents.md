@@ -308,6 +308,28 @@ réutilisent les accès de la connexion, sans copie locale ni nouveau droit
 d’écriture. Elles consultent les check runs et statuts du **commit de fusion**,
 plutôt que les checks du dernier commit de la branche source.
 
+### Déclarer le suivi d’une PR
+
+`project_git_pr_manage` associe uniquement l’agent appelant à une PR ouverte de sa
+connexion Git configurée. Il accepte `connectionId`, `number`, `phase` et,
+uniquement pour une surveillance, `monitorId`. Projet, agent et tour sont fournis
+par Mergeron, jamais par les arguments.
+
+- `working` : tour authentifié observé, expiration après quinze minutes ; renouveler
+  seulement si le travail porte toujours sur cette PR. Un nouveau tour sans nouvelle
+  déclaration ne réactive pas la prise en charge précédente.
+- `watching` : exige un contrôle programmé actif et non expiré du même agent et du
+  même projet. Une conversation humaine n’interrompt pas ce contrôle. La pause ou
+  la fin du contrôle arrête l’indicateur.
+- `attention` : intervention humaine attendue, affichage borné à quinze minutes.
+- `idle` : fin du travail, ou association sans activité d’une PR créée par terminal.
+
+La création confirmée par l’outil de publication enregistre l’agent créateur. Une
+PR préexistante ou retrouvée après une réponse incertaine ne reçoit pas d’auteur
+supposé. Le suivi ne modifie aucun dépôt, ne programme aucun contrôle et n’autorise
+ni publication ni fusion. Les noms ne sont exposés qu’aux personnes autorisées à
+lire les conversations correspondantes.
+
 Dans les permissions de la conversation, « Tests du projet » permet un choix
 explicite du réseau pour le prochain message, **uniquement en workspace-write**.
 Il conserve les racines d’écriture et la politique d’approbation observées.

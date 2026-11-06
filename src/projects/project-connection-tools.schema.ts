@@ -2,6 +2,12 @@ import { z } from 'zod';
 
 const id = z.string().min(1).max(100);
 const revision = z.string().regex(/^[a-f0-9]{40,64}$/);
+export const trackProjectPullRequestInput = z.strictObject({
+  connectionId: id,
+  number: z.number().int().min(1).max(999999999),
+  phase: z.enum(['idle', 'working', 'watching', 'attention']),
+  monitorId: id.optional(),
+});
 export const listProjectConnectionsInput = z.strictObject({
   query: z.string().max(200).optional(),
   offset: z.number().int().min(0).optional(),
@@ -179,6 +185,7 @@ export const prepareProjectGitOperationInput = z.discriminatedUnion(
   ],
 );
 export const projectConnectionTools = [
+  'track_project_pull_request',
   'list_project_connections',
   'create_project_git_copy',
   'read_project_git',

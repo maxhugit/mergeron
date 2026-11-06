@@ -99,6 +99,11 @@ export class ThreadExecutionInventoryService {
     return [...this.threads.keys()].filter((id) => this.has(id));
   }
 
+  /** Correlated turns only: a goal or an unrelated active thread is not a PR claim. */
+  activeTurnIds(threadId: string): string[] {
+    return [...(this.threads.get(threadId)?.turns ?? [])];
+  }
+
   /** Rechecks a queued recovery target after intervening completion or deletion. */
   has(threadId: string): boolean {
     const state = this.threads.get(threadId);

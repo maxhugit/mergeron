@@ -43,6 +43,7 @@ describe('project connection agent tools', () => {
     fingerprint: 'b'.repeat(64),
   };
   const git = {
+    trackPullRequest: vi.fn(),
     snapshot: vi.fn(),
     remoteBranches: vi.fn(),
     remoteFiles: vi.fn(),
@@ -90,6 +91,45 @@ describe('project connection agent tools', () => {
     input: Record<string, unknown>,
     active: () => void = () => {},
   ) => as('admin', () => tools.execute('p', 'agent', input, active));
+
+  it('binds PR tracking to the authenticated caller and turn, never an input identity', async () => {
+    git.trackPullRequest.mockResolvedValue({
+      phase: 'working',
+      expiresAt: 123,
+      renewalRequired: true,
+    });
+    const input = {
+      tool: 'track_project_pull_request',
+      connectionId,
+      number: 12,
+      phase: 'working',
+    };
+    await expect(call(input)).rejects.toThrow('PR_AUTHENTICATED_TURN_REQUIRED');
+    await as('admin', () =>
+      tools.execute('p', 'agent', input, () => {}, 'trusted-turn'),
+    );
+    expect(git.trackPullRequest).toHaveBeenCalledWith(
+      'p',
+      connectionId,
+      12,
+      'agent',
+      'working',
+      'trusted-turn',
+      undefined,
+      expect.any(Function),
+    );
+    await expect(
+      as('admin', () =>
+        tools.execute(
+          'p',
+          'agent',
+          { ...input, threadId: 'other' },
+          () => {},
+          'trusted-turn',
+        ),
+      ),
+    ).rejects.toThrow();
+  });
   const publish = (extra: Record<string, unknown> = {}) => ({
     tool: 'publish_project_git',
     operation: 'push',

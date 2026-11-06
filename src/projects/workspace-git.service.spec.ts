@@ -1552,6 +1552,7 @@ describe('confirmed actions', () => {
   it.each([false, true])(
     'creates a PR for the exact published head using the fixed GitHub API (native caller: %s)',
     async (native) => {
+      const creator = vi.spyOn(service, 'recordPullRequestCreator');
       const input = await prInput();
       if (native) {
         database.db
@@ -1596,6 +1597,15 @@ describe('confirmed actions', () => {
         url: 'https://github.com/example/demo/pull/12',
         existing: false,
       });
+      if (native)
+        expect(creator).toHaveBeenCalledWith(
+          'p',
+          expect.any(String),
+          12,
+          'agent',
+          'https://github.com/example/demo/pull/12',
+        );
+      else expect(creator).not.toHaveBeenCalled();
       const posts = fetch.mock.calls.filter(
         ([, options]) =>
           (options as RequestInit | undefined)?.method === 'POST',

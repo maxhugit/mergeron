@@ -1,4 +1,5 @@
 import { ProjectIntegrityService } from './project-integrity.service';
+import { PullRequestTrackerService } from './pull-request-tracker.service';
 import { ProjectIntegrityController } from './project-integrity.controller';
 import { DocumentOrganizationController } from '../deliverables/document-organization.controller';
 import { DocumentLabelsAiAdapter } from './document-labels-ai-adapter.service';
@@ -55,6 +56,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     WorkspaceResourcesController,
   ],
   providers: [
+    PullRequestTrackerService,
     ProjectIntegrityService,
     DocumentLabelsAiAdapter,
     ProjectConnectionToolsService,
