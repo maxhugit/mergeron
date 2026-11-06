@@ -1,3 +1,4 @@
+import { isSsoProxySource } from './sso-proxy-source';
 /**
  * Global guard that validates API and WebSocket requests with JWT or API key.
  * Static assets are served outside controllers; API routes and gateway events are protected.
@@ -44,7 +45,7 @@ export class ApiKeyGuard implements CanActivate {
       const socket = context.switchToWs().getClient<Socket>();
       if (
         process.env.MERGERON_PREVIEWS_ENABLED === 'true' &&
-        socket.handshake.headers['x-webui-auth-source'] === 'authentik'
+        isSsoProxySource(socket.handshake.headers['x-webui-auth-source'])
       )
         this.requireSameOrigin(
           socket.handshake.headers.origin,
@@ -89,7 +90,7 @@ export class ApiKeyGuard implements CanActivate {
       .getRequest<FastifyRequest & IdentityRequest>();
     if (
       process.env.MERGERON_PREVIEWS_ENABLED === 'true' &&
-      request.headers['x-webui-auth-source'] === 'authentik'
+      isSsoProxySource(request.headers['x-webui-auth-source'])
     )
       this.requireSameOriginForUnsafeCookieRequest(request);
     const personId = this.localAuth?.authenticateCookie(request.headers.cookie);

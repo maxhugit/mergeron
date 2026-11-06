@@ -7,7 +7,7 @@ import { oidcAuthFlows } from '../database/schema';
 import { AuthConfigService } from './auth-config.service';
 import type { IdentityService } from './identity.service';
 import type { LocalAuthService } from './local-auth.service';
-import { OidcAuthService } from './oidc-auth.service';
+import { OidcAuthService, silentReturnPath } from './oidc-auth.service';
 
 const oidcMocks = vi.hoisted(() => ({
   claims: vi.fn(() => ({
@@ -16,11 +16,12 @@ const oidcMocks = vi.hoisted(() => ({
     email_verified: true,
   })),
   discovery: vi.fn(),
+  randomState: vi.fn(() => 'state-value'),
   authorizationCodeGrant: vi.fn(),
 }));
 
 vi.mock('openid-client', () => ({
-  randomState: () => 'state-value',
+  randomState: oidcMocks.randomState,
   randomPKCECodeVerifier: () => 'code-verifier',
   randomNonce: () => 'nonce-value',
   calculatePKCECodeChallenge: vi.fn(() => Promise.resolve('code-challenge')),
@@ -104,6 +105,56 @@ describe('OidcAuthService', () => {
   });
   afterAll(() => database.sqlite.close());
 
+  it('requests standard silent authentication without weakening PKCE/state/nonce', async () => {
+    const start = await service.start(
+      `${silentReturnPath}?request=${'a'.repeat(32)}`,
+      true,
+      true,
+    );
+    const params = new URL(start.authorizationUrl).searchParams;
+    expect(params.get('prompt')).toBe('none');
+    expect(params.get('state')).toBe('state-value');
+    expect(params.get('nonce')).toBe('nonce-value');
+    expect(params.get('code_challenge_method')).toBe('S256');
+  });
+
+  it.each([
+    'login_required',
+    'consent_required',
+    'interaction_required',
+    'account_selection_required',
+  ])(
+    'returns a bounded interactive outcome for %s only after browser-state validation',
+    async (error) => {
+      const returnTo = `${silentReturnPath}?request=${'a'.repeat(32)}`;
+      const start = await service.start(returnTo, true, true);
+      await expect(
+        service.callback({ error, state: 'state-value' }, 'wrong-cookie'),
+      ).rejects.toThrow('Invalid or missing OIDC state');
+      expect(database.db.select().from(oidcAuthFlows).all()).toHaveLength(1);
+      await expect(
+        service.callback({ error, state: 'state-value' }, start.cookie),
+      ).rejects.toMatchObject({ returnTo, interactive: true });
+      expect(database.db.select().from(oidcAuthFlows).all()).toHaveLength(0);
+      expect(sessions.createSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not misclassify provider failures as a need to authenticate', async () => {
+    const start = await service.start(
+      `${silentReturnPath}?request=${'b'.repeat(32)}`,
+      true,
+      true,
+    );
+    await expect(
+      service.callback(
+        { error: 'temporarily_unavailable', state: 'state-value' },
+        start.cookie,
+      ),
+    ).rejects.toMatchObject({ interactive: false });
+    expect(sessions.createSession).not.toHaveBeenCalled();
+  });
+
   it('uses discovery, PKCE, nonce and a browser-bound single-use state', async () => {
     await service.validateConfiguration(configuration.get().oidc);
     const start = await service.start('/projects/example', true);
@@ -134,6 +185,37 @@ describe('OidcAuthService', () => {
         start.cookie,
       ),
     ).rejects.toThrow('OIDC authentication request has expired');
+  });
+
+  it('keeps simultaneous tab flows bound to distinct cookies and consumes each exactly once', async () => {
+    const first = await service.start(
+      `${silentReturnPath}?request=${'a'.repeat(32)}`,
+      true,
+      true,
+    );
+    oidcMocks.randomState.mockReturnValueOnce('second-tab-state');
+    const second = await service.start(
+      `${silentReturnPath}?request=${'b'.repeat(32)}`,
+      true,
+      true,
+    );
+    expect(first.cookie.split('=')[0]).not.toBe(second.cookie.split('=')[0]);
+    const cookies = [first.cookie, second.cookie]
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    const a = await service.callback(
+      { state: 'state-value', code: 'first-code' },
+      cookies,
+    );
+    const b = await service.callback(
+      { state: 'second-tab-state', code: 'second-code' },
+      cookies,
+    );
+    expect(a.returnTo).not.toBe(b.returnTo);
+    expect(database.db.select().from(oidcAuthFlows).all()).toHaveLength(0);
+    expect(service.clearFlowCookie(true, 'state-value').split('=')[0]).toBe(
+      first.cookie.split('=')[0],
+    );
   });
 
   it('rejects callbacks that are not bound to the initiating browser', async () => {

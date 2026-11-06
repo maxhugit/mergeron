@@ -68,8 +68,14 @@ for (const scenario of [
       server.close();
     });
     await new Promise((resolve) => server.listen(path, resolve));
-    const result = await probeManager({ socketPath: path, deadlineMs: 100 });
-    assert.equal(result.healthy, scenario === 'ok');
+    // A healthy response must meet the production budget, not the shortened
+    // timeout used to make failure scenarios fast. Parallel CI work can delay
+    // a healthy local response beyond 100 ms without violating the real probe.
+    const result = await probeManager({
+      socketPath: path,
+      ...(scenario === 'ok' ? {} : { deadlineMs: 100 }),
+    });
+    assert.equal(result.healthy, scenario === 'ok', result.reason ?? undefined);
     if (scenario === 'stream')
       assert.equal(result.reason, 'managerHealthTimeout');
     if (scenario === 'ok') {

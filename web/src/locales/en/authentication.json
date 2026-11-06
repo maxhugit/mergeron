@@ -21,7 +21,10 @@
       "manualRetry": "Manual verification requested",
       "renewalOpened": "Sign-in window requested",
       "renewalBlocked": "Sign-in window blocked",
-      "renewalHint": "Sign-in hint received; fresh verification required"
+      "renewalHint": "Sign-in hint received; fresh verification required",
+      "silentStarted": "Silent renewal started",
+      "silentInteractive": "SSO interaction required",
+      "silentFailed": "Silent renewal could not complete"
     },
     "reasons": {
       "verification": "Fresh verification required",
@@ -174,7 +177,10 @@
     "inactivePerson": "Your login is not linked to an active person. Contact an administrator.",
     "reference": "Authentication reference",
     "retry": "Retry",
-    "anotherMethod": "Use another authentication method"
+    "anotherMethod": "Use another authentication method",
+    "resumingSession": "Resuming your session…",
+    "silentUnavailable": "Silent session recovery could not complete. The provider, browser or a connection interruption may prevent verification. Retry or open a separate sign-in window; this page is retained.",
+    "recoveryUnavailable": "Automatic session recovery unavailable"
   },
   "errors": {
     "requestFailed": "Authentication request failed",

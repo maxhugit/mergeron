@@ -23,6 +23,19 @@ import { platformCookie, platformCookiePath } from './platform-cookie';
 const FLOW_COOKIE = 'codex_webui_oidc_state';
 const FLOW_LIFETIME_MS = 10 * 60_000;
 
+export class SilentOidcFailure extends Error {
+  constructor(
+    readonly returnTo: string,
+    readonly interactive: boolean,
+  ) {
+    super('Silent SSO did not complete');
+  }
+}
+
+export const silentReturnPath = '/api/auth/session/renew/complete';
+export const isSilentReturn = (value: string) =>
+  new RegExp('^' + silentReturnPath + '\\?request=[a-f0-9]{32}$').test(value);
+
 export interface OidcStart {
   authorizationUrl: string;
   cookie: string;
@@ -61,7 +74,11 @@ export class OidcAuthService {
       );
   }
 
-  async start(returnTo: unknown, secure: boolean): Promise<OidcStart> {
+  async start(
+    returnTo: unknown,
+    secure: boolean,
+    silent = false,
+  ): Promise<OidcStart> {
     const oidc = this.enabledConfiguration();
     const client = await this.client();
     const configuration = await this.discover(oidc);
@@ -86,6 +103,7 @@ export class OidcAuthService {
       redirect_uri: oidc.redirectUri,
       scope: oidc.scopes,
       response_type: 'code',
+      ...(silent ? { prompt: 'none' } : {}),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       state,
@@ -108,10 +126,9 @@ export class OidcAuthService {
   ): Promise<OidcCallback> {
     const oidc = this.enabledConfiguration();
     const state = this.queryString(query.state);
-    const cookieState = this.readCookie(
-      cookieHeader,
-      platformCookie(FLOW_COOKIE),
-    );
+    const cookieState =
+      this.readCookie(cookieHeader, this.flowCookieName(state ?? '')) ??
+      this.readCookie(cookieHeader, platformCookie(FLOW_COOKIE));
     if (!state || !cookieState || !this.equal(state, cookieState))
       throw new BadRequestException('Invalid or missing OIDC state');
     const stateHash = this.digest(state);
@@ -126,6 +143,16 @@ export class OidcAuthService {
       .run();
     if (!flow || flow.expiresAt <= Date.now())
       throw new BadRequestException('OIDC authentication request has expired');
+    if (typeof query.error === 'string' && isSilentReturn(flow.returnTo))
+      throw new SilentOidcFailure(
+        flow.returnTo,
+        [
+          'login_required',
+          'consent_required',
+          'interaction_required',
+          'account_selection_required',
+        ].includes(query.error),
+      );
     const configuration = await this.discover(oidc);
     const client = await this.client();
     const callbackUrl = new URL(oidc.redirectUri);
@@ -145,6 +172,8 @@ export class OidcAuthService {
         idTokenExpected: true,
       });
     } catch {
+      if (isSilentReturn(flow.returnTo))
+        throw new SilentOidcFailure(flow.returnTo, false);
       throw new ForbiddenException('OIDC authentication failed');
     }
     const claims = tokens.claims();
@@ -167,8 +196,8 @@ export class OidcAuthService {
     };
   }
 
-  clearFlowCookie(secure: boolean): string {
-    return this.flowCookie('', secure, 0);
+  clearFlowCookie(secure: boolean, state?: unknown): string {
+    return this.flowCookie('', secure, 0, this.queryString(state) ?? '');
   }
 
   private enabledConfiguration(): AuthConfiguration['oidc'] {
@@ -218,8 +247,20 @@ export class OidcAuthService {
     return import('openid-client');
   }
 
-  private flowCookie(value: string, secure: boolean, maxAge: number): string {
-    return `${platformCookie(FLOW_COOKIE)}=${value}; Path=${platformCookiePath('/api/auth/oidc')}; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure || process.env.MERGERON_PREVIEWS_ENABLED === 'true' ? '; Secure' : ''}`;
+  private flowCookieName(state: string): string {
+    // Parallel tabs must not overwrite each other's browser-bound OAuth state.
+    return platformCookie(
+      state ? `${FLOW_COOKIE}_${this.digest(state).slice(0, 24)}` : FLOW_COOKIE,
+    );
+  }
+
+  private flowCookie(
+    value: string,
+    secure: boolean,
+    maxAge: number,
+    state = value,
+  ): string {
+    return `${this.flowCookieName(state)}=${value}; Path=${platformCookiePath('/api/auth/oidc')}; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure || process.env.MERGERON_PREVIEWS_ENABLED === 'true' ? '; Secure' : ''}`;
   }
 
   private safeReturnTo(value: unknown): string {

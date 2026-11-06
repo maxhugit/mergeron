@@ -18,6 +18,16 @@ import {
 import { platformSessionKey } from '@/lib/platform-session';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+vi.mock('@/base-path', async (original) => {
+  const actual = await original<typeof import('@/base-path')>();
+  return {
+    ...actual,
+    withBasePath: (path: string) =>
+      path.startsWith('/api/auth/session/renew?')
+        ? path.replace('/api/auth/session/renew', '/__silent_renewal/start')
+        : actual.withBasePath(path),
+  };
+});
 import {
   clearSessionDiagnostics,
   exportSessionDiagnostics,
@@ -743,3 +753,78 @@ test('automatically recovers a transient real proxy redirect without navigation,
   view.unmount();
   client.clear();
 });
+
+test.each([390, 1180])(
+  'shows the real recovery dialog while preserving the workspace at %ipx',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    document.cookie = 'silent_renewal_fixture=blocked; Path=/; SameSite=Lax';
+    let expired = false;
+    const network = vi
+      .spyOn(window, 'fetch')
+      .mockImplementation(async (input) => {
+        const path = input instanceof Request ? input.url : String(input);
+        if (path.endsWith('/me') && expired)
+          return { type: 'opaqueredirect', status: 0 } as Response;
+        return new Response(
+          JSON.stringify(
+            path.endsWith('/me')
+              ? {
+                  active: true,
+                  kind: 'person',
+                  personId: 'original',
+                  name: 'Person',
+                  role: 'administrator',
+                }
+              : { maxIdleSubscriptions: 30 },
+          ),
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+      });
+    dispose = installSessionRecovery();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      const input = await screen.findByRole('textbox', {
+        name: 'Unsent message',
+      });
+      fireEvent.change(input, {
+        target: { value: 'Un brouillon à conserver' },
+      });
+      expired = true;
+      await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+      await screen.findByRole('heading', {
+        name: 'Reprise de session en cours…',
+      });
+      expect(screen.getByRole('dialog')).toBeVisible();
+      expect(
+        screen.queryByRole('button', { name: 'Rétablir la connexion' }),
+      ).toBeNull();
+      const calls = network.mock.calls.length;
+      await expect(
+        fetch('/api/projects', { method: 'DELETE' }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(network).toHaveBeenCalledTimes(calls);
+      await page.screenshot({
+        path: `../../.vitest-screenshots/silent-recovery-dialog-${width}.png`,
+      });
+      expired = false;
+      await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+      await waitFor(() => expect(screen.getByRole('textbox')).toBe(input));
+      expect(input).toHaveValue('Un brouillon à conserver');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    } finally {
+      document.cookie = 'silent_renewal_fixture=; Max-Age=0; Path=/';
+      view.unmount();
+      client.clear();
+    }
+  },
+);

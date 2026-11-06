@@ -58,6 +58,65 @@ et PostgreSQL réels. Après déploiement autorisé, une observation prolongée 
 retours de veille, changements d’onglet et interruptions réelles reste nécessaire
 pour conclure sur l’incident intermittent de l’installation.
 
+## Reprise silencieuse indépendante du fournisseur SSO
+
+Lorsqu'un onglet déjà vérifié rencontre une redirection de connexion ou un
+`401`, il affiche **Reprise de session en cours…** et lance au maximum un
+parcours invisible par génération de vérification. Le brouillon reste dans
+l'onglet ; les API protégées et le socket restent suspendus. Un `403`, un
+changement d'identité, un compte inactif ou une panne réseau/serveur ne déclenche
+pas une nouvelle authentification automatique.
+
+Le navigateur charge `/api/auth/session/renew?request=<aléatoire>` dans une iframe
+masquée, sans autorisation de naviguer l'onglet principal ni d'ouvrir une popup.
+Deux intégrations partagent ce contrat :
+
+- **OIDC natif** : découverte standard et Authorization Code + PKCE/state/nonce,
+  avec `prompt=none`. Les réponses `login_required`, `consent_required`,
+  `interaction_required` et `account_selection_required` demandent une connexion
+  interactive ; une erreur du fournisseur reste une indisponibilité.
+- **Proxy SSO externe** : le point d'entrée reste soumis au contrôle du proxy,
+  comme les autres routes applicatives. Si sa session a expiré, celui-ci peut
+  effectuer son parcours de redirection dans l'iframe, puis revenir à la même
+  route. Le backend reconnaît le contrat d'en-têtes `X-Webui-Auth-Source:
+  sso-proxy` et son identifiant vérifié, uniquement derrière l'authentification
+  par la clé serveur de l'ingress. La valeur historique `authentik` reste
+  compatible. L'ingress doit écraser les en-têtes du navigateur et garder son
+  secret côté serveur ; aucune exemption de cette route n'est nécessaire.
+
+Le retour est une page HTML minimale sans identité, jeton ou donnée métier,
+avec `no-store`, une CSP à nonce, `frame-ancestors 'self'` et
+`X-Frame-Options: SAMEORIGIN`. Les pages ordinaires de Mergeron restent
+interdites aux iframes. Le parent valide origine, fenêtre émettrice et identifiant
+aléatoire ; un message ne fait que déclencher une **nouvelle** lecture d'identité,
+en annulant une éventuelle ancienne sonde. Seul le même compte et les mêmes
+droits permettent la reprise. Aucun envoi n'est mis en attente ou rejoué.
+
+L'iframe est limitée à 15 secondes, puis elle et ses écouteurs sont retirés.
+La lecture fraîche d'identité conserve ses propres délais et tentatives bornées.
+Les états OIDC sont liés à des cookies distincts par parcours afin que plusieurs
+onglets puissent se reconnecter sans écraser leurs vérifications respectives. En cas de restriction d'iframe/cookies, de panne,
+ou d'absence de réponse, l'interface signale une reprise non aboutie, sans
+prétendre qu'une nouvelle identification est obligatoire. Le bouton de connexion
+séparée reste disponible après l'essai. Aucun changement de page ni popup visible
+n'est imposé automatiquement. Une interaction explicitement requise par le SSO
+reste nécessaire ; la reprise silencieuse n'est pas garantie par tous les
+fournisseurs, navigateurs ou protocoles.
+
+Ce parcours n'introduit aucun stockage de refresh token ni prolongation des
+durées de session. Il réutilise la session SSO si le fournisseur le permet ;
+il ne contourne pas ses révocations, MFA, consentements ou limites de durée.
+Pour un proxy utilisant SAML ou un autre protocole, sa propre capacité à refaire
+une authentification sans interaction détermine la reprise. Une solution qui
+impose une page interactive ou refuse l'encapsulation conservera le recours manuel.
+
+Les tests unitaires couvrent les messages étrangers, états OIDC à usage unique,
+refus de droits et nettoyage. Les tests Chromium/WebKit font un aller-retour HTTP
+réel vers un fournisseur synthétique sur un autre port de boucle locale et
+utilisent la vraie page minimale avec sa CSP. Ils ne prouvent pas la compatibilité
+avec chaque fournisseur réel : celle de l'installation doit être vérifiée après
+un déploiement autorisé, sans modifier globalement ses protections d'affichage.
+
 ## Vérification ordinaire et renouvellement interactif
 
 Un clic dans un champ de saisie n’est pas un retour à la fenêtre. L’écoute de
@@ -81,8 +140,9 @@ Pendant une vérification ordinaire, le client présente un état non modal
 reste conservé mais masqué, les requêtes protégées et le socket restent bloqués.
 Une réponse fraîche pour la même identité et les mêmes droits est toujours
 nécessaire pour reprendre. Un refus persistant, une panne de connexion et un
-changement d’identité gardent leurs états distincts et bloquants ; la fenêtre de
-connexion ne s’ouvre jamais automatiquement. Les vrais refus `401`/`403` et les
+changement d’identité gardent leurs états distincts et bloquants. Le parcours
+silencieux décrit ci-dessus précède la proposition d'une connexion visible ;
+aucune fenêtre visible ne s'ouvre automatiquement. Les vrais refus `401`/`403` et les
 changements de droits ne sont pas réessayés par le polling de panne serveur.
 
 Les tests unitaires et les scénarios Chromium/WebKit couvrent ces événements,
@@ -135,8 +195,8 @@ Pour un onglet ayant déjà vérifié son identité, une redirection du proxy d�
 au maximum trois nouvelles lectures d'identité, après 500, 1 500 et 3 000 ms.
 La barrière reste fermée et la vue indique la vérification pendant cet essai.
 Seule une réponse fraîche confirmant le même compte, rôle et contexte de test
-de droits permet la reprise. Si le refus persiste, le renouvellement interactif
-reste nécessaire. Les vrais `401`/`403` du backend ne deviennent pas des erreurs
+de droits permet la reprise. Si le refus persiste, le parcours silencieux est tenté avant de proposer le
+renouvellement interactif. Son absence de succès ne prouve pas l'expiration SSO. Les vrais `401`/`403` du backend ne deviennent pas des erreurs
 transitoires. Les requêtes d'identité utilisent explicitement `cache: no-store`.
 Aucune mutation ni aucun message n'est mis en attente ou rejoué.
 

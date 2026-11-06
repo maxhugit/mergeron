@@ -11,6 +11,7 @@ import type { BrowserCommand } from 'vitest/node';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { sessionStackFixtures } from './test/session-stack';
+import { createSilentRenewalFixture } from './test/silent-renewal';
 
 const sessionStack = sessionStackFixtures();
 const sessionStackControl: BrowserCommand<
@@ -178,9 +179,12 @@ export default mergeConfig(
       {
         name: 'test-auth-proxy-redirect',
         configureServer(server) {
+          const silentRenewal = createSilentRenewalFixture();
           server.middlewares.use(sessionStack.middleware);
+          server.middlewares.use(silentRenewal.middleware);
           server.httpServer?.once('close', () => {
             void sessionStack.dispose();
+            void silentRenewal.dispose();
           });
           // A manifest protected like Authentik: only the document sets the
           // session cookie. Missing crossorigin credentials returns login HTML.

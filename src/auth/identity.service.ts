@@ -1,3 +1,4 @@
+import { isSsoProxySource } from './sso-proxy-source';
 import {
   managedContentAccess,
   managedDeliverableReadable,
@@ -302,7 +303,7 @@ export class IdentityService {
 
   /** Call only after bearer authentication. The ingress overwrites every identity header. */
   private resolveTrustedHeaders(headers: IdentityHeaders): PlatformIdentity {
-    if (headers['x-webui-auth-source'] !== 'authentik') {
+    if (!isSsoProxySource(headers['x-webui-auth-source'])) {
       if (
         (headers['x-webui-auth-source'] !== undefined &&
           headers['x-webui-auth-source'] !== 'service') ||
