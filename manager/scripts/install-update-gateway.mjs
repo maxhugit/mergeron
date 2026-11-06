@@ -69,10 +69,29 @@ export function gatewayRouting({ stack, hostname }) {
       routers: {
         [`${stack}-continuous`]: {
           rule: `Host(\`${hostname}\`)`,
-          priority: 100,
+          priority: 150,
           entryPoints: ['websecure'],
           tls: {},
           service: `${stack}-continuous`,
+          middlewares: [`${stack}-continuous-security`],
+        },
+        [`${stack}-monitor`]: {
+          rule: `Host(\`${hostname}\`) && PathPrefix(\`/_mergeron-update\`)`,
+          priority: 300,
+          entryPoints: ['websecure'],
+          tls: {},
+          service: `${stack}-continuous`,
+        },
+      },
+      middlewares: {
+        [`${stack}-continuous-security`]: {
+          headers: {
+            contentTypeNosniff: true,
+            frameDeny: true,
+            referrerPolicy: 'no-referrer',
+            stsSeconds: 31536000,
+            stsIncludeSubdomains: true,
+          },
         },
       },
       services: {

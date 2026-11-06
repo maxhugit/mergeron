@@ -165,6 +165,7 @@ export function createUpdateGateway({
     socket.on('error', () => remote.destroy());
     socket.on('close', () => remote.destroy());
   });
+  server.maxConnections = 256;
   server.requestTimeout = 30000;
   server.headersTimeout = 10000;
   return server;

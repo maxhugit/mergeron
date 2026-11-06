@@ -1,16 +1,30 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 export const monitorDigest = (value) =>
   createHash('sha256').update(value).digest('hex');
 export async function writeMonitorFile(directory, name, value) {
   await mkdir(directory, { recursive: true, mode: 0o755 });
-  const temporary = join(directory, `${name}.${process.pid}.tmp`);
+  const temporary = join(
+    directory,
+    `${name}.${process.pid}.${randomUUID()}.tmp`,
+  );
   await writeFile(temporary, JSON.stringify(value), { mode: 0o644 });
   await rename(temporary, join(directory, name));
 }
+const grantQueues = new Map();
 export async function grantMonitor(directory, now = Date.now()) {
+  const previous = grantQueues.get(directory) ?? Promise.resolve();
+  const task = previous.catch(() => {}).then(() => createGrant(directory, now));
+  grantQueues.set(directory, task);
+  try {
+    return await task;
+  } finally {
+    if (grantQueues.get(directory) === task) grantQueues.delete(directory);
+  }
+}
+async function createGrant(directory, now) {
   const token = randomBytes(32).toString('hex');
   let grants = [];
   try {
@@ -37,13 +51,11 @@ export async function publishMonitor(directory, operation) {
       phase: safeWord(operation.phase),
       status: safeWord(operation.status),
       startedAt: operation.startedAt,
-      events: (operation.events ?? [])
-        .slice(-200)
-        .map((event) => ({
-          at: event.at,
-          phase: safeWord(event.phase),
-          status: safeWord(event.status),
-        })),
+      events: (operation.events ?? []).slice(-200).map((event) => ({
+        at: event.at,
+        phase: safeWord(event.phase),
+        status: safeWord(event.status),
+      })),
     },
   });
 }
