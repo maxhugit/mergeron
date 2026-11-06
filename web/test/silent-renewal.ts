@@ -4,7 +4,6 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import type { FastifyReply } from 'fastify';
 import { sendRenewalPage } from '../../src/auth/session-renewal-page';
 
 export function createSilentRenewalFixture() {
@@ -97,7 +96,7 @@ export function createSilentRenewalFixture() {
           res.end(value);
         },
       };
-      sendRenewalPage(reply as unknown as FastifyReply, request, status);
+      sendRenewalPage(reply, request, status);
     },
   };
 }

@@ -1,5 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import type { FastifyReply } from 'fastify';
+/** Structural response contract keeps the synthetic frontend fixture independent
+ * of backend packages, including during frontend-only TypeScript builds. */
+export interface RenewalPageReply {
+  header(name: string, value: string): RenewalPageReply;
+  type(value: string): RenewalPageReply;
+  send(value: string): unknown;
+}
 
 export function renewalRequest(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-f0-9]{32}$/.test(value))
@@ -9,7 +15,7 @@ export function renewalRequest(value: unknown): string {
 
 /** A hint only: contains no identity or credential and never grants access. */
 export function sendRenewalPage(
-  reply: FastifyReply,
+  reply: RenewalPageReply,
   request: string,
   status: 'complete' | 'interactive' | 'unavailable',
 ): void {
