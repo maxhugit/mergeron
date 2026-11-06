@@ -152,7 +152,7 @@ export async function installGateways(config, docker = new DockerClient()) {
   if (config.proxyDirectory) {
     const path = join(
       resolve(config.proxyDirectory),
-      `${config.stack}-continuous.json`,
+      `${config.stack}-continuous.yml`,
     );
     const text = JSON.stringify(gatewayRouting(config), null, 2) + '\n';
     try {

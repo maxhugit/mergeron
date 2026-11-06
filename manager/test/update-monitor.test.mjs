@@ -183,3 +183,18 @@ test('gateway profile is read-only, unprivileged and has neither Docker nor priv
     gatewaySpecification({ ...config, image: 'attacker:latest' }),
   );
 });
+
+test('serializes concurrent monitoring grants without storing raw secrets', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'monitor-grants-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const grants = await Promise.all(
+    Array.from({ length: 8 }, () => grantMonitor(directory)),
+  );
+  const stored = JSON.parse(
+    await readFile(join(directory, 'access.json'), 'utf8'),
+  );
+  assert.equal(stored.length, 8);
+  assert.equal(new Set(stored.map((item) => item.hash)).size, 8);
+  for (const grant of grants)
+    assert(!JSON.stringify(stored).includes(grant.token));
+});
