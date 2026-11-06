@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, fireEvent, screen } from '@testing-library/react';
 import {
   mockupReference,
@@ -10,6 +11,7 @@ import {
   normalizeThreadItem,
   mergeTurnItem,
 } from '@/lib/thread-item-normalizer';
+import { MockupPanel } from './mockup-panel';
 import { MockupCard } from './mockup-card';
 import { validMockupMessage, mockupSource } from '@/lib/mockup-sandbox';
 const reference = {
@@ -161,4 +163,53 @@ it('rejects login and malformed source responses instead of crashing the workspa
     expect(() => parseMockupDocument(response, reference)).toThrow(
       'Invalid mockup response',
     );
+});
+
+it('reopens the revision pinned in the message after browsing another version', () => {
+  const query = new QueryClient();
+  const second = {
+    ...reference,
+    revision: '44444444-4444-4444-8444-444444444444',
+    number: 2,
+    title: 'Second revision',
+  };
+  const history = [reference, second].map((ref) => ({
+    id: ref.revision,
+    number: ref.number,
+    title: ref.title,
+    authorName: 'Agent',
+    createdAt: 1,
+  }));
+  for (const ref of [reference, second])
+    query.setQueryData(
+      ['mockup', ref.projectId, ref.threadId, ref.id, ref.revision],
+      {
+        reference: ref,
+        html: `<p>Source version ${ref.number}</p>`,
+        currentRevision: second.revision,
+        history,
+      },
+    );
+  const view = (active: boolean) => (
+    <QueryClientProvider client={query}>
+      <MockupPanel reference={reference} active={active} />
+    </QueryClientProvider>
+  );
+  const mounted = render(view(true));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Revision' }), {
+    target: { value: second.revision },
+  });
+  expect(screen.getByRole('combobox', { name: 'Revision' })).toHaveValue(
+    second.revision,
+  );
+  mounted.rerender(view(false));
+  mounted.rerender(view(true));
+  expect(screen.getByRole('combobox', { name: 'Revision' })).toHaveValue(
+    reference.revision,
+  );
+  expect(screen.getByTitle(reference.title).getAttribute('srcdoc')).toContain(
+    'Source version 1',
+  );
+  mounted.unmount();
+  query.clear();
 });

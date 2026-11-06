@@ -12,10 +12,18 @@ import { page, commands } from 'vitest/browser';
 declare module 'vitest/browser' {
   interface BrowserCommands {
     mockupProductionHeaders: (source: string) => Promise<string>;
-    mockupPreview: (action: 'next' | 'confirm' | 'ready') => Promise<string>;
+    mockupPreview: (
+      action: 'next' | 'confirm' | 'ready' | 'presentation' | 'restored',
+    ) => Promise<string>;
   }
 }
 import { mockupSource } from '@/lib/mockup-sandbox';
+import { RememberedMockupFrame } from './remembered-mockup-frame';
+import {
+  readPresentation,
+  presentationKey,
+  writePresentation,
+} from '@/lib/mockup-presentation';
 import { MockupFrame } from './mockup-frame';
 import { MockupPanel } from './mockup-panel';
 import i18n, { i18nReady } from '@/i18n';
@@ -173,4 +181,49 @@ test('keeps the preview interactive under the real production SPA CSP and frame-
   expect(await commands.mockupProductionHeaders(source)).toContain(
     'Clicked with production headers',
   );
+});
+
+test('persists optional bounded presentation JSON and restores it after closing the preview', async () => {
+  const reference = {
+    type: 'mergeron.mockup' as const,
+    projectId: '22222222-2222-4222-8222-222222222222',
+    threadId: 'remembered-thread',
+    id: '11111111-1111-4111-8111-111111111111',
+    revision: '33333333-3333-4333-8333-333333333333',
+    number: 1,
+    title: 'Remembered simulation',
+  };
+  const owner = 'synthetic-presentation-owner';
+  const key = presentationKey(
+    owner,
+    reference.projectId,
+    reference.threadId,
+    reference.id,
+    reference.revision,
+  );
+  const html = `<button id="remember">Remember selection</button><p id="choice" role="status"></p><script>const saved=window.mergeronMockup.getState();document.getElementById('choice').textContent=saved?.tab==='details'?'Details selected':'Initial';document.getElementById('remember').onclick=()=>{window.mergeronMockup.setState({tab:'details'});document.getElementById('choice').textContent='Details selected'}</script>`;
+  const view = () => (
+    <div style={{ height: 400 }}>
+      <RememberedMockupFrame owner={owner} reference={reference} html={html} />
+    </div>
+  );
+  try {
+    const first = render(view());
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(await commands.mockupPreview('presentation')).toContain(
+      'Details selected',
+    );
+    await waitFor(() =>
+      expect(readPresentation(key).state).toEqual({ tab: 'details' }),
+    );
+    first.unmount();
+    render(view());
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(await commands.mockupPreview('restored')).toContain(
+      'Details selected',
+    );
+  } finally {
+    writePresentation(key, null, false);
+  }
 });

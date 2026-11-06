@@ -10,5 +10,8 @@
   "loadError": "Maquette indisponible ou accès refusé.",
   "retry": "Réessayer",
   "loading": "Chargement de la maquette…",
-  "close": "Fermer la maquette"
+  "close": "Fermer la maquette",
+  "remember": "Conserver les choix sur cet appareil",
+  "rememberHint": "Option locale et facultative, pour cette personne et cette révision : JSON de présentation uniquement, sans donnée réelle. Désactiver pour oublier.",
+  "storageError": "Les choix n’ont pas pu être conservés sur cet appareil."
 }

@@ -23,10 +23,24 @@ Aucun environnement de test, conteneur, processus applicatif ou port n’est cr�
    `mockup-<identifiant>.html`. Pour une version suivante du même document, fournir
    sa `revision` de maquette, son `documentId` et son `expectedVersion` observés dans le livrable.
 
-Les annotations visuelles et la conservation d’un état interactif de présentation
-ne font pas partie de cette première livraison. Chaque ouverture ou changement de
-révision remet la simulation à son état initial. Aucun état émis par le JavaScript
-n’est interprété comme une instruction, un consentement ou un appel d’outil.
+Les annotations visuelles restent pour une livraison ultérieure. Sans activation
+explicite de **Conserver les choix sur cet appareil**, une réouverture repart de
+la référence de révision du message et remet la simulation à son état initial.
+
+La conservation facultative se limite à du JSON de présentation : **4 Kio**, six
+niveaux, 256 valeurs, 40 entrées par objet/tableau et chaînes de 256 caractères au
+maximum. Elle est locale au navigateur, séparée par personne, projet,
+conversation, maquette et révision ; au plus **20 vues**, expirant après **30 jours**.
+Désactiver l’option oublie les préférences correspondantes. En cas de refus du
+stockage navigateur, un message local l’indique ; l’aperçu reste utilisable.
+
+La maquette peut lire `window.mergeronMockup.getState()` et proposer un petit objet
+avec `window.mergeronMockup.setState({activeTab: 'overview'})`. L’API reste locale
+même si la conservation est désactivée. N’y placer que des choix fictifs de
+présentation ; jamais de mot de passe, secret ou donnée réelle de formulaire.
+Ces valeurs sont non fiables et ne sont ni du code, ni des instructions, ni un
+consentement. Elles ne sont transmises ni aux outils agents ni à une opération
+serveur, et ne sont pas reprises automatiquement dans une nouvelle révision.
 
 ## Outils MCP
 
@@ -80,9 +94,9 @@ Les styles et scripts autonomes sont autorisés ; les images et polices peuvent
 être intégrées en données dans la limite de taille du document. Aucun fichier,
 jeton, secret ou identifiant de session applicative n’est envoyé à l’iframe.
 
-Le protocole de remontée d’erreur accepte seulement un message de forme fixe,
+Le protocole accepte uniquement une erreur de forme fixe ou le JSON de présentation borné,
 depuis la fenêtre exacte de l’iframe et sa session d’aperçu courante. L’origine
-opaque `null` ne suffit pas. Les erreurs n’entraînent aucune opération serveur.
+opaque `null` ne suffit pas. Aucun de ces messages n’entraîne d’opération serveur.
 Ce pont ne donne accès à aucun outil agent ; les messages supplémentaires, les
 fenêtres tierces et les sessions périmées sont ignorés.
 

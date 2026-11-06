@@ -1,3 +1,4 @@
+import { forgetPresentations } from '@/lib/mockup-presentation';
 /**
  * Left sidebar: global actions (top) + workspace-grouped thread navigation.
  * Rendering is split into sidebar/ sub-components; this file orchestrates
@@ -766,7 +767,8 @@ export function ThreadSidebar() {
         }),
       }),
     onMutate: () => setDeleteProjectError(''),
-    onSuccess: () => {
+    onSuccess: (_result, project) => {
+      forgetPresentations({ projectId: project.id });
       setDeleteProject(null);
       setDeleteProjectError('');
       setDeleteProjectWorkspaceIds(new Set());

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { type MockupReference, readMockup } from '@/lib/mockups';
-import { MockupFrame } from './mockup-frame';
+import { RememberedMockupFrame } from './remembered-mockup-frame';
+import { useMockupOwner } from '@/lib/use-mockup-owner';
+/** Reopen the pinned reference with fresh presentation state; source/history remain cached. */
 export function MockupPanel({
   reference,
   active,
@@ -10,7 +12,16 @@ export function MockupPanel({
   reference: MockupReference;
   active: boolean;
 }) {
+  return active ? (
+    <ActiveMockupPanel
+      key={`${reference.id}:${reference.revision}`}
+      reference={reference}
+    />
+  ) : null;
+}
+function ActiveMockupPanel({ reference }: { reference: MockupReference }) {
   const { t } = useTranslation('mockups');
+  const owner = useMockupOwner();
   const [revision, setRevision] = useState(reference.revision);
   const [mobile, setMobile] = useState(false);
   const [reload, setReload] = useState(0);
@@ -23,7 +34,6 @@ export function MockupPanel({
       revision,
     ],
     queryFn: ({ signal }) => readMockup({ ...reference, revision }, signal),
-    enabled: active,
     staleTime: Infinity,
   });
   return (
@@ -90,13 +100,12 @@ export function MockupPanel({
               minWidth: mobile ? undefined : 960,
             }}
           >
-            {active && (
-              <MockupFrame
-                key={`${revision}:${reload}`}
-                html={query.data.html}
-                title={query.data.reference.title}
-              />
-            )}
+            <RememberedMockupFrame
+              key={`${revision}:${reload}:${owner ?? 'anonymous'}`}
+              reference={query.data.reference}
+              owner={owner}
+              html={query.data.html}
+            />
           </div>
         </div>
       )}

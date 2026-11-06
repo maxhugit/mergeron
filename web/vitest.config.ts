@@ -54,10 +54,9 @@ const mockupProductionHeaders: BrowserCommand<[source: string]> = async (
   }
 };
 
-const mockupPreview: BrowserCommand<['next' | 'confirm' | 'ready']> = async (
-  context,
-  action,
-) => {
+const mockupPreview: BrowserCommand<
+  ['next' | 'confirm' | 'ready' | 'presentation' | 'restored']
+> = async (context, action) => {
   const preview = context.iframe.frameLocator('iframe');
   if (action === 'next')
     await preview.getByRole('button', { name: 'Next', exact: true }).click();
@@ -72,6 +71,15 @@ const mockupPreview: BrowserCommand<['next' | 'confirm' | 'ready']> = async (
   if (action === 'ready')
     await preview
       .getByRole('heading', { name: 'Project dashboard', exact: true })
+      .waitFor({ state: 'visible' });
+  if (action === 'presentation')
+    await preview
+      .getByRole('button', { name: 'Remember selection', exact: true })
+      .press('Enter');
+  if (action === 'presentation' || action === 'restored')
+    await preview
+      .getByRole('status')
+      .filter({ hasText: 'Details selected' })
       .waitFor({ state: 'visible' });
   return preview.locator('body').innerText();
 };

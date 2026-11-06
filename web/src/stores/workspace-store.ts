@@ -1,3 +1,4 @@
+import { forgetPresentations } from '@/lib/mockup-presentation';
 import type { MockupReference } from '@/lib/mockups';
 /** Browser-session view descriptors. Documents and terminal processes have separate owners. */
 import { create } from 'zustand';
@@ -434,6 +435,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }),
   forgetConversations: (threadIds) =>
     set((state) => {
+      forgetPresentations({ threadIds });
       const contexts = { ...state.contexts };
       const fileViews = { ...state.fileViews };
       for (const threadId of threadIds) {

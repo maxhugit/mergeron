@@ -1,24 +1,41 @@
+import type { PresentationState } from '@/lib/mockup-presentation';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { mockupSource, validMockupMessage } from '@/lib/mockup-sandbox';
+import { mockupSource, readMockupMessage } from '@/lib/mockup-sandbox';
 
-export function MockupFrame({ html, title }: { html: string; title: string }) {
+export function MockupFrame({
+  html,
+  title,
+  initialState = null,
+  onPresentation,
+}: {
+  html: string;
+  title: string;
+  initialState?: PresentationState | null;
+  onPresentation?: (state: PresentationState) => void;
+}) {
   const { t } = useTranslation('mockups');
   const frame = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState(false);
   const session = useMemo(() => crypto.randomUUID(), []);
-  const source = useMemo(() => mockupSource(html, session), [html, session]);
+  const source = useMemo(
+    () => mockupSource(html, session, initialState),
+    [html, session, initialState],
+  );
   useLayoutEffect(() => {
     const receive = (event: MessageEvent) => {
-      if (
-        validMockupMessage(event, frame.current?.contentWindow ?? null, session)
-      )
-        setError(true);
+      const message = readMockupMessage(
+        event,
+        frame.current?.contentWindow ?? null,
+        session,
+      );
+      if (message?.kind === 'error') setError(true);
+      if (message?.kind === 'presentation') onPresentation?.(message.state);
     };
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
-  }, [session]);
+  }, [session, onPresentation]);
   return (
     <div className="flex h-full min-h-0 flex-col">
       {error && (
