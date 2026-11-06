@@ -174,8 +174,18 @@ export class PullRequestTrackerService {
         let phase = row.phase;
         if (row.expiresAt <= Date.now() || binding.archivedAt !== null)
           phase = 'idle';
+        const status = this.metadata.getHeldThread(row.threadId)?.status;
         if (
           phase === 'working' &&
+          status?.type === 'active' &&
+          status.activeFlags.some(
+            (flag) =>
+              flag === 'waitingOnApproval' || flag === 'waitingOnUserInput',
+          )
+        )
+          phase = 'attention';
+        if (
+          row.phase === 'working' &&
           (!row.turnId ||
             !this.executions.activeTurnIds(row.threadId).includes(row.turnId))
         )
@@ -192,10 +202,11 @@ export class PullRequestTrackerService {
             !monitor ||
             monitor.threadId !== row.threadId ||
             monitor.projectId !== projectId ||
-            monitor.status !== 'active' ||
+            !['active', 'needs_attention'].includes(monitor.status) ||
             monitor.expiresAt <= Date.now()
           )
             phase = 'idle';
+          else if (monitor.status === 'needs_attention') phase = 'attention';
         }
         return { ...agent(row.threadId), phase, updatedAt: row.updatedAt };
       });

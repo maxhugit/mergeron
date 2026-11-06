@@ -25,6 +25,7 @@ import type {
 let db: TestDatabase;
 let tracker: PullRequestTrackerService;
 let turns: string[];
+let waiting: boolean;
 beforeEach(() => {
   db = createTestDatabase();
   for (const id of ['p', 'other'])
@@ -50,13 +51,20 @@ beforeEach(() => {
       })
       .run();
   turns = ['turn-1'];
+  waiting = false;
   tracker = new PullRequestTrackerService(
     db.db,
     {
       activeTurnIds: () => turns,
     } as unknown as ThreadExecutionInventoryService,
     {
-      getHeldThread: (id: string) => ({ name: 'Agent ' + id }),
+      getHeldThread: (id: string) => ({
+        name: 'Agent ' + id,
+        status: {
+          type: 'active',
+          activeFlags: waiting ? ['waitingOnApproval'] : [],
+        },
+      }),
     } as unknown as ThreadMetadataService,
   );
 });
@@ -107,6 +115,16 @@ it('does not invent a creator when an agent associates a terminal-created PR', (
     agents: [{ threadId: 'a' }],
   });
 });
+it('shows a pending human request only for the correlated active turn', () => {
+  tracker.claim('p', 'o/r', 12, 'a', 'working', 'turn-1');
+  waiting = true;
+  expect(tracker.snapshot('p', 'o/r', 12).agents[0].phase).toBe('attention');
+  waiting = false;
+  expect(tracker.snapshot('p', 'o/r', 12).agents[0].phase).toBe('working');
+  waiting = true;
+  turns = [];
+  expect(tracker.snapshot('p', 'o/r', 12).agents[0].phase).toBe('idle');
+});
 
 it('keeps a real monitor visible across unrelated human turns and stops it when paused', () => {
   db.db
@@ -143,6 +161,10 @@ it('keeps a real monitor visible across unrelated human turns and stops it when 
   expect(() =>
     tracker.claim('p', 'o/r', 12, 'b', 'watching', undefined, 'monitor'),
   ).toThrow('PR_MONITOR_NOT_ACTIVE');
+  db.sqlite
+    .prepare('UPDATE agent_monitors SET status=? WHERE id=?')
+    .run('needs_attention', 'monitor');
+  expect(tracker.snapshot('p', 'o/r', 12).agents[0].phase).toBe('attention');
   db.sqlite
     .prepare('UPDATE agent_monitors SET status=? WHERE id=?')
     .run('paused', 'monitor');
