@@ -708,7 +708,7 @@ describe('provider adapter', () => {
       vi.fn().mockRejectedValue(new Error('private-token')),
     );
     await expect(service.pullRequests('p', resource.id)).rejects.toThrow(
-      'GitHub is unavailable',
+      'GIT_GITHUB_NETWORK',
     );
     await expect(
       service.checks('p', resource.id, '../secrets'),

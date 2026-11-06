@@ -17,6 +17,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { GitHubReadScheduler } from './github-read-scheduler';
 import { requireExecutionAccess } from '../auth/access-context';
 import * as path from 'node:path';
 import { WorkspaceCopiesService } from './workspace-copies.service';
@@ -39,6 +40,7 @@ export interface GitChange {
 /** Inspection of registered copies; the command runner is server-only, never a route. */
 @Injectable()
 export class WorkspaceGitService {
+  private readonly githubReads = new GitHubReadScheduler();
   private readonly prChecks = new Map<
     string,
     {
@@ -658,31 +660,16 @@ export class WorkspaceGitService {
     repo: NonNullable<ReturnType<WorkspaceGitService['github']>>,
     endpoint: string,
     emptyRepository = false,
-    options: { apiVersion?: string; signal?: AbortSignal } = {},
+    options: {
+      apiVersion?: string;
+      signal?: AbortSignal;
+      cacheMs?: number;
+    } = {},
   ): Promise<T> {
-    try {
-      const response = await fetch(
-        `https://api.github.com/repos/${repo.owner}/${repo.repo}/${endpoint}`,
-        {
-          headers: {
-            Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': options.apiVersion ?? '2022-11-28',
-            ...(repo.token ? { Authorization: `Bearer ${repo.token}` } : {}),
-          },
-          redirect: 'error',
-          signal: options.signal
-            ? AbortSignal.any([options.signal, AbortSignal.timeout(10000)])
-            : AbortSignal.timeout(10000),
-        },
-      );
-      if (emptyRepository && response.status === 409) return [] as T;
-      if (!response.ok) throw new Error();
-      return (await response.json()) as T;
-    } catch {
-      throw new ConflictException(
-        'GitHub is unavailable or access is denied. Check the resource credentials and permissions.',
-      );
-    }
+    return this.githubReads.read<T>(repo, endpoint, {
+      ...options,
+      emptyRepository,
+    });
   }
 
   async pullRequestPreparation(
@@ -725,7 +712,9 @@ export class WorkspaceGitService {
         head: { ref: string; sha: string };
         base: { ref: string };
       }>
-    >(repo, 'pulls?state=open&per_page=30&sort=updated&direction=desc');
+    >(repo, 'pulls?state=open&per_page=30&sort=updated&direction=desc', false, {
+      cacheMs: 15_000,
+    });
     return {
       supported: true,
       limited: items.length === 30,

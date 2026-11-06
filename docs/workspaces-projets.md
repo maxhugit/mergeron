@@ -177,6 +177,16 @@ fusionner ou état non confirmé. « Prête à fusionner » exige une observatio
 du SHA courant et une fusion autorisée par l’état GitHub ; des tests verts seuls
 ne prouvent pas qu’une revue est approuvée. Un échec d’actualisation retire le statut
 confirmé et conserve l’heure de la dernière observation.
+Les lectures GitHub sont limitées à deux appels simultanés pour tout le backend.
+Les lectures identiques sont regroupées, et la liste des PR est brièvement mise
+en cache sans conserver les droits ni les noms d’agents d’une autre personne.
+La liste est actualisée chaque minute ; les contrôles en cours sont suivis plus
+souvent que les PR au repos, avec des intervalles décalés. Une vue d’agent masquée
+ne lance pas de rafraîchissement GitHub. Après un échec, les tentatives sont
+espacées et les limites communiquées par GitHub sont respectées.
+La dernière liste chargée reste visible avec un avertissement. Son état est alors
+non confirmé et les actions de fusion sont suspendues. Les erreurs de réseau,
+délai dépassé, quota, jeton refusé et accès refusé ont des messages distincts.
 Le nom de l’agent créateur reste cliquable pendant les vérifications, même inactif.
 Les autres agents explicitement associés sont également accessibles. Une branche
 commune ou un agent actif ailleurs ne prouvent ni l’auteur ni une prise en charge.

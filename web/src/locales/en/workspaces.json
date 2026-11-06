@@ -252,7 +252,7 @@
   "gitUntracked": "New file, not yet tracked. Open it to inspect its content.",
   "gitNoTextDiff": "No text comparison available (binary file, conflict or metadata-only change).",
   "gitOpenFile": "Open file",
-  "gitGithubError": "GitHub unavailable or access denied. Check this resource's token and permissions.",
+  "gitGithubError": "Could not load GitHub information. Try again shortly.",
   "gitProviderUnsupported": "PRs and checks are currently available for github.com. Files and branches work with other Git hosts.",
   "gitNoPr": "No open pull requests.",
   "gitDraft": "Draft",
@@ -392,5 +392,13 @@
   "gitPrAgentsError": "Could not load project agents.",
   "gitPrAgentsEmpty": "No agents available in this project.",
   "gitPrAssigning": "Assigning…",
-  "gitPrAssignError": "Could not assign the agent. Check your permissions and refresh the PR list."
+  "gitPrAssignError": "Could not assign the agent. Check your permissions and refresh the PR list.",
+  "gitGithubTimeout": "GitHub did not respond in time. Automatic refresh has slowed down.",
+  "gitGithubNetwork": "Could not connect to GitHub. Automatic refresh has slowed down.",
+  "gitGithubRateLimit": "GitHub is temporarily limiting requests. Reads are paused.",
+  "gitGithubAuth": "GitHub rejected the configured token. Check its credentials.",
+  "gitGithubAccess": "GitHub resource not found or access not permitted.",
+  "gitGithubUnavailable": "GitHub is temporarily unavailable.",
+  "gitGithubBusy": "GitHub reads are busy. Automatic refresh has slowed down.",
+  "gitPrListStale": "List retained from {{date}}; state unconfirmed and merging suspended."
 }
