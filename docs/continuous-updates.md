@@ -65,8 +65,9 @@ constitue pas un mécanisme de remplacement à chaud garanti du proxy TLS extern
 
 Lorsque le plan global inclut une image Manager immuable, son empreinte est liée
 au fingerprint du plan applicatif. Le Manager vérifie son identité, son réseau
-`none` et ses montages existants, puis lance un auxiliaire indépendant avant la
-transaction. Cet auxiliaire utilise l’image actuellement installée, sans réseau,
+`none` et ses montages existants. L’acceptation est ensuite enregistrée durablement
+et le suivi passe immédiatement en préparation, avant le téléchargement de l’image
+Manager. Un auxiliaire indépendant est lancé avant l’arrêt des composants. Cet auxiliaire utilise l’image actuellement installée, sans réseau,
 avec racine en lecture seule, capacités supprimées et limites de ressources.
 Son accès Docker reste réservé à ce processus de remplacement ; les relais HTTP
 ne le reçoivent jamais.
@@ -123,3 +124,9 @@ fonctionnelle conserve ce contrat : inventaire complet et unique, dépôts admis
 réseaux présents, composants gérés et aucune anomalie. Elle refuse les états
 non gérés, incomplets ou en dérive. Aucun registre n’est créé ou réécrit pour
 faire passer cette vérification.
+
+Le reçu temporaire de l’onglet conserve la disponibilité du suivi indépendant.
+Pendant une vérification d’identité ou une reconnexion de transport, la vue de
+reconnexion continue d’afficher cette page avec son cookie limité au suivi.
+Elle ne rétablit aucun droit applicatif, ne fait pas de requête protégée et ne
+remplace jamais un refus d’accès ou un changement d’identité.

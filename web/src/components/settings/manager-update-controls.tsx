@@ -154,6 +154,7 @@ export function ManagerUpdateControls({
     const startedAt = Date.now();
     saveManagerUpdateReceipt({
       startedAt,
+      independentMonitor: status.capabilities?.independentMonitor === true,
       operationId: action === 'apply' ? null : (operation?.id ?? null),
       excludedOperationId: action === 'apply' ? (operation?.id ?? null) : null,
     });

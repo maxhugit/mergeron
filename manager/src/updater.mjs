@@ -1270,6 +1270,8 @@ export class TransactionalUpdater {
     checkpoint,
     requestedId,
     managerPending = false,
+    managerTarget,
+    managerFingerprint,
   }) {
     if (this.busy) throw new Error('managerOperationInProgress');
     if (
@@ -1305,6 +1307,7 @@ export class TransactionalUpdater {
       this.current = {
         id: requestedId ?? randomUUID(),
         managerPending,
+        ...(managerPending ? { managerTarget, managerFingerprint } : {}),
         stack: this.manifest.stack,
         environment: this.manifest.environment,
         status: 'running',
@@ -1346,6 +1349,12 @@ export class TransactionalUpdater {
 
   async run(plan) {
     try {
+      // Acceptance is durable before any potentially slow Manager download.
+      if (this.current.managerPending) {
+        if (!this.prepareManager)
+          throw new Error('managerPreparationUnavailable');
+        await this.prepareManager(this.current);
+      }
       // Pull every requested image before stopping anything, then pin its immutable ID.
       const imageIds = {};
       const targetImages = {};

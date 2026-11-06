@@ -1946,3 +1946,41 @@ test('rollback refuses a renamed candidate rather than replacing an unrelated re
   assert.equal(updater.current.status, 'succeeded');
   assert.equal(updater.busy, false);
 });
+
+test('durably accepts before slow Manager preparation without stopping application containers', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const plan = await updater.plan(images);
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  updater.prepareManager = async () => {
+    await gate;
+  };
+  const accepted = await updater.begin({
+    images,
+    confirmation: plan.confirmation,
+    expectedFingerprint: plan.fingerprint,
+    managerPending: true,
+    managerTarget: 'pinned-manager',
+    managerFingerprint: 'reviewed',
+    requestedId: 'durable-operation',
+  });
+  try {
+    assert.equal(accepted.operation.id, 'durable-operation');
+    assert.equal(accepted.operation.phase, 'preparing');
+    const durable = JSON.parse(
+      await readFile(join(updater.directory, 'transaction.json'), 'utf8'),
+    );
+    assert.equal(durable.managerTarget, 'pinned-manager');
+    assert.equal(durable.status, 'running');
+    assert.equal(
+      docker.calls.some((call) => call[0] === 'stop'),
+      false,
+    );
+  } finally {
+    release();
+    await updater.task;
+  }
+  assert.equal(updater.current.status, 'succeeded');
+});
