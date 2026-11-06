@@ -6,8 +6,20 @@ export interface IntegrityIssue {
   path: string;
   entityId?: string;
   severity: 'error' | 'warning';
-  action: 'create-directory' | 'realign-agent' | 'realign-override' | null;
+  action:
+    | 'create-directory'
+    | 'realign-agent'
+    | 'realign-override'
+    | 'select-project-folder'
+    | null;
   expectedPath?: string;
+  reference?: {
+    contextType: 'agent' | 'task' | 'deliverable' | 'simple_chat';
+    contextId: string;
+    label: string;
+    resourceId: string;
+    relativePath: string;
+  };
 }
 export interface IntegrityReport {
   projectId: string;

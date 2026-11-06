@@ -152,3 +152,47 @@ it('never presents a failed inspection as healthy', async () => {
     ),
   ).toBeNull();
 });
+
+it('identifies the affected task and confirms its new reference from the diagnostic', async () => {
+  report.issues = [
+    {
+      id: 'ref',
+      kind: 'active-folder-registration-missing',
+      path: report.root,
+      severity: 'warning',
+      action: 'select-project-folder',
+      expectedPath: report.root + '/dossiers',
+      reference: {
+        contextType: 'task',
+        contextId: 'task-1',
+        label: 'Préparer la réunion',
+        resourceId: 'removed',
+        relativePath: '',
+      },
+    },
+  ];
+  show();
+  await screen.findByRole('option', { name: 'Project' });
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'p' } });
+  await screen.findByText('Tâche : Préparer la réunion');
+  expect(screen.getByText('Connexion absente : removed')).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Utiliser Dossiers comme référence…' }),
+  );
+  expect(vi.mocked(integrityRequest).mock.calls.some(([, b]) => !!b)).toBe(
+    false,
+  );
+  expect(screen.getAllByText('/workspaces/p/dossiers').length).toBeGreaterThan(
+    0,
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Appliquer la correction' }),
+  );
+  await waitFor(() =>
+    expect(integrityRequest).toHaveBeenCalledWith('/p/repair', {
+      fingerprint: 'fresh',
+      issueId: 'ref',
+      confirmation: 'REPAIR_PROJECT',
+    }),
+  );
+});

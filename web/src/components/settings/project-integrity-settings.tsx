@@ -19,6 +19,12 @@ import {
   type IntegrityIssue,
 } from './project-integrity-api';
 
+const contextKeys = {
+  agent: 'context.agent',
+  task: 'context.task',
+  deliverable: 'context.deliverable',
+  simple_chat: 'context.simpleChat',
+} as const;
 const issueKindKeys: Record<string, string> = {
   'outside-project': 'kind.outsideProject',
   'symbolic-link': 'kind.symbolicLink',
@@ -184,7 +190,25 @@ export function ProjectIntegritySettings() {
                 />
                 {t(issueKindKeys[issue.kind] ?? 'unknown')}
               </h3>
-              <p className="break-all text-xs">{issue.path}</p>
+              {issue.reference && (
+                <div className="space-y-1 text-sm">
+                  <p className="break-words font-medium">
+                    {t(contextKeys[issue.reference.contextType] ?? 'unknown')} :{' '}
+                    {issue.reference.label}
+                  </p>
+                  <p className="break-all text-xs">
+                    {t('missingConnection', { id: issue.reference.resourceId })}
+                  </p>
+                  {issue.reference.relativePath && (
+                    <p className="break-all text-xs">
+                      {issue.reference.relativePath}
+                    </p>
+                  )}
+                </div>
+              )}
+              {!issue.reference && (
+                <p className="break-all text-xs">{issue.path}</p>
+              )}
               {issue.expectedPath && (
                 <p className="break-all text-xs">
                   {t('expected')}: {issue.expectedPath}
@@ -202,9 +226,11 @@ export function ProjectIntegritySettings() {
                   }
                 >
                   {t(
-                    issue.action === 'create-directory'
-                      ? 'createDirectory'
-                      : 'realign',
+                    issue.action === 'select-project-folder'
+                      ? 'selectProjectFolder'
+                      : issue.action === 'create-directory'
+                        ? 'createDirectory'
+                        : 'realign',
                   )}
                 </Button>
               )}
@@ -222,12 +248,16 @@ export function ProjectIntegritySettings() {
           <AlertDialogTitle>{t('confirmTitle')}</AlertDialogTitle>
           <AlertDialogDescription>
             {t(
-              confirmation?.issue.action === 'create-directory'
-                ? 'confirmDirectory'
-                : 'confirmReference',
+              confirmation?.issue.action === 'select-project-folder'
+                ? 'confirmProjectFolder'
+                : confirmation?.issue.action === 'create-directory'
+                  ? 'confirmDirectory'
+                  : 'confirmReference',
             )}
           </AlertDialogDescription>
-          <p className="break-all text-xs">{confirmation?.issue.path}</p>
+          <p className="break-all text-xs">
+            {confirmation?.issue.reference?.label ?? confirmation?.issue.path}
+          </p>
           {confirmation?.issue.expectedPath && (
             <p className="break-all text-xs">
               {confirmation.issue.expectedPath}
