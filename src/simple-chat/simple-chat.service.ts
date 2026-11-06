@@ -874,9 +874,8 @@ export class SimpleChatService {
   }
 
   async respond(threadId: string, input: { message?: unknown }) {
-    const message =
-      typeof input?.message === 'string' ? input.message.trim() : '';
-    if (!message) {
+    const message = typeof input?.message === 'string' ? input.message : '';
+    if (!message.trim()) {
       throw BusinessException.badRequest(
         ErrorCode.simpleChat.messageRequired,
         'message is required',

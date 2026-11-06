@@ -327,7 +327,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       )
       .map((a) => a.path);
     addUserMessage(
-      valueRef.current.trim(),
+      valueRef.current,
       imageAttachments.length > 0 ? imageAttachments : undefined,
     );
     clearAfterSend();

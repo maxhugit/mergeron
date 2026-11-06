@@ -149,7 +149,7 @@ export function useChatAttachments({
   const buildInput = useCallback(() => {
     const input: Array<Record<string, unknown>> = [];
     const currentAttachments = attachmentsRef.current;
-    let currentText = valueRef.current.trim();
+    let currentText = valueRef.current;
 
     // Replace @relative with @absolute in text for file mentions.
     // Sort by displayName length descending to prevent partial matches.
@@ -178,7 +178,7 @@ export function useChatAttachments({
       }
     }
 
-    if (currentText) {
+    if (currentText.trim()) {
       input.push({ type: 'text', text: currentText, text_elements: [] });
     }
 

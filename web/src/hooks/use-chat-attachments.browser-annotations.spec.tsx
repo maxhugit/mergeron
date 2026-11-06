@@ -25,8 +25,12 @@ beforeEach(() => {
   );
 });
 afterEach(() => vi.unstubAllGlobals());
-function useDraft(threadId: string, readOnly: boolean) {
-  const [value, setValue] = useState('Existing draft');
+function useDraft(
+  threadId: string,
+  readOnly: boolean,
+  initial = 'Existing draft',
+) {
+  const [value, setValue] = useState(initial);
   const valueRef = useRef(value);
   useEffect(() => {
     valueRef.current = value;
@@ -84,3 +88,14 @@ it.each([
     expect(fetchMock).not.toHaveBeenCalled();
   },
 );
+
+it('preserves draft whitespace in the actual text input sent to the agent, while rejecting whitespace-only requests', () => {
+  const text = '\n\n  Bonjour\r\nDeuxième ligne\n\n';
+  const first = renderHook(() => useDraft('a', false, text));
+  expect(first.result.current.buildInput()).toEqual([
+    { type: 'text', text, text_elements: [] },
+  ]);
+  first.unmount();
+  const empty = renderHook(() => useDraft('b', false, ' \n\n '));
+  expect(empty.result.current.buildInput()).toEqual([]);
+});

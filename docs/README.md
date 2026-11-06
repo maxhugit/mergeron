@@ -88,6 +88,8 @@ séparées du parcours standard. Les proxys HTTPS et fournisseurs d’identité 
 
 ## Conversations et récupération
 
+- [Mise en forme et retours à la ligne des messages](message-formatting.md).
+
 - [Branches de conversation](conversation-branches.md).
 - [Récupération et découverte des conversations](conversation-recovery.md).
 - [Affichage des éléments d’un tour terminé](completed-turn-items.md).

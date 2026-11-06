@@ -5,6 +5,8 @@
 import { useMemo, type ComponentProps } from 'react';
 import Markdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { remarkMessageLayout } from '@/lib/remark-message-layout';
+import { messageBlockComponents } from './message-block-components';
 import { FileText, ImageIcon } from 'lucide-react';
 import { remarkMentions } from '@/lib/remark-mentions';
 import { normalizeMessageMentions } from '@/lib/mention-utils';
@@ -39,10 +41,7 @@ function userUrlTransform(url: string): string {
 const userComponents = (
   threadId: string | null,
 ): ComponentProps<typeof Markdown>['components'] => ({
-  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1">{children}</ol>,
-  li: ({ children }) => <li className="text-sm">{children}</li>,
+  ...messageBlockComponents,
   blockquote: ({ children }) => (
     <blockquote className="my-2 border-l-2 border-border pl-3 italic text-muted-foreground">
       {children}
@@ -74,13 +73,19 @@ const userComponents = (
     }
     // Regular links
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className="underline">
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline"
+      >
         {children}
       </a>
     );
   },
   code: ({ className, children, ...rest }) => {
-    const isBlock = className?.startsWith('language-') || String(children).includes('\n');
+    const isBlock =
+      className?.startsWith('language-') || String(children).includes('\n');
     if (isBlock) {
       return (
         <pre className="my-2 overflow-auto rounded bg-foreground/[0.07] p-3 text-sm leading-relaxed">
@@ -89,17 +94,27 @@ const userComponents = (
       );
     }
     return (
-      <code className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[0.85em]" {...rest}>
+      <code
+        className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[0.85em]"
+        {...rest}
+      >
         {children}
       </code>
     );
   },
   pre: ({ children }) => <>{children}</>,
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  strong: ({ children }) => (
+    <strong className="font-semibold">{children}</strong>
+  ),
   hr: () => <hr className="my-3 border-border" />,
 });
 
-export function UserMessageBubble({ content, threadCwd, threadId, images }: Props) {
+export function UserMessageBubble({
+  content,
+  threadCwd,
+  threadId,
+  images,
+}: Props) {
   // Normalize absolute @mentions to relative before rendering
   const normalizedContent = useMemo(
     () => normalizeMessageMentions(content, threadCwd),
@@ -108,11 +123,14 @@ export function UserMessageBubble({ content, threadCwd, threadId, images }: Prop
 
   // Memoize remark plugins array (stable reference prevents re-renders)
   const remarkPlugins = useMemo(
-    () => [remarkGfm, remarkMentions(threadCwd)],
+    () => [remarkGfm, remarkMessageLayout, remarkMentions(threadCwd)],
     [threadCwd],
   );
 
-  const markdownComponents = useMemo(() => userComponents(threadId), [threadId]);
+  const markdownComponents = useMemo(
+    () => userComponents(threadId),
+    [threadId],
+  );
 
   // Filter out direct URLs — only server paths are openable
   const imageFiles = images?.filter((src) => !/^(https?|data|blob):/.test(src));
@@ -134,7 +152,9 @@ export function UserMessageBubble({ content, threadCwd, threadId, images }: Prop
               key={i}
               role="button"
               tabIndex={0}
-              onClick={() => requestOpenFile({ path: src, sourceThreadId: threadId })}
+              onClick={() =>
+                requestOpenFile({ path: src, sourceThreadId: threadId })
+              }
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
