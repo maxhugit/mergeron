@@ -57,7 +57,7 @@ export function gatewaySpecification({
       NetworkMode: network,
       Binds: [`${stateRoot}/manager-state/maintenance:/monitor:ro`],
       RestartPolicy: { Name: 'unless-stopped' },
-      Memory: 64 * 1024 * 1024,
+      Memory: 128 * 1024 * 1024, // Includes the separate Node HTTP health probe.
       PidsLimit: 64,
     },
     NetworkingConfig: { EndpointsConfig: { [network]: {} } },
