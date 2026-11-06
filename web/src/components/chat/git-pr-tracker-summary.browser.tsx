@@ -48,86 +48,107 @@ test.each([390, 1180])(
     await page.viewport(width, 900);
     await i18nReady;
     await i18n.changeLanguage('fr');
-    api.mockImplementation((url: string) =>
+    api.mockImplementation((url: string, options?: RequestInit) =>
       Promise.resolve(
-        url.endsWith('/locations')
-          ? locationInventoryFixture({
-              resources: [
-                {
-                  id: 'r',
-                  projectId: 'p',
-                  name: 'Git Mergeron',
-                  type: 'git',
-                  accessMode: 'read_write',
-                  address: 'https://github.com/example/repo.git',
-                  enabled: true,
-                  localWorkspaceId: null,
-                  localPath: null,
-                  rootPath: '/',
-                  capabilities: { read: true, write: true, execute: false },
-                  connectionState: 'connected',
-                  hasSecret: false,
-                  lastCheckedAt: null,
-                  lastError: null,
-                },
-              ],
-              copies: [],
-            })
-          : url.endsWith('/pull-requests')
+        url.endsWith('/pr-agents')
+          ? { agents: [{ threadId: 'creator2', name: 'Documentation' }] }
+          : options?.method === 'POST' && url.endsWith('/14/agent')
             ? {
-                supported: true,
-                limited: false,
-                items: [12, 13, 14].map((number, i) => ({
-                  number,
-                  title: [
-                    'Améliorer le classement',
-                    'Corriger les documents',
-                    'Simplifier la documentation',
-                  ][i],
-                  draft: false,
-                  branch: 'feature/' + number,
-                  base: 'main',
-                  head: 'a',
-                  url: 'https://github.com/example/repo/pull/' + number,
-                  tracking: {
-                    creator: {
-                      threadId: 'creator' + i,
-                      name: ['Agent créateur', 'Correcteur', 'Documentation'][
-                        i
-                      ],
+                creator: null,
+                agents: [
+                  {
+                    threadId: 'creator2',
+                    name: 'Documentation',
+                    phase: 'idle',
+                    updatedAt: 1,
+                  },
+                ],
+              }
+            : url.endsWith('/locations')
+              ? locationInventoryFixture({
+                  resources: [
+                    {
+                      id: 'r',
+                      projectId: 'p',
+                      name: 'Git Mergeron',
+                      type: 'git',
+                      accessMode: 'read_write',
+                      address: 'https://github.com/example/repo.git',
+                      enabled: true,
+                      localWorkspaceId: null,
+                      localPath: null,
+                      rootPath: '/',
+                      capabilities: { read: true, write: true, execute: false },
+                      connectionState: 'connected',
+                      hasSecret: false,
+                      lastCheckedAt: null,
+                      lastError: null,
                     },
-                    agents: [
+                  ],
+                  copies: [],
+                })
+              : url.endsWith('/pull-requests')
+                ? {
+                    supported: true,
+                    limited: false,
+                    items: [12, 13, 14].map((number, i) => ({
+                      number,
+                      title: [
+                        'Améliorer le classement',
+                        'Corriger les documents',
+                        'Simplifier la documentation',
+                      ][i],
+                      draft: false,
+                      branch: 'feature/' + number,
+                      base: 'main',
+                      head: 'a',
+                      url: 'https://github.com/example/repo/pull/' + number,
+                      tracking:
+                        i === 2
+                          ? { creator: null, agents: [] }
+                          : {
+                              creator: {
+                                threadId: 'creator' + i,
+                                name: [
+                                  'Agent créateur',
+                                  'Correcteur',
+                                  'Documentation',
+                                ][i],
+                              },
+                              agents: [
+                                {
+                                  threadId: 'creator' + i,
+                                  name: [
+                                    'Agent créateur',
+                                    'Correcteur',
+                                    'Documentation',
+                                  ][i],
+                                  phase: i === 1 ? 'working' : 'idle',
+                                  updatedAt: 1,
+                                },
+                              ],
+                            },
+                    })),
+                  }
+                : {
+                    head: 'a',
+                    draft: false,
+                    mergeable: true,
+                    mergeableState: 'clean',
+                    limited: false,
+                    inspectedAt: Date.now(),
+                    items: [
                       {
-                        threadId: 'creator' + i,
-                        name: ['Agent créateur', 'Correcteur', 'Documentation'][
-                          i
-                        ],
-                        phase: i === 1 ? 'working' : 'idle',
-                        updatedAt: 1,
+                        id: '1',
+                        name: 'Frontend',
+                        status: url.includes('/13/')
+                          ? 'failure'
+                          : url.includes('/14/')
+                            ? 'success'
+                            : 'in_progress',
                       },
                     ],
                   },
-                })),
-              }
-            : {
-                head: 'a',
-                draft: false,
-                mergeable: true,
-                mergeableState: 'clean',
-                limited: false,
-                inspectedAt: Date.now(),
-                items: [
-                  {
-                    id: '1',
-                    name: 'Frontend',
-                    status: url.includes('/13/')
-                      ? 'failure'
-                      : url.includes('/14/')
-                        ? 'success'
-                        : 'in_progress',
-                  },
-                ],
-              },
       ),
     );
     const root = createRootRoute();
@@ -181,6 +202,12 @@ test.each([390, 1180])(
     expect(
       within(list).queryByRole('link', { name: 'Voir sur GitHub' }),
     ).toBeNull();
+    expect(
+      screen.queryByRole('region', { name: 'Détail de la PR #12' }),
+    ).toBeNull();
+    await page
+      .getByRole('button', { name: '#12 Améliorer le classement', exact: true })
+      .click();
     const detail = screen.getByRole('region', { name: 'Détail de la PR #12' });
     expect(
       within(detail).getByRole('heading', { name: 'Contrôles GitHub' }),
@@ -199,8 +226,30 @@ test.each([390, 1180])(
       screen.getByRole('button', {
         name: '#13 Corriger les documents',
       }),
-    ).toHaveAttribute('aria-pressed', 'true');
-    expect(list.contains(nextDetail)).toBe(false);
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(list.contains(nextDetail)).toBe(true);
+    expect(
+      screen.getByRole('region', { name: 'Détail de la PR #12' }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: '#13 Corriger les documents', exact: true })
+      .click();
+    expect(
+      screen.queryByRole('region', { name: 'Détail de la PR #13' }),
+    ).toBeNull();
+    await page
+      .getByRole('button', { name: 'Agent non identifié', exact: true })
+      .click();
+    const picker = await screen.findByRole('dialog');
+    expect(picker).toHaveTextContent('PR #14');
+    await page
+      .getByRole('button', { name: 'Documentation', exact: true })
+      .click();
+    await screen.findByRole('link', { name: 'Documentation · Inactif' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      screen.getByRole('region', { name: 'Détail de la PR #12' }),
+    ).toBeVisible();
     await page.screenshot({
       path: `../../../.vitest-screenshots/pr-tracker-${width}.png`,
     });

@@ -238,6 +238,27 @@ export class WorkspaceGitController {
     return this.git.merges(projectId, resourceId);
   }
 
+  @Get(['resources/:resourceId/pr-agents', 'connections/:resourceId/pr-agents'])
+  pullRequestAgents(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return this.git.pullRequestAgents(projectId, resourceId);
+  }
+
+  @Post([
+    'resources/:resourceId/pull-requests/:number/agent',
+    'connections/:resourceId/pull-requests/:number/agent',
+  ])
+  assignPullRequestAgent(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('number') number: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.git.assignPullRequestAgent(projectId, resourceId, number, body);
+  }
+
   @Get([
     'resources/:resourceId/merges/:number/checks',
     'connections/:resourceId/merges/:number/checks',

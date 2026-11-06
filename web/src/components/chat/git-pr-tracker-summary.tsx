@@ -16,6 +16,7 @@ import {
   type GitPullRequests,
 } from '@/lib/workspace-git-api';
 import { gitPrStatus } from '@/lib/git-pr-status';
+import { GitPrAgentPicker } from './git-pr-agent-picker';
 
 export function GitPrTrackerSummary({
   projectId,
@@ -23,12 +24,14 @@ export function GitPrTrackerSummary({
   pr,
   observation,
   showAgents = true,
+  canAssign = false,
 }: {
   projectId: string;
   resourceId: string;
   pr: GitPullRequests['items'][number];
   observation?: { data?: GitChecks; isPending: boolean; isError: boolean };
   showAgents?: boolean;
+  canAssign?: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const statusLabels = {
@@ -134,6 +137,12 @@ export function GitPrTrackerSummary({
                 </Link>
               );
             })
+          ) : canAssign ? (
+            <GitPrAgentPicker
+              projectId={projectId}
+              resourceId={resourceId}
+              number={pr.number}
+            />
           ) : (
             <span className="text-muted-foreground">{t('gitPrNoAgent')}</span>
           )}

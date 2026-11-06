@@ -386,5 +386,11 @@
   "gitPrChecksCount": "{{passed}} / {{total}} passed",
   "gitPrChecksDetails": "Check details",
   "gitPrViewGithub": "View on GitHub",
-  "gitPrLastChecked": "Last checked: {{date}}"
+  "gitPrLastChecked": "Last checked: {{date}}",
+  "gitPrAssignAgent": "Assign an agent",
+  "gitPrAssignDescription": "PR #{{number}} · Choose an agent from this project. Assignment does not start the agent.",
+  "gitPrAgentsError": "Could not load project agents.",
+  "gitPrAgentsEmpty": "No agents available in this project.",
+  "gitPrAssigning": "Assigning…",
+  "gitPrAssignError": "Could not assign the agent. Check your permissions and refresh the PR list."
 }

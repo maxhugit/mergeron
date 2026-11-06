@@ -162,10 +162,15 @@ la copie est utilisée ; aucun travail non publié n’est supprimé impliciteme
 Le panneau sépare **Local**, **GitHub** et **Synchronisation**.
 Dans la sidebar droite, **GitHub → PR** suit les PR ouvertes du dépôt sélectionné,
 par groupes de cinq.
-La liste compacte et son indicateur de sélection restent au-dessus d’un panneau
-de détail séparé. Branches, contrôles et actions GitHub apparaissent uniquement
-dans ce panneau ; les deux zones ont leur propre défilement. Le nom de l’agent
-reste directement cliquable dans la liste et n’est pas répété dans un bloc de détail.
+Cliquer sur le titre d’une PR déplie ses branches, contrôles et actions directement
+sous sa ligne. Plusieurs PR peuvent rester dépliées ; un second clic replie la PR.
+La liste et ses détails partagent le même défilement. Le nom de l’agent reste
+directement cliquable et ouvre sa conversation sans modifier les PR dépliées.
+Lorsqu’aucun agent n’est identifié, un administrateur disposant d’un accès en
+écriture peut cliquer sur **Agent non identifié**, puis choisir un agent du projet
+dans la fenêtre proposée. Les agents archivés ou non accessibles sont exclus.
+Cette affectation est conservée ; elle ne démarre pas l’agent et ne le déclare pas
+créateur historique de la PR. Une affectation concurrente est refusée.
 Chaque ligne distingue le statut GitHub du travail des agents :
 brouillon, vérification en cours, erreur, conflit, validation requise, prête à
 fusionner ou état non confirmé. « Prête à fusionner » exige une observation complète
