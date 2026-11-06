@@ -43,19 +43,32 @@ export class PullRequestTrackerService {
       throw new ForbiddenException('PR_AGENT_UNAVAILABLE');
   }
 
-  candidates(projectId: string) {
+  async candidates(projectId: string) {
     requireProjectAccess(projectId);
+    // Membership outlives CLI history. A missing runtime conversation must not
+    // be offered as an opaque ID or confused with an available agent.
+    const { entries } = await this.metadata.read();
+    const available = new Map(
+      entries
+        .filter((entry) => !entry.archived)
+        .map((entry) => [entry.thread.id, entry.thread]),
+    );
     return this.db
       .select()
       .from(projectAgentThreads)
       .where(eq(projectAgentThreads.projectId, projectId))
       .all()
-      .filter((row) => row.archivedAt === null && canReadThread(row.threadId))
+      .filter(
+        (row) =>
+          row.archivedAt === null &&
+          available.has(row.threadId) &&
+          canReadThread(row.threadId),
+      )
       .map((row) => ({
         threadId: row.threadId,
         name:
-          this.metadata.getHeldThread(row.threadId)?.name ||
-          this.metadata.getHeldThread(row.threadId)?.preview?.slice(0, 80) ||
+          available.get(row.threadId)?.name ||
+          available.get(row.threadId)?.preview?.slice(0, 80) ||
           row.threadId,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
