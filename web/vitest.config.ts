@@ -335,6 +335,9 @@ export default mergeConfig(
         },
         {
           extends: true,
+          // Browser rendering discovers this React entry after fixture startup.
+          // Prebundle it up front so optimization cannot reload an active test.
+          optimizeDeps: { include: ['react-dom/client'] },
           test: {
             name: 'browser',
             // Bound pages on small runners; machine-level parallelism comes
