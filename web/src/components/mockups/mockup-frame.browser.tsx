@@ -11,9 +11,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page, commands } from 'vitest/browser';
 declare module 'vitest/browser' {
   interface BrowserCommands {
+    mockupProductionHeaders: (source: string) => Promise<string>;
     mockupPreview: (action: 'next' | 'confirm' | 'ready') => Promise<string>;
   }
 }
+import { mockupSource } from '@/lib/mockup-sandbox';
 import { MockupFrame } from './mockup-frame';
 import { MockupPanel } from './mockup-panel';
 import i18n, { i18nReady } from '@/i18n';
@@ -36,6 +38,7 @@ test('allows simulated interactions while refusing parent, storage, network, pop
   const before = location.href;
   document.cookie =
     'mockup_test_parent=synthetic-private; SameSite=Strict; path=/';
+  expect(document.cookie).toContain('mockup_test_parent=synthetic-private');
   try {
     render(
       <div style={{ height: 500 }}>
@@ -161,3 +164,13 @@ for (const width of [1180, 390])
     });
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
   });
+
+test('keeps the preview interactive under the real production SPA CSP and frame-denial headers', async () => {
+  const source = mockupSource(
+    '<button onclick="this.textContent=\'Clicked with production headers\'">Simulate</button>',
+    'header-fixture',
+  );
+  expect(await commands.mockupProductionHeaders(source)).toContain(
+    'Clicked with production headers',
+  );
+});

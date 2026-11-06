@@ -1,3 +1,4 @@
+import { setStaticHtmlSecurityHeaders } from '../src/static-html-security';
 /**
  * Vitest config for the web client.
  *
@@ -12,6 +13,46 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { sessionStackFixtures } from './test/session-stack';
 import { createSilentRenewalFixture } from './test/silent-renewal';
+
+/** A real top-level document carrying the production SPA headers, not the Vitest runner's policy. */
+const mockupProductionHeaders: BrowserCommand<[source: string]> = async (
+  context,
+  source,
+) => {
+  const page = await context.page.context().newPage();
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'text/html' };
+    setStaticHtmlSecurityHeaders(
+      {
+        header: (name: string, value: unknown) => {
+          headers[name] = String(value);
+        },
+      } as Parameters<typeof setStaticHtmlSecurityHeaders>[0],
+      'index.html',
+    );
+    const url = new URL('/__mockup_header_fixture__', context.page.url()).href;
+    await page.route(url, (route) =>
+      route.fulfill({
+        headers,
+        body: `<!doctype html><script>const frame=document.createElement('iframe');frame.sandbox='allow-scripts';frame.srcdoc=${JSON.stringify(source).replaceAll('<', '\\u003c')};document.documentElement.appendChild(frame)</script>`,
+      }),
+    );
+    await page.goto(url);
+    const preview = page.frameLocator('iframe');
+    await preview
+      .getByRole('button', { name: 'Simulate', exact: true })
+      .click();
+    await preview
+      .getByRole('button', {
+        name: 'Clicked with production headers',
+        exact: true,
+      })
+      .waitFor({ state: 'visible' });
+    return await preview.locator('body').innerText();
+  } finally {
+    await page.close();
+  }
+};
 
 const mockupPreview: BrowserCommand<['next' | 'confirm' | 'ready']> = async (
   context,
@@ -300,6 +341,7 @@ export default mergeConfig(
               headless: true,
               provider: playwright(),
               commands: {
+                mockupProductionHeaders,
                 mockupPreview,
                 authenticatedManifest,
                 scrollTranscript,
