@@ -54,7 +54,14 @@ export class GlobalUpdateCoordinator {
     // A manager-only update still uses the existing reviewed backup/health transaction.
     if (!Object.keys(applicationImages).length) {
       const current = await this.docker.inspectContainer(this.stack + '-ui');
-      applicationImages.application = current.Config.Image;
+      const image = await this.docker.inspectImage(current.Image);
+      const pinned = image.RepoDigests?.find((reference) =>
+        /^ghcr.io\/maxhugit\/(?:mergeron|codex-webui-unraid)@sha256:[a-f0-9]{64}$/.test(
+          reference,
+        ),
+      );
+      if (!pinned) throw new Error('updateApplicationIdentityUnknown');
+      applicationImages.application = pinned;
     }
     return {
       base: await this.updater.plan(applicationImages, mode, backupMode),

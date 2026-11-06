@@ -187,13 +187,22 @@ export async function runManagerReplacement({
         const candidate = await docker.inspectContainer(job.candidateId);
         if (
           candidate.Config.Labels?.['io.mergeron.replacement'] !== id ||
-          candidate.Name !== '/' + canonical
+          candidate.Name !== '/' + canonical ||
+          candidate.Image !== job.targetImageId ||
+          replacementFingerprint(candidate.HostConfig) !==
+            replacementFingerprint(job.original.HostConfig)
         )
           throw new Error('updateManagerIdentityChanged');
         if (candidate.State.Running) await docker.stopContainer(candidate.Id);
         await docker.removeContainer(candidate.Id);
       }
       const old = await docker.inspectContainer(job.originalId);
+      if (
+        old.Image !== job.original.Image ||
+        replacementFingerprint(old.HostConfig) !==
+          replacementFingerprint(job.original.HostConfig)
+      )
+        throw new Error('updateManagerIdentityChanged');
       if (old.Name === '/' + retained)
         await docker.renameContainer(old.Id, canonical);
       else if (old.Name !== '/' + canonical)

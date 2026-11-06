@@ -59,6 +59,7 @@ export class ManagerReplacement {
     )
       throw new Error('updateManagerUpgradeRequired');
     const original = specification(inspect, inspect.Image);
+    delete original.NetworkingConfig; // NetworkMode none is authoritative; never attach an endpoint.
     const identity = {
       id: inspect.Id,
       image: inspect.Image,
