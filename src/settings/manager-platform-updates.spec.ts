@@ -136,13 +136,11 @@ it('builds a global plan from fresh verified discovery and ignores client-select
 
 it('blocks a global plan when a managed component has unknown registry identity', async () => {
   class Bridge extends ManagerStatusService {
-    override imageUpdates = vi
-      .fn()
-      .mockResolvedValue({
-        components: [
-          { id: 'ingress', versionStatus: 'unknown', checkError: 'offline' },
-        ],
-      });
+    override imageUpdates = vi.fn().mockResolvedValue({
+      components: [
+        { id: 'ingress', versionStatus: 'unknown', checkError: 'offline' },
+      ],
+    });
   }
   await expect(
     new Bridge(new ConfigService()).updateOperation('plan', {
