@@ -60,3 +60,19 @@ Le relais est une nouvelle frontière réseau : le proxy extérieur ne doit pas
 nécessite un retrait préalable du routage et une vérification de chaque nouvelle
 instance ; ne pas remplacer les deux simultanément. Le script initial ne
 constitue pas un mécanisme de remplacement à chaud garanti du proxy TLS externe.
+
+## Vérification reproductible de l’interface
+
+```sh
+cd web
+node scripts/install-test-browsers.mjs chromium webkit
+node scripts/verify-update-monitor.mjs /tmp/mergeron-monitor-visual
+```
+
+Ce contrôle utilise uniquement des serveurs HTTP locaux synthétiques. Il vérifie
+Chromium et WebKit à 390 et 1280 pixels, l’attente d’une nouvelle opération,
+les étapes du remplacement du Manager, la réussite confirmée et l’absence de
+débordement horizontal. Il conserve les captures et `report.json`. Le contrôle
+HTTP final arrête le serveur applicatif local et exige toujours une réponse 200
+de la page de maintenance. Ces simulations complètent les tests transactionnels ;
+elles ne remplacent pas l’essai d’une mise à jour réelle sur la dev.
