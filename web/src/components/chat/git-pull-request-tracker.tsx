@@ -82,7 +82,7 @@ export function GitPullRequestTracker({
           Boolean(query.state.error),
         );
         return (
-          (status === 'checking' && !query.state.error ? 30_000 : 120_000) +
+          (status === 'checking' && !query.state.error ? 60_000 : 120_000) +
           index * 3000
         );
       },
