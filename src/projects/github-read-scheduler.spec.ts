@@ -22,7 +22,22 @@ it('limits all repository reads to two, coalesces duplicates and releases queued
         peak = Math.max(peak, active);
         finish.push(() => {
           active--;
-          resolve(ok());
+          // The runner's Node may deliver the response body on a later event-loop
+          // turn. Releasing headers is not the end of the scheduled read.
+          resolve(
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  setTimeout(() => {
+                    controller.enqueue(
+                      new TextEncoder().encode('{"result":true}'),
+                    );
+                    controller.close();
+                  }, 0);
+                },
+              }),
+            ),
+          );
         });
       }),
   );
@@ -34,11 +49,11 @@ it('limits all repository reads to two, coalesces duplicates and releases queued
   await flush();
   expect(fetch).toHaveBeenCalledTimes(2);
   finish.shift()!();
-  await flush();
+  await reads[0];
   expect(fetch).toHaveBeenCalledTimes(3);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 1; i < 6; i++) {
     finish.shift()!();
-    await flush();
+    await reads[i];
   }
   await Promise.all([...reads, duplicate]);
   expect(peak).toBe(2);
@@ -204,7 +219,7 @@ it('bounds the waiting queue and does not mask an outage with a cached successfu
   expect(fetch).toHaveBeenCalledTimes(2);
   for (let i = 0; i < 66; i++) {
     finish.shift()!();
-    await flush();
+    await reads[i];
   }
   await Promise.all(reads);
   fetch.mockImplementation(() => Promise.resolve(ok()));
