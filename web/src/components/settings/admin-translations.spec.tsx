@@ -4,6 +4,7 @@ import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import { describe, expect, it, vi } from 'vitest';
 import fr from '@/locales/fr/common.json';
+import frRuntimeSettings from '@/locales/fr/runtimeSettings.json';
 import frCodex from '@/locales/fr/codexSettings.json';
 import enCodex from '@/locales/en/codexSettings.json';
 import { translationKey } from '@/locales/translation-key';
@@ -125,7 +126,14 @@ describe('administration translations', () => {
     ]) {
       const label = settingLabel(key);
       const translation = translationKey(label);
-      expect(Object.hasOwn(fr, translation), key).toBe(true);
+      const resources = { common: fr, runtimeSettings: frRuntimeSettings };
+      const [namespace, catalogKey] = translation.includes(':')
+        ? translation.split(':')
+        : ['common', translation];
+      expect(
+        resources[namespace as keyof typeof resources],
+        key,
+      ).toHaveProperty(catalogKey);
     }
   });
 

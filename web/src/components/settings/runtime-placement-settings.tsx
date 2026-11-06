@@ -14,7 +14,9 @@ export function RuntimePlacementSettings({
 }: {
   kind: keyof typeof KEYS;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['runtimeSettings', 'common'], {
+    nsMode: 'fallback',
+  });
   const state = useCategorySettings('general', { includeKeys: KEYS[kind] });
   const applications = kind === 'applications';
   return (

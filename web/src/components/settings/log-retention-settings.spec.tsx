@@ -4,6 +4,7 @@ import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import frCommon from '@/locales/fr/common.json';
 import frLogs from '@/locales/fr/logs.json';
+import frRuntimeSettings from '@/locales/fr/runtimeSettings.json';
 import { LogRetentionDialog } from '@/components/logs/log-retention-dialog';
 import type { LogStorage } from '@/lib/logs-api';
 import { catalogFixture, json } from './catalog/catalog.testing';
@@ -170,3 +171,80 @@ it('saves only the catalog source from the applications advanced settings', asyn
     updates: [{ key: 'general.applicationCatalogSource', value: 'byparr' }],
   });
 });
+
+it.each(['connections', 'applications'] as const)(
+  'loads dedicated French runtime translations for %s without changing the common actions',
+  async (kind) => {
+    const localized = createInstance();
+    await localized.init({
+      lng: 'fr',
+      fallbackLng: false,
+      defaultNS: 'common',
+      ns: ['runtimeSettings', 'common'],
+      resources: {
+        fr: { common: frCommon, runtimeSettings: frRuntimeSettings },
+      },
+    });
+    fixture.server.overrides.set('GET /api/settings', () =>
+      json({
+        settings: [
+          {
+            key: 'general.maxIdleSubscriptions',
+            category: 'general',
+            type: 'number',
+            value: 30,
+            defaultValue: 30,
+            source: 'db',
+            description: 'subscriptions',
+            constraints: {},
+          },
+          {
+            key: 'general.applicationCatalogSource',
+            category: 'general',
+            type: 'string',
+            value: 'native',
+            defaultValue: 'native',
+            source: 'db',
+            description: 'catalog',
+            constraints: { enum: ['native', 'byparr'] },
+          },
+        ],
+      }),
+    );
+    fixture.render(
+      <I18nextProvider i18n={localized}>
+        <RuntimePlacementSettings kind={kind} />
+      </I18nextProvider>,
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name:
+          kind === 'connections'
+            ? frRuntimeSettings.connectionsPerformance
+            : frRuntimeSettings.applicationCatalogAdvanced,
+      }),
+    ).toBeInTheDocument();
+    if (kind === 'connections') {
+      expect(
+        await screen.findByRole('heading', {
+          name: frRuntimeSettings.idleConversationsLabel,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(frRuntimeSettings.idleConversationsHelp),
+      ).toBeInTheDocument();
+    } else {
+      expect(
+        await screen.findByRole('combobox', {
+          name: frRuntimeSettings.applicationCatalogSourceLabel,
+        }),
+      ).toHaveValue('native');
+      expect(
+        screen.getByText(frRuntimeSettings.applicationCatalogSourceHelp),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Réinitialiser' }),
+      ).toBeInTheDocument();
+    }
+  },
+);

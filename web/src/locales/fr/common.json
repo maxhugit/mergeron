@@ -1667,11 +1667,5 @@
   "retiredQuestionReplyHint": "Cette demande est terminée. Vous pouvez encore préparer une réponse à envoyer comme message dans la conversation.",
   "prepareQuestionReply": "Préparer une réponse",
   "projectIntegrityTitle": "Cohérence des projets",
-  "projectIntegrityDescription": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite, sans suppression ni écrasement.",
-  "connectionsPerformance": "Connexions et performances",
-  "idleConversationsLabel": "Conversations inactives conservées en connexion",
-  "idleConversationsHelp": "Limite les abonnements du navigateur aux conversations inactives. Les conversations actives ou en attente d’approbation restent connectées.",
-  "applicationCatalogAdvanced": "Applications — paramètres avancés",
-  "applicationCatalogSourceLabel": "Source du catalogue d’applications",
-  "applicationCatalogSourceHelp": "Native utilise le catalogue standard. Byparr utilise un instantané quotidien côté serveur comme solution de compatibilité."
+  "projectIntegrityDescription": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite, sans suppression ni écrasement."
 }
