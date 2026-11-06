@@ -59,6 +59,23 @@ beforeEach(() => {
           history: [],
         },
       } as never;
+    if (url === '/api/settings')
+      return {
+        data: {
+          settings: [
+            {
+              key: 'general.applicationCatalogSource',
+              category: 'general',
+              type: 'string',
+              value: 'native',
+              defaultValue: 'native',
+              source: 'db',
+              description: '',
+              constraints: {},
+            },
+          ],
+        },
+      } as never;
     if (url === '/api/plugins' || url === '/api/plugins/installed')
       return { data: plugins } as never;
     if (url === '/api/apps/installed')
@@ -322,4 +339,24 @@ it('renders at most fifty catalog rows and searches the full catalog', async () 
   });
   expect(await screen.findByText('Integration 100')).toBeVisible();
   expect(screen.getAllByRole('button', { name: 'Manage' })).toHaveLength(1);
+});
+
+it('loads advanced settings on demand after MCP and retains the draft across tabs', async () => {
+  mount();
+  await screen.findByText('Documents');
+  expect(get.mock.calls.some(([o]) => o.url === '/api/settings')).toBe(false);
+  const tabs = screen.getAllByRole('tab');
+  const advanced = screen.getByRole('tab', { name: 'Advanced settings' });
+  expect(tabs.indexOf(advanced)).toBe(
+    tabs.indexOf(screen.getByRole('tab', { name: 'MCP servers' })) + 1,
+  );
+  expect(screen.queryByLabelText('Application catalog source')).toBeNull();
+  fireEvent.click(advanced);
+  const source = await screen.findByLabelText('Application catalog source');
+  fireEvent.change(source, { target: { value: 'byparr' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Plugins' }));
+  expect(source).not.toBeVisible();
+  fireEvent.click(advanced);
+  expect(source).toBeVisible();
+  expect(source).toHaveValue('byparr');
 });
