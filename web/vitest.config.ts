@@ -179,6 +179,21 @@ export default mergeConfig(
       {
         name: 'test-auth-proxy-redirect',
         configureServer(server) {
+          // The real monitor is served by an independent gateway, not Vite's
+          // application HTML fallback. Keep its layout fixture equally isolated
+          // so an iframe cannot boot the app and invalidate optimized React deps.
+          server.middlewares.use((request, response, next) => {
+            const url = new URL(request.url ?? '/', 'http://localhost');
+            if (
+              url.pathname !== '/_mergeron-update/' ||
+              url.searchParams.get('operation') !== 'fixture'
+            )
+              return next();
+            response.setHeader('Content-Type', 'text/html');
+            response.end(
+              '<!doctype html><html lang="fr"><body>Suivi synthétique</body></html>',
+            );
+          });
           const silentRenewal = createSilentRenewalFixture();
           server.middlewares.use(sessionStack.middleware);
           server.middlewares.use(silentRenewal.middleware);
