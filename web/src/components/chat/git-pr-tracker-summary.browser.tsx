@@ -41,6 +41,8 @@ vi.mock('@/lib/platform-session', () => ({
     isError: false,
   }),
 }));
+const longPrTitle =
+  'Corriger les documents et leur classement dans tous les projets avec un titre volontairement très long pour vérifier une hauteur constante dans la liste des demandes de fusion';
 afterEach(cleanup);
 test.each([390, 1180])(
   'opens the inactive creator during CI in the actual router at %ipx',
@@ -98,7 +100,7 @@ test.each([390, 1180])(
                       number,
                       title: [
                         'Améliorer le classement',
-                        'Corriger les documents',
+                        longPrTitle,
                         'Simplifier la documentation',
                       ][i],
                       draft: false,
@@ -201,6 +203,17 @@ test.each([390, 1180])(
     );
     await within(list).findByText('En erreur');
     await within(list).findByText('Prête à fusionner');
+    const cards = Array.from(list.querySelectorAll('article'));
+    const heights = cards.map((card) => card.getBoundingClientRect().height);
+    expect(heights).toEqual([128, 128, 128]);
+    const longTitle = within(list).getByRole('button', {
+      name: `#13 ${longPrTitle}`,
+    });
+    expect(longTitle).toHaveAttribute('title', `#13 ${longPrTitle}`);
+    expect(longTitle.getBoundingClientRect().height).toBe(32);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/pr-tracker-fixed-rows-${width}.png`,
+    });
     expect(within(list).queryByText('feature/12 → main')).toBeNull();
     expect(
       within(list).queryByRole('link', { name: 'Voir sur GitHub' }),
@@ -219,23 +232,28 @@ test.each([390, 1180])(
       within(detail).queryByRole('link', { name: 'Agent créateur · Inactif' }),
     ).toBeNull();
     await page
-      .getByRole('button', { name: '#13 Corriger les documents', exact: true })
+      .getByRole('button', { name: `#13 ${longPrTitle}`, exact: true })
       .click();
     const nextDetail = await screen.findByRole('region', {
       name: 'Détail de la PR #13',
     });
     await within(nextDetail).findByText('Échec');
     expect(
+      within(nextDetail).getByRole('heading', { name: longPrTitle }),
+    ).toBeVisible();
+    expect(
       screen.getByRole('button', {
-        name: '#13 Corriger les documents',
+        name: `#13 ${longPrTitle}`,
       }),
     ).toHaveAttribute('aria-expanded', 'true');
     expect(list.contains(nextDetail)).toBe(true);
+    expect(cards[2].getBoundingClientRect().height).toBe(128);
+    expect(cards[1].getBoundingClientRect().height).toBeGreaterThan(128);
     expect(
       screen.getByRole('region', { name: 'Détail de la PR #12' }),
     ).toBeVisible();
     await page
-      .getByRole('button', { name: '#13 Corriger les documents', exact: true })
+      .getByRole('button', { name: `#13 ${longPrTitle}`, exact: true })
       .click();
     expect(
       screen.queryByRole('region', { name: 'Détail de la PR #13' }),
