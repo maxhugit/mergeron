@@ -43,6 +43,63 @@ export class PullRequestTrackerService {
       throw new ForbiddenException('PR_AGENT_UNAVAILABLE');
   }
 
+  candidates(projectId: string) {
+    requireProjectAccess(projectId);
+    return this.db
+      .select()
+      .from(projectAgentThreads)
+      .where(eq(projectAgentThreads.projectId, projectId))
+      .all()
+      .filter((row) => row.archivedAt === null && canReadThread(row.threadId))
+      .map((row) => ({
+        threadId: row.threadId,
+        name:
+          this.metadata.getHeldThread(row.threadId)?.name ||
+          this.metadata.getHeldThread(row.threadId)?.preview?.slice(0, 80) ||
+          row.threadId,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Manual association never invents a creator or starts an execution. */
+  assign(
+    projectId: string,
+    repository: string,
+    number: number,
+    threadId: string,
+  ) {
+    this.member(projectId, threadId);
+    return this.db.transaction(() => {
+      const key = { projectId, repository: repository.toLowerCase(), number };
+      const linked = this.db
+        .select()
+        .from(projectPullRequestAgents)
+        .where(
+          and(
+            eq(projectPullRequestAgents.projectId, key.projectId),
+            eq(projectPullRequestAgents.repository, key.repository),
+            eq(projectPullRequestAgents.number, key.number),
+          ),
+        )
+        .all();
+      const creator = this.db
+        .select()
+        .from(projectPullRequests)
+        .where(
+          and(
+            eq(projectPullRequests.projectId, key.projectId),
+            eq(projectPullRequests.repository, key.repository),
+            eq(projectPullRequests.number, key.number),
+          ),
+        )
+        .get();
+      if (creator || linked.length)
+        throw new ConflictException('PR_ALREADY_ASSIGNED');
+      this.claim(projectId, repository, number, threadId, 'idle');
+      return this.snapshot(projectId, repository, number);
+    });
+  }
+
   created(
     projectId: string,
     repository: string,

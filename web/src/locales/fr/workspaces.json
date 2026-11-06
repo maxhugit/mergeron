@@ -386,5 +386,11 @@
   "gitPrChecksCount": "{{passed}} / {{total}} réussis",
   "gitPrChecksDetails": "Détail des contrôles",
   "gitPrViewGithub": "Voir sur GitHub",
-  "gitPrLastChecked": "Dernière vérification : {{date}}"
+  "gitPrLastChecked": "Dernière vérification : {{date}}",
+  "gitPrAssignAgent": "Affecter un agent",
+  "gitPrAssignDescription": "PR #{{number}} · Choisissez un agent de ce projet. Cette affectation ne le démarre pas.",
+  "gitPrAgentsError": "Impossible de charger les agents du projet.",
+  "gitPrAgentsEmpty": "Aucun agent disponible dans ce projet.",
+  "gitPrAssigning": "Affectation en cours…",
+  "gitPrAssignError": "Affectation impossible. Vérifiez vos droits et actualisez la liste des PR."
 }

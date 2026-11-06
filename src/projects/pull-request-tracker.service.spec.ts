@@ -90,6 +90,50 @@ it('retains the confirmed creator independently of another agent’s work and re
   tracker.created('p', 'owner/repo', 12, 'b');
   expect(tracker.snapshot('p', 'owner/repo', 12).creator?.threadId).toBe('a');
 });
+
+it('assigns an idle agent persistently without inventing a creator or execution', () => {
+  tracker.assign('p', 'Owner/Repo', 42, 'a');
+  expect(tracker.snapshot('p', 'owner/repo', 42)).toMatchObject({
+    creator: null,
+    agents: [{ threadId: 'a', phase: 'idle' }],
+  });
+  expect(() => tracker.assign('p', 'OWNER/REPO', 42, 'b')).toThrow(
+    'PR_ALREADY_ASSIGNED',
+  );
+  expect(tracker.snapshot('p', 'owner/repo', 42).agents).toHaveLength(1);
+  tracker.created('p', 'o/r', 12, 'a');
+  expect(() => tracker.assign('p', 'o/r', 12, 'b')).toThrow(
+    'PR_ALREADY_ASSIGNED',
+  );
+});
+
+it('offers only readable, non-archived agents in this project and rejects invalid assignment', () => {
+  db.sqlite
+    .prepare('UPDATE project_agent_threads SET archived_at=1 WHERE thread_id=?')
+    .run('b');
+  expect(tracker.candidates('p')).toEqual([{ threadId: 'a', name: 'Agent a' }]);
+  expect(tracker.candidates('other')).toEqual([]);
+  expect(() => tracker.assign('p', 'o/r', 12, 'b')).toThrow(
+    'PR_AGENT_UNAVAILABLE',
+  );
+  expect(() => tracker.assign('other', 'o/r', 12, 'a')).toThrow(
+    'PR_AGENT_UNAVAILABLE',
+  );
+  const context = {
+    identity: {} as PlatformIdentity,
+    identities: {
+      requireProject: vi.fn(),
+      canReadThread: () => false,
+      requireThread: () => {
+        throw new Error('denied');
+      },
+    } as unknown as IdentityService,
+  };
+  expect(accessContext.run(context, () => tracker.candidates('p'))).toEqual([]);
+  expect(() =>
+    accessContext.run(context, () => tracker.assign('p', 'o/r', 12, 'a')),
+  ).toThrow('denied');
+});
 it('never revives a completed claim because an unrelated turn started', () => {
   tracker.claim('p', 'o/r', 12, 'a', 'working', 'turn-1');
   turns = ['unrelated-turn'];

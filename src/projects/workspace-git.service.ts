@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  ForbiddenException,
 } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import {
@@ -16,6 +17,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { requireExecutionAccess } from '../auth/access-context';
 import * as path from 'node:path';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
@@ -112,6 +114,44 @@ export class WorkspaceGitService {
       phase,
       turnId,
       monitorId,
+    );
+  }
+
+  pullRequestAgents(projectId: string, resourceId: string) {
+    this.github(projectId, resourceId);
+    if (!this.tracker) throw new ConflictException('PR_TRACKER_UNAVAILABLE');
+    return { agents: this.tracker.candidates(projectId) };
+  }
+
+  async assignPullRequestAgent(
+    projectId: string,
+    resourceId: string,
+    number: string,
+    body: Record<string, unknown>,
+  ) {
+    requireExecutionAccess();
+    const { resource } = this.resources.resolveForTransfer(
+      projectId,
+      resourceId,
+    );
+    if (resource.accessMode !== 'read_write')
+      throw new ForbiddenException('GIT_READ_ONLY');
+    if (
+      typeof body.threadId !== 'string' ||
+      !body.threadId.trim() ||
+      body.threadId.length > 200
+    )
+      throw new BadRequestException('PR_AGENT_UNAVAILABLE');
+    const pr = await this.pullRequest(projectId, resourceId, number);
+    if (pr.state !== 'open') throw new ConflictException('PR_NOT_OPEN');
+    const repo = this.github(projectId, resourceId);
+    if (!repo || !this.tracker)
+      throw new ConflictException('PR_TRACKER_UNAVAILABLE');
+    return this.tracker.assign(
+      projectId,
+      `${repo.owner}/${repo.repo}`,
+      pr.number,
+      body.threadId,
     );
   }
 
