@@ -54,7 +54,7 @@ it('shares bounded checks only after resolving access and distinguishes tokens',
     'access revoked',
   );
 });
-it('drops failed observations instead of caching an unavailable state as success', async () => {
+it('does not turn a failed observation into success and pauses repeated network reads', async () => {
   const service = new WorkspaceGitService(
     {} as WorkspaceCopiesService,
     {
@@ -71,5 +71,5 @@ it('drops failed observations instead of caching an unavailable state as success
   vi.stubGlobal('fetch', fetch);
   await expect(service.checks('p', 'r', '12')).rejects.toThrow();
   await expect(service.checks('p', 'r', '12')).rejects.toThrow();
-  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch).toHaveBeenCalledTimes(1);
 });

@@ -227,5 +227,5 @@ it('preserves provider restrictions and sanitizes access errors', async () => {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('private-token')));
   await expect(
     service.mergeChecks('project', 'connection', '12'),
-  ).rejects.toThrow('GitHub is unavailable');
+  ).rejects.toThrow('GIT_GITHUB_NETWORK');
 });

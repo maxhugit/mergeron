@@ -48,8 +48,11 @@ test.each([390, 1180])(
     await page.viewport(width, 900);
     await i18nReady;
     await i18n.changeLanguage('fr');
-    api.mockImplementation((url: string, options?: RequestInit) =>
-      Promise.resolve(
+    let listOffline = false;
+    api.mockImplementation((url: string, options?: RequestInit) => {
+      if (listOffline && url.endsWith('/pull-requests'))
+        return Promise.reject(new Error('GIT_GITHUB_TIMEOUT'));
+      return Promise.resolve(
         url.endsWith('/pr-agents')
           ? { agents: [{ threadId: 'creator2', name: 'Documentation' }] }
           : options?.method === 'POST' && url.endsWith('/14/agent')
@@ -149,8 +152,8 @@ test.each([390, 1180])(
                       },
                     ],
                   },
-      ),
-    );
+      );
+    });
     const root = createRootRoute();
     const index = createRoute({
       getParentRoute: () => root,
@@ -252,6 +255,19 @@ test.each([390, 1180])(
     ).toBeVisible();
     await page.screenshot({
       path: `../../../.vitest-screenshots/pr-tracker-${width}.png`,
+    });
+    listOffline = true;
+    await client.refetchQueries({ queryKey: ['workspace-git-prs', 'p', 'r'] });
+    await screen.findByText(/Liste conservée depuis/);
+    expect(screen.queryByText('Prête à fusionner')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: '#12 Améliorer le classement' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Fusionner la PR…' }),
+    ).toBeNull();
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/pr-tracker-stale-${width}.png`,
     });
     fireEvent.click(link);
     await screen.findByText('Conversation de l’agent créateur');

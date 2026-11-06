@@ -252,7 +252,7 @@
   "gitUntracked": "Nouveau fichier, pas encore suivi. Ouvrez-le pour consulter son contenu.",
   "gitNoTextDiff": "Aucune comparaison textuelle disponible (fichier binaire, conflit ou changement de métadonnées).",
   "gitOpenFile": "Ouvrir le fichier",
-  "gitGithubError": "GitHub indisponible ou accès refusé. Vérifiez le jeton et les permissions de cette ressource.",
+  "gitGithubError": "Impossible de charger les informations GitHub. Réessayez dans un instant.",
   "gitProviderUnsupported": "Les PR et checks sont actuellement disponibles pour github.com. Les fichiers et branches fonctionnent avec les autres hébergeurs Git.",
   "gitNoPr": "Aucune pull request ouverte.",
   "gitDraft": "Brouillon",
@@ -392,5 +392,13 @@
   "gitPrAgentsError": "Impossible de charger les agents du projet.",
   "gitPrAgentsEmpty": "Aucun agent disponible dans ce projet.",
   "gitPrAssigning": "Affectation en cours…",
-  "gitPrAssignError": "Affectation impossible. Vérifiez vos droits et actualisez la liste des PR."
+  "gitPrAssignError": "Affectation impossible. Vérifiez vos droits et actualisez la liste des PR.",
+  "gitGithubTimeout": "GitHub n’a pas répondu dans le délai prévu. Nouvelle tentative espacée automatiquement.",
+  "gitGithubNetwork": "Connexion réseau à GitHub impossible. Nouvelle tentative espacée automatiquement.",
+  "gitGithubRateLimit": "GitHub limite temporairement les requêtes. Les appels sont mis en pause.",
+  "gitGithubAuth": "GitHub refuse le jeton configuré. Vérifiez ses identifiants.",
+  "gitGithubAccess": "Ressource GitHub introuvable ou accès non autorisé.",
+  "gitGithubUnavailable": "Le service GitHub est temporairement indisponible.",
+  "gitGithubBusy": "Les lectures GitHub sont occupées. Nouvelle tentative espacée automatiquement.",
+  "gitPrListStale": "Liste conservée depuis {{date}} ; état non confirmé et fusion suspendue."
 }

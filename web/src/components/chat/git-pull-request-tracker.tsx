@@ -1,5 +1,10 @@
-import { useState } from 'react';
-import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
+import { useContext, useState } from 'react';
+import {
+  useQuery,
+  useQueries,
+  useQueryClient,
+  type Query,
+} from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   ChevronDown,
@@ -14,6 +19,9 @@ import {
   type GitPullRequests,
 } from '@/lib/workspace-git-api';
 import { gitPrStatus } from '@/lib/git-pr-status';
+import { gitGithubErrorKey } from '@/lib/git-github-error';
+import { translationKey } from '@/locales/translation-key';
+import { SurfaceActivityContext } from '@/lib/surface-activity';
 import { GitPrTrackerSummary } from './git-pr-tracker-summary';
 import { GitMergeAction } from './workspace-git-actions';
 
@@ -35,6 +43,7 @@ export function GitPullRequestTracker({
 }: Props) {
   const { t } = useTranslation('workspaces');
   const queryClient = useQueryClient();
+  const active = useContext(SurfaceActivityContext);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [lastMerged, setLastMerged] = useState<number | null>(null);
   const [page, setPage] = useState(0);
@@ -46,7 +55,9 @@ export function GitPullRequestTracker({
         `resources/${encodeURIComponent(resourceId)}/pull-requests`,
         signal,
       ),
-    refetchInterval: 15_000,
+    enabled: active,
+    refetchInterval: (query) => (query.state.error ? 120_000 : 60_000),
+    refetchOnWindowFocus: false,
     retry: false,
   });
   const pageCount = Math.max(1, Math.ceil((prs.data?.items.length ?? 0) / 5));
@@ -54,7 +65,7 @@ export function GitPullRequestTracker({
   const rows =
     prs.data?.items.slice(currentPage * 5, (currentPage + 1) * 5) ?? [];
   const observations = useQueries({
-    queries: rows.map((pr) => ({
+    queries: rows.map((pr, index) => ({
       queryKey: ['workspace-git-checks', projectId, resourceId, pr.number],
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         gitGet<GitChecks>(
@@ -62,8 +73,20 @@ export function GitPullRequestTracker({
           `resources/${encodeURIComponent(resourceId)}/pull-requests/${pr.number}/checks`,
           signal,
         ),
-      enabled: !prs.isError,
-      refetchInterval: 60_000,
+      enabled: active && !prs.isError,
+      refetchInterval: (query: Query<GitChecks>) => {
+        const status = gitPrStatus(
+          pr.head,
+          pr.draft,
+          query.state.data,
+          Boolean(query.state.error),
+        );
+        return (
+          (status === 'checking' && !query.state.error ? 30_000 : 120_000) +
+          index * 3000
+        );
+      },
+      refetchOnWindowFocus: false,
       retry: false,
     })),
   });
@@ -106,10 +129,10 @@ export function GitPullRequestTracker({
         {t('gitLoading')}
       </p>
     );
-  if (prs.isError)
+  if (prs.isError && !prs.data)
     return (
       <p role="alert" className="p-3 text-xs text-destructive">
-        {t('gitGithubError')}
+        {t(translationKey(gitGithubErrorKey(prs.error)))}
       </p>
     );
   if (!prs.data?.supported)
@@ -131,6 +154,14 @@ export function GitPullRequestTracker({
       {prs.data.limited && (
         <p className="shrink-0 px-3 pb-1 text-muted-foreground">
           {t('gitLimited')}
+        </p>
+      )}
+      {prs.isError && (
+        <p role="alert" className="shrink-0 px-3 pb-2 text-muted-foreground">
+          {t(translationKey(gitGithubErrorKey(prs.error)))}{' '}
+          {t('gitPrListStale', {
+            date: new Date(prs.dataUpdatedAt).toLocaleTimeString(),
+          })}
         </p>
       )}
       {lastMerged !== null && (
@@ -172,7 +203,10 @@ export function GitPullRequestTracker({
           >
             {rows.map((pr, i) => {
               const selected = pr;
-              const observation = observations[i];
+              const observation = {
+                ...observations[i],
+                isError: prs.isError || observations[i].isError,
+              };
               const checks = observation?.data;
               const open = expanded.has(pr.number);
               return (
@@ -210,7 +244,7 @@ export function GitPullRequestTracker({
                     projectId={projectId}
                     resourceId={resourceId}
                     pr={pr}
-                    observation={observations[i]}
+                    observation={observation}
                     canAssign={canWrite}
                   />
                   {open && (
@@ -241,7 +275,11 @@ export function GitPullRequestTracker({
                         <p role="status">{t('gitLoading')}</p>
                       ) : observation?.isError ? (
                         <p role="alert" className="text-destructive">
-                          {t('gitGithubError')}
+                          {t(
+                            translationKey(
+                              gitGithubErrorKey(prs.error ?? observation.error),
+                            ),
+                          )}
                         </p>
                       ) : (
                         checks && (
