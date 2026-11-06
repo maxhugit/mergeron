@@ -1,0 +1,14 @@
+{
+  "title": "Interactive mockup",
+  "open": "Open mockup",
+  "revision": "Revision",
+  "desktop": "Desktop",
+  "mobile": "Mobile",
+  "restart": "Restart preview",
+  "simulation": "Simulation only. Give feedback in the conversation; this mockup does not run real operations.",
+  "scriptError": "An error occurred in the mockup. The conversation remains available.",
+  "loadError": "Mockup unavailable or access denied.",
+  "retry": "Retry",
+  "loading": "Loading mockup…",
+  "close": "Close mockup"
+}

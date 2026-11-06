@@ -1,3 +1,4 @@
+import { MockupsModule } from './mockups/mockups.module';
 import { TranscriptionsModule } from './transcriptions/transcriptions.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -104,6 +105,7 @@ const PINO_REDACT = {
 
 @Module({
   imports: [
+    MockupsModule,
     AgentMonitorsModule,
     BrowserModule,
     TranscriptionsModule,

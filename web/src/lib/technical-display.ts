@@ -6,6 +6,8 @@ export const useExpandedTechnicalDetails = () =>
   useContext(ExpandedTechnicalDetails);
 
 export function isTechnicalItem(item: TurnItem): boolean {
+  if (item.type === 'mcpToolCall' && item.mockupReference && !item.failed)
+    return false;
   if (
     item.type === 'functionCallOutput' &&
     item.outputParts.some(

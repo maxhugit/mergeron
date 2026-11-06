@@ -1,0 +1,14 @@
+{
+  "title": "Maquette interactive",
+  "open": "Ouvrir la maquette",
+  "revision": "Révision",
+  "desktop": "Ordinateur",
+  "mobile": "Mobile",
+  "restart": "Relancer l’aperçu",
+  "simulation": "Simulation uniquement. Donnez vos retours dans la conversation ; cette maquette n’exécute aucune opération réelle.",
+  "scriptError": "Une erreur est survenue dans la maquette. La conversation reste accessible.",
+  "loadError": "Maquette indisponible ou accès refusé.",
+  "retry": "Réessayer",
+  "loading": "Chargement de la maquette…",
+  "close": "Fermer la maquette"
+}

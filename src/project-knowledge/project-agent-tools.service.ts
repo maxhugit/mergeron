@@ -1,3 +1,4 @@
+import type { MockupsService } from '../mockups/mockups.service';
 import type { ProjectMediaToolsService } from '../transcriptions/project-media-tools.service';
 import {
   Inject,
@@ -247,6 +248,13 @@ export class ProjectAgentToolsService {
         })
         .tool(scope.project.id, threadId, input, assertActive);
     }
+    if (
+      typeof input.tool === 'string' &&
+      input.tool.startsWith('project_mockup_')
+    )
+      return this.modules
+        .get<MockupsService>('PROJECT_MOCKUP_TOOLS', { strict: false })
+        .tool(scope.project.id, threadId, input, assertActive, canWrite);
     if (
       input.tool === 'project_media_read' ||
       input.tool === 'project_media_manage'

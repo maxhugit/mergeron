@@ -16,6 +16,8 @@ droits, conserve les données et relie l’interface aux moteurs et services aut
   accès aux outils de travail et environnements autorisés.
 - `internal-mcp/`, `mcp-servers/`, `apps/`, `plugins/`, `skills/` et `models/`
   exposent les capacités et intégrations disponibles.
+- `mockups/` conserve les maquettes interactives de conversation et leurs révisions ;
+  leur publication réutilise les documents des livrables, sans environnement de test.
 - `preview/` concerne les réponses et aperçus de fichiers ; `previews/` gère
   les environnements de test. Ces deux fonctions ne sont pas interchangeables.
 - `logs/`, `push/`, `turn-errors/`, `turn-diff/` et `token-usage/` fournissent

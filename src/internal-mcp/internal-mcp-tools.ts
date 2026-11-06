@@ -43,7 +43,55 @@ const browserRead: ToolPolicy = {
   forbidImpersonation: true,
 };
 
+const mockupWrite: ToolPolicy = {
+  ...conversationWrite,
+  forbidImpersonation: true,
+};
+
 const definitions = {
+  project_mockup_create: {
+    name: 'project_mockup_create',
+    title: 'Mockups — Create an interactive mockup',
+    titleFr: 'Maquettes — Créer une maquette interactive',
+    handler: 'project',
+    policy: mockupWrite,
+  },
+  project_mockup_read: {
+    name: 'project_mockup_read',
+    title: 'Mockups — Read a mockup source and revisions',
+    titleFr: 'Maquettes — Consulter une maquette et ses révisions',
+    handler: 'project',
+    policy: projectRead,
+  },
+  project_mockup_manage: {
+    name: 'project_mockup_manage',
+    title: 'Mockups — Publish a new mockup revision',
+    titleFr: 'Maquettes — Publier une révision de maquette',
+    handler: 'project',
+    policy: mockupWrite,
+  },
+  project_mockup_list: {
+    name: 'project_mockup_list',
+    title: 'Mockups — List conversation mockups',
+    titleFr: 'Maquettes — Lister les maquettes de la conversation',
+    handler: 'project',
+    policy: projectRead,
+  },
+  project_mockup_report: {
+    name: 'project_mockup_report',
+    title: 'Mockups — Present a mockup reference',
+    titleFr: 'Maquettes — Présenter une maquette',
+    handler: 'project',
+    policy: projectRead,
+  },
+  project_mockup_publish: {
+    name: 'project_mockup_publish',
+    title: 'Mockups — Save a mockup into a deliverable',
+    titleFr: 'Maquettes — Enregistrer une maquette dans un livrable',
+    handler: 'project',
+    policy: mockupWrite,
+  },
+
   agent_monitor_read: {
     name: 'agent_monitor_read',
     title: 'Monitoring — Read conversation monitors',

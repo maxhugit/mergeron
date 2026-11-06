@@ -7,6 +7,9 @@ Mergeron. Les guides fonctionnels décrivent les parcours et leurs protections ;
 les références techniques détaillent l’architecture, les contrats et les contrôles.
 Pour situer le code, consulter les [répertoires racine du dépôt](../README.md#répertoires-du-dépôt).
 
+- [Maquettes interactives](interactive-mockups.md) : valider une interface dans un
+  onglet de conversation et conserver une version dans un livrable.
+
 ## Installer et exploiter sur Docker
 
 Le [premier administrateur et ses contrôles techniques](initial-admin-setup.md)

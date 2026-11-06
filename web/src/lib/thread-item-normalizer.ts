@@ -1,3 +1,4 @@
+import { presentedMockup } from './mockups';
 /** Pure normalization from app-server ThreadItem payloads to the UI timeline union. */
 import type {
   DynamicToolOutputPart,
@@ -385,6 +386,7 @@ export function normalizeThreadItem(
           content: result?.content
             ? displayJson(result.content, 500)
             : stringValue(error?.message),
+          mockupReference: presentedMockup(item.server, item.tool, item.result),
           toolServer: stringValue(item.server),
           toolName: stringValue(item.tool),
           toolArgs: displayJson(item.arguments),
@@ -638,6 +640,8 @@ export function mergeTurnItem(
             ...incoming,
             content: incoming.content || existing.content,
             toolProgress: incoming.toolProgress ?? existing.toolProgress,
+            mockupReference:
+              incoming.mockupReference ?? existing.mockupReference,
           }
         : incoming;
     case 'fileChange':

@@ -1,3 +1,4 @@
+import type { MockupReference } from '@/lib/mockups';
 /** Browser-session view descriptors. Documents and terminal processes have separate owners. */
 import { create } from 'zustand';
 import { useTerminalViewStore } from './terminal-view-store';
@@ -13,6 +14,7 @@ export type EditorViewState = ReturnType<
   Parameters<OnMount>[0]['saveViewState']
 >;
 export type WorkspaceTab =
+  | { id: string; kind: 'mockup'; reference: MockupReference }
   | { id: string; kind: 'preview'; projectId: string; threadId: string }
   | {
       id: string;
@@ -74,6 +76,7 @@ interface WorkspaceState {
   contexts: Record<string, WorkspaceContext>;
   fileViews: Record<string, FileViewState>;
   openFile: (context: string, path: string, line?: number | null) => void;
+  openMockup: (context: string, reference: MockupReference) => void;
   openPreview: (context: string, projectId: string, threadId: string) => void;
   openBrowser: (context: string, mode?: 'local' | 'isolated') => void;
   setBrowserLayout: (
@@ -120,6 +123,23 @@ function clearActiveReveal(state: WorkspaceState, context: string) {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   contexts: {},
   fileViews: {},
+  openMockup: (context, reference) =>
+    set((state) => {
+      const current = state.contexts[context] ?? EMPTY_WORKSPACE;
+      const id = `mockup:${reference.id}:${reference.revision}`;
+      return {
+        contexts: {
+          ...state.contexts,
+          [context]: {
+            ...current,
+            activeId: id,
+            tabs: current.tabs.some((tab) => tab.id === id)
+              ? current.tabs
+              : [...current.tabs, { id, kind: 'mockup' as const, reference }],
+          },
+        },
+      };
+    }),
   openPreview: (context, projectId, threadId) =>
     set((state) => {
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;

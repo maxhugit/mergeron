@@ -11,11 +11,11 @@ import {
 
 describe('internal MCP public names and stable execution identities', () => {
   it('gives every schema exactly one canonical definition and localized title', () => {
-    expect(INTERNAL_MCP_TOOLS).toHaveLength(24);
+    expect(INTERNAL_MCP_TOOLS).toHaveLength(30);
     expect(INTERNAL_MCP_TOOLS.map((t) => t.operation)).toEqual(
       INTERNAL_MCP_IDENTITIES.map((t) => t.operation),
     );
-    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(24);
+    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(30);
     for (const tool of INTERNAL_MCP_TOOLS) {
       expect(tool.titleFr).toContain(' — ');
       expect(tool.title).toContain(' — ');
@@ -103,6 +103,9 @@ describe('internal MCP public names and stable execution identities', () => {
       expect(tool.policy.requiresWorkspaceWrite).toBe(
         !tool.readOnly &&
           ![
+            'project_mockup_create',
+            'project_mockup_manage',
+            'project_mockup_publish',
             'rename_agent',
             'track_project_pull_request',
             'agent_monitor_manage',
@@ -113,7 +116,13 @@ describe('internal MCP public names and stable execution identities', () => {
         tool.handler !== 'project' || operation === 'project_media_manage',
       );
       expect(tool.policy.forbidImpersonation).toBe(
-        tool.handler !== 'project' || operation === 'project_media_manage',
+        tool.handler !== 'project' ||
+          operation === 'project_media_manage' ||
+          [
+            'project_mockup_create',
+            'project_mockup_manage',
+            'project_mockup_publish',
+          ].includes(operation),
       );
     }
     expect(internalMcpTransportApprovals()).toEqual({

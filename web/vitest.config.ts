@@ -13,6 +13,28 @@ import { fileURLToPath } from 'node:url';
 import { sessionStackFixtures } from './test/session-stack';
 import { createSilentRenewalFixture } from './test/silent-renewal';
 
+const mockupPreview: BrowserCommand<['next' | 'confirm' | 'ready']> = async (
+  context,
+  action,
+) => {
+  const preview = context.iframe.frameLocator('iframe');
+  if (action === 'next')
+    await preview.getByRole('button', { name: 'Next', exact: true }).click();
+  if (action === 'confirm') {
+    await preview
+      .getByRole('button', { name: 'Preview action', exact: true })
+      .press('Enter');
+    await preview
+      .getByRole('button', { name: 'Simulation confirmed', exact: true })
+      .waitFor({ state: 'visible' });
+  }
+  if (action === 'ready')
+    await preview
+      .getByRole('heading', { name: 'Project dashboard', exact: true })
+      .waitFor({ state: 'visible' });
+  return preview.locator('body').innerText();
+};
+
 const sessionStack = sessionStackFixtures();
 const sessionStackControl: BrowserCommand<
   [
@@ -278,6 +300,7 @@ export default mergeConfig(
               headless: true,
               provider: playwright(),
               commands: {
+                mockupPreview,
                 authenticatedManifest,
                 scrollTranscript,
                 sidebarProjectDrag,
