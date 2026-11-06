@@ -1,3 +1,4 @@
+import { ensureUpdateMonitor } from './update-monitor-api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { retainManagerUpdateSnapshot } from './manager-update-recovery';
@@ -70,6 +71,24 @@ export function ManagerUpdateProgressDialog({
   monitoringPaused?: boolean;
 }) {
   const { t, i18n } = useTranslation('manager');
+  useEffect(() => {
+    if (!open || !independent || pending || monitoringPaused) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const authorize = async () => {
+      try {
+        await ensureUpdateMonitor();
+      } catch {
+        if (!stopped) timer = setTimeout(() => void authorize(), 5000);
+      }
+    };
+    void authorize();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [open, independent, pending, monitoringPaused, session]);
+
   const { t: common } = useTranslation();
   const client = useQueryClient();
   const expectedId = initialOperation?.id ?? expectedOperationId;

@@ -161,3 +161,37 @@ it('keeps installed versions readable when Manager is unavailable', async () => 
     screen.getByRole('button', { name: 'Update Mergeron' }),
   ).toBeDisabled();
 });
+
+it('opens the existing operation from the component console without starting another update', async () => {
+  currentManager = {
+    ...manager,
+    update: {
+      busy: false,
+      operation: {
+        id: 'existing-operation',
+        status: 'succeeded',
+        phase: 'complete',
+        startedAt: '2026-11-06T10:00:00Z',
+        events: [],
+        images: {},
+        previousImages: {},
+        backupRetained: false,
+        rollbackAvailable: false,
+      },
+    },
+  } as unknown as ManagerStatus;
+  fixture.queryClient.setQueryData(managerStatusQueryKey, currentManager);
+  fixture.render(<ServerVersionCard view="current" />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'View progress and logs' }),
+  );
+  expect(await screen.findByRole('dialog')).toBeVisible();
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.some(
+        ([url, input]) =>
+          String(url).endsWith('/manager/update') && input?.method === 'POST',
+      ),
+  ).toBe(false);
+});

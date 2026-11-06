@@ -77,6 +77,7 @@ export function ManagerUpdateControls({
   renderUpdates?: (controls: {
     disabled: boolean;
     onUpdate: (images: Record<string, string>) => void;
+    monitorAction?: ReactNode;
   }) => ReactNode;
 }) {
   const { t } = useTranslation('manager');
@@ -185,6 +186,21 @@ export function ManagerUpdateControls({
       }
     >
       {renderUpdates?.({
+        monitorAction:
+          operation || progressOperation || progressSession > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setProgressOperation(operation ?? progressOperation);
+                setExcludedOperationId(null);
+                setProgressSession(Date.now());
+                setProgressOpen(true);
+              }}
+            >
+              {t('managerViewUpdateProgress')}
+            </Button>
+          ) : undefined,
         disabled: Boolean(
           busy ||
           blocked ||
