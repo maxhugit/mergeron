@@ -29,6 +29,8 @@ ou le menu d’actions du dossier, du livrable ou de la source Git. La référen
 mémorisée côté serveur pour la conversation. Parcourir les fichiers ne sélectionne
 jamais implicitement une nouvelle référence. Un chemin indisponible ou interdit
 reste refusé ; choisir une référence ne donne aucun droit supplémentaire.
+Un livrable ou un sous-dossier conserve son chemin relatif dans l’emplacement
+local du projet : il n’est pas nécessaire de sélectionner la racine de cet emplacement.
 
 ## Organisation physique, version 4
 

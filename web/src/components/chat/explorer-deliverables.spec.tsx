@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ExplorerDeliverables } from './explorer-deliverables';
 import { useFilesStore } from '@/stores/files-store';
 import type { ProjectSummary } from '@/lib/projects-api';
+import { localExecutionSelection } from '@/lib/project-execution-location';
 vi.mock('@/hooks/use-file-watch', () => ({ useFileWatch: () => {} }));
 vi.mock('@/lib/platform-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/platform-session')>()),
@@ -62,7 +63,7 @@ vi.mock('@/components/files/file-viewer', () => ({ FileViewer: () => null }));
 const project = {
   id: 'p',
   resources: [],
-  workspaces: [],
+  workspaces: [{ id: 'primary', path: '/project' }],
 } as unknown as ProjectSummary;
 function fixture(onReference = vi.fn(), revealPath?: string, onFile = vi.fn()) {
   return render(
@@ -104,6 +105,22 @@ describe('deliverable explorer', () => {
     expect(reference).toHaveBeenCalledExactlyOnceWith(
       '/project/.mergeron-system/livrables/d',
     );
+  });
+  it('resolves the selected deliverable into an explicit nested project location', async () => {
+    const association = vi.fn();
+    fixture(
+      vi.fn((directory: string) =>
+        association(localExecutionSelection(project, directory)),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Actions : Report' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Use as agent reference' }),
+    );
+    expect(association).toHaveBeenCalledExactlyOnceWith({
+      locationId: 'local:primary',
+      relativePath: '.mergeron-system/livrables/d',
+    });
   });
   it('reveals the document list directly from a deliverable or document link', async () => {
     fixture(undefined, '/project/.mergeron-system/livrables/d/Choix.docx');

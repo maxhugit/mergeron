@@ -1,4 +1,5 @@
 import type { ProjectWorkspaceSummary } from './projects-api';
+import { projectDirectorySelection } from './project-locations-api';
 
 /** UI selection only; the server revalidates ownership and execution eligibility. */
 export function localExecutionSelection(
@@ -7,10 +8,7 @@ export function localExecutionSelection(
   },
   cwd: string,
 ) {
-  const location = project.workspaces.find(
-    (workspace) => workspace.path === cwd,
-  );
-  return location
-    ? { locationId: `local:${location.id}`, relativePath: '' }
-    : null;
+  // References may point to a deliverable or another nested project folder.
+  // Preserve its relative path instead of requiring an exact workspace root.
+  return projectDirectorySelection(project, cwd);
 }
