@@ -62,7 +62,7 @@ test('keeps component headers and bottom actions fixed while the table scrolls',
   const table = screen.getByRole('table');
   for (const width of [1100, 390]) {
     await page.viewport(width, 700);
-    const update = screen.getByRole('button', { name: /Update selected/ });
+    const update = screen.getByRole('button', { name: /Update Mergeron/ });
     expect(update.parentElement).toBe(footer);
     expect(update).toBeDisabled();
     expect(footer.getBoundingClientRect().top).toBeGreaterThanOrEqual(
