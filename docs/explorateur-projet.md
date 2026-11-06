@@ -10,7 +10,10 @@ répertoire ne change pas le dossier de référence de l’agent.
   principal est `dossiers/`. Les autres connexions locales restent sélectionnables.
 - **Livrables** présente les livrables par leur titre, leurs documents et leurs
   actions habituelles (détails, documents, historique, validation, tâche principale,
-  suppression). Déplier un livrable ouvre l’explorateur de ses documents.
+  suppression). Déplier un livrable affiche ses documents enregistrés avec leur version courante
+  (V1, V2…). Cette liste ne propose ni navigation dans le système de fichiers ni
+  création de dossiers. Les dossiers virtuels par étiquettes restent disponibles,
+  ainsi que les actions versionnées propres à chaque document.
   Créer, déposer, enregistrer ou renommer un document dans cette vue passe par
   le gestionnaire de livrables : le fichier devient un document du livrable,
   avec son identité, ses versions et ses contrôles de concurrence.

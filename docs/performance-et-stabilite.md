@@ -1,5 +1,18 @@
 # Performance et stabilité du code
 
+## Bibliothèque zlib du Manager
+
+L’image distroless inclut une bibliothèque Debian partagée `zlib1g` inutilisée
+par Node, qui embarque sa propre implémentation de compression. Le build retire
+les fichiers de cette dépendance et son inventaire de paquets ensemble pour
+éliminer la bibliothèque système affectée par
+[CVE-2026-76844](https://security-tracker.debian.org/tracker/CVE-2026-76844).
+Il refuse le retrait si Node charge cette bibliothèque ou si l’inventaire du
+paquet diffère des chemins attendus dans la base épinglée. Un nouveau processus
+Node vérifie ensuite l’absence de la bibliothèque et la compression/décompression
+réelle. Les tests de sauvegarde, restauration, archive et CLI ainsi que le scan
+HIGH/CRITICAL restent exigés ; aucune exception de vulnérabilité n’est ajoutée.
+
 ## Correctifs du runtime navigateur
 
 L’image navigateur met à jour APT et `libapt-pkg6.0t64` vers au moins

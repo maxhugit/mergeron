@@ -160,6 +160,16 @@ class ManagerDeploymentTest(unittest.TestCase):
         )
         self.assertIn("deployment/config/squid.conf", self.dockerfile)
 
+    def test_manager_removes_only_unused_shared_zlib_and_verifies_fresh_node_compression(self) -> None:
+        self.assertIn('COPY scripts/prune-manager-zlib.mjs /tmp/prune-manager-zlib.mjs', self.dockerfile)
+        self.assertIn('JSON.stringify(pruneManagerZlib())', self.dockerfile)
+        self.assertIn("unlinkSync('/tmp/prune-manager-zlib.mjs')", self.dockerfile)
+        self.assertIn("assert(!existsSync('/usr/lib/x86_64-linux-gnu/libz.so.1'))", self.dockerfile)
+        self.assertIn("assert(!existsSync('/usr/lib/x86_64-linux-gnu/libz.so.1.3.1'))", self.dockerfile)
+        self.assertIn("assert(!existsSync('/var/lib/dpkg/status.d/zlib1g'))", self.dockerfile)
+        self.assertIn("gunzipSync(gzipSync('manager-runtime-compression'))", self.dockerfile)
+        self.assertGreaterEqual(self.dockerfile.count('RUN ["/nodejs/bin/node"'), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

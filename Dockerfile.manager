@@ -48,6 +48,13 @@ RUN mkdir -p /runtime/run/mergeron-manager /runtime/var/lib/mergeron-manager \
 # Keep npm and the build distribution out of the privileged final image.
 FROM gcr.io/distroless/nodejs22-debian13@sha256:f643bc05bdcf5a8d98442e8a2a5c7a3a4c3a0e3bc4cdc5f10557d47f1ddd5812
 
+# Node embeds its own compression implementation: the inherited Debian shared
+# zlib is unused (CVE-2026-76844). Remove its real files and inventory together,
+# then verify a NEW Node process still starts and compresses/decompresses data.
+COPY scripts/prune-manager-zlib.mjs /tmp/prune-manager-zlib.mjs
+RUN ["/nodejs/bin/node", "--input-type=module", "-e", "import {pruneManagerZlib} from '/tmp/prune-manager-zlib.mjs'; import {unlinkSync} from 'node:fs'; console.log(JSON.stringify(pruneManagerZlib())); unlinkSync('/tmp/prune-manager-zlib.mjs');"]
+RUN ["/nodejs/bin/node", "--input-type=module", "-e", "import assert from 'node:assert/strict'; import {existsSync} from 'node:fs'; import {gzipSync,gunzipSync} from 'node:zlib'; assert(!existsSync('/usr/lib/x86_64-linux-gnu/libz.so.1')); assert(!existsSync('/usr/lib/x86_64-linux-gnu/libz.so.1.3.1')); assert(!existsSync('/var/lib/dpkg/status.d/zlib1g')); assert.equal(gunzipSync(gzipSync('manager-runtime-compression')).toString(),'manager-runtime-compression');"]
+
 ARG MERGERON_VERSION=unknown
 ARG MERGERON_REVISION=unknown
 ARG MERGERON_BUILD_DATE=unknown
