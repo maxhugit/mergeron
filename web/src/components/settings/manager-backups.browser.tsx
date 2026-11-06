@@ -10,6 +10,9 @@ import type { ManagerStatus } from './manager-status-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 
+vi.mock('./update-monitor-api', () => ({
+  ensureUpdateMonitor: () => Promise.resolve(),
+}));
 vi.mock('./use-category-settings', () => ({
   useCategorySettings: () => ({
     settings: [],
@@ -36,6 +39,7 @@ vi.mock('./server-version-card', () => ({
 }));
 vi.mock('./manager-status-api', async (original) => ({
   ...(await original<typeof import('./manager-status-api')>()),
+  requestManagerStatus: async () => ({ available: false }),
   requestManagerRetention: async () => ({ maxBackups: 10 }),
   requestManagerBackups: async () => ({
     totalSizeBytes: null,
@@ -159,7 +163,6 @@ test.each([
           open
           onOpenChange={close}
           independent
-          monitoringPaused
           pending={false}
           requestError={null}
           session={Date.now()}
@@ -181,6 +184,7 @@ test.each([
       </QueryClientProvider>,
     );
     try {
+      document.querySelector('iframe')!.src = 'about:blank';
       const dialog = screen.getByRole('dialog');
       expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(
         height * 0.85 + 1,
