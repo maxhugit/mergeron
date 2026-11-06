@@ -304,6 +304,7 @@ export class ManagerStatusService {
 
   async updateOperation(
     action:
+      | 'monitor'
       | 'plan'
       | 'apply'
       | 'rollback'

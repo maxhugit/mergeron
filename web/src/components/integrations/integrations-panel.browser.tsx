@@ -213,7 +213,7 @@ test.each([390, 1280])(
     await page.getByRole('dialog').screenshot({
       path: `../../../.vitest-screenshots/integrations-plugin-modal-${engine}-${width}.png`,
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getByRole('tab', { name: 'Applications' }));
     expect(await screen.findByText('Home Assistant')).toBeVisible();

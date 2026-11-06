@@ -51,7 +51,9 @@ export function ManagerUpdateProgressDialog({
   excludedOperationId,
   expectedOperationId,
   monitoringPaused = false,
+  independent = false,
 }: {
+  independent?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   operation: ManagerUpdateOperation | null;
@@ -67,6 +69,11 @@ export function ManagerUpdateProgressDialog({
   const { t: common } = useTranslation();
   const client = useQueryClient();
   const expectedId = initialOperation?.id ?? expectedOperationId;
+  const monitorUrl = expectedId
+    ? `/_mergeron-update/?operation=${encodeURIComponent(expectedId)}`
+    : excludedOperationId
+      ? `/_mergeron-update/?exclude=${encodeURIComponent(excludedOperationId)}`
+      : '/_mergeron-update/';
   const query = useQuery({
     queryKey: ['administration', 'manager-update-progress', session],
     queryFn: async () => {
@@ -174,6 +181,23 @@ export function ManagerUpdateProgressDialog({
             {t('managerUpdateProgressDescription')}
           </DialogDescription>
         </DialogHeader>
+        {independent && (
+          <div className="space-y-2">
+            <a
+              className="text-primary underline"
+              href={monitorUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('independentMonitorOpen')}
+            </a>
+            <iframe
+              src={monitorUrl}
+              title={t('independentMonitorOpen')}
+              className="h-[45vh] w-full rounded border"
+            />
+          </div>
+        )}
         <div className="space-y-3" role="status" aria-live="polite">
           <p className="flex items-center gap-2 font-medium">
             {running && (

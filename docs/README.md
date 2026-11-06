@@ -130,3 +130,5 @@ avant de supposer qu’une ancienne version stable possède toutes ces fonctions
 - [Transcription locale de fichiers audio/vidéo](file-transcription.md) : service facultatif, locuteurs, limites et exploitation.
 
 - [Cohérence des projets : diagnostic et corrections](coherence-projets.md)
+
+- [Suivi HTTP indépendant des mises à jour](continuous-updates.md)

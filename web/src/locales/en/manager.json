@@ -253,5 +253,6 @@
   "byparrManagedUpdates": "Reviewed image updated with the Manager; no automatic installation.",
   "globalUpdateAction": "Update Mergeron",
   "globalUpdateManaged": "Managed by the global update",
-  "globalUpdateHelp": "Mergeron determines which components need updating and their order. Review the plan and backup before confirming."
+  "globalUpdateHelp": "Mergeron determines which components need updating and their order. Review the plan and backup before confirming.",
+  "independentMonitorOpen": "Open independent update monitoring"
 }
