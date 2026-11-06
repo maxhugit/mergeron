@@ -62,7 +62,7 @@ beforeEach(async () => {
   fixture.queryClient.setQueryData(componentUpdatesKey, updates);
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('image-updates')) return json(updates);
       if (url.endsWith('/manager/status')) return json(currentManager);
