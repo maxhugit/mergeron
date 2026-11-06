@@ -128,3 +128,9 @@ complet laisse aux sessions de l’application le temps de renouveler leurs rés
 Le backend peut explicitement utiliser `MERGERON_BROWSER_LIFECYCLE=external` pour un runtime
 externe non géré. Les anciens Managers sans cette API conservent le raccordement direct ; une
 erreur réseau du Manager moderne reste une erreur, sans démarrage alternatif ni modification du sandbox.
+
+## Suivi HTTP indépendant
+
+`MERGERON_UPDATE_MONITOR_ENABLED` vaut `false` par défaut. Activer `true` seulement après installation et vérification des deux relais HTTP indépendants et de leur routage TLS ; voir [le suivi des mises à jour](continuous-updates.md). Cette activation fait établir une session de suivi avant les mises à jour.
+
+Les relais utilisent uniquement `MERGERON_PUBLIC_HOST` (nom public exact), `MERGERON_GATEWAY_UPSTREAM` (ingress interne fixe) et `MERGERON_MONITOR_DIRECTORY` (`/monitor`, projection publique montée en lecture seule). Ces trois variables ne vont pas sur le conteneur applicatif.
