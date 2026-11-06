@@ -14,7 +14,7 @@ import {
   gatewayRouting,
 } from '../scripts/install-update-gateway.mjs';
 
-async function fixture(t) {
+async function fixture(t, gatewayOptions = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'mergeron-monitor-'));
   const app = http.createServer((req, res) => res.end('application'));
   await new Promise((r) => app.listen(0, '127.0.0.1', r));
@@ -22,6 +22,7 @@ async function fixture(t) {
     directory,
     hostname: 'mergeron.example.com',
     upstream: `http://127.0.0.1:${app.address().port}`,
+    ...gatewayOptions,
   });
   await new Promise((r) => gateway.listen(0, '127.0.0.1', r));
   t.after(async () => {
@@ -197,4 +198,15 @@ test('serializes concurrent monitoring grants without storing raw secrets', asyn
   assert.equal(new Set(stored.map((item) => item.hash)).size, 8);
   for (const grant of grants)
     assert(!JSON.stringify(stored).includes(grant.token));
+});
+
+test('a connected upstream may send delayed headers without the connection deadline truncating the request', async (t) => {
+  const f = await fixture(t, { connectTimeoutMs: 200 });
+  f.app.removeAllListeners('request');
+  f.app.on('request', (_request, response) =>
+    setTimeout(() => response.end('delayed response'), 400),
+  );
+  const result = await f.request('/long-office-operation');
+  assert.equal(result.status, 200);
+  assert.equal(result.body, 'delayed response');
 });

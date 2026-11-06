@@ -13,6 +13,7 @@ export function createUpdateGateway({
   upstream = 'http://mergeron-ingress:8080',
   request = http.request,
   now = Date.now,
+  connectTimeoutMs = 15000,
 }) {
   const destination = new URL(upstream);
   if (
@@ -113,7 +114,7 @@ export function createUpdateGateway({
         method: req.method,
         path: req.url,
         headers: req.headers,
-        timeout: 15000,
+        timeout: 3600000,
       },
       (upstreamResponse) => {
         if (document && [502, 503, 504].includes(upstreamResponse.statusCode)) {
@@ -124,6 +125,16 @@ export function createUpdateGateway({
         upstreamResponse.pipe(res);
       },
     );
+    // Bound connection establishment without truncating long Office/audio requests.
+    const connecting = setTimeout(() => proxy.destroy(), connectTimeoutMs);
+    const connected = () => clearTimeout(connecting);
+    proxy.once('socket', (socket) => {
+      if (socket.connecting) socket.once('connect', connected);
+      else connected();
+    });
+    proxy.once('response', connected);
+    proxy.once('close', connected);
+    proxy.once('error', connected);
     proxy.on('timeout', () => proxy.destroy());
     proxy.on('error', () => {
       if (!res.headersSent) {
@@ -153,6 +164,7 @@ export function createUpdateGateway({
       Number(destination.port) || 80,
       destination.hostname,
       () => {
+        remote.setTimeout(0); // The authenticated ingress owns WebSocket idle policy.
         remote.write(
           `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
             Object.entries(req.headers)
@@ -164,13 +176,13 @@ export function createUpdateGateway({
         socket.pipe(remote).pipe(socket);
       },
     );
-    remote.setTimeout(300000, () => remote.destroy());
+    remote.setTimeout(connectTimeoutMs, () => remote.destroy());
     remote.on('error', () => socket.destroy());
     socket.on('error', () => remote.destroy());
     socket.on('close', () => remote.destroy());
   });
   server.maxConnections = 256;
-  server.requestTimeout = 30000;
+  server.requestTimeout = 3600000;
   server.headersTimeout = 10000;
   return server;
 }
