@@ -23,7 +23,6 @@ function target(item?: ComponentImageUpdate) {
     !item?.targetImage ||
     !item.targetDigest ||
     !/^sha256:[a-f0-9]{64}$/.test(item.targetDigest) ||
-    item.id === 'manager' ||
     item.updateManagedBy === 'manager'
   )
     return null;
@@ -287,7 +286,7 @@ export function InstalledVersions({
                         variant="outline"
                         onClick={() => setDetails('manager')}
                       >
-                        {t('consoleHostProcedure')}
+                        {t('componentUpdatesNotes')}
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">

@@ -60,3 +60,28 @@ Le relais est une nouvelle frontière réseau : le proxy extérieur ne doit pas
 nécessite un retrait préalable du routage et une vérification de chaque nouvelle
 instance ; ne pas remplacer les deux simultanément. Le script initial ne
 constitue pas un mécanisme de remplacement à chaud garanti du proxy TLS externe.
+
+## Remplacement supervisé du Manager
+
+Lorsque le plan global inclut une image Manager immuable, son empreinte est liée
+au fingerprint du plan applicatif. Le Manager vérifie son identité, son réseau
+`none` et ses montages existants, puis lance un auxiliaire indépendant avant la
+transaction. Cet auxiliaire utilise l’image actuellement installée, sans réseau,
+avec racine en lecture seule, capacités supprimées et limites de ressources.
+Son accès Docker reste réservé à ce processus de remplacement ; les relais HTTP
+ne le reçoivent jamais.
+
+Après réussite de la sauvegarde et de la transaction applicative, l’auxiliaire
+renomme et arrête l’ancien Manager, puis crée le nouveau avec la spécification
+existante : mêmes droits, secrets, montages, limites et réseau. Il attend le
+contrôle Docker et une vraie réponse de la sonde Unix. Le conteneur précédent
+reste conservé à l’arrêt. Les spécifications privées sont écrites en mode 0600,
+avec synchronisation avant renommage du journal de remplacement.
+
+Un échec de santé restaure le Manager précédent. L’état global reste
+**intervention nécessaire**, car l’application a pu être mise à jour : cela ne
+prétend pas avoir restauré toute la stack. Le retour arrière applicatif isolé
+n’est pas proposé pour une opération qui a remplacé le Manager. Une modification
+d’identité ou des protections après préparation bloque le remplacement ; aucun
+conteneur étranger n’est écrasé. Une reprise de l’auxiliaire reconnaît ses propres
+conteneurs par l’identifiant privé de remplacement.

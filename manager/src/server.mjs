@@ -1,3 +1,5 @@
+import { ManagerReplacement } from './manager-replacement.mjs';
+import { GlobalUpdateCoordinator } from './global-update-coordinator.mjs';
 import { grantMonitor } from './update-monitor-journal.mjs';
 import { BrowserLifecycle } from './browser-lifecycle.mjs';
 import { ManagedTranscription } from './transcription.mjs';
@@ -89,6 +91,18 @@ const updater = new TransactionalUpdater({
   configuration: installConfiguration,
   adoptionPath,
   directory: `${dirname(adoptionPath)}/updates`,
+});
+const managerReplacement = new ManagerReplacement({
+  docker,
+  stack: manifest.stack,
+  directory: dirname(adoptionPath),
+  enabled: process.env.MERGERON_UPDATE_MONITOR_ENABLED === 'true',
+});
+const globalUpdates = new GlobalUpdateCoordinator({
+  updater,
+  replacement: managerReplacement,
+  docker,
+  stack: manifest.stack,
 });
 const transcription = new ManagedTranscription({
   docker,
@@ -424,7 +438,7 @@ const server = http.createServer(async (request, response) => {
           : component,
       ),
       events: [...events],
-      update: updater.status(),
+      update: await globalUpdates.status(),
       backupPolicy: environmentBackupPolicy(manifest),
       capabilities: {
         backupManagement: true,
@@ -433,6 +447,8 @@ const server = http.createServer(async (request, response) => {
         updateHistory: true,
         backupRestore: true,
         imageUpdates: true,
+        managerReplacement:
+          process.env.MERGERON_UPDATE_MONITOR_ENABLED === 'true',
         independentMonitor:
           process.env.MERGERON_UPDATE_MONITOR_ENABLED === 'true',
         browserLifecycle: true,
@@ -562,6 +578,7 @@ const server = http.createServer(async (request, response) => {
         adopting ||
         browserLifecycle.busy ||
         updater.busy ||
+        (await managerReplacement.busy()) ||
         previews.busy ||
         codexCli.busy ||
         appCatalog.busy ||
@@ -600,7 +617,7 @@ const server = http.createServer(async (request, response) => {
         json(
           response,
           200,
-          await updater.plan(body.images, body.mode, body.backupMode),
+          await globalUpdates.plan(body.images, body.mode, body.backupMode),
         );
       else if (request.url === '/v1/update/rollback')
         json(response, 200, await updater.requestRollback(body));
@@ -611,7 +628,7 @@ const server = http.createServer(async (request, response) => {
           .recover()
           .catch((error) => console.error(updater.safeError(error)));
         json(response, 200, updater.status());
-      } else json(response, 200, await updater.begin(body));
+      } else json(response, 200, await globalUpdates.begin(body));
     } catch (error) {
       const code = error instanceof Error ? error.message : 'updateFailed';
       json(
@@ -687,6 +704,7 @@ const server = http.createServer(async (request, response) => {
         adopting ||
         browserLifecycle.busy ||
         updater.busy ||
+        (await managerReplacement.busy()) ||
         previews.busy ||
         codexCli.busy ||
         appCatalog.busy ||

@@ -128,7 +128,10 @@ it('builds a global plan from fresh verified discovery and ignores client-select
     '/v1/update/plan',
     'POST',
     expect.objectContaining({
-      images: { application: `ghcr.io/maxhugit/mergeron@${nextId}` },
+      images: {
+        application: `ghcr.io/maxhugit/mergeron@${nextId}`,
+        manager: `ghcr.io/maxhugit/mergeron-manager@${nextId}`,
+      },
       backupMode: 'minimal',
     }),
   );
