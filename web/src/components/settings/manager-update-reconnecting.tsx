@@ -18,6 +18,7 @@ export function ManagerUpdateReconnecting({
         session={receipt.startedAt}
         excludedOperationId={receipt.excludedOperationId}
         expectedOperationId={receipt.operationId}
+        independent={receipt.independentMonitor === true}
         monitoringPaused
       />
     </main>

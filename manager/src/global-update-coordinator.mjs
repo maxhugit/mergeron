@@ -6,6 +6,12 @@ import { replacementFingerprint } from './manager-replacement.mjs';
 export class GlobalUpdateCoordinator {
   constructor({ updater, replacement, docker, stack }) {
     Object.assign(this, { updater, replacement, docker, stack });
+    updater.prepareManager = async (operation) => {
+      const plan = await replacement.plan(operation.managerTarget);
+      if (plan.fingerprint !== operation.managerFingerprint)
+        throw new Error('updatePlanChanged');
+      await replacement.launch(plan, operation.id);
+    };
   }
   async status() {
     const status = this.updater.status();
@@ -99,18 +105,14 @@ export class GlobalUpdateCoordinator {
     if (input.confirmation !== base.confirmation)
       throw new Error('updateConfirmationRequired');
     const requestedId = randomUUID();
-    const helper = await this.replacement.launch(manager, requestedId);
-    try {
-      return await this.updater.begin({
-        ...input,
-        images: base.images,
-        expectedFingerprint: base.fingerprint,
-        requestedId,
-        managerPending: true,
-      });
-    } catch (error) {
-      await this.replacement.cancel(helper);
-      throw error;
-    }
+    return this.updater.begin({
+      ...input,
+      images: base.images,
+      expectedFingerprint: base.fingerprint,
+      requestedId,
+      managerPending: true,
+      managerTarget: manager.image,
+      managerFingerprint: manager.fingerprint,
+    });
   }
 }

@@ -4,6 +4,7 @@ import type { ManagerUpdateOperation } from './manager-status-api';
 /** A tab-local UI receipt, never an authentication or mutation-replay token. */
 export interface ManagerUpdateReceipt {
   startedAt: number;
+  independentMonitor?: boolean;
   operationId: string | null;
   excludedOperationId: string | null;
   /** Display-only journal. It never authorizes a request or restores a session. */
@@ -32,6 +33,9 @@ export function readManagerUpdateReceipt(): ManagerUpdateReceipt | null {
       return null;
     const snapshot = sanitizeSnapshot(receipt.snapshot);
     return {
+      ...(receipt.independentMonitor === true
+        ? { independentMonitor: true }
+        : {}),
       startedAt: receipt.startedAt,
       operationId: receipt.operationId,
       excludedOperationId: receipt.excludedOperationId,
@@ -53,6 +57,9 @@ export function saveManagerUpdateReceipt(receipt: ManagerUpdateReceipt | null) {
       sessionStorage.setItem(
         key,
         JSON.stringify({
+          ...(receipt.independentMonitor === true
+            ? { independentMonitor: true }
+            : {}),
           startedAt: receipt.startedAt,
           operationId: receipt.operationId,
           excludedOperationId: receipt.excludedOperationId,

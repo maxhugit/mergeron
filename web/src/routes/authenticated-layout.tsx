@@ -169,7 +169,12 @@ function SessionRecovery({
     session.isPending ||
     (session.paused && !session.isError && session.data?.active);
   // A local receipt only restores progress display, never the authenticated workspace.
-  if (session.isPending || (session.isError && reconnecting)) {
+  if (
+    !changed &&
+    (session.isPending ||
+      (session.paused && !session.isError) ||
+      (session.isError && reconnecting))
+  ) {
     const receipt = readManagerUpdateReceipt();
     // This recovery view must already be loaded before the server goes offline.
     // A lazy import here would require a network request precisely during downtime.

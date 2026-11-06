@@ -149,6 +149,7 @@ it('does not offer a transport recovery shortcut for a real access denial', () =
 function updateReceipt() {
   saveManagerUpdateReceipt({
     startedAt: Date.now(),
+    independentMonitor: true,
     operationId: 'operation',
     excludedOperationId: null,
     snapshot: {
@@ -177,6 +178,10 @@ it('renders the retained update monitor synchronously during restart, without au
   expect(
     screen.getByRole('dialog', { name: 'Update progress' }),
   ).toBeInTheDocument();
+  expect(document.querySelector('iframe')).toHaveAttribute(
+    'src',
+    expect.stringContaining('operation=operation'),
+  );
   expect(screen.getByRole('log')).toHaveTextContent('Saving application data');
   expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
   expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
@@ -292,6 +297,28 @@ it('never reveals the retained workspace after a different account is verified',
   expect(
     screen.getByRole('heading', { name: 'Identity or permissions changed' }),
   ).toBeInTheDocument();
+  view.unmount();
+  client.clear();
+});
+
+it('keeps the independent monitor visible while retained identity is paused before a transport error', () => {
+  updateReceipt();
+  verifiedSession();
+  const current = vi.mocked(usePlatformSession)();
+  vi.mocked(usePlatformSession).mockReturnValue({ ...current, paused: true });
+  const client = new QueryClient();
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  const view = render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedLayout />
+    </QueryClientProvider>,
+  );
+  expect(document.querySelector('iframe')).toHaveAttribute(
+    'src',
+    expect.stringContaining('operation=operation'),
+  );
+  expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
+  expect(fetch).not.toHaveBeenCalled();
   view.unmount();
   client.clear();
 });
