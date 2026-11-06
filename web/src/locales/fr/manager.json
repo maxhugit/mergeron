@@ -264,5 +264,8 @@
   "updateDiscoveryIncomplete": "La version de certains composants n’a pas pu être vérifiée. Actualisez la détection avant de réessayer.",
   "updateNoChanges": "Aucun composant ne nécessite de mise à jour.",
   "updateIndependentMonitorRequired": "Installez et vérifiez le suivi indépendant avant de remplacer le Manager.",
-  "updateMonitorUnavailable": "Le suivi indépendant n’a pas pu être ouvert. La mise à jour n’a pas été lancée."
+  "updateMonitorUnavailable": "Le suivi indépendant n’a pas pu être ouvert. La mise à jour n’a pas été lancée.",
+  "updateManagerUpgradeRequired": "Installez d’abord un Manager compatible avec le remplacement supervisé, en conservant sa configuration et ses volumes.",
+  "updateApplicationIdentityUnknown": "L’image applicative installée ne peut pas être figée de manière sûre. Son identité doit être vérifiée avant la mise à jour du Manager.",
+  "updateCoordinatedRollbackRequired": "Cette opération a aussi remplacé le Manager. Une restauration coordonnée doit être examinée avant de revenir sur l’application seule."
 }

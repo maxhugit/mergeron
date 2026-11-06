@@ -1658,6 +1658,8 @@ export class TransactionalUpdater {
   }
 
   async requestRollback({ confirmation, operationId }) {
+    if (this.current?.managerPending)
+      throw new Error('updateCoordinatedRollbackRequired');
     if (this.busy) throw new Error('managerOperationInProgress');
     const policy = this.current ? recordedBackupPolicy(this.current) : null;
     if (confirmation !== rollbackConfirmation(policy))

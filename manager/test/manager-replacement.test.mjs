@@ -1,3 +1,4 @@
+import { TransactionalUpdater } from '../src/updater.mjs';
 import { publishMonitor } from '../src/update-monitor-journal.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -262,4 +263,17 @@ test('coordinator binds both component plans to one fingerprint and validates co
   assert.equal(result.expectedFingerprint, 'base');
   assert.deepEqual(result.images, base.images);
   assert.equal(launch.length, 1);
+});
+
+test('rejects an application-only rollback after a coordinated Manager replacement', async () => {
+  const updater = new TransactionalUpdater({});
+  updater.current = { managerPending: true, status: 'succeeded' };
+  await assert.rejects(
+    () =>
+      updater.requestRollback({
+        confirmation: 'ROLLBACK',
+        operationId: 'operation',
+      }),
+    /updateCoordinatedRollbackRequired/,
+  );
 });

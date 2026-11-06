@@ -264,5 +264,8 @@
   "updateDiscoveryIncomplete": "Some component versions could not be verified. Refresh discovery before retrying.",
   "updateNoChanges": "No component needs updating.",
   "updateIndependentMonitorRequired": "Install and verify independent monitoring before replacing Manager.",
-  "updateMonitorUnavailable": "Independent monitoring could not be opened. The update was not started."
+  "updateMonitorUnavailable": "Independent monitoring could not be opened. The update was not started.",
+  "updateManagerUpgradeRequired": "First install a Manager image that supports supervised replacement. Keep its configuration and volumes.",
+  "updateApplicationIdentityUnknown": "The installed application image cannot be pinned safely. Its identity must be verified before updating Manager.",
+  "updateCoordinatedRollbackRequired": "This operation also replaced Manager. Review a coordinated recovery instead of rolling back the application alone."
 }
