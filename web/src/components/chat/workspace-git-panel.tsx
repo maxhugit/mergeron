@@ -1,4 +1,5 @@
 import { GitIntegrateBranch } from './git-integrate-branch';
+import { GitPrTrackerSummary } from './git-pr-tracker-summary';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -1301,6 +1302,7 @@ function PullRequests({
   const { t } = useTranslation('workspaces');
   const [number, setNumber] = useState<number | null>(null);
   const [lastMerged, setLastMerged] = useState<number | null>(null);
+  const [prPage, setPrPage] = useState(0);
   const statusLabels: Record<string, string> = {
     success: t('gitCheckSuccess'),
     failure: t('gitCheckFailure'),
@@ -1325,9 +1327,11 @@ function PullRequests({
         `resources/${encodeURIComponent(resourceId)}/pull-requests`,
         signal,
       ),
-    refetchInterval: 60000,
+    refetchInterval: 15000,
     retry: false,
   });
+  const pageCount = Math.max(1, Math.ceil((prs.data?.items.length ?? 0) / 5));
+  const visiblePage = Math.min(prPage, pageCount - 1);
   const checks = useQuery({
     queryKey: ['workspace-git-checks', projectId, resourceId, number],
     queryFn: ({ signal }) =>
@@ -1337,7 +1341,7 @@ function PullRequests({
         signal,
       ),
     enabled: number !== null,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: false,
   });
   return (
@@ -1359,94 +1363,124 @@ function PullRequests({
         <>
           {prs.data.items.length === 0 && <p>{t('gitNoPr')}</p>}
           {prs.data.limited && <p>{t('gitLimited')}</p>}
-          {prs.data.items.map((pr) => (
-            <article key={pr.number} className="space-y-2 border-b pb-3">
+          {prs.data.items.length > 5 && (
+            <div className="flex items-center justify-between gap-2">
               <Button
+                size="sm"
                 variant="ghost"
-                className="h-auto w-full justify-start whitespace-normal text-left text-xs"
-                aria-pressed={number === pr.number}
-                onClick={() => setNumber(pr.number)}
+                disabled={visiblePage === 0}
+                onClick={() => setPrPage(Math.max(0, visiblePage - 1))}
               >
-                #{pr.number} {pr.title}
-                {pr.draft ? ` · ${t('gitDraft')}` : ''}
+                {t('gitPrPrevious')}
               </Button>
-              <p className="break-all text-muted-foreground">
-                {pr.branch} → {pr.base}
-              </p>
-              <a
-                className="inline-flex items-center gap-1 text-primary underline"
-                href={pr.url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <span>
+                {visiblePage + 1} / {pageCount}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={visiblePage + 1 >= pageCount}
+                onClick={() => setPrPage(visiblePage + 1)}
               >
-                {t('gitOpenPr')}
-                <ExternalLink className="h-3 w-3" />
-              </a>
-              {number === pr.number &&
-                (checks.isPending ? (
-                  <p role="status">{t('gitLoading')}</p>
-                ) : checks.error ? (
-                  <p role="alert" className="text-destructive">
-                    {t('gitGithubError')}
-                  </p>
-                ) : (
-                  checks.data && (
-                    <div className="space-y-2">
-                      <p>
-                        {t('gitPrRevision', {
-                          sha: checks.data.head.slice(0, 7),
-                        })}
-                      </p>
-                      <p>
-                        {t(
-                          checks.data.mergeable === null
-                            ? 'gitMergeUnknown'
-                            : checks.data.mergeable
-                              ? 'gitMergeNoConflict'
-                              : 'gitMergeConflict',
-                        )}
-                      </p>
-                      {checks.data.limited && <p>{t('gitLimited')}</p>}
-                      {checks.data.items.length === 0 ? (
-                        <p>{t('gitNoChecks')}</p>
-                      ) : (
-                        checks.data.items.map((check) => (
-                          <div
-                            key={check.id}
-                            className="flex items-start justify-between gap-2"
-                          >
-                            <span className="min-w-0 break-words">
-                              {check.name}
-                            </span>
-                            <span
-                              className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${check.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' : ['failure', 'error', 'timed_out', 'action_required'].includes(check.status) ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}
+                {t('gitPrNext')}
+              </Button>
+            </div>
+          )}
+          {prs.data.items
+            .slice(visiblePage * 5, (visiblePage + 1) * 5)
+            .map((pr) => (
+              <article key={pr.number} className="space-y-2 border-b pb-3">
+                <Button
+                  variant="ghost"
+                  className="h-auto w-full justify-start whitespace-normal text-left text-xs"
+                  aria-pressed={number === pr.number}
+                  onClick={() => setNumber(pr.number)}
+                >
+                  #{pr.number} {pr.title}
+                  {pr.draft ? ` · ${t('gitDraft')}` : ''}
+                </Button>
+                <p className="break-all text-muted-foreground">
+                  {pr.branch} → {pr.base}
+                </p>
+                <GitPrTrackerSummary
+                  projectId={projectId}
+                  resourceId={resourceId}
+                  pr={pr}
+                />
+                <a
+                  className="inline-flex items-center gap-1 text-primary underline"
+                  href={pr.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('gitOpenPr')}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                {number === pr.number &&
+                  (checks.isPending ? (
+                    <p role="status">{t('gitLoading')}</p>
+                  ) : checks.error ? (
+                    <p role="alert" className="text-destructive">
+                      {t('gitGithubError')}
+                    </p>
+                  ) : (
+                    checks.data && (
+                      <div className="space-y-2">
+                        <p>
+                          {t('gitPrRevision', {
+                            sha: checks.data.head.slice(0, 7),
+                          })}
+                        </p>
+                        <p>
+                          {t(
+                            checks.data.mergeable === null
+                              ? 'gitMergeUnknown'
+                              : checks.data.mergeable
+                                ? 'gitMergeNoConflict'
+                                : 'gitMergeConflict',
+                          )}
+                        </p>
+                        {checks.data.limited && <p>{t('gitLimited')}</p>}
+                        {checks.data.items.length === 0 ? (
+                          <p>{t('gitNoChecks')}</p>
+                        ) : (
+                          checks.data.items.map((check) => (
+                            <div
+                              key={check.id}
+                              className="flex items-start justify-between gap-2"
                             >
-                              {statusLabels[check.status] ??
-                                t('gitCheckUnknown')}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                      <p className="text-muted-foreground">
-                        {t('gitMergeHelp')}
-                      </p>
-                      {canWrite && (
-                        <GitMergeAction
-                          key={pr.number}
-                          projectId={projectId}
-                          resourceId={resourceId}
-                          number={pr.number}
-                          checks={checks.data}
-                          address={resourceAddress}
-                          onMerged={() => setLastMerged(pr.number)}
-                          onCloseFocus={onCloseFocus}
-                        />
-                      )}
-                    </div>
-                  )
-                ))}
-            </article>
-          ))}
+                              <span className="min-w-0 break-words">
+                                {check.name}
+                              </span>
+                              <span
+                                className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${check.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' : ['failure', 'error', 'timed_out', 'action_required'].includes(check.status) ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}
+                              >
+                                {statusLabels[check.status] ??
+                                  t('gitCheckUnknown')}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                        <p className="text-muted-foreground">
+                          {t('gitMergeHelp')}
+                        </p>
+                        {canWrite && (
+                          <GitMergeAction
+                            key={pr.number}
+                            projectId={projectId}
+                            resourceId={resourceId}
+                            number={pr.number}
+                            checks={checks.data}
+                            address={resourceAddress}
+                            onMerged={() => setLastMerged(pr.number)}
+                            onCloseFocus={onCloseFocus}
+                          />
+                        )}
+                      </div>
+                    )
+                  ))}
+              </article>
+            ))}
         </>
       )}
     </div>

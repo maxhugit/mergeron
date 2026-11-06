@@ -266,6 +266,7 @@ export class ProjectAgentToolsService {
         threadId,
         input,
         assertActive,
+        turnId,
       );
     }
     const names = [

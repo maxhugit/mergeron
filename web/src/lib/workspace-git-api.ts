@@ -48,6 +48,15 @@ export interface GitPullRequests {
     base: string;
     head: string;
     url: string;
+    tracking?: {
+      creator: { threadId: string; name: string } | null;
+      agents: Array<{
+        threadId: string;
+        name: string;
+        phase: 'idle' | 'working' | 'watching' | 'attention';
+        updatedAt: number;
+      }>;
+    };
   }>;
 }
 

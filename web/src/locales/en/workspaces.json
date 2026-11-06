@@ -359,5 +359,22 @@
   "explorerSources": "Sources",
   "explorerNoAgentCopy": "No local source copy is available for this agent. Select a source above, then choose “Prepare a working copy” in its menu.",
   "explorerSelectSource": "Select a source above to browse its local copy or remote repository.",
-  "explorerNoSource": "No source is connected to this project. Add a Git connection in the project settings, then prepare a working copy for this agent."
+  "explorerNoSource": "No source is connected to this project. Add a Git connection in the project settings, then prepare a working copy for this agent.",
+  "gitPrStale": "Last checked: {{date}} · refresh failed",
+  "gitPrCreator": "Creator agent",
+  "gitPrAssociated": "Associated agent",
+  "gitPrNoAgent": "Agent unidentified",
+  "gitPrPrevious": "Previous",
+  "gitPrNext": "Next",
+  "gitPrStatusDraft": "Draft",
+  "gitPrStatusChecking": "Checks running",
+  "gitPrStatusError": "Checks failed",
+  "gitPrStatusConflict": "Conflict",
+  "gitPrStatusBlocked": "Validation required",
+  "gitPrStatusReady": "Ready to merge",
+  "gitPrStatusUnknown": "Unconfirmed status",
+  "gitPrAgentIdle": "Inactive",
+  "gitPrAgentWorking": "Working on this PR",
+  "gitPrAgentWatching": "Monitoring checks",
+  "gitPrAgentAttention": "Needs intervention"
 }

@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { spawn } from 'node:child_process';
 import {
@@ -19,6 +20,10 @@ import * as path from 'node:path';
 import { WorkspaceCopiesService } from './workspace-copies.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import {
+  PullRequestTrackerService,
+  type PrPhase,
+} from './pull-request-tracker.service';
+import {
   observeGitHubWorkflows,
   type WorkflowObservation,
 } from './github-workflow-observation';
@@ -32,6 +37,13 @@ export interface GitChange {
 /** Inspection of registered copies; the command runner is server-only, never a route. */
 @Injectable()
 export class WorkspaceGitService {
+  private readonly prChecks = new Map<
+    string,
+    {
+      expiresAt: number;
+      promise: ReturnType<WorkspaceGitService['inspectPullRequestChecks']>;
+    }
+  >();
   private readonly workflowObservations = new Map<
     string,
     {
@@ -42,7 +54,66 @@ export class WorkspaceGitService {
   constructor(
     private readonly copies: WorkspaceCopiesService,
     private readonly resources: WorkspaceResourcesService,
+    @Optional() private readonly tracker?: PullRequestTrackerService,
   ) {}
+
+  recordPullRequestCreator(
+    projectId: string,
+    resourceId: string,
+    number: number,
+    threadId: string,
+    expectedUrl: string,
+  ) {
+    const repo = this.github(projectId, resourceId);
+    if (
+      !repo ||
+      expectedUrl !==
+        `https://github.com/${repo.owner}/${repo.repo}/pull/${number}`
+    )
+      throw new ConflictException('GIT_STALE');
+    this.tracker?.created(
+      projectId,
+      `${repo.owner}/${repo.repo}`,
+      number,
+      threadId,
+    );
+  }
+
+  async trackPullRequest(
+    projectId: string,
+    resourceId: string,
+    number: number,
+    threadId: string,
+    phase: PrPhase,
+    turnId: string | undefined,
+    monitorId: string | undefined,
+    assertActive: () => void,
+  ) {
+    const observed = await this.pullRequest(
+      projectId,
+      resourceId,
+      String(number),
+    );
+    assertActive();
+    if (observed.state !== 'open') throw new ConflictException('PR_NOT_OPEN');
+    const repo = this.github(projectId, resourceId);
+    if (!repo || !this.tracker)
+      throw new ConflictException('PR_TRACKER_UNAVAILABLE');
+    if (
+      observed.url !==
+      `https://github.com/${repo.owner}/${repo.repo}/pull/${number}`
+    )
+      throw new ConflictException('GIT_STALE');
+    return this.tracker.claim(
+      projectId,
+      `${repo.owner}/${repo.repo}`,
+      number,
+      threadId,
+      phase,
+      turnId,
+      monitorId,
+    );
+  }
 
   async directory(projectId: string, copyId: string) {
     const copy = this.copies.list(projectId).find((item) => item.id === copyId);
@@ -623,6 +694,11 @@ export class WorkspaceGitService {
         base: item.base.ref,
         head: item.head.sha,
         url: `https://github.com/${repo.owner}/${repo.repo}/pull/${item.number}`,
+        tracking: this.tracker?.snapshot(
+          projectId,
+          `${repo.owner}/${repo.repo}`,
+          item.number,
+        ) ?? { creator: null, agents: [] },
       })),
     };
   }
@@ -850,7 +926,54 @@ export class WorkspaceGitService {
     };
   }
 
-  async checks(projectId: string, resourceId: string, number: string) {
+  async checks(
+    projectId: string,
+    resourceId: string,
+    number: string,
+    fresh = false,
+  ) {
+    // Resolve authorization BEFORE sharing observations; credentials are never a cache value.
+    const repo = this.github(projectId, resourceId);
+    if (!repo) throw new BadRequestException('Provider not supported');
+    if (!/^[1-9]\d{0,8}$/.test(number))
+      throw new BadRequestException('Invalid pull request');
+    const key = createHash('sha256')
+      .update(
+        JSON.stringify([
+          projectId,
+          repo.owner.toLowerCase(),
+          repo.repo.toLowerCase(),
+          repo.token ?? '',
+          number,
+        ]),
+      )
+      .digest('hex');
+    for (const [id, cached] of this.prChecks)
+      if (cached.expiresAt <= Date.now()) this.prChecks.delete(id);
+    const cached = this.prChecks.get(key);
+    if (cached && !fresh) return cached.promise;
+    if (this.prChecks.size >= 128) {
+      const oldest = this.prChecks.keys().next();
+      if (!oldest.done) this.prChecks.delete(oldest.value);
+    }
+    const promise = this.inspectPullRequestChecks(
+      projectId,
+      resourceId,
+      number,
+    );
+    const observation = { expiresAt: Date.now() + 30_000, promise };
+    this.prChecks.set(key, observation);
+    void promise.catch(() => {
+      if (this.prChecks.get(key) === observation) this.prChecks.delete(key);
+    });
+    return promise;
+  }
+
+  private async inspectPullRequestChecks(
+    projectId: string,
+    resourceId: string,
+    number: string,
+  ) {
     if (!/^[1-9]\d{0,8}$/.test(number))
       throw new BadRequestException('Invalid pull request');
     const repo = this.github(projectId, resourceId);

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import {
   mkdtemp,
@@ -50,6 +51,7 @@ export interface AgentGitPreparer {
 
 @Injectable()
 export class WorkspaceGitActionsService {
+  private readonly logger = new Logger(WorkspaceGitActionsService.name);
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     private readonly git: WorkspaceGitService,
@@ -1925,7 +1927,7 @@ export class WorkspaceGitActionsService {
       )
         throw new ConflictException('GIT_STALE');
       publisher?.assertActive();
-      return this.postPullRequest(
+      const result = await this.postPullRequest(
         projectId,
         copyId,
         repo,
@@ -1933,6 +1935,31 @@ export class WorkspaceGitActionsService {
         branch,
         state.head,
       );
+      const owners = copyAgentIds(this.db, projectId, copyId);
+      const creator =
+        publisher?.threadId ??
+        (typeof body.agentThreadId === 'string' &&
+        owners.length === 1 &&
+        owners[0] === workAgentId(this.db, body.agentThreadId)
+          ? body.agentThreadId
+          : undefined);
+      if (creator) {
+        try {
+          this.git.recordPullRequestCreator(
+            projectId,
+            copy.sourceResourceId,
+            result.number,
+            creator,
+            result.url,
+          );
+        } catch {
+          this.logger.warn(
+            'Created PR confirmed, but agent attribution could not be recorded',
+          );
+          return { ...result, trackingRecorded: false };
+        }
+      }
+      return result;
     });
   }
 
@@ -2249,7 +2276,7 @@ export class WorkspaceGitActionsService {
       const repo = this.git.github(projectId, resourceId);
       if (!repo?.token)
         throw new ForbiddenException('GIT_GITHUB_TOKEN_REQUIRED');
-      const state = await this.git.checks(projectId, resourceId, number);
+      const state = await this.git.checks(projectId, resourceId, number, true);
       if (
         body.head !== state.head ||
         !state.baseHead ||

@@ -526,6 +526,55 @@ export const projectActivity = sqliteTable(
 
 export type ProjectActivity = typeof projectActivity.$inferSelect;
 
+/** A repository identity is pinned independently of a connection's editable URL. */
+export const projectPullRequests = sqliteTable(
+  'project_pull_requests',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    repository: text('repository').notNull(),
+    number: integer('number').notNull(),
+    creatorThreadId: text('creator_thread_id'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.repository, table.number] }),
+  ],
+);
+
+/** Claims belong to a specific execution, never to arbitrary thread activity. */
+export const projectPullRequestAgents = sqliteTable(
+  'project_pull_request_agents',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    repository: text('repository').notNull(),
+    number: integer('number').notNull(),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => projectAgentThreads.threadId, { onDelete: 'cascade' }),
+    phase: text('phase')
+      .$type<'idle' | 'working' | 'watching' | 'attention'>()
+      .notNull(),
+    turnId: text('turn_id'),
+    monitorId: text('monitor_id'),
+    expiresAt: integer('expires_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [
+        table.projectId,
+        table.repository,
+        table.number,
+        table.threadId,
+      ],
+    }),
+  ],
+);
+
 /** Extensible project tools (task boards today, other skills later). */
 /** Security audit: immutable identity snapshots, retained if a person is removed. */
 export const impersonationAudit = sqliteTable('impersonation_audit', {

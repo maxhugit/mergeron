@@ -11,11 +11,11 @@ import {
 
 describe('internal MCP public names and stable execution identities', () => {
   it('gives every schema exactly one canonical definition and localized title', () => {
-    expect(INTERNAL_MCP_TOOLS).toHaveLength(23);
+    expect(INTERNAL_MCP_TOOLS).toHaveLength(24);
     expect(INTERNAL_MCP_TOOLS.map((t) => t.operation)).toEqual(
       INTERNAL_MCP_IDENTITIES.map((t) => t.operation),
     );
-    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(23);
+    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(24);
     for (const tool of INTERNAL_MCP_TOOLS) {
       expect(tool.titleFr).toContain(' — ');
       expect(tool.title).toContain(' — ');
@@ -97,12 +97,14 @@ describe('internal MCP public names and stable execution identities', () => {
           'prepare_project_git',
           'publish_project_git',
           'create_project_git_copy',
+          'track_project_pull_request',
         ].includes(operation),
       );
       expect(tool.policy.requiresWorkspaceWrite).toBe(
         !tool.readOnly &&
           ![
             'rename_agent',
+            'track_project_pull_request',
             'agent_monitor_manage',
             'agent_monitor_report',
           ].includes(operation),
