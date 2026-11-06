@@ -29,6 +29,9 @@ export function SessionDiagnostics() {
     renewal_opened: t('diagnostics.events.renewalOpened'),
     renewal_blocked: t('diagnostics.events.renewalBlocked'),
     renewal_hint: t('diagnostics.events.renewalHint'),
+    silent_started: t('diagnostics.events.silentStarted'),
+    silent_interactive: t('diagnostics.events.silentInteractive'),
+    silent_failed: t('diagnostics.events.silentFailed'),
   } satisfies Record<SessionDiagnosticEvent, string>;
   const reasonLabels = {
     verification: t('diagnostics.reasons.verification'),

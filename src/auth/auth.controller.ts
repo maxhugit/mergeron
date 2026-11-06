@@ -1,3 +1,4 @@
+import { isSsoProxySource } from './sso-proxy-source';
 /** REST controller for API-key, local-session and OIDC authentication flows. */
 import {
   Body,
@@ -35,7 +36,12 @@ import { IdentityService } from './identity.service';
 import type { IdentityRequest } from './platform-access.guard';
 import { AuthConfigService } from './auth-config.service';
 import { LocalAuthService } from './local-auth.service';
-import { OidcAuthService } from './oidc-auth.service';
+import {
+  OidcAuthService,
+  SilentOidcFailure,
+  silentReturnPath,
+} from './oidc-auth.service';
+import { renewalRequest, sendRenewalPage } from './session-renewal-page';
 
 function getRequestId(request: FastifyRequest): string | undefined {
   const id = (request as unknown as { id?: unknown }).id;
@@ -276,6 +282,62 @@ export class AuthController {
     return { expiresAt: session.expiresAt };
   }
 
+  /** Native OIDC or a fronting SSO proxy can complete the same bounded flow. */
+  @Public()
+  @Get('session/renew')
+  async silentRenewal(
+    @Query('request') value: unknown,
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const id = renewalRequest(value);
+    reply.header('Cache-Control', 'no-store');
+    const source = request.headers['x-webui-auth-source'];
+    const bearer = request.headers.authorization?.replace(/^Bearer /i, '');
+    if (isSsoProxySource(source) && this.authService.validateApiKey(bearer)) {
+      // Legacy ingress calls this source "authentik"; the contract works with
+      // any proxy that verifies SSO and overwrites these trusted headers.
+      sendRenewalPage(reply, id, 'complete');
+      return;
+    }
+    // Only our own frame may initiate native silent login. An IdP return uses
+    // the separately state/nonce/PKCE-checked callback, never this entry point.
+    if (request.headers['sec-fetch-site'] !== 'same-origin')
+      throw new ForbiddenException('Same-origin renewal required');
+    if (!this.authConfig.get().oidc.enabled) {
+      sendRenewalPage(reply, id, 'interactive');
+      return;
+    }
+    const start = await this.oidcAuth.start(
+      `${silentReturnPath}?request=${id}`,
+      this.secureCookie(request),
+      true,
+    );
+    reply.header('set-cookie', start.cookie);
+    reply
+      .code(HttpStatus.FOUND)
+      .header('location', start.authorizationUrl)
+      .send();
+  }
+
+  @Public()
+  @Get('session/renew/complete')
+  silentRenewalComplete(
+    @Query('request') value: unknown,
+    @Query('outcome') outcome: unknown,
+    @Res() reply: FastifyReply,
+  ): void {
+    sendRenewalPage(
+      reply,
+      renewalRequest(value),
+      outcome === 'interactive'
+        ? 'interactive'
+        : outcome === 'unavailable'
+          ? 'unavailable'
+          : 'complete',
+    );
+  }
+
   @Public()
   @Get('oidc/start')
   async oidcStart(
@@ -310,11 +372,24 @@ export class AuthController {
       );
       reply.header('set-cookie', [
         this.localAuth.cookie(result.session, secure),
-        this.oidcAuth.clearFlowCookie(secure),
+        this.oidcAuth.clearFlowCookie(secure, query.state),
       ]);
       reply.code(HttpStatus.FOUND).header('location', result.returnTo).send();
     } catch (error) {
-      reply.header('set-cookie', this.oidcAuth.clearFlowCookie(secure));
+      reply.header(
+        'set-cookie',
+        this.oidcAuth.clearFlowCookie(secure, query.state),
+      );
+      if (error instanceof SilentOidcFailure) {
+        reply
+          .code(HttpStatus.FOUND)
+          .header(
+            'location',
+            `${error.returnTo}&outcome=${error.interactive ? 'interactive' : 'unavailable'}`,
+          )
+          .send();
+        return;
+      }
       throw error;
     }
   }

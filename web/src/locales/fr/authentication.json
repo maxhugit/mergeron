@@ -21,7 +21,10 @@
       "manualRetry": "Vérification manuelle demandée",
       "renewalOpened": "Fenêtre de connexion demandée",
       "renewalBlocked": "Fenêtre de connexion bloquée",
-      "renewalHint": "Signal de connexion reçu ; vérification fraîche nécessaire"
+      "renewalHint": "Signal de connexion reçu ; vérification fraîche nécessaire",
+      "silentStarted": "Renouvellement silencieux démarré",
+      "silentInteractive": "Interaction SSO requise",
+      "silentFailed": "Renouvellement silencieux non abouti"
     },
     "reasons": {
       "verification": "Vérification fraîche requise",
@@ -174,7 +177,10 @@
     "inactivePerson": "Votre connexion n’est liée à aucune personne active. Contactez un administrateur.",
     "reference": "Référence d’authentification",
     "retry": "Réessayer",
-    "anotherMethod": "Utiliser une autre méthode d’authentification"
+    "anotherMethod": "Utiliser une autre méthode d’authentification",
+    "resumingSession": "Reprise de session en cours…",
+    "silentUnavailable": "La reprise silencieuse n’a pas pu aboutir. Le fournisseur, le navigateur ou une interruption de connexion peut empêcher sa vérification. Vous pouvez réessayer ou ouvrir une connexion séparée ; cette page reste conservée.",
+    "recoveryUnavailable": "Reprise automatique indisponible"
   },
   "errors": {
     "requestFailed": "La requête d’authentification a échoué.",

@@ -42,7 +42,11 @@ import {
   usePlatformSession,
   type PlatformSession,
 } from '@/lib/platform-session';
-import { sessionOwner } from '@/lib/session-recovery';
+import {
+  sessionOwner,
+  sessionVerificationGeneration,
+} from '@/lib/session-recovery';
+import { useSilentSessionRenewal } from '@/lib/silent-session-renewal';
 import { useSessionRenewal } from '@/lib/session-renewal';
 import {
   Dialog,
@@ -143,7 +147,25 @@ function SessionRecovery({
     session.error instanceof AuthRedirectError ||
     (session.error instanceof AuthResourceError &&
       session.error.status === 401);
+  // Short identity retries handle transient proxy failures first. Renew only
+  // after they are exhausted, so a brief interruption never starts a login flow.
+  const needsRenewal = retained && !changed && proxyExpired;
+  const silent = useSilentSessionRenewal(
+    needsRenewal,
+    sessionVerificationGeneration(),
+    async () => {
+      const result = await session.refetch({ cancelRefetch: true });
+      return !result.isError && result.data?.active === true;
+    },
+  );
+  const resuming =
+    silent === 'running' ||
+    (silent === 'idle' &&
+      needsRenewal &&
+      navigator.onLine &&
+      document.visibilityState === 'visible');
   const checking =
+    resuming ||
     session.isPending ||
     (session.paused && !session.isError && session.data?.active);
   // A local receipt only restores progress display, never the authenticated workspace.
@@ -158,7 +180,7 @@ function SessionRecovery({
   // A normal wake-up check is not an expired session. The protected Activity
   // remains hidden and API/socket writes remain gated, but no renewal dialog,
   // focus trap or login action is introduced while the fresh probe is pending.
-  if (checking)
+  if (checking && !resuming)
     return (
       <main
         role="status"
@@ -186,11 +208,15 @@ function SessionRecovery({
         changed
           ? 'access.identityChanged'
           : checking
-            ? 'access.verifying'
+            ? resuming
+              ? 'access.resumingSession'
+              : 'access.verifying'
             : reconnecting
               ? 'access.reconnecting'
               : proxyExpired
-                ? 'access.sessionExpired'
+                ? silent === 'unavailable'
+                  ? 'access.recoveryUnavailable'
+                  : 'access.sessionExpired'
                 : 'access.unavailable',
       )}
     </h1>
@@ -207,7 +233,9 @@ function SessionRecovery({
               : reconnecting
                 ? 'access.connectionInterrupted'
                 : proxyExpired
-                  ? 'access.proxySessionExpired'
+                  ? silent === 'unavailable'
+                    ? 'access.silentUnavailable'
+                    : 'access.proxySessionExpired'
                   : session.isError
                     ? 'access.verificationError'
                     : 'access.inactivePerson',
@@ -228,16 +256,18 @@ function SessionRecovery({
             {t('access.reference')}: {session.data.subject}
           </p>
         )}
-      <button
-        className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
-        onClick={() => {
-          recordSessionDiagnostic('manual_retry');
-          void session.refetch();
-        }}
-      >
-        {t('access.retry')}
-      </button>
-      {proxyExpired && (
+      {!checking && (
+        <button
+          className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
+          onClick={() => {
+            recordSessionDiagnostic('manual_retry');
+            void session.refetch();
+          }}
+        >
+          {t('access.retry')}
+        </button>
+      )}
+      {proxyExpired && !checking && (
         <button
           className="cursor-pointer rounded-md border px-4 py-2 hover:bg-accent"
           onClick={() => renewal.open()}

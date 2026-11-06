@@ -981,3 +981,29 @@ it('lets active project members read participants but reserves membership change
     ).statusCode,
   ).toBe(200);
 });
+
+it('serves only a credential-free renewal hint after a trusted proxy request', async () => {
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/auth/session/renew?request=${'a'.repeat(32)}`,
+    headers: { ...proxyHeaders(), 'sec-fetch-site': 'same-origin' },
+  });
+  expect(response.statusCode).toBe(200);
+  expect(response.headers['content-security-policy']).toContain(
+    "frame-ancestors 'self'",
+  );
+  expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
+  expect(response.headers['cache-control']).toBe('no-store');
+  expect(response.body).toContain('"status":"complete"');
+  expect(response.body).not.toContain('standard@example.com');
+  expect(response.headers['set-cookie']).toBeUndefined();
+});
+
+it('rejects malformed renewal input without rendering an HTML payload', async () => {
+  const response = await app.inject({
+    method: 'GET',
+    url: '/api/auth/session/renew/complete?request=bad',
+  });
+  expect(response.statusCode).toBe(400);
+  expect(response.body).not.toContain('<script');
+});

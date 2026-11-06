@@ -134,6 +134,16 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+it('resolves the provider-neutral proxy contract with the existing identity policy', () => {
+  const identity = identities.resolve({
+    ...headers(),
+    'x-webui-auth-source': 'sso-proxy',
+  });
+  expect(identity.active).toBe(true);
+  expect(identity.personId).toBe('standard');
+  expect(identity.role).toBe('standard');
+});
+
 it('binds only provisioned email records, then follows the stable subject instead of email changes', () => {
   expect(
     identities.resolve(headers('stable', 'STANDARD@EXAMPLE.COM')),

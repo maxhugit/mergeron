@@ -17,6 +17,9 @@ const EVENTS = [
   'renewal_opened',
   'renewal_blocked',
   'renewal_hint',
+  'silent_started',
+  'silent_interactive',
+  'silent_failed',
 ] as const;
 const REASONS = [
   'verification',
