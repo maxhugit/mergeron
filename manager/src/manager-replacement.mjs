@@ -34,6 +34,9 @@ export class ManagerReplacement {
     const inspect = await this.docker.inspectContainer(`${this.stack}-manager`);
     if (
       inspect.Name !== `/${this.stack}-manager` ||
+      inspect.Config.Labels?.['io.mergeron.stack'] !== this.stack ||
+      inspect.Config.Labels?.['io.mergeron.component'] !== 'manager' ||
+      inspect.Config.Labels?.['io.mergeron.managed'] !== 'true' ||
       inspect.HostConfig.NetworkMode !== 'none' ||
       !inspect.State.Running
     )

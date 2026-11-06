@@ -23,7 +23,11 @@ class Docker {
       Config: {
         Image: oldImage,
         Env: ['SECRET=private'],
-        Labels: { 'io.mergeron.stack': 'mergeron-dev' },
+        Labels: {
+          'io.mergeron.stack': 'mergeron-dev',
+          'io.mergeron.component': 'manager',
+          'io.mergeron.managed': 'true',
+        },
         Healthcheck: { Test: ['CMD', 'health'] },
       },
       HostConfig: {

@@ -85,3 +85,19 @@ n’est pas proposé pour une opération qui a remplacé le Manager. Une modific
 d’identité ou des protections après préparation bloque le remplacement ; aucun
 conteneur étranger n’est écrasé. Une reprise de l’auxiliaire reconnaît ses propres
 conteneurs par l’identifiant privé de remplacement.
+
+## Vérification reproductible de l’interface
+
+```sh
+cd web
+node scripts/install-test-browsers.mjs chromium webkit
+node scripts/verify-update-monitor.mjs /tmp/mergeron-monitor-visual
+```
+
+Ce contrôle utilise uniquement des serveurs HTTP locaux synthétiques. Il vérifie
+Chromium et WebKit à 390 et 1280 pixels, l’attente d’une nouvelle opération,
+les étapes du remplacement du Manager, la réussite confirmée et l’absence de
+débordement horizontal. Il conserve les captures et `report.json`. Le contrôle
+HTTP final arrête le serveur applicatif local et exige toujours une réponse 200
+de la page de maintenance. Ces simulations complètent les tests transactionnels ;
+elles ne remplacent pas l’essai d’une mise à jour réelle sur la dev.
