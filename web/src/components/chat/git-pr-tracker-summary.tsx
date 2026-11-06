@@ -21,10 +21,14 @@ export function GitPrTrackerSummary({
   projectId,
   resourceId,
   pr,
+  observation,
+  showAgents = true,
 }: {
   projectId: string;
   resourceId: string;
   pr: GitPullRequests['items'][number];
+  observation?: { data?: GitChecks; isPending: boolean; isError: boolean };
+  showAgents?: boolean;
 }) {
   const { t } = useTranslation('workspaces');
   const statusLabels = {
@@ -42,7 +46,7 @@ export function GitPrTrackerSummary({
     watching: t('gitPrAgentWatching'),
     attention: t('gitPrAgentAttention'),
   };
-  const checks = useQuery({
+  const query = useQuery({
     queryKey: ['workspace-git-checks', projectId, resourceId, pr.number],
     queryFn: ({ signal }) =>
       gitGet<GitChecks>(
@@ -51,8 +55,10 @@ export function GitPrTrackerSummary({
         signal,
       ),
     refetchInterval: 60_000,
+    enabled: observation === undefined,
     retry: false,
   });
+  const checks = observation ?? query;
   const status = checks.isPending
     ? 'checking'
     : gitPrStatus(pr.head, pr.draft, checks.data, checks.isError);
@@ -83,7 +89,7 @@ export function GitPrTrackerSummary({
       Number(a.threadId === tracking?.creator?.threadId),
   );
   return (
-    <div className="space-y-1 px-2">
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
       <div className={`flex items-center gap-1 ${color}`} role="status">
         <Icon
           aria-hidden="true"
@@ -98,39 +104,41 @@ export function GitPrTrackerSummary({
           })}
         </p>
       )}
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {agents.length ? (
-          agents.map((agent) => {
-            const Activity =
-              agent.phase === 'working'
-                ? Loader2
-                : agent.phase === 'watching'
-                  ? Clock
-                  : agent.phase === 'attention'
-                    ? CircleAlert
-                    : Pause;
-            return (
-              <Link
-                key={agent.threadId}
-                to="/t/$threadId"
-                params={{ threadId: agent.threadId }}
-                aria-label={`${agent.name} · ${phaseLabels[agent.phase]}`}
-                className="inline-flex min-w-0 max-w-full items-center gap-1 text-primary underline underline-offset-2"
-                title={`${t(agent.threadId === tracking?.creator?.threadId ? 'gitPrCreator' : 'gitPrAssociated')} · ${phaseLabels[agent.phase]}`}
-              >
-                <Bot aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{agent.name}</span>
-                <Activity
-                  aria-label={phaseLabels[agent.phase]}
-                  className={`h-3 w-3 shrink-0 ${agent.phase === 'working' ? 'animate-spin' : ''}`}
-                />
-              </Link>
-            );
-          })
-        ) : (
-          <span className="text-muted-foreground">{t('gitPrNoAgent')}</span>
-        )}
-      </div>
+      {showAgents && (
+        <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+          {agents.length ? (
+            agents.map((agent) => {
+              const Activity =
+                agent.phase === 'working'
+                  ? Loader2
+                  : agent.phase === 'watching'
+                    ? Clock
+                    : agent.phase === 'attention'
+                      ? CircleAlert
+                      : Pause;
+              return (
+                <Link
+                  key={agent.threadId}
+                  to="/t/$threadId"
+                  params={{ threadId: agent.threadId }}
+                  aria-label={`${agent.name} · ${phaseLabels[agent.phase]}`}
+                  className="inline-flex min-w-0 max-w-full items-center gap-1 text-primary underline underline-offset-2"
+                  title={`${t(agent.threadId === tracking?.creator?.threadId ? 'gitPrCreator' : 'gitPrAssociated')} · ${phaseLabels[agent.phase]}`}
+                >
+                  <Bot aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{agent.name}</span>
+                  <Activity
+                    aria-label={phaseLabels[agent.phase]}
+                    className={`h-3 w-3 shrink-0 ${agent.phase === 'working' ? 'animate-spin' : ''}`}
+                  />
+                </Link>
+              );
+            })
+          ) : (
+            <span className="text-muted-foreground">{t('gitPrNoAgent')}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

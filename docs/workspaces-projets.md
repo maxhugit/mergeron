@@ -161,7 +161,12 @@ la copie est utilisée ; aucun travail non publié n’est supprimé impliciteme
 
 Le panneau sépare **Local**, **GitHub** et **Synchronisation**.
 Dans la sidebar droite, **GitHub → PR** suit les PR ouvertes du dépôt sélectionné,
-par groupes de cinq. Chaque ligne distingue le statut GitHub du travail des agents :
+par groupes de cinq.
+La liste compacte et son indicateur de sélection restent au-dessus d’un panneau
+de détail séparé. Branches, contrôles et actions GitHub apparaissent uniquement
+dans ce panneau ; les deux zones ont leur propre défilement. Le nom de l’agent
+reste directement cliquable dans la liste et n’est pas répété dans un bloc de détail.
+Chaque ligne distingue le statut GitHub du travail des agents :
 brouillon, vérification en cours, erreur, conflit, validation requise, prête à
 fusionner ou état non confirmé. « Prête à fusionner » exige une observation complète
 du SHA courant et une fusion autorisée par l’état GitHub ; des tests verts seuls
