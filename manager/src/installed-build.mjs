@@ -89,7 +89,7 @@ export async function inspectInstalledBuild(docker, inspect, component) {
   }
 }
 
-/** Read-only self identification; the Manager is not a self-update target. */
+/** Read-only self identification; replacement is supervised outside this process. */
 export async function inspectManagerBuild(manifest, containers, docker) {
   const candidates = containers.filter((item) =>
     item.Names?.includes(`/${manifest.stack}-manager`),

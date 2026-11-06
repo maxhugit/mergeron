@@ -254,5 +254,18 @@
   "globalUpdateAction": "Mettre à jour Mergeron",
   "globalUpdateManaged": "Géré par la mise à jour globale",
   "globalUpdateHelp": "Mergeron détermine les composants à mettre à jour et leur ordre. Le plan et la sauvegarde sont vérifiés avant confirmation.",
-  "independentMonitorOpen": "Ouvrir le suivi indépendant"
+  "independentMonitorOpen": "Ouvrir le suivi indépendant",
+  "globalManagerHelp": "La mise à jour globale supervise le remplacement du Manager depuis un processus indépendant, conserve son ancien conteneur et vérifie le nouveau avant de confirmer la réussite.",
+  "globalManagerPending": "Préparation du remplacement du Manager",
+  "globalManagerReplacing": "Remplacement du Manager",
+  "globalManagerChecking": "Vérification du Manager",
+  "globalManagerRolledBack": "Ancien Manager restauré — vérification nécessaire",
+  "updateDiscoveryUnavailable": "La détection des mises à jour est indisponible. Aucune mise à jour n’a été lancée.",
+  "updateDiscoveryIncomplete": "La version de certains composants n’a pas pu être vérifiée. Actualisez la détection avant de réessayer.",
+  "updateNoChanges": "Aucun composant ne nécessite de mise à jour.",
+  "updateIndependentMonitorRequired": "Installez et vérifiez le suivi indépendant avant de remplacer le Manager.",
+  "updateMonitorUnavailable": "Le suivi indépendant n’a pas pu être ouvert. La mise à jour n’a pas été lancée.",
+  "updateManagerUpgradeRequired": "Installez d’abord un Manager compatible avec le remplacement supervisé, en conservant sa configuration et ses volumes.",
+  "updateApplicationIdentityUnknown": "L’image applicative installée ne peut pas être figée de manière sûre. Son identité doit être vérifiée avant la mise à jour du Manager.",
+  "updateCoordinatedRollbackRequired": "Cette opération a aussi remplacé le Manager. Une restauration coordonnée doit être examinée avant de revenir sur l’application seule."
 }

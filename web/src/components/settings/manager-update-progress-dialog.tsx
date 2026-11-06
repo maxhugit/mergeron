@@ -30,6 +30,10 @@ const allStages = [
 ];
 const updatePhaseLabels: Record<string, string> = {
   preparing: 'managerUpdatePreparing',
+  managerPending: 'globalManagerPending',
+  managerReplacing: 'globalManagerReplacing',
+  managerChecking: 'globalManagerChecking',
+  managerRolledBack: 'globalManagerRolledBack',
   stopping: 'managerUpdateStopping',
   backingUp: 'managerUpdateBackingUp',
   restoring: 'managerUpdateRestoring',

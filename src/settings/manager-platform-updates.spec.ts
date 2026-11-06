@@ -1,3 +1,4 @@
+import { SettingsController } from './settings.controller';
 import { ConfigService } from '@nestjs/config';
 import { expect, it, vi } from 'vitest';
 import { ManagerStatusService } from './manager-status.service';
@@ -128,7 +129,10 @@ it('builds a global plan from fresh verified discovery and ignores client-select
     '/v1/update/plan',
     'POST',
     expect.objectContaining({
-      images: { application: `ghcr.io/maxhugit/mergeron@${nextId}` },
+      images: {
+        application: `ghcr.io/maxhugit/mergeron@${nextId}`,
+        manager: `ghcr.io/maxhugit/mergeron-manager@${nextId}`,
+      },
       backupMode: 'minimal',
     }),
   );
@@ -147,4 +151,22 @@ it('blocks a global plan when a managed component has unknown registry identity'
       automatic: true,
     }),
   ).rejects.toThrow('updateDiscoveryIncomplete');
+});
+
+it('does not let an HTTP caller restore per-container selection by disabling automatic planning', async () => {
+  const updateOperation = vi.fn().mockResolvedValue({ applicable: true });
+  const controller = new SettingsController(
+    {} as ConstructorParameters<typeof SettingsController>[0],
+    { updateOperation } as unknown as ManagerStatusService,
+    {} as ConstructorParameters<typeof SettingsController>[2],
+  );
+  await controller.managerUpdatePlan({
+    automatic: false,
+    images: { ingress: 'nginx:unreviewed' },
+    backupMode: 'minimal',
+  });
+  expect(updateOperation).toHaveBeenCalledWith(
+    'plan',
+    expect.objectContaining({ automatic: true, backupMode: 'minimal' }),
+  );
 });

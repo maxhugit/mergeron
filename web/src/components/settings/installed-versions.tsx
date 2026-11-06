@@ -23,7 +23,6 @@ function target(item?: ComponentImageUpdate) {
     !item?.targetImage ||
     !item.targetDigest ||
     !/^sha256:[a-f0-9]{64}$/.test(item.targetDigest) ||
-    item.id === 'manager' ||
     item.updateManagedBy === 'manager'
   )
     return null;
@@ -47,6 +46,7 @@ export function InstalledVersions({
   trailingActions?: ReactNode;
 }) {
   const { t, i18n } = useTranslation('manager');
+  const supervised = status?.capabilities?.managerReplacement === true;
   const [details, setDetails] = useState<string | null>(null);
   const updates = useQuery({
     queryKey: componentUpdatesKey,
@@ -143,7 +143,7 @@ export function InstalledVersions({
           variant="outline"
           onClick={() => setDetails('manager')}
         >
-          {t('consoleHostProcedure')}
+          {t(supervised ? 'consoleDetails' : 'consoleHostProcedure')}
         </Button>
       </div>
       {updates.isError && (
@@ -287,7 +287,11 @@ export function InstalledVersions({
                         variant="outline"
                         onClick={() => setDetails('manager')}
                       >
-                        {t('consoleHostProcedure')}
+                        {t(
+                          supervised
+                            ? 'consoleDetails'
+                            : 'consoleHostProcedure',
+                        )}
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">
@@ -324,12 +328,12 @@ export function InstalledVersions({
           <DialogHeader>
             <DialogTitle>
               {details === 'manager'
-                ? t('consoleHostProcedure')
+                ? t(supervised ? 'consoleDetails' : 'consoleHostProcedure')
                 : t('consoleDetails')}
             </DialogTitle>
             <DialogDescription>
               {details === 'manager'
-                ? t('consoleManagerHostHelp')
+                ? t(supervised ? 'globalManagerHelp' : 'consoleManagerHostHelp')
                 : t('componentUpdatesNotesHelp')}
             </DialogDescription>
           </DialogHeader>

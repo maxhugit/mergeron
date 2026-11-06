@@ -40,6 +40,8 @@ async function createGrant(directory, now) {
 }
 /** Deliberate allowlist: never publish actor, Docker specs, paths, errors or backup details. */
 export async function publishMonitor(directory, operation) {
+  if (operation.managerPending && operation.status === 'succeeded')
+    operation = { ...operation, phase: 'managerPending', status: 'running' };
   const safeWord = (value) =>
     typeof value === 'string' && /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(value)
       ? value

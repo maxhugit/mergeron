@@ -1268,6 +1268,8 @@ export class TransactionalUpdater {
     actor,
     restoreSource,
     checkpoint,
+    requestedId,
+    managerPending = false,
   }) {
     if (this.busy) throw new Error('managerOperationInProgress');
     if (
@@ -1301,7 +1303,8 @@ export class TransactionalUpdater {
           this.current,
         );
       this.current = {
-        id: randomUUID(),
+        id: requestedId ?? randomUUID(),
+        managerPending,
         stack: this.manifest.stack,
         environment: this.manifest.environment,
         status: 'running',
@@ -1655,6 +1658,8 @@ export class TransactionalUpdater {
   }
 
   async requestRollback({ confirmation, operationId }) {
+    if (this.current?.managerPending)
+      throw new Error('updateCoordinatedRollbackRequired');
     if (this.busy) throw new Error('managerOperationInProgress');
     const policy = this.current ? recordedBackupPolicy(this.current) : null;
     if (confirmation !== rollbackConfirmation(policy))

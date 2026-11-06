@@ -129,7 +129,23 @@ export async function installGateways(config, docker = new DockerClient()) {
         old.Config.Labels?.['io.mergeron.stack'] !== config.stack
       )
         throw new Error('Gateway name conflict');
-      if (old.Config.Image === config.image && old.State.Running) continue;
+      if (
+        old.HostConfig.Privileged ||
+        !old.HostConfig.ReadonlyRootfs ||
+        old.Config.User !== spec.User ||
+        old.HostConfig.CapAdd?.length ||
+        !old.HostConfig.CapDrop?.includes('ALL') ||
+        !old.HostConfig.SecurityOpt?.includes('no-new-privileges:true') ||
+        old.HostConfig.Binds?.length !== 1 ||
+        old.HostConfig.Binds[0] !== spec.HostConfig.Binds[0] ||
+        !spec.Env.every((entry) => old.Config.Env?.includes(entry))
+      )
+        throw new Error('Gateway profile changed; routing not modified');
+      if (old.Config.Image !== config.image)
+        throw new Error(
+          'Gateway upgrades require prior proxy draining; existing replicas retained',
+        );
+      if (old.State.Running && old.State.Health?.Status === 'healthy') continue;
       // Replace one replica at a time. Routing is installed only after both answer HTTP.
       await docker.stopContainer(existing.Id);
       await docker.removeContainer(existing.Id);

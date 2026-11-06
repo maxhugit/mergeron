@@ -332,7 +332,7 @@ export class ManagerStatusService {
       if (!Array.isArray(components))
         throw new HttpException('updateDiscoveryUnavailable', 503);
       const managed = components.filter(
-        (item) => item.id !== 'manager' && item.updateManagedBy !== 'manager',
+        (item) => item.updateManagedBy !== 'manager',
       );
       if (
         managed.some(

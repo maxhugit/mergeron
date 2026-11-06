@@ -77,6 +77,7 @@ export interface ManagerStatus {
   backupPolicy?: ManagerBackupPolicy;
   capabilities?: {
     independentMonitor?: boolean;
+    managerReplacement?: boolean;
     updateHistory?: boolean;
     backupRestore?: boolean;
     backupManagement?: boolean;
