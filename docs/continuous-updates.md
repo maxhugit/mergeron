@@ -115,3 +115,11 @@ image sans une procédure de retrait du routage ; il conserve les instances en
 place. Leur propre évolution nécessite une maintenance distincte avec retrait,
 remplacement et vérification d’une seule instance à la fois. Une modification de
 leurs protections ou un échec de santé bloque l’activation du nouveau routage.
+
+
+Une installation historique dont tous les composants sont déjà marqués comme
+gérés peut légitimement ne pas posséder de registre d’adoption. La vérification
+fonctionnelle conserve ce contrat : inventaire complet et unique, dépôts admis,
+réseaux présents, composants gérés et aucune anomalie. Elle refuse les états
+non gérés, incomplets ou en dérive. Aucun registre n’est créé ou réécrit pour
+faire passer cette vérification.

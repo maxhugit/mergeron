@@ -45,6 +45,42 @@ export function probeManager({
   });
 }
 
+/** Same recordless managed-installation contract as evaluateAdoption; never forgive drift. */
+function managedInstallationReady(status) {
+  const adoption = status.adoption;
+  if (adoption?.state === 'adopted') return !adoption.blockers?.length;
+  if (
+    adoption?.state !== 'eligible' ||
+    adoption.canAdopt !== false ||
+    !Array.isArray(adoption.blockers) ||
+    adoption.blockers.length
+  )
+    return false;
+  const components = status.components?.filter(
+    (component) => !component.observational,
+  );
+  return (
+    Array.isArray(components) &&
+    [3, 4].includes(components.length) &&
+    new Set(components.map((component) => component.id)).size ===
+      components.length &&
+    ['application', 'ingress', 'egress'].every((id) =>
+      components.some((component) => component.id === id),
+    ) &&
+    components.every(
+      (component) =>
+        ['application', 'ingress', 'egress', 'browser'].includes(
+          component.id,
+        ) &&
+        component.containerId &&
+        component.adoption === 'managed' &&
+        component.imageRepositoryAllowed === true &&
+        Array.isArray(component.missingNetworks) &&
+        component.missingNetworks.length === 0,
+    )
+  );
+}
+
 /** Replacement readiness includes Docker/adoption, not just a live Node process. */
 export function probeManagerReadiness({
   socketPath,
@@ -84,7 +120,7 @@ export function probeManagerReadiness({
               finish(
                 status.stack === stack &&
                   status.dockerConnected === true &&
-                  status.adoption?.state === 'adopted' &&
+                  managedInstallationReady(status) &&
                   status.dataSafety?.status === 'protected' &&
                   status.capabilities?.independentMonitor === true &&
                   status.capabilities?.managerReplacement === true,

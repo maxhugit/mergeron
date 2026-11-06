@@ -68,3 +68,54 @@ test('requires a functional Manager with the expected stack, adoption and update
     false,
   );
 });
+
+test('accepts an already managed stack without a record but rejects unmanaged, incomplete or drifted inventories', async () => {
+  const recordless = {
+    ...healthy,
+    adoption: { state: 'eligible', canAdopt: false, blockers: [] },
+    components: ['application', 'ingress', 'egress'].map((id) => ({
+      id,
+      containerId: id + '-container',
+      adoption: 'managed',
+      imageRepositoryAllowed: true,
+      missingNetworks: [],
+    })),
+  };
+  const probe = (status) =>
+    probeManagerReadiness({
+      socketPath: '/unused',
+      stack: 'mergeron-dev',
+      client: client(status),
+    });
+  assert.equal((await probe(recordless)).healthy, true);
+  for (const state of [
+    { ...recordless, adoption: { ...recordless.adoption, canAdopt: true } },
+    { ...recordless, adoption: { ...recordless.adoption, state: 'drifted' } },
+    {
+      ...recordless,
+      adoption: { ...recordless.adoption, blockers: ['adoptionRecordDrift'] },
+    },
+    { ...recordless, components: recordless.components.slice(1) },
+    {
+      ...recordless,
+      components: recordless.components.map((c) =>
+        c.id === 'application' ? { ...c, adoption: 'unmanaged' } : c,
+      ),
+    },
+    {
+      ...recordless,
+      components: recordless.components.map((c) =>
+        c.id === 'application' ? { ...c, imageRepositoryAllowed: false } : c,
+      ),
+    },
+    {
+      ...recordless,
+      components: recordless.components.map((c) =>
+        c.id === 'application'
+          ? { ...c, missingNetworks: ['private-network'] }
+          : c,
+      ),
+    },
+  ])
+    assert.equal((await probe(state)).healthy, false);
+});
