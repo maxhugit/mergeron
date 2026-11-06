@@ -208,7 +208,7 @@ test.each([1100, 390])(
       await waitFor(() =>
         expect(
           screen.getByRole('button', {
-            name: 'Mettre à jour la sélection (1)',
+            name: 'Mettre à jour Mergeron',
           }),
         ).toBeEnabled(),
       );

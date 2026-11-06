@@ -57,7 +57,7 @@ it('separates installed revisions with equal versions and keeps Manager host-man
   expect(within(rows[3]).getByRole('link')).toHaveTextContent('ccccccc');
   expect(screen.getAllByText('0.5.1')).toHaveLength(3);
   expect(
-    screen.getByRole('button', { name: 'Update selected (0)' }),
+    screen.getByRole('button', { name: 'Update Mergeron' }),
   ).toBeDisabled();
   expect(
     within(rows[2]).getByRole('button', { name: 'On the host' }),

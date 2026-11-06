@@ -250,5 +250,8 @@
   "managerBackupPreferenceSummary": "Choix propre à cette installation. Chaque opération reste à confirmer.",
   "optionalServiceStopped": "Arrêté · disponible à la demande",
   "optionalServiceIdle": "Démarrage à la demande ; arrêt {{minutes}} min après libération des sessions.",
-  "byparrManagedUpdates": "Image approuvée mise à jour avec le Manager ; aucune installation automatique."
+  "byparrManagedUpdates": "Image approuvée mise à jour avec le Manager ; aucune installation automatique.",
+  "globalUpdateAction": "Mettre à jour Mergeron",
+  "globalUpdateManaged": "Géré par la mise à jour globale",
+  "globalUpdateHelp": "Mergeron détermine les composants à mettre à jour et leur ordre. Le plan et la sauvegarde sont vérifiés avant confirmation."
 }

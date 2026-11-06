@@ -94,3 +94,57 @@ it('requires a new Manager platform identity instead of trusting an old index-on
   });
   expect(imageId).not.toHaveBeenCalled();
 });
+
+it('builds a global plan from fresh verified discovery and ignores client-selected images', async () => {
+  const requests = vi.fn().mockResolvedValue({ applicable: true });
+  class Bridge extends ManagerStatusService {
+    override imageUpdates = vi.fn().mockResolvedValue({
+      components: [
+        {
+          id: 'application',
+          updateAvailable: true,
+          targetImage: 'ghcr.io/maxhugit/mergeron:edge',
+          targetDigest: nextId,
+        },
+        { id: 'ingress', versionStatus: 'current', updateAvailable: false },
+        {
+          id: 'manager',
+          updateAvailable: true,
+          targetImage: 'ghcr.io/maxhugit/mergeron-manager:edge',
+          targetDigest: nextId,
+        },
+      ],
+    });
+    protected override requestManager = requests;
+  }
+  const service = new Bridge(new ConfigService());
+  await service.updateOperation('plan', {
+    automatic: true,
+    images: { ingress: 'nginx:untrusted' },
+    backupMode: 'minimal',
+  });
+  expect(service.imageUpdates).toHaveBeenCalledWith(true);
+  expect(requests).toHaveBeenCalledWith(
+    '/v1/update/plan',
+    'POST',
+    expect.objectContaining({
+      images: { application: `ghcr.io/maxhugit/mergeron@${nextId}` },
+      backupMode: 'minimal',
+    }),
+  );
+});
+
+it('blocks a global plan when a managed component has unknown registry identity', async () => {
+  class Bridge extends ManagerStatusService {
+    override imageUpdates = vi.fn().mockResolvedValue({
+      components: [
+        { id: 'ingress', versionStatus: 'unknown', checkError: 'offline' },
+      ],
+    });
+  }
+  await expect(
+    new Bridge(new ConfigService()).updateOperation('plan', {
+      automatic: true,
+    }),
+  ).rejects.toThrow('updateDiscoveryIncomplete');
+});

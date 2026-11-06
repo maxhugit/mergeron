@@ -1,23 +1,8 @@
-# Mises à jour individuelles des conteneurs
+# Mise à jour globale de Mergeron
 
-Dans **Serveur → Mise à jour**, chaque composant géré (application, ingress
-NGINX, sortie Squid, navigateur lorsqu’il est activé) affiche l’image installée,
-le canal suivi, l’empreinte publiée et son état. Le bouton de chaque carte prépare
-une mise à jour **de cette image uniquement**. Le plan affiche le composant et
-l’empreinte exacte avant confirmation. Aucun téléchargement ni installation
-n’est déclenché par la détection.
+Le tableau des composants est un inventaire en lecture seule : il ne propose plus de sélection ni de mise à jour individuelle. **Mettre à jour Mergeron** demande au backend de relire les images disponibles et de construire le plan global, avec les empreintes immuables vérifiées pour la plateforme installée. Une détection incomplète bloque le plan ; les images envoyées par le navigateur ne choisissent pas son contenu.
 
-La transaction applique la [politique de sauvegarde de l’environnement](sauvegarde-restauration.md#politique-des-mises-à-jour-du-manager) :
-aucune sauvegarde en Dev, données essentielles seulement en production.
-Les contrôles de santé restent obligatoires. Les autres images ne sont pas mises
-à niveau implicitement, mais **la stack entière est arrêtée et recréée**. Le
-retour arrière Dev ne remet que les images, pas les données ou migrations.
-Ce n’est donc pas un redémarrage à chaud sans
-interruption. Aucun choix ne contourne les blocages du Manager.
-
-Les résultats terminés se consultent avec **Voir le suivi et les logs** : le
-panneau permanent de réussite est retiré. Les erreurs et récupérations nécessaires
-restent visibles.
+Le plan conserve la confirmation, la politique de sauvegarde sélectionnée, les contrôles d’adoption, de santé et le retour arrière existants. Le Manager démarre les services dans l’ordre sortie réseau, navigateur, application, ingress ; le suivi indépendant et le remplacement supervisé du Manager sont développés séparément.
 
 ## Sources et limites
 

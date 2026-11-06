@@ -47,7 +47,6 @@ export function InstalledVersions({
   trailingActions?: ReactNode;
 }) {
   const { t, i18n } = useTranslation('manager');
-  const [selected, setSelected] = useState<Set<string> | null>(null);
   const [details, setDetails] = useState<string | null>(null);
   const updates = useQuery({
     queryKey: componentUpdatesKey,
@@ -108,8 +107,6 @@ export function InstalledVersions({
   ];
   const candidates =
     updates.data?.components.filter((item) => target(item)) ?? [];
-  const selection = selected ?? new Set(candidates.map((item) => item.id));
-  const chosen = candidates.filter((item) => selection.has(item.id));
   const compatible =
     !!status?.capabilities?.backupSelection &&
     !!status.capabilities.updateHistory &&
@@ -119,14 +116,8 @@ export function InstalledVersions({
     value && Number.isFinite(Date.parse(value))
       ? new Date(value).toLocaleString(i18n.language)
       : t('versionUnknown');
-  const perform = (items: ComponentImageUpdate[]) => {
-    const images = Object.fromEntries(
-      items.flatMap((item) => {
-        const reference = target(item);
-        return reference ? [[item.id, reference]] : [];
-      }),
-    );
-    if (Object.keys(images).length && !blocked) onUpdate?.(images);
+  const perform = () => {
+    if (!blocked) onUpdate?.({});
   };
   const active = updates.data?.components.find((c) => c.id === details);
   return (
@@ -169,23 +160,6 @@ export function InstalledVersions({
         <table className="w-full min-w-[850px] text-left text-sm">
           <thead className="sticky top-0 z-10 bg-background text-xs text-muted-foreground">
             <tr>
-              <th className="p-3">
-                <input
-                  type="checkbox"
-                  aria-label={t('consoleSelectAll')}
-                  disabled={blocked || !candidates.length}
-                  checked={
-                    !!candidates.length && chosen.length === candidates.length
-                  }
-                  onChange={(event) =>
-                    setSelected(
-                      new Set(
-                        event.target.checked ? candidates.map((c) => c.id) : [],
-                      ),
-                    )
-                  }
-                />
-              </th>
               {[
                 'versionComponent',
                 'versionInstalled',
@@ -210,25 +184,8 @@ export function InstalledVersions({
                 !item.checkError &&
                 (item.versionStatus === 'current' || item.updateAvailable);
               const vendor = ['ingress', 'egress'].includes(row.id);
-              const candidate = target(item);
               return (
                 <tr className="border-t border-border" key={row.id}>
-                  <td className="p-3">
-                    <input
-                      type="checkbox"
-                      aria-label={t('consoleSelectComponent', {
-                        name: row.name,
-                      })}
-                      checked={!!candidate && selection.has(row.id)}
-                      disabled={blocked || !candidate}
-                      onChange={(event) => {
-                        const next = new Set(selection);
-                        if (event.target.checked) next.add(row.id);
-                        else next.delete(row.id);
-                        setSelected(next);
-                      }}
-                    />
-                  </td>
                   <th scope="row" className="whitespace-nowrap p-3 font-medium">
                     {row.name}
                     {components.find((c) => c.id === row.id)?.state ===
@@ -333,14 +290,9 @@ export function InstalledVersions({
                         {t('consoleHostProcedure')}
                       </Button>
                     ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={blocked || !candidate}
-                        onClick={() => item && perform([item])}
-                      >
-                        {t('consoleUpdate')}
-                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {t('globalUpdateManaged')}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -351,19 +303,17 @@ export function InstalledVersions({
       </div>
       <div className="order-last flex shrink-0 flex-wrap items-center justify-end gap-2 border-t bg-background pt-3">
         <p className="mr-auto text-xs text-muted-foreground">
-          {t('consoleSelected', { count: chosen.length })}
+          {t('globalUpdateHelp')}
         </p>
         {trailingActions}
         <Button
-          disabled={blocked || !chosen.length}
-          onClick={() => perform(chosen)}
+          disabled={blocked || !candidates.length || updates.isFetching}
+          onClick={perform}
         >
-          {t('consoleUpdateSelected', { count: chosen.length })}
+          {t('globalUpdateAction')}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {t('versionsIndependentHelp')}
-      </p>
+      <p className="text-xs text-muted-foreground">{t('globalUpdateHelp')}</p>
       <Dialog
         open={details !== null}
         onOpenChange={(open) => {
