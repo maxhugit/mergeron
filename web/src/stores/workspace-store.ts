@@ -128,6 +128,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const current = state.contexts[context] ?? EMPTY_WORKSPACE;
       const id = `mockup:${reference.id}:${reference.revision}`;
       return {
+        fileViews: clearActiveReveal(state, context),
         contexts: {
           ...state.contexts,
           [context]: {

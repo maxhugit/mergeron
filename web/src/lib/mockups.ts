@@ -70,9 +70,82 @@ export interface MockupDocument {
     createdAt: number;
   }>;
 }
-export function readMockup(ref: MockupReference, signal?: AbortSignal) {
-  return projectsApi<MockupDocument>(
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+/** Fail closed on login HTML, malformed JSON or a mismatched source response. */
+export function parseMockupDocument(
+  value: unknown,
+  expected: MockupReference,
+): MockupDocument {
+  const fail = () => {
+    throw new Error('Invalid mockup response');
+  };
+  if (!record(value)) return fail();
+  const ref = mockupReference(value.reference);
+  if (
+    !ref ||
+    ['projectId', 'threadId', 'id', 'revision'].some(
+      (key) =>
+        ref[key as keyof MockupReference] !==
+        expected[key as keyof MockupReference],
+    ) ||
+    typeof value.html !== 'string' ||
+    value.html.length > 24 * 1024 ||
+    typeof value.currentRevision !== 'string' ||
+    !uuid.test(value.currentRevision) ||
+    !Array.isArray(value.history) ||
+    value.history.length < 1 ||
+    value.history.length > 100
+  )
+    return fail();
+  const history = value.history.map((row: unknown) => {
+    if (
+      !record(row) ||
+      typeof row.id !== 'string' ||
+      !uuid.test(row.id) ||
+      typeof row.number !== 'number' ||
+      !Number.isSafeInteger(row.number) ||
+      row.number < 1 ||
+      row.number > 100 ||
+      typeof row.title !== 'string' ||
+      row.title.length > 160 ||
+      typeof row.authorName !== 'string' ||
+      row.authorName.length > 1024 ||
+      typeof row.createdAt !== 'number' ||
+      !Number.isFinite(row.createdAt)
+    )
+      return fail();
+    return {
+      id: row.id,
+      number: row.number,
+      title: row.title,
+      authorName: row.authorName,
+      createdAt: row.createdAt,
+    };
+  });
+  if (
+    !history.some(
+      (row) =>
+        row.id === ref.revision &&
+        row.number === ref.number &&
+        row.title === ref.title,
+    ) ||
+    !history.some((row) => row.id === value.currentRevision) ||
+    new Set(history.map((row) => row.id)).size !== history.length
+  )
+    return fail();
+  return {
+    reference: ref,
+    html: value.html,
+    currentRevision: value.currentRevision,
+    history,
+  };
+}
+export async function readMockup(ref: MockupReference, signal?: AbortSignal) {
+  const result = await projectsApi<unknown>(
     `/${encodeURIComponent(ref.projectId)}/conversations/${encodeURIComponent(ref.threadId)}/mockups/${encodeURIComponent(ref.id)}?revision=${encodeURIComponent(ref.revision)}`,
     { signal },
   );
+  return parseMockupDocument(result, ref);
 }

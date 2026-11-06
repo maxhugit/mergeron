@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/react';
-import { mockupReference, presentedMockup } from '@/lib/mockups';
+import {
+  mockupReference,
+  presentedMockup,
+  parseMockupDocument,
+} from '@/lib/mockups';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import {
   normalizeThreadItem,
@@ -126,4 +130,35 @@ it('preserves a previously verified reference through later partial protocol upd
   expect(
     mergeTurnItem(old, { ...old, content: '', mockupReference: undefined }),
   ).toMatchObject({ mockupReference: reference });
+});
+
+it('rejects login and malformed source responses instead of crashing the workspace', () => {
+  const valid = {
+    reference,
+    html: '<button>Simulation</button>',
+    currentRevision: reference.revision,
+    history: [
+      {
+        id: reference.revision,
+        number: 1,
+        title: reference.title,
+        authorName: 'Agent',
+        createdAt: 1,
+      },
+    ],
+  };
+  expect(parseMockupDocument(valid, reference)).toEqual(valid);
+  for (const response of [
+    '<html>Sign in</html>',
+    {},
+    null,
+    { ...valid, reference: { ...reference, threadId: 'foreign' } },
+    { ...valid, history: [null] },
+    { ...valid, history: [] },
+    { ...valid, html: { unsafe: 'not a document' } },
+    { ...valid, currentRevision: 'invalid' },
+  ])
+    expect(() => parseMockupDocument(response, reference)).toThrow(
+      'Invalid mockup response',
+    );
 });
