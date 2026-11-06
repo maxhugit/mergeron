@@ -112,7 +112,7 @@ export function settingsPageDescription(section: string): string {
 
 export function settingLabel(key: string): string {
   const labels: Record<string, string> = {
-    'general.maxIdleSubscriptions': 'Maximum idle subscriptions',
+    'general.maxIdleSubscriptions': 'idleConversationsLabel',
     'general.onlyofficeUrl': 'OnlyOffice server URL',
     'general.onlyofficeJwtSecret': 'OnlyOffice JWT secret',
     'general.onlyofficeSaveMaxBytes': 'OnlyOffice maximum save size',

@@ -30,6 +30,7 @@ import { IntegrationsPanel } from '@/components/integrations/integrations-panel'
 import { RawConfigEditor } from './raw-config-editor';
 import { SettingsSaveBar } from './settings-save-bar';
 import { loadAdminModels } from './admin-model-options';
+import { RuntimePlacementSettings } from './runtime-placement-settings';
 import { LocalAgentsSettings } from './local-agents-settings';
 import { CatalogSettings } from './catalog/catalog-settings';
 import { AccountSettings } from './account/account-settings';
@@ -554,7 +555,7 @@ export function CodexSettings({
         className={cn(
           'min-h-0 flex-1 px-4 py-4 sm:px-6',
           activeTab === 'integrations'
-            ? 'flex flex-col overflow-hidden'
+            ? 'flex flex-col overflow-y-auto'
             : 'space-y-6 overflow-y-auto',
         )}
       >
@@ -564,6 +565,9 @@ export function CodexSettings({
             role="tabpanel"
             className="flex min-h-0 flex-1 flex-col"
           >
+            <div className="shrink-0">
+              <RuntimePlacementSettings kind="applications" />
+            </div>
             <IntegrationsPanel />
           </div>
         )}

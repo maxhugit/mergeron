@@ -1667,5 +1667,11 @@
   "retiredQuestionReplyHint": "This request has ended. You can still prepare an answer to send as a message in the conversation.",
   "prepareQuestionReply": "Prepare a reply",
   "projectIntegrityTitle": "Project consistency",
-  "projectIntegrityDescription": "Compare database references with project directories. Inspection changes nothing and does not read document contents. External connections are outside this inspection. Each correction is explicit, without deletion or overwriting."
+  "projectIntegrityDescription": "Compare database references with project directories. Inspection changes nothing and does not read document contents. External connections are outside this inspection. Each correction is explicit, without deletion or overwriting.",
+  "connectionsPerformance": "Connections and performance",
+  "idleConversationsLabel": "Inactive conversations kept connected",
+  "idleConversationsHelp": "Limits inactive conversation subscriptions kept by the browser. Active conversations and those awaiting approval remain connected.",
+  "applicationCatalogAdvanced": "Applications — advanced settings",
+  "applicationCatalogSourceLabel": "Application catalog source",
+  "applicationCatalogSourceHelp": "Native uses the standard catalog. Byparr uses a daily server snapshot as a compatibility workaround."
 }
