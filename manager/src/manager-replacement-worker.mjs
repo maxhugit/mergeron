@@ -74,8 +74,20 @@ export async function runManagerReplacement({
         );
         if (current.id === job.operationId) {
           operation = current;
-          if (current.status === 'succeeded') break;
-          if (current.status !== 'running') {
+          if (current.status === 'succeeded') {
+            const projection = JSON.parse(
+              await readFile(
+                join(directory, 'maintenance', 'state.json'),
+                'utf8',
+              ),
+            );
+            if (
+              projection.operation?.id === job.operationId &&
+              projection.operation.phase === 'managerPending'
+            )
+              break;
+          }
+          if (current.status !== 'running' && current.status !== 'succeeded') {
             job.stage = 'cancelled';
             await saveReplacement(path, job);
             return job;

@@ -1,3 +1,4 @@
+import { publishMonitor } from '../src/update-monitor-journal.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
@@ -131,6 +132,12 @@ async function fixture(t) {
       startedAt: new Date().toISOString(),
       events: [],
     }),
+  );
+  await publishMonitor(
+    join(directory, 'maintenance'),
+    JSON.parse(
+      await readFile(join(directory, 'updates', 'transaction.json'), 'utf8'),
+    ),
   );
   return { directory, docker, manager, plan, handle };
 }

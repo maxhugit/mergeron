@@ -60,7 +60,7 @@ it('separates installed revisions with equal versions and keeps Manager host-man
     screen.getByRole('button', { name: 'Update Mergeron' }),
   ).toBeDisabled();
   expect(
-    within(rows[2]).getByRole('button', { name: 'View vendor information' }),
+    within(rows[2]).getByRole('button', { name: 'On the host' }),
   ).toBeEnabled();
 });
 

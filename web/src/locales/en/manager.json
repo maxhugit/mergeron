@@ -254,5 +254,15 @@
   "globalUpdateAction": "Update Mergeron",
   "globalUpdateManaged": "Managed by the global update",
   "globalUpdateHelp": "Mergeron determines which components need updating and their order. Review the plan and backup before confirming.",
-  "independentMonitorOpen": "Open independent update monitoring"
+  "independentMonitorOpen": "Open independent update monitoring",
+  "globalManagerHelp": "The global update supervises Manager replacement from an independent process, keeps the previous container and verifies the new one before confirming success.",
+  "globalManagerPending": "Preparing Manager replacement",
+  "globalManagerReplacing": "Replacing Manager",
+  "globalManagerChecking": "Checking Manager health",
+  "globalManagerRolledBack": "Previous Manager restored — review required",
+  "updateDiscoveryUnavailable": "Update discovery is unavailable. No update was started.",
+  "updateDiscoveryIncomplete": "Some component versions could not be verified. Refresh discovery before retrying.",
+  "updateNoChanges": "No component needs updating.",
+  "updateIndependentMonitorRequired": "Install and verify independent monitoring before replacing Manager.",
+  "updateMonitorUnavailable": "Independent monitoring could not be opened. The update was not started."
 }
