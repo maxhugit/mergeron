@@ -192,7 +192,7 @@ test.each([
       await page.getByRole('button', { name: 'Fermer', exact: true }).click();
       expect(close).toHaveBeenCalledWith(false);
       const bounds = screen
-        .getByRole('button', { name: 'Fermer', exact: true })
+        .getByRole('button', { name: 'Fermer' })
         .getBoundingClientRect();
       expect(bounds.top).toBeGreaterThanOrEqual(0);
       expect(bounds.bottom).toBeLessThanOrEqual(height);
