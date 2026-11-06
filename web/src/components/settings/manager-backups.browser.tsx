@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { GeneralSettings } from './general-settings';
 import { ManagerBackups } from './manager-backups';
+import { ManagerUpdateProgressDialog } from './manager-update-progress-dialog';
 import type { ManagerStatus } from './manager-status-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
@@ -136,6 +137,67 @@ test.each([1000, 1295, 390])(
         .click();
       expect(document.querySelector('.max-w-7xl')).not.toBeNull();
     } finally {
+      client.clear();
+    }
+  },
+);
+
+test.each([
+  [390, 600],
+  [1280, 720],
+])(
+  'keeps the update monitor footer reachable at %ix%i',
+  async (width, height) => {
+    await page.viewport(width, height);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    const client = new QueryClient();
+    const close = vi.fn();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ManagerUpdateProgressDialog
+          open
+          onOpenChange={close}
+          independent
+          monitoringPaused
+          pending={false}
+          requestError={null}
+          session={Date.now()}
+          excludedOperationId={null}
+          operation={{
+            id: 'fixture',
+            status: 'succeeded',
+            phase: 'complete',
+            backupRetained: true,
+            images: {},
+            previousImages: {},
+            events: Array.from({ length: 100 }, () => ({
+              at: '2026-11-06T22:14:33Z',
+              phase: 'replacing',
+              status: 'running',
+            })),
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    try {
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(
+        height * 0.85 + 1,
+      );
+      await page.getByRole('button', { name: 'Fermer', exact: true }).click();
+      expect(close).toHaveBeenCalledWith(false);
+      const bounds = screen
+        .getByRole('button', { name: 'Fermer', exact: true })
+        .getBoundingClientRect();
+      expect(bounds.top).toBeGreaterThanOrEqual(0);
+      expect(bounds.bottom).toBeLessThanOrEqual(height);
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/update-dialog-${width}-${height}.png`,
+      });
+    } finally {
+      view.unmount();
       client.clear();
     }
   },
