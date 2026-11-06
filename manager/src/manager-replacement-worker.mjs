@@ -37,6 +37,7 @@ export async function runManagerReplacement({
     operation = JSON.parse(
       await readFile(join(directory, 'updates', 'transaction.json'), 'utf8'),
     );
+    if (operation.id !== job.operationId) return job;
     await publishMonitor(join(directory, 'maintenance'), {
       ...operation,
       managerPending: false,
@@ -55,6 +56,7 @@ export async function runManagerReplacement({
         { at: new Date(now()).toISOString(), phase, status },
       ],
     };
+    if (operation.id !== job.operationId) return job;
     await publishMonitor(join(directory, 'maintenance'), {
       ...operation,
       managerPending: false,
@@ -90,6 +92,8 @@ export async function runManagerReplacement({
     operation = JSON.parse(
       await readFile(join(directory, 'updates', 'transaction.json'), 'utf8'),
     );
+  if (operation.id !== job.operationId)
+    throw new Error('updateReplacementOperationChanged');
   const canonical = job.stack + '-manager';
   const retained = canonical + '-previous-' + id;
   try {
@@ -122,7 +126,7 @@ export async function runManagerReplacement({
     if (!candidate) {
       const created = await docker.createContainer(canonical, {
         ...job.original,
-        Image: job.image,
+        Image: job.targetImageId,
         Labels: { ...job.original.Labels, 'io.mergeron.replacement': id },
       });
       job.candidateId = created.Id;
