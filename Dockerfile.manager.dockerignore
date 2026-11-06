@@ -13,6 +13,7 @@
 !scripts/
 !scripts/build-codex-runtime.sh
 !scripts/package-codex-runtime.cjs
+!scripts/prune-manager-zlib.mjs
 !security/
 !security/codex-netlink/
 !security/codex-netlink/**

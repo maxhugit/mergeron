@@ -1,5 +1,18 @@
 # Performance et stabilité du code
 
+## Bibliothèque zlib du Manager
+
+L’image distroless inclut une bibliothèque Debian partagée `zlib1g` inutilisée
+par Node, qui embarque sa propre implémentation de compression. Le build retire
+les fichiers de cette dépendance et son inventaire de paquets ensemble pour
+éliminer la bibliothèque système affectée par
+[CVE-2026-76844](https://security-tracker.debian.org/tracker/CVE-2026-76844).
+Il refuse le retrait si Node charge cette bibliothèque ou si l’inventaire du
+paquet diffère des chemins attendus dans la base épinglée. Un nouveau processus
+Node vérifie ensuite l’absence de la bibliothèque et la compression/décompression
+réelle. Les tests de sauvegarde, restauration, archive et CLI ainsi que le scan
+HIGH/CRITICAL restent exigés ; aucune exception de vulnérabilité n’est ajoutée.
+
 ## Correctifs du runtime navigateur
 
 L’image navigateur met à jour APT et `libapt-pkg6.0t64` vers au moins
@@ -137,6 +150,56 @@ Le [workflow de référence](https://github.com/maxhugit/mergeron/actions/runs/4
 conserve les journaux de l’organisation précédente. Les durées CI dépendent
 des caches et des runners : comparer les étapes sur plusieurs exécutions avant
 d’annoncer un gain global de livraison.
+
+## Réduction des invalidations Docker et répartition navigateur
+
+Sur la PR #376, le job image a pris 15,1 minutes, dont 12,1 de construction ;
+après fusion, la construction candidate a encore pris 11,8 minutes. Les suites
+backend et navigateur prenaient respectivement 5,2 et 6,1 minutes. Ces durées
+proviennent des [checks de PR](https://github.com/maxhugit/mergeron/actions/runs/42083285651)
+et de la [publication après fusion](https://github.com/maxhugit/mergeron/actions/runs/42086122982).
+Le cache chaud a ensuite ramené le job image de la PR #378 à environ 6 minutes :
+un gain annoncé doit donc distinguer construction froide et réutilisation.
+
+Dans le Dockerfile applicatif, les arguments de révision, date, version et canal,
+les labels, variables correspondantes et `build-info.json` arrivent désormais
+après les copies et installations stables. Un changement d’identité ne force
+plus la réexécution de la préparation utilisateur, des copies Office/outils ou
+des permissions de l’entrypoint. Les assets applicatifs restent reconstruits
+quand leurs sources changent. L’identité finale et ses contrôles restent présents.
+Aucune image de PR n’est promue directement vers `main` et les caches de PR
+restent séparés des caches de confiance.
+
+Chaque étape APT indépendante a ses propres caches d’archives et de listes,
+toujours verrouillés. OpenSSH, libxml2, les builders Python et les dépendances
+Chromium ne se bloquent ainsi plus mutuellement sur un verrou de cache commun.
+Cela peut entraîner un remplissage initial des nouveaux caches. Les paquets,
+backports, tests de régression et scans ne sont pas retirés ; les changements
+de base système peuvent toujours imposer une reconstruction complète.
+
+Les tests navigateur utilisent deux shards Vitest sur deux runners. Chaque shard
+conserve Chromium et WebKit ; Chromium est borné à deux pages parallèles et
+WebKit reste séquentiel à l’intérieur de son runner.
+Un test utilisant la découverte réelle et le séquenceur installé vérifie que
+l’union des deux lots couvre exactement les spécifications attendues, sans trou
+ni doublon. Une nouvelle fixture est découverte automatiquement. L’assistant
+OnlyOffice est contrôlé une fois sur le premier runner ; les captures des deux
+shards ont des noms d’artefacts distincts. Le gate existant exige le succès de
+l’ensemble de la matrice, y compris si un shard échoue ou est annulé. Le nom
+`checks (frontend-browser)` est conservé par un gate agrégé pour les règles de
+protection de branche existantes.
+
+Un suivi en direct a aussi identifié des installations de paquets bloquées sur
+`azure.archive.ubuntu.com` : les tests n’avaient pas encore commencé. Les runners
+Ubuntu jetables utilisent désormais `archive.ubuntu.com` en HTTPS pour ces
+références, avec deux reprises réseau et des délais de connexion/inactivité de
+30 secondes. Les suites, composants, priorités et clés de signature APT restent
+inchangés. Ce réglage ne s’exécute ni sur les installations Mergeron ni dans
+leurs conteneurs ; il ne désactive aucune vérification de signature ou TLS.
+
+Les scans de vulnérabilités, tests natifs Linux/SSH/Office, preuves de sandbox et
+validation du couple application/Manager restent obligatoires avant promotion.
+La publication et le déploiement restent des opérations distinctes.
 
 ## Vérifications et suivi
 

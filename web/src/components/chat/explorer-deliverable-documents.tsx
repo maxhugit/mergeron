@@ -1,0 +1,184 @@
+import { useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Folder,
+  Loader2,
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useFileWatch } from '@/hooks/use-file-watch';
+import { useAgentDocumentView } from '@/hooks/use-agent-document-view';
+import { useDocumentOrganization } from '@/lib/document-organization';
+import type { Deliverable, DeliverableDocument } from '@/lib/deliverables-api';
+import { DeliverableDocuments } from '@/components/projects/deliverable-documents';
+import { showSnackbar } from '@/stores/snackbar-store';
+
+/** Registered documents only: no filesystem navigation or general-purpose mutations. */
+export function ExplorerDeliverableDocuments({
+  item,
+  base,
+  personId,
+  agentThreadId,
+  onFile,
+  refresh,
+}: {
+  item: Deliverable;
+  base: string;
+  personId?: string | null;
+  agentThreadId?: string;
+  onFile: (path: string) => void;
+  refresh: () => Promise<unknown>;
+}) {
+  useFileWatch(item.directory);
+  const { t } = useTranslation('deliverables');
+  const { t: common } = useTranslation();
+  const preference = useAgentDocumentView(personId, agentThreadId);
+  const organization = useDocumentOrganization(
+    preference.mode === 'labels' ? base : undefined,
+    item.id,
+    item.version,
+  );
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const documents = item.documents.filter(
+    (document) => document.deletedAt === null,
+  );
+  const row = (document: DeliverableDocument) => (
+    <DeliverableDocuments
+      key={document.id}
+      item={item}
+      base={base}
+      contextDocument={document}
+      disabled={!['draft', 'in_constitution'].includes(item.lifecycleStatus)}
+      refresh={refresh}
+      onAttachToChat={() =>
+        window.dispatchEvent(
+          new CustomEvent('codex-webui:attach-file', {
+            detail: { name: document.name, path: document.sourcePath },
+          }),
+        )
+      }
+      menuLabel={document.name}
+      onError={() => showSnackbar(common('unableToUpdateDocument'), 'error')}
+    >
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-muted"
+        onClick={() => onFile(document.sourcePath)}
+        title={document.name}
+      >
+        <FileText className="h-4 w-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1 truncate">{document.name}</span>
+        <span
+          className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-muted-foreground"
+          aria-label={common('versionNumber', {
+            number: document.currentVersionNumber,
+          })}
+        >
+          V{document.currentVersionNumber}
+        </span>
+      </button>
+    </DeliverableDocuments>
+  );
+  const group = (id: string, name: string, members: DeliverableDocument[]) => (
+    <section key={id}>
+      <button
+        type="button"
+        aria-expanded={!!opened[id]}
+        className="flex w-full items-center gap-2 px-2 py-2 text-left text-xs hover:bg-muted"
+        onClick={() =>
+          setOpened((previous) => ({ ...previous, [id]: !previous[id] }))
+        }
+      >
+        {opened[id] ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <Folder className="h-4 w-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1 truncate">{name}</span>
+        <span className="text-muted-foreground">{members.length}</span>
+      </button>
+      {opened[id] && (
+        <div className="ml-3 border-l">
+          {members.length ? (
+            members.map(row)
+          ) : (
+            <p className="p-2 text-xs text-muted-foreground">
+              {t('labelsEmpty')}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+  return (
+    <div className="min-w-0 p-1">
+      {preference.available && (
+        <div className="border-b px-2 py-2">
+          <label className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            {t('labelsExplorerDisplay')}
+            <select
+              aria-label={t('labelsExplorerDisplay')}
+              value={preference.mode}
+              disabled={preference.loading}
+              onChange={(event) =>
+                preference.setMode(event.target.value as 'plain' | 'labels')
+              }
+              className="min-w-0 rounded-md border bg-background px-2 py-1"
+            >
+              <option value="plain">{t('labelsExplorerPlain')}</option>
+              <option value="labels">{t('labelsExplorerVirtual')}</option>
+            </select>
+          </label>
+          {preference.error && (
+            <p role="alert" className="mt-1 text-xs text-destructive">
+              {t('labelsPreferenceFailed')}
+            </p>
+          )}
+        </div>
+      )}
+      {preference.mode !== 'labels' ? (
+        documents.map(row)
+      ) : organization.isLoading ? (
+        <Loader2
+          className="m-2 h-4 w-4 animate-spin"
+          aria-label={t('explorerLoading')}
+        />
+      ) : organization.isError ? (
+        <p role="alert" className="p-2 text-xs text-destructive">
+          {t('labelsError')}
+        </p>
+      ) : (
+        organization.data && (
+          <>
+            {organization.data.labels.map((label) =>
+              group(
+                'label:' + label.id,
+                label.name,
+                documents.filter((document) =>
+                  organization.data!.assignments[document.id]?.includes(
+                    label.id,
+                  ),
+                ),
+              ),
+            )}
+            {group(
+              'unassigned',
+              t('labelsUnassigned'),
+              documents.filter(
+                (document) =>
+                  !organization.data!.assignments[document.id]?.length,
+              ),
+            )}
+          </>
+        )
+      )}
+      {!documents.length && (
+        <p className="p-2 text-xs text-muted-foreground">
+          {common('noDocumentYet')}
+        </p>
+      )}
+    </div>
+  );
+}

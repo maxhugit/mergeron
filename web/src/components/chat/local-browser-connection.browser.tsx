@@ -161,9 +161,16 @@ test.each([
     expect(
       screen.queryByRole('button', { name: 'Extension connection' }),
     ).toBeNull();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Local browser · extension (test)' }),
-    );
+    const chooser = screen.getByRole('dialog');
+    await page
+      .getByRole('button', {
+        name: 'Local browser · extension (test)',
+        exact: true,
+      })
+      .click();
+    // The outgoing mode chooser and incoming pairing dialog overlap during
+    // Radix's exit animation. Do not target the old modal's Close button.
+    await waitFor(() => expect(chooser.isConnected).toBe(false));
     expect(
       screen.getByRole('dialog').getBoundingClientRect().width,
     ).toBeLessThanOrEqual(width);
@@ -173,7 +180,7 @@ test.each([
       }),
     );
     await screen.findByText('Tab shared with this agent', { selector: 'p' });
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(input.getBoundingClientRect().width).toBeCloseTo(originalWidth, 0);
     expect(screen.queryAllByRole('tab')).toHaveLength(width > 1000 ? 1 : 0);
