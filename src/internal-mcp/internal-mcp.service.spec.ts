@@ -1,3 +1,4 @@
+import { MockupsService } from '../mockups/mockups.service';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -350,7 +351,9 @@ describe('native internal MCP over HTTP', () => {
             ? connections
             : token === 'AGENT_MONITOR_TOOLS'
               ? monitorTools
-              : domain,
+              : token === 'PROJECT_MOCKUP_TOOLS'
+                ? new MockupsService(database.db, deliverables)
+                : domain,
     } as unknown as ModuleRef);
     localBrowser = new LocalBrowserService();
     service = new InternalMcpService(
@@ -855,6 +858,109 @@ describe('native internal MCP over HTTP', () => {
         .isError,
     ).toBe(true);
     expect(setThreadName).not.toHaveBeenCalled();
+  });
+
+  it('binds mockup creation, history and presentation to the active native turn', async () => {
+    const { client } = await connect();
+    const args = {
+      requestId: 'mockup-native',
+      title: 'Simulated checkout',
+      html: '<button>Simulated checkout</button>',
+    };
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_create',
+          arguments: args,
+        })
+      ).isError,
+    ).toBe(true);
+    activate('admin', false);
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_create',
+          arguments: args,
+        })
+      ).isError,
+    ).toBe(true);
+    activate('admin', true);
+    const created = await client.callTool({
+      name: 'project_mockup_create',
+      arguments: args,
+    });
+    expect(created.isError).not.toBe(true);
+    const ref = (
+      created.structuredContent as {
+        reference: { id: string; revision: string };
+      }
+    ).reference;
+    expect(
+      await client.callTool({ name: 'project_mockup_create', arguments: args }),
+    ).toEqual(created);
+    activate('admin', false);
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_read',
+          arguments: { id: ref.id },
+        })
+      ).structuredContent,
+    ).toMatchObject({ html: args.html });
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_report',
+          arguments: { id: ref.id },
+        })
+      ).structuredContent,
+    ).toMatchObject({ reference: { id: ref.id, revision: ref.revision } });
+    const change = {
+      ...args,
+      id: ref.id,
+      baseRevision: ref.revision,
+      requestId: 'mockup-native-v2',
+      html: '<h1>New simulation</h1>',
+    };
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_manage',
+          arguments: change,
+        })
+      ).isError,
+    ).toBe(true);
+    activate('admin', true);
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_manage',
+          arguments: change,
+        })
+      ).isError,
+    ).not.toBe(true);
+    const stale = await client.callTool({
+      name: 'project_mockup_manage',
+      arguments: { ...change, requestId: 'stale-native' },
+    });
+    expect(JSON.stringify(stale.content)).toContain('MOCKUP_REVISION_CONFLICT');
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_create',
+          arguments: { ...args, projectId: 'other' },
+        })
+      ).isError,
+    ).toBe(true);
+    service.revoke('agent');
+    expect(
+      (
+        await client.callTool({
+          name: 'project_mockup_report',
+          arguments: { id: ref.id },
+        })
+      ).isError,
+    ).toBe(true);
   });
 
   it('negotiates MCP and exposes exactly the schemas displayed by administration', async () => {
