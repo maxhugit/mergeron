@@ -13,7 +13,6 @@ import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   projectAgentLaunches as launches,
   projectAgentThreads,
-  projectDeliverables,
   projectTasks,
   type AgentLaunchContext,
 } from '../database/schema';
@@ -29,6 +28,7 @@ import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { ThreadsService } from '../threads/threads.service';
 import { ThreadMetadataService } from '../threads/thread-metadata.service';
 import { ProjectsService } from './projects.service';
+import { assertTaskDeliverableLinks } from './project-work-links';
 
 type Receipt = typeof launches.$inferSelect;
 export type DeliverableAgentInput = {
@@ -357,7 +357,8 @@ export class ProjectAgentLaunchService {
           (!parent ||
             !task ||
             task.parentTaskId !== parent.id ||
-            task.linkedThreadId)
+            (task.linkedThreadId &&
+              task.linkedThreadId !== input.existingThreadId))
         )
           throw new ConflictException(
             'The selected execution subtask is no longer available',
@@ -385,27 +386,22 @@ export class ProjectAgentLaunchService {
             personId: currentAccess()?.identity.personId ?? null,
             name: currentAccess()?.identity.name ?? 'Système',
           };
-          task = parent
-            ? this.projects.createTask(
-                projectId,
-                parent.resourceId,
-                {
-                  parentTaskId: parent.id,
-                  title: input.subtaskTitle,
-                  description: `Produire le livrable « ${item.title} ».`,
-                  validationCriteria: item.criteria,
-                  executionMode: 'agent',
-                },
-                actor,
-              )
-            : this.projects.createDeliverableExecutionSubtask(
-                projectId,
-                id,
-                item.title,
-                item.criteria,
-                actor,
-                input.subtaskTitle,
-              );
+          if (!parent)
+            throw new ConflictException(
+              'Link the deliverable to a main task before creating an execution subtask',
+            );
+          task = this.projects.createTask(
+            projectId,
+            parent.resourceId,
+            {
+              parentTaskId: parent.id,
+              title: input.subtaskTitle,
+              description: `Produire le livrable « ${item.title} ».`,
+              validationCriteria: item.criteria,
+              executionMode: 'agent',
+            },
+            actor,
+          );
         }
         return {
           kind: 'deliverable',
@@ -605,19 +601,60 @@ export class ProjectAgentLaunchService {
         .all()
         .map((row) => [row.threadId, row.projectId]),
     );
-    const assigned = new Set(
-      this.db
-        .select({ id: projectTasks.linkedThreadId })
-        .from(projectTasks)
-        .all()
-        .map((row) => row.id),
-    );
-    for (const item of this.db
-      .select({ conversations: projectDeliverables.conversations })
-      .from(projectDeliverables)
-      .all())
-      for (const link of item.conversations)
-        if (link.type === 'agent') assigned.add(link.id);
+    const compatible = (threadId: string) => {
+      if (threadId === receipt.threadId) return true;
+      if (!bindings.has(threadId))
+        return !this.db
+          .select()
+          .from(projectTasks)
+          .where(eq(projectTasks.linkedThreadId, threadId))
+          .get();
+      if (receipt.context.kind === 'deliverable') {
+        const item = this.deliverables.get(
+          receipt.projectId,
+          receipt.resourceId,
+          receipt.context.targetId,
+        );
+        return (
+          this.deliverables.isAgentAvailable(
+            receipt.projectId,
+            threadId,
+            item,
+          ) &&
+          (!receipt.context.taskId ||
+            !this.db
+              .select()
+              .from(projectTasks)
+              .where(
+                and(
+                  eq(projectTasks.linkedThreadId, threadId),
+                  sql`${projectTasks.id} != ${receipt.context.taskId}`,
+                ),
+              )
+              .get())
+        );
+      }
+      const target = this.task(
+        receipt.projectId,
+        receipt.resourceId,
+        receipt.context.targetId,
+      );
+      if (
+        this.db
+          .select()
+          .from(projectTasks)
+          .where(eq(projectTasks.linkedThreadId, threadId))
+          .get()
+      )
+        return false;
+      try {
+        assertTaskDeliverableLinks(this.db, threadId, target.parentTaskId);
+        return true;
+      } catch (error) {
+        if (error instanceof ConflictException) return false;
+        throw error;
+      }
+    };
     const folders = new ActiveFoldersService(this.db);
     return snapshot.entries
       .filter(
@@ -632,7 +669,7 @@ export class ProjectAgentLaunchService {
                 receipt.context.cwd)) &&
           (!bindings.has(thread.id) ||
             bindings.get(thread.id) === receipt.projectId) &&
-          (!assigned.has(thread.id) || thread.id === receipt.threadId),
+          compatible(thread.id),
       )
       .map(({ thread }) => ({
         id: thread.id,

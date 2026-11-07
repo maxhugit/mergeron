@@ -184,6 +184,8 @@ L’action de validation envoie `agentState: validated` et `subtaskStatus: done`
 
 Supprimer une tâche supprime ses sous-tâches et ses liens de tâche, mais conserve les agents, leurs historiques et leurs copies Git. Leur suppression reste une action explicite distincte, avec les contrôles habituels. Le journal du tableau conserve les entrées de suppression. Une notification explicite de suppression d’agent nettoie ses liens ; une absence temporaire des métadonnées ne le fait pas.
 
+Les agents existent indépendamment des tâches et des livrables. Seules les sous-tâches peuvent recevoir un agent. Un même agent peut être affecté explicitement à un livrable et à une sous-tâche, à condition que le livrable soit rattaché à la tâche principale de cette sous-tâche. Cette règle est vérifiée dans les deux sens, lors des affectations et des changements de rattachement. Pour déplacer un élément vers une autre tâche principale, retirer d’abord l’affectation incompatible ; l’agent et son historique restent conservés.
+
 Une tâche principale ne peut être associée qu’à un seul livrable principal, quelle que soit la route d’édition utilisée. Un agent affecté doit appartenir au projet et ne peut être affecté à deux tâches. Une tâche qui porte un livrable ou possède des enfants ne peut devenir une sous-tâche. Le contexte MCP, les livrables et le bandeau « Lié à » utilisent les mêmes liens calculés, incluant les sous-tâches de la tâche principale du livrable ; consulter un dossier ne crée pas de lien.
 
 ## Paramètres et droits d’accès
