@@ -45,12 +45,12 @@ export function TimelineEntryRow({
     const versions =
       turnId && !entry.steering ? versionsByTurnId.get(turnId) : undefined;
     return (
-      <div className="group/user flex flex-col items-end">
+      <div className="group/user flex min-w-0 flex-col items-end">
         {/* A neutral tint, not an accent colour: the user's own message is the
             one thing on screen they never need drawing to, and a saturated block
             was the only high-chroma surface in an otherwise neutral palette.
             Side and alignment already say who wrote it. */}
-        <div className="max-w-2xl overflow-hidden rounded-2xl border border-border/60 bg-muted px-4 py-3 text-foreground [&_a]:underline">
+        <div className="min-w-0 max-w-[min(100%,42rem)] overflow-hidden rounded-2xl border border-border/60 bg-muted px-4 py-3 text-foreground [&_a]:underline">
           <UserMessageBubble
             content={entry.content}
             threadCwd={threadCwd}

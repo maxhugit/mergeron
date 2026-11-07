@@ -64,9 +64,9 @@ const userComponents = (
               openMention();
             }
           }}
-          className="inline-flex cursor-pointer items-center gap-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[0.85em] transition-colors hover:bg-foreground/20"
+          className="inline-flex max-w-full cursor-pointer items-center gap-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[0.85em] transition-colors hover:bg-foreground/20"
         >
-          <FileText className="inline h-3 w-3 opacity-70" />
+          <FileText className="inline h-3 w-3 shrink-0 opacity-70" />
           {children}
         </span>
       );
@@ -136,7 +136,7 @@ export function UserMessageBubble({
   const imageFiles = images?.filter((src) => !/^(https?|data|blob):/.test(src));
 
   return (
-    <div className="text-sm leading-relaxed [overflow-wrap:break-word]">
+    <div className="min-w-0 max-w-full text-sm leading-relaxed [overflow-wrap:anywhere]">
       <Markdown
         remarkPlugins={remarkPlugins}
         components={markdownComponents}
@@ -161,9 +161,9 @@ export function UserMessageBubble({
                   requestOpenFile({ path: src, sourceThreadId: threadId });
                 }
               }}
-              className="inline-flex cursor-pointer items-center gap-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[0.85em] transition-colors hover:bg-foreground/20"
+              className="inline-flex max-w-full cursor-pointer items-center gap-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[0.85em] transition-colors hover:bg-foreground/20"
             >
-              <ImageIcon className="inline h-3 w-3 opacity-70" />
+              <ImageIcon className="inline h-3 w-3 shrink-0 opacity-70" />
               {src.split('/').pop() ?? src}
             </span>
           ))}

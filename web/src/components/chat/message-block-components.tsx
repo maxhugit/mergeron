@@ -67,8 +67,8 @@ export const messageBlockComponents: ComponentProps<
   ),
   li: ({ children }) => <li className="text-sm">{children}</li>,
   table: ({ children }) => (
-    <div className="my-2 overflow-auto">
-      <table className="min-w-full border-collapse text-sm">{children}</table>
+    <div className="my-2 max-w-full overflow-auto">
+      <table className="w-max min-w-full border-collapse text-sm">{children}</table>
     </div>
   ),
   thead: ({ children }) => (

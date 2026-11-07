@@ -389,7 +389,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   );
 
   const rendered = (
-    <div className={cn('text-sm leading-relaxed', 'wrap-break-word')}>
+    <div className="min-w-0 max-w-full text-sm leading-relaxed [overflow-wrap:anywhere]">
       <Markdown
         remarkPlugins={REMARK_PLUGINS}
         components={markdownComponents}
