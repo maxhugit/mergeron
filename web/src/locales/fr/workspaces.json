@@ -419,6 +419,6 @@
   "launchRecoveryAcknowledge": "Confirmer la vérification",
   "launchRecoveryNoReplay": "Aucune instruction n’est renvoyée pendant la reprise. Après association, poursuivez le travail dans la conversation existante. Vous pouvez aussi clore cette demande après vérification : l’agent et son historique seront conservés.",
   "launchRecoveryConflict": "La reprise n’a pas été confirmée. Actualisez les informations et vérifiez que l’agent et sa destination sont toujours disponibles.",
-  "launchRecoveryNeeded": "Le lancement demande une vérification. Utilisez la reprise ci-dessous.",
+  "launchRecoveryNeeded": "Le lancement demande une vérification. Utilisez le panneau de reprise.",
   "launchRecoveryKeep": "Conserver l’agent sans terminer l’association"
 }

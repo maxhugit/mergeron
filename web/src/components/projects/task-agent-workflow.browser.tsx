@@ -31,7 +31,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function setup(agentState: ProjectTaskSummary['agentState'] = 'ready') {
+async function setup(
+  agentState: ProjectTaskSummary['agentState'] = 'ready',
+  failLaunch = false,
+) {
   await i18nReady;
   await i18n.changeLanguage('fr');
   api.mockReset();
@@ -96,18 +99,36 @@ async function setup(agentState: ProjectTaskSummary['agentState'] = 'ready') {
     dependencies: [],
     activity: [],
   } as unknown as ProjectTaskBoard;
+  let requested = false;
   api.mockImplementation((path?: string, init?: RequestInit) => {
     if (init?.method === 'PATCH')
       return Promise.resolve({
         task: { ...sub, ...JSON.parse(String(init.body)), updatedAt: 43 },
       });
-    if (path?.endsWith('/agent'))
+    if (path?.endsWith('/agent')) {
+      requested = true;
       return Promise.resolve({
         threadId: 'existing',
-        state: 'submitted',
+        state: failLaunch ? 'needs_attention' : 'submitted',
       });
+    }
     if (path?.endsWith('/agent-launch'))
-      return Promise.resolve({ launch: null, candidates: [] });
+      return Promise.resolve({
+        launch:
+          requested && failLaunch
+            ? {
+                id: 'receipt',
+                resourceId: 'r',
+                phase: 'dispatching',
+                state: 'needs_attention',
+                threadId: 'existing',
+                revision: 10,
+                targetRevision: 43,
+                busy: false,
+              }
+            : null,
+        candidates: [],
+      });
     if (path === '/people') return Promise.resolve({ people: [] });
     if (path?.endsWith('/participants'))
       return Promise.resolve({ participants: [] });
@@ -209,3 +230,26 @@ test('keeps a conflicting validation open and tells the user to refresh instead 
   ).toBeInTheDocument();
   expect(navigate).not.toHaveBeenCalled();
 });
+
+test.each([390, 1280])(
+  'shows recovery immediately after an uncertain send in the actual task editor at %ipx',
+  async (width) => {
+    await page.viewport(width, 950);
+    await setup('ready', true);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Exécuter avec un agent' }),
+    );
+    const recovery = await screen.findByRole('region', {
+      name: 'Reprise du lancement de l’agent',
+    });
+    const open = screen.getByRole('button', { name: 'Ouvrir l’agent' });
+    expect(recovery.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
+    expect(open.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      window.innerHeight,
+    );
+    expect(navigate).not.toHaveBeenCalled();
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/task-editor-recovery-${width}.png`,
+    });
+  },
+);

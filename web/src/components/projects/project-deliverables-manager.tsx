@@ -1184,6 +1184,7 @@ function DeliverableDetail({
     onSuccess: async ({ threadId, state }) => {
       await client.invalidateQueries({ queryKey: ['agent-launch', base.split('/')[1]] });
       if (state === 'needs_attention' || state === 'pending' || !threadId) {
+        setAgentDialogOpen(false);
         setError(launchText('launchRecoveryNeeded'));
         await refresh();
         return;
@@ -1542,7 +1543,7 @@ function DeliverableDetail({
         </DialogContent>
       </Dialog>
       <Dialog open={agentDialogOpen} onOpenChange={setAgentDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('entrustDeliverableToAgent')}</DialogTitle>
             <DialogDescription>

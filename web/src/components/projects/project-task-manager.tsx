@@ -2201,6 +2201,11 @@ export function ProjectTaskManager({
                   ? 'Nouvelle sous-tâche'
                   : 'Nouvelle tâche'}
       >
+            {editing && draft.executionMode === 'agent' && <AgentLaunchRecovery
+              projectId={projectId} resourceId={resourceId} kind="task" targetId={editing.id}
+              onOpen={threadId => { void navigate({ to: '/t/$threadId', params: { threadId } }); }}
+              onRecovered={() => { launchIds.current.delete(editing.id); return refresh(); }}
+            />}
           {rootTask && (
             <div className="flex shrink-0 gap-1 overflow-x-auto border-b px-6">
               <button
@@ -2697,11 +2702,6 @@ export function ProjectTaskManager({
                 </dl>
               </fieldset>
             )}
-            {editing && draft.executionMode === 'agent' && <AgentLaunchRecovery
-              projectId={projectId} resourceId={resourceId} kind="task" targetId={editing.id}
-              onOpen={threadId => { void navigate({ to: '/t/$threadId', params: { threadId } }); }}
-              onRecovered={() => { launchIds.current.delete(editing.id); return refresh(); }}
-            />}
             {taskError && (
               <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                 {taskError}

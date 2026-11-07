@@ -29,6 +29,7 @@ test.each([390, 1307])(
     await page.viewport(width, 988);
     await i18nReady;
     await i18n.changeLanguage('fr');
+    api.mockReset();
     const board = {
       resource: {
         id: 'r',
@@ -129,5 +130,51 @@ test.each([390, 1307])(
       await page.screenshot({
         path: '../../../.vitest-screenshots/deliverable-existing-agent.png',
       });
+    let failed = false;
+    api.mockImplementation((path?: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && path?.endsWith('/agent')) {
+        failed = true;
+        return Promise.resolve({
+          state: 'needs_attention',
+          threadId: 'existing',
+        });
+      }
+      if (path?.endsWith('/agent-launch'))
+        return Promise.resolve({
+          launch: failed
+            ? {
+                id: 'receipt',
+                resourceId: 'r',
+                phase: 'created',
+                state: 'needs_attention',
+                threadId: 'existing',
+                revision: 10,
+                targetRevision: 1,
+                busy: false,
+              }
+            : null,
+          candidates: [],
+        });
+      if (path?.endsWith('/available-agents'))
+        return Promise.resolve({
+          agents: [{ id: 'existing', title: 'Analyse des besoins' }],
+        });
+      return Promise.resolve(
+        path === undefined
+          ? { projects: [{ id: 'p', agentThreads: [], workspaces: [] }] }
+          : board,
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Affecter cet agent' }));
+    const recovery = await screen.findByRole('region', {
+      name: 'Reprise du lancement de l’agent',
+    });
+    await expect.poll(() => screen.queryByRole('dialog')).toBeNull();
+    expect(recovery.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
+    expect(
+      screen
+        .getByRole('button', { name: 'Ouvrir l’agent' })
+        .getBoundingClientRect().bottom,
+    ).toBeLessThanOrEqual(window.innerHeight);
   },
 );

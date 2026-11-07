@@ -108,7 +108,7 @@ export function AgentLaunchRecovery({
   return (
     <section
       aria-label={t('launchRecoveryTitle')}
-      className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+      className="max-h-[40dvh] shrink-0 space-y-3 overflow-y-auto rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
     >
       <p className="font-medium">{t('launchRecoveryTitle')}</p>
       <p>
