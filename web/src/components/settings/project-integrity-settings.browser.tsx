@@ -14,11 +14,11 @@ afterEach(() => {
   cleanup();
   document.documentElement.classList.remove('dark');
 });
-for (const width of [390, 1100])
+for (const width of [320, 390, 1100])
   test(`shows project anomalies and a confirmation without overflow at ${width}px`, async () => {
     await i18nReady;
     await i18n.changeLanguage('fr');
-    const height = width === 390 ? 600 : 850;
+    const height = width < 600 ? 600 : 850;
     await page.viewport(width, height);
     document.documentElement.classList.add('dark');
     const root = '/workspaces/81f92635-f4b2-4b69-ba9c-cd8763336ad4';
@@ -65,7 +65,7 @@ for (const width of [390, 1100])
     );
     await screen.findByRole('option', { name: 'Projet exemple' });
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'p' } });
-    await screen.findByText('Document référencé absent ou invalide');
+    await screen.findByText('Un document enregistré est introuvable');
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page.screenshot({
       path: `../../../.vitest-screenshots/project-integrity-${width}.png`,
@@ -86,6 +86,16 @@ for (const width of [390, 1100])
       : 'webkit';
     await page.screenshot({
       path: `../../../.vitest-screenshots/project-integrity-corrections-${width}-${engine}.png`,
+    });
+    await page
+      .getByRole('button', { name: 'Après correction', exact: true })
+      .click();
+    expect(
+      screen.getByRole('img', { name: /Dossier créé — Dossier vide/ }),
+    ).toBeVisible();
+    expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/project-integrity-preview-${width}-${engine}.png`,
     });
     await page
       .getByRole('button', { name: 'Recréer ce dossier vide', exact: true })

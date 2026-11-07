@@ -80,5 +80,228 @@
   "availableCorrections": "Corrections disponibles",
   "noAutomaticRepair": "Aucune correction automatique n’est disponible pour cette anomalie. Suivez les indications ci-dessus pour retrouver ou rattacher les données existantes.",
   "openAgentReference": "Ouvrir l’agent pour choisir une autre référence",
-  "issueResolved": "Cette anomalie n’apparaît plus dans le diagnostic actualisé."
+  "issueResolved": "Cette anomalie n’apparaît plus dans le diagnostic actualisé.",
+  "visual": {
+    "current": "Situation actuelle",
+    "after": "Après correction",
+    "afterLabel": "Résultat attendu après confirmation",
+    "details": "Détails techniques",
+    "explanation": "Ce qui bloque",
+    "diagram": "{{left}} — {{link}} — {{right}}",
+    "created": "Dossier vide",
+    "linked": "Référence rétablie",
+    "createdLink": "Dossier créé",
+    "linkedLink": "Lien rétabli",
+    "beforeConfirm": "Aperçu du résultat attendu. Aucune correction n’a encore été appliquée.",
+    "unknown": {
+      "left": "Élément du projet",
+      "right": "État à vérifier",
+      "link": "À examiner",
+      "explanation": "Le diagnostic a signalé une anomalie. Consultez les détails et les actions disponibles avant toute modification.",
+      "title": "Anomalie à vérifier"
+    },
+    "outsideProject": {
+      "left": "Projet autorisé",
+      "right": "Chemin à contrôler",
+      "link": "Hors périmètre",
+      "explanation": "Le chemin ne respecte pas les limites du projet. Le diagnostic ne peut pas inspecter cet emplacement.",
+      "title": "Un chemin sort du projet"
+    },
+    "symbolicLink": {
+      "left": "Dossier du projet",
+      "right": "Lien symbolique",
+      "link": "Accès bloqué",
+      "explanation": "Cet emplacement redirige vers un autre chemin. Le diagnostic ne suit pas ce lien, pour rester dans le périmètre autorisé.",
+      "title": "Un dossier redirige vers un autre emplacement"
+    },
+    "pathCollision": {
+      "left": "Dossier attendu",
+      "right": "Fichier présent",
+      "link": "Type différent",
+      "explanation": "Un fichier occupe la place prévue pour un dossier. Il faut vérifier son contenu avant de réorganiser cet emplacement.",
+      "title": "Un fichier occupe la place d’un dossier"
+    },
+    "projectRootMissing": {
+      "left": "Projet enregistré",
+      "right": "Dossier principal",
+      "link": "Introuvable",
+      "explanation": "Mergeron connaît le projet, mais ne retrouve pas son dossier principal à l’emplacement attendu.",
+      "title": "Le dossier principal du projet est introuvable"
+    },
+    "projectLocationMismatch": {
+      "left": "Projet enregistré",
+      "right": "Emplacement principal",
+      "link": "Non conforme",
+      "explanation": "Le chemin principal ne correspond pas à l’organisation attendue. Son origine doit être vérifiée avant toute modification.",
+      "title": "Le dossier principal est à un emplacement inattendu"
+    },
+    "migrationRequired": {
+      "left": "Organisation actuelle",
+      "right": "Organisation attendue",
+      "link": "Migration requise",
+      "explanation": "Le projet utilise une ancienne organisation de dossiers. Une migration dédiée est nécessaire pour conserver ses données.",
+      "title": "L’organisation du projet doit être migrée"
+    },
+    "projectIdentityMismatch": {
+      "left": "Identité du projet",
+      "right": "Identité du dossier",
+      "link": "Non vérifiée",
+      "explanation": "Le diagnostic ne peut pas confirmer que ce dossier appartient bien à ce projet. Il ne propose pas de modification sur cette base.",
+      "title": "L’identité du dossier reste à vérifier"
+    },
+    "directoryMissing": {
+      "left": "Organisation du projet",
+      "right": "Dossier attendu",
+      "link": "Absent",
+      "explanation": "Un dossier prévu dans l’organisation n’a pas été trouvé. Le recréer vide est proposé seulement si le serveur a vérifié que cela est sûr.",
+      "title": "Un dossier de rangement est absent"
+    },
+    "documentMissing": {
+      "left": "Document enregistré",
+      "right": "Fichier sur le disque",
+      "link": "Introuvable ou invalide",
+      "explanation": "Le document est enregistré, mais son fichier n’a pas été retrouvé ou n’est pas un fichier valide. Il peut avoir été déplacé : recherchez l’original ou une sauvegarde.",
+      "title": "Un document enregistré est introuvable"
+    },
+    "currentVersionMissing": {
+      "left": "Document courant",
+      "right": "Version enregistrée",
+      "link": "Non reliés",
+      "explanation": "La version courante du document n’est pas enregistrée dans son historique. Cela ne permet pas de conclure que le fichier a disparu.",
+      "title": "La version courante n’est pas enregistrée"
+    },
+    "snapshotMissing": {
+      "left": "Version dans l’historique",
+      "right": "Fichier de cette version",
+      "link": "Introuvable ou invalide",
+      "explanation": "Une version est enregistrée dans l’historique, mais son fichier n’est pas disponible à l’emplacement attendu. Vérifiez les sauvegardes.",
+      "title": "Le fichier d’une ancienne version est introuvable"
+    },
+    "documentLocationMismatch": {
+      "left": "Livrable du document",
+      "right": "Emplacement du fichier",
+      "link": "Emplacement différent",
+      "explanation": "Le document ne se trouve pas dans l’espace prévu pour son livrable. Il faut vérifier le fichier et son rattachement.",
+      "title": "Un document est en dehors de son livrable"
+    },
+    "snapshotLocationMismatch": {
+      "left": "Historique des versions",
+      "right": "Emplacement de la version",
+      "link": "Emplacement différent",
+      "explanation": "Le fichier de cette version est situé hors de l’espace historique attendu. Son emplacement doit être vérifié.",
+      "title": "Une version est hors de son espace historique"
+    },
+    "copyRegistrationMissing": {
+      "left": "Copie Git enregistrée",
+      "right": "Emplacement enregistré",
+      "link": "Rattachement absent",
+      "explanation": "La copie Git est connue, mais son emplacement n’est pas enregistré. Vérifiez la copie et ses changements avant de la rattacher.",
+      "title": "Une copie Git a perdu son emplacement enregistré"
+    },
+    "copyLocationMismatch": {
+      "left": "Emplacement Git attendu",
+      "right": "Emplacement de la copie",
+      "link": "Emplacement différent",
+      "explanation": "La copie Git est située ailleurs que prévu. Ses fichiers et changements locaux doivent être conservés pendant la vérification.",
+      "title": "Une copie Git est à un emplacement inattendu"
+    },
+    "copyMissing": {
+      "left": "Copie Git enregistrée",
+      "right": "Dossier de la copie",
+      "link": "Introuvable",
+      "explanation": "Mergeron connaît cette copie Git, mais ne retrouve pas son dossier. Une nouvelle copie distante ne récupérerait pas ses modifications non publiées.",
+      "title": "Une copie Git enregistrée est introuvable"
+    },
+    "gitMetadataMissing": {
+      "left": "Dossier de la copie",
+      "right": "Informations Git",
+      "link": "Absentes",
+      "explanation": "Le dossier existe, mais ses informations Git ne sont pas présentes comme attendu. Vérifiez les fichiers avant de recréer une copie.",
+      "title": "Les informations Git de cette copie sont absentes"
+    },
+    "agentReferenceObsolete": {
+      "left": "Référence de l’agent",
+      "right": "Dossier après migration",
+      "link": "Ancien chemin",
+      "explanation": "Le dossier migré a été retrouvé, mais l’agent mémorise encore une ancienne référence. Le diagnostic peut proposer de rétablir ce lien.",
+      "title": "Un agent utilise encore une ancienne référence"
+    },
+    "agentOverrideObsolete": {
+      "left": "Conversation",
+      "right": "Dossier après migration",
+      "link": "Ancien chemin",
+      "explanation": "Cette conversation mémorise encore un ancien chemin alors que le dossier migré existe. Son lien peut être réaligné si le serveur le propose.",
+      "title": "Une conversation utilise encore un ancien dossier"
+    },
+    "agentReferenceMissing": {
+      "left": "Référence de l’agent",
+      "right": "Dossier de référence",
+      "link": "Introuvable",
+      "explanation": "Le dossier utilisé comme référence de cet agent n’a pas été retrouvé. Vérifiez son emplacement ou choisissez une autre référence.",
+      "title": "Le dossier de référence d’un agent est introuvable"
+    },
+    "unregisteredDocument": {
+      "left": "Documents du livrable",
+      "right": "Fichier sur le disque",
+      "link": "Non enregistré",
+      "explanation": "Un fichier est présent sans document correspondant dans Mergeron. Son import documentaire permet de conserver identité, versions et contrôles.",
+      "title": "Un fichier n’est pas enregistré dans le livrable"
+    },
+    "unregisteredDeliverableDirectory": {
+      "left": "Livrable enregistré",
+      "right": "Dossier sur le disque",
+      "link": "Non rattaché",
+      "explanation": "Un dossier existe sans livrable correspondant. Il peut aussi s’agir d’un dossier technique : son origine doit être vérifiée avant tout rattachement ou nettoyage.",
+      "title": "Un dossier existe sans livrable associé"
+    },
+    "unregisteredCopy": {
+      "left": "Copie connue de Mergeron",
+      "right": "Copie Git sur le disque",
+      "link": "Non rattachée",
+      "explanation": "Une copie Git existe sans rattachement enregistré. Elle peut contenir des changements non publiés : vérifiez son origine et son contenu.",
+      "title": "Une copie Git existe sans être enregistrée"
+    },
+    "scanLimited": {
+      "left": "Périmètre à analyser",
+      "right": "Partie inspectée",
+      "link": "Analyse incomplète",
+      "explanation": "La limite d’analyse a été atteinte. Le résultat est partiel et les corrections automatiques sont désactivées pour ce diagnostic.",
+      "title": "Le diagnostic est incomplet"
+    },
+    "transferRunning": {
+      "left": "Dossiers du projet",
+      "right": "Transfert en cours",
+      "link": "Corrections suspendues",
+      "explanation": "Les dossiers sont en cours de transfert. Attendez la fin du transfert puis actualisez le diagnostic avant de corriger une référence.",
+      "title": "Un transfert suspend les corrections"
+    },
+    "primaryLocationMismatch": {
+      "left": "Projet enregistré",
+      "right": "Connexion principale",
+      "link": "Incohérente",
+      "explanation": "L’emplacement principal mémorisé en base ne correspond pas à celui attendu pour ce projet. Les références doivent être vérifiées.",
+      "title": "La connexion principale du projet est incohérente"
+    },
+    "activeFolderRegistrationMissing": {
+      "left": "Élément du projet",
+      "right": "Ancienne connexion",
+      "link": "Lien rompu",
+      "explanation": "Cet élément mémorise une connexion qui n’existe plus. Cela ne signifie pas que ses fichiers sont supprimés. Le diagnostic peut proposer Dossiers comme nouvelle référence.",
+      "title": "Un élément a perdu son lien vers un dossier"
+    },
+    "activeFolderOutsideWorkspace": {
+      "left": "Connexion autorisée",
+      "right": "Dossier de référence",
+      "link": "Hors de la connexion",
+      "explanation": "Le chemin de référence sort du périmètre de sa connexion. Choisissez une référence située dans un emplacement autorisé.",
+      "title": "Une référence sort de sa connexion autorisée"
+    },
+    "activeFolderMissing": {
+      "left": "Élément du projet",
+      "right": "Dossier de référence",
+      "link": "Introuvable",
+      "explanation": "La connexion est connue, mais le dossier de référence n’a pas été retrouvé. Vérifiez le dossier ou choisissez une autre référence.",
+      "title": "Un dossier de référence est introuvable"
+    }
+  }
 }

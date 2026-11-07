@@ -9,7 +9,12 @@ projet. Le diagnostic compare les références en base avec l’organisation phy
 attendue. **Actualiser le diagnostic** relance la lecture sans modifier de données.
 La page et ses API sont réservées aux administrateurs actifs.
 
-Le rapport montre les chemins concernés et distingue les erreurs des avertissements :
+Le rapport présente chaque anomalie avec un titre simple, une explication et un
+schéma reliant les deux éléments concernés. Le lien indique ce qui bloque
+(absence, rattachement manquant, emplacement différent ou contrôle suspendu).
+Les 29 types d’anomalies disposent d’une représentation et d’une explication
+propres ; une anomalie inconnue conserve un affichage générique.
+Les erreurs restent distinguées des avertissements :
 
 - identité, emplacement principal et version d’organisation du projet ;
 - dossiers attendus, collisions de chemins et liens symboliques ;
@@ -33,8 +38,13 @@ pour traitement manuel, sans migration implicite.
 ## Corrections
 
 Cliquer sur une anomalie ouvre **Corrections proposées**. La popup présente
-l’élément concerné, les chemins, les explications et les seules réparations
-offertes par le diagnostic serveur. Choisir une réparation ouvre sa confirmation ;
+l’élément concerné, les explications et les seules réparations
+offertes par le diagnostic serveur. Les chemins, identifiants et intitulés techniques
+restent consultables dans **Détails techniques**, replié par défaut.
+Lorsqu’une réparation est disponible, **Situation actuelle / Après correction**
+permet de visualiser son effet attendu sans écrire de données. Cet aperçu
+n’apparaît pas pour les cas manuels ou les diagnostics incomplets et disparaît
+si un rafraîchissement retire la réparation. Choisir une réparation ouvre sa confirmation ;
 ouvrir la popup ne modifie aucune donnée. Le diagnostic peut aussi être actualisé
 depuis cette fenêtre. Si l’anomalie disparaît, ses anciens boutons ne restent pas
 disponibles. Une référence d’agent permet également d’ouvrir cet agent pour
