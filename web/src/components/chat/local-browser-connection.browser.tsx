@@ -11,6 +11,11 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { LocalBrowserSidebar } from './local-browser-sidebar';
 import { WorkspaceControls } from './workspace-controls';
+vi.mock('../settings/server-capabilities-api', () => ({
+  useServerCapabilities: () => ({
+    data: { capabilities: [{ id: 'browser', installed: true }] },
+  }),
+}));
 import { BrowserModeDialog } from './browser-mode-dialog';
 import { useChatAttachments } from '@/hooks/use-chat-attachments';
 import { useComposerDraftStore } from '@/stores/composer-draft-store';

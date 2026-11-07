@@ -343,3 +343,50 @@ test('observed companions do not invalidate core adoption or become trusted thro
     'drifted',
   );
 });
+
+test('capability adoption only changes optional browser and its reviewed app control network', async () => {
+  const { capabilityCoreTrusted, recordCapabilityChange } =
+    await import('../src/adoption.mjs');
+  const directory = await mkdtemp(join(tmpdir(), 'capability-adoption-'));
+  try {
+    const path = join(directory, 'adoption.json');
+    const before = inventory();
+    before.components.forEach((c) => {
+      c.adoption = 'managed';
+      c.protectedMounts.forEach((m) => {
+        m.present = true;
+      });
+    });
+    assert.equal(capabilityCoreTrusted(before, null), true);
+    const after = structuredClone(before);
+    after.components[0].networks.push('mergeron-browser-control');
+    after.components.push({
+      id: 'browser',
+      containerId: 'browser-id',
+      containerName: 'mergeron-browser',
+      image: 'ghcr.io/maxhugit/mergeron-browser:latest',
+      imageRepositoryAllowed: true,
+      adoption: 'managed',
+      networks: ['mergeron-browser-control', 'mergeron-browser-egress'],
+      missingNetworks: [],
+      protectedMounts: [],
+    });
+    await recordCapabilityChange({ before, after, path });
+    const record = await readAdoptionRecord(path);
+    assert.equal(evaluateAdoption(after, record).adoption.state, 'adopted');
+    const drifted = structuredClone(after);
+    drifted.components[0].containerId = 'foreign';
+    assert.equal(capabilityCoreTrusted(drifted, record), false);
+    await assert.rejects(
+      recordCapabilityChange({ before: after, after: drifted, path }),
+      /CORE_CHANGED/,
+    );
+    const unsafe = structuredClone(after);
+    unsafe.dataSafety.blockers.push('unsafe');
+    assert.equal(capabilityCoreTrusted(unsafe, record), false);
+    after.components = after.components.filter((c) => c.id !== 'browser');
+    assert.equal(capabilityCoreTrusted(after, record), true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

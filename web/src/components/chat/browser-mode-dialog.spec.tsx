@@ -1,8 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
+const capabilityFixture = vi.hoisted(() => ({ installed: true }));
+vi.mock('../settings/server-capabilities-api', () => ({
+  useServerCapabilities: () => ({
+    data: {
+      capabilities: [{ id: 'browser', installed: capabilityFixture.installed }],
+    },
+  }),
+}));
 import { BrowserModeDialog } from './browser-mode-dialog';
 beforeEach(async () => {
+  capabilityFixture.installed = true;
   await i18n.changeLanguage('en');
 });
 it.each(['isolated', 'local'] as const)(
@@ -40,6 +49,19 @@ it('keeps the extension connection available when the isolated browser limit is 
   expect(
     screen.getByRole('button', { name: 'Isolated browser (existing)' }),
   ).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Local browser · extension (test)' }),
+  ).toBeEnabled();
+});
+
+it('disables an absent isolated capability while retaining the local extension choice', () => {
+  capabilityFixture.installed = false;
+  const choose = vi.fn();
+  render(<BrowserModeDialog open onOpenChange={vi.fn()} onChoose={choose} />);
+  const isolated = screen.getByRole('button', { name: /Not installed/ });
+  expect(isolated).toBeDisabled();
+  fireEvent.click(isolated);
+  expect(choose).not.toHaveBeenCalled();
   expect(
     screen.getByRole('button', { name: 'Local browser · extension (test)' }),
   ).toBeEnabled();

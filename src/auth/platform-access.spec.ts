@@ -537,3 +537,29 @@ it('requires person contact fields, computes the name server-side and protects t
     'last active administrator',
   );
 });
+
+it.each(['GET', 'POST'])(
+  'keeps server capability operations administrator-only (%s)',
+  (method) => {
+    const path = '/settings/manager/capabilities';
+    expect(() =>
+      guard.canActivate(
+        http(path, method, {
+          body: {
+            id: 'browser',
+            action: 'install',
+            confirmation: 'install:browser',
+            role: 'administrator',
+          },
+        }).context,
+      ),
+    ).toThrow('Administrator access');
+    expect(
+      guard.canActivate(
+        http(path, method, {
+          headers: headers('admin-subject', 'admin@example.com'),
+        }).context,
+      ),
+    ).toBe(true);
+  },
+);

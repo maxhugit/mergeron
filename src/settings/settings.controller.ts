@@ -86,6 +86,16 @@ export class SettingsController {
   }
 
   /** Proxies the observe-only local stack inventory exposed by Mergeron Manager. */
+  @Get('manager/capabilities')
+  managerCapabilities() {
+    return this.managerStatus.capabilities();
+  }
+
+  @Post('manager/capabilities')
+  changeCapability(@Body() body: Record<string, unknown>) {
+    return this.managerStatus.changeCapability(body);
+  }
+
   @Get('manager/status')
   @ApiOperation({ summary: 'Read Mergeron stack health and data safeguards' })
   managerStackStatus() {

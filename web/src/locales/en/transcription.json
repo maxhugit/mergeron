@@ -8,7 +8,7 @@
   "tooLarge": "File exceeds 128 MiB.",
   "failed": "Transcription failed.",
   "serviceError": "Cannot reach the transcription service.",
-  "disabled": "The administrator must enable the transcription service in the Manager.",
+  "disabled": "Transcription is not installed. An administrator can install it in Settings → Server → Capabilities.",
   "language": "Language: {{language}} · confidence {{confidence}}%",
   "anonymous": "Speakers are anonymous labels, not identified people. Attribution may be imperfect.",
   "speakersFailed": "Speaker separation failed. The transcript remains available.",

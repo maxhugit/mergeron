@@ -99,7 +99,9 @@ export class BrowserService implements OnModuleDestroy {
   private async session(key: string, allowPopups = true): Promise<Session> {
     const existing = this.sessions.get(key);
     if (existing) return existing;
-    const endpoint = this.config.get<string>('MERGERON_BROWSER_ENDPOINT');
+    const endpoint =
+      this.runtime?.endpoint?.() ??
+      this.config.get<string>('MERGERON_BROWSER_ENDPOINT');
     if (!endpoint)
       throw new ServiceUnavailableException({
         code: 'BROWSER_NOT_CONFIGURED',
@@ -185,7 +187,10 @@ export class BrowserService implements OnModuleDestroy {
       return { cancelled: true };
     }
     if (action === 'runtime') {
-      if (!this.config.get<string>('MERGERON_BROWSER_ENDPOINT'))
+      if (
+        !this.runtime &&
+        !this.config.get<string>('MERGERON_BROWSER_ENDPOINT')
+      )
         throw new ServiceUnavailableException({
           code: 'BROWSER_NOT_CONFIGURED',
           message: 'Browser runtime is not configured',
@@ -197,7 +202,10 @@ export class BrowserService implements OnModuleDestroy {
       !(action === 'tabs' && body.restoreOnly === true) &&
       !this.sessions.has(key)
     ) {
-      if (!this.config.get<string>('MERGERON_BROWSER_ENDPOINT'))
+      if (
+        !this.runtime &&
+        !this.config.get<string>('MERGERON_BROWSER_ENDPOINT')
+      )
         throw new ServiceUnavailableException({
           code: 'BROWSER_NOT_CONFIGURED',
           message: 'Browser runtime is not configured',

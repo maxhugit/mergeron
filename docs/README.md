@@ -22,7 +22,7 @@ se configurent dans l’assistant Web, sans fichier de compte à préparer.
    réseaux, sécurité et déroulement des mises à jour.
 5. [Fonctionnement du dépôt](fonctionnement-du-depot.md)
 6. [Configuration des intégrations facultatives](configuration-integrations.md)
-7. [Mergeron Manager](mergeron-manager.md)
+7. [Mergeron Manager](mergeron-manager.md) et [compétences optionnelles](server-capabilities.md)
 8. [Sauvegarde et restauration](sauvegarde-restauration.md)
 9. [Exploitation et dépannage](exploitation-depannage.md)
 10. [Versions et publications](publications.md)

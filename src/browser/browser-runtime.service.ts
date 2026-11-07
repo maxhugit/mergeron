@@ -22,6 +22,7 @@ export class BrowserRuntimeService implements OnModuleDestroy {
   private readonly refs = new Map<string, number>();
   private renewing = false;
   private external = false;
+  private managedEndpoint: string | undefined;
   private readonly timer = setInterval(() => void this.renew(), 20_000).unref();
   constructor(
     private readonly manager: ManagerStatusService,
@@ -51,6 +52,16 @@ export class BrowserRuntimeService implements OnModuleDestroy {
         ].includes(String(result.state))
       )
         throw this.failure();
+      const transport = result.transport as { endpoint?: unknown } | undefined;
+      if (
+        typeof transport?.endpoint === 'string' &&
+        /^ws:\/\/[a-z0-9_-]+-browser:3000\/[A-Za-z0-9_-]{32,128}$/.test(
+          transport.endpoint,
+        )
+      )
+        this.managedEndpoint = transport.endpoint;
+      // Never expose the private browser credential through runtime status.
+      delete result.transport;
       this.external = result.state === 'external';
       return result as unknown as BrowserRuntimeStatus;
     } catch (error) {
@@ -61,6 +72,12 @@ export class BrowserRuntimeService implements OnModuleDestroy {
       }
       throw this.failure();
     }
+  }
+  endpoint() {
+    return (
+      this.managedEndpoint ??
+      this.config.get<string>('MERGERON_BROWSER_ENDPOINT')
+    );
   }
   async prepare(key: string) {
     if (!this.refs.has(key) && this.refs.size >= 16) throw this.failure();

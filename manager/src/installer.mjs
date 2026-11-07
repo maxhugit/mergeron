@@ -15,7 +15,7 @@ const MANAGED_LABELS = {
 const INSTALL_CONFIRMATION = 'INSTALL';
 
 /** Same reviewed profile as Compose; Docker API expects inline JSON, not a path. */
-function documentSeccompProfile() {
+export function documentSeccompProfile() {
   let source;
   try {
     source = readFileSync(

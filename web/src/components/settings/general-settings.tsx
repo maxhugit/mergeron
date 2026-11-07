@@ -1,13 +1,16 @@
 import { useTranslation } from 'react-i18next';
 /** Server-wide runtime settings. */
 import { useState } from 'react';
-import { BadgeInfo, History, Archive } from 'lucide-react';
+import { BadgeInfo, History, Archive, Boxes } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ServerCapabilities } from './server-capabilities';
 import { ServerVersionCard } from './server-version-card';
 
 export function GeneralSettings() {
   const { t: tm } = useTranslation('manager');
-  const [tab, setTab] = useState<'current' | 'update' | 'backups'>('current');
+  const [tab, setTab] = useState<
+    'current' | 'update' | 'backups' | 'capabilities'
+  >('current');
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -46,6 +49,7 @@ export function GeneralSettings() {
               ['current', 'serverCurrentVersionTab', BadgeInfo],
               ['update', 'serverUpdateTab', History],
               ['backups', 'serverBackupTab', Archive],
+              ['capabilities', 'capabilitiesTitle', Boxes],
             ] as const
           ).map(([id, label, Icon]) => (
             <button
@@ -98,7 +102,19 @@ export function GeneralSettings() {
             id={`server-panel-${tab}`}
             aria-labelledby={`server-tab-${tab}`}
           >
-            <ServerVersionCard view={tab} />
+            <div
+              hidden={tab === 'capabilities'}
+              className={
+                tab === 'current' || tab === 'backups'
+                  ? 'flex min-h-0 flex-1 flex-col'
+                  : undefined
+              }
+            >
+              <ServerVersionCard
+                view={tab === 'capabilities' ? 'current' : tab}
+              />
+            </div>
+            {tab === 'capabilities' && <ServerCapabilities />}
           </div>
         </div>
       </div>
