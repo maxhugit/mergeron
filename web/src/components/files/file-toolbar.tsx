@@ -40,6 +40,14 @@ export function FileToolbar({
   if (!rootDir) return null;
 
   const workspacePath = workspaceRoot?.path.replace(/\/+$/, '') || '/';
+  const currentPath = rootDir.replace(/\/+$/, '') || '/';
+  const canNavigateUp =
+    currentPath !== '/' &&
+    (!workspaceRoot ||
+      (currentPath !== workspacePath &&
+        currentPath.startsWith(
+          workspacePath === '/' ? '/' : `${workspacePath}/`,
+        )));
   const inWorkspace =
     workspaceRoot?.name &&
     (rootDir === workspacePath ||
@@ -88,8 +96,11 @@ export function FileToolbar({
     <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
       <button
         type="button"
-        onClick={() => navigateUp()}
-        className="rounded p-0.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+        onClick={() => {
+          if (canNavigateUp) navigateUp();
+        }}
+        disabled={!canNavigateUp}
+        className="rounded p-0.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-default disabled:opacity-40"
         title={t('goUp')}
       >
         <ChevronUp className="h-3.5 w-3.5" />
