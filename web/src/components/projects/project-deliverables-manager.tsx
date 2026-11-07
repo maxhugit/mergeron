@@ -136,6 +136,8 @@ export function ProjectDeliverablesManager({
     queryKey: key,
     queryFn: () => projectsApi<DeliverablesBoard>(base),
     refetchOnWindowFocus: false,
+    // Refresh only mounted, visible views; runtime projection itself lives on the server.
+    refetchInterval: 5_000,
   });
   const [title, setTitle] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -1909,9 +1911,10 @@ function Overview({
   )?.agentThreads;
   const agentIds = [
     ...new Set(
-      item.conversations
-        .filter((link) => link.type === 'agent')
-        .map((link) => link.id),
+      item.linkedAgentIds ??
+        item.conversations
+          .filter((link) => link.type === 'agent')
+          .map((link) => link.id),
     ),
   ];
   const assignedAgents = agentIds

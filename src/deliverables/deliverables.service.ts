@@ -1,3 +1,7 @@
+import {
+  assertPrimaryTask,
+  projectAgentLinks,
+} from '../projects/project-work-links';
 import { projectDeliverablesPath } from '../projects/workspace-structure';
 import {
   requireProjectAccess,
@@ -176,6 +180,7 @@ export class DeliverablesService implements OnModuleInit {
   }
   /** Small permission-filtered catalog; no file paths or document histories. */
   agentCatalog(projectId: string) {
+    const agentLinks = projectAgentLinks(this.db, projectId);
     requireProjectAccess(projectId);
     return this.db
       .select({ item: items, resource: projectResources })
@@ -203,6 +208,7 @@ export class DeliverablesService implements OnModuleInit {
         status: item.lifecycleStatus,
         primaryTaskId: item.primaryTaskId,
         conversations: item.conversations,
+        linkedAgentIds: agentLinks(item),
         version: item.version,
       }));
   }
@@ -546,6 +552,8 @@ export class DeliverablesService implements OnModuleInit {
         authorizedGroupIds: items.authorizedGroupIds,
         workspace: projects.workspacePath,
         validatedVersionId: items.validatedVersionId,
+        primaryTaskId: items.primaryTaskId,
+        conversations: items.conversations,
       })
       .from(items)
       .innerJoin(projectResources, eq(items.resourceId, projectResources.id))
@@ -553,21 +561,28 @@ export class DeliverablesService implements OnModuleInit {
       .where(
         and(
           eq(projects.id, projectId),
-          sql`exists (select 1 from json_each(${items.conversations}) where json_extract(value, '$.id') = ${threadId} and json_extract(value, '$.type') = ${type})`,
+          type === 'simple'
+            ? sql`exists (select 1 from json_each(${items.conversations}) where json_extract(value, '$.id') = ${threadId} and json_extract(value, '$.type') = ${type})`
+            : undefined,
         ),
       )
       .all();
-    return linked.length
+    const agentLinks = projectAgentLinks(this.db, projectId);
+    const visible = linked.filter(
+      (item) =>
+        this.canAccessDeliverable(projectId, item) &&
+        (type === 'simple' || agentLinks(item).includes(threadId)),
+    );
+    return visible.length
       ? '<project_deliverable_context>\nProject deliverables linked to this conversation. Use their goals and validation criteria. Save working files in the indicated directory. Do not claim validation; only a person can validate a submitted version.\n' +
           JSON.stringify(
-            linked
-              .filter((item) => this.canAccessDeliverable(projectId, item))
-              .map((item) => ({
-                ...item,
-                directory:
-                  this.activeFolders.get('deliverable', item.id)
-                    ?.effectivePath ?? null,
-              })),
+            visible.map((item) => ({
+              ...item,
+              conversations: undefined,
+              directory:
+                this.activeFolders.get('deliverable', item.id)?.effectivePath ??
+                null,
+            })),
           ) +
           '\n</project_deliverable_context>'
       : null;
@@ -930,6 +945,7 @@ export class DeliverablesService implements OnModuleInit {
     };
   }
   board(projectId: string, resourceId: string) {
+    const agentLinks = projectAgentLinks(this.db, projectId);
     const context = this.resource(projectId, resourceId);
     const records = this.db
       .select()
@@ -1050,6 +1066,7 @@ export class DeliverablesService implements OnModuleInit {
       ...this.options(projectId),
       deliverables: records.map((item) => ({
         ...item,
+        linkedAgentIds: agentLinks(item),
         activityEvents: activityHistory.filter(
           (event) => event.entityId === item.id,
         ),
@@ -1254,15 +1271,8 @@ export class DeliverablesService implements OnModuleInit {
       )
     )
       throw new BadRequestException('Tasks must belong to this project');
-    if (
-      primaryTaskId &&
-      !options.tasks.some(
-        (task) => task.id === primaryTaskId && task.parentTaskId === null,
-      )
-    )
-      throw new BadRequestException(
-        'Primary task must be a main task in this project',
-      );
+    if (primaryTaskId)
+      assertPrimaryTask(this.db, projectId, primaryTaskId, current?.id);
     if (
       !Array.isArray(conversations) ||
       conversations.length > 100 ||
@@ -1369,6 +1379,8 @@ export class DeliverablesService implements OnModuleInit {
     beforeCommit?.();
     const actor = this.actor();
     const created = this.db.transaction((tx) => {
+      if (values.primaryTaskId)
+        assertPrimaryTask(this.db, projectId, values.primaryTaskId);
       const created = tx
         .insert(items)
         .values({
@@ -1492,6 +1504,8 @@ export class DeliverablesService implements OnModuleInit {
     const changes = this.changes(projectId, input, current);
     const now = Date.now();
     return this.db.transaction((tx) => {
+      if (changes.primaryTaskId)
+        assertPrimaryTask(this.db, projectId, changes.primaryTaskId, id);
       const changed = tx
         .update(items)
         .set({

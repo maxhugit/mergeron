@@ -25,14 +25,14 @@ Une tâche contient un titre, une description, une priorité, un responsable
 facultatif, des labels, un avancement de 0 à 100 %, une estimation et des
 dates facultatives. Elle peut aussi préciser des conditions de validation.
 
-| Élément | Tâche principale | Sous-tâche |
-| --- | --- | --- |
-| Organisation | Colonne du tableau | Rattachée à une tâche principale |
-| Exécution | Manuelle | Manuelle ou agent Codex |
-| Priorité et dossier | Choisis sur la tâche | Hérités du parent |
-| Dépendances | Autres tâches principales du même tableau | Non prises en charge |
-| Fichier lié | Possible | Pas de fichier lié propre |
-| Niveau inférieur | Sous-tâches | Aucun niveau supplémentaire |
+| Élément             | Tâche principale                          | Sous-tâche                       |
+| ------------------- | ----------------------------------------- | -------------------------------- |
+| Organisation        | Colonne du tableau                        | Rattachée à une tâche principale |
+| Exécution           | Manuelle                                  | Manuelle ou agent Codex          |
+| Priorité et dossier | Choisis sur la tâche                      | Hérités du parent                |
+| Dépendances         | Autres tâches principales du même tableau | Non prises en charge             |
+| Fichier lié         | Possible                                  | Pas de fichier lié propre        |
+| Niveau inférieur    | Sous-tâches                               | Aucun niveau supplémentaire      |
 
 Un responsable doit être une personne active ajoutée aux participants du projet.
 Retirer un participant ne supprime pas ses affectations historiques.
@@ -87,12 +87,12 @@ réalisé. Supprimer la dernière sous-tâche remet les agrégats du parent à z
 
 ## Les quatre vues
 
-| Vue | Utilisation |
-| --- | --- |
-| Conseils | Analyse du tableau et proposition de travail selon le temps disponible |
-| Tableau | Cartes par statut, sous-tâches, recherche, filtre de priorité et déplacement des cartes |
-| Planning | Gantt des tâches et sous-tâches datées, liens de dépendance et modification du planning |
-| Journal | Créations, modifications et suppressions, avec valeurs avant/après pour les changements enregistrés |
+| Vue      | Utilisation                                                                                         |
+| -------- | --------------------------------------------------------------------------------------------------- |
+| Conseils | Analyse du tableau et proposition de travail selon le temps disponible                              |
+| Tableau  | Cartes par statut, sous-tâches, recherche, filtre de priorité et déplacement des cartes             |
+| Planning | Gantt des tâches et sous-tâches datées, liens de dépendance et modification du planning             |
+| Journal  | Créations, modifications et suppressions, avec valeurs avant/après pour les changements enregistrés |
 
 La recherche du tableau porte sur le titre, la description et les labels des
 tâches principales. Le tableau est relu toutes les cinq secondes.
@@ -118,12 +118,12 @@ Ces fonctions passent par `SimpleChatService` et l’API OpenAI
 (`/v1/responses`), avec le modèle du chat simple. Elles nécessitent sa clé API ;
 l’authentification du CLI Codex par un compte ChatGPT ne suffit pas à elle seule.
 
-| Fonction | Résultat |
-| --- | --- |
-| Générer un plan | Propositions de tâches, sous-tâches, estimations et dépendances à partir d’une demande |
-| Découper une tâche | Jusqu’à dix propositions de sous-tâches, avec mode manuel ou agent et conditions de validation |
-| Replanifier | Propositions de priorité, charge, dates et dépendances des tâches principales existantes |
-| Conseils | Analyse de santé, alertes et recommandations |
+| Fonction                    | Résultat                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| Générer un plan             | Propositions de tâches, sous-tâches, estimations et dépendances à partir d’une demande           |
+| Découper une tâche          | Jusqu’à dix propositions de sous-tâches, avec mode manuel ou agent et conditions de validation   |
+| Replanifier                 | Propositions de priorité, charge, dates et dépendances des tâches principales existantes         |
+| Conseils                    | Analyse de santé, alertes et recommandations                                                     |
 | Travail selon disponibilité | Sélection proposée avec temps recommandé, pour une disponibilité supérieure à 0 et au plus 168 h |
 
 Les propositions de création et de replanification sont présentées avant
@@ -143,45 +143,38 @@ relire le tableau avant de recommencer.
 Seules les sous-tâches peuvent être confiées à un agent. Le lancement depuis
 l’interface suit ces étapes :
 
-1. Enregistrer la sous-tâche.
-2. Créer une conversation Codex dans son dossier de travail.
-3. Associer cette conversation au projet.
-4. Lier son identifiant à la sous-tâche, avec l’état agent `running` et le
-   statut de sous-tâche `started`.
-5. Envoyer le titre, la description, l’estimation et les conditions de validation.
-6. Ouvrir la conversation pour suivre le travail.
+1. Enregistrer la sous-tâche avec la révision observée (`expectedUpdatedAt`). Une modification concurrente est refusée avec HTTP 409 : relire la tâche avant de sauvegarder.
+2. Demander le lancement à `POST /tasks/:taskId/agent`, avec un identifiant de demande et la révision enregistrée. Le serveur réserve durablement un lancement par tâche avant tout appel au moteur.
+3. Créer la conversation dans le dossier autorisé, conserver immédiatement son identifiant, puis l’associer au projet et à la sous-tâche.
+4. Envoyer les instructions et ouvrir la conversation existante pour suivre le travail.
+
+Une nouvelle demande ou un rechargement reprend le même reçu de lancement ; il ne crée pas un deuxième agent et ne renvoie pas automatiquement les instructions. Si la réponse du moteur est perdue, l’état `needs_attention` demande de vérifier l’agent existant. Si aucun identifiant n’a été confirmé, le lancement est bloqué (`TASK_LAUNCH_UNCONFIRMED`) pour éviter une création en double. Une suppression explicite de cet agent libère son reçu ; supprimer la tâche ne supprime jamais l’agent.
 
 Les instructions demandent à l’agent de résumer son travail et ses
 vérifications sans se déclarer définitivement validé. La restriction de
 dossier écrite dans le message ne remplace pas les protections du moteur.
 
-À la lecture du tableau, le serveur synchronise les agents en cours ou en
-attente avec les métadonnées des conversations :
+Le serveur projette les événements du moteur et réconcilie les métadonnées au démarrage et après leur actualisation, même sans gestionnaire ouvert. Les vues ouvertes se rafraîchissent toutes les cinq secondes, sans scrutation en arrière-plan quand l’onglet est masqué.
 
-| État observé | État du gestionnaire |
-| --- | --- |
-| Conversation active | `running` |
-| Attente d’approbation ou de réponse utilisateur | `waiting` |
-| Conversation devenue inactive | `review`, sous-tâche À valider |
-| Échec du lancement dans l’interface | `error` |
+| État observé                                               | État du gestionnaire                      |
+| ---------------------------------------------------------- | ----------------------------------------- |
+| Conversation active, y compris un agent auparavant `ready` | `running`, sous-tâche En cours            |
+| Attente d’approbation ou de réponse utilisateur            | `waiting`                                 |
+| Conversation devenue inactive après exécution              | `review`, sous-tâche À valider            |
+| Tour échoué                                                | `error`                                   |
+| Métadonnées absentes ou conversation non chargée           | Aucun état final déduit                   |
+| Travail déjà validé ou terminé                             | Conservé, jamais rouvert par un événement |
 
 Un agent inactif ne prouve pas que le résultat est correct : la revue reste
 nécessaire. L’avancement n’est pas calculé à partir des messages de Codex.
 
 ### Validation et suppression
 
-L’action de validation envoie `agentState: validated` et
-`subtaskStatus: done`. Si une conversation agent est liée, le serveur
-vérifie qu’elle peut être supprimée puis la supprime via
-`ThreadsDeletionService`. Le lien est retiré de la sous-tâche. Si cette
-suppression ne peut pas être effectuée, la validation est refusée.
+L’action de validation envoie `agentState: validated` et `subtaskStatus: done`. Elle conserve la conversation, l’historique, le lien et la copie Git de l’agent. La validation fonctionnelle n’autorise aucune destruction de données.
 
-Il faut donc consulter et conserver les éléments utiles du résultat avant de
-valider : la conversation de travail n’est pas un historique permanent.
+Supprimer une tâche supprime ses sous-tâches et ses liens de tâche, mais conserve les agents, leurs historiques et leurs copies Git. Leur suppression reste une action explicite distincte, avec les contrôles habituels. Le journal du tableau conserve les entrées de suppression. Une notification explicite de suppression d’agent nettoie ses liens ; une absence temporaire des métadonnées ne le fait pas.
 
-Supprimer une tâche supprime aussi ses sous-tâches et traite les conversations
-agents liées par le même mécanisme de suppression contrôlée. Le journal du
-tableau conserve les entrées de suppression.
+Une tâche principale ne peut être associée qu’à un seul livrable principal, quelle que soit la route d’édition utilisée. Un agent affecté doit appartenir au projet et ne peut être affecté à deux tâches. Une tâche qui porte un livrable ou possède des enfants ne peut devenir une sous-tâche. Le contexte MCP, les livrables et le bandeau « Lié à » utilisent les mêmes liens calculés, incluant les sous-tâches de la tâche principale du livrable ; consulter un dossier ne crée pas de lien.
 
 ## Paramètres et droits d’accès
 
@@ -222,29 +215,32 @@ journal d’audit exhaustif des actions de chaque utilisateur.
 
 ## Repères dans le code
 
-| Fichier | Responsabilité |
-| --- | --- |
-| [Interface du gestionnaire](../web/src/components/projects/project-task-manager.tsx) | Vues, formulaires, Gantt, propositions IA et lancement des agents |
-| [Gantt](../web/src/components/projects/stable-project-gantt.tsx) | Intégration du composant de planning |
-| [Types et client HTTP](../web/src/lib/projects-api.ts) | Contrats côté navigateur |
-| [Contrôleur](../src/projects/projects.controller.ts) | Routes sous `/api/projects` |
-| [Service projets](../src/projects/projects.service.ts) | Validation, persistance, agrégats, dépendances et synchronisation des agents |
-| [Service chat simple](../src/simple-chat/simple-chat.service.ts) | Appels IA de planification et de conseil |
-| [Schéma SQLite](../src/database/schema.ts) | Tables et relations |
-| [Contrôle d’accès](../src/auth/platform-access.guard.ts) | Autorisations des routes |
+| Fichier                                                                              | Responsabilité                                                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| [Interface du gestionnaire](../web/src/components/projects/project-task-manager.tsx) | Vues, formulaires, Gantt, propositions IA et lancement des agents         |
+| [Gantt](../web/src/components/projects/stable-project-gantt.tsx)                     | Intégration du composant de planning                                      |
+| [Types et client HTTP](../web/src/lib/projects-api.ts)                               | Contrats côté navigateur                                                  |
+| [Contrôleur](../src/projects/projects.controller.ts)                                 | Routes sous `/api/projects`                                               |
+| [Service projets](../src/projects/projects.service.ts)                               | Validation, persistance, agrégats et dépendances                          |
+| [Projection d’exécution](../src/projects/project-task-runtime.service.ts)            | États des tâches depuis les événements et les instantanés frais du moteur |
+| [Lancement durable](../src/projects/task-agent-launch.service.ts)                    | Réservation et reprise sans duplication des lancements                    |
+| [Service chat simple](../src/simple-chat/simple-chat.service.ts)                     | Appels IA de planification et de conseil                                  |
+| [Schéma SQLite](../src/database/schema.ts)                                           | Tables et relations                                                       |
+| [Contrôle d’accès](../src/auth/platform-access.guard.ts)                             | Autorisations des routes                                                  |
 
 Les routes du tableau partagent le préfixe
 `/api/projects/:id/resources/:resourceId` :
 
-| Méthode et suffixe | Fonction |
-| --- | --- |
-| `GET /` | Lire le tableau, synchroniser les agents et recalculer les parents |
-| `POST /tasks` | Créer une tâche ou sous-tâche |
-| `PATCH /tasks/:taskId` | Modifier, lier une conversation ou valider |
-| `DELETE /tasks/:taskId` | Supprimer une tâche et ses sous-tâches |
-| `POST /statuses`, `PATCH/DELETE /statuses/:statusId` | Gérer les colonnes |
-| `POST /ai-plan` | Proposer un plan |
-| `POST /ai-replan` | Proposer une replanification |
-| `POST /ai-advice` | Obtenir analyse ou sélection de travail |
-| `POST /tasks/:taskId/ai-subtasks` | Proposer un découpage |
-| `PATCH /` | Modifier la ressource et ses paramètres |
+| Méthode et suffixe                                   | Fonction                                          |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `GET /`                                              | Lire le tableau et recalculer les parents         |
+| `POST /tasks`                                        | Créer une tâche ou sous-tâche                     |
+| `PATCH /tasks/:taskId`                               | Modifier, lier une conversation ou valider        |
+| `POST /tasks/:taskId/agent`                          | Lancer ou retrouver un agent avec un reçu durable |
+| `DELETE /tasks/:taskId`                              | Supprimer une tâche et ses sous-tâches            |
+| `POST /statuses`, `PATCH/DELETE /statuses/:statusId` | Gérer les colonnes                                |
+| `POST /ai-plan`                                      | Proposer un plan                                  |
+| `POST /ai-replan`                                    | Proposer une replanification                      |
+| `POST /ai-advice`                                    | Obtenir analyse ou sélection de travail           |
+| `POST /tasks/:taskId/ai-subtasks`                    | Proposer un découpage                             |
+| `PATCH /`                                            | Modifier la ressource et ses paramètres           |

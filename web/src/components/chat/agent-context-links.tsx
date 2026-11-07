@@ -40,6 +40,8 @@ export function AgentContextLinks({
         `/${project!.id}/resources/${resource!.id}/deliverables`,
       ),
     enabled: !!project && !!resource,
+    // Refresh only mounted, visible views; runtime projection itself lives on the server.
+    refetchInterval: 5_000,
   });
   const [openedTask, setOpenedTask] = useState<{
     id: string;
@@ -60,18 +62,13 @@ export function AgentContextLinks({
           direct: true,
         }
       : null;
-  const parentId = query.data?.tasks.find(
-    (task) => task.id === directTask?.id,
-  )?.parentTaskId;
   const deliverables =
-    query.data?.deliverables.filter(
-      (item) =>
-        item.conversations.some(
-          (link) => link.type === 'agent' && link.id === threadId,
-        ) ||
-        (!!item.primaryTaskId &&
-          (item.primaryTaskId === directTask?.id ||
-            item.primaryTaskId === parentId)),
+    query.data?.deliverables.filter((item) =>
+      item.linkedAgentIds
+        ? item.linkedAgentIds.includes(threadId)
+        : item.conversations.some(
+            (link) => link.type === 'agent' && link.id === threadId,
+          ),
     ) ?? [];
   const tasks = directTask ? [directTask] : [];
   for (const item of deliverables) {

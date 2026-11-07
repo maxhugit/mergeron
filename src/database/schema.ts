@@ -1133,12 +1133,28 @@ export const projectTasks = sqliteTable(
   },
   (table) => [
     index('idx_project_tasks_resource').on(table.resourceId),
+    index('idx_project_tasks_linked_thread').on(table.linkedThreadId),
     index('idx_project_tasks_status_position').on(
       table.statusId,
       table.position,
     ),
   ],
 );
+
+/** Durable launch receipt: unknown external outcomes never authorize a duplicate agent. */
+export const projectTaskLaunches = sqliteTable('project_task_launches', {
+  taskId: text('task_id')
+    .primaryKey()
+    .references(() => projectTasks.id, { onDelete: 'cascade' }),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  requestId: text('request_id').notNull(),
+  ownerId: text('owner_id').notNull(),
+  state: text('state').notNull(),
+  threadId: text('thread_id'),
+  updatedAt: integer('updated_at').notNull(),
+});
 
 export type ProjectTask = typeof projectTasks.$inferSelect;
 
