@@ -137,7 +137,11 @@ export async function migrateManagedProject(
     await add(path.join(root, 'livrables'), path.join(system, 'livrables'));
     const external = path.join(root, 'sources', '.external');
     const ext = await exists(external);
-    if (ext) {
+    // Older installations may contain an empty protected placeholder here.
+    // It has no Git copies: preserve it with the imported user sources below.
+    const emptyPlaceholder =
+      ext?.isFile() && !ext.isSymbolicLink() && ext.size === 0;
+    if (ext && !emptyPlaceholder) {
       if (!ext.isDirectory() || ext.isSymbolicLink())
         throw new ConflictException('Invalid legacy Git copy directory');
       for (const name of await fs.readdir(external)) {
@@ -261,12 +265,19 @@ export async function migrateManagedProject(
       if (before.isSymbolicLink())
         throw new ConflictException('Migration source changed');
       await safeParents(move.to);
-      if (move.from === path.join(root, 'sources'))
-        await fs
-          .rmdir(path.join(move.from, '.external'))
-          .catch((e: NodeJS.ErrnoException) => {
-            if (e.code !== 'ENOENT') throw e;
-          });
+      if (move.from === path.join(root, 'sources')) {
+        const external = path.join(move.from, '.external');
+        const remaining = await exists(external);
+        if (remaining?.isDirectory() && !remaining.isSymbolicLink())
+          await fs.rmdir(external);
+        else if (
+          remaining &&
+          (!remaining.isFile() ||
+            remaining.isSymbolicLink() ||
+            remaining.size !== 0)
+        )
+          throw new ConflictException('Invalid legacy Git copy directory');
+      }
       await fs.rename(move.from, move.to);
     } else if (!after || after.isSymbolicLink())
       throw new ConflictException(

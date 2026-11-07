@@ -167,6 +167,7 @@ test('gateway profile is read-only, unprivileged and has neither Docker nor priv
     image: `ghcr.io/maxhugit/mergeron-manager@sha256:${'a'.repeat(64)}`,
     stateRoot: '/srv/dev',
     network: 'proxy',
+    applicationMiddlewares: [],
   };
   const spec = gatewaySpecification(config);
   assert.equal(spec.User, '65532:65532');
@@ -221,10 +222,12 @@ test('keeps existing gateway replicas untouched when an upgrade has not been dra
     image: `ghcr.io/maxhugit/mergeron-manager@sha256:${'a'.repeat(64)}`,
     stateRoot: root,
     network: 'proxy',
+    applicationMiddlewares: [],
   };
   const spec = gatewaySpecification(config);
   let stopped = false;
   const docker = {
+    listNetworks: async () => [{ Name: 'proxy' }],
     listContainers: async () => [
       { Id: 'existing', Names: ['/mergeron-dev-update-gateway-a'] },
     ],

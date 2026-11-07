@@ -422,6 +422,15 @@ async function preparePersistentState(configuration, creatingApplication) {
     configuration.applyOwnership === false
       ? undefined
       : { uid: 11002, gid: 11002 };
+  // The parent belongs to the Manager; only designated children belong to the app.
+  // Never recursively chown an existing installation.
+  const parentMissing = !(await exists(configuration.hostStatePath));
+  await mkdir(configuration.hostStatePath, { recursive: true, mode: 0o755 });
+  const parentInfo = await lstat(configuration.hostStatePath);
+  if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink())
+    throw new Error('Invalid persistent state root');
+  if (parentMissing && configuration.applyOwnership !== false)
+    await chown(configuration.hostStatePath, 0, 0);
   for (const directory of PERSISTENT_DIRECTORIES) {
     const path = join(configuration.hostStatePath, directory);
     const wasMissing = !(await exists(path));

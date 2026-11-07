@@ -630,3 +630,28 @@ for (const authMode of ['native', 'authentik'])
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+test('creates a separate writable installation parent without inheriting private child permissions', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mergeron-state-parent-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const configuration = await fixtureConfiguration(directory);
+  configuration.hostStatePath = join(directory, 'new-state');
+  const docker = new FixtureDocker();
+  const plan = await createInstallPlan(manifest, docker, configuration);
+  await applyInstallPlan({
+    manifest,
+    docker,
+    configuration,
+    expectedFingerprint: plan.fingerprint,
+    confirmation: 'INSTALL',
+  });
+  assert.equal((await stat(configuration.hostStatePath)).mode & 0o777, 0o755);
+  assert.equal(
+    (await stat(join(configuration.hostStatePath, 'ssh'))).mode & 0o777,
+    0o700,
+  );
+  assert.equal(
+    (await stat(join(configuration.hostStatePath, 'home'))).mode & 0o777,
+    0o750,
+  );
+});

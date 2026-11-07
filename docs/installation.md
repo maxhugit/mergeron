@@ -21,6 +21,9 @@ sur **l’hôte Docker**. Les chemins `/srv/mergeron` sont des exemples à adapt
 
 ```sh
 mkdir -p /srv/mergeron/state/manager-run /srv/mergeron/state/manager-state
+# Le parent appartient au Manager, pas à l’utilisateur applicatif.
+chown 0:0 /srv/mergeron/state
+chmod 755 /srv/mergeron/state
 chown 0:11002 /srv/mergeron/state/manager-run
 chmod 750 /srv/mergeron/state/manager-run
 chmod 700 /srv/mergeron/state/manager-state

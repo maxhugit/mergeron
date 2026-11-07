@@ -64,10 +64,11 @@ export function gatewaySpecification({
   };
 }
 export function gatewayRouting(
-  { stack, hostname },
+  { stack, hostname, applicationMiddlewares = [], previousRouting },
   names = ['1', '2'].map((slot) => `${stack}-acces-web-${slot}`),
 ) {
-  return {
+  const previous = structuredClone(previousRouting);
+  const routing = {
     http: {
       routers: {
         [`${stack}-continuous`]: {
@@ -76,7 +77,11 @@ export function gatewayRouting(
           entryPoints: ['websecure'],
           tls: {},
           service: `${stack}-continuous`,
-          middlewares: [`${stack}-continuous-security`],
+          middlewares: applicationMiddlewares.includes(
+            `${stack}-continuous-security`,
+          )
+            ? [...applicationMiddlewares]
+            : [...applicationMiddlewares, `${stack}-continuous-security`],
         },
         [`${stack}-monitor`]: {
           rule: `Host(\`${hostname}\`) && PathPrefix(\`/_mergeron-update\`)`,
@@ -115,9 +120,83 @@ export function gatewayRouting(
       },
     },
   };
+  return {
+    ...previous,
+    http: {
+      ...previous?.http,
+      ...routing.http,
+      routers: { ...previous?.http?.routers, ...routing.http.routers },
+      services: {
+        ...previous?.http?.services,
+        ...routing.http.services,
+      },
+      middlewares: {
+        ...routing.http.middlewares,
+        ...previous?.http?.middlewares,
+      },
+    },
+  };
 }
+export async function resolveGatewayRouting(config) {
+  let previous;
+  let previousRouting;
+  if (config.proxyDirectory) {
+    try {
+      const route = JSON.parse(
+        await readFile(
+          join(
+            resolve(config.proxyDirectory),
+            `${config.stack}-continuous.yml`,
+          ),
+          'utf8',
+        ),
+      );
+      previousRouting = route;
+      previous =
+        route.http?.routers?.[`${config.stack}-continuous`]?.middlewares;
+      if (!Array.isArray(previous))
+        throw new Error('Existing relay middleware chain is missing');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  const chain = config.applicationMiddlewares ?? previous;
+  if (
+    !Array.isArray(chain) ||
+    chain.length > 64 ||
+    chain.some(
+      (name) => typeof name !== 'string' || !/^[A-Za-z0-9_.@-]+$/.test(name),
+    )
+  )
+    throw new Error(
+      'Explicit application middlewares required before changing proxy routing (use none only for a route without authentication)',
+    );
+  if (
+    previous?.some(
+      (name) =>
+        name !== `${config.stack}-continuous-security` && !chain.includes(name),
+    )
+  )
+    throw new Error('Existing application middleware must not be removed');
+  return {
+    ...config,
+    previousRouting,
+    applicationMiddlewares: [...new Set(chain)],
+  };
+}
+
 export async function installGateways(config, docker = new DockerClient()) {
+  // Validate the whole plan before creating containers or changing routing.
   const spec = gatewaySpecification(config);
+  config = await resolveGatewayRouting(config);
+  if (
+    !(await docker.listNetworks()).some(
+      (network) => network.Name === config.network,
+    )
+  )
+    throw new Error(
+      'Gateway network not found; select the existing network shared by Traefik and ingress',
+    );
   const directory = join(config.stateRoot, 'manager-state', 'maintenance');
   await mkdir(directory, { recursive: true, mode: 0o755 });
   const names = [];
@@ -139,6 +218,7 @@ export async function installGateways(config, docker = new DockerClient()) {
       )
         throw new Error('Gateway name conflict');
       if (
+        old.HostConfig.NetworkMode !== spec.HostConfig.NetworkMode ||
         old.HostConfig.Privileged ||
         !old.HostConfig.ReadonlyRootfs ||
         old.Config.User !== spec.User ||
@@ -156,7 +236,7 @@ export async function installGateways(config, docker = new DockerClient()) {
         );
       if (old.State.Running && old.State.Health?.Status === 'healthy') continue;
       // Replace one replica at a time. Routing is installed only after both answer HTTP.
-      await docker.stopContainer(existing.Id);
+      if (old.State.Running) await docker.stopContainer(existing.Id);
       await docker.removeContainer(existing.Id);
     }
     const created = await docker.createContainer(name, spec);
@@ -189,6 +269,7 @@ export async function installGateways(config, docker = new DockerClient()) {
     await writeFile(path + '.tmp', text, { mode: 0o600 });
     await rename(path + '.tmp', path);
   }
+  return config;
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const options = Object.fromEntries(
@@ -206,5 +287,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     stateRoot: options['state-root'],
     network: options.network ?? 'mergeron-proxy',
     proxyDirectory: options['proxy-directory'],
+    applicationMiddlewares:
+      options['application-middlewares'] === undefined
+        ? undefined
+        : options['application-middlewares'] === 'none'
+          ? []
+          : options['application-middlewares'].split(','),
   });
 }
