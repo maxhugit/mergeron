@@ -41,7 +41,8 @@ possède ni page Web ni port réseau exposé : l’interface l’interroge par l
 applicatif et son socket Unix privé. Le parcours classique sans suivi indépendant
 peut raccorder le proxy directement à l’ingress ; l’installation des relais et du
 routage continu est une activation explicite sur l’hôte. L’outillage de routage
-continu livré cible le fournisseur de fichiers Traefik.
+continu et son intégration au proxy sont décrits dans le
+[guide du suivi indépendant](continuous-updates.md).
 
 ## Composants livrés
 
