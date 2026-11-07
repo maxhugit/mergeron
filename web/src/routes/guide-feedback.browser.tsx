@@ -71,6 +71,7 @@ test.each([
         `a[href$="template=${template}"]`,
       );
       expect(link).not.toBeNull();
+      if (!link) throw new Error('The guide feedback link is missing');
       link.scrollIntoView({ block: 'center' });
       expect(link).toBeVisible();
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
@@ -106,7 +107,7 @@ test.each([
       </div>,
     );
     const article = screen.getByRole('article');
-    const image = within(article).getByRole('img');
+    const image = within(article).getByRole<HTMLImageElement>('img');
     await expect
       .poll(() => image.complete && image.naturalWidth > 0)
       .toBe(true);
