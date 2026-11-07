@@ -27,6 +27,7 @@ export function PluginCard({
   onSelect,
 }: Props) {
   const { t } = useTranslation();
+  const { t: ti } = useTranslation('integrations');
   const displayName = plugin.interface?.displayName ?? plugin.name;
   const desc = plugin.interface?.shortDescription ?? null;
 
@@ -65,6 +66,11 @@ export function PluginCard({
           <span className="truncate text-sm font-medium">{displayName}</span>
           {featured && (
             <Star className="h-3 w-3 shrink-0 fill-yellow-400 text-yellow-400" />
+          )}
+          {plugin.source.type === 'remote' && !plugin.installed && (
+            <Badge variant="outline" className="text-[10px]">
+              {ti('notInstalledOnServer')}
+            </Badge>
           )}
           {plugin.installed && (
             <Badge variant="secondary" className="text-[10px]">

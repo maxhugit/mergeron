@@ -9,6 +9,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { page } from 'vitest/browser';
+import { PluginsTab } from './plugins-tab';
 import { CodexSettings } from '../settings/codex-settings';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { client } from '@/generated/api/client.gen';
@@ -252,3 +253,65 @@ test.each([390, 1280])(
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
   },
 );
+
+test('shows the missing local bundle in the catalog and the install dialog', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  await page.viewport(900, 913);
+  const remote = {
+    ...plugin,
+    id: 'gmail@remote',
+    name: 'Gmail',
+    source: { type: 'remote' },
+    installed: false,
+    enabled: false,
+    localVersion: null,
+  };
+  vi.spyOn(client, 'get').mockImplementation(async (options) => {
+    if (options.url === '/api/plugins')
+      return {
+        data: {
+          ...inventory,
+          marketplaces: [
+            { name: 'remote', path: null, interface: null, plugins: [remote] },
+          ],
+        },
+      } as never;
+    if (options.url === '/api/plugins/detail')
+      return {
+        data: {
+          plugin: {
+            summary: remote,
+            description: 'Plugin Gmail',
+            marketplaceName: 'remote',
+            marketplacePath: null,
+            skills: [],
+            apps: [],
+            mcpServers: [],
+          },
+        },
+      } as never;
+    throw new Error('Unexpected read');
+  });
+  query = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={query}>
+      <TooltipProvider>
+        <PluginsTab catalogOnly />
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText('À installer sur ce serveur')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Détails' }));
+  const dialog = await screen.findByRole('dialog');
+  await waitFor(() =>
+    expect(dialog).toHaveTextContent('À installer sur ce serveur'),
+  );
+  expect(screen.getByRole('button', { name: 'Installer' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Désinstaller' })).toBeNull();
+  await page
+    .getByRole('dialog')
+    .screenshot({
+      path: `../../../.vitest-screenshots/plugin-local-state-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}.png`,
+    });
+});

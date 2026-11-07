@@ -1,5 +1,5 @@
 /** Plugins facade over Codex app-server JSON-RPC methods. */
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CodexService } from '../codex/codex.service';
 import type { v2 } from '../codex/codex-schema';
 
@@ -8,10 +8,14 @@ export class PluginsService {
   constructor(private readonly codex: CodexService) {}
 
   /** Lists plugin marketplaces and installation state. */
-  listPlugins(
+  async listPlugins(
     params: v2.PluginListParams = {},
   ): Promise<v2.PluginListResponse> {
-    return this.codex.request<v2.PluginListResponse>('plugin/list', params);
+    const result = await this.codex.request<v2.PluginListResponse>(
+      'plugin/list',
+      params,
+    );
+    return normalizeMarketplacePlugins(result);
   }
 
   /** Lists local installed bundles without querying a remote marketplace. */
@@ -20,18 +24,46 @@ export class PluginsService {
       'plugin/installed',
       {},
     );
-    return { ...result, featuredPluginIds: [] };
+    return normalizeMarketplacePlugins({ ...result, featuredPluginIds: [] });
   }
 
   /** Reads detailed metadata for one plugin inside one marketplace. */
-  readPlugin(params: v2.PluginReadParams): Promise<v2.PluginReadResponse> {
-    return this.codex.request<v2.PluginReadResponse>('plugin/read', params);
+  async readPlugin(
+    params: v2.PluginReadParams,
+  ): Promise<v2.PluginReadResponse> {
+    const result = await this.codex.request<v2.PluginReadResponse>(
+      'plugin/read',
+      params,
+    );
+    return {
+      ...result,
+      plugin: {
+        ...result.plugin,
+        summary: localPluginState(result.plugin.summary),
+      },
+    };
   }
 
   /** Installs a plugin through the app-server plugin lifecycle. */
-  installPlugin(
+  async installPlugin(
     params: v2.PluginInstallParams,
   ): Promise<v2.PluginInstallResponse> {
+    if (params.remoteMarketplaceName) {
+      // For remote installs the native field pluginName expects the backend ID,
+      // while plugin/read accepts the catalog name used by our UI. Never send
+      // that display/catalog name to the mutation endpoint.
+      const { plugin } = await this.readPlugin({
+        remoteMarketplaceName: params.remoteMarketplaceName,
+        pluginName: params.pluginName,
+      });
+      const remotePluginId = plugin.summary.remotePluginId?.trim();
+      if (!remotePluginId) {
+        throw new BadRequestException(
+          'The remote plugin identifier is missing. Refresh the plugin catalog before retrying.',
+        );
+      }
+      params = { ...params, pluginName: remotePluginId };
+    }
     return this.codex.request<v2.PluginInstallResponse>(
       'plugin/install',
       params,
@@ -57,4 +89,25 @@ export class PluginsService {
       params,
     );
   }
+}
+
+/** Account installation alone is not evidence of a bundle on this server. */
+export function localPluginState(plugin: v2.PluginSummary): v2.PluginSummary {
+  if (plugin.source.type !== 'remote') return plugin;
+  const installed =
+    plugin.installPolicy === 'INSTALLED_BY_DEFAULT' ||
+    Boolean(plugin.localVersion?.trim());
+  return { ...plugin, installed, enabled: installed && plugin.enabled };
+}
+
+function normalizeMarketplacePlugins<
+  T extends { marketplaces: v2.PluginMarketplaceEntry[] },
+>(result: T): T {
+  return {
+    ...result,
+    marketplaces: result.marketplaces.map((marketplace) => ({
+      ...marketplace,
+      plugins: marketplace.plugins.map(localPluginState),
+    })),
+  };
 }

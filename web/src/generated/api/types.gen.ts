@@ -1880,6 +1880,15 @@ export type PluginInterfaceDto = {
 };
 
 export type PluginSummaryDto = {
+    /**
+     * Remote backend identifier used for installation.
+     */
+    remotePluginId?: string | null;
+    /**
+     * Version of the bundle materialized on this server.
+     */
+    localVersion?: string | null;
+    version?: string | null;
     id: string;
     name: string;
     source: {

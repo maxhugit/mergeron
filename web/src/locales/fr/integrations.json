@@ -95,5 +95,6 @@
   "catalogWorkerMissing": "Conteneur non préparé",
   "catalogWorkerStopped": "Arrêté",
   "catalogWorkerHealthy": "En service",
-  "catalogWorkerStarting": "Démarrage ou vérification en cours"
+  "catalogWorkerStarting": "Démarrage ou vérification en cours",
+  "notInstalledOnServer": "À installer sur ce serveur"
 }

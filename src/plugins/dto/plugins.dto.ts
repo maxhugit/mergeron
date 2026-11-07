@@ -76,6 +76,23 @@ export class PluginInterfaceDto {
 
 /** Summary row returned by plugin/list. */
 export class PluginSummaryDto {
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Remote backend identifier used for installation.',
+  })
+  remotePluginId?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Version of the bundle materialized on this server.',
+  })
+  localVersion?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  version?: string | null;
+
   @ApiProperty()
   id!: string;
 
