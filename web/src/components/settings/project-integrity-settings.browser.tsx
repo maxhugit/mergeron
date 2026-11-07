@@ -71,7 +71,7 @@ for (const width of [320, 390, 1100])
       path: `../../../.vitest-screenshots/project-integrity-${width}.png`,
     });
     await page
-      .getByRole('button', { name: /^Corrections : Dossier attendu/ })
+      .getByRole('button', { name: /^Un dossier de rangement est absent/ })
       .click();
     const dialog = await screen.findByRole('dialog');
     await expect.poll(() => getComputedStyle(dialog).opacity).toBe('1');
@@ -104,7 +104,7 @@ for (const width of [320, 390, 1100])
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page.getByRole('button', { name: 'Annuler', exact: true }).click();
     await page
-      .getByRole('button', { name: /^Corrections : Document référencé/ })
+      .getByRole('button', { name: /^Un document enregistré est introuvable/ })
       .click();
     await screen.findByRole('dialog');
     await expect

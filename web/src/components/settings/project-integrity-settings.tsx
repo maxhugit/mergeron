@@ -240,10 +240,6 @@ export function ProjectIntegritySettings() {
                   type="button"
                   aria-haspopup="dialog"
                   className="flex w-full items-start gap-2 text-left after:absolute after:inset-0 after:rounded-lg focus:outline-none"
-                  aria-label={t('viewCorrectionsFor', {
-                    issue: t(issueKindKeys[issue.kind] ?? 'unknown'),
-                    target: issue.reference?.label ?? issue.path,
-                  })}
                   onClick={() => {
                     setPreview(false);
                     setSelected({
@@ -260,6 +256,10 @@ export function ProjectIntegritySettings() {
                     }
                   />
                   <IntegrityIssueTitle kind={issue.kind} />
+                  <span className="sr-only">
+                    {' '}
+                    — {issue.reference?.label ?? issue.path}
+                  </span>
                 </button>
               </h3>
               {issue.reference && (

@@ -76,7 +76,7 @@ async function choose() {
 }
 async function openCorrections() {
   fireEvent.click(
-    await screen.findByRole('button', { name: /^Corrections :/ }),
+    within((await screen.findAllByRole('article'))[0]).getByRole('button'),
   );
   await screen.findByRole('dialog');
 }
