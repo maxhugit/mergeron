@@ -1007,3 +1007,89 @@ it('rejects malformed renewal input without rendering an HTML payload', async ()
   expect(response.statusCode).toBe(400);
   expect(response.body).not.toContain('<script');
 });
+
+it('stores text size separately for each support and connected person, rejects invalid sizes and deletes preferences with the person', async () => {
+  const server = app.getHttpAdapter().getInstance();
+  const save = (textSize: unknown, email = 'standard@example.com') =>
+    server.inject({
+      method: 'PATCH',
+      url: '/api/auth/preferences',
+      headers: proxyHeaders(email),
+      payload: { textSize },
+    });
+  expect((await save({ support: 'mobile', percent: 120 })).statusCode).toBe(
+    200,
+  );
+  expect(
+    (await save({ support: 'desktop', percent: 90 })).json<{
+      textSizes: Record<string, number>;
+    }>().textSizes,
+  ).toEqual({ mobile: 120, tablet: 100, desktop: 90 });
+  const me = await server.inject({
+    method: 'GET',
+    url: '/api/auth/me',
+    headers: proxyHeaders(),
+  });
+  expect(me.json<{ textSizes: Record<string, number> }>().textSizes).toEqual({
+    mobile: 120,
+    tablet: 100,
+    desktop: 90,
+  });
+  const other = await server.inject({
+    method: 'GET',
+    url: '/api/auth/me',
+    headers: proxyHeaders('administrator@example.com'),
+  });
+  expect(other.json<{ textSizes: Record<string, number> }>().textSizes).toEqual(
+    {
+      mobile: 100,
+      tablet: 100,
+      desktop: 100,
+    },
+  );
+  for (const value of [
+    null,
+    [],
+    { support: 'watch', percent: 100 },
+    { support: { toString: 1 }, percent: 100 },
+    { support: 'mobile', percent: 151 },
+    { support: 'mobile', percent: 79 },
+    { support: 'mobile', percent: 115 },
+    { support: 'mobile', percent: '120' },
+    { support: 'mobile', percent: 120, personId: 'administrator' },
+  ]) {
+    expect((await save(value)).statusCode).toBe(400);
+  }
+  expect(
+    (
+      await server.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: proxyHeaders(),
+      })
+    ).json<{ textSizes: Record<string, number> }>().textSizes.mobile,
+  ).toBe(120);
+  database.db
+    .insert(people)
+    .values({
+      id: 'unused',
+      reference: 'unused',
+      name: 'Unused',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  database.sqlite
+    .prepare(
+      'INSERT INTO person_display_preferences (person_id, mobile) VALUES (?, ?)',
+    )
+    .run('unused', 120);
+  database.sqlite.prepare('DELETE FROM people WHERE id=?').run('unused');
+  expect(
+    database.sqlite
+      .prepare(
+        'SELECT count(*) AS count FROM person_display_preferences WHERE person_id=?',
+      )
+      .get('unused'),
+  ).toEqual({ count: 0 });
+});

@@ -1,3 +1,4 @@
+import { ProfileTextSize } from './profile-text-size';
 import { translationKey } from '@/locales/translation-key';
 import { Check, Globe, Palette } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -143,6 +144,7 @@ export function ProfileAppearance() {
           ))}
         </div>
       </div>
+      <ProfileTextSize />
       {save.isError && (
         <p className="text-xs text-destructive" role="alert">
           {t('unableToSaveProfilePreferences')}

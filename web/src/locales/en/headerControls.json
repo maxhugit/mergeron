@@ -1,0 +1,18 @@
+{
+  "title": "Quick controls",
+  "connection": "Connection",
+  "quota": "Codex account quota",
+  "quotaHint": "Share of your Codex account allowance used. It is separate from the conversation context.",
+  "textSize": "Text size",
+  "mobile": "Mobile",
+  "tablet": "Tablet",
+  "desktop": "Desktop",
+  "smaller": "Decrease text size",
+  "larger": "Increase text size",
+  "reset": "Reset",
+  "savedForSupport": "Saved in your profile for this screen category.",
+  "saveError": "Unable to save text size. Try again.",
+  "quotaLoading": "Loading quota…",
+  "quotaUnavailable": "Quota unavailable.",
+  "quotaNotApplicable": "Quota is available for ChatGPT accounts only."
+}

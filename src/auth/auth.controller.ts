@@ -162,6 +162,7 @@ export class AuthController {
     return {
       ...identity,
       fastNavigationProjectId: this.identities.navigationProject(identity),
+      textSizes: this.identities.textSizes(identity),
     };
   }
 
@@ -226,6 +227,7 @@ export class AuthController {
       theme?: unknown;
       language?: unknown;
       fastNavigationProjectId?: unknown;
+      textSize?: unknown;
     },
   ) {
     const identity =

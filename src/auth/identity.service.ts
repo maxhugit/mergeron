@@ -29,6 +29,7 @@ import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   people,
   personNavigationPreferences,
+  personDisplayPreferences,
   personAgentDocumentViews,
   projects,
   projectWorkspaces,
@@ -444,6 +445,7 @@ export class IdentityService {
       theme?: unknown;
       language?: unknown;
       fastNavigationProjectId?: unknown;
+      textSize?: unknown;
     },
   ) {
     this.requireActive(identity);
@@ -469,6 +471,27 @@ export class IdentityService {
         !/^[a-z]{2,3}$/.test(input.language))
     )
       throw new BadRequestException('Unsupported language');
+    let textSize:
+      | { support: 'mobile' | 'tablet' | 'desktop'; percent: number }
+      | undefined;
+    if (input.textSize !== undefined) {
+      const value = input.textSize as Record<string, unknown> | null;
+      if (
+        !value ||
+        typeof value !== 'object' ||
+        Array.isArray(value) ||
+        Object.keys(value).length !== 2 ||
+        typeof value.support !== 'string' ||
+        !['mobile', 'tablet', 'desktop'].includes(value.support) ||
+        typeof value.percent !== 'number' ||
+        !Number.isInteger(value.percent) ||
+        value.percent < 80 ||
+        value.percent > 150 ||
+        value.percent % 10 !== 0
+      )
+        throw new BadRequestException('Unsupported text size');
+      textSize = value as typeof textSize;
+    }
     const hasNavigation = Object.hasOwn(input, 'fastNavigationProjectId');
     const projectId = input.fastNavigationProjectId;
     if (hasNavigation) {
@@ -504,6 +527,19 @@ export class IdentityService {
         .set(updates)
         .where(eq(people.id, identity.personId!))
         .run();
+      if (textSize) {
+        this.db
+          .insert(personDisplayPreferences)
+          .values({
+            personId: identity.personId!,
+            [textSize.support]: textSize.percent,
+          })
+          .onConflictDoUpdate({
+            target: personDisplayPreferences.personId,
+            set: { [textSize.support]: textSize.percent },
+          })
+          .run();
+      }
       if (hasNavigation) {
         const value = {
           personId: identity.personId!,
@@ -527,10 +563,27 @@ export class IdentityService {
     return {
       theme: person!.theme,
       language: person!.language,
+      ...(textSize ? { textSizes: this.textSizes(identity) } : {}),
       ...(hasNavigation
         ? { fastNavigationProjectId: this.navigationProject(identity) }
         : {}),
     };
+  }
+
+  textSizes(identity: PlatformIdentity) {
+    const defaults = { mobile: 100, tablet: 100, desktop: 100 };
+    if (identity.kind !== 'person' || !identity.personId || !identity.active)
+      return defaults;
+    const row = this.db
+      .select({
+        mobile: personDisplayPreferences.mobile,
+        tablet: personDisplayPreferences.tablet,
+        desktop: personDisplayPreferences.desktop,
+      })
+      .from(personDisplayPreferences)
+      .where(eq(personDisplayPreferences.personId, identity.personId))
+      .get();
+    return row ?? defaults;
   }
 
   navigationProject(identity: PlatformIdentity): string | null {

@@ -1,0 +1,18 @@
+{
+  "title": "Commandes rapides",
+  "connection": "Connexion",
+  "quota": "Quota du compte Codex",
+  "quotaHint": "Part du quota de votre compte Codex utilisée. Elle est distincte du contexte de la conversation.",
+  "textSize": "Taille du texte",
+  "mobile": "Mobile",
+  "tablet": "Tablette",
+  "desktop": "Ordinateur",
+  "smaller": "Réduire la taille du texte",
+  "larger": "Agrandir la taille du texte",
+  "reset": "Réinitialiser",
+  "savedForSupport": "Conservé dans votre profil pour cette catégorie d’écran.",
+  "saveError": "Impossible d’enregistrer la taille du texte. Réessayez.",
+  "quotaLoading": "Chargement du quota…",
+  "quotaUnavailable": "Quota indisponible.",
+  "quotaNotApplicable": "Quota disponible uniquement pour les comptes ChatGPT."
+}

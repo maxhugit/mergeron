@@ -1,3 +1,4 @@
+import { ProfileTextSizeApplier } from '@/components/account/profile-text-size';
 /**
  * Authenticated layout: sidebar + header + main content outlet.
  * Replaces the old App.tsx conditional rendering.
@@ -113,6 +114,7 @@ function AuthenticatedContent() {
                 ])}
                 profileTheme={retained.theme}
                 profileLanguage={retained.language}
+                profileTextSizes={retained.textSizes}
               />
             </div>
           </div>
@@ -315,11 +317,13 @@ function AuthenticatedWorkspace({
   isAdministrator,
   profileTheme,
   profileLanguage,
+  profileTextSizes,
   browserOwner,
 }: {
   isAdministrator: boolean;
   profileTheme?: string;
   profileLanguage?: string;
+  profileTextSizes?: PlatformSession['textSizes'];
   browserOwner: string;
 }) {
   useEffect(() => {
@@ -466,6 +470,7 @@ function AuthenticatedWorkspace({
 
   return (
     <TooltipProvider>
+      <ProfileTextSizeApplier sizes={profileTextSizes} />
       <div className="flex h-full overflow-hidden bg-background">
         {/* Desktop: inline sidebar with collapse animation */}
         {isDesktop && (
