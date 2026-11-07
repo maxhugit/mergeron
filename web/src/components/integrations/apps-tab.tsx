@@ -1,3 +1,4 @@
+import { AppRuntimeBadges } from './app-runtime-badges';
 import { AppCatalogSettings } from './app-catalog-settings';
 import { PluginsTab } from './plugins-tab';
 import { IntegrationNav } from './integration-nav';
@@ -126,6 +127,7 @@ export function AppsTab() {
           { value: 'catalog', label: ti('catalog') },
         ]}
       />
+      <p className="text-xs text-muted-foreground">{ti('appsRemoteHelp')}</p>
       {view === 'catalog' && (
         <AppCatalogSettings
           onSourceChanged={() => {
@@ -231,6 +233,7 @@ export function AppsTab() {
             <AppRow
               key={app.id}
               app={app}
+              runtimeObserved={view === 'connected'}
               onToggled={invalidateAppsConfig}
               onOpenDetails={() => setSelectedApp(app)}
               onAssociate={() => setAssociation(app)}
@@ -291,7 +294,11 @@ export function AppsTab() {
           )}
         </DialogContent>
       </Dialog>
-      <AppDetailSheet app={selectedApp} onClose={() => setSelectedApp(null)} />
+      <AppDetailSheet
+        runtimeObserved={view === 'connected'}
+        app={selectedApp}
+        onClose={() => setSelectedApp(null)}
+      />
       <AppDefaultsSheet
         open={defaultsOpen}
         onClose={() => setDefaultsOpen(false)}
@@ -303,11 +310,13 @@ export function AppsTab() {
 /** Single app row with logo, toggle, and install link. */
 function AppRow({
   app,
+  runtimeObserved,
   onToggled,
   onOpenDetails,
   onAssociate,
 }: {
   app: AppInfoDto;
+  runtimeObserved: boolean;
   onToggled: () => void;
   onOpenDetails: () => void;
   onAssociate: () => void;
@@ -360,6 +369,11 @@ function AppRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{app.name}</span>
+          <AppRuntimeBadges
+            observed={runtimeObserved}
+            enabled={app.isEnabled}
+            callable={app.isAccessible}
+          />
           {!app.isAccessible && (
             <Badge
               variant="outline"

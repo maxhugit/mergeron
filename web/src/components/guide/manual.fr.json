@@ -2179,10 +2179,17 @@
             "title": "Préparer les intégrations",
             "steps": [
               "Ouvrez Paramètres → Codex → Intégrations pour consulter les plugins, applications et serveurs MCP de cette installation.",
-              "Les plugins installés et intégrés et les applications connectées s’affichent en premier. Les catalogues se chargent à la demande ; une erreur du catalogue ne remplace pas l’inventaire connecté.",
+              "Les plugins installés et intégrés s’affichent en premier. Pour un plugin distant, le statut installé exige un paquet présent sur le serveur. La vue Applications → Disponibles dans Mergeron présente les outils déclarés par le runtime ; les catalogues restent séparés.",
               "Dans la gestion des agents du projet, sélectionnez les intégrations utiles et enregistrez la sélection.",
               "Réalisez la connexion ou l’authentification requise par le service via son parcours dédié.",
               "Vérifiez les capacités réellement disponibles pour l’agent dans le projet avant de lui confier une action externe."
+            ]
+          },
+          {
+            "title": "Distinguer local, distant et connexion observée",
+            "paragraphs": [
+              "Les outils internes apparaissent en premier dans Serveurs MCP, puis les processus locaux identifiés par leur commande dans la configuration de Mergeron. Un processus local peut lui-même utiliser Internet. Un MCP direct HTTP peut être distant.",
+              "Les applications portent le badge Via OpenAI · distant. Outils disponibles dans Mergeron signifie que le runtime les déclare utilisables, sans prouver une réponse récente du service. Connexion vérifiée par le runtime exige un état de connexion explicite ; sinon, la connexion reste non vérifiée."
             ]
           },
           {

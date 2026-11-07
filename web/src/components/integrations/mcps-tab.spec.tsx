@@ -29,6 +29,10 @@ vi.mock('@/generated/api/sdk.gen', () => ({
 
 vi.mock('@/generated/api/@tanstack/react-query.gen', () => ({
   mcpServersListServersQueryKey: () => ['mcp', 'servers'],
+  codexConfigReadConfigOptions: () => ({
+    queryKey: ['config'],
+    queryFn: async () => ({ config: {} }),
+  }),
 }));
 
 vi.mock('@/lib/clipboard', () => ({
