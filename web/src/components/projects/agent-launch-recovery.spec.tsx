@@ -190,3 +190,16 @@ it.each([
     );
   },
 );
+
+it('offers association repair before confirmation for a migrated request whose agent was never linked', async () => {
+  show({
+    ...initial,
+    phase: 'legacy',
+    threadId: 'existing',
+    associationPending: true,
+  } as typeof initial);
+  expect(
+    await screen.findByRole('button', { name: 'Finish association' }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Confirm check' })).toBeNull();
+});

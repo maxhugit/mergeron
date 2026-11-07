@@ -565,6 +565,33 @@ export class ProjectAgentLaunchService {
       });
     }
   }
+  private associated(receipt: Receipt) {
+    if (!receipt.threadId) return false;
+    if (receipt.context.kind === 'task')
+      return (
+        this.db
+          .select({ id: projectTasks.linkedThreadId })
+          .from(projectTasks)
+          .where(eq(projectTasks.id, receipt.context.targetId))
+          .get()?.id === receipt.threadId
+      );
+    const item = this.deliverables.get(
+      receipt.projectId,
+      receipt.resourceId,
+      receipt.context.targetId,
+    );
+    return (
+      item.conversations.some(
+        (link) => link.type === 'agent' && link.id === receipt.threadId,
+      ) &&
+      (!receipt.context.taskId ||
+        this.db
+          .select({ id: projectTasks.linkedThreadId })
+          .from(projectTasks)
+          .where(eq(projectTasks.id, receipt.context.taskId))
+          .get()?.id === receipt.threadId)
+    );
+  }
   private async candidates(receipt: Receipt) {
     const snapshot = await this.metadata.read();
     if (snapshot.freshness.stale)
@@ -678,7 +705,13 @@ export class ProjectAgentLaunchService {
             receipt.context.targetId,
           ).version;
     return {
-      launch: { ...this.view(receipt), targetRevision },
+      launch: {
+        ...this.view(receipt),
+        targetRevision,
+        associationPending: Boolean(
+          receipt.threadId && !this.associated(receipt),
+        ),
+      },
       candidates,
       inventoryError,
     };
@@ -726,6 +759,10 @@ export class ProjectAgentLaunchService {
           scope: `${receipt.scope}:closed:${receipt.id}`,
         });
       } else if (input.action === 'acknowledge') {
+        if (!this.associated(receipt))
+          throw new ConflictException(
+            'First finish the existing agent association',
+          );
         if (input.verified !== true)
           throw new ConflictException(
             'Verify the conversation before confirming the send',
@@ -749,7 +786,11 @@ export class ProjectAgentLaunchService {
           });
         } else if (
           !receipt.threadId ||
-          !['created', 'bound'].includes(receipt.phase)
+          (!['created', 'bound'].includes(receipt.phase) &&
+            !(
+              ['legacy', 'dispatching'].includes(receipt.phase) &&
+              !this.associated(receipt)
+            ))
         )
           throw new ConflictException(
             'An uncertain send cannot be resumed automatically',
@@ -780,7 +821,13 @@ export class ProjectAgentLaunchService {
           await this.mutations.mutate(() => this.bind(receipt));
         } else await this.bind(receipt);
         // Association recovery deliberately leaves sending to the existing conversation.
-        receipt = this.save(receipt, { phase: 'bound', state: 'confirmed' });
+        const uncertain =
+          input.action === 'resume' &&
+          ['legacy', 'dispatching'].includes(receipt.phase);
+        receipt = this.save(receipt, {
+          phase: uncertain ? receipt.phase : 'bound',
+          state: uncertain ? 'needs_attention' : 'confirmed',
+        });
       }
     } catch (error) {
       receipt = this.save(receipt, { state: 'needs_attention' });

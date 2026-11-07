@@ -15,6 +15,7 @@ interface LaunchStatus {
     targetRevision: number;
     resourceId: string;
     busy: boolean;
+    associationPending?: boolean;
   } | null;
   candidates: Array<{ id: string; title: string }>;
   inventoryError?: boolean;
@@ -180,24 +181,29 @@ export function AgentLaunchRecovery({
             {t('launchRecoveryAttach')}
           </Button>
         )}
-        {!launch.busy && launch.threadId && !uncertainSend && (
-          <Button
-            size="sm"
-            disabled={recover.isPending}
-            onClick={() => recover.mutate('resume')}
-          >
-            {t('launchRecoveryResume')}
-          </Button>
-        )}
-        {!launch.busy && launch.threadId && uncertainSend && (
-          <Button
-            size="sm"
-            disabled={!checked || recover.isPending}
-            onClick={() => recover.mutate('acknowledge')}
-          >
-            {t('launchRecoveryAcknowledge')}
-          </Button>
-        )}
+        {!launch.busy &&
+          launch.threadId &&
+          (!uncertainSend || launch.associationPending) && (
+            <Button
+              size="sm"
+              disabled={recover.isPending}
+              onClick={() => recover.mutate('resume')}
+            >
+              {t('launchRecoveryResume')}
+            </Button>
+          )}
+        {!launch.busy &&
+          launch.threadId &&
+          uncertainSend &&
+          !launch.associationPending && (
+            <Button
+              size="sm"
+              disabled={!checked || recover.isPending}
+              onClick={() => recover.mutate('acknowledge')}
+            >
+              {t('launchRecoveryAcknowledge')}
+            </Button>
+          )}
         {!launch.busy && launch.threadId && (
           <Button
             variant="outline"

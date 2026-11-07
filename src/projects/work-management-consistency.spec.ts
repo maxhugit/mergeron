@@ -1215,3 +1215,71 @@ it('keeps the existing-agent mutation barrier during recovery and permits retry 
     expect(startThread).toHaveBeenCalledTimes(1);
     expect(startTurn).not.toHaveBeenCalled();
   }));
+
+it('repairs a migrated known agent association before allowing confirmation of its uncertain send', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    database.db
+      .insert(projectAgentLaunches)
+      .values({
+        id: 'migrated',
+        scope: `task:${sub.id}`,
+        targetKey: `task:${sub.id}`,
+        taskId: sub.id,
+        projectId: 'p',
+        resourceId: 'tasks',
+        ownerId: 'admin',
+        requestId: 'old',
+        state: 'needs_attention',
+        phase: 'legacy',
+        threadId: 'agent',
+        createdAt: 1,
+        updatedAt: 2,
+        context: {
+          kind: 'task',
+          targetId: sub.id,
+          targetRevision: sub.updatedAt,
+          taskId: sub.id,
+          cwd: root,
+          title: sub.title,
+          createdSubtask: false,
+          existing: false,
+        },
+      })
+      .run();
+    const { launch } = recoveryService([
+      {
+        archived: false,
+        thread: { id: 'agent', cwd: root, status: { type: 'idle' } },
+      },
+    ]);
+    const initial = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(initial.launch).toMatchObject({ associationPending: true });
+    await expect(
+      launch.recover('p', 'tasks', 'migrated', {
+        action: 'acknowledge',
+        verified: true,
+        expectedUpdatedAt: initial.launch!.revision,
+      }),
+    ).rejects.toThrow('First finish');
+    const before = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(
+      await launch.recover('p', 'tasks', 'migrated', {
+        action: 'resume',
+        expectedUpdatedAt: before.launch!.revision,
+        targetRevision: before.launch!.targetRevision,
+      }),
+    ).toMatchObject({ state: 'needs_attention', phase: 'legacy' });
+    expect(task(sub.id).linkedThreadId).toBe('agent');
+    const after = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(after.launch).toMatchObject({ associationPending: false });
+    expect(
+      await launch.recover('p', 'tasks', 'migrated', {
+        action: 'acknowledge',
+        verified: true,
+        expectedUpdatedAt: after.launch!.revision,
+      }),
+    ).toMatchObject({ state: 'confirmed' });
+    expect(startThread).not.toHaveBeenCalled();
+    expect(startTurn).not.toHaveBeenCalled();
+  }));
