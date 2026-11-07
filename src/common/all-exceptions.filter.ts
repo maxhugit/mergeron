@@ -3,6 +3,7 @@
  * { statusCode, errorCode, message, params? }
  *
  * - BusinessException: uses its errorCode + params directly.
+ * - CodexRequestTimeoutError: 504, bounded upstream deadline, never auto-resend.
  * - CodexUnavailableError: 503, app-server not connected.
  * - CodexRpcError: 400 or 502 depending on the JSON-RPC code, with the
  *   app-server message forwarded so the client can explain the refusal.
@@ -17,7 +18,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
-import { CodexRpcError, CodexUnavailableError } from '../codex/codex-errors';
+import {
+  CodexRpcError,
+  CodexUnavailableError,
+  CodexRequestTimeoutError,
+} from '../codex/codex-errors';
 import { ErrorCode } from './error-codes';
 import type { ErrorCodeValue } from './error-codes';
 import { BusinessException } from './business.exception';
@@ -62,6 +67,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
       if (exception.params) body.params = exception.params;
       void response.status(status).send(body);
+      return;
+    }
+
+    if (exception instanceof CodexRequestTimeoutError) {
+      void response.status(504).send({
+        statusCode: 504,
+        errorCode: ErrorCode.codex.requestTimeout,
+        message:
+          'Codex did not respond in time. Check the thread state before retrying; no request was automatically resent.',
+        params: { method: exception.method },
+      } satisfies ErrorResponseBody);
       return;
     }
 

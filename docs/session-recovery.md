@@ -401,3 +401,29 @@ de navigateur ne simulent pas une suspension iOS de plusieurs heures.
 Références : [mode de redirection de fetch](https://developer.mozilla.org/en-US/docs/Web/API/Request/redirect),
 [conservation d’état avec Activity](https://react.dev/reference/react/Activity)
 et [intégration proxy Traefik Authentik](https://docs.goauthentik.io/add-secure-apps/providers/proxy/server_traefik/).
+
+
+## Redémarrage du moteur Codex
+
+Une reconnexion HTTP et le retour du moteur Codex sont deux observations
+distinctes. Dans la conversation, un indicateur violet animé signale le
+redémarrage ; il devient vert quand le moteur est disponible, puis indique la
+reprise du fil si elle est confirmée. Une indisponibilité ou un échec de reprise
+est affiché sans conserver indéfiniment l’animation. Les préférences de mouvement
+réduit sont respectées.
+
+Le socket authentifié fournit l’état courant du moteur à chaque reconnexion :
+un onglet ayant manqué l’événement de retour ne nécessite pas un rechargement.
+Les vues conservées par la navigation rapide sont réconciliées comme la vue
+active, sans sélectionner un autre agent et sans renvoyer son dernier message.
+Les événements d’une ancienne génération ne remplacent pas un état plus récent.
+
+La première page native `app/list` peut dépasser le délai RPC habituel lors du
+chargement du catalogue après un redémarrage. Elle dispose d’un budget borné à
+60 secondes (ou du délai configuré s’il est supérieur). Les pages suivantes, les
+appels modifiant l’état et les délais explicites conservent leur budget habituel.
+Aucun catalogue périmé ne remplace la vérification des permissions du projet.
+Si le délai expire, l’API renvoie `504 / codex.request_timeout` avec le nom de la
+méthode, plutôt qu’une erreur interne générique. Le client explique le délai et
+invite à vérifier l’état du fil avant une nouvelle tentative ; il ne rejoue pas
+un envoi dont l’acceptation serait incertaine.

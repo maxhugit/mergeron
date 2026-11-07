@@ -1,6 +1,7 @@
 /** Conversation timeline state. */
 import {
   type TimelineEntry,
+  type CodexRecoveryState,
   type TurnFailure,
   type TurnItem,
   type TurnPlanState,
@@ -372,6 +373,11 @@ export interface TimelineState {
     severity?: 'info' | 'warning' | 'error',
     turnId?: string,
     requestInstanceId?: string,
+  ) => void;
+  setCodexRecoveryForThread: (
+    threadId: string,
+    state: CodexRecoveryState,
+    message: string,
   ) => void;
   addSystemErrorForThread: (threadId: string, message: string) => void;
   upsertTurnFailureForThread: (threadId: string, failure: TurnFailure) => void;

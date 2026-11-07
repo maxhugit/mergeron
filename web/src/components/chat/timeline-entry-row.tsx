@@ -2,6 +2,7 @@
  * Renders one timeline entry — user message, system notice, turn failure, or
  * assistant turn — plus the per-message controls that hang off a user message.
  */
+import { CodexRecoveryNotice } from './codex-recovery-notice';
 import { Pencil } from 'lucide-react';
 import {
   Tooltip,
@@ -94,6 +95,13 @@ export function TimelineEntryRow({
   }
 
   if (entry.kind === 'system') {
+    if (entry.codexRecovery)
+      return (
+        <CodexRecoveryNotice
+          phase={entry.codexRecovery.phase}
+          message={entry.content}
+        />
+      );
     const severity = entry.severity ?? 'error';
     const colorMap = {
       info: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',

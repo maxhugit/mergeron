@@ -282,6 +282,7 @@ export type TimelineEntry =
     }
   | {
       kind: 'system';
+      codexRecovery?: CodexRecoveryState;
       requestInstanceId?: string;
       content: string;
       severity?: 'info' | 'warning' | 'error';
@@ -300,3 +301,14 @@ export type TimelineEntry =
       /** Detail level used to decide whether this turn needs a full-item top-up. */
       itemsView?: 'notLoaded' | 'summary' | 'full';
     };
+
+export type CodexRecoveryPhase =
+  | 'restarting'
+  | 'ready'
+  | 'resumed'
+  | 'unavailable'
+  | 'failed';
+export interface CodexRecoveryState {
+  generation: number;
+  phase: CodexRecoveryPhase;
+}

@@ -19,6 +19,10 @@ export function getApiErrorMessage(
   if (typeof error === 'string' && error.trim()) return error;
 
   const body = isRecord(error) ? (error as ApiErrorBody) : undefined;
+  if (body?.errorCode === 'codex.request_timeout')
+    return i18n.t('codexRequestTimedOut', {
+      method: sanitizeParams(body.params).method ?? 'Codex',
+    });
   if (body?.errorCode) {
     const msg = normalizeMessage(body.message) ?? body.errorCode;
     return i18n.t(translationKey(`error.${body.errorCode}`), {
