@@ -2,11 +2,30 @@
 # Canonical hardened image for supported Linux Docker hosts.
 
 ARG PNPM_VERSION=10.34.9
-ARG GH_VERSION=2.103.0
-ARG GH_LINUX_AMD64_SHA256=fdd768eb70f6409f80fcfa9f3a1c0adf0fc98d827ab3ce0bed2ac22762c5d786
+ARG GH_VERSION=2.103.3
+ARG GH_SOURCE_SHA256=bb148138a3a2fe023e57c78042fe3b42fc09171c0e8fff4cf983b227b7a2eade
 ARG PILLOW_VERSION=13.0.0
 ARG SEVENZIP_VERSION=26.05
 ARG SEVENZIP_LINUX_X64_SHA256=22cf82fcc6eb7474f1d5bb4f02c0f8ebd573a718089d6833dc30f8350a3b232e
+
+# Rebuild the reviewed upstream release with the corrected HTML parser.
+# Neither the Go toolchain nor source/build caches enter the runtime image.
+FROM golang:1.27.3-bookworm AS github-cli-builder
+ARG GH_VERSION
+ARG GH_SOURCE_SHA256
+ENV GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+WORKDIR /build/gh
+COPY security/github-cli-dependencies.patch /tmp/github-cli-dependencies.patch
+RUN curl --fail --silent --show-error --location \
+      "https://codeload.github.com/cli/cli/tar.gz/refs/tags/v${GH_VERSION}" \
+      --output /tmp/gh-source.tar.gz \
+ && echo "${GH_SOURCE_SHA256}  /tmp/gh-source.tar.gz" | sha256sum --check --strict \
+ && tar -xzf /tmp/gh-source.tar.gz --strip-components=1 \
+ && patch --batch --fuzz=0 -p1 < /tmp/github-cli-dependencies.patch \
+ && go build -mod=readonly -trimpath \
+      -ldflags "-s -w -X github.com/cli/cli/v2/internal/build.Version=${GH_VERSION}-mergeron.1" \
+      -o /out/gh ./cmd/gh \
+ && go version -m /out/gh | grep -F 'golang.org/x/net' | grep -F 'v0.62.0'
 
 # ── Stage 1: Frontend build ──────────────────────────────────────────
 FROM node:22-bookworm-slim AS frontend-builder
@@ -82,7 +101,6 @@ RUN bash /tmp/build-libxml2-backport.sh
 FROM debian:trixie-slim AS runtime-base
 
 ARG GH_VERSION
-ARG GH_LINUX_AMD64_SHA256
 ARG PILLOW_VERSION
 ARG SEVENZIP_VERSION
 ARG SEVENZIP_LINUX_X64_SHA256
@@ -153,18 +171,8 @@ RUN bash /tmp/install-sevenzip.sh "${SEVENZIP_VERSION}" "${SEVENZIP_LINUX_X64_SH
  && rm /tmp/install-sevenzip.sh \
  && for command in 7z 7za 7zr; do ln -s /opt/7zip/7zz "/usr/local/bin/${command}"; done
 
-# The upstream release includes fixes in both gh and its compiled Go dependencies.
-# Verify its published digest before exposing the immutable binary in PATH.
-RUN curl --fail --silent --show-error --location \
-      "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
-      --output /tmp/gh.tar.gz \
- && echo "${GH_LINUX_AMD64_SHA256}  /tmp/gh.tar.gz" | sha256sum --check --strict \
- && tar -xzf /tmp/gh.tar.gz \
-      --strip-components=2 \
-      --directory=/usr/local/bin \
-      "gh_${GH_VERSION}_linux_amd64/bin/gh" \
- && rm /tmp/gh.tar.gz \
- && gh version | grep -F "gh version ${GH_VERSION}"
+COPY --from=github-cli-builder /out/gh /usr/local/bin/gh
+RUN gh version | grep -F "gh version ${GH_VERSION}-mergeron.1"
 
 # Python headers and packaging tools are needed while assembling the managed
 # Python runtimes, but not by the published image. Keeping them in this shared
