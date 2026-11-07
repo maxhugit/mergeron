@@ -104,5 +104,8 @@
   "never": "Jamais",
   "legacyLifetime": "{{minutes}} minutes (ancienne valeur)",
   "applyLifetime": "Appliquer la durée",
-  "lifetimeHelp": "La durée est comptée à partir du démarrage ou de cette modification. Le changement ne redémarre pas l’environnement. « Jamais » désactive l’arrêt automatique."
+  "lifetimeHelp": "La durée est comptée à partir du démarrage ou de cette modification. Le changement ne redémarre pas l’environnement. « Jamais » désactive l’arrêt automatique.",
+  "executionTab": "Exécution",
+  "resourcesTab": "Ressources et durée",
+  "advancedTab": "Configuration avancée"
 }

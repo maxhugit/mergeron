@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { projectsApi } from '@/lib/projects-api';
+import { SettingsPanelActions } from '@/components/settings/settings-panel';
 import { KnowledgeProposalsPanel } from './knowledge-proposals-panel';
 
 const names = ['AGENTS.md', 'CONNAISSANCES.md', 'DECISIONS.md'] as const;
@@ -25,9 +26,15 @@ const descriptions = [
 export function ProjectKnowledgePanel({
   projectId,
   readOnly = false,
+  view = 'all',
+  active = true,
+  selectedFile = 'AGENTS.md',
 }: {
   projectId: string;
   readOnly?: boolean;
+  view?: 'all' | 'memory' | 'proposals';
+  active?: boolean;
+  selectedFile?: string;
 }) {
   const { t } = useTranslation();
   const client = useQueryClient();
@@ -97,7 +104,7 @@ export function ProjectKnowledgePanel({
     );
   return (
     <section className="space-y-5 pb-3">
-      <div>
+      <div hidden={view === 'proposals'}>
         <h3 className="font-semibold">{t('sharedProjectKnowledge')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           {t(
@@ -109,7 +116,13 @@ export function ProjectKnowledgePanel({
         </p>
       </div>
       {names.map((name, index) => (
-        <div key={name} className="space-y-2 rounded-lg border p-3">
+        <div
+          key={name}
+          hidden={
+            view === 'proposals' || (view === 'memory' && selectedFile !== name)
+          }
+          className="space-y-2"
+        >
           <label htmlFor={`knowledge-${name}`} className="block font-medium">
             {t(translationKey(labels[index]))}{' '}
             <span className="font-mono text-xs text-muted-foreground">
@@ -125,7 +138,7 @@ export function ProjectKnowledgePanel({
             value={files[name]}
             readOnly={readOnly}
             disabled={save.isPending || proposalBusy}
-            className="font-mono text-sm"
+            className="min-h-72 w-full font-mono text-sm"
             onChange={(event) => {
               const next = {
                 files: { ...files, [name]: event.target.value },
@@ -141,17 +154,20 @@ export function ProjectKnowledgePanel({
         </div>
       ))}
       {!readOnly && (
-        <KnowledgeProposalsPanel
-          projectId={projectId}
-          revision={snapshot.revision}
-          unsaved={dirty}
-          onBusyChange={setProposalBusy}
-          onApplied={() => {
-            setDraft(null);
-            client.setQueryData(draftKey, null);
-            void client.invalidateQueries({ queryKey: key });
-          }}
-        />
+        <div hidden={view === 'memory'}>
+          <KnowledgeProposalsPanel
+            projectId={projectId}
+            active={active && view !== 'memory'}
+            revision={snapshot.revision}
+            unsaved={dirty}
+            onBusyChange={setProposalBusy}
+            onApplied={() => {
+              setDraft(null);
+              client.setQueryData(draftKey, null);
+              void client.invalidateQueries({ queryKey: key });
+            }}
+          />
+        </div>
       )}
       {save.error && (
         <p role="alert" className="text-sm text-destructive">
@@ -171,31 +187,44 @@ export function ProjectKnowledgePanel({
         </p>
       )}
       {!readOnly && (
-        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t bg-background py-3">
-          <span role="status" className="text-sm text-muted-foreground">
-            {dirty ? t('unsavedChanges') : t('noPendingChanges')}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              disabled={save.isPending || proposalBusy || query.isFetching}
-              onClick={() => void reload()}
-            >
-              {dirty ? t('reloadAndDiscardChanges') : t('reload')}
-            </Button>
-            <Button
-              disabled={!dirty || tooLarge || save.isPending || proposalBusy}
-              onClick={() =>
-                save.mutate({
-                  files,
-                  revision: draft?.revision ?? snapshot.revision,
-                })
-              }
-            >
-              {save.isPending ? t('saving56a2285c') : t('save')}
-            </Button>
+        <SettingsPanelActions active={active && view !== 'proposals'}>
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <span role="status" className="text-sm text-muted-foreground">
+              {dirty ? t('unsavedChanges') : t('noPendingChanges')}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={save.isPending || proposalBusy || query.isFetching}
+                onClick={() => void reload()}
+              >
+                {dirty ? t('reloadAndDiscardChanges') : t('reload')}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!dirty || save.isPending || proposalBusy}
+                onClick={() => {
+                  setDraft(null);
+                  client.setQueryData(draftKey, null);
+                  save.reset();
+                }}
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                disabled={!dirty || tooLarge || save.isPending || proposalBusy}
+                onClick={() =>
+                  save.mutate({
+                    files,
+                    revision: draft?.revision ?? snapshot.revision,
+                  })
+                }
+              >
+                {save.isPending ? t('saving56a2285c') : t('save')}
+              </Button>
+            </div>
           </div>
-        </div>
+        </SettingsPanelActions>
       )}
     </section>
   );

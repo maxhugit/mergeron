@@ -97,6 +97,12 @@
               "Un projet peut posséder plusieurs gestionnaires de tâches, mais un seul gestionnaire de livrables et un seul gestionnaire d’automatisations. Choisir à nouveau un gestionnaire unique existant ouvre celui-ci."
             ],
             "warning": "Les emplacements sont ceux du serveur. Un chemin présent sur votre ordinateur n’est pas automatiquement disponible pour l’agent."
+          },
+          {
+            "title": "Retrouver les réglages du projet",
+            "paragraphs": [
+              "Le projet conserve ses sept onglets : Informations générales, Personnes, Journal, Gestion des agents, Navigateur, Emplacements et connexions, Environnement de test. Les titres ou sous-onglets restent visibles pendant le défilement. Les actions de sauvegarde appartiennent au bas du panneau."
+            ]
           }
         ],
         "related": ["project-people", "locations", "agent-composer"]
@@ -326,6 +332,12 @@
               "Après un retrait, vérifiez les responsabilités des tâches et livrables : leurs anciennes affectations restent visibles à titre historique."
             ],
             "warning": "Retirer une personne la retire aussi des groupes concernés. Un lien vers un document ou une affectation ne contourne jamais les contrôles d’accès."
+          },
+          {
+            "title": "Organisation et participants",
+            "paragraphs": [
+              "Dans Personnes, Organisation regroupe le chef de projet et les groupes. Participants présente la recherche et les opérations d’ajout ou de retrait. Les confirmations et les règles d’accès restent les mêmes ; les affectations existantes ne disparaissent pas lors d’un retrait."
+            ]
           }
         ],
         "related": ["admin-people", "impersonation"]
@@ -802,6 +814,13 @@
               "Acceptez explicitement la proposition pour l’intégrer aux connaissances approuvées, ou refusez-la et demandez une correction."
             ],
             "warning": "La mémoire ne remplace ni les autorisations ni la vérification des faits. Un chat simple ne doit pas être supposé lire automatiquement les mêmes fichiers qu’un agent de travail."
+          },
+          {
+            "title": "Modifier et examiner dans les sous-onglets",
+            "paragraphs": [
+              "Gestion des agents sépare Configuration, Connaissances partagées, Propositions et Intégrations. Les trois fichiers d’instructions, connaissances et décisions disposent de leur propre sous-onglet ; leurs brouillons restent présents quand vous passez de l’un à l’autre. Enregistrer applique les trois fichiers ensemble avec la révision observée ; Annuler abandonne le brouillon local.",
+              "Propositions affiche directement chaque contenu avant/après, sans bouton pour l’ouvrir ou le fermer. Les actions restent auprès de la proposition concernée. Enregistrez une modification de proposition avant de l’accepter. Une proposition périmée ou un brouillon de connaissances non enregistré bloque son acceptation. Recharger et Précédent/Suivant restent disponibles."
+            ]
           }
         ],
         "related": [
@@ -901,6 +920,13 @@
               "La durée choisie peut arrêter automatiquement l’environnement. Sa modification sur une instance active ne la redémarre pas ; Jamais désactive cet arrêt automatique. Vérifiez l’état arrêté et la confirmation du nettoyage après un essai."
             ],
             "warning": "Ce n’est pas une sauvegarde. Copiez les résultats utiles dans l’espace de travail avant arrêt ou recréation. Aucun compte Codex, jeton Git ou secret de production n’est copié automatiquement. Ne désactivez ni le proxy, ni TLS, ni le sandbox pour faire démarrer un test."
+          },
+          {
+            "title": "Organiser le profil du projet",
+            "paragraphs": [
+              "Dans Environnement de test, Exécution regroupe l’activation et la recette manuelle ou la gestion par les agents. Ressources et durée contient la durée, la mémoire, les CPU et les informations de stockage. Configuration avancée contient les variables et les services JSON du profil manuel.",
+              "Les changements restent présents entre les sous-onglets. Enregistrer le profil et Annuler restent en bas du panneau. Le profil enregistré s’applique à un environnement recréé ; les technologies autorisées et les valeurs masquées existantes sont conservées."
+            ]
           }
         ],
         "related": ["agent-visual-checks", "agent-project-tools", "report-bug"]

@@ -97,6 +97,12 @@
               "A project may have multiple task managers, but only one deliverable manager and one automation manager. Selecting an existing unique manager opens it."
             ],
             "warning": "Paths belong to the server. A folder on your computer is not automatically accessible to an agent."
+          },
+          {
+            "title": "Find project settings",
+            "paragraphs": [
+              "The project retains its seven tabs: General information, People, Journal, Agent management, Browser, Locations and connections, Test environment. Headings or sub-tabs stay visible while content scrolls. Save actions belong to the bottom of the panel."
+            ]
           }
         ],
         "related": ["project-people", "locations", "agent-composer"]
@@ -320,6 +326,12 @@
               "After removing someone, check task and deliverable ownership: historical assignments remain visible."
             ],
             "warning": "Removing a participant also removes their membership in project groups. Links and assignments never bypass access checks."
+          },
+          {
+            "title": "Organization and participants",
+            "paragraphs": [
+              "Under People, Organization contains the project manager and groups. Participants contains search and membership actions. Confirmations and access rules are unchanged; removing a participant does not delete existing assignments."
+            ]
           }
         ],
         "related": ["admin-people", "impersonation"]
@@ -781,6 +793,13 @@
               "Explicitly accept it into approved knowledge, or reject it and request a correction."
             ],
             "warning": "Memory does not replace permissions or fact-checking. Do not assume simple chat automatically reads the same files as a work agent."
+          },
+          {
+            "title": "Edit and review with sub-tabs",
+            "paragraphs": [
+              "Agent management separates Configuration, Shared project knowledge, Proposals and Integrations. Instructions, knowledge and decisions each have a file tab; drafts remain when switching between them. Save writes all three files together with the observed revision; Cancel discards the local draft.",
+              "Proposals show each before/after directly, with no open or close button. Review actions remain next to their proposal. Save proposal edits before accepting. An outdated proposal or an unsaved manual knowledge draft blocks acceptance. Reload and Previous/Next remain available."
+            ]
           }
         ],
         "related": [
@@ -880,6 +899,13 @@
               "The selected lifetime can stop the environment automatically. Changing it for an active instance does not restart it; Never disables automatic expiry. After testing, verify the stopped state and cleanup confirmation."
             ],
             "warning": "This is not a backup. Copy useful results to the workspace before stopping or recreating. No Codex account, Git token or production secret is copied automatically. Do not disable the proxy, TLS or sandbox to start a test."
+          },
+          {
+            "title": "Organize the project profile",
+            "paragraphs": [
+              "Under Test environment, Execution contains activation and the manual recipe or agent management. Resources and lifetime contains lifetime, memory, CPUs and storage information. Advanced configuration contains the manual profile’s JSON variables and services.",
+              "Edits remain across sub-tabs. Save profile and Cancel stay at the bottom of the panel. A saved profile applies when recreating an environment; allowed technologies and existing masked values are preserved."
+            ]
           }
         ],
         "related": ["agent-visual-checks", "agent-project-tools", "report-bug"]

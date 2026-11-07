@@ -26,6 +26,7 @@ import {
   type ProjectActivitySummary,
   type ProjectSummary,
 } from '@/lib/projects-api';
+import { SettingsPanel } from '@/components/settings/settings-panel';
 import { usePlatformSession } from '@/lib/platform-session';
 import { useParticipants } from '@/lib/people-api';
 
@@ -148,30 +149,19 @@ export function ProjectRoute() {
         </div>
       </div>
 
-      <div
-        className={`min-h-0 flex-1 p-4 md:p-6 ${visibleTab === 'journal' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}
-      >
-        <div
-          className={`mx-auto w-full max-w-6xl ${visibleTab === 'journal' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-6'}`}
-        >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-5">
+        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">
           {visibleTab === 'general' ? (
-            <>
-              <section className="rounded-xl border bg-card p-5">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                    <FolderKanban className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-xl font-semibold">
-                      {project.name}
-                    </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {t('generalProjectInformationAndLinkedResources')}
-                    </p>
-                  </div>
-                </div>
-              </section>
-
+            <SettingsPanel
+              heading={
+                <>
+                  <h2 className="font-semibold">{project.name}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {t('generalProjectInformationAndLinkedResources')}
+                  </p>
+                </>
+              }
+            >
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <SummaryCard
                   icon={FolderOpen}
@@ -254,7 +244,7 @@ export function ProjectRoute() {
                   </dl>
                 </section>
               </div>
-            </>
+            </SettingsPanel>
           ) : visibleTab === 'journal' ? (
             <ProjectJournal
               rows={activity.data?.activity ?? []}
@@ -265,7 +255,7 @@ export function ProjectRoute() {
             />
           ) : (
             <ProjectSettingsPanel
-              key={`${project.id}:${project.updatedAt}:${visibleTab}`}
+              key={`${project.id}:${visibleTab}`}
               project={project}
               section={visibleTab}
               canManageParticipants={session.isAdministrator}
