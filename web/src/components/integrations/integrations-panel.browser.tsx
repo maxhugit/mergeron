@@ -135,6 +135,7 @@ test.each([390, 1280])(
             data: Array.from({ length: 25 }, (_, i) => ({
               name: `server-${i}`,
               tools: {},
+              runtimeStatus: i === 0 ? 'connected' : null,
               authStatus: 'unsupported',
             })),
             nextCursor: null,
@@ -145,7 +146,17 @@ test.each([390, 1280])(
       if (options.url === '/api/settings/{key}')
         return { data: { value: '' } } as never;
       if (options.url === '/api/codex/config')
-        return { data: { config: {}, origins: {} } } as never;
+        return {
+          data: {
+            config: {
+              mcp_servers: {
+                'server-0': { command: 'node' },
+                'server-1': { url: 'https://example.com/mcp' },
+              },
+            },
+            origins: {},
+          },
+        } as never;
       throw Error('Unexpected fixture request: ' + options.url);
     });
     query = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -234,6 +245,16 @@ test.each([390, 1280])(
     });
     fireEvent.click(screen.getByRole('tab', { name: 'Serveurs MCP' }));
     await screen.findByText('server-0');
+    expect(await screen.findByText('Processus local Mergeron')).toBeVisible();
+    expect(screen.getByText('Connexion vérifiée par le runtime')).toBeVisible();
+    expect(
+      screen.getAllByText('Connexion non vérifiée').length,
+    ).toBeGreaterThan(0);
+    await page
+      .getByRole('main')
+      .screenshot({
+        path: `../../../.vitest-screenshots/integrations-local-priority-${engine}-${width}.png`,
+      });
     expect(screen.getByText('Mergeron (interne)')).toBeVisible();
     expect(screen.getByText('Par conversation')).toBeVisible();
     await assertInnerScroll('mcps');
@@ -309,9 +330,7 @@ test('shows the missing local bundle in the catalog and the install dialog', asy
   );
   expect(screen.getByRole('button', { name: 'Installer' })).toBeEnabled();
   expect(screen.queryByRole('button', { name: 'Désinstaller' })).toBeNull();
-  await page
-    .getByRole('dialog')
-    .screenshot({
-      path: `../../../.vitest-screenshots/plugin-local-state-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}.png`,
-    });
+  await page.getByRole('dialog').screenshot({
+    path: `../../../.vitest-screenshots/plugin-local-state-${navigator.userAgent.includes('Chrome') ? 'chromium' : 'webkit'}.png`,
+  });
 });

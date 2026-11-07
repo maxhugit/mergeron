@@ -56,17 +56,29 @@ fenêtres modales.
   Après un échec, les inventaires sont actualisés : un téléchargement local
   peut avoir eu lieu avant le refus de l’étape distante.
 
-- **Applications** : « Connectées » consulte `app/installed`, l’instantané du
+- **Applications** : « Disponibles dans Mergeron » consulte `app/installed`, l’instantané du
   runtime. Il peut être vide avant le premier chargement des outils ; le bouton
-  « Actualiser les connexions » demande explicitement `forceRefresh`. Le
+  « Actualiser les outils disponibles » demande explicitement `forceRefresh`. Le
   catalogue utilise séparément `app/list`. Une absence dans l’instantané ne prouve
-  pas que le compte n’est pas associé chez le fournisseur.
+  pas que le compte n’est pas associé chez le fournisseur. Ces applications
+  portent le badge « Via OpenAI · distant ». « Outils disponibles dans Mergeron »
+  exige `enabled` et `callable` dans l’inventaire courant, sans affirmer que le
+  service vient de répondre. Le catalogue seul reste « Connexion non vérifiée ».
+  Une application ne constitue pas une installation locale du service.
 - **Serveurs MCP** : l’administrateur peut déclarer une URL HTTP ou une commande
   locale avec ses arguments séparés. La configuration appartient au CLI exécuté
   dans Mergeron, pas au CLI du poste. Les noms réservés de la plateforme sont
   protégés et un serveur existant n’est pas remplacé par un ajout. Les éditions
   portent sur les seules propriétés de transport et vérifient la version du
-  fichier utilisateur lorsqu’elle est disponible.
+  fichier utilisateur lorsqu’elle est disponible. Les outils internes
+  apparaissent en premier, puis les processus locaux (`command` dans la
+  configuration effective), les serveurs HTTP directs (`url`), les emplacements
+  inconnus et enfin le pont OpenAI. Un processus local peut utiliser Internet ;
+  un serveur HTTP direct n’est pas nécessairement hébergé par Mergeron. Seul
+  `runtimeStatus: connected` donne « Connexion vérifiée par le runtime ». Une
+  liste d’outils, une authentification déclarée ou un ancien événement d’une
+  autre conversation ne suffisent pas. Sans observation, l’état reste non
+  vérifié ; la connexion des outils internes se consulte dans chaque agent.
 
 OAuth reste un parcours explicite après l’enregistrement. Pour un jeton, le
 formulaire accepte le **nom d’une variable d’environnement existante**, jamais

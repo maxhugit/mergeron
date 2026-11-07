@@ -1,5 +1,11 @@
-import { McpConfigDialog } from './mcp-config-dialog';
 import { translationKey } from '@/locales/translation-key';
+import {
+  mcpOrigin,
+  mcpConnection,
+  type McpOrigin,
+  type McpConnection,
+} from './integration-runtime-state';
+import { McpConfigDialog } from './mcp-config-dialog';
 /**
  * MCPs tab: full MCP server list with status, auth, reload, and OAuth login.
  */
@@ -7,6 +13,7 @@ import { useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  CircleHelp,
   Copy,
   ExternalLink,
   Loader2,
@@ -18,14 +25,16 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { mcpServersListServersQueryKey } from '@/generated/api/@tanstack/react-query.gen';
+import {
+  codexConfigReadConfigOptions,
+  mcpServersListServersQueryKey,
+} from '@/generated/api/@tanstack/react-query.gen';
 import {
   mcpServersListServers,
   mcpServersReloadAll,
   mcpServersStartOauthLogin,
 } from '@/generated/api/sdk.gen';
-import type { McpServerStatus, McpServerStartupState } from '@/types/mcp';
-import { useMcpStore, type McpServerRuntimeStatus } from '@/stores/mcp-store';
+import type { McpServerStatus } from '@/types/mcp';
 import { cn } from '@/lib/utils';
 import { showSnackbar } from '@/stores/snackbar-store';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -38,7 +47,16 @@ export function McpsTab() {
   const [configuration, setConfiguration] = useState<string | null | undefined>(
     undefined,
   );
-  const runtimeStatuses = useMcpStore((s) => s.statuses);
+  const configQuery = useQuery({
+    ...codexConfigReadConfigOptions(),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const configurations = (
+    configQuery.data?.config as
+      | { mcp_servers?: Record<string, { command?: unknown; url?: unknown }> }
+      | undefined
+  )?.mcp_servers;
 
   const serversQuery = useQuery({
     queryKey: mcpServersListServersQueryKey(),
@@ -71,17 +89,20 @@ export function McpsTab() {
   // Build merged rows from inventory + runtime status
   const rows = buildRows(
     (serversQuery.data?.data ?? []) as unknown as McpServerStatus[],
-    runtimeStatuses,
+    configurations,
   ).filter((row) => row.name !== 'mergeron_internal');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <p className="shrink-0 text-xs text-muted-foreground">
+        {ti('mcpRuntimeHelp')}
+      </p>
       {/* Header with reload */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           {serversQuery.isSuccess
             ? ti('externalServersReady', {
-                ready: rows.filter((r) => r.status === 'ready').length,
+                ready: rows.filter((r) => r.status === 'connected').length,
                 total: rows.length,
               })
             : serversQuery.isLoading
@@ -124,7 +145,8 @@ export function McpsTab() {
         <div className="rounded-lg border border-border/50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm font-medium">{ti('internalServer')}</span>
-            <Badge variant="secondary">{ti('conversationScoped')}</Badge>
+            <Badge variant="secondary">{ti('internalLocal')}</Badge>
+            <Badge variant="outline">{ti('conversationScoped')}</Badge>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             {ti('internalServerHelp')}
@@ -167,7 +189,8 @@ const isPlatformMcp = (name: string) =>
 
 interface McpRow {
   name: string;
-  status: McpServerStartupState;
+  status: McpConnection;
+  origin: McpOrigin;
   error: string | null;
   authStatus?: McpServerStatus['authStatus'];
   toolCount?: number;
@@ -175,6 +198,7 @@ interface McpRow {
 
 function McpServerRow({ row }: { row: McpRow }) {
   const { t } = useTranslation();
+  const { t: ti } = useTranslation('integrations');
   const [loggingIn, setLoggingIn] = useState(false);
   /** Authorization URL the popup blocker kept us from opening; see below. */
   const [blockedAuthUrl, setBlockedAuthUrl] = useState<string | null>(null);
@@ -184,7 +208,9 @@ function McpServerRow({ row }: { row: McpRow }) {
       ? AlertCircle
       : row.status === 'starting'
         ? Loader2
-        : CheckCircle2;
+        : row.status === 'connected'
+          ? CheckCircle2
+          : CircleHelp;
 
   const needsLogin = row.authStatus === 'notLoggedIn';
 
@@ -254,7 +280,7 @@ function McpServerRow({ row }: { row: McpRow }) {
           className={cn(
             'h-4 w-4 shrink-0',
             row.status === 'failed' && 'text-destructive',
-            row.status === 'ready' && 'text-green-500',
+            row.status === 'connected' && 'text-green-500',
             row.status === 'starting' && 'animate-spin text-blue-500',
           )}
         />
@@ -265,10 +291,13 @@ function McpServerRow({ row }: { row: McpRow }) {
           variant={row.status === 'failed' ? 'destructive' : 'secondary'}
           className="text-[10px]"
         >
-          {t(translationKey(row.status))}
+          {ti(`connectionState.${row.status}`)}
         </Badge>
       </div>
 
+      <div className="mt-2 flex flex-wrap gap-2 pl-6">
+        <Badge variant="outline">{ti(translationKey(row.origin))}</Badge>
+      </div>
       {/* Details row */}
       <div className="mt-1.5 flex items-center gap-3 pl-6 text-xs text-muted-foreground">
         {row.authStatus && (
@@ -352,27 +381,33 @@ function McpServerRow({ row }: { row: McpRow }) {
 
 function buildRows(
   servers: McpServerStatus[],
-  runtimeStatuses: Record<string, McpServerRuntimeStatus>,
+  configurations?: Record<string, { command?: unknown; url?: unknown }>,
 ): McpRow[] {
-  const rows = new Map<string, McpRow>();
-  for (const server of servers) {
-    const runtime = runtimeStatuses[server.name];
-    rows.set(server.name, {
+  const observedNames = new Set(servers.map((server) => server.name));
+  const configuredOnly = Object.keys(configurations ?? {})
+    .filter((name) => !observedNames.has(name))
+    .map((name) => ({ name, tools: {}, authStatus: undefined }));
+  return [...servers, ...configuredOnly]
+    .map((server) => ({
       name: server.name,
-      status: runtime?.status ?? 'ready',
-      error: runtime?.error ?? null,
+      // Global startup notifications can belong to another conversation. Only
+      // the state returned for this inventory can verify this connection.
+      status: mcpConnection(
+        (server as McpServerStatus & { runtimeStatus?: string | null })
+          .runtimeStatus,
+      ),
+      origin: mcpOrigin(server.name, configurations?.[server.name]),
+      error: null,
       authStatus: server.authStatus,
       toolCount: Object.keys(server.tools ?? {}).length,
+    }))
+    .sort((a, b) => {
+      const rank = {
+        localProcess: 0,
+        directRemote: 1,
+        originUnknown: 2,
+        viaOpenAI: 3,
+      };
+      return rank[a.origin] - rank[b.origin] || a.name.localeCompare(b.name);
     });
-  }
-  for (const runtime of Object.values(runtimeStatuses)) {
-    if (!rows.has(runtime.name)) {
-      rows.set(runtime.name, {
-        name: runtime.name,
-        status: runtime.status,
-        error: runtime.error,
-      });
-    }
-  }
-  return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

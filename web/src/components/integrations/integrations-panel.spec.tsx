@@ -176,7 +176,7 @@ it('does not repeatedly fetch a refused directory when revisiting the category',
   await screen.findByText('Home Assistant');
   fireEvent.click(screen.getByRole('tab', { name: 'Catalog' }));
   await screen.findByRole('alert');
-  fireEvent.click(screen.getByRole('tab', { name: 'Connected' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Mergeron inventory' }));
   await screen.findByText('Home Assistant');
   fireEvent.click(screen.getByRole('tab', { name: 'Catalog' }));
   await screen.findByRole('alert');
@@ -299,7 +299,7 @@ it('keeps an official plugin catalog available when the application directory re
     screen.getByRole('link', { name: 'Open ChatGPT directory' }),
   ).toHaveAttribute('href', 'https://chatgpt.com/apps');
   expect(post).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('tab', { name: 'Connected' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Mergeron inventory' }));
   expect(await screen.findByText('Home Assistant')).toBeVisible();
 });
 
@@ -411,4 +411,73 @@ it('labels a remote plugin missing its local bundle and offers installation in i
   expect(
     screen.queryByRole('button', { name: 'Uninstall' }),
   ).not.toBeInTheDocument();
+});
+
+it('labels applications as remote runtime tools rather than local installations or verified connections', async () => {
+  mount();
+  await screen.findByText('Documents');
+  fireEvent.click(screen.getByRole('tab', { name: 'Applications' }));
+  await screen.findByText('Home Assistant');
+  expect(screen.getByText('Via OpenAI · remote')).toBeVisible();
+  expect(screen.getByText('Tools available in Mergeron')).toBeVisible();
+  expect(screen.queryByText('Connection verified by runtime')).toBeNull();
+  expect(screen.queryByText('Local Mergeron process')).toBeNull();
+});
+
+it('puts local MCP processes first without inventing a connection from reported tools', async () => {
+  const original = get.getMockImplementation()!;
+  get.mockImplementation((options, ...rest) => {
+    if (options.url === '/api/codex/config')
+      return Promise.resolve({
+        data: {
+          config: {
+            mcp_servers: {
+              zLocal: { command: 'node' },
+              notObserved: { command: 'python' },
+              direct: { url: 'https://example.com/mcp' },
+            },
+          },
+        },
+      }) as never;
+    if (options.url === '/api/mcp-servers')
+      return Promise.resolve({
+        data: {
+          data: [
+            {
+              name: 'codex_apps',
+              authStatus: 'bearerToken',
+              runtimeStatus: null,
+              tools: { remote: {} },
+            },
+            {
+              name: 'zLocal',
+              authStatus: 'unsupported',
+              runtimeStatus: null,
+              tools: { read: {} },
+            },
+            {
+              name: 'direct',
+              authStatus: 'unsupported',
+              runtimeStatus: 'connected',
+              tools: {},
+            },
+          ],
+          nextCursor: null,
+        },
+      }) as never;
+    return original(options, ...rest);
+  });
+  mount();
+  await screen.findByText('Documents');
+  fireEvent.click(screen.getByRole('tab', { name: 'MCP servers' }));
+  expect((await screen.findAllByText('Local Mergeron process')).length).toBe(2);
+  expect(
+    screen.getByText('1/4 connections verified by the runtime'),
+  ).toBeVisible();
+  expect(screen.getAllByText('Connection not verified')).toHaveLength(3);
+  expect(screen.getByText('Direct MCP · HTTP service')).toBeVisible();
+  const list = screen.getByRole('region', { name: 'Integration list' });
+  const text = list.textContent!;
+  expect(text.indexOf('zLocal')).toBeLessThan(text.indexOf('direct'));
+  expect(text.indexOf('direct')).toBeLessThan(text.indexOf('codex_apps'));
 });

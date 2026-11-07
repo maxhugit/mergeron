@@ -2158,10 +2158,17 @@
             "title": "Prepare integrations",
             "steps": [
               "Open Settings → Codex → Integrations to view plugins, applications and MCP servers for this installation.",
-              "Installed and built-in plugins and connected apps appear first. Catalogs load on demand; a catalog error does not replace the connected inventory.",
+              "Installed and built-in plugins appear first. A remote plugin requires a package on this server to be marked installed. Applications → Mergeron inventory shows tools reported by the runtime; catalogs remain separate.",
               "Select useful integrations in project agent management and save the selection.",
               "Complete the service’s separate connection or authentication flow.",
               "Check actual agent capabilities in the project before assigning an external action."
+            ]
+          },
+          {
+            "title": "Distinguish local execution, remote services and observed connections",
+            "paragraphs": [
+              "MCP servers lists internal tools first, followed by local processes identified by their command in the Mergeron configuration. A local process may itself use the Internet. A direct HTTP MCP may be remote.",
+              "Apps carry the Via OpenAI · remote badge. Tools available in Mergeron means the runtime reports usable tools, without proving a recent service response. Connection verified by runtime requires an explicit connection state; otherwise it remains unverified."
             ]
           },
           {

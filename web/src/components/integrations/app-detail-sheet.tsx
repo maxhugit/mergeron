@@ -1,3 +1,4 @@
+import { AppRuntimeBadges } from './app-runtime-badges';
 /** App detail drawer with per-app and per-tool approval configuration. */
 import { ExternalLink, Power } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -57,6 +58,7 @@ type ConfigKeyPath = ConfigEditDto['keyPath'];
 type ConfigValue = ConfigEditDto['value'];
 
 interface AppDetailSheetProps {
+  runtimeObserved?: boolean;
   /** App row selected from app/list, or null when the sheet is closed. */
   app: AppInfoDto | null;
   /** Closes the sheet. */
@@ -64,7 +66,11 @@ interface AppDetailSheetProps {
 }
 
 /** App detail surface for scoped app/tool config edits. */
-export function AppDetailSheet({ app, onClose }: AppDetailSheetProps) {
+export function AppDetailSheet({
+  app,
+  onClose,
+  runtimeObserved = false,
+}: AppDetailSheetProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const threadId = useTimelineStore((s) => s.threadId);
@@ -144,7 +150,11 @@ export function AppDetailSheet({ app, onClose }: AppDetailSheetProps) {
         ) : (
           <ScrollArea className="h-[55dvh] px-4 pr-2">
             <div className="space-y-5 pb-6 pt-2">
-              <AppIdentity app={app} metadata={metadata} />
+              <AppIdentity
+                runtimeObserved={runtimeObserved}
+                app={app}
+                metadata={metadata}
+              />
 
               {missing && (
                 <WarningBanner
@@ -343,10 +353,12 @@ function AppPolicyControls({
 
 function AppIdentity({
   app,
+  runtimeObserved,
   metadata,
 }: {
   app: AppInfoDto;
   metadata: ConnectorMetadataDto | null;
+  runtimeObserved: boolean;
 }) {
   const { t } = useTranslation();
   const logoUrl = metadata?.iconUrl ?? app.logoUrl;
@@ -369,6 +381,11 @@ function AppIdentity({
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <code className="text-xs text-muted-foreground">{app.id}</code>
+          <AppRuntimeBadges
+            observed={runtimeObserved}
+            enabled={app.isEnabled}
+            callable={app.isAccessible}
+          />
           {!app.isAccessible && (
             <Badge
               variant="outline"
