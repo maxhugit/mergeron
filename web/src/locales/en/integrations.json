@@ -95,5 +95,6 @@
   "catalogWorkerMissing": "Container not prepared",
   "catalogWorkerStopped": "Stopped",
   "catalogWorkerHealthy": "Running",
-  "catalogWorkerStarting": "Starting or checking"
+  "catalogWorkerStarting": "Starting or checking",
+  "notInstalledOnServer": "Not installed on this server"
 }

@@ -38,6 +38,7 @@ export function PluginDetailSheet({
   mutating,
 }: Props) {
   const { t } = useTranslation();
+  const { t: ti } = useTranslation('integrations');
 
   const { data, isLoading, isError, refetch } = useQuery({
     ...pluginsReadPluginOptions({
@@ -203,6 +204,12 @@ export function PluginDetailSheet({
 
               <Separator />
 
+              {detail.summary.source.type === 'remote' &&
+                !detail.summary.installed && (
+                  <p className="text-sm text-muted-foreground">
+                    {ti('notInstalledOnServer')}
+                  </p>
+                )}
               {/* Install/Uninstall action */}
               <div className="flex justify-end">
                 {detail.summary.installPolicy === 'INSTALLED_BY_DEFAULT' ? (

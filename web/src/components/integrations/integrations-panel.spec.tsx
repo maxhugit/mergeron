@@ -360,3 +360,55 @@ it('loads advanced settings on demand after MCP and retains the draft across tab
   expect(source).toBeVisible();
   expect(source).toHaveValue('byparr');
 });
+
+it('labels a remote plugin missing its local bundle and offers installation in its detail', async () => {
+  const remotePlugin = {
+    ...plugin,
+    source: { type: 'remote' },
+    installed: false,
+    enabled: false,
+  };
+  const original = get.getMockImplementation()!;
+  get.mockImplementation((options, ...rest) => {
+    if (options.url === '/api/plugins')
+      return Promise.resolve({
+        data: {
+          ...plugins,
+          marketplaces: [
+            {
+              name: 'remote',
+              path: null,
+              interface: null,
+              plugins: [remotePlugin],
+            },
+          ],
+        },
+      }) as never;
+    if (options.url === '/api/plugins/detail')
+      return Promise.resolve({
+        data: {
+          plugin: {
+            summary: remotePlugin,
+            marketplaceName: 'remote',
+            marketplacePath: null,
+            description: 'Gmail local installation',
+            skills: [],
+            apps: [],
+            mcpServers: [],
+          },
+        },
+      }) as never;
+    return original(options, ...rest);
+  });
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: 'Catalog' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+  const dialog = await screen.findByRole('dialog');
+  await waitFor(() =>
+    expect(dialog).toHaveTextContent('Not installed on this server'),
+  );
+  expect(screen.getByRole('button', { name: 'Install' })).toBeEnabled();
+  expect(
+    screen.queryByRole('button', { name: 'Uninstall' }),
+  ).not.toBeInTheDocument();
+});

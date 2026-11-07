@@ -134,7 +134,12 @@ export function PluginsTab({ catalogOnly = false }: { catalogOnly?: boolean }) {
         'success',
       );
     },
-    onError: (err) => showSnackbar(getApiErrorMessage(err), 'error'),
+    onError: (err) => {
+      // Native installation can materialize a bundle before the remote mutation
+      // fails. Re-read the real state without claiming that it succeeded.
+      invalidateAll();
+      showSnackbar(getApiErrorMessage(err), 'error');
+    },
   });
 
   const uninstallMutation = useMutation({

@@ -47,6 +47,15 @@ fenêtres modales.
 
 - **Plugins** : « Installés et intégrés » consulte `plugin/installed` ; les vues
   « En vedette » et « Catalogue » demandent `plugin/list` uniquement à l’ouverture.
+  Pour un plugin distant, l’état « Installé » nécessite une version du paquet
+  matérialisée sur ce serveur (`localVersion`) ; l’installation déclarée sur le
+  compte OpenAI seule ne suffit pas. Les plugins intégrés restent identifiés
+  séparément. La fiche et le catalogue utilisent la même règle. Pour installer,
+  Mergeron résout le nom du catalogue vers `remotePluginId` avant d’appeler
+  `plugin/install`. Si cet identifiant manque, aucune installation n’est tentée.
+  Après un échec, les inventaires sont actualisés : un téléchargement local
+  peut avoir eu lieu avant le refus de l’étape distante.
+
 - **Applications** : « Connectées » consulte `app/installed`, l’instantané du
   runtime. Il peut être vide avant le premier chargement des outils ; le bouton
   « Actualiser les connexions » demande explicitement `forceRefresh`. Le
