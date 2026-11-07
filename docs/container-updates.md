@@ -2,7 +2,7 @@
 
 Le tableau des composants est un inventaire en lecture seule : il ne propose plus de sélection ni de mise à jour individuelle. **Mettre à jour Mergeron** demande au backend de relire les images disponibles et de construire le plan global, avec les empreintes immuables vérifiées pour la plateforme installée. Une détection incomplète bloque le plan ; les images envoyées par le navigateur ne choisissent pas son contenu.
 
-Le plan conserve la confirmation, la politique de sauvegarde sélectionnée, les contrôles d’adoption, de santé et le retour arrière existants. Le Manager démarre les services dans l’ordre sortie réseau, navigateur, application, ingress ; le suivi indépendant et le remplacement supervisé du Manager sont développés séparément.
+Le plan conserve la confirmation, la politique de sauvegarde sélectionnée, les contrôles d’adoption, de santé et le retour arrière existants. Le Manager démarre les services dans l’ordre sortie réseau, navigateur, application, ingress ; le suivi HTTP indépendant reste servi par les relais permanents et le Manager compatible est remplacé par un auxiliaire supervisé. Voir [l’architecture](architecture.md) et [le suivi continu](continuous-updates.md).
 
 ## Sources et limites
 
@@ -81,16 +81,19 @@ des différences : aucun historique de sécurité ou d’améliorations n’est 
 
 L’interface prépare le plan existant avec
 `images: { [componentId]: "repository@sha256:…" }`, puis transmet le fingerprint
-vérifié et la confirmation du plan : `UPDATE_WITHOUT_DATA_BACKUP` en Dev,
-`UPDATE_WITH_ROLLBACK` en production. Une modification d’état entre
+vérifié et la confirmation du plan : `UPDATE_WITHOUT_DATA_BACKUP` sans sauvegarde de données,
+`UPDATE_WITH_ROLLBACK` avec sauvegarde complète ou minimale. Le choix enregistré
+de sauvegarde est utilisé par le processus, indépendamment du canal dev ou prod. Une modification d’état entre
 préparation et application invalide le plan. La détection ne crée pas de nouvelle
 voie d’exécution et ne modifie pas les règles d’autorisation du Manager.
 
 Le workflow principal publie une image navigateur immuable puis ses tags publics
 uniquement après validation des sources et analyse de vulnérabilités. Pour
 bénéficier de cette fonctionnalité, mettre à jour **le Manager et l’application**.
-Le Manager lui-même reste mis à jour par l’hôte ; il n’essaye pas de se remplacer
-pendant sa propre transaction.
+Avec le suivi indépendant activé, un Manager compatible peut être remplacé par
+un auxiliaire externe à son propre processus, après validation applicative. La
+première activation d’un ancien Manager et la maintenance des relais permanents
+restent des opérations contrôlées sur l’hôte ; voir le [fonctionnement détaillé](continuous-updates.md).
 
 ## Délais et résultat incertain
 

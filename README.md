@@ -12,6 +12,7 @@ d’utilisation, installation, administration, architecture et références tech
 
 - [Utiliser Mergeron et son guide intégré](docs/guide-utilisateur.md).
 - [Installer Mergeron](docs/installation.md).
+- [Architecture, relais d’accès web et mises à jour](docs/architecture.md).
 - [Administrer, mettre à jour et dépanner](docs/README.md#installer-et-exploiter-sur-docker).
 - [Développer et comprendre les mécanismes internes](docs/README.md#développement-et-sécurité).
 - [Comprendre les répertoires du code](#répertoires-du-dépôt).
