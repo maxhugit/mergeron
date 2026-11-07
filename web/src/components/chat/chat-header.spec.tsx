@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatHeader } from './chat-header';
@@ -69,11 +69,17 @@ describe('ChatHeader', () => {
 
   it.each(['mobile', 'tablet', 'desktop'] as const)(
     'keeps the explicit refresh button available on %s',
-    (breakpoint) => {
+    async (breakpoint) => {
       vi.mocked(useBreakpoint).mockReturnValue(breakpoint);
       renderHeader();
+      if (breakpoint !== 'desktop') {
+        expect(
+          screen.queryByRole('button', { name: 'Refresh the app' }),
+        ).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      }
       expect(
-        screen.getByRole('button', { name: 'Refresh the app' }),
+        await screen.findByRole('button', { name: 'Refresh the app' }),
       ).toBeEnabled();
     },
   );

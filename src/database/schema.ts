@@ -624,6 +624,19 @@ export const personNavigationPreferences = sqliteTable(
   },
 );
 
+/** Personal display choices by viewport class, excluded from shared people exports. */
+export const personDisplayPreferences = sqliteTable(
+  'person_display_preferences',
+  {
+    personId: text('person_id')
+      .primaryKey()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    mobile: integer('mobile').notNull().default(100),
+    tablet: integer('tablet').notNull().default(100),
+    desktop: integer('desktop').notNull().default(100),
+  },
+);
+
 /** Local credentials are optional and kept separate from the person profile. */
 export const localAuthCredentials = sqliteTable(
   'local_auth_credentials',

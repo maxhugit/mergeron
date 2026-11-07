@@ -121,7 +121,7 @@
             "title": "Find your way around",
             "paragraphs": [
               "The sidebar lists projects and their resources. Collapsing it frees space without deleting anything. Agent tabs switch between the conversation and open tools.",
-              "The account menu contains personal preferences and sign-out. Server administration is separate from project settings.",
+              "The account menu contains personal preferences and sign-out. On mobile and tablet, the … menu groups connection status, the Codex account quota, app refresh and administrator settings. Quota percentage is separate from conversation context. Text size ranges from 80 to 150% and is saved in your profile separately for mobile (below 640 px), tablet (640–1,023 px) and desktop (1,024 px and above). It is also available in account Appearance. Server administration is separate from project settings.",
               "The Platform guide provides a chapter tree and local article search without querying your project data. On mobile, Contents opens navigation. Related articles, Previous and Next keep you in the guide; Copy link shares a direct link to an article."
             ]
           },

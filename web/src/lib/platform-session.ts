@@ -30,6 +30,7 @@ export interface PlatformSession {
   email?: string;
   theme?: string;
   language?: string;
+  textSizes?: Record<'mobile' | 'tablet' | 'desktop', number>;
   fastNavigationProjectId?: string | null;
   impersonation?: {
     sessionId: string;

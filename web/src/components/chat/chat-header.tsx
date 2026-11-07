@@ -1,3 +1,4 @@
+import { CompactHeaderControls } from './compact-header-controls';
 import { translationKey } from '@/locales/translation-key';
 import { BrandIcon } from '@/components/brand-icon';
 import { PwaInstall } from '@/components/pwa-install';
@@ -6,7 +7,6 @@ import { useState } from 'react';
 import {
   Check,
   Edit3,
-  EllipsisVertical,
   Menu,
   MonitorCog,
   Network,
@@ -23,11 +23,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import {
   Tooltip,
   TooltipContent,
@@ -76,44 +71,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-
-/** Mobile overflow menu — closes after each action. */
-function MobileOverflowMenu({
-  onSettings,
-  t,
-}: {
-  onSettings: () => void;
-  t: (key: string) => string;
-}) {
-  const [open, setOpen] = useState(false);
-  const act = (fn: () => void) => {
-    fn();
-    setOpen(false);
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-9 w-9"
-          aria-label={t('moreActions')}
-        >
-          <EllipsisVertical className="h-5 w-5" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" side="bottom" className="w-48 p-1">
-        <button
-          type="button"
-          onClick={() => act(onSettings)}
-          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent"
-        >
-          <MonitorCog className="h-4 w-4" /> {t('platformSettings')}
-        </button>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export function ChatHeader() {
   const session = usePlatformSession();
@@ -369,25 +326,30 @@ export function ChatHeader() {
             </h1>
           )}
         </div>
-        {/* Always visible badges */}
-        <McpStatusBadge mode="header" />
-        <span className="hidden sm:inline-flex">
-          <AccountRateLimitBadge />
-        </span>
-        <Badge
-          variant={connected ? 'default' : 'secondary'}
-          className="text-xs transition-colors duration-300"
-        >
-          <span
-            className={`inline-block h-1.5 w-1.5 rounded-full sm:mr-1.5 ${
-              connected ? 'animate-pulse bg-green-400' : 'bg-muted-foreground'
-            }`}
-          />
-          <span className="hidden sm:inline">
-            {connected ? t('connected') : t('disconnected')}
-          </span>
-        </Badge>
-
+        {/* Full-size controls stay inline on desktop. */}
+        {isDesktop && (
+          <>
+            <McpStatusBadge mode="header" />
+            <span className="hidden sm:inline-flex">
+              <AccountRateLimitBadge />
+            </span>
+            <Badge
+              variant={connected ? 'default' : 'secondary'}
+              className="text-xs transition-colors duration-300"
+            >
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full sm:mr-1.5 ${
+                  connected
+                    ? 'animate-pulse bg-green-400'
+                    : 'bg-muted-foreground'
+                }`}
+              />
+              <span className="hidden sm:inline">
+                {connected ? t('connected') : t('disconnected')}
+              </span>
+            </Badge>
+          </>
+        )}
         {/* Desktop: inline action buttons */}
         {isDesktop ? (
           <>
@@ -408,14 +370,14 @@ export function ChatHeader() {
               </Tooltip>
             )}
           </>
-        ) : isAdministrator ? (
-          /* Mobile/Tablet: overflow menu popover */
-          <MobileOverflowMenu
+        ) : (
+          <CompactHeaderControls
+            connected={connected}
+            isAdministrator={isAdministrator}
             onSettings={() => void navigate({ to: '/settings' })}
-            t={t}
           />
-        ) : null}
-        <ReloadApplicationButton />
+        )}
+        {isDesktop && <ReloadApplicationButton />}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

@@ -29,8 +29,13 @@ function periodLabel(windowDurationMins: number | null): string {
   return 'Limite longue durée';
 }
 
-export function AccountRateLimitBadge() {
+export function AccountRateLimitBadge({
+  showUnavailable = false,
+}: {
+  showUnavailable?: boolean;
+}) {
   const { t } = useTranslation();
+  const { t: th } = useTranslation('headerControls');
   const setAccount = useAccountStore((s) => s.setAccount);
   const setRateLimits = useAccountStore((s) => s.setRateLimits);
   const storedAccount = useAccountStore((s) => s.account);
@@ -67,7 +72,18 @@ export function AccountRateLimitBadge() {
     if (rateLimitsQuery.data) setRateLimits(rateLimitsQuery.data);
   }, [rateLimitsQuery.data, setRateLimits]);
 
-  if (!isChatGpt) return null;
+  if (!isChatGpt)
+    return showUnavailable ? (
+      <p role="status" className="text-xs text-muted-foreground">
+        {th(
+          accountQuery.isPending
+            ? 'quotaLoading'
+            : accountQuery.isError
+              ? 'quotaUnavailable'
+              : 'quotaNotApplicable',
+        )}
+      </p>
+    ) : null;
 
   const response = storedRateLimits ?? rateLimitsQuery.data;
   const snapshot = response?.rateLimits;
@@ -75,7 +91,11 @@ export function AccountRateLimitBadge() {
   const secondary = snapshot?.secondary;
   const credits = snapshot?.credits;
   if (!primary && !secondary && !credits?.hasCredits && !credits?.unlimited)
-    return null;
+    return showUnavailable ? (
+      <p role="status" className="text-xs text-muted-foreground">
+        {th(rateLimitsQuery.isPending ? 'quotaLoading' : 'quotaUnavailable')}
+      </p>
+    ) : null;
 
   const used = primary ? Math.round(primary.usedPercent) : null;
   const variant = used !== null && used >= 90 ? 'destructive' : 'secondary';

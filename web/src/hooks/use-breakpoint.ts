@@ -24,24 +24,18 @@ function resolve(tablet: boolean, desktop: boolean): Breakpoint {
 // Module-level singletons — shared across all hook consumers.
 let tabletMql: MediaQueryList | null = null;
 let desktopMql: MediaQueryList | null = null;
-let currentBreakpoint: Breakpoint = 'desktop'; // SSR-safe default
 
 function ensureMql() {
   if (tabletMql) return;
   tabletMql = window.matchMedia(TABLET_QUERY);
   desktopMql = window.matchMedia(DESKTOP_QUERY);
-  currentBreakpoint = resolve(tabletMql.matches, desktopMql.matches);
 }
 
 function subscribe(onStoreChange: () => void): () => void {
   ensureMql();
-  const handler = () => {
-    const next = resolve(tabletMql!.matches, desktopMql!.matches);
-    if (next !== currentBreakpoint) {
-      currentBreakpoint = next;
-      onStoreChange();
-    }
-  };
+  // Every subscriber must be notified. A shared equality gate lets the first
+  // listener update the cached value and silently skips all other consumers.
+  const handler = () => onStoreChange();
   tabletMql!.addEventListener('change', handler);
   desktopMql!.addEventListener('change', handler);
   return () => {
@@ -52,7 +46,8 @@ function subscribe(onStoreChange: () => void): () => void {
 
 function getSnapshot(): Breakpoint {
   ensureMql();
-  return currentBreakpoint;
+  // Read the media queries afresh even after a period with no subscribers.
+  return resolve(tabletMql!.matches, desktopMql!.matches);
 }
 
 function getServerSnapshot(): Breakpoint {

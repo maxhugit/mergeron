@@ -121,7 +121,7 @@
             "title": "Se déplacer dans l’application",
             "paragraphs": [
               "La barre latérale donne accès aux projets et à leurs ressources. Le bouton de réduction libère de la place sans supprimer les éléments. Les onglets d’un agent permettent de passer entre conversation et outils ouverts.",
-              "Le menu du compte contient les préférences personnelles et la déconnexion. L’administration serveur est distincte des paramètres d’un projet.",
+              "Le menu du compte contient les préférences personnelles et la déconnexion. Sur mobile et tablette, le menu … regroupe la connexion, le quota du compte Codex, l’actualisation et les paramètres administrateur. Le pourcentage du quota est distinct du contexte de la conversation. La taille du texte se règle de 80 à 150 % et est conservée dans le profil, séparément pour mobile (moins de 640 px), tablette (640 à 1 023 px) et ordinateur (à partir de 1 024 px). Elle reste aussi accessible dans Apparence du compte. L’administration serveur est distincte des paramètres d’un projet.",
               "Le Guide de la plateforme propose un sommaire par chapitres et une recherche locale dans les articles, sans interroger les données de vos projets. Sur mobile, Sommaire affiche la navigation. Les liens Voir aussi, Précédent et Suivant conservent la lecture dans le guide ; Copier le lien permet de partager directement un article."
             ]
           },
