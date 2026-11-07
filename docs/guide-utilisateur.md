@@ -159,3 +159,7 @@ une sauvegarde indépendante. Sa récupération ne restaure pas automatiquement
 les enregistrements documentaires. Le manuel distingue cette opération de la
 restauration de versions de document et des sauvegardes de l’installation.
 Les exemples ne contiennent ni compte, ni chemin de projet réel, ni secret.
+
+## Paramètres du projet
+
+Les articles `first-project`, `project-people`, `agent-knowledge` et `agent-preview` décrivent les sept onglets, leurs sous-onglets et les propositions affichées directement. La [correspondance des champs et actions](interface-parametres-projet.md) sert à vérifier les évolutions de cette interface.

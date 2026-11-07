@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -94,10 +95,10 @@ function setup(revision = 'revision-1', unsaved = false) {
   );
 }
 async function open() {
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Review proposal' }),
-  );
   await screen.findByLabelText('Proposed content');
+  expect(
+    screen.queryByRole('button', { name: 'Review proposal' }),
+  ).not.toBeInTheDocument();
 }
 
 it('shows before/after and source, without applying before an explicit acceptance', async () => {
@@ -171,5 +172,47 @@ it('keeps unsaved manual knowledge drafts from being overwritten by acceptance',
   await open();
   expect(
     screen.getByRole('button', { name: 'Accept and apply' }),
+  ).toBeDisabled();
+});
+
+it('expands every proposal and keeps independent drafts when another proposal is edited', async () => {
+  const first = structuredClone(proposal);
+  const second = {
+    ...structuredClone(proposal),
+    id: 'p2',
+    title: 'Second decision',
+  };
+  api.mockImplementation(async (path: string) =>
+    path.includes('?offset=')
+      ? { proposals: [first, second], nextOffset: null }
+      : path.endsWith('/p2')
+        ? second
+        : first,
+  );
+  setup();
+  await waitFor(() =>
+    expect(screen.getAllByLabelText('Proposed content')).toHaveLength(2),
+  );
+  const firstCard = within(screen.getByRole('article', { name: first.title }));
+  const secondCard = within(
+    screen.getByRole('article', { name: second.title }),
+  );
+  fireEvent.change(firstCard.getByLabelText('Proposed content'), {
+    target: { value: 'First draft' },
+  });
+  fireEvent.change(secondCard.getByLabelText('Proposed content'), {
+    target: { value: 'Second draft' },
+  });
+  expect(firstCard.getByLabelText('Proposed content')).toHaveValue(
+    'First draft',
+  );
+  expect(secondCard.getByLabelText('Proposed content')).toHaveValue(
+    'Second draft',
+  );
+  expect(
+    firstCard.getByRole('button', { name: 'Accept and apply' }),
+  ).toBeDisabled();
+  expect(
+    secondCard.getByRole('button', { name: 'Accept and apply' }),
   ).toBeDisabled();
 });

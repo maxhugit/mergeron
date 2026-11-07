@@ -293,9 +293,7 @@ test('project profile supports generic runtimes and preserves masked settings on
   ).toHaveValue('hot');
   const body = document.body;
   expect(body.scrollWidth).toBeLessThanOrEqual(390);
-  fireEvent.click(
-    screen.getByText('Configuration avancée : variables et services de test'),
-  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Configuration avancée' }));
   expect(
     screen.getByLabelText('Variables de l’application (objet JSON)'),
   ).toHaveValue(JSON.stringify({ TEST_KEY: '[stored]' }, null, 2));

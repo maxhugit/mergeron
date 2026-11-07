@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { ProjectLocationsIntro } from './project-locations-intro';
 import { ProjectBrowserSettings } from './project-browser-settings';
 import { lazy, Suspense } from 'react';
@@ -21,6 +21,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { PeopleManager } from './people-manager';
 import { ProjectPeopleConfigurationPanel } from './project-people-configuration';
+import { ProjectPanelNavigation } from './project-panel-navigation';
+import {
+  SettingsPanel,
+  SettingsPanelActions,
+} from '@/components/settings/settings-panel';
 import { ProjectKnowledgePanel } from './project-knowledge-panel';
 import {
   WorkspaceCreationDialog,
@@ -62,10 +67,16 @@ export function ProjectSettingsPanel({
   canManageParticipants: boolean;
 }) {
   const { t } = useTranslation();
+  const panelId = useId();
   const session = usePlatformSession();
   const client = useQueryClient();
   const [workspaceCreationOpen, setWorkspaceCreationOpen] = useState(false);
   const [error, setError] = useState('');
+  const [agentTab, setAgentTab] = useState('configuration');
+  const [integrationTab, setIntegrationTab] = useState('mcp');
+  const [peopleTab, setPeopleTab] = useState('organization');
+  const [workspaceTab, setWorkspaceTab] = useState('local');
+  const [knowledgeFile, setKnowledgeFile] = useState('AGENTS.md');
   const [mcpServerIds, setMcpServerIds] = useState<string[]>(
     project.mcpServerIds ?? [],
   );
@@ -179,31 +190,98 @@ export function ProjectSettingsPanel({
     saveApps.isPending ||
     saveAgentSettings.isPending;
 
+  const agentItems = [
+    { id: 'configuration', label: 'agentConfiguration' },
+    { id: 'memory', label: 'sharedProjectKnowledge' },
+    ...(session.isAdministrator
+      ? [
+          { id: 'proposals', label: 'memoryProposals' },
+          { id: 'integrations', label: 'projectIntegrations' },
+        ]
+      : []),
+  ];
+  const navigation =
+    section === 'agents' ? (
+      <>
+        <ProjectPanelNavigation
+          contentId={panelId}
+          label={t('agentManagement')}
+          value={agentTab}
+          onChange={setAgentTab}
+          items={agentItems}
+        />
+        {agentTab === 'memory' && (
+          <ProjectPanelNavigation
+            contentId={panelId}
+            label={t('sharedProjectKnowledge')}
+            value={knowledgeFile}
+            onChange={setKnowledgeFile}
+            items={[
+              { id: 'AGENTS.md', label: 'sharedInstructions' },
+              { id: 'CONNAISSANCES.md', label: 'projectKnowledge' },
+              { id: 'DECISIONS.md', label: 'projectDecisions' },
+            ]}
+          />
+        )}
+        {agentTab === 'integrations' && (
+          <ProjectPanelNavigation
+            contentId={panelId}
+            label={t('projectIntegrations')}
+            value={integrationTab}
+            onChange={setIntegrationTab}
+            items={[
+              { id: 'mcp', label: 'mcpConnectors' },
+              { id: 'apps', label: 'applications' },
+            ]}
+          />
+        )}
+      </>
+    ) : section === 'participants' ? (
+      <ProjectPanelNavigation
+        contentId={panelId}
+        label={t('people')}
+        value={peopleTab}
+        onChange={setPeopleTab}
+        items={[
+          { id: 'organization', label: 'projectOrganization' },
+          { id: 'participants', label: 'projectParticipants' },
+        ]}
+      />
+    ) : section === 'workspaces' ? (
+      <ProjectPanelNavigation
+        contentId={panelId}
+        label={t('manageWorkspaces')}
+        value={workspaceTab}
+        onChange={setWorkspaceTab}
+        items={[
+          { id: 'local', label: 'projectWorkspaces' },
+          { id: 'external', label: 'externalResources' },
+        ]}
+      />
+    ) : undefined;
+  if (section === 'browser')
+    return <ProjectBrowserSettings key={project.id} project={project} />;
+  if (section === 'preview')
+    return (
+      <Suspense fallback={<p>{t('loading')}</p>}>
+        <ProjectPreviewSettings projectId={project.id} />
+      </Suspense>
+    );
+  const sameIds = (left: string[], right: string[]) =>
+    left.length === right.length && left.every((id) => right.includes(id));
   return (
     <>
-      <div className="space-y-6 rounded-xl border bg-card p-5">
-        {section === 'browser' && (
-          <ProjectBrowserSettings key={project.id} project={project} />
-        )}
-        {section === 'preview' && (
-          <Suspense fallback={<p>{t('loading')}</p>}>
-            <ProjectPreviewSettings projectId={project.id} />
-          </Suspense>
-        )}
+      <SettingsPanel
+        navigation={navigation}
+        contentId={panelId}
+        labelledBy={`${panelId}-${section === 'agents' ? agentTab : section === 'participants' ? peopleTab : workspaceTab}`}
+      >
         {section === 'agents' && (
           <>
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <Bot className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-semibold">{t('agentManagement')}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t('configureAgentsKnowledgeAndIntegrationsForThisProject')}
-                </p>
-              </div>
-            </div>
-            <section className="space-y-4 rounded-lg border p-4">
+            <section
+              hidden={agentTab !== 'configuration'}
+              className="space-y-4"
+            >
               <div>
                 <h3 className="font-semibold">{t('agentConfiguration')}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -262,7 +340,19 @@ export function ProjectSettingsPanel({
                 </label>
               </div>
               {session.isAdministrator && (
-                <div className="flex justify-end">
+                <SettingsPanelActions active={agentTab === 'configuration'}>
+                  <Button
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => {
+                      setAgentModel(project.agentModel ?? '');
+                      setAgentReasoningEffort(
+                        project.agentReasoningEffort ?? '',
+                      );
+                    }}
+                  >
+                    {t('cancel')}
+                  </Button>
                   <Button
                     disabled={
                       pending ||
@@ -279,14 +369,17 @@ export function ProjectSettingsPanel({
                     )}
                     {t('save')}
                   </Button>
-                </div>
+                </SettingsPanelActions>
               )}
             </section>
 
-            <section className="rounded-lg border p-4">
+            <section hidden={!['memory', 'proposals'].includes(agentTab)}>
               <ProjectKnowledgePanel
                 projectId={project.id}
                 readOnly={!session.isAdministrator}
+                active={['memory', 'proposals'].includes(agentTab)}
+                view={agentTab === 'proposals' ? 'proposals' : 'memory'}
+                selectedFile={knowledgeFile}
               />
             </section>
           </>
@@ -294,121 +387,139 @@ export function ProjectSettingsPanel({
 
         {section === 'workspaces' && (
           <section className="space-y-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">{t('manageWorkspaces')}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t(
-                    'thePrimaryWorkspaceIsPermanentAddOrDetachSecondaryWorkspacesWithoutDeletingThei69867b01',
-                  )}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                disabled={pending}
-                onClick={() => setWorkspaceCreationOpen(true)}
-              >
-                <FolderPlus className="h-4 w-4" />
-                {t('addAWorkspace')}
-              </Button>
-            </div>
-            <ProjectLocationsIntro />
-            {project.workspaces.map((workspace) => {
-              const agents = (project.agentThreads ?? []).filter(
-                (thread) => thread.workspacePath === workspace.path,
-              );
-              return (
-                <div
-                  key={workspace.id}
-                  className="space-y-3 rounded-lg border p-3"
-                >
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-40 flex-1">
-                      <div className="flex items-center gap-2 font-medium">
-                        <span className="truncate">{workspace.name}</span>
-                        <Badge variant="secondary">
-                          {t(
-                            workspace.primary
-                              ? 'primaryWorkspace'
-                              : 'secondaryWorkspace',
-                          )}
-                        </Badge>
-                      </div>
-                      <div
-                        className="truncate font-mono text-[11px] text-muted-foreground"
-                        title={workspace.path}
-                      >
-                        {workspace.path}
-                      </div>
-                    </div>
-                    {!workspace.primary && (
-                      <div className="flex flex-wrap gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          disabled={pending}
-                          onClick={() => detachWorkspace.mutate(workspace.id)}
-                        >
-                          <Unlink className="h-3.5 w-3.5" />
-                          {t('detach')}
-                        </Button>
-                      </div>
+            <div hidden={workspaceTab !== 'local'} className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">{t('manageWorkspaces')}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t(
+                      'thePrimaryWorkspaceIsPermanentAddOrDetachSecondaryWorkspacesWithoutDeletingThei69867b01',
                     )}
-                  </div>
-                  <div className="ml-7 space-y-1.5 border-l pl-3">
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {t('associatedConversations')} ({agents.length})
-                    </div>
-                    {agents.length === 0 ? (
-                      <p className="text-xs italic text-muted-foreground">
-                        {t('noAssociatedConversation')}
-                      </p>
-                    ) : (
-                      agents.map((thread) => (
-                        <div
-                          key={thread.threadId}
-                          className="flex min-w-0 items-center gap-2 text-xs"
-                        >
-                          <Bot className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{thread.title}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  </p>
                 </div>
-              );
-            })}
-            <ExternalWorkspaceResources
-              project={project}
-              pending={pending}
-              allowCreate={false}
-            />
+                <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => setWorkspaceCreationOpen(true)}
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  {t('addAWorkspace')}
+                </Button>
+              </div>
+              <ProjectLocationsIntro />
+              {project.workspaces.map((workspace) => {
+                const agents = (project.agentThreads ?? []).filter(
+                  (thread) => thread.workspacePath === workspace.path,
+                );
+                return (
+                  <div
+                    key={workspace.id}
+                    className="space-y-3 rounded-lg border p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-40 flex-1">
+                        <div className="flex items-center gap-2 font-medium">
+                          <span className="truncate">{workspace.name}</span>
+                          <Badge variant="secondary">
+                            {t(
+                              workspace.primary
+                                ? 'primaryWorkspace'
+                                : 'secondaryWorkspace',
+                            )}
+                          </Badge>
+                        </div>
+                        <div
+                          className="truncate font-mono text-[11px] text-muted-foreground"
+                          title={workspace.path}
+                        >
+                          {workspace.path}
+                        </div>
+                      </div>
+                      {!workspace.primary && (
+                        <div className="flex flex-wrap gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            disabled={pending}
+                            onClick={() => detachWorkspace.mutate(workspace.id)}
+                          >
+                            <Unlink className="h-3.5 w-3.5" />
+                            {t('detach')}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-7 space-y-1.5 border-l pl-3">
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {t('associatedConversations')} ({agents.length})
+                      </div>
+                      {agents.length === 0 ? (
+                        <p className="text-xs italic text-muted-foreground">
+                          {t('noAssociatedConversation')}
+                        </p>
+                      ) : (
+                        agents.map((thread) => (
+                          <div
+                            key={thread.threadId}
+                            className="flex min-w-0 items-center gap-2 text-xs"
+                          >
+                            <Bot className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{thread.title}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div hidden={workspaceTab !== 'external'}>
+              <div className="mb-4 flex justify-end">
+                <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => setWorkspaceCreationOpen(true)}
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  {t('addAWorkspace')}
+                </Button>
+              </div>
+              <ExternalWorkspaceResources
+                project={project}
+                pending={pending}
+                allowCreate={false}
+              />
+            </div>
           </section>
         )}
 
         {section === 'participants' && (
           <div className="space-y-6">
-            <ProjectPeopleConfigurationPanel
-              projectId={project.id}
-              readOnly={!canManageParticipants}
-            />
-            <PeopleManager
-              projectId={project.id}
-              readOnly={!canManageParticipants}
-            />
+            <div hidden={peopleTab !== 'organization'}>
+              <ProjectPeopleConfigurationPanel
+                projectId={project.id}
+                readOnly={!canManageParticipants}
+              />
+            </div>
+            <div hidden={peopleTab !== 'participants'}>
+              <PeopleManager
+                projectId={project.id}
+                readOnly={!canManageParticipants}
+              />
+            </div>
           </div>
         )}
         {section === 'agents' && session.isAdministrator && (
-          <section className="space-y-6 rounded-lg border p-4">
+          <section hidden={agentTab !== 'integrations'} className="space-y-6">
             <div>
               <h3 className="font-semibold">{t('projectIntegrations')}</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 {t('selectTheToolsAndApplicationsAvailableToProjectAgents')}
               </p>
             </div>
-            <div className="space-y-4">
+            <div hidden={integrationTab !== 'mcp'} className="space-y-4">
               <div>
                 <h3 className="font-semibold">{t('mcpConnectors')}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -466,9 +577,22 @@ export function ProjectSettingsPanel({
                   })}
                 </div>
               )}
-              <div className="flex justify-end">
+              <SettingsPanelActions
+                active={agentTab === 'integrations' && integrationTab === 'mcp'}
+              >
                 <Button
-                  disabled={pending || mcpServers.isPending}
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => setMcpServerIds(project.mcpServerIds ?? [])}
+                >
+                  {t('cancel')}
+                </Button>
+                <Button
+                  disabled={
+                    pending ||
+                    mcpServers.isPending ||
+                    sameIds(mcpServerIds, project.mcpServerIds ?? [])
+                  }
                   onClick={() => saveMcpServers.mutate(mcpServerIds)}
                 >
                   {saveMcpServers.isPending ? (
@@ -478,10 +602,10 @@ export function ProjectSettingsPanel({
                   )}
                   {t('save')}
                 </Button>
-              </div>
+              </SettingsPanelActions>
             </div>
 
-            <div className="space-y-4 border-t pt-6">
+            <div hidden={integrationTab !== 'apps'} className="space-y-4">
               <div>
                 <h3 className="font-semibold">{t('applications')}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -535,9 +659,24 @@ export function ProjectSettingsPanel({
                   })}
                 </div>
               )}
-              <div className="flex justify-end">
+              <SettingsPanelActions
+                active={
+                  agentTab === 'integrations' && integrationTab === 'apps'
+                }
+              >
                 <Button
-                  disabled={pending || apps.isPending}
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => setAppIds(project.appIds ?? [])}
+                >
+                  {t('cancel')}
+                </Button>
+                <Button
+                  disabled={
+                    pending ||
+                    apps.isPending ||
+                    sameIds(appIds, project.appIds ?? [])
+                  }
                   onClick={() => saveApps.mutate(appIds)}
                 >
                   {saveApps.isPending ? (
@@ -547,7 +686,7 @@ export function ProjectSettingsPanel({
                   )}
                   {t('save')}
                 </Button>
-              </div>
+              </SettingsPanelActions>
             </div>
           </section>
         )}
@@ -556,7 +695,7 @@ export function ProjectSettingsPanel({
             {error}
           </p>
         )}
-      </div>
+      </SettingsPanel>
       {workspaceCreationOpen && (
         <WorkspaceCreationDialog
           open

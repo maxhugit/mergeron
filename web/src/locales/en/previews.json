@@ -104,5 +104,8 @@
   "never": "Never",
   "legacyLifetime": "{{minutes}} minutes (legacy value)",
   "applyLifetime": "Apply duration",
-  "lifetimeHelp": "Duration starts at launch or when this change is applied. Changing it does not restart the environment. “Never” disables automatic shutdown."
+  "lifetimeHelp": "Duration starts at launch or when this change is applied. Changing it does not restart the environment. “Never” disables automatic shutdown.",
+  "executionTab": "Execution",
+  "resourcesTab": "Resources and lifetime",
+  "advancedTab": "Advanced configuration"
 }
