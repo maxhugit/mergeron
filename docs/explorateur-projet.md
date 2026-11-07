@@ -32,6 +32,9 @@ reste refusé ; choisir une référence ne donne aucun droit supplémentaire.
 
 ## Organisation physique, version 4
 
+Dans l’onglet **Dossiers**, la remontée s’arrête à la racine affichée du dossier
+du projet. Le bouton de remontée y est désactivé ; les sous-dossiers restent navigables.
+
 ```text
 /workspaces/<projet>/
 ├── AGENTS.md
