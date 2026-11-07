@@ -38,6 +38,60 @@ export async function runManagerReplacement({
         socketPath: '/manager-run/manager.sock',
         stack: job.stack,
       }));
+  // Cleanup is deliberately outside rollback: success is durable before deletion.
+  // Only the exact stopped original recorded by this replacement is eligible.
+  const cleanupSuccessfulManager = async () => {
+    if (job.cleanupStatus === 'complete') return;
+    try {
+      const currentOperation = JSON.parse(
+        await readFile(join(directory, 'updates', 'transaction.json'), 'utf8'),
+      );
+      if (
+        currentOperation.id !== job.operationId ||
+        currentOperation.status !== 'succeeded'
+      )
+        throw new Error('updateReplacementOperationChanged');
+      const active = await docker.inspectContainer(job.candidateId);
+      if (
+        active.Name !== '/' + job.stack + '-manager' ||
+        active.Image !== job.targetImageId ||
+        active.Config.Labels?.['io.mergeron.replacement'] !== id ||
+        replacementFingerprint(active.HostConfig) !==
+          replacementFingerprint(job.original.HostConfig) ||
+        !active.State.Running ||
+        active.State.Health?.Status !== 'healthy' ||
+        !(await readinessProbe()).healthy
+      )
+        throw new Error('updateManagerCleanupNotReady');
+      let old;
+      try {
+        old = await docker.inspectContainer(job.originalId);
+      } catch (error) {
+        if (error.statusCode !== 404) throw error;
+      }
+      if (old) {
+        if (
+          old.Id === active.Id ||
+          old.State.Running ||
+          old.Name !== '/' + job.stack + '-manager-previous-' + id ||
+          old.Image !== job.original.Image ||
+          replacementFingerprint(old.HostConfig) !==
+            replacementFingerprint(job.original.HostConfig) ||
+          replacementFingerprint(old.Config.Labels) !==
+            replacementFingerprint(job.original.Labels)
+        )
+          throw new Error('updateManagerCleanupIdentityChanged');
+        // DockerClient enforces force=false and v=false: never delete volumes.
+        await docker.removeContainer(old.Id);
+      }
+      job.cleanupStatus = 'complete';
+      await saveReplacement(path, job);
+    } catch {
+      job.cleanupStatus = 'pending';
+      await saveReplacement(path, job).catch(() => {});
+      console.error('updateManagerCleanupDeferred');
+    }
+  };
   if (['cancelled'].includes(job.stage)) return job;
   let operation;
   if (['succeeded', 'rolledBack', 'recoveryRequired'].includes(job.stage)) {
@@ -45,6 +99,7 @@ export async function runManagerReplacement({
       await readFile(join(directory, 'updates', 'transaction.json'), 'utf8'),
     );
     if (operation.id !== job.operationId) return job;
+    if (job.stage === 'succeeded') await cleanupSuccessfulManager();
     await publishMonitor(join(directory, 'maintenance'), {
       ...operation,
       managerPending: false,
@@ -180,8 +235,6 @@ export async function runManagerReplacement({
     if (!healthy) throw new Error('updateManagerHealthTimeout');
     job.stage = 'succeeded';
     await saveReplacement(path, job);
-    await publish('complete', 'succeeded');
-    return job;
   } catch {
     if (!job.originalTouched) {
       job.stage = 'recoveryRequired';
@@ -226,13 +279,19 @@ export async function runManagerReplacement({
     }
     return job;
   }
+  await cleanupSuccessfulManager();
+  await publish('complete', 'succeeded');
+  return job;
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    await runManagerReplacement({
+    const result = await runManagerReplacement({
       docker: new DockerClient(),
       id: process.argv[2],
     });
+    // The existing on-failure helper policy retries deferred cleanup (max 3 restarts).
+    if (result.stage === 'succeeded' && result.cleanupStatus === 'pending')
+      process.exitCode = 1;
   } catch {
     console.error('updateManagerReplacementFailed');
     process.exitCode = 1;
