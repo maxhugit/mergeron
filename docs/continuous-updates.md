@@ -130,3 +130,23 @@ Pendant une vérification d’identité ou une reconnexion de transport, la vue 
 reconnexion continue d’afficher cette page avec son cookie limité au suivi.
 Elle ne rétablit aucun droit applicatif, ne fait pas de requête protégée et ne
 remplace jamais un refus d’accès ou un changement d’identité.
+
+## Noms des relais permanents
+
+Les deux conteneurs `mergeron-dev-acces-web-1` et `mergeron-dev-acces-web-2`
+(ou le préfixe de la stack concernée) sont actifs en permanence : ils assurent
+l’accès HTTP normal et le suivi pendant les mises à jour. Ce ne sont pas des
+conteneurs de sauvegarde. Les numéros distinguent deux répliques équivalentes,
+pas un serveur principal et un serveur de secours.
+
+Les anciennes installations `*-update-gateway-a/b` restent reconnues par
+l’installateur sans duplication ni renommage implicite. Pour les renommer,
+exécuter explicitement `manager/scripts/rename-http-relays.mjs` avec les mêmes
+arguments `--stack`, `--hostname`, `--image`, `--state-root`, `--network` et
+`--proxy-directory` que l’installation. Conserver l’image immuable déjà utilisée.
+
+Le script vérifie les protections et la santé des deux répliques, fait pointer
+le proxy vers leurs IP inchangées, puis attend une confirmation HTTPS de la
+nouvelle configuration avant le renommage Docker. Il rétablit ensuite le routage
+par les nouveaux noms. Aucun conteneur n’est arrêté ou recréé. Un échec du
+routage final rétablit d’abord le routage par IP avant de restaurer les noms.

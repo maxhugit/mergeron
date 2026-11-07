@@ -63,7 +63,10 @@ export function gatewaySpecification({
     NetworkingConfig: { EndpointsConfig: { [network]: {} } },
   };
 }
-export function gatewayRouting({ stack, hostname }) {
+export function gatewayRouting(
+  { stack, hostname },
+  names = ['1', '2'].map((slot) => `${stack}-acces-web-${slot}`),
+) {
   return {
     http: {
       routers: {
@@ -104,8 +107,8 @@ export function gatewayRouting({ stack, hostname }) {
               interval: '2s',
               timeout: '1s',
             },
-            servers: ['a', 'b'].map((slot) => ({
-              url: `http://${stack}-update-gateway-${slot}:8080`,
+            servers: names.map((name) => ({
+              url: `http://${name}:8080`,
             })),
           },
         },
@@ -117,11 +120,17 @@ export async function installGateways(config, docker = new DockerClient()) {
   const spec = gatewaySpecification(config);
   const directory = join(config.stateRoot, 'manager-state', 'maintenance');
   await mkdir(directory, { recursive: true, mode: 0o755 });
-  for (const slot of ['a', 'b']) {
-    const name = `${config.stack}-update-gateway-${slot}`;
-    const existing = (await docker.listContainers()).find((c) =>
-      c.Names.includes('/' + name),
-    );
+  const names = [];
+  for (const [index, slot] of ['a', 'b'].entries()) {
+    const preferred = `${config.stack}-acces-web-${index + 1}`;
+    const legacy = `${config.stack}-update-gateway-${slot}`;
+    const containers = await docker.listContainers();
+    const existing =
+      containers.find((c) => c.Names.includes('/' + preferred)) ??
+      containers.find((c) => c.Names.includes('/' + legacy));
+    // Existing routing must remain valid until an explicit, verified rename.
+    const name = existing?.Names.includes('/' + legacy) ? legacy : preferred;
+    names.push(name);
     if (existing) {
       const old = await docker.inspectContainer(existing.Id);
       if (
@@ -170,7 +179,7 @@ export async function installGateways(config, docker = new DockerClient()) {
       resolve(config.proxyDirectory),
       `${config.stack}-continuous.yml`,
     );
-    const text = JSON.stringify(gatewayRouting(config), null, 2) + '\n';
+    const text = JSON.stringify(gatewayRouting(config, names), null, 2) + '\n';
     try {
       const old = await readFile(path, 'utf8');
       await writeFile(path + '.previous', old, { mode: 0o600 });
