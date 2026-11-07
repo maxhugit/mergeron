@@ -1,3 +1,4 @@
+import { MockupCard } from '@/components/mockups/mockup-card';
 /**
  * Renders a single AI turn as a unified block.
  * Contains all items (reasoning, tool calls, messages) under one avatar.
@@ -108,7 +109,11 @@ function ItemBody({
     case 'mcpToolCall':
       return (
         <>
-          <ToolCallItem item={item} />
+          {item.mockupReference && !item.failed && threadId ? (
+            <MockupCard reference={item.mockupReference} threadId={threadId} />
+          ) : (
+            <ToolCallItem item={item} />
+          )}
           {inputCard}
         </>
       );

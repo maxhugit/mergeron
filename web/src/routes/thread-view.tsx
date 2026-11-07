@@ -57,6 +57,11 @@ import { getAgentFilesStore } from '@/stores/files-store';
 import { FileBrowserContext } from '@/components/files/file-browser-context';
 import { usePlatformSession } from '@/lib/platform-session';
 import { PreviewLinkContext } from '@/lib/preview-link-context';
+const MockupPanel = lazy(() =>
+  import('@/components/mockups/mockup-panel').then((m) => ({
+    default: m.MockupPanel,
+  })),
+);
 const BrowserSidebar = lazy(() =>
   import('@/components/chat/browser-sidebar').then((module) => ({
     default: module.BrowserSidebar,
@@ -423,21 +428,30 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
                     <div
                       role="tabpanel"
                       aria-label={
-                        tab.kind === 'file' ||
-                        tab.kind === 'git-diff' ||
-                        tab.kind === 'git-remote-file'
-                          ? tab.path
-                          : tab.kind === 'git-graph'
-                            ? tab.name
-                            : tab.kind === 'preview'
-                              ? t('title', { ns: 'previews' })
-                              : t('terminal')
+                        tab.kind === 'mockup'
+                          ? tab.reference.title
+                          : tab.kind === 'file' ||
+                              tab.kind === 'git-diff' ||
+                              tab.kind === 'git-remote-file'
+                            ? tab.path
+                            : tab.kind === 'git-graph'
+                              ? tab.name
+                              : tab.kind === 'preview'
+                                ? t('title', { ns: 'previews' })
+                                : t('terminal')
                       }
                       className="absolute inset-0 flex min-h-0 flex-col"
                       inert={!active}
                       style={{ visibility: active ? 'visible' : 'hidden' }}
                     >
-                      {tab.kind === 'preview' ? (
+                      {tab.kind === 'mockup' ? (
+                        <Suspense fallback={null}>
+                          <MockupPanel
+                            reference={tab.reference}
+                            active={active}
+                          />
+                        </Suspense>
+                      ) : tab.kind === 'preview' ? (
                         <Suspense fallback={null}>
                           <AgentPreviewPanel
                             projectId={tab.projectId}

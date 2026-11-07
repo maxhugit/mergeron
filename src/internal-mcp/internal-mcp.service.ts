@@ -350,6 +350,15 @@ export class InternalMcpService implements OnModuleDestroy {
             const code =
               error instanceof Error &&
               [
+                'MOCKUP_IDENTITY_REQUIRED',
+                'MOCKUP_NOT_FOUND',
+                'MOCKUP_REVISION_NOT_FOUND',
+                'MOCKUP_REVISION_CONFLICT',
+                'MOCKUP_REQUEST_CONFLICT',
+                'MOCKUP_PUBLICATION_UNCONFIRMED',
+                'MOCKUP_SIZE_LIMIT',
+                'MOCKUP_QUOTA_EXCEEDED',
+                'MOCKUP_INVALID_REQUEST',
                 'NO_ACTIVE_TURN',
                 'READ_ONLY',
                 'RATE_LIMIT',

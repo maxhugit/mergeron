@@ -1,3 +1,4 @@
+import type { MockupReference } from '@/lib/mockups';
 /** Internal, display-oriented timeline model shared by live and persisted history. */
 
 export type TurnPlanStepStatus = 'pending' | 'inProgress' | 'completed';
@@ -65,6 +66,7 @@ export interface AgentMessageTurnItem extends TurnItemBase {
 }
 
 export interface McpToolCallTurnItem extends TurnItemBase {
+  mockupReference?: MockupReference;
   type: 'mcpToolCall';
   content: string;
   toolName: string;
@@ -215,7 +217,11 @@ export interface ImageGenerationTurnItem extends TurnItemBase {
   hasUnpreviewableResult: boolean;
   transparentBackground: boolean | null;
   savedPath: string | null;
-  failure: { type: string; limitId: string | null; resetsAt: number | null } | null;
+  failure: {
+    type: string;
+    limitId: string | null;
+    resetsAt: number | null;
+  } | null;
 }
 
 /** Safe fallback produced by the normalizer for a future protocol variant. */
@@ -256,7 +262,12 @@ export interface TurnFailure {
 
 /** A user message, system message, structured failure, or full AI turn. */
 export type TimelineEntry =
-  | { kind: 'interaction'; requestId: string; instanceId: string; turnId?: string }
+  | {
+      kind: 'interaction';
+      requestId: string;
+      instanceId: string;
+      turnId?: string;
+    }
   | {
       kind: 'user';
       content: string;

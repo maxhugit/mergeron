@@ -1921,3 +1921,43 @@ export const personAgentDocumentViews = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.personId, table.threadId] })],
 );
+
+/** Conversation drafts, not retained documents. Publication uses deliverable documents. */
+export const conversationMockups = sqliteTable(
+  'conversation_mockups',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => projectAgentThreads.threadId, { onDelete: 'cascade' }),
+    currentRevision: text('current_revision').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    index('idx_mockups_conversation').on(table.projectId, table.threadId),
+  ],
+);
+export const conversationMockupRevisions = sqliteTable(
+  'conversation_mockup_revisions',
+  {
+    id: text('id').primaryKey(),
+    mockupId: text('mockup_id')
+      .notNull()
+      .references(() => conversationMockups.id, { onDelete: 'cascade' }),
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    html: text('html').notNull(),
+    bytes: integer('bytes').notNull(),
+    authorPersonId: text('author_person_id').references(() => people.id, {
+      onDelete: 'set null',
+    }),
+    authorName: text('author_name').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('uidx_mockup_revision_number').on(table.mockupId, table.number),
+  ],
+);

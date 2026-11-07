@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maquette — exemple</title><style>
+*{box-sizing:border-box}body{margin:0;padding:24px;font:16px system-ui,sans-serif;background:#f1f5f9;color:#172033}main{max-width:960px;margin:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px}section{background:white;padding:20px;border-radius:12px}button{padding:12px;border:0;border-radius:8px;background:#1d4ed8;color:white;cursor:pointer}button:focus-visible{outline:3px solid #eab308;outline-offset:3px}.notice{border-left:4px solid #1d4ed8;padding:12px;background:#dbeafe}
+</style></head><body><main><h1>Tableau de bord — maquette</h1><p class="notice">Données et actions simulées. Aucune opération réelle.</p><div class="grid"><section><h2>Demandes</h2><p>12 éléments fictifs</p><button type="button" id="demo">Simuler la validation</button><p id="feedback" role="status" aria-live="polite"></p></section><section><h2>Prochaine étape</h2><p>Donnez vos retours dans la conversation pour demander une nouvelle révision.</p></section></div></main><script>
+const state=window.mergeronMockup?.getState();
+function feedback(){document.getElementById('feedback').textContent='Validation simulée : aucune donnée modifiée.'}
+if(state && state.confirmed===true) feedback();
+document.getElementById('demo').addEventListener('click',()=>{feedback();window.mergeronMockup?.setState({confirmed:true})});
+</script></body></html>

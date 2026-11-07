@@ -59,6 +59,8 @@ export function WorkspaceControls({
   const terminals = useTerminalStore((s) => s.terminals);
   const [chooser, setChooser] = useState(false);
   const label = (tab: WorkspaceTab) => {
+    if (tab.kind === 'mockup')
+      return `${tab.reference.title} · v${tab.reference.number}`;
     if (tab.kind === 'preview') return t('title', { ns: 'previews' });
     if (tab.kind === 'browser')
       return `${tb(tab.mode === 'local' ? 'localTitle' : 'title')} ${tab.number ?? 1}`;
@@ -79,21 +81,23 @@ export function WorkspaceControls({
   };
   const selected = workspace.tabs.find((tab) => tab.id === workspace.activeId);
   const closeLabel = (tab: WorkspaceTab) =>
-    tab.kind === 'preview'
-      ? t('closeTab', { ns: 'previews' })
-      : tab.kind === 'browser'
-        ? tb('close')
-        : tab.kind === 'git-remote-file'
-          ? tw('gitCloseRemoteFile', { name: tab.path })
-          : tab.kind === 'git-graph'
-            ? tw('gitCloseGraph')
-            : tab.kind === 'git-diff'
-              ? tw('gitCloseDiff', { name: tab.path })
-              : t(
-                  translationKey(
-                    tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
-                  ),
-                );
+    tab.kind === 'mockup'
+      ? t('close', { ns: 'mockups' })
+      : tab.kind === 'preview'
+        ? t('closeTab', { ns: 'previews' })
+        : tab.kind === 'browser'
+          ? tb('close')
+          : tab.kind === 'git-remote-file'
+            ? tw('gitCloseRemoteFile', { name: tab.path })
+            : tab.kind === 'git-graph'
+              ? tw('gitCloseGraph')
+              : tab.kind === 'git-diff'
+                ? tw('gitCloseDiff', { name: tab.path })
+                : t(
+                    translationKey(
+                      tab.kind === 'terminal' ? 'closeTerminal' : 'Close file',
+                    ),
+                  );
   const choose = (id: string) => {
     onSelect(id);
     setChooser(false);
@@ -205,7 +209,9 @@ export function WorkspaceControls({
                   }}
                   className="flex min-w-0 items-center gap-2 px-3 text-xs"
                 >
-                  {tab.kind === 'preview' ? (
+                  {tab.kind === 'mockup' ? (
+                    <FileCode className="h-3.5 w-3.5 shrink-0" />
+                  ) : tab.kind === 'preview' ? (
                     <FlaskConical className="h-3.5 w-3.5 shrink-0" />
                   ) : tab.kind === 'browser' ? (
                     <Globe className="h-3.5 w-3.5 shrink-0" />
