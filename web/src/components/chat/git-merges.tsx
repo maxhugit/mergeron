@@ -1,3 +1,4 @@
+import { useContext, useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Ban,
@@ -5,12 +6,14 @@ import {
   CircleHelp,
   CircleX,
   Clock3,
+  ChevronDown,
   ExternalLink,
   GitMerge,
   Loader2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { SurfaceActivityContext } from '@/lib/surface-activity';
 import {
   checkTone,
   mergeCheckState,
@@ -46,18 +49,18 @@ export function GitMergeIndicator({
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className="flex min-w-0 items-center gap-3 py-1"
+      className="flex min-w-0 items-center gap-1 py-1"
       data-merge-state={state}
     >
       <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${checkTone(state)}`}
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${checkTone(state)}`}
       >
         <Icon
-          className={`h-7 w-7 ${state === 'running' ? 'animate-spin motion-reduce:animate-none' : ''}`}
+          className={`h-3.5 w-3.5 ${state === 'running' ? 'animate-spin motion-reduce:animate-none' : ''}`}
           aria-hidden="true"
         />
       </span>
-      <span className="min-w-0 break-words text-sm font-semibold">{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
     </div>
   );
 }
@@ -70,6 +73,8 @@ export function GitMerges({
   resourceId: string;
 }) {
   const { t, i18n } = useTranslation('workspaces');
+  const active = useContext(SurfaceActivityContext);
+  const [page, setPage] = useState(0);
   const query = useQuery({
     queryKey: ['workspace-git-merges', projectId, resourceId],
     queryFn: ({ signal }) =>
@@ -80,14 +85,22 @@ export function GitMerges({
       ),
     refetchInterval: 60000,
     retry: false,
+    enabled: active,
+    refetchOnWindowFocus: false,
   });
+  const pageCount = Math.max(1, Math.ceil((query.data?.items.length ?? 0) / 5));
+  const currentPage = Math.min(page, pageCount - 1);
+  const rows =
+    query.data?.items.slice(currentPage * 5, (currentPage + 1) * 5) ?? [];
   return (
     <section
       aria-label={t('gitTabMerges')}
       data-git-merges
-      className="min-w-0 space-y-3 p-3 text-xs"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden text-xs"
     >
-      <p className="text-muted-foreground">{t('gitMergesHelp')}</p>
+      <p className="shrink-0 px-3 py-2 text-muted-foreground">
+        {t('gitMergesHelp')}
+      </p>
       {query.isPending ? (
         <p role="status">{t('gitLoading')}</p>
       ) : query.isError ? (
@@ -105,7 +118,7 @@ export function GitMerges({
         <p>{t('gitProviderUnsupported')}</p>
       ) : (
         <>
-          <p className="text-muted-foreground">
+          <p className="shrink-0 px-3 pb-2 text-muted-foreground">
             {t('gitRemoteObserved', {
               date: new Date(query.data.inspectedAt).toLocaleString(
                 i18n.language,
@@ -113,15 +126,39 @@ export function GitMerges({
             })}
           </p>
           {query.data.items.length === 0 && <p>{t('gitNoMerges')}</p>}
-          {query.data.items.map((merge, index) => (
-            <MergedPullRequest
-              key={merge.number}
-              projectId={projectId}
-              resourceId={resourceId}
-              merge={merge}
-              expanded={index === 0}
-            />
-          ))}
+          {pageCount > 1 && (
+            <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={currentPage === 0}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                {t('gitPrPrevious')}
+              </Button>
+              <span>
+                {currentPage + 1} / {pageCount}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={currentPage + 1 >= pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                {t('gitPrNext')}
+              </Button>
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            {rows.map((merge) => (
+              <MergedPullRequest
+                key={merge.number}
+                projectId={projectId}
+                resourceId={resourceId}
+                merge={merge}
+              />
+            ))}
+          </div>
           {query.data.limited && <p>{t('gitMergesLimited')}</p>}
         </>
       )}
@@ -133,14 +170,15 @@ function MergedPullRequest({
   projectId,
   resourceId,
   merge,
-  expanded,
 }: {
   projectId: string;
   resourceId: string;
   merge: GitMerges['items'][number];
-  expanded: boolean;
 }) {
   const { t, i18n } = useTranslation('workspaces');
+  const active = useContext(SurfaceActivityContext);
+  const [expanded, setExpanded] = useState(false);
+  const detailId = useId();
   const query = useQuery({
     queryKey: ['workspace-git-merges', projectId, resourceId, merge.number],
     queryFn: ({ signal }) =>
@@ -152,6 +190,8 @@ function MergedPullRequest({
     refetchInterval: 30000,
     staleTime: 15000,
     retry: false,
+    enabled: active,
+    refetchOnWindowFocus: false,
   });
   const states = {
     passed: t('gitMergeChecksPassed'),
@@ -178,100 +218,142 @@ function MergedPullRequest({
     action_required: t('gitCheckActionRequired'),
     stale: t('gitCheckStale'),
   };
-  const state = query.data ? mergeCheckState(query.data) : 'unknown';
+  const state = query.isError
+    ? 'unknown'
+    : query.data
+      ? mergeCheckState(query.data)
+      : 'unknown';
   return (
-    <article className="min-w-0 space-y-2 rounded-md border p-3">
-      <h3 className="flex items-start gap-2 font-medium">
-        <GitMerge
-          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400"
-          aria-hidden="true"
-        />
-        <a
-          href={merge.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="min-w-0 break-words hover:underline"
+    <article
+      className={`relative min-w-0 rounded-lg p-2 after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:border-b after:border-border/60 last:after:hidden ${expanded ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50'}`}
+    >
+      <div className="h-28 min-w-0" data-merge-summary>
+        <button
+          type="button"
+          className="mb-2 flex h-8 w-full cursor-pointer items-start gap-2 text-left font-medium"
+          title={`#${merge.number} ${merge.title}`}
+          aria-label={`#${merge.number} ${merge.title}`}
+          aria-expanded={expanded}
+          aria-controls={detailId}
+          onClick={() => setExpanded(!expanded)}
         >
-          #{merge.number} {merge.title}
-        </a>
-      </h3>
-      <p className="break-all text-muted-foreground">
-        {merge.branch} → {merge.base}
-      </p>
-      <p className="text-muted-foreground">
-        {t('gitMergedOn', {
-          date: new Date(merge.mergedAt).toLocaleString(i18n.language),
-        })}
-      </p>
-      {query.isPending ? (
-        <p role="status" className="flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {t('gitLoading')}
+          <GitMerge
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400"
+            aria-hidden="true"
+          />
+          <span className="line-clamp-2 min-w-0 flex-1 break-words leading-4">
+            #{merge.number} {merge.title}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          />
+        </button>
+        <GitMergeIndicator
+          state={state}
+          label={
+            query.isPending
+              ? t('gitLoading')
+              : query.isError
+                ? t('gitCheckUnknown')
+                : states[state]
+          }
+        />
+        <p className="truncate text-muted-foreground">
+          {t('gitMergedOn', {
+            date: new Date(merge.mergedAt).toLocaleString(i18n.language),
+          })}
         </p>
-      ) : query.isError ? (
-        <div role="alert">
-          <p className="text-destructive">{t('gitMergeChecksError')}</p>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => void query.refetch()}
+      </div>
+      {expanded && (
+        <section
+          id={detailId}
+          aria-label={`#${merge.number} ${merge.title}`}
+          className="mt-2 space-y-3 border-t pt-3"
+        >
+          <h3 className="break-words font-medium">{merge.title}</h3>
+          <p className="break-all text-muted-foreground">
+            {merge.branch} → {merge.base}
+          </p>
+          <a
+            href={merge.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-primary underline"
           >
-            {t('gitRetry')}
-          </Button>
-        </div>
-      ) : (
-        query.data && (
-          <>
-            <GitMergeIndicator state={state} label={states[state]} />
-            {query.data.workflows && (
-              <WorkflowRuns workflows={query.data.workflows} />
-            )}
-            <p className="break-all font-mono text-muted-foreground">
-              {t('gitMergeCommit', { sha: query.data.head.slice(0, 7) })}
+            {t('gitPrViewGithub')}
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+          </a>
+          {query.isPending ? (
+            <p role="status" className="flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {t('gitLoading')}
             </p>
-            {query.data.items.length > 0 && (
-              <details open={expanded} className="min-w-0">
-                <summary className="cursor-pointer py-1 font-medium">
-                  {t('gitMergeJobs', { count: query.data.items.length })}
-                </summary>
-                <ul className="mt-2 space-y-2">
-                  {query.data.items.map((check) => (
-                    <li
-                      key={check.id}
-                      className="flex min-w-0 items-start justify-between gap-2"
-                    >
-                      <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-                        {check.name}
-                      </span>
-                      <span
-                        className={`max-w-[45%] shrink-0 rounded px-1.5 py-0.5 text-[10px] ${checkTone(check.status)}`}
-                      >
-                        {statusLabels[check.status] ?? t('gitCheckUnknown')}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-            {query.data.limited && <p>{t('gitLimited')}</p>}
-            <a
-              href={query.data.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-primary underline"
-            >
-              {t('gitMergeOpenChecks')}
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-            </a>
-            <p className="text-muted-foreground">
-              {t('gitRemoteObserved', {
-                date: new Date(query.data.inspectedAt).toLocaleTimeString(
-                  i18n.language,
-                ),
-              })}
-            </p>
-          </>
-        )
+          ) : query.isError ? (
+            <div role="alert">
+              <p className="text-destructive">{t('gitMergeChecksError')}</p>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void query.refetch()}
+              >
+                {t('gitRetry')}
+              </Button>
+            </div>
+          ) : (
+            query.data && (
+              <>
+                {query.data.workflows && (
+                  <WorkflowRuns workflows={query.data.workflows} />
+                )}
+                <p className="break-all font-mono text-muted-foreground">
+                  {t('gitMergeCommit', { sha: query.data.head.slice(0, 7) })}
+                </p>
+                {query.data.items.length > 0 && (
+                  <details open className="min-w-0">
+                    <summary className="cursor-pointer py-1 font-medium">
+                      {t('gitMergeJobs', { count: query.data.items.length })}
+                    </summary>
+                    <ul className="mt-2 space-y-2">
+                      {query.data.items.map((check) => (
+                        <li
+                          key={check.id}
+                          className="flex min-w-0 items-start justify-between gap-2"
+                        >
+                          <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                            {check.name}
+                          </span>
+                          <span
+                            className={`max-w-[45%] shrink-0 rounded px-1.5 py-0.5 text-[10px] ${checkTone(check.status)}`}
+                          >
+                            {statusLabels[check.status] ?? t('gitCheckUnknown')}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                {query.data.limited && <p>{t('gitLimited')}</p>}
+                <a
+                  href={query.data.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary underline"
+                >
+                  {t('gitMergeOpenChecks')}
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+                <p className="text-muted-foreground">
+                  {t('gitRemoteObserved', {
+                    date: new Date(query.data.inspectedAt).toLocaleTimeString(
+                      i18n.language,
+                    ),
+                  })}
+                </p>
+              </>
+            )
+          )}
+        </section>
       )}
     </article>
   );
