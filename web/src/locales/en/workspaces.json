@@ -428,5 +428,10 @@
   "taskCreateOrLinkDeliverable": "Create or link a deliverable",
   "taskFolderOnly": "Without a deliverables manager, only a folder reference is available.",
   "taskReferenceInherited": "The work reference is inherited from the main task.",
-  "taskAgentFolderPreserved": "Agents keep their own folder and history. Incompatible assignments must be removed before changing the reference."
+  "taskAgentFolderPreserved": "Agents keep their own folder and history. Incompatible assignments must be removed before changing the reference.",
+  "taskAgentAssignment": "Agent assignment",
+  "taskSelectExistingAgent": "Choose an existing agent",
+  "taskNoAgentAssignment": "No agent assigned",
+  "taskRemoveAgentAssignment": "Remove assignment",
+  "taskAgentAssignmentHelp": "The assignment is saved with the subtask. It sends no instructions, does not move the agent folder and preserves its history."
 }

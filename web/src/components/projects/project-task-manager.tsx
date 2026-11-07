@@ -75,6 +75,7 @@ type Draft = {
   workspacePath: string;
   referenceType: 'folder' | 'deliverable';
   deliverableId: string;
+  linkedThreadId: string;
   executionMode: 'manual' | 'agent';
   estimateHours: string;
   progress: string;
@@ -138,6 +139,7 @@ const emptyDraft: Draft = {
   workspacePath: '',
   referenceType: 'folder',
   deliverableId: '',
+  linkedThreadId: '',
   executionMode: 'manual',
   estimateHours: '',
   progress: '0',
@@ -317,6 +319,32 @@ export function ProjectTaskManager({
   const client = useQueryClient();
   const newlyCreatedVersions = useRef(new Map<string, number>());
   const launchIds = useRef(new Map<string, string>());
+  const batchRequests = useRef(
+    new Map<string, { body: string; source: string; requestId: string }>(),
+  );
+  const applyBatch = async (
+    kind: string,
+    operations: Array<{
+      type: 'create' | 'update';
+      key?: string;
+      taskId?: string;
+      input: Record<string, unknown>;
+      dependsOnKeys?: string[];
+    }>,
+    source = JSON.stringify(operations),
+  ) => {
+    if (!operations.length) return;
+    const previous = batchRequests.current.get(kind);
+    const retry = previous?.source === source;
+    const body = retry ? previous.body : JSON.stringify(operations);
+    const requestId = retry ? previous.requestId : crypto.randomUUID();
+    batchRequests.current.set(kind, { body, source, requestId });
+    await taskApi(`/${projectId}/resources/${resourceId}/task-batches`, {
+      method: 'POST',
+      body: JSON.stringify({ requestId, operations: JSON.parse(body) }),
+    });
+  };
+
   async function taskApi<T = unknown>(
     path = '',
     init?: RequestInit,
@@ -512,6 +540,7 @@ export function ProjectTaskManager({
         workspacePath: storedWorkspace,
         referenceType: task.workReference?.type ?? 'folder',
         deliverableId: task.workReference?.deliverableId ?? '',
+        linkedThreadId: task.linkedThreadId ?? '',
         executionMode: task.parentTaskId ? task.executionMode : 'manual',
         estimateHours: task.estimateMinutes
           ? String(task.estimateMinutes / 60)
@@ -695,6 +724,7 @@ export function ProjectTaskManager({
       workspacePath: storedWorkspace,
       referenceType: task.workReference?.type ?? 'folder',
       deliverableId: task.workReference?.deliverableId ?? '',
+      linkedThreadId: task.linkedThreadId ?? '',
       executionMode: task.parentTaskId ? task.executionMode : 'manual',
       estimateHours: task.estimateMinutes
         ? String(task.estimateMinutes / 60)
@@ -709,6 +739,9 @@ export function ProjectTaskManager({
     setTaskTab(task.id);
     setTaskOpen(true);
   };
+  const assignableAgents = (projects.data?.projects.find(project=>project.id===projectId)?.agentThreads ?? []).filter(agent =>
+    !agent.archived && !board.tasks.some(task=>task.id!==editing?.id && task.linkedThreadId===agent.threadId) &&
+    !deliverables.data?.deliverables.some(item=>item.primaryTaskId!==draft.parentTaskId && (item.linkedAgentIds ?? (item.conversations??[]).filter(link=>link.type==='agent').map(link=>link.id)).includes(agent.threadId)));
   const payload = () => ({
     ...(editing ? { expectedUpdatedAt: editing.updatedAt } : {}),
     assigneeId: draft.assigneeId || null,
@@ -747,7 +780,12 @@ export function ProjectTaskManager({
       ? null
       : draft.linkedFilePath.trim() || null,
     parentTaskId: draft.parentTaskId || null,
-    ...(draft.parentTaskId ? { subtaskStatus: draft.subtaskStatus } : {}),
+    ...(draft.parentTaskId
+      ? {
+          subtaskStatus: draft.subtaskStatus,
+          linkedThreadId: draft.linkedThreadId || null,
+        }
+      : {}),
     dependencyIds: draft.parentTaskId ? [] : draft.dependencyIds,
   });
   const completeParent = async (parentId: string, statusId: string) => {
@@ -955,6 +993,7 @@ export function ProjectTaskManager({
     await refresh();
   };
   const generatePlan = async () => {
+    batchRequests.current.delete('plan');
     setAiLoading(true);
     setAiError('');
     setAiSuggestions([]);
@@ -1004,6 +1043,7 @@ export function ProjectTaskManager({
     }
   };
   const generateReplan = async () => {
+    batchRequests.current.delete('replan');
     setAiLoading(true);
     setAiError('');
     try {
@@ -1050,23 +1090,23 @@ export function ProjectTaskManager({
     setAiLoading(true);
     setAiError('');
     try {
-      for (const suggestion of replanSuggestions) {
-        if (!selectedReplanTasks.has(suggestion.taskId)) continue;
-        await taskApi(
-          `/${projectId}/resources/${resourceId}/tasks/${suggestion.taskId}`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify({
+      await applyBatch(
+        'replan',
+        replanSuggestions
+          .filter((suggestion) => selectedReplanTasks.has(suggestion.taskId))
+          .map((suggestion) => ({
+            type: 'update',
+            taskId: suggestion.taskId,
+            input: {
               expectedUpdatedAt: suggestion.expectedUpdatedAt,
               priority: suggestion.priority,
               estimateMinutes: Math.round(suggestion.estimateHours * 60),
               startAt: suggestion.startAt,
               dueAt: suggestion.dueAt,
               dependencyIds: suggestion.dependencyIds,
-            }),
           },
+          })),
         );
-      }
       await refresh();
       setAiOpen(false);
       setReplanSuggestions([]);
@@ -1086,7 +1126,7 @@ export function ProjectTaskManager({
         throw new Error(
           'Seules les tâches principales peuvent être créées par la planification.',
         );
-      const created = new Map<string, string>();
+
       const plannedDates = new Map<
         string,
         { startAt: number; dueAt: number }
@@ -1126,37 +1166,22 @@ export function ProjectTaskManager({
       };
       // Planning schedules main tasks only. Subtasks are proposed later from a task.
       for (const suggestion of aiSuggestions) schedule(suggestion);
-      for (const suggestion of aiSuggestions) {
-        const dates = plannedDates.get(suggestion.title)!;
-        const result = await taskApi<{ task: ProjectTaskSummary }>(
-          `/${projectId}/resources/${resourceId}/tasks`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
+      await applyBatch(
+        'plan',
+        aiSuggestions.map((suggestion) => ({
+          type: 'create',
+          key: suggestion.title,
+          dependsOnKeys: suggestion.dependsOnTitles,
+          input: {
               ...suggestion,
               executionMode: 'manual',
               estimateMinutes: Math.round(suggestion.estimateHours * 60),
               workspacePath: board.project.workspacePath,
-              ...dates,
-            }),
+            ...plannedDates.get(suggestion.title)!,
           },
+        })),
+        JSON.stringify(aiSuggestions),
         );
-        created.set(suggestion.title, result.task.id);
-      }
-      for (const suggestion of aiSuggestions) {
-        const id = created.get(suggestion.title);
-        if (!id) continue;
-        await taskApi(`/${projectId}/resources/${resourceId}/tasks/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            parentTaskId: null,
-            executionMode: 'manual',
-            dependencyIds: suggestion.dependsOnTitles
-              .map((title) => created.get(title))
-              .filter(Boolean),
-          }),
-        });
-      }
       await refresh();
       setAiOpen(false);
       setAiSuggestions([]);
@@ -1207,6 +1232,7 @@ export function ProjectTaskManager({
           }),
         },
       );
+      batchRequests.current.delete('subtasks');
       setBreakdownSuggestions(result.tasks);
       if (!result.tasks.length)
         setBreakdownError('L’IA n’a proposé aucune sous-tâche.');
@@ -1227,24 +1253,26 @@ export function ProjectTaskManager({
     setBreakdownLoading(true);
     setBreakdownError('');
     try {
-      for (const suggestion of breakdownSuggestions) {
-        if (!suggestion.title.trim()) continue;
-        await taskApi(`/${projectId}/resources/${resourceId}/tasks`, {
-          method: 'POST',
-          body: JSON.stringify({
+      await applyBatch(
+        'subtasks',
+        breakdownSuggestions
+          .filter((suggestion) => suggestion.title.trim())
+          .map((suggestion, index) => ({
+            type: 'create',
+            key: String(index),
+            input: {
             title: suggestion.title,
             description: suggestion.description,
             priority: suggestion.priority,
             estimateMinutes: Math.round(suggestion.estimateHours * 60),
             validationCriteria: suggestion.validationCriteria,
             parentTaskId: parentId,
-            workspacePath: draft.workspacePath || board.project.workspacePath,
             executionMode: suggestion.executionMode,
             labels: suggestion.labels,
             dependencyIds: [],
-          }),
-        });
-      }
+            },
+          })),
+      );
       await refresh();
       setBreakdownOpen(false);
       setBreakdownSuggestions([]);
@@ -2559,7 +2587,16 @@ export function ProjectTaskManager({
                   )}
               </label>
             )}
-              {editing && ((editing.workReference?.type ?? 'folder') !== draft.referenceType || (draft.referenceType === 'deliverable' && editing.workReference?.deliverableId !== draft.deliverableId)) && <p className="text-xs text-muted-foreground">{launchText('taskAgentFolderPreserved')}</p>}
+              {editing &&
+                ((editing.workReference?.type ?? 'folder') !==
+                  draft.referenceType ||
+                  (draft.referenceType === 'deliverable' &&
+                    editing.workReference?.deliverableId !==
+                      draft.deliverableId)) && (
+                  <p className="text-xs text-muted-foreground">
+                    {launchText('taskAgentFolderPreserved')}
+                  </p>
+                )}
               {!deliverableResource && (
                 <p className="text-xs text-muted-foreground">
                   {launchText('taskFolderOnly')}
@@ -2571,6 +2608,63 @@ export function ProjectTaskManager({
             <p className="text-xs text-muted-foreground">
               {launchText('taskReferenceInherited')}
             </p>
+          )}{' '}
+          {draft.parentTaskId && (
+            <fieldset className="space-y-2 rounded-lg border p-3">
+              <legend className="px-1 text-xs text-muted-foreground">
+                {launchText('taskAgentAssignment')}
+              </legend>
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                {launchText('taskSelectExistingAgent')}
+                <select
+                  aria-label={launchText('taskSelectExistingAgent')}
+                  className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
+                  value={draft.linkedThreadId}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      linkedThreadId: event.target.value,
+                      executionMode: 'agent',
+                    })
+                  }
+                >
+                  <option value="">
+                    {launchText('taskNoAgentAssignment')}
+                  </option>
+                  {draft.linkedThreadId &&
+                    !assignableAgents.some(
+                      (agent) => agent.threadId === draft.linkedThreadId,
+                    ) && (
+                      <option value={draft.linkedThreadId}>
+                        {draft.linkedThreadId}
+                      </option>
+                    )}
+                  {assignableAgents.map((agent) => (
+                    <option key={agent.threadId} value={agent.threadId}>
+                      {agent.title || agent.threadId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {draft.linkedThreadId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      linkedThreadId: '',
+                      executionMode: 'agent',
+                    })
+                  }
+                >
+                  {launchText('taskRemoveAgentAssignment')}
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {launchText('taskAgentAssignmentHelp')}
+              </p>
+            </fieldset>
           )}
             <div
               className={`grid gap-2 ${draft.parentTaskId ? 'grid-cols-1' : 'grid-cols-2'}`}
@@ -2810,13 +2904,13 @@ export function ProjectTaskManager({
               )}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {editing?.parentTaskId && editing.linkedThreadId && (
+            {draft.parentTaskId && draft.linkedThreadId && (
                 <Button
                   variant="outline"
                   onClick={() =>
                     navigate({
                       to: '/t/$threadId',
-                      params: { threadId: editing.linkedThreadId! },
+                    params: { threadId: draft.linkedThreadId },
                     })
                   }
                 >
@@ -2855,7 +2949,7 @@ export function ProjectTaskManager({
                 </Button>
               )}
               {editing &&
-                !editing.linkedThreadId &&
+                !editing.linkedThreadId && !draft.linkedThreadId &&
                 draft.executionMode === 'agent' &&
                 editing.agentState !== 'running' &&
                 editing.agentState !== 'review' && (

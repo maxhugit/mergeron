@@ -1108,6 +1108,13 @@
               "Pour une replanification, examinez les tâches retenues, dates et dépendances puis appliquez seulement les propositions utiles."
             ],
             "warning": "Ces fonctions utilisent le modèle et l’accès API du chat simple. Les dépendances restent entre tâches principales d’un même tableau, sans cycle ; ce n’est pas un ordonnanceur automatique. Une application partiellement échouée peut laisser des changements déjà enregistrés."
+          },
+          {
+            "title": "Enregistrer les propositions ensemble",
+            "paragraphs": [
+              "La création d’un plan, la replanification et la création des sous-tâches proposées par l’IA utilisent un enregistrement groupé. Si une étape est refusée, aucune modification du groupe n’est conservée.",
+              "Après une interruption réseau, relancez la même proposition : sa requête est reconnue et les tâches ne sont pas créées une seconde fois. Générer une nouvelle proposition ou modifier la sélection prépare une nouvelle demande."
+            ]
           }
         ],
         "related": ["task-board", "admin-chat"]
@@ -1141,6 +1148,13 @@
               "La validation d’une sous-tâche avec agent peut supprimer sa conversation liée après contrôle et retirer son lien. La suppression d’une tâche concerne aussi ses enfants et leurs agents associés."
             ],
             "warning": "Conservez les éléments utiles et consultez la conversation avant de valider. Une conversation d’exécution n’est pas un historique permanent garanti."
+          },
+          {
+            "title": "Affecter ou retirer un agent existant",
+            "paragraphs": [
+              "Dans la fiche d’une sous-tâche, Affectation de l’agent permet de choisir une conversation existante ou de retirer son affectation. Enregistrez la fiche pour appliquer le choix. Cela ne lance aucune instruction et ne supprime ni l’agent ni son historique.",
+              "Un agent ne peut être affecté qu’à une sous-tâche et un livrable au maximum. En cas de double affectation, les deux doivent partager la même tâche principale. Un lancement au résultat incertain doit d’abord être résolu avant de changer son affectation."
+            ]
           }
         ],
         "related": ["agent-approvals", "deliverable-agent", "task-board"]

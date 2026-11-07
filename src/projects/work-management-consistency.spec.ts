@@ -1875,3 +1875,135 @@ it('rolls back reference writes when folder registration fails after validation'
     ).toThrow('Registration failed');
     expect(database.db.select().from(projectTasks).all()).toHaveLength(1);
   }));
+
+it('rejects unknown agent states before changing the task', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id),
+      before = task(sub.id);
+    await expect(
+      domain.updateTask('p', 'tasks', sub.id, {
+        agentState: 'not-a-real-state',
+        title: 'Not saved',
+      }),
+    ).rejects.toThrow('Invalid agent state');
+    expect(task(sub.id)).toEqual(before);
+  }));
+
+it('unassigns without deleting the agent and releases only resolved launch reservations', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    startThread.mockResolvedValue({ thread: { id: 'agent' } });
+    const { launch } = recoveryService();
+    await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'first',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    expect(task(sub.id).linkedThreadId).toBe('agent');
+    await domain.updateTask('p', 'tasks', sub.id, {
+      expectedUpdatedAt: task(sub.id).updatedAt,
+      linkedThreadId: null,
+    });
+    expect(task(sub.id).linkedThreadId).toBeNull();
+    expect(
+      database.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, 'agent'))
+        .get(),
+    ).toBeDefined();
+    expect(database.db.select().from(projectAgentLaunches).all()).toHaveLength(
+      1,
+    );
+    expect(
+      database.db.select().from(projectAgentLaunches).all()[0].taskId,
+    ).toBeNull();
+    startTurn.mockRejectedValue(Error('Response lost'));
+    await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'second',
+      expectedUpdatedAt: task(sub.id).updatedAt,
+    });
+    await expect(
+      domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: null }),
+    ).rejects.toThrow('uncertain launch');
+    expect(deletion.deleteThread).not.toHaveBeenCalled();
+  }));
+
+it('applies and replays a whole task batch without duplicating tasks', () =>
+  asAdmin(() => {
+    const body = {
+      requestId: 'stable-batch',
+      operations: [
+        {
+          type: 'create' as const,
+          key: 'a',
+          input: { title: 'First', workspacePath: root },
+        },
+        {
+          type: 'create' as const,
+          key: 'b',
+          dependsOnKeys: ['a'],
+          input: { title: 'Second', workspacePath: root },
+        },
+      ],
+    };
+    const first = domain.applyTaskBatch('p', 'tasks', body);
+    const replay = domain.applyTaskBatch('p', 'tasks', body);
+    expect(first.replayed).toBe(false);
+    expect(replay.replayed).toBe(true);
+    expect(replay.tasks.map((t) => t.id)).toEqual(first.tasks.map((t) => t.id));
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(2);
+    expect(() =>
+      domain.applyTaskBatch('p', 'tasks', {
+        ...body,
+        operations: [
+          { type: 'create', key: 'other', input: { title: 'Other' } },
+        ],
+      }),
+    ).toThrow('another batch');
+  }));
+
+it('rolls back every task and its journal when a batch fails mid-way', () =>
+  asAdmin(() => {
+    expect(() =>
+      domain.applyTaskBatch('p', 'tasks', {
+        requestId: 'failed-create',
+        operations: [
+          {
+            type: 'create',
+            key: 'a',
+            input: { title: 'First', workspacePath: root },
+          },
+          {
+            type: 'create',
+            key: 'b',
+            input: {
+              title: 'Second',
+              workspacePath: path.join(root, 'missing'),
+            },
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+    const main = parent(),
+      other = parent();
+    const before = task(main.id);
+    expect(() =>
+      domain.applyTaskBatch('p', 'tasks', {
+        requestId: 'failed-update',
+        operations: [
+          {
+            type: 'update',
+            taskId: main.id,
+            input: { expectedUpdatedAt: main.updatedAt, title: 'Not saved' },
+          },
+          {
+            type: 'update',
+            taskId: other.id,
+            input: { expectedUpdatedAt: other.updatedAt - 1, title: 'Stale' },
+          },
+        ],
+      }),
+    ).toThrow('changed');
+    expect(task(main.id)).toEqual(before);
+  }));

@@ -24,7 +24,7 @@ import {
   WORKSPACE_LAYOUT_VERSION,
   projectSystemPath,
 } from './workspace-structure';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { identityEvents } from '../auth/identity-events';
 import {
@@ -43,6 +43,7 @@ import {
   projects,
   projectResources,
   projectTasks,
+  projectAgentLaunches,
   projectTaskActivity,
   projectTaskDependencies,
   projectTaskStatuses,
@@ -2015,9 +2016,163 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  // Preserve the asynchronous service contract used by API and internal callers.
+  applyTaskBatch(
+    projectId: string,
+    resourceId: string,
+    input: {
+      requestId: string;
+      operations: Array<
+        | {
+            type: 'create';
+            key: string;
+            input: Parameters<ProjectsService['createTask']>[2];
+            dependsOnKeys?: string[];
+          }
+        | {
+            type: 'update';
+            taskId: string;
+            input: Parameters<ProjectsService['updateTask']>[3];
+          }
+      >;
+    },
+    actor?: ProjectActivityActor,
+  ) {
+    this.getResource(projectId, resourceId);
+    if (
+      !input ||
+      typeof input.requestId !== 'string' ||
+      !input.requestId.trim() ||
+      input.requestId.length > 100 ||
+      !Array.isArray(input.operations) ||
+      !input.operations.length ||
+      input.operations.length > 100
+    )
+      throw new BadRequestException('Invalid task batch');
+    const owner =
+      currentAccess()?.identity.personId ??
+      currentAccess()?.identity.subject ??
+      'system';
+    const id =
+      'task-batch:' +
+      createHash('sha256')
+        .update(JSON.stringify([projectId, resourceId, owner, input.requestId]))
+        .digest('hex');
+    const hash = createHash('sha256')
+      .update(JSON.stringify(input.operations))
+      .digest('hex');
+    const keys = new Set<string>(),
+      updates = new Set<string>();
+    for (const op of input.operations) {
+      if (!op || !op.input || typeof op.input !== 'object')
+        throw new BadRequestException('Invalid batch operation');
+      if (op.type === 'create') {
+        if (
+          typeof op.key !== 'string' ||
+          !op.key.trim() ||
+          keys.has(op.key) ||
+          (op.dependsOnKeys !== undefined &&
+            (!Array.isArray(op.dependsOnKeys) ||
+              op.dependsOnKeys.some((key) => typeof key !== 'string')))
+        )
+          throw new BadRequestException('Invalid or duplicate batch key');
+        keys.add(op.key);
+      } else if (op.type === 'update') {
+        if (
+          typeof op.taskId !== 'string' ||
+          updates.has(op.taskId) ||
+          !Number.isSafeInteger(op.input.expectedUpdatedAt)
+        )
+          throw new BadRequestException(
+            'An observed task revision is required for every batch update',
+          );
+        updates.add(op.taskId);
+      } else throw new BadRequestException('Unknown batch operation');
+    }
+    for (const op of input.operations)
+      if (
+        op.type === 'create' &&
+        op.dependsOnKeys?.some((key) => !keys.has(key))
+      )
+        throw new BadRequestException('Unknown batch dependency');
+    const result = this.db.transaction((tx) => {
+      const prior = tx
+        .select()
+        .from(projectActivity)
+        .where(eq(projectActivity.id, id))
+        .get();
+      if (prior) {
+        if (prior.details.hash !== hash)
+          throw new ConflictException(
+            'This request identifier belongs to another batch',
+          );
+        return { ids: prior.details.taskIds as string[], replayed: true };
+      }
+      const created = new Map<string, string>(),
+        ids: string[] = [];
+      for (const op of input.operations) {
+        const task =
+          op.type === 'create'
+            ? this.createTask(projectId, resourceId, op.input, actor)
+            : this.updateTaskSync(
+                projectId,
+                resourceId,
+                op.taskId,
+                op.input,
+                actor,
+              );
+        ids.push(task.id);
+        if (op.type === 'create') created.set(op.key, task.id);
+      }
+      for (const op of input.operations)
+        if (op.type === 'create' && op.dependsOnKeys?.length) {
+          const task = this.requireTask(resourceId, created.get(op.key)!);
+          this.updateTaskSync(
+            projectId,
+            resourceId,
+            task.id,
+            {
+              expectedUpdatedAt: task.updatedAt,
+              dependencyIds: [
+                ...(op.input.dependencyIds ?? []),
+                ...op.dependsOnKeys.map((key) => created.get(key)!),
+              ],
+            },
+            actor,
+          );
+        }
+      tx.insert(projectActivity)
+        .values({
+          id,
+          projectId,
+          action: 'task_batch_applied',
+          entityType: 'task_batch',
+          entityId: resourceId,
+          label: 'Task batch applied',
+          details: { hash, taskIds: ids },
+          actorPersonId: actor?.personId ?? null,
+          actorName: actor?.name ?? 'Système',
+          createdAt: Date.now(),
+        })
+        .run();
+      return { ids, replayed: false };
+    });
+    return {
+      replayed: result.replayed,
+      tasks: result.ids.map((id) => {
+        const task = this.requireTask(resourceId, id),
+          workReference = taskWorkReference(this.db, task);
+        return { ...task, workspacePath: workReference.path, workReference };
+      }),
+    };
+  }
+
+  // Preserve the public asynchronous contract; batches use the synchronous core.
   // eslint-disable-next-line @typescript-eslint/require-await
-  async updateTask(
+  async updateTask(...args: Parameters<ProjectsService['updateTaskSync']>) {
+    return this.updateTaskSync(...args);
+  }
+
+  private updateTaskSync(
     projectId: string,
     resourceId: string,
     taskId: string,
@@ -2047,11 +2202,48 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       subtaskStatus: string;
     }>,
     actor?: ProjectActivityActor,
-  ): Promise<
-    ProjectTask & { workReference?: ReturnType<typeof taskWorkReference> }
-  > {
+  ): ProjectTask & { workReference?: ReturnType<typeof taskWorkReference> } {
     this.getResource(projectId, resourceId);
     const task = this.requireTask(resourceId, taskId);
+    if (
+      input.agentState !== undefined &&
+      ![
+        'manual',
+        'ready',
+        'running',
+        'waiting',
+        'error',
+        'review',
+        'validated',
+      ].includes(input.agentState)
+    )
+      throw new BadRequestException('Invalid agent state');
+    if (
+      input.linkedThreadId !== undefined &&
+      task.linkedThreadId &&
+      input.linkedThreadId !== task.linkedThreadId
+    ) {
+      requireThreadAccess(task.linkedThreadId);
+      if (
+        this.db
+          .select({ id: projectAgentLaunches.id })
+          .from(projectAgentLaunches)
+          .where(
+            and(
+              eq(projectAgentLaunches.taskId, task.id),
+              inArray(projectAgentLaunches.state, [
+                'pending',
+                'needs_attention',
+              ]),
+            ),
+          )
+          .get()
+      )
+        throw new ConflictException(
+          'Recover the uncertain launch before changing its assignment',
+        );
+    }
+
     if (
       input.expectedUpdatedAt !== undefined &&
       input.expectedUpdatedAt !== task.updatedAt
@@ -2289,6 +2481,13 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       )
     )
       updated.progress = 100;
+    if (
+      input.linkedThreadId !== undefined &&
+      input.linkedThreadId !== task.linkedThreadId &&
+      input.agentState === undefined
+    )
+      updated.agentState =
+        updated.executionMode === 'agent' ? 'ready' : 'manual';
     this.validateTaskDateRange(updated.startAt, updated.dueAt, effectiveParent);
     if (!effectiveParentId) {
       const children = this.db
@@ -2332,6 +2531,24 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           .run().changes
       )
         throw new ConflictException('Task changed. Reload before saving.');
+      if (
+        input.linkedThreadId !== undefined &&
+        task.linkedThreadId &&
+        input.linkedThreadId !== task.linkedThreadId
+      ) {
+        for (const receipt of tx
+          .select()
+          .from(projectAgentLaunches)
+          .where(eq(projectAgentLaunches.taskId, task.id))
+          .all())
+          tx.update(projectAgentLaunches)
+            .set({
+              taskId: null,
+              scope: receipt.scope + ':detached:' + receipt.id,
+            })
+            .where(eq(projectAgentLaunches.id, receipt.id))
+            .run();
+      }
       const changes = this.taskChanges(task, updated);
       if (input.workReference)
         changes.workReference = {

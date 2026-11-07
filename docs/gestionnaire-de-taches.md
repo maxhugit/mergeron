@@ -266,3 +266,13 @@ Les routes du tableau partagent le préfixe
 | `POST /ai-advice`                                    | Obtenir analyse ou sélection de travail           |
 | `POST /tasks/:taskId/ai-subtasks`                    | Proposer un découpage                             |
 | `PATCH /`                                            | Modifier la ressource et ses paramètres           |
+
+## Affectations et enregistrements groupés
+
+Un agent ne peut contribuer explicitement qu’à un livrable et une sous-tâche au maximum. Les contrôles d’unicité sont communs à la création, aux éditions génériques et aux associations ; ils sont revérifiés dans la transaction avant validation, y compris après une préparation asynchrone. Un agent sans titre garde un lien d’ouverture avec un libellé de secours.
+
+Le formulaire d’une sous-tâche permet de choisir un agent existant ou de retirer l’affectation à l’enregistrement, sans exécuter de tour ni supprimer de conversation. Un reçu de lancement encore incertain bloque le changement ; les reçus résolus sont conservés comme historique sans retenir la réservation de la sous-tâche.
+
+`POST /projects/:projectId/resources/:resourceId/task-batches` applique jusqu’à 100 créations/modifications en une transaction synchrone. Chaque modification exige sa révision observée. Les dépendances entre créations utilisent des clés uniques au groupe. Une erreur annule tâches, dépendances, affectations, dossiers actifs et journal du groupe. La validation physique et l’enregistrement du dossier font partie de la transaction de tâche, y compris pour les opérations individuelles.
+
+La requête groupée porte un `requestId`, lié au projet, à la ressource et à l’identité. Un reçu conservé dans le journal reconnaît une répétition identique et retourne les tâches existantes ; réutiliser cet identifiant avec un autre contenu est refusé. L’interface conserve le contenu et l’identifiant lors d’une nouvelle tentative après perte de réponse, puis prépare une nouvelle demande pour une proposition ou une sélection différente.
