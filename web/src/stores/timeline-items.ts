@@ -13,6 +13,7 @@ import {
 } from '../lib/turn-item-merge';
 import { type ThreadRuntimeState } from './timeline-state';
 import { mergePersistedPlan } from './timeline-history-entries';
+import { upsertTimelineUserMessage } from '@/lib/timeline-user-messages';
 
 /** Ensures a turn entry exists in timeline for a given turnId (needed for request-only cards). */
 export function ensureTurnEntry(
@@ -150,25 +151,13 @@ export function applyPersistedItems(
     // Page-local ids must not collide with another turn's fallback ids.
     normalizeThreadItem(item, true, `${turnId}:${index}`),
   );
-  const timeline = [...runtime.timeline];
-  const turnIndex = timeline.findIndex(
-    (entry) => entry.kind === 'turn' && entry.turnId === turnId,
+  const timeline = normalized.reduce(
+    (timeline, item) =>
+      item.kind === 'userMessage'
+        ? upsertTimelineUserMessage(timeline, turnId, item.message)
+        : timeline,
+    runtime.timeline,
   );
-  const user = normalized.find((item) => item.kind === 'userMessage');
-  // A turn adopted after reconnect can also have missed its prompt. Keep the
-  // prompt before its response, preserving any optimistic user row already held.
-  if (
-    turnIndex >= 0 &&
-    user?.kind === 'userMessage' &&
-    !timeline.some((entry) => entry.kind === 'user' && entry.turnId === turnId)
-  ) {
-    timeline.splice(turnIndex, 0, {
-      kind: 'user',
-      turnId,
-      content: user.message.text,
-      ...(user.message.images.length > 0 && { images: user.message.images }),
-    });
-  }
   return {
     ...runtime,
     timeline: timeline.map((entry) => {

@@ -162,6 +162,19 @@ export interface TimelineState {
   hydrateTimeline: (turns: TurnDto[], cwd?: string | null) => void;
   setThreadTitle: (title: string | null) => void;
   addUserMessage: (text: string, images?: string[]) => void;
+  addSteeringMessageForThread: (
+    threadId: string,
+    turnId: string,
+    localId: string,
+    text: string,
+    images: string[],
+  ) => void;
+  rejectSteeringMessageForThread: (threadId: string, localId: string) => void;
+  upsertUserMessageForThread: (
+    threadId: string,
+    turnId: string,
+    message: import('@/lib/thread-item-normalizer').NormalizedUserMessage,
+  ) => void;
   addSystemError: (message: string) => void;
   addSystemMessage: (
     message: string,

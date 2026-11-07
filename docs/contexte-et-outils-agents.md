@@ -2,6 +2,16 @@
 
 ## Fonctionnement
 
+Une instruction envoyée pendant que l’agent travaille apparaît immédiatement
+dans le fil, avec ses éventuelles images, sans démarrer un nouveau tour ni
+interrompre le tour actif. La confirmation native complète cette même entrée ;
+elle n’ajoute pas une seconde copie. Plusieurs instructions identiques restent
+des messages distincts. Le rechargement et la récupération de l’historique
+conservent toutes les instructions d’un tour, pas uniquement la première.
+Une erreur d’envoi reste signalée dans la conversation concernée ; une entrée
+locale non confirmée est retirée. Les contrôles de modification de la question
+initiale ne sont pas proposés sur une instruction complémentaire du même tour.
+
 À chaque échange, un agent de travail reçoit le nom et l’identifiant de son
 projet, le dossier actif et uniquement les identifiants/titres des éléments liés
 à sa conversation (10 maximum de chaque type). Les listes, compteurs, descriptions

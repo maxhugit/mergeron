@@ -271,6 +271,11 @@ export type TimelineEntry =
   | {
       kind: 'user';
       content: string;
+      /** Native message identity: several user items can belong to one turn. */
+      itemId?: string;
+      /** Optimistic submission identity retained until the native echo arrives. */
+      localId?: string;
+      steering?: boolean;
       images?: string[];
       /** Turn this message opened; absent only before `turn/started`. */
       turnId?: string;

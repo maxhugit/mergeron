@@ -42,6 +42,10 @@ export interface NotificationContext {
     itemId: string,
     updater: (existing: TurnItem | undefined) => TurnItem,
   ) => void;
+  upsertUserMessage: (
+    turnId: string,
+    message: import('@/lib/thread-item-normalizer').NormalizedUserMessage,
+  ) => void;
   updateTurnDiff: (turnId: string, diff: string) => void;
   updateTurnPlan: (turnId: string, plan: TurnPlanState) => void;
   appendPlanDelta: (turnId: string, itemId: string, delta: string) => void;

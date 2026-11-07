@@ -64,17 +64,19 @@ export function turnsToTimeline(turns: TurnDto[]): TimelineEntry[] {
       normalizeThreadItem(item, true, `${turn.id}:${index}`),
     );
 
-    const userMsg = normalized.find(
+    const userMessages = normalized.filter(
       (
         item,
       ): item is Extract<ThreadItemNormalization, { kind: 'userMessage' }> =>
         item.kind === 'userMessage',
     );
-    if (userMsg) {
+    for (const [index, userMsg] of userMessages.entries()) {
       entries.push({
         kind: 'user',
         content: userMsg.message.text,
         turnId: turn.id,
+        itemId: userMsg.message.itemId,
+        ...(index > 0 && { steering: true }),
         ...(userMsg.message.images.length > 0 && {
           images: userMsg.message.images,
         }),
