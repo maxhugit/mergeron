@@ -4,14 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ThreadDto } from '@/generated/api';
-import type { SimpleChatThreadSummary } from '@/lib/simple-chat-api';
+
 import type { SidebarView } from './sidebar-types';
 import { workspaceLabel } from './sidebar-types';
 
 interface Props {
   sidebarView: SidebarView;
   threads: ThreadDto[];
-  simpleChats: SimpleChatThreadSummary[];
+
   projectName?: string;
   isLoading: boolean;
   hasPrevious: boolean;
@@ -20,13 +20,12 @@ interface Props {
   onPrevious: () => void;
   onNext: () => void;
   renderThreadRow: (thread: ThreadDto, archived: boolean) => React.ReactNode;
-  renderSimpleChatRow: (thread: SimpleChatThreadSummary) => React.ReactNode;
 }
 
 export function WorkspaceDetail({
   sidebarView,
   threads,
-  simpleChats,
+
   projectName,
   isLoading,
   hasPrevious,
@@ -35,7 +34,6 @@ export function WorkspaceDetail({
   onPrevious,
   onNext,
   renderThreadRow,
-  renderSimpleChatRow,
 }: Props) {
   const { t } = useTranslation();
   const archived = sidebarView.type === 'archivedDetail';
@@ -68,8 +66,7 @@ export function WorkspaceDetail({
         ) : (
           <>
             {threads.map((thread) => renderThreadRow(thread, archived))}
-            {!archived && simpleChats.map(renderSimpleChatRow)}
-            {threads.length === 0 && (archived || simpleChats.length === 0) && (
+            {threads.length === 0 && (
               <p className="px-2 py-8 text-center text-xs text-muted-foreground">
                 {t('noThreadsYet')}
               </p>

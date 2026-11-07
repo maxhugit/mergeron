@@ -15,7 +15,7 @@ import { ProjectKnowledgeController } from '../project-knowledge/project-knowled
 import { DatabaseModule } from '../database/database.module';
 import { FilesModule } from '../files/files.module';
 import { ThreadsModule } from '../threads/threads.module';
-import { SimpleChatModule } from '../simple-chat/simple-chat.module';
+import { ProjectAiService } from './project-ai.service';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { ActiveFoldersModule } from '../active-folders/active-folders.module';
@@ -43,7 +43,6 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     DatabaseModule,
     FilesModule,
     ThreadsModule,
-    SimpleChatModule,
     ProjectKnowledgeModule,
   ],
   controllers: [
@@ -62,6 +61,8 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
   providers: [
     ProjectTaskRuntimeService,
     ProjectAgentLaunchService,
+
+    ProjectAiService,
     PullRequestTrackerService,
     ProjectIntegrityService,
     DocumentLabelsAiAdapter,

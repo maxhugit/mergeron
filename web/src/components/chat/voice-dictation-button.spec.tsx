@@ -1,17 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { VoiceDictationButton } from './voice-dictation-button';
-import { dictationBackend, startCliDictation } from '@/lib/cli-dictation';
+import { startCliDictation } from '@/lib/cli-dictation';
 
 vi.mock('@/lib/cli-dictation', () => ({
-  dictationBackend: vi.fn(),
   startCliDictation: vi.fn(),
 }));
 vi.mock('@/stores/snackbar-store', () => ({ showSnackbar: vi.fn() }));
 
 beforeEach(() => {
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn() } });
-  vi.mocked(dictationBackend).mockResolvedValue('codex');
 });
 afterEach(() => {
   vi.unstubAllGlobals();

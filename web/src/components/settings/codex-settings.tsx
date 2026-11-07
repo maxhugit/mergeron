@@ -35,7 +35,6 @@ import { LocalAgentsSettings } from './local-agents-settings';
 import { CatalogSettings } from './catalog/catalog-settings';
 import { AccountSettings } from './account/account-settings';
 import { CodexCliSettings } from './codex-cli-settings';
-import { SimpleChatSettings } from './simple-chat-settings';
 import { AgentInstructionsSettings } from './agent-instructions-settings';
 import { useAccountStore } from '@/stores/account-store';
 import {
@@ -84,7 +83,6 @@ type CodexSettingsTab =
   | 'local'
   | 'profile'
   | 'model'
-  | 'chatAudio'
   | 'instructions'
   | 'reasoning'
   | 'security'
@@ -97,7 +95,6 @@ const CODEX_SETTINGS_TABS = [
   { id: 'local', label: 'localAgentsTitle', icon: Bot },
   { id: 'profile', label: 'Profile', icon: UserCog },
   { id: 'model', label: 'Model', icon: Bot },
-  { id: 'chatAudio', label: 'chatAudioTitle', icon: Bot },
   { id: 'instructions', label: 'Instructions', icon: FileText },
   { id: 'reasoning', label: 'Reasoning', icon: Brain },
   { id: 'security', label: 'Security', icon: ShieldCheck },
@@ -157,7 +154,7 @@ const isSandboxModeValue = (value: unknown): value is SandboxModeValue =>
 
 export function CodexSettings({
   initialTab = 'account',
-}: { initialTab?: 'account' | 'cli' | 'chatAudio' | 'integrations' } = {}) {
+}: { initialTab?: 'account' | 'cli' | 'integrations' } = {}) {
   const { t, i18n } = useTranslation(['common', 'localAgents'], {
     nsMode: 'fallback',
   });
@@ -189,7 +186,6 @@ export function CodexSettings({
     connected ||
     requestedTab === 'cli' ||
     requestedTab === 'local' ||
-    requestedTab === 'chatAudio' ||
     requestedTab === 'instructions' ||
     requestedTab === 'integrations'
       ? requestedTab
@@ -452,9 +448,7 @@ export function CodexSettings({
     return true;
   });
   const needsStructuredConfig =
-    !['raw', 'account', 'cli', 'local', 'chatAudio', 'integrations'].includes(
-      activeTab,
-    ) &&
+    !['raw', 'account', 'cli', 'local', 'integrations'].includes(activeTab) &&
     !(activeTab === 'instructions' && instructionSection === 'common') &&
     !(activeTab === 'model' && ['catalog', 'json'].includes(modelSection));
   const activeKeys =
@@ -533,7 +527,6 @@ export function CodexSettings({
     cli: 'codexCliOnThisServer',
     local: 'localAgentsTitle',
     profile: 'Active Profile',
-    chatAudio: 'chatAudioTitle',
     reasoning: 'Reasoning',
     security: 'Security',
     raw: 'Raw configuration',
@@ -543,7 +536,6 @@ export function CodexSettings({
     cli: 'codexSettings:panelCliDescription',
     local: 'localAgentsScope',
     profile: 'Switch active configuration profile',
-    chatAudio: 'codexSettings:panelChatDescription',
     reasoning: 'codexSettings:panelReasoningDescription',
     security:
       'defaultsForNewConversationsChangingThemDoesNotAffectAConversationAlreadyOpenUse71a22217',
@@ -594,7 +586,6 @@ export function CodexSettings({
                 id !== 'account' &&
                 id !== 'cli' &&
                 id !== 'local' &&
-                id !== 'chatAudio' &&
                 id !== 'instructions' &&
                 id !== 'integrations' &&
                 !connected
@@ -679,11 +670,7 @@ export function CodexSettings({
                 activeTab === 'instructions' && instructionSection === 'common'
               }
             />
-            {activeTab === 'chatAudio' && (
-              <div>
-                <SimpleChatSettings />
-              </div>
-            )}
+
             {activeTab === 'cli' && (
               <div>
                 <CodexCliSettings />

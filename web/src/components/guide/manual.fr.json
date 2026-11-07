@@ -43,7 +43,7 @@
             "title": "Les éléments de votre travail",
             "paragraphs": [
               "Un projet rassemble ses participants, ses emplacements de fichiers, ses connexions, ses connaissances et ses ressources. L’accueil permet de retrouver vos projets et les éléments qui demandent votre attention.",
-              "Une conversation simple sert à échanger avec un modèle sans exécuter d’outils. Un agent de travail utilise une conversation Codex et peut agir sur des fichiers et outils selon ses autorisations. Une tâche organise le travail ; un livrable rassemble les documents et leur validation."
+              "Un agent de travail utilise Codex CLI ou un moteur local et peut agir sur les fichiers et outils selon ses autorisations. Une tâche organise le travail ; un livrable rassemble les documents et leur validation."
             ]
           },
           {
@@ -67,7 +67,6 @@
         ],
         "related": [
           "first-project",
-          "simple-chat",
           "agent-create",
           "deliverable-lifecycle",
           "report-bug",
@@ -87,7 +86,7 @@
               "Ouvrez le projet, complétez ses informations et ajoutez les participants autorisés.",
               "Dans Emplacements et connexions, vérifiez l’espace de travail principal et ajoutez les dossiers ou connexions nécessaires.",
               "Renseignez les connaissances utiles et sélectionnez les intégrations adaptées au projet.",
-              "Créez une conversation simple pour une question, un agent pour une action, ou un gestionnaire pour organiser tâches et livrables."
+              "Créez un agent pour poser une question ou réaliser un travail, ou un gestionnaire pour organiser les tâches et les livrables."
             ]
           },
           {
@@ -172,7 +171,7 @@
             "warning": "L’installation dépend du navigateur et des règles de votre poste. Ce n’est pas un mode hors ligne pour les API, conversations et fichiers ; un rechargement n’installe pas une mise à jour du serveur."
           }
         ],
-        "related": ["server-update", "simple-messages"]
+        "related": ["server-update"]
       }
     ]
   },
@@ -427,110 +426,6 @@
     ]
   },
   {
-    "id": "conversations",
-    "title": "Conversations simples",
-    "articles": [
-      {
-        "id": "simple-chat",
-        "title": "Créer une conversation simple",
-        "summary": "Échanger avec un modèle sans lancer un agent de travail ni des commandes serveur.",
-        "keywords": ["chat simple", "modèle", "discussion", "API", "OpenAI"],
-        "sections": [
-          {
-            "title": "À quoi sert une conversation simple ?",
-            "paragraphs": [
-              "Utilisez-la pour reformuler, traduire, expliquer ou préparer un texte. Le moteur se choisit dans Codex → Chat et Audio : clé API OpenAI ou session Codex CLI. Même en mode CLI, ce chat reste distinct d’un agent de travail et n’exécute pas ses outils.",
-              "Une réponse n’exécute pas les outils d’un agent, ne crée pas une branche Git et ne valide pas un livrable. L’accès d’un agent aux fichiers de son dossier ne doit pas être supposé pour le chat simple."
-            ]
-          },
-          {
-            "title": "Démarrer un échange",
-            "steps": [
-              "Ajoutez une conversation simple depuis le + du projet puis ouvrez-la.",
-              "Saisissez une demande avec le contexte nécessaire et envoyez-la.",
-              "Complétez ou corrigez votre demande au fil de l’échange, puis relisez la réponse avant utilisation."
-            ],
-            "warning": "Vérifiez le moteur choisi avec l’administration : le mode API exige une clé configurée et le mode CLI une session Codex disponible. Aucun repli automatique vers l’API ne masque une erreur CLI. Ne collez pas de secrets dans votre demande."
-          }
-        ],
-        "related": ["simple-messages", "response-copy", "admin-chat"]
-      },
-      {
-        "id": "simple-messages",
-        "title": "Rédiger, envoyer et lire les messages",
-        "summary": "Préparer une demande et distinguer génération, interruption et résultat conservé.",
-        "keywords": [
-          "message",
-          "brouillon",
-          "envoyer",
-          "arrêter",
-          "historique",
-          "scroll"
-        ],
-        "sections": [
-          {
-            "title": "Pendant l’échange",
-            "actions": [
-              {
-                "label": "Champ de message",
-                "effect": "Prépare un brouillon. Donnez un objectif concret, les contraintes, les sources et le format de sortie attendu."
-              },
-              {
-                "label": "Envoyer",
-                "effect": "Soumet le message et démarre la génération. Attendez le résultat ou utilisez l’arrêt lorsque cette commande est proposée."
-              },
-              {
-                "label": "Arrêter",
-                "effect": "Interrompt la génération en cours ; ce n’est pas un effacement des messages déjà enregistrés."
-              }
-            ]
-          },
-          {
-            "title": "Relire le résultat",
-            "paragraphs": [
-              "La conversation se parcourt verticalement. Les tableaux et blocs de code peuvent avoir leur propre zone de lecture : vérifiez leur contenu complet avant de le copier.",
-              "Une erreur réseau ou fournisseur ne signifie pas nécessairement que toute opération a été annulée. Consultez l’historique avant de renvoyer une demande afin d’éviter les doublons."
-            ],
-            "warning": "L’historique fournit du contexte au modèle, pas une garantie d’exactitude. Vérifiez les faits et les contenus destinés à être publiés."
-          }
-        ],
-        "related": ["simple-chat", "response-copy"]
-      },
-      {
-        "id": "response-copy",
-        "title": "Copier une réponse avec sa mise en forme",
-        "summary": "Récupérer une réponse dans un traitement de texte ou un autre éditeur.",
-        "keywords": [
-          "copier",
-          "presse-papiers",
-          "HTML",
-          "Word",
-          "tableau",
-          "style"
-        ],
-        "sections": [
-          {
-            "title": "Utiliser l’icône de copie",
-            "steps": [
-              "Attendez qu’une réponse non vide soit terminée.",
-              "Survolez la réponse ou atteignez ses commandes au clavier. L’icône Copier apparaît dans son coin supérieur droit ; sur un écran tactile elle reste accessible.",
-              "Cliquez sur l’icône puis collez dans votre logiciel de destination. L’infobulle indique Copier avec mise en forme."
-            ]
-          },
-          {
-            "title": "Ce qui est copié",
-            "paragraphs": [
-              "La copie propose du HTML et du texte brut. Les éditeurs compatibles peuvent garder titres, listes, tableaux, liens et blocs de code ; un champ texte utilise la version texte. Le rendu dépend du logiciel de destination.",
-              "Seul le corps de la réponse est copié, pas les commandes de l’interface ni un journal technique extérieur à celle-ci. La copie reste locale au navigateur et fonctionne aussi pour les réponses des agents."
-            ],
-            "warning": "Un refus du presse-papiers est signalé. Ne supposez pas une copie réussie si une erreur apparaît ; vérifiez également les informations sensibles avant de coller ailleurs."
-          }
-        ],
-        "related": ["simple-chat", "agent-history"]
-      }
-    ]
-  },
-  {
     "id": "agents",
     "title": "Agents de travail",
     "articles": [
@@ -622,6 +517,38 @@
           }
         ],
         "related": ["agent-approvals", "agent-history", "integrations"]
+      },
+      {
+        "id": "response-copy",
+        "title": "Copier une réponse avec sa mise en forme",
+        "summary": "Récupérer une réponse dans un traitement de texte ou un autre éditeur.",
+        "keywords": [
+          "copier",
+          "presse-papiers",
+          "HTML",
+          "Word",
+          "tableau",
+          "style"
+        ],
+        "sections": [
+          {
+            "title": "Utiliser l’icône de copie",
+            "steps": [
+              "Attendez qu’une réponse non vide soit terminée.",
+              "Survolez la réponse ou atteignez ses commandes au clavier. L’icône Copier apparaît dans son coin supérieur droit ; sur un écran tactile elle reste accessible.",
+              "Cliquez sur l’icône puis collez dans votre logiciel de destination. L’infobulle indique Copier avec mise en forme."
+            ]
+          },
+          {
+            "title": "Ce qui est copié",
+            "paragraphs": [
+              "La copie propose du HTML et du texte brut. Les éditeurs compatibles peuvent garder titres, listes, tableaux, liens et blocs de code ; un champ texte utilise la version texte. Le rendu dépend du logiciel de destination.",
+              "Seul le corps de la réponse est copié, pas les commandes de l’interface ni un journal technique extérieur à celle-ci. La copie reste locale au navigateur et fonctionne aussi pour les réponses des agents."
+            ],
+            "warning": "Un refus du presse-papiers est signalé. Ne supposez pas une copie réussie si une erreur apparaît ; vérifiez également les informations sensibles avant de coller ailleurs."
+          }
+        ],
+        "related": ["agent-history"]
       },
       {
         "id": "agent-approvals",
@@ -754,13 +681,13 @@
       {
         "id": "voice-dictation",
         "title": "Dicter une demande au microphone",
-        "summary": "Transcrire une consigne dans le brouillon puis la relire avant de l’envoyer.",
+        "summary": "Dicter une demande avec le compte ChatGPT du CLI, puis relire le texte avant envoi.",
         "keywords": ["microphone", "voix", "dictée", "audio", "transcription"],
         "sections": [
           {
             "title": "Dicter dans les écrans compatibles",
             "steps": [
-              "Cliquez sur l’icône de microphone d’une conversation simple, du champ d’un agent ou d’un formulaire qui la propose.",
+              "Cliquez sur l’icône de microphone du champ d’un agent ou d’un formulaire qui la propose.",
               "Autorisez le microphone dans votre navigateur uniquement si vous souhaitez enregistrer, puis dictez votre demande.",
               "Cliquez sur Arrêter l’enregistrement ; l’enregistrement est aussi borné à deux minutes.",
               "Attendez la transcription, corrigez les noms, chiffres et termes techniques dans le brouillon puis envoyez explicitement le texte."
@@ -770,12 +697,12 @@
             "title": "Prérequis et confidentialité",
             "paragraphs": [
               "La dictée nécessite un navigateur compatible avec l’enregistrement audio, une connexion sécurisée et un accès microphone autorisé. Un refus de permission ou une transcription en cours peut rendre la commande indisponible.",
-              "Le moteur est choisi dans Codex → Chat et Audio : clé API ou Codex CLI — expérimental. Les moteurs du chat et de l’audio sont indépendants ; aucun repli automatique vers la clé API n’est effectué. La disponibilité vocale du CLI dépend du moteur et du compte. Le texte reste un brouillon à relire, pas une action de l’agent."
+              "La dictée utilise le compte ChatGPT authentifié du CLI et le microphone du navigateur via WebRTC. Sa disponibilité dépend du CLI et du compte. Le texte obtenu reste un brouillon à relire : rien n’est envoyé automatiquement à l’agent."
             ],
             "warning": "Ne dictez pas de secrets ou d’informations sensibles sans tenir compte du service destinataire. Un texte transcrit peut comporter des erreurs : l’ajout au brouillon ne vaut pas validation de son contenu."
           }
         ],
-        "related": ["simple-messages", "agent-composer", "admin-chat"]
+        "related": ["agent-composer"]
       },
       {
         "id": "agent-knowledge",
@@ -814,7 +741,7 @@
               "Vérifiez qu’il est utile aux prochains travaux, sourcé et exempt de secret.",
               "Acceptez explicitement la proposition pour l’intégrer aux connaissances approuvées, ou refusez-la et demandez une correction."
             ],
-            "warning": "La mémoire ne remplace ni les autorisations ni la vérification des faits. Un chat simple ne doit pas être supposé lire automatiquement les mêmes fichiers qu’un agent de travail."
+            "warning": "La mémoire ne remplace ni les autorisations ni la vérification des faits."
           },
           {
             "title": "Modifier et examiner dans les sous-onglets",
@@ -865,7 +792,7 @@
             "title": "Documentation pour les administrateurs",
             "paragraphs": [
               "Paramètres → MCP interne présente les méthodes, paramètres, exemples et règles de droits issus du catalogue du serveur. Cette référence n’est pas une console d’exécution et ne donne aucun droit supplémentaire.",
-              "Ces outils sont destinés aux agents de travail rattachés ; les conversations simples ne reçoivent pas ce canal projet."
+              "Ces outils sont destinés aux agents de travail rattachés."
             ]
           }
         ],
@@ -1099,10 +1026,10 @@
               "Relisez titres, charges, modes d’exécution et critères proposés avant application.",
               "Pour une replanification, examinez les tâches retenues, dates et dépendances puis appliquez seulement les propositions utiles."
             ],
-            "warning": "Ces fonctions utilisent le modèle et l’accès API du chat simple. Les dépendances restent entre tâches principales d’un même tableau, sans cycle ; ce n’est pas un ordonnanceur automatique. Une application partiellement échouée peut laisser des changements déjà enregistrés."
+            "warning": "Les fonctions IA utilisent le CLI authentifié dans le contexte du projet. Les dépendances restent entre tâches principales d’un même tableau, sans cycle ; ce n’est pas un ordonnanceur automatique. Relisez les propositions avant leur application."
           }
         ],
-        "related": ["task-board", "admin-chat"]
+        "related": ["task-board"]
       },
       {
         "id": "task-execution",
@@ -2150,17 +2077,16 @@
           {
             "title": "Configurer sans mélanger les actions",
             "steps": [
-              "Ouvrez l’administration Codex puis Compte pour l’authentification nécessaire aux fonctions concernées.",
+              "Ouvrez Paramètres → Codex → Compte pour vous connecter à ChatGPT avec le code d’appareil, ou pour changer de compte.",
               "Dans les onglets de configuration, choisissez modèles, raisonnement, instructions et sécurité selon les besoins.",
               "Utilisez les actions Enregistrer et Annuler les modifications du panneau actif. Elles restent en bas de ce panneau ; changer de sous-onglet ne lance ni enregistrement ni redémarrage.",
-              "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation.",
-              "Chat et Audio regroupe les moteurs du chat simple et de la dictée, y compris sans compte Codex connecté pour préparer le mode API. Instructions contient aussi Consignes communes aux agents, avec son propre bouton d’enregistrement indépendant des réglages natifs Codex."
+              "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation."
             ]
           },
           {
             "title": "Se repérer dans les panneaux",
             "paragraphs": [
-              "Les onglets principaux restent Compte, Codex CLI, Modèle, Chat et Audio, Instructions, Raisonnement, Sécurité, Intégrations et Configuration brute, avec les réglages locaux lorsqu’ils sont disponibles. Profil apparaît uniquement si la configuration en déclare un : ce n’est pas un nouveau profil utilisateur.",
+              "Les onglets principaux restent Compte, Codex CLI, Modèle, Instructions, Raisonnement, Sécurité, Intégrations et Configuration brute, avec les réglages locaux lorsqu’ils sont disponibles. Profil apparaît uniquement si la configuration en déclare un : ce n’est pas un nouveau profil utilisateur.",
               "Modèle distingue les valeurs par défaut, le contexte et le catalogue, avec sa vue JSON. Instructions sépare les consignes communes, les instructions de session et la compaction. Raisonnement conserve notamment l’effort, le résumé du raisonnement, la verbosité des réponses, la recherche web et le niveau de service, selon le catalogue disponible.",
               "Quand il n’y a pas de sous-onglets utiles, le titre et son explication restent fixes en tête du panneau. Le contenu défile au centre ; les grandes zones de texte occupent la largeur disponible. Les actions de Compte et Codex CLI restent aussi dans leur panneau. Les boutons propres aux consignes communes, au catalogue ou au moteur local gardent leur portée et leurs confirmations."
             ]
@@ -2179,7 +2105,6 @@
           "agent-composer",
           "agent-knowledge",
           "server-update",
-          "admin-chat",
           "admin-agent-instructions"
         ]
       },
@@ -2207,49 +2132,13 @@
           {
             "title": "Comprendre la portée",
             "paragraphs": [
-              "Le réglage est persistant et relu à chaque nouvel échange, pour les agents de travail nouveaux et existants. Aucun redémarrage n’est nécessaire ; un échange déjà en cours n’est pas modifié. Les conversations simples ne reçoivent pas ces consignes.",
+              "Le réglage est persistant et relu à chaque nouvel échange, pour les agents de travail nouveaux et existants. Aucun redémarrage n’est nécessaire ; un échange déjà en cours n’est pas modifié.",
               "Le texte par défaut demande la vérification des interfaces modifiées sur ordinateur et mobile, puis l’examen réel des captures et le signalement des limites. Vous pouvez l’adapter aux pratiques de votre instance."
             ],
             "warning": "Ne placez aucun secret dans ce texte transmis à tous les agents de travail. Il ne modifie ni AGENTS.md, ni les consignes du projet, ni les permissions. Une instruction textuelle ne garantit pas l’exécution d’un contrôle et ne permet pas de contourner les protections."
           }
         ],
         "related": ["admin-codex", "agent-knowledge", "agent-visual-checks"]
-      },
-      {
-        "id": "admin-chat",
-        "title": "Configurer les moteurs du chat simple et de la dictée",
-        "summary": "Choisir séparément les moteurs du chat et de l’audio dans Codex → Chat et Audio.",
-        "keywords": [
-          "Chat et Audio",
-          "clé API",
-          "chat simple",
-          "OpenAI",
-          "Codex CLI",
-          "dictée",
-          "expérimental",
-          "planification"
-        ],
-        "sections": [
-          {
-            "title": "Choisir les moteurs et enregistrer",
-            "steps": [
-              "Ouvrez Paramètres → Codex → Chat et Audio. L’ancienne entrée Chat simple est regroupée dans cet onglet, accessible aussi sans connexion Codex pour configurer la clé API.",
-              "Pour le chat simple, choisissez la clé API OpenAI ou la session Codex CLI et renseignez les options proposées. Une connexion Codex ne configure pas automatiquement le circuit API.",
-              "Pour la dictée, choisissez la clé API ou Codex CLI — expérimental. Sans réglage audio explicite, la dictée suit le moteur du chat ; après enregistrement d’un choix audio, changer le moteur du chat ne le modifie plus.",
-              "Enregistrez, puis essayez séparément une courte conversation et une dictée. La transcription reste dans le brouillon à relire et envoyer explicitement."
-            ]
-          },
-          {
-            "title": "Diagnostiquer un échec sans changer de moteur implicitement",
-            "paragraphs": [
-              "Chat et audio sont indépendants. La clé API est commune aux fonctions qui sélectionnent explicitement ce moteur ; elle n’est jamais utilisée en secours après une erreur du CLI. Vérifiez le moteur concerné avant de modifier le compte ou les paramètres.",
-              "La dictée CLI exige une session Codex authentifiée avec ChatGPT et dépend de la version du CLI et de l’accès vocal du compte. Une seule dictée CLI peut être traitée à la fois par installation. Une incompatibilité, coupure ou expiration produit une erreur explicite, sans appel de secours à l’API.",
-              "Certaines assistances de planification utilisent encore leur circuit API : vérifiez leurs prérequis séparément. Une clé valide ne garantit ni quota ni disponibilité du modèle."
-            ],
-            "warning": "Ne copiez jamais de clé dans un message ou une capture. La dictée CLI est expérimentale et doit être essayée avec le compte de l’installation ; élargir les permissions de l’agent ne résout pas une erreur de transcription."
-          }
-        ],
-        "related": ["simple-chat", "task-planning", "admin-codex"]
       },
       {
         "id": "integrations",

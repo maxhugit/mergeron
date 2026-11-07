@@ -271,8 +271,6 @@ it.each([
   '/logs/retention/codex',
   '/database/status',
   '/plugins',
-  '/simple-chat/api-key',
-  '/simple-chat/settings',
   '/projects/project-1/knowledge/proposals',
 ])(
   'blocks standard access to %s even with a direct request or a forged body role',
@@ -368,7 +366,7 @@ it('refuses global terminal operations including attach/input on existing sessio
   ).toThrow('Administrator access');
 });
 
-it('reserves agent and automation execution for administrators while allowing simple chat and manual tasks', () => {
+it('reserves agent and automation execution for administrators while allowing manual tasks', () => {
   for (const path of [
     '/threads',
     '/threads/t/turns',
@@ -379,8 +377,8 @@ it('reserves agent and automation execution for administrators while allowing si
     '/projects/p/resources/r/deliverables/d/agent',
     '/projects/p/resources/r/tasks/t/agent',
     '/projects/p/resources/r/agent-launches/l/recover',
-    '/simple-chat/audio-sessions',
-    '/simple-chat/audio-sessions/session-id/finish',
+    '/voice-dictation/audio-sessions',
+    '/voice-dictation/audio-sessions/session-id/finish',
   ]) {
     expect(() => guard.canActivate(http(path, 'POST').context)).toThrow(
       'Administrator access',
@@ -389,9 +387,6 @@ it('reserves agent and automation execution for administrators while allowing si
   expect(() =>
     guard.canActivate(ws('codex.serverResponse', { decision: 'accept' })),
   ).toThrow('Administrator access');
-  expect(
-    guard.canActivate(http('/simple-chat/threads/t/messages', 'POST').context),
-  ).toBe(true);
   expect(
     guard.canActivate(http('/projects/p/resources/r/tasks', 'POST').context),
   ).toBe(true);

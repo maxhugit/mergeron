@@ -3,7 +3,7 @@
 Le guide de la plateforme est une aide HTML organisée comme un sommaire CHM,
 pas un fichier Windows `.chm`. La route `/help` présente une arborescence de
 chapitres et articles, un moteur de recherche local et une lecture séparée.
-Les conversations simples et les agents de travail ont des chapitres distincts.
+Les agents de travail, leurs outils et les tâches ont des chapitres distincts.
 
 ## Sources et organisation
 
@@ -56,7 +56,7 @@ besoin, le bénéfice et ses critères de réussite.
 
 ## Cohérence avec les fonctions actuelles
 
-Le manuel français et anglais comprend 52 articles. Les identifiants historiques
+Le manuel français et anglais comprend 50 articles. Les identifiants historiques
 sont conservés. Les parcours suivants tiennent compte des fonctions actuelles :
 
 | Articles                        | Points de fonctionnement                                                                                                   |
@@ -121,7 +121,6 @@ avec le code et leurs guides spécialisés.
 | #224, #225       | Joindre les documents au chat et menus regroupés : `deliverable-versions` et `file-explorer`, avec vérification du brouillon avant envoi.                                                                 |
 | #226             | Préparation du commit dans l'explorateur, affichage compact et dossier du livrable : contenu existant de `git-local`, `agent-composer` et `agent-create` conservé, menus de fichiers précisés.            |
 | #228, #233       | Extension Chrome/Edge et Safari Mac : nouvel article `browser-local`, installation temporaire Safari, association, lecture, consentement, suspension et limites.                                          |
-| #229             | Chat et Audio : `simple-chat` et `admin-chat` corrigés ; choix indépendants, héritage initial audio, dictée CLI expérimentale et absence de repli API. `voice-dictation` déjà actualisé conservé.         |
 | #230             | Détection et mises à jour individuelles des images : `server-update` et `infrastructure` corrigés ; arrêt de toute la pile, états inconnus, migration d'image locale et Manager administré depuis l'hôte. |
 | #231             | Durcissement de l'image navigateur et contrôles CI : pas de nouvelle commande utilisateur ; protections du navigateur conservées.                                                                         |
 | #232             | Suppression du projet et de son espace système : procédure et avertissements existants de `project-archive` conservés.                                                                                    |
@@ -163,3 +162,12 @@ Les exemples ne contiennent ni compte, ni chemin de projet réel, ni secret.
 ## Paramètres du projet
 
 Les articles `first-project`, `project-people`, `agent-knowledge` et `agent-preview` décrivent les sept onglets, leurs sous-onglets et les propositions affichées directement. La [correspondance des champs et actions](interface-parametres-projet.md) sert à vérifier les évolutions de cette interface.
+
+## Retrait du parcours de conversation historique
+
+Les deux manuels contiennent maintenant 50 articles. Le chapitre de conversation
+léger et les anciens articles `simple-chat`, `simple-messages`, `admin-chat` sont
+retirés, ainsi que leurs liens et le paramétrage de fournisseur associé. L’article
+`response-copy` conserve son identifiant et rejoint les agents. La dictée est
+décrite avec le CLI authentifié, sans choix de moteur API. Les anciens liens vers
+un article retiré reviennent à l’accueil du guide.

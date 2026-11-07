@@ -10,7 +10,7 @@ droits, conserve les données et relie l’interface aux moteurs et services aut
   les comptes techniques et les données persistantes.
 - `projects/`, `project-knowledge/`, `deliverables/` et `document-publication/`
   organisent les projets, la connaissance commune et les documents versionnés.
-- `threads/`, `chat/`, `simple-chat/`, `codex/`, `pending-approvals/` et
+- `threads/`, `chat/`, `voice-dictation/`, `codex/`, `pending-approvals/` et
   `agent-monitors/` pilotent les conversations, agents, décisions et suivis.
 - `files/`, `active-folders/`, `terminal/`, `browser/` et `previews/` donnent
   accès aux outils de travail et environnements autorisés.

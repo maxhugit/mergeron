@@ -69,10 +69,8 @@ depuis les réglages du moteur, puis configurer son authentification.
 Le moteur actuellement intégré est Codex. Les paramètres et l’authentification
 restent dans le stockage persistant de Mergeron.
 
-Le chat simple possède sa propre configuration d’accès. Si une clé est utilisée,
-la conserver uniquement dans le stockage privé prévu, jamais dans Git ou une
-capture. Vérifier une réponse et le rechargement d’une conversation après
-redémarrage.
+Le compte ChatGPT du CLI s’authentifie par son parcours de connexion. La dictée
+utilise ce même CLI ; aucune clé API OpenAI n’est demandée dans Mergeron.
 
 ## Connexions et outils des projets
 

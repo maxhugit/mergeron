@@ -524,11 +524,7 @@ export type AccountReadResponseDto = {
 };
 
 export type LoginAccountDto = {
-    type: 'apiKey' | 'chatgpt' | 'chatgptDeviceCode' | 'chatgptAuthTokens';
-    /**
-     * Required for API key login.
-     */
-    apiKey?: string;
+    type: 'chatgpt' | 'chatgptDeviceCode' | 'chatgptAuthTokens';
     /**
      * Required for externally managed ChatGPT token login.
      */

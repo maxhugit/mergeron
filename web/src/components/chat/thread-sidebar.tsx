@@ -66,7 +66,7 @@ import { ThreadRow } from './sidebar/thread-row';
 import { WorkspaceOverview } from './sidebar/workspace-overview';
 import { WorkspaceDetail } from './sidebar/workspace-detail';
 import { ArchivedAgentsDetail } from './sidebar/archived-agents-detail';
-import { SimpleChatRow } from './sidebar/simple-chat-row';
+
 import { RenameDialog, ConfirmDialog } from './sidebar/sidebar-dialogs';
 import { ForkGoalDialog } from './sidebar/fork-goal-dialog';
 import { CreateProjectDialog } from './sidebar/create-project-dialog';
@@ -76,11 +76,7 @@ import { ProjectArchiveExportDialog } from '@/components/projects/project-archiv
 import { usePlatformSession } from '@/lib/platform-session';
 import { useProjectNavigationPreference } from '@/hooks/use-project-navigation-preference';
 import { useForkWithGoal } from '@/hooks/use-fork-with-goal';
-import { getAuthorizationHeader } from '@/auth-token';
-import { withBasePath } from '@/base-path';
-import type { SimpleChatThreadSummary } from '@/lib/simple-chat-api';
-import { simpleChatThreadsQueryKey } from '@/lib/simple-chat-api';
-import { useSimpleChatActivityStore } from '@/stores/simple-chat-activity-store';
+
 import {
   projectsApi,
   projectsQueryKey,
@@ -88,38 +84,11 @@ import {
   type ProjectSummary,
 } from '@/lib/projects-api';
 
-type SimpleChatThread = SimpleChatThreadSummary;
-
-function simpleChatHeaders(hasBody = false) {
-  const authorization = getAuthorizationHeader();
-  return {
-    ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-    ...(authorization ? { Authorization: authorization } : {}),
-  };
-}
-
-async function simpleChatApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(withBasePath(`/api/simple-chat${path}`), {
-    ...init,
-    headers: {
-      ...simpleChatHeaders(init?.body !== undefined),
-      ...init?.headers,
-    },
-  });
-  const payload = (await response.json().catch(() => ({}))) as T & {
-    message?: string;
-  };
-  if (!response.ok)
-    throw new Error(payload.message || `HTTP ${response.status}`);
-  return payload;
-}
-
 /** Derives the active "view" from the current route path. */
 function useActiveView():
   | 'chat'
   | 'home'
   | 'help'
-  | 'simpleChat'
   | 'files'
   | 'terminal'
   | 'diagnostics'
@@ -132,7 +101,7 @@ function useActiveView():
   if (pathname.startsWith('/diagnostics')) return 'diagnostics';
   if (pathname.startsWith('/integrations')) return 'integrations';
   if (pathname.startsWith('/settings')) return 'settings';
-  if (pathname.startsWith('/simple-chat')) return 'simpleChat';
+
   if (pathname === '/') return 'home';
   if (pathname === '/help') return 'help';
   if (pathname.startsWith('/t/')) return 'chat';
@@ -150,9 +119,7 @@ export function ThreadSidebar() {
   const [exportProjectId, setExportProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
   const activeView = useActiveView();
-  const activeSimpleThreadId = useRouterState({
-    select: (state) => (state.location.search as { thread?: string }).thread,
-  });
+
   const activeResourceId = useRouterState({
     select: (state) =>
       state.location.pathname.match(
@@ -174,9 +141,6 @@ export function ThreadSidebar() {
   const setThreadTitle = useTimelineStore((s) => s.setThreadTitle);
   const addSystemError = useTimelineStore((s) => s.addSystemError);
   const queryClient = useQueryClient();
-  const activeSimpleChatIds = useSimpleChatActivityStore(
-    (state) => state.activeThreadIds,
-  );
 
   // ── Layout store (sidebar view + collapsed groups) ──────────────────
   const sidebarView = useLayoutStore((s) => s.sidebarView);
@@ -200,11 +164,7 @@ export function ThreadSidebar() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [graphTargetId, setGraphTargetId] = useState<string | null>(null);
-  const [renameSimpleThread, setRenameSimpleThread] =
-    useState<SimpleChatThread | null>(null);
-  const [renameSimpleValue, setRenameSimpleValue] = useState('');
-  const [deleteSimpleThread, setDeleteSimpleThread] =
-    useState<SimpleChatThread | null>(null);
+
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createProjectMode, setCreateProjectMode] = useState<'new' | 'import'>(
     'new',
@@ -220,7 +180,7 @@ export function ThreadSidebar() {
   const [deleteResource, setDeleteResource] =
     useState<ProjectResourceSummary | null>(null);
   const [pendingConversation, setPendingConversation] = useState<{
-    kind: 'agent' | 'simple';
+    kind: 'agent';
     group: WorkspaceGroup;
   } | null>(null);
   const [deleteProjectWorkspaceIds, setDeleteProjectWorkspaceIds] = useState<
@@ -270,10 +230,7 @@ export function ThreadSidebar() {
     }),
     enabled: sidebarView.type === 'workspaceDetail',
   });
-  const simpleChatThreadsQuery = useQuery({
-    queryKey: simpleChatThreadsQueryKey,
-    queryFn: () => simpleChatApi<{ threads: SimpleChatThread[] }>('/threads'),
-  });
+
   const projectsQuery = useQuery({
     queryKey: projectsQueryKey,
     queryFn: () => projectsApi<{ projects: ProjectSummary[] }>(),
@@ -368,7 +325,6 @@ export function ThreadSidebar() {
           (agent) => agent.archived,
         ),
         threads: [] as ThreadDto[],
-        simpleChats: [] as SimpleChatThread[],
       }),
     );
     const groupsByProject = new Map(
@@ -388,12 +344,9 @@ export function ThreadSidebar() {
         legacyGroupByCwd.get(thread.cwd);
       if (group) group.threads.push(thread);
     }
-    for (const simpleChat of simpleChatThreadsQuery.data?.threads ?? []) {
-      const group = groupsByProject.get(simpleChat.projectId ?? '');
-      if (group) group.simpleChats.push(simpleChat);
-    }
+
     return groups;
-  }, [activeThreads, simpleChatThreadsQuery.data, projectsQuery.data]);
+  }, [activeThreads, projectsQuery.data]);
   const detailProject =
     sidebarView.type === 'workspaceDetail'
       ? projectsQuery.data?.projects.find(
@@ -597,9 +550,6 @@ export function ThreadSidebar() {
         ...(project.agentThreads ?? [])
           .filter((thread) => !thread.archived)
           .map((thread) => `agent:${thread.threadId}`),
-        ...(simpleChatThreadsQuery.data?.threads ?? [])
-          .filter((thread) => thread.projectId === project.id)
-          .map((thread) => `simple:${thread.id}`),
       ];
       if (!validItems.includes(sourceItemId)) return;
       const valid = new Set(validItems);
@@ -619,7 +569,7 @@ export function ThreadSidebar() {
       );
       reorderSidebar.mutate({ projectId: project.id, order });
     },
-    [projectsQuery.data, reorderSidebar, simpleChatThreadsQuery.data?.threads],
+    [projectsQuery.data, reorderSidebar],
   );
 
   const archiveThread = useMutation({
@@ -698,52 +648,7 @@ export function ThreadSidebar() {
       invalidateThreads();
     },
   });
-  const createSimpleChatThread = useMutation({
-    mutationFn: ({ projectId }: { projectId: string }) =>
-      simpleChatApi<{ thread: SimpleChatThread }>('/threads', {
-        method: 'POST',
-        body: JSON.stringify({ projectId }),
-      }),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({
-        queryKey: simpleChatThreadsQueryKey,
-      });
-      void navigate({
-        to: '/simple-chat',
-        search: { thread: result.thread.id },
-      });
-    },
-    onError: (err) => addSystemError(getApiErrorMessage(err)),
-  });
-  const renameSimpleChat = useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) =>
-      simpleChatApi(`/threads/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ title }),
-      }),
-    onSuccess: () => {
-      setRenameSimpleThread(null);
-      setRenameSimpleValue('');
-      void queryClient.invalidateQueries({
-        queryKey: simpleChatThreadsQueryKey,
-      });
-    },
-    onError: (err) => addSystemError(getApiErrorMessage(err)),
-  });
-  const deleteSimpleChat = useMutation({
-    mutationFn: (id: string) =>
-      simpleChatApi(`/threads/${id}`, { method: 'DELETE' }),
-    onSuccess: (_result, deletedId) => {
-      setDeleteSimpleThread(null);
-      void queryClient.invalidateQueries({
-        queryKey: simpleChatThreadsQueryKey,
-      });
-      if (activeView === 'simpleChat' && activeSimpleThreadId === deletedId) {
-        void navigate({ to: '/' });
-      }
-    },
-    onError: (err) => addSystemError(getApiErrorMessage(err)),
-  });
+
   const createProject = useMutation({
     mutationFn: ({ name }: { name: string }) =>
       projectsApi<{ project: ProjectSummary }>('', {
@@ -1024,47 +929,17 @@ export function ThreadSidebar() {
     );
   };
 
-  const renderSimpleChatRow = (thread: SimpleChatThread) => (
-    <SimpleChatRow
-      key={thread.id}
-      thread={thread}
-      isActive={
-        activeView === 'simpleChat' && activeSimpleThreadId === thread.id
-      }
-      disabled={reorderSidebar.isPending}
-      running={activeSimpleChatIds.has(thread.id)}
-      onOpen={() =>
-        void navigate({ to: '/simple-chat', search: { thread: thread.id } })
-      }
-      onRename={() => {
-        setRenameSimpleThread(thread);
-        setRenameSimpleValue(thread.title);
-      }}
-      onDelete={() => setDeleteSimpleThread(thread)}
-    />
-  );
-
   const createConversationIn = (
-    kind: 'agent' | 'simple',
+    _kind: 'agent',
     cwd: string,
     projectId: string,
   ) => {
     setPendingConversation(null);
-    if (kind === 'agent') {
-      createThread.mutate({ projectId, workspacePath: cwd });
-    } else createSimpleChatThread.mutate({ projectId });
+    createThread.mutate({ projectId, workspacePath: cwd });
   };
 
-  const requestConversation = (
-    kind: 'agent' | 'simple',
-    group: WorkspaceGroup,
-  ) => {
+  const requestConversation = (kind: 'agent', group: WorkspaceGroup) => {
     const workspaces = group.workspaces ?? [];
-    if (kind === 'simple') {
-      if (group.projectId)
-        createSimpleChatThread.mutate({ projectId: group.projectId });
-      return;
-    }
     if (workspaces.length <= 1) {
       if (!group.projectId) return;
       createConversationIn(
@@ -1221,9 +1096,6 @@ export function ThreadSidebar() {
               onCreateLocalAgent={
                 session.isAdministrator ? setLocalAgentGroup : undefined
               }
-              onCreateSimpleChatInWorkspace={(group) =>
-                requestConversation('simple', group)
-              }
               onCreateTaskBoard={(group) =>
                 group.projectId && createTaskBoard.mutate(group.projectId)
               }
@@ -1282,7 +1154,6 @@ export function ThreadSidebar() {
                 });
               }}
               renderThreadRow={renderThreadRow}
-              renderSimpleChatRow={renderSimpleChatRow}
               movingThread={reorderSidebar.isPending}
             />
           ) : sidebarView.type === 'archivedDetail' && archivedProject ? (
@@ -1307,15 +1178,6 @@ export function ThreadSidebar() {
             <WorkspaceDetail
               sidebarView={sidebarView}
               threads={detailThreads}
-              simpleChats={
-                cursorStack.length === 0
-                  ? (simpleChatThreadsQuery.data?.threads.filter((thread) =>
-                      detailProject
-                        ? thread.projectId === detailProject.id
-                        : false,
-                    ) ?? [])
-                  : []
-              }
               projectName={detailProject?.name}
               isLoading={detailQuery.isLoading}
               hasPrevious={cursorStack.length > 0}
@@ -1324,7 +1186,6 @@ export function ThreadSidebar() {
               onPrevious={goPrevious}
               onNext={goNext}
               renderThreadRow={renderThreadRow}
-              renderSimpleChatRow={renderSimpleChatRow}
             />
           ) : (
             <div className="px-2 py-8 text-center text-xs text-muted-foreground">
@@ -1469,50 +1330,7 @@ export function ThreadSidebar() {
         onSave={saveRename}
         onClose={() => setRenameThread(null)}
       />
-      <RenameDialog
-        open={renameSimpleThread !== null}
-        pending={renameSimpleChat.isPending}
-        value={renameSimpleValue}
-        onChange={setRenameSimpleValue}
-        onSave={() => {
-          if (renameSimpleThread && renameSimpleValue.trim()) {
-            renameSimpleChat.mutate({
-              id: renameSimpleThread.id,
-              title: renameSimpleValue.trim(),
-            });
-          }
-        }}
-        onClose={() => setRenameSimpleThread(null)}
-      />
-      <AlertDialog
-        open={deleteSimpleThread !== null}
-        onOpenChange={(open) =>
-          !open && !deleteSimpleChat.isPending && setDeleteSimpleThread(null)
-        }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer cette conversation ?</AlertDialogTitle>
-            <AlertDialogDescription>
-              « {deleteSimpleThread?.title} » sera supprimée définitivement.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteSimpleChat.isPending}>
-              Annuler
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={!deleteSimpleThread || deleteSimpleChat.isPending}
-              onClick={() =>
-                deleteSimpleThread &&
-                deleteSimpleChat.mutate(deleteSimpleThread.id)
-              }
-            >
-              Supprimer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
       <AlertDialog
         open={deleteProject !== null}
         onOpenChange={(open) =>

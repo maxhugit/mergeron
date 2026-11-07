@@ -228,20 +228,11 @@ export const ErrorCode = {
     fileInvalid: 'chat.file_invalid',
   },
 
-  simpleChat: {
-    notConfigured: 'simple_chat.not_configured',
-    messageRequired: 'simple_chat.message_required',
-    messageTooLong: 'simple_chat.message_too_long',
-    upstreamFailed: 'simple_chat.upstream_failed',
-    invalidResponse: 'simple_chat.invalid_response',
-    threadNotFound: 'simple_chat.thread_not_found',
-    titleInvalid: 'simple_chat.title_invalid',
-    modelInvalid: 'simple_chat.model_invalid',
-    projectInvalid: 'simple_chat.project_invalid',
-    apiKeyInvalid: 'simple_chat.api_key_invalid',
-    audioRequired: 'simple_chat.audio_required',
-    audioInvalid: 'simple_chat.audio_invalid',
-    audioTooLarge: 'simple_chat.audio_too_large',
+  voiceDictation: {
+    upstreamFailed: 'voice_dictation.upstream_failed',
+    audioRequired: 'voice_dictation.audio_required',
+    audioInvalid: 'voice_dictation.audio_invalid',
+    audioTooLarge: 'voice_dictation.audio_too_large',
   },
 
   // ── Codex Config ───────────────────────────────────────────────────

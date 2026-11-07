@@ -1,4 +1,4 @@
-/** Login dialog for Codex account: API Key or ChatGPT device code. */
+/** Login dialog for the managed ChatGPT device-code flow. */
 import { useEffect, useState } from 'react';
 import { ExternalLink, Loader2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { accountLogin, accountCancelLogin } from '@/generated/api/sdk.gen';
 import { showSnackbar } from '@/stores/snackbar-store';
 import { useAccountStore } from '@/stores/account-store';
@@ -35,20 +34,13 @@ export function AccountLoginDialog({ open, onOpenChange, onChanged }: Props) {
   const setLoginStarted = useAccountStore((s) => s.setLoginStarted);
   const clearLogin = useAccountStore((s) => s.clearLogin);
   const loginState = useAccountStore((s) => s.login);
-  const [mode, setMode] = useState<'apiKey' | 'chatgptDeviceCode'>(
-    'chatgptDeviceCode',
-  );
-  const [apiKey, setApiKey] = useState('');
   const [deviceResponse, setDeviceResponse] = useState<DeviceCodeState | null>(
     null,
   );
 
   const loginMutation = useMutation({
     mutationFn: async () => {
-      const body =
-        mode === 'apiKey'
-          ? { type: 'apiKey' as const, apiKey: apiKey.trim() }
-          : { type: 'chatgptDeviceCode' as const };
+      const body = { type: 'chatgptDeviceCode' as const };
       const { data } = await accountLogin({ body, throwOnError: true });
       return data;
     },
@@ -96,7 +88,6 @@ export function AccountLoginDialog({ open, onOpenChange, onChanged }: Props) {
   }, [loginState.lastResult, onChanged, onOpenChange, clearLogin]);
 
   const pending = loginMutation.isPending || cancelMutation.isPending;
-  const canSubmit = mode === 'chatgptDeviceCode' || apiKey.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -104,38 +95,11 @@ export function AccountLoginDialog({ open, onOpenChange, onChanged }: Props) {
         <DialogHeader>
           <DialogTitle>{t('loginToCodex')}</DialogTitle>
           <DialogDescription>
-            {t('useApiKeyModeForProxiesOrChatGptDeviceCodeForAccountQuotas')}
+            {t('startADeviceCodeLoginAndCompleteItInYourBrowser')}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={mode === 'chatgptDeviceCode' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setMode('chatgptDeviceCode')}
-          >
-            {t('chatGpt')}
-          </Button>
-          <Button
-            type="button"
-            variant={mode === 'apiKey' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setMode('apiKey')}
-          >
-            {t('apiKey')}
-          </Button>
-        </div>
-
-        {mode === 'apiKey' ? (
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={t('codexApiKey')}
-            autoFocus
-          />
-        ) : deviceResponse ? (
+        {deviceResponse ? (
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">
             <p className="text-muted-foreground">
               {t('openTheVerificationUrlAndEnterThisCode')}
@@ -170,11 +134,11 @@ export function AccountLoginDialog({ open, onOpenChange, onChanged }: Props) {
             </Button>
           ) : null}
           <Button
-            disabled={pending || !canSubmit || Boolean(deviceResponse)}
+            disabled={pending || Boolean(deviceResponse)}
             onClick={() => loginMutation.mutate()}
           >
             {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {mode === 'apiKey' ? t('loginWithApiKey') : t('startDeviceLogin')}
+            {t('startDeviceLogin')}
           </Button>
         </DialogFooter>
       </DialogContent>

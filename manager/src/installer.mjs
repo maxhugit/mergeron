@@ -199,7 +199,7 @@ async function persistentStatePlan(configuration) {
   for (const file of [
     'backend-token.txt',
     'backend-token-nginx.txt',
-    'openai-api-key.txt',
+    'openai-api-key.txt', // Legacy rollback archive scope; never mounted into the app.
     'config/nginx.conf.template',
     'config/squid.conf',
   ]) {
@@ -491,9 +491,12 @@ async function preparePersistentState(configuration, creatingApplication) {
       throw new Error('backendTokenMismatch');
   }
 
-  const openAiPath = join(configuration.hostStatePath, 'openai-api-key.txt');
-  if (!(await exists(openAiPath)))
-    await createExclusive(openAiPath, '', 0o600, applicationOwner);
+  // Existing versioned backup policies include this leaf. Keep an empty
+  // placeholder on new installations until those policies are retired; the
+  // application no longer receives or reads it. Never overwrite an old secret.
+  const legacyKeyPath = join(configuration.hostStatePath, 'openai-api-key.txt');
+  if (!(await exists(legacyKeyPath)))
+    await createExclusive(legacyKeyPath, '', 0o600, applicationOwner);
 
   const defaults = configuration.defaultsPath;
   for (const file of ['nginx.conf.template', 'squid.conf']) {
@@ -596,8 +599,6 @@ export function containerSpecification(manifest, component, configuration) {
         'WEBUI_PROTECTED_PATHS=/home/codex,/run/secrets,/app,/proc,/sys,/dev,/etc,/root,/appdata/mergeron',
         'WORKSPACE_ROOTS=/workspaces,/appdata',
         'LOG_LEVEL=info',
-        'OPENAI_API_KEY_FILE=/run/secrets/openai_api_key',
-        'OPENAI_CHAT_MODEL=gpt-5-mini',
         `HTTP_PROXY=http://${manifest.stack}-squid:3128`,
         `HTTPS_PROXY=http://${manifest.stack}-squid:3128`,
         `ALL_PROXY=http://${manifest.stack}-squid:3128`,
@@ -626,7 +627,6 @@ export function containerSpecification(manifest, component, configuration) {
             `${configuration.appdataRoot}:/appdata`,
             `${root}/logs:/app/logs`,
             `${root}/backend-token.txt:/run/secrets/backend_token:ro`,
-            `${root}/openai-api-key.txt:/run/secrets/openai_api_key:ro`,
             `${root}/ssh:/home/codex/.ssh:ro`,
             `${root}/manager-run:/run/mergeron-manager`,
           ],

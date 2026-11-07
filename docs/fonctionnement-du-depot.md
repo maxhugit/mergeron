@@ -43,7 +43,6 @@ l’image dans `STATE_ROOT` :
 | `logs/`              | journaux applicatifs                                        |
 | `ssh/`               | clés et `known_hosts`, montés en lecture seule              |
 | `backend-token*.txt` | secret partagé entre Nginx et le backend                    |
-| `openai-api-key.txt` | clé du chat simple                                          |
 
 Le montage `/appdata` donne à l’application un accès en lecture/écriture aux
 fichiers hôtes autorisés. Cette capacité est puissante : elle doit rester réservée

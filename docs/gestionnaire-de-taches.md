@@ -114,9 +114,10 @@ les dépendances ne constituent pas un ordonnanceur lançant les agents.
 
 ## Assistance IA à la planification
 
-Ces fonctions passent par `SimpleChatService` et l’API OpenAI
-(`/v1/responses`), avec le modèle du chat simple. Elles nécessitent sa clé API ;
-l’authentification du CLI Codex par un compte ChatGPT ne suffit pas à elle seule.
+Ces fonctions utilisent les échanges structurés du moteur agent natif et les
+préférences du projet. Elles ne nécessitent plus de clé API pour un mode de
+conversation distinct. Les règles d’accès administrateur, les validations et la
+confirmation des propositions restent applicables.
 
 | Fonction                    | Résultat                                                                                         |
 | --------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -236,7 +237,7 @@ journal d’audit exhaustif des actions de chaque utilisateur.
 | [Service projets](../src/projects/projects.service.ts)                               | Validation, persistance, agrégats et dépendances                          |
 | [Projection d’exécution](../src/projects/project-task-runtime.service.ts)            | États des tâches depuis les événements et les instantanés frais du moteur |
 | [Lancement durable](../src/projects/project-agent-launch.service.ts)                 | Réservation et reprise sans duplication des lancements                    |
-| [Service chat simple](../src/simple-chat/simple-chat.service.ts)                     | Appels IA de planification et de conseil                                  |
+| [Service IA projet](../src/projects/project-ai.service.ts)                           | Rapports d’automatisation par le moteur agent natif                       |
 | [Schéma SQLite](../src/database/schema.ts)                                           | Tables et relations                                                       |
 | [Contrôle d’accès](../src/auth/platform-access.guard.ts)                             | Autorisations des routes                                                  |
 

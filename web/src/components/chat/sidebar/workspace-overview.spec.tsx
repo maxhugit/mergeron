@@ -14,7 +14,6 @@ describe('WorkspaceOverview creation menu', () => {
         cwd: '/workspaces/selected-project',
         name: 'Selected project',
         threads: [],
-        simpleChats: [],
       };
       render(
         <DragDropProvider>
@@ -28,7 +27,6 @@ describe('WorkspaceOverview creation menu', () => {
             onOpenArchivedDetail={vi.fn()}
             onOpenWorkspaceDetail={vi.fn()}
             onCreateAgentInWorkspace={vi.fn()}
-            onCreateSimpleChatInWorkspace={vi.fn()}
             onCreateTaskBoard={vi.fn()}
             onOpenResource={vi.fn()}
             resourceActionPending={false}
@@ -36,7 +34,6 @@ describe('WorkspaceOverview creation menu', () => {
             onDeleteResource={vi.fn()}
             onExportProject={authorized ? exportProject : undefined}
             renderThreadRow={() => null}
-            renderSimpleChatRow={() => null}
             movingThread={false}
           />
         </DragDropProvider>,
@@ -103,7 +100,7 @@ describe('WorkspaceOverview creation menu', () => {
                 projectId: 'p',
                 cwd: '/workspaces/p',
                 threads: [],
-                simpleChats: [],
+
                 resources: [
                   {
                     id: 'existing',
@@ -124,7 +121,6 @@ describe('WorkspaceOverview creation menu', () => {
             onOpenArchivedDetail={vi.fn()}
             onOpenWorkspaceDetail={vi.fn()}
             onCreateAgentInWorkspace={vi.fn()}
-            onCreateSimpleChatInWorkspace={vi.fn()}
             onCreateTaskBoard={vi.fn()}
             onCreateAutomationBoard={create}
             onCreateDeliverables={create}
@@ -133,7 +129,6 @@ describe('WorkspaceOverview creation menu', () => {
             onRenameResource={vi.fn()}
             onDeleteResource={vi.fn()}
             renderThreadRow={() => null}
-            renderSimpleChatRow={() => null}
             movingThread={false}
           />
         </DragDropProvider>,
@@ -147,14 +142,12 @@ describe('WorkspaceOverview creation menu', () => {
   );
   it.each([
     ['Work agent', 'agent'],
-    ['Simple conversation', 'simple'],
     ['Task manager', 'task'],
     ['Automations', 'automation'],
     ['Deliverables management', 'deliverables'],
   ] as const)('creates a %s in the selected workspace', async (label, kind) => {
     const user = userEvent.setup();
     const createAgent = vi.fn();
-    const createSimpleChat = vi.fn();
     const createTaskBoard = vi.fn();
     const createAutomation = vi.fn();
     const createDeliverables = vi.fn();
@@ -163,9 +156,7 @@ describe('WorkspaceOverview creation menu', () => {
       <DragDropProvider>
         <WorkspaceOverview
           projectsHeader={<h2>Projects</h2>}
-          workspaceGroups={[
-            { cwd: '/workspaces/ExampleProject', threads: [], simpleChats: [] },
-          ]}
+          workspaceGroups={[{ cwd: '/workspaces/ExampleProject', threads: [] }]}
           collapsedGroups={new Set()}
           isLoading={false}
           onToggleCollapse={vi.fn()}
@@ -173,7 +164,6 @@ describe('WorkspaceOverview creation menu', () => {
           onOpenArchivedDetail={vi.fn()}
           onOpenWorkspaceDetail={vi.fn()}
           onCreateAgentInWorkspace={createAgent}
-          onCreateSimpleChatInWorkspace={createSimpleChat}
           onCreateTaskBoard={createTaskBoard}
           onCreateAutomationBoard={createAutomation}
           onCreateDeliverables={createDeliverables}
@@ -182,7 +172,6 @@ describe('WorkspaceOverview creation menu', () => {
           onRenameResource={vi.fn()}
           onDeleteResource={vi.fn()}
           renderThreadRow={() => null}
-          renderSimpleChatRow={() => null}
           movingThread={false}
         />
       </DragDropProvider>,
@@ -195,20 +184,18 @@ describe('WorkspaceOverview creation menu', () => {
     await user.click(screen.getByRole('button', { name: 'Project actions' }));
     expect(screen.getByRole('button', { name: 'Work agent' })).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Simple conversation' }),
-    ).toBeVisible();
+      screen.queryByRole('button', { name: 'Simple conversation' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Task manager' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: label }));
     expect(
       kind === 'agent'
         ? createAgent
-        : kind === 'simple'
-          ? createSimpleChat
-          : kind === 'task'
-            ? createTaskBoard
-            : kind === 'automation'
-              ? createAutomation
-              : createDeliverables,
+        : kind === 'task'
+          ? createTaskBoard
+          : kind === 'automation'
+            ? createAutomation
+            : createDeliverables,
     ).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: '/workspaces/ExampleProject' }),
     );
@@ -238,7 +225,6 @@ describe('WorkspaceOverview creation menu', () => {
                 updatedAt: 1,
               })),
               threads: [],
-              simpleChats: [],
             },
           ]}
           collapsedGroups={new Set()}
@@ -248,14 +234,12 @@ describe('WorkspaceOverview creation menu', () => {
           onOpenArchivedDetail={vi.fn()}
           onOpenWorkspaceDetail={vi.fn()}
           onCreateAgentInWorkspace={vi.fn()}
-          onCreateSimpleChatInWorkspace={vi.fn()}
           onCreateTaskBoard={vi.fn()}
           onOpenResource={vi.fn()}
           resourceActionPending={false}
           onRenameResource={vi.fn()}
           onDeleteResource={vi.fn()}
           renderThreadRow={() => null}
-          renderSimpleChatRow={() => null}
           movingThread={false}
         />
       </DragDropProvider>,
@@ -283,7 +267,7 @@ describe('WorkspaceOverview creation menu', () => {
               projectId: 'project-1',
               name: 'Tests',
               threads: [],
-              simpleChats: [],
+
               archivedAgents: [
                 {
                   threadId: 'archived-1',
@@ -317,14 +301,12 @@ describe('WorkspaceOverview creation menu', () => {
           onOpenArchivedDetail={openArchived}
           onOpenWorkspaceDetail={vi.fn()}
           onCreateAgentInWorkspace={vi.fn()}
-          onCreateSimpleChatInWorkspace={vi.fn()}
           onCreateTaskBoard={vi.fn()}
           onOpenResource={vi.fn()}
           resourceActionPending={false}
           onRenameResource={vi.fn()}
           onDeleteResource={vi.fn()}
           renderThreadRow={() => null}
-          renderSimpleChatRow={() => null}
           movingThread={false}
         />
       </DragDropProvider>,
@@ -349,27 +331,22 @@ describe('WorkspaceOverview creation menu', () => {
               cwd: '/workspaces/Tests',
               projectId: 'project-1',
               name: 'Tests',
-              threads: [],
-              sidebarOrder: ['simple:second', 'resource:board', 'simple:first'],
-              simpleChats: [
+              sidebarOrder: ['agent:second', 'resource:board', 'agent:first'],
+              threads: [
                 {
                   id: 'first',
-                  title: 'First chat',
-                  model: 'codex',
-                  projectId: 'project-1',
+                  name: 'First agent',
                   cwd: '/workspaces/Tests',
                   createdAt: 1,
                   updatedAt: 1,
-                },
+                } as import('@/generated/api').ThreadDto,
                 {
                   id: 'second',
-                  title: 'Second chat',
-                  model: 'codex',
-                  projectId: 'project-1',
+                  name: 'Second agent',
                   cwd: '/workspaces/Tests',
                   createdAt: 1,
                   updatedAt: 1,
-                },
+                } as import('@/generated/api').ThreadDto,
               ],
               resources: [
                 {
@@ -391,21 +368,19 @@ describe('WorkspaceOverview creation menu', () => {
           onOpenArchivedDetail={vi.fn()}
           onOpenWorkspaceDetail={vi.fn()}
           onCreateAgentInWorkspace={vi.fn()}
-          onCreateSimpleChatInWorkspace={vi.fn()}
           onCreateTaskBoard={vi.fn()}
           onOpenResource={vi.fn()}
           resourceActionPending={false}
           onRenameResource={vi.fn()}
           onDeleteResource={vi.fn()}
-          renderThreadRow={() => null}
-          renderSimpleChatRow={(thread) => <span>{thread.title}</span>}
+          renderThreadRow={(thread) => <span>{thread.name}</span>}
           movingThread={false}
         />
       </DragDropProvider>,
     );
-    const second = screen.getByText('Second chat');
+    const second = screen.getByText('Second agent');
     const board = screen.getByText('Board');
-    const first = screen.getByText('First chat');
+    const first = screen.getByText('First agent');
     expect(
       second.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

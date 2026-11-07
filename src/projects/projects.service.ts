@@ -65,7 +65,7 @@ import { ThreadWorkspaceOverridesService } from '../threads/thread-workspace-ove
 import { ThreadsDeletionService } from '../threads/threads-deletion.service';
 import { ThreadsService } from '../threads/threads.service';
 import { ProjectConnectionRuntimeService } from '../threads/project-connection-runtime.service';
-import { SimpleChatService } from '../simple-chat/simple-chat.service';
+import { ProjectAiService } from './project-ai.service';
 import { WorkspaceTransfersService } from './workspace-transfers.service';
 import {
   ActiveFoldersService,
@@ -145,7 +145,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     private readonly overrides: ThreadWorkspaceOverridesService,
     private readonly deletion: ThreadsDeletionService,
     private readonly threads: ThreadsService,
-    private readonly simpleChat: SimpleChatService,
+    private readonly projectAi: ProjectAiService,
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     @Optional() private readonly activeFolders?: ActiveFoldersService,
     @Optional() private readonly workspaceTransfers?: WorkspaceTransfersService,
@@ -3177,8 +3177,9 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         }
       }
       if (!run.result) {
-        run.result = await this.simpleChat.runProjectAutomation(
+        run.result = await this.projectAi.runProjectAutomation(
           `Automatisation du projet « ${this.get(projectId).name} ».\nMode : ${item.mode}.\nInstruction : ${item.instructions}\nContexte : ${context}\nProduis un rapport clair en français. Ne prétends pas avoir appliqué de modification.`,
+          this.get(projectId).workspacePath,
         );
         run.status = item.mode === 'analysis' ? 'success' : 'pending_approval';
       }

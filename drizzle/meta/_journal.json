@@ -526,6 +526,13 @@
       "when": 1794046030494,
       "tag": "0074_shared_agent_launch_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1794057778088,
+      "tag": "0075_retire_simple_conversations",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,6 @@ import {
   FolderCog,
   FolderOpen,
   FileText,
-  MessageCircle,
   PackageOpen,
   ScrollText,
   Plug,
@@ -39,7 +38,6 @@ const sectionIcons = {
   account: UserCircle,
   codex: Bot,
   codexCli: PackageOpen,
-  simpleChat: MessageCircle,
   terminal: SquareTerminal,
   files: FolderCog,
   database: Database,
@@ -155,7 +153,6 @@ export function SettingsSidebar() {
               entry !== 'integrations' &&
               entry !== 'account' &&
               entry !== 'codexCli' &&
-              entry !== 'simpleChat' &&
               entry !== 'projectIntegrity',
           ).map((entry) => {
             const Icon = sectionIcons[entry];
@@ -166,9 +163,7 @@ export function SettingsSidebar() {
                   pathname === '/settings' &&
                   (section === entry ||
                     (entry === 'codex' &&
-                      (section === 'codexCli' ||
-                        section === 'simpleChat' ||
-                        section === 'integrations')))
+                      (section === 'codexCli' || section === 'integrations')))
                     ? 'page'
                     : undefined
                 }
@@ -177,7 +172,6 @@ export function SettingsSidebar() {
                     (section === entry ||
                       (entry === 'codex' &&
                         (section === 'codexCli' ||
-                          section === 'simpleChat' ||
                           section === 'integrations'))),
                 )}
                 onClick={() => {

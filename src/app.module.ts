@@ -30,7 +30,7 @@ import { PluginsModule } from './plugins/plugins.module';
 import { ProjectsModule } from './projects/projects.module';
 import { SettingsModule } from './settings/settings.module';
 import { SkillsModule } from './skills/skills.module';
-import { SimpleChatModule } from './simple-chat/simple-chat.module';
+import { VoiceDictationModule } from './voice-dictation/voice-dictation.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { ThreadsModule } from './threads/threads.module';
 import { TokenUsageModule } from './token-usage/token-usage.module';
@@ -162,7 +162,7 @@ const PINO_REDACT = {
     FilesModule,
     SettingsModule,
     SkillsModule,
-    SimpleChatModule,
+    VoiceDictationModule,
     TerminalModule,
     ThreadsModule,
     PendingApprovalsModule,

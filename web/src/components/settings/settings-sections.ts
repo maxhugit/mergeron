@@ -6,7 +6,6 @@ export const SETTINGS_SECTIONS = [
   'account',
   'codex',
   'codexCli',
-  'simpleChat',
   'terminal',
   'files',
   'database',

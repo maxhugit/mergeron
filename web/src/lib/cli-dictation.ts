@@ -8,7 +8,7 @@ async function request<T>(
   timeout = 35000,
 ): Promise<T> {
   const authorization = getAuthorizationHeader();
-  const response = await fetch(withBasePath(`/api/simple-chat/${path}`), {
+  const response = await fetch(withBasePath(`/api/voice-dictation/${path}`), {
     method,
     headers: {
       ...(authorization ? { Authorization: authorization } : {}),
@@ -22,13 +22,6 @@ async function request<T>(
   if (!response.ok)
     throw new Error(payload.message || 'La connexion à la dictée a échoué.');
   return payload as T;
-}
-
-export async function dictationBackend(): Promise<'codex' | 'openai'> {
-  const status = await request<{ audioBackend?: string }>('status');
-  if (status.audioBackend !== 'codex' && status.audioBackend !== 'openai')
-    throw new Error('Moteur de dictée indisponible. Rechargez la page.');
-  return status.audioBackend;
 }
 
 export interface CliDictation {

@@ -31,7 +31,7 @@ export function Fixture() {
     cwd: focusProject.workspacePath,
     name: focusProject.name,
     threads: focusThreads,
-    simpleChats: [],
+
     resources: focusProject.resources,
     archivedAgents: focusProject.agentThreads,
     sidebarOrder: order,
@@ -91,7 +91,6 @@ export function Fixture() {
                       cwd: '/other',
                       name: 'Other project',
                       threads: [],
-                      simpleChats: [],
                     },
                   ]
             }
@@ -113,14 +112,12 @@ export function Fixture() {
                 .restorePreference('fixture', group.projectId);
             }}
             onCreateAgentInWorkspace={vi.fn()}
-            onCreateSimpleChatInWorkspace={vi.fn()}
             onCreateTaskBoard={vi.fn()}
             onOpenResource={vi.fn()}
             resourceActionPending={false}
             onRenameResource={vi.fn()}
             onDeleteResource={vi.fn()}
             movingThread={false}
-            renderSimpleChatRow={() => null}
             renderThreadRow={(thread) => (
               <div key={thread.id} data-testid={thread.id}>
                 <ThreadRow
