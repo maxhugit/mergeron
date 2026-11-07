@@ -1,4 +1,6 @@
 {
+  "returnToPrimaryReference": "Return to the primary agent reference",
+  "primaryReference": "Primary",
   "focusProject": "Focus on this project",
   "allProjects": "All projects",
   "projectsMenu": "Project list actions",

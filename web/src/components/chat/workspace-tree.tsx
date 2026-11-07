@@ -8,7 +8,15 @@ import {
   type Ref,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Folder, MapPin, Package, GitBranch } from 'lucide-react';
+import {
+  X,
+  Loader2,
+  Folder,
+  MapPin,
+  Package,
+  GitBranch,
+  Undo2,
+} from 'lucide-react';
 import { FileTree } from '@/components/files/file-tree';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -90,6 +98,11 @@ export function WorkspaceTree({
     project?.workspaces.find((w) => w.primary)?.path ??
     project?.workspacePath ??
     '';
+  const atPrimaryReference = Boolean(
+    cwd &&
+    projectRoot &&
+    cwd.replace(/\/+$/, '') === projectRoot.replace(/\/+$/, ''),
+  );
   const foldersRoot =
     folderConnection && !folderConnection.primary
       ? folderConnection.path
@@ -169,7 +182,7 @@ export function WorkspaceTree({
         <>
           <div className="flex items-center gap-2 border-b px-3 py-2 text-xs">
             <MapPin className="h-4 w-4 shrink-0 text-primary" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <span className="block text-muted-foreground">
                 {tw('agentReference')}
               </span>
@@ -179,6 +192,20 @@ export function WorkspaceTree({
                   cwd?.split('/').filter(Boolean).at(-1)}
               </span>
             </div>
+            {projectRoot && onActiveWorkspaceChange && !atPrimaryReference && (
+              <button
+                type="button"
+                className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border px-2 text-xs hover:bg-accent disabled:opacity-50"
+                aria-label={tw('returnToPrimaryReference')}
+                title={`${tw('returnToPrimaryReference')} · ${projectRoot}`}
+                disabled={activeWorkspacePending}
+                aria-busy={activeWorkspacePending}
+                onClick={() => onActiveWorkspaceChange(projectRoot)}
+              >
+                <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                {tw('primaryReference')}
+              </button>
+            )}
           </div>
           <div
             className="flex shrink-0 border-b px-2"

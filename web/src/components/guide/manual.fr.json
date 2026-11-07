@@ -356,7 +356,7 @@
             "steps": [
               "Dans Emplacements et connexions, utilisez l’ajout d’un dossier local ou celui d’une connexion externe selon votre besoin.",
               "Pour agir sur une ressource distante, préparez une copie locale lorsque cette opération est proposée.",
-              "Dans l’agent, sélectionnez explicitement le dossier de travail autorisé. Parcourir un dossier dans l’explorateur ne le rend pas actif."
+              "Dans l’agent, sélectionnez explicitement le dossier de travail autorisé. Parcourir un dossier dans l’explorateur ne le rend pas actif. Après avoir choisi une autre référence, le bouton Principal à côté de Référence de l’agent permet de revenir à l’emplacement principal du projet, sur ordinateur comme sur mobile."
             ],
             "warning": "Un alias est un nom d’affichage, pas un déplacement. Un emplacement absent, désactivé ou incohérent bloque le travail ; l’application ne doit pas choisir silencieusement un autre dossier."
           }
