@@ -149,7 +149,7 @@ async function fixture(t) {
   );
   return { directory, docker, manager, plan, handle };
 }
-test('replaces only the reviewed Manager and retains the original with exactly preserved protections', async (t) => {
+test('replaces only the reviewed Manager, preserves protections and cleans its stopped original after success', async (t) => {
   const f = await fixture(t);
   const result = await runManagerReplacement({
     ...f,
@@ -160,8 +160,11 @@ test('replaces only the reviewed Manager and retains the original with exactly p
   const current = await f.docker.inspectContainer('mergeron-dev-manager');
   assert.deepEqual(current.HostConfig, f.plan.original.HostConfig);
   assert.deepEqual(current.Config.Env, ['SECRET=private']);
-  assert.equal((await f.docker.inspectContainer('old')).State.Running, false);
-  assert(!f.docker.calls.some((c) => c[0] === 'remove' && c[1] === 'old'));
+  await assert.rejects(() => f.docker.inspectContainer('old'), {
+    statusCode: 404,
+  });
+  assert.equal(result.cleanupStatus, 'complete');
+  assert(f.docker.calls.some((c) => c[0] === 'remove' && c[1] === 'old'));
   const state = await readFile(
     join(f.directory, 'maintenance', 'state.json'),
     'utf8',
@@ -311,3 +314,62 @@ test('rejects an incompatible target Manager image before creating a replacement
       .some((call) => ['create', 'stop', 'rename', 'remove'].includes(call[0])),
   );
 });
+
+test('cleanup failure keeps success and retries safely without rolling back the healthy Manager', async (t) => {
+  const f = await fixture(t);
+  const remove = f.docker.removeContainer.bind(f.docker);
+  let fail = true;
+  f.docker.removeContainer = async (id) => {
+    if (id === 'old' && fail) throw new Error('Docker unavailable');
+    return remove(id);
+  };
+  const run = () =>
+    runManagerReplacement({
+      ...f,
+      id: f.handle.id,
+      probe: async () => ({ healthy: true }),
+    });
+  const first = await run();
+  assert.equal(first.stage, 'succeeded');
+  assert.equal(first.cleanupStatus, 'pending');
+  assert.equal((await f.docker.inspectContainer('old')).State.Running, false);
+  const active = (await f.docker.inspectContainer('mergeron-dev-manager')).Id;
+  fail = false;
+  assert.equal((await run()).cleanupStatus, 'complete');
+  assert.equal(
+    (await f.docker.inspectContainer('mergeron-dev-manager')).Id,
+    active,
+  );
+  await run(); // Idempotent after deletion.
+  assert.equal(
+    f.docker.calls.filter((c) => c[0] === 'remove' && c[1] === 'old').length,
+    1,
+  );
+});
+
+for (const change of ['running', 'name', 'labels', 'specification', 'active']) {
+  test(`successful cleanup refuses a changed ${change} identity and preserves success`, async (t) => {
+    const f = await fixture(t);
+    let probes = 0;
+    const result = await runManagerReplacement({
+      ...f,
+      id: f.handle.id,
+      probe: async () => {
+        if (++probes === 2) {
+          const old = f.docker.values.get('old');
+          if (change === 'running') old.State.Running = true;
+          if (change === 'name') old.Name = '/unrelated';
+          if (change === 'labels')
+            old.Config.Labels['io.mergeron.stack'] = 'production';
+          if (change === 'specification') old.HostConfig.Privileged = true;
+          if (change === 'active') return { healthy: false };
+        }
+        return { healthy: true };
+      },
+    });
+    assert.equal(result.stage, 'succeeded');
+    assert.equal(result.cleanupStatus, 'pending');
+    assert(f.docker.values.has('old'));
+    assert(!f.docker.calls.some((c) => c[0] === 'remove' && c[1] === 'old'));
+  });
+}
