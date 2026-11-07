@@ -169,6 +169,9 @@ test.each([390, 1001])(
       screen.getByRole('heading', { name: 'Emplacements locaux' }),
     ).toBeVisible();
     expect(screen.getByText('Espace local géré')).toBeVisible();
+    await page
+      .getByRole('tab', { name: i18n.t('externalResources'), exact: true })
+      .click();
     expect(await screen.findByText('Dépôt Git du projet')).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'Connexions externes' }),
