@@ -361,7 +361,13 @@
             "warning": "Un alias est un nom d’affichage, pas un déplacement. Un emplacement absent, désactivé ou incohérent bloque le travail ; l’application ne doit pas choisir silencieusement un autre dossier."
           }
         ],
-        "related": ["file-explorer", "transfers", "agent-create", "git-local"]
+        "related": [
+          "file-explorer",
+          "transfers",
+          "agent-create",
+          "git-local",
+          "project-integrity"
+        ]
       },
       {
         "id": "project-archive",
@@ -674,6 +680,12 @@
               "Une branche de conversation n’est pas une branche Git : les fichiers ne sont pas automatiquement copiés ni restaurés en changeant de version de l’échange. Conservez les documents utiles avant de supprimer ou valider une session de travail liée à une sous-tâche."
             ],
             "warning": "La suppression d’une conversation ou d’une branche doit être relue attentivement, notamment lorsqu’elle possède des dépendances. Il n’existe pas de fusion automatique des raisonnements de deux conversations."
+          },
+          {
+            "title": "Lire une conversation en affichage compact",
+            "paragraphs": [
+              "Les questions et réponses longues restent dans la largeur disponible de l’écran. Le texte se replie ; un tableau ou un bloc de code peut conserver son propre défilement horizontal, sans élargir toute la conversation. Vous pouvez ainsi relire les grandes instructions sur téléphone."
+            ]
           }
         ],
         "related": ["response-copy", "git-branches", "task-execution"]
@@ -1077,6 +1089,13 @@
             ]
           },
           {
+            "title": "Ouvrir la fiche ou un document depuis la liste",
+            "paragraphs": [
+              "Cliquez sur le titre du livrable pour ouvrir sa fiche. Le curseur en forme de main et le soulignement au survol indiquent cette action ; la description et le reste de la ligne ne servent pas de bouton d’ouverture.",
+              "Dans la colonne Documents, cliquez sur un nom de fichier pour ouvrir la même visionneuse que depuis Documents dans la fiche. L’ouverture se fait dans un nouvel onglet ou une nouvelle fenêtre selon le navigateur. Les droits du document continuent de s’appliquer ; les documents retirés ne sont pas proposés dans cette liste."
+            ]
+          },
+          {
             "title": "Se repérer dans la fiche",
             "paragraphs": [
               "Aperçu présente la synthèse ; Documents gère les fichiers et leurs versions ; Validation concerne les demandes et décisions ; Historique conserve les instantanés et transitions. Les liens donnent accès aux tâches et conversations associées.",
@@ -1108,6 +1127,7 @@
             "title": "Gérer les fichiers du livrable",
             "steps": [
               "Ouvrez Documents puis Ajouter un document ; sélectionnez les fichiers et ajoutez un commentaire si nécessaire.",
+              "Cliquez sur le nom pour ouvrir la visionneuse dans une fenêtre ou un onglet séparé ; utilisez le menu ⋮ pour les autres actions.",
               "Utilisez le menu ⋮ du document pour les actions proposées : aperçu, téléchargement, versions ou retrait.",
               "Pour reprendre une ancienne version, ouvrez son historique et confirmez la restauration proposée.",
               "Pour un document travaillé par un agent, contrôlez son brouillon puis utilisez l’enregistrement versionné prévu, plutôt qu’un écrasement du fichier publié."
@@ -1907,15 +1927,14 @@
           "Manager",
           "edge",
           "latest",
-          "DEV",
-          "rapide"
+          "DEV"
         ],
         "sections": [
           {
             "title": "Avant et pendant la mise à jour",
             "steps": [
-              "Dans Paramètres → Serveur → Mise à jour, consultez la version de l’application et les cartes Mises à jour des conteneurs : application, ingress NGINX, sortie Squid et navigateur lorsqu’il est géré.",
-              "Actualiser la détection recherche les images sans les installer ni les télécharger. Chaque carte indique l’image installée, le canal et la disponibilité ; un état inconnu ou une erreur ne signifie pas « à jour ».",
+              "Dans Paramètres → Serveur → Version actuelle, consultez le tableau des composants : application, Manager, navigateur Mergeron et composants fournisseurs NGINX et Squid selon l’installation.",
+              "Actualiser la détection recherche les versions sans les installer. Chaque ligne distingue version installée, version fournisseur lorsqu’elle est connue et état de mise à jour. Une valeur inconnue ou une erreur ne signifie pas « à jour ». Les actions disponibles dépendent du composant et du Manager installé.",
               "Relisez Sauvegarde avant cette mise à jour : Complète, Minimale — base et configuration, ou Aucune sauvegarde. Enregistrer le choix de sauvegarde mémorise ce réglage pour cette installation, sans lancer l’opération ; une sélection non enregistrée ne vaut que pour cette mise à jour.",
               "Choisissez Mettre à jour sur le composant voulu, ou Remplacer par l’image publiée si la migration d’un navigateur local connu est proposée. Relisez le composant et l’empreinte exacte du plan, puis confirmez.",
               "Même si seule l’image choisie est mise à niveau, la pile est arrêtée et recréée dans la transaction. La sauvegarde éventuelle et les possibilités de retour arrière dépendent du périmètre confirmé. Le suivi est préparé avant l’arrêt du serveur ; gardez-le ouvert pendant l’opération.",
@@ -1923,10 +1942,10 @@
             ]
           },
           {
-            "title": "Retour arrière et mode DEV",
+            "title": "Retour arrière et compatibilité du Manager",
             "paragraphs": [
               "Le périmètre du plan confirmé détermine les données restaurables : complète, minimale ou aucune sauvegarde. Sans sauvegarde, le retour arrière peut remettre les images, mais n’annule ni migration ni modification des données. Une défaillance ou un état exigeant une récupération doit être relu dans le suivi.",
-              "Le mode rapide est réservé à une pile Dev dédiée. Dev et production ont leurs réglages distincts : ne supposez jamais le périmètre d’après le seul nom de l’environnement et relisez le plan avant confirmation.",
+              "Si l’interface demande une mise à jour préalable du Manager, faites-la effectuer depuis l’hôte avant de relancer les composants. Dev et production restent des installations distinctes : relisez toujours le plan et son périmètre.",
               "Ces fonctions nécessitent une application et un Manager compatibles. Les images non sélectionnées restent inchangées. Un navigateur déjà présent peut être géré en Dev ou en production après configuration explicite de l’opérateur ; le Manager lui-même se met à jour depuis l’hôte."
             ],
             "warning": "Ne lancez pas deux opérations simultanées. Actualiser l’application, mettre à jour le CLI Codex et mettre à jour l’image serveur sont trois actions différentes."
@@ -1936,6 +1955,18 @@
             "paragraphs": [
               "Serveur → Version actuelle distingue l’application, le Manager, le navigateur et les autres composants disponibles. Relevez la version installée, le canal, la révision Git et, si nécessaire, l’identité d’image. Inconnue signifie que l’information manque, pas que le composant est à jour.",
               "La dernière version publiée, la révision d’un build Dev et la version du CLI Codex sont des informations distinctes. Une PR fusionnée peut ne pas encore être installée. Pour une demande de support, indiquez les composants réellement concernés, sans partager la configuration privée."
+            ]
+          },
+          {
+            "title": "Retrouver le suivi après une reconnexion",
+            "paragraphs": [
+              "Quand une mise à jour est déjà en cours, un onglet qui se reconnecte peut retrouver son opération et rouvrir le suivi. Cette détection n’installe rien et ne lance pas une seconde mise à jour. Conservez le dernier suivi jusqu’au résultat, puis vérifiez les versions réellement installées."
+            ]
+          },
+          {
+            "title": "Consulter le journal des mises à jour",
+            "paragraphs": [
+              "Journal des mises à jour présente les opérations enregistrées, leur auteur, leur date, leur résultat et les versions avant/après lorsqu’elles sont connues. Les améliorations disponibles sont rattachées aux versions correspondantes ; une information absente n’est pas reconstituée arbitrairement. Rouvrez les logs d’une opération pour examiner les étapes et les erreurs."
             ]
           }
         ],
@@ -1958,7 +1989,7 @@
           {
             "title": "Consulter les sauvegardes",
             "paragraphs": [
-              "L’onglet Sauvegarde présente les copies de mises à jour dans un tableau avec date, identifiant, chemin serveur, espace occupé, état et actions. L’espace total permet de surveiller l’accumulation.",
+              "Dans Paramètres → Serveur → Restauration, consultez les copies de mises à jour avec leur date, identifiant, chemin serveur, espace occupé, état et actions. L’espace total permet de surveiller l’accumulation. Réglez ici le nombre maximal de sauvegardes conservées et le choix de sauvegarde pour les prochaines mises à jour.",
               "Le réglage du nombre maximal définit la rétention. Le nettoyage est appliqué après une mise à jour réussie en protégeant les éléments requis pour le retour arrière courant ; une copie n’est pas supprimée simplement pour faire de la place avant une migration risquée."
             ]
           },
@@ -1974,7 +2005,7 @@
             "title": "Décider une restauration ou un retrait",
             "steps": [
               "Identifiez précisément la sauvegarde et l’opération dont elle provient.",
-              "Avant une restauration, vérifiez les changements plus récents et consultez le suivi du Manager.",
+              "Pour revenir à une copie disponible, utilisez Revenir à cette sauvegarde, examinez le plan puis confirmez la restauration. Vérifiez les changements plus récents et le périmètre des données remplacées : l’opération peut interrompre les services.",
               "Avant Supprimer la sauvegarde, assurez-vous qu’elle n’est plus nécessaire et confirmez uniquement la copie visée."
             ],
             "warning": "La suppression est définitive et retire le retour arrière reposant sur cette copie. Une sauvegarde de mise à jour et un export ZIP de projet n’ont pas le même périmètre. Préservez aussi les données externes qui ne sont pas couvertes par le Manager."
@@ -2001,15 +2032,16 @@
             "title": "Ce que montre l’écran",
             "paragraphs": [
               "Infrastructure présente les composants de la pile, leur état, leur image, les réseaux, le mode de gestion et des métadonnées de configuration. Les valeurs d’environnement sensibles ne sont pas affichées comme de simples réglages publics.",
-              "Les données persistantes protégées permettent de vérifier les montages attendus. Un état indisponible ou incohérent doit être diagnostiqué avant de lancer une modification d’infrastructure."
+              "Les données persistantes protégées permettent de vérifier les montages attendus. Un état indisponible ou incohérent doit être diagnostiqué avant de lancer une modification d’infrastructure.",
+              "Les relais web permanents assurent l’entrée web et l’affichage du suivi pendant une mise à jour. Leur présence n’indique pas à elle seule qu’une opération est en cours ; consultez le suivi du Manager pour connaître l’état réel."
             ]
           },
           {
             "title": "Navigateur géré par le Manager",
             "paragraphs": [
               "Un navigateur déjà présent peut apparaître dans l’inventaire et participer aux transactions du Manager lorsque l’opérateur a explicitement activé sa gestion. Cela exige un Manager compatible et la topologie protégée attendue. Ce n’est pas une activation automatique sur les installations existantes.",
-              "Serveur → Mise à jour peut détecter et mettre à jour séparément son image publiée, comme celles de NGINX et Squid, avec confirmation et transaction sur toute la pile. L’image du navigateur doit rester compatible avec l’application. Un navigateur construit localement sans empreinte publiée peut nécessiter Remplacer par l’image publiée ; un état inconnu n’est pas une preuve de mise à jour.",
-              "Infrastructure sert à consulter l’état et la configuration ; les actions de mise à jour sont dans l’onglet Mise à jour. Le Manager lui-même reste administré depuis l’hôte."
+              "Serveur → Version actuelle peut détecter et mettre à jour séparément son image publiée, comme celles de NGINX et Squid, avec confirmation et transaction sur toute la pile. L’image du navigateur doit rester compatible avec l’application. Un navigateur construit localement sans empreinte publiée peut nécessiter Remplacer par l’image publiée ; un état inconnu n’est pas une preuve de mise à jour.",
+              "Infrastructure sert à consulter l’état et la configuration ; les actions de mise à jour sont dans Version actuelle. Le Manager lui-même reste administré depuis l’hôte."
             ],
             "warning": "Ne désactivez pas le sandbox et n’exposez pas le port de contrôle pour résoudre une erreur. La configuration de production doit utiliser une image officielle stable compatible et être validée par l’opérateur ; un réglage Dev n’y est jamais appliqué implicitement."
           }
@@ -2027,7 +2059,10 @@
           "compte",
           "instructions",
           "enregistrer",
-          "redémarrer"
+          "redémarrer",
+          "sous-onglets",
+          "verbosité",
+          "Ollama"
         ],
         "sections": [
           {
@@ -2035,9 +2070,17 @@
             "steps": [
               "Ouvrez l’administration Codex puis Compte pour l’authentification nécessaire aux fonctions concernées.",
               "Dans les onglets de configuration, choisissez modèles, raisonnement, instructions et sécurité selon les besoins.",
-              "Utilisez la barre fixe Enregistrer pour l’onglet actif. Les autres brouillons d’onglets ne sont pas automatiquement appliqués.",
+              "Utilisez les actions Enregistrer et Annuler les modifications du panneau actif. Elles restent en bas de ce panneau ; changer de sous-onglet ne lance ni enregistrement ni redémarrage.",
               "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation.",
               "Chat et Audio regroupe les moteurs du chat simple et de la dictée, y compris sans compte Codex connecté pour préparer le mode API. Instructions contient aussi Consignes communes aux agents, avec son propre bouton d’enregistrement indépendant des réglages natifs Codex."
+            ]
+          },
+          {
+            "title": "Se repérer dans les panneaux",
+            "paragraphs": [
+              "Les onglets principaux restent Compte, Codex CLI, Modèle, Chat et Audio, Instructions, Raisonnement, Sécurité, Intégrations et Configuration brute, avec les réglages locaux lorsqu’ils sont disponibles. Profil apparaît uniquement si la configuration en déclare un : ce n’est pas un nouveau profil utilisateur.",
+              "Modèle distingue les valeurs par défaut, le contexte et le catalogue, avec sa vue JSON. Instructions sépare les consignes communes, les instructions de session et la compaction. Raisonnement conserve notamment l’effort, le résumé du raisonnement, la verbosité des réponses, la recherche web et le niveau de service, selon le catalogue disponible.",
+              "Quand il n’y a pas de sous-onglets utiles, le titre et son explication restent fixes en tête du panneau. Le contenu défile au centre ; les grandes zones de texte occupent la largeur disponible. Les actions de Compte et Codex CLI restent aussi dans leur panneau. Les boutons propres aux consignes communes, au catalogue ou au moteur local gardent leur portée et leurs confirmations."
             ]
           },
           {
@@ -2225,7 +2268,66 @@
           "backups",
           "onlyoffice",
           "impersonation",
-          "report-bug"
+          "report-bug",
+          "project-integrity"
+        ]
+      },
+      {
+        "id": "project-integrity",
+        "title": "Comprendre et corriger la cohérence des projets",
+        "summary": "Lire les schémas, confirmer une correction et récupérer des données placées à la corbeille du projet.",
+        "keywords": [
+          "cohérence",
+          "diagnostic",
+          "schéma",
+          "jaune",
+          "référence",
+          "connexion",
+          "livrable",
+          "copie Git",
+          "corbeille",
+          "récupérer"
+        ],
+        "sections": [
+          {
+            "title": "Lancer un diagnostic en lecture seule",
+            "steps": [
+              "En administrateur, ouvrez Paramètres → Outils d’exploitation → Cohérence des projets, sélectionnez le projet puis Actualiser le diagnostic.",
+              "Vérifiez le projet, l’heure du contrôle et les compteurs de documents, versions et copies Git. L’analyse compare les références enregistrées et les emplacements locaux gérés ; elle ne lit pas le contenu des documents et ne contrôle pas les connexions externes."
+            ],
+            "warning": "Un diagnostic incomplet ou en échec ne prouve pas que le projet est cohérent. Les corrections sont suspendues lorsque le périmètre ne peut pas être vérifié ou pendant un transfert."
+          },
+          {
+            "title": "Comprendre les schémas",
+            "paragraphs": [
+              "Chaque carte représente un élément du projet, son lien et le dossier ou fichier attendu. Le jaune et le contour en pointillés repèrent le lien ou l’emplacement à vérifier. Les détails techniques donnent les chemins et identifiants utiles sans remplacer l’explication.",
+              "Un lien rompu signifie qu’une référence mémorisée n’est plus valide : les fichiers peuvent encore exister. Un document ou une version introuvable nécessite de retrouver le contenu ou une sauvegarde ; créer un fichier vide ne le répare pas. Un fichier ou une copie Git non enregistré peut au contraire contenir un travail utile non publié."
+            ]
+          },
+          {
+            "title": "Choisir et confirmer une correction",
+            "steps": [
+              "Cliquez sur la carte ou Voir les corrections. Lisez la situation actuelle et les actions réellement proposées pour cette anomalie.",
+              "Quand une correction le permet, Après correction montre le résultat attendu, pas une modification déjà appliquée. Recréer ce dossier vide ne restaure aucun contenu ; réaligner une référence ou choisir Dossiers ne déplace aucun fichier.",
+              "Relisez le projet, l’élément et le chemin puis confirmez explicitement. Le serveur vérifie de nouveau la situation. Si le diagnostic a changé, actualisez-le et examinez la nouvelle proposition au lieu de répéter l’ancienne confirmation."
+            ]
+          },
+          {
+            "title": "Retirer et récupérer des données non enregistrées",
+            "paragraphs": [
+              "Mettre ces données à la corbeille est proposé uniquement si le serveur confirme qu’un fichier de livrable, un dossier de livrable ou une copie de source non enregistré peut être retiré sans référence persistante connue. Une connexion manquante ne permet pas de supprimer l’agent ou ses documents. Les chemins techniques, liens et analyses non vérifiables sont exclus.",
+              "Examinez d’abord les fichiers et les éventuels changements Git non publiés. Dans la confirmation, recopiez exactement le nom demandé. Les données sont déplacées vers la corbeille récupérable du projet ; l’auteur et la date de l’opération sont conservés. Rien n’est retiré à la simple ouverture de la fenêtre.",
+              "Dans la corbeille du même projet, Récupérer demande une nouvelle confirmation puis remet les données dans Dossiers sous un nom unique. Le chemin obtenu est affiché : la récupération ne remplace pas l’ancien emplacement et ne réimporte pas automatiquement un document ni sa validation."
+            ],
+            "warning": "La corbeille conserve les octets : elle ne libère pas l’espace disque et aucune purge automatique n’est prévue ici. Ce n’est pas une sauvegarde indépendante. En cas d’opération non confirmée, actualisez le diagnostic et la corbeille avant de réessayer."
+          }
+        ],
+        "related": [
+          "locations",
+          "file-explorer",
+          "deliverable-versions",
+          "backups",
+          "admin-operations"
         ]
       }
     ]

@@ -56,7 +56,7 @@ besoin, le bénéfice et ses critères de réussite.
 
 ## Cohérence avec les fonctions actuelles
 
-Le manuel français et anglais comprend 51 articles. Les identifiants historiques
+Le manuel français et anglais comprend 52 articles. Les identifiants historiques
 sont conservés. Les parcours suivants tiennent compte des fonctions actuelles :
 
 | Articles                        | Points de fonctionnement                                                                                                   |
@@ -138,3 +138,24 @@ Les captures de tâches et de cycle des livrables restent valides : les contrôl
 qu'elles illustrent n'ont pas changé dans cette série. Les captures de contrôle
 du rendu du guide sont des artefacts de test dans `artifacts/visual-check` ;
 elles ne font pas partie des fichiers à publier dans Git.
+
+## Actualisation du 7 novembre 2026
+
+Les manuels français et anglais conservent les identifiants existants et ajoutent
+`project-integrity`, accessible par `/help#guide/project-integrity` et par la
+recherche locale. Les liens depuis les emplacements et l’exploitation permettent
+de retrouver ce nouveau parcours.
+
+| Articles                                             | Actualisation                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin-codex`                                        | Organisation des panneaux, en-tête et actions fixes dans leur panneau, sous-onglets utiles, profil conditionnel, verbosité et portée des enregistrements.                                                                                                         |
+| `project-integrity`, `admin-operations`, `locations` | Accès depuis Outils d’exploitation, lecture des schémas jaunes, prévisualisation avant confirmation, diagnostic périmé, limites de l’analyse, corbeille récupérable et récupération sans écrasement.                                                              |
+| `deliverable-overview`, `deliverable-versions`       | Ouverture de la fiche par son titre seul et ouverture directe des documents dans la visionneuse séparée.                                                                                                                                                          |
+| `server-update`, `backups`, `infrastructure`         | Version actuelle, journal des mises à jour et logs, Restauration, rétention et stratégie de sauvegarde, compatibilité préalable du Manager, reprise du suivi après reconnexion et rôle des relais web permanents. Ancienne indication du mode rapide DEV retirée. |
+| `agent-history`                                      | Lecture des longs échanges en affichage compact, avec défilement propre aux tableaux et au code.                                                                                                                                                                  |
+
+La corbeille de cohérence conserve les données sur disque et ne constitue pas
+une sauvegarde indépendante. Sa récupération ne restaure pas automatiquement
+les enregistrements documentaires. Le manuel distingue cette opération de la
+restauration de versions de document et des sauvegardes de l’installation.
+Les exemples ne contiennent ni compte, ni chemin de projet réel, ni secret.
