@@ -1,5 +1,11 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { ProjectDeliverablesManager } from './project-deliverables-manager';
@@ -165,11 +171,20 @@ test.each([390, 1307])(
           : board,
       );
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Affecter cet agent' }));
+    await page
+      .getByRole('button', { name: 'Affecter cet agent', exact: true })
+      .click();
+    // Radix retains the closed portal until its exit animation ends. Wait for
+    // actual removal before resolving the recovery region: during the exit,
+    // the same region can still be found inside the old modal in WebKit.
+    await waitFor(() => expect(dialog).not.toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
     const recovery = await screen.findByRole('region', {
       name: 'Reprise du lancement de l’agent',
     });
-    await expect.poll(() => screen.queryByRole('dialog')).toBeNull();
+    expect(recovery).toBeVisible();
     expect(recovery.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
     expect(
       screen
