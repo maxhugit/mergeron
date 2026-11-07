@@ -1,3 +1,5 @@
+import { useContext } from 'react';
+import { SettingsPanelContext } from './settings-panel-context';
 import { translationKey } from '@/locales/translation-key';
 /** Row editor for structured Codex config settings. */
 import { RotateCcw } from 'lucide-react';
@@ -57,6 +59,7 @@ export function ConfigFieldEditor({
   onSave,
   onClear,
 }: FieldEditorProps) {
+  const embedded = useContext(SettingsPanelContext);
   const { t, i18n } = useTranslation();
   const isNonEnglish = !i18n.language.startsWith('en');
 
@@ -72,7 +75,13 @@ export function ConfigFieldEditor({
     draft && !options.includes(draft) ? [...options, draft] : options;
 
   return (
-    <div className="space-y-2 rounded-lg border border-border bg-card/50 px-4 py-3">
+    <div
+      className={
+        embedded
+          ? 'min-w-0 space-y-2 border-b border-border pb-4 last:border-0'
+          : 'min-w-0 space-y-2 rounded-lg border border-border bg-card/50 px-4 py-3'
+      }
+    >
       <div className="flex flex-wrap items-center gap-2">
         <label
           htmlFor={`codex-field-${def.key}`}
@@ -81,7 +90,9 @@ export function ConfigFieldEditor({
           {t(translationKey(def.label))}
         </label>
         {isNonEnglish && (
-          <code className="text-xs text-muted-foreground">{def.key}</code>
+          <code className="break-all text-xs text-muted-foreground">
+            {def.key}
+          </code>
         )}
         <ConfigSourceBadge source={origin} />
       </div>
@@ -99,7 +110,7 @@ export function ConfigFieldEditor({
             onChange={(e) => onDraftChange(def.key, e.target.value)}
             disabled={saving}
             className={cn(
-              'h-8 rounded-md border border-input bg-background px-3 text-sm',
+              'h-8 max-w-full rounded-md border border-input bg-background px-3 text-sm',
               'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
             )}
           >
@@ -179,7 +190,7 @@ export function ConfigFieldEditor({
             value={draft}
             onChange={(e) => onDraftChange(def.key, e.target.value)}
             disabled={saving}
-            className="h-8 w-48"
+            className="h-8 w-full max-w-48"
             min={0}
           />
         ) : (
@@ -188,7 +199,7 @@ export function ConfigFieldEditor({
             value={draft}
             onChange={(e) => onDraftChange(def.key, e.target.value)}
             disabled={saving}
-            className="h-8 w-64"
+            className="h-8 w-full max-w-64"
           />
         )}
 

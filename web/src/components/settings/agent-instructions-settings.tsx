@@ -1,3 +1,6 @@
+import { useContext } from 'react';
+import { SettingsPanelContext } from './settings-panel-context';
+import { SettingsPanelActions } from './settings-panel';
 /** Instance-wide instructions are independent of the connected Codex account. */
 import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +18,7 @@ const MAX_LENGTH = 12_000;
 
 export function AgentInstructionsSettings({ active }: { active: boolean }) {
   const { t } = useTranslation('codexSettings');
+  const embedded = useContext(SettingsPanelContext);
   const queryClient = useQueryClient();
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
@@ -62,7 +66,11 @@ export function AgentInstructionsSettings({ active }: { active: boolean }) {
     <section
       hidden={!active}
       aria-labelledby={`${id}-title`}
-      className="min-w-0 space-y-3 rounded-lg border border-border bg-card/50 p-4"
+      className={
+        embedded
+          ? 'min-w-0 space-y-3'
+          : 'min-w-0 space-y-3 rounded-lg border border-border bg-card/50 p-4'
+      }
     >
       <h3 id={`${id}-title`} className="font-medium">
         {t('commonInstructionsTitle')}
@@ -113,41 +121,43 @@ export function AgentInstructionsSettings({ active }: { active: boolean }) {
               max: MAX_LENGTH,
             })}
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={
-                !dirty || mutation.isPending || value.length > MAX_LENGTH
-              }
-              onClick={() => mutation.mutate(value)}
-            >
-              {mutation.isPending
-                ? t('commonInstructionsSaving')
-                : t('commonInstructionsSave')}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={mutation.isPending || value === defaultText}
-              onClick={() => edit(defaultText)}
-            >
-              {t('commonInstructionsDefault')}
-            </Button>
-            {dirty && (
+          <SettingsPanelActions active={active}>
+            <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                variant="ghost"
-                disabled={mutation.isPending}
-                onClick={() => {
-                  setDraft(null);
-                  setSaved(false);
-                  mutation.reset();
-                }}
+                disabled={
+                  !dirty || mutation.isPending || value.length > MAX_LENGTH
+                }
+                onClick={() => mutation.mutate(value)}
               >
-                {t('commonInstructionsCancel')}
+                {mutation.isPending
+                  ? t('commonInstructionsSaving')
+                  : t('commonInstructionsSave')}
               </Button>
-            )}
-          </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={mutation.isPending || value === defaultText}
+                onClick={() => edit(defaultText)}
+              >
+                {t('commonInstructionsDefault')}
+              </Button>
+              {dirty && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={mutation.isPending}
+                  onClick={() => {
+                    setDraft(null);
+                    setSaved(false);
+                    mutation.reset();
+                  }}
+                >
+                  {t('commonInstructionsCancel')}
+                </Button>
+              )}
+            </div>
+          </SettingsPanelActions>
           {mutation.isError && (
             <p role="alert" className="text-sm text-destructive">
               {t('commonInstructionsSaveError')}

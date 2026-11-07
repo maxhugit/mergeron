@@ -1,3 +1,6 @@
+import { useContext } from 'react';
+import { SettingsPanelContext } from '../settings-panel-context';
+import { SettingsPanelActions } from '../settings-panel';
 /**
  * Model catalog management: seed, edit, validate, apply.
  *
@@ -24,8 +27,15 @@ import {
 } from './use-catalog-draft';
 
 /** Renders the shared draft and repair controls without treating failed reads as absence. */
-export function CatalogSettings() {
+export function CatalogSettings({
+  active = true,
+  view = 'all',
+}: {
+  active?: boolean;
+  view?: 'catalog' | 'json' | 'all';
+}) {
   const { t } = useTranslation();
+  const embedded = useContext(SettingsPanelContext);
   const catalog = useCatalogDraft();
   const [editing, setEditing] = useState<CatalogEntry | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -95,215 +105,222 @@ export function CatalogSettings() {
     catalog.blockers.error;
 
   return (
-    <section className="space-y-4 rounded-lg border border-border bg-card/50 p-4">
-      <header className="space-y-1">
-        <h2 className="text-sm font-semibold">{t('modelCatalog')}</h2>
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'codexClampsModelContextWindowToEachModelSMaxContextWindowACustomCatalogIsTheOnla4fbfb36',
-          )}
-        </p>
-        {/* "No user-level override" is all this endpoint can prove. A lower
+    <section
+      className={
+        embedded
+          ? 'space-y-4'
+          : 'space-y-4 rounded-lg border border-border bg-card/50 p-4'
+      }
+    >
+      <div hidden={view === 'json'}>
+        <header className="space-y-1">
+          <h2 className="text-sm font-semibold">{t('modelCatalog')}</h2>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'codexClampsModelContextWindowToEachModelSMaxContextWindowACustomCatalogIsTheOnla4fbfb36',
+            )}
+          </p>
+          {/* "No user-level override" is all this endpoint can prove. A lower
             config layer may still supply a catalog, so claiming the bundled one
             is active would be a guess. `runningPaths` is what the child
             actually loaded, and it is the only statement about the live list. */}
-        {state && !state.repairError && (
-          <p className="text-xs text-muted-foreground">
-            {pointer
-              ? t('configuredCatalogPath', { path: pointer })
-              : t('noUserLevelCatalogOverride')}
-            {!managed && pointer && ` · ${t('notManagedByThisServer')}`}
-          </p>
-        )}
-        {running.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {t('codexLoadedPath', { path: running.join(', ') })}
-          </p>
-        )}
-        {state?.ready &&
-          !state.repairError &&
-          !pointer &&
-          running.length === 0 && (
+          {state && !state.repairError && (
             <p className="text-xs text-muted-foreground">
-              {t('codexIsUsingTheCatalogItShipsWith')}
+              {pointer
+                ? t('configuredCatalogPath', { path: pointer })
+                : t('noUserLevelCatalogOverride')}
+              {!managed && pointer && ` · ${t('notManagedByThisServer')}`}
             </p>
           )}
-        {state?.ready && !pointerApplied && (
-          <div className="space-y-1.5">
-            <p className="text-xs text-amber-500">
-              {t(
-                'theRunningCatalogDiffersFromWhatTheConfigurationPointsAtNowRestartToAlignThem',
-              )}
+          {running.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t('codexLoadedPath', { path: running.join(', ') })}
             </p>
-            {/* A pointer changed through raw config leaves a perfectly healthy
+          )}
+          {state?.ready &&
+            !state.repairError &&
+            !pointer &&
+            running.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t('codexIsUsingTheCatalogItShipsWith')}
+              </p>
+            )}
+          {state?.ready && !pointerApplied && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-amber-500">
+                {t(
+                  'theRunningCatalogDiffersFromWhatTheConfigurationPointsAtNowRestartToAlignThem',
+                )}
+              </p>
+              {/* A pointer changed through raw config leaves a perfectly healthy
                 child, so this action cannot be tied to the error block. The
                 backend still runs its own activity check before stopping it. */}
-            <RestartButton catalog={catalog} />
+              <RestartButton catalog={catalog} active={active} />
+            </div>
+          )}
+        </header>
+
+        {(state?.startupError || state?.repairError) && (
+          <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
+            <p className="flex items-center gap-2 text-xs font-medium text-destructive">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {state.startupError
+                ? t('codexCouldNotStart')
+                : t('catalogStateCouldNotBeRead')}
+            </p>
+            <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all text-[11px]">
+              {state.startupError ?? state.repairError}
+            </pre>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'restoreThePreviousCatalogOrRepairConfigTomlDirectlyBelowThenRetryStartup',
+              )}
+            </p>
+            {/* The only in-browser way out of a failed start: everything else in
+              this panel needs a healthy child. */}
+            <RestartButton catalog={catalog} active={active} />
           </div>
         )}
-      </header>
 
-      {(state?.startupError || state?.repairError) && (
-        <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
-          <p className="flex items-center gap-2 text-xs font-medium text-destructive">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            {state.startupError
-              ? t('codexCouldNotStart')
-              : t('catalogStateCouldNotBeRead')}
-          </p>
-          <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all text-[11px]">
-            {state.startupError ?? state.repairError}
-          </pre>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'restoreThePreviousCatalogOrRepairConfigTomlDirectlyBelowThenRetryStartup',
-            )}
-          </p>
-          {/* The only in-browser way out of a failed start: everything else in
-              this panel needs a healthy child. */}
-          <RestartButton catalog={catalog} />
-        </div>
-      )}
-
-      {/* Draft actions */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={catalog.seed.isPending}
-          onClick={() =>
-            catalog.seed.mutate({
-              body: { source: 'bundled', expectedDraft: catalog.committed },
-            })
-          }
-        >
-          {t('seedFromBundledCatalog')}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={catalog.seed.isPending}
-          onClick={() =>
-            catalog.seed.mutate({
-              body: { source: 'effective', expectedDraft: catalog.committed },
-            })
-          }
-        >
-          {t('seedFromCurrentCatalog')}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!catalog.parsed}
-          onClick={() => {
-            setEditing(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          {t('addModel')}
-        </Button>
-      </div>
-
-      {catalog.draft.isSuccess && catalog.working === null && (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'noDraftYetSeedOneFirstACatalogReplacesTheWholeModelListSoStartingFromTheFullSet1870dd18',
-          )}
-        </p>
-      )}
-
-      {/* The document survives; only the structured view steps aside, so the
-          raw editor below stays the way to fix it. */}
-      {catalog.working !== null && !catalog.parsed && (
-        <p className="text-xs text-amber-500">
-          {t(
-            'thisDraftIsNotAReadableCatalogSoTheModelListIsUnavailableFixItInTheJsonEditorBelow',
-          )}
-        </p>
-      )}
-
-      {conflict && <p className="text-xs text-destructive">{conflict}</p>}
-
-      {/* Refusing the overwrite is only useful with a way out: the baseline is
-          deliberately stale now, so every save would keep failing until the
-          user decides whose version wins. */}
-      {catalog.stale && catalog.dirty && (
-        <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
-          <p className="text-xs text-amber-600 dark:text-amber-500">
-            {t(
-              'theSavedDraftChangedElsewhereWhileYouWereEditingSavingNowWouldOverwriteIt',
-            )}
-          </p>
+        {/* Draft actions */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant="outline"
-            disabled={catalog.writing || discarding}
+            disabled={catalog.seed.isPending}
+            onClick={() =>
+              catalog.seed.mutate({
+                body: { source: 'bundled', expectedDraft: catalog.committed },
+              })
+            }
+          >
+            {t('seedFromBundledCatalog')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={catalog.seed.isPending}
+            onClick={() =>
+              catalog.seed.mutate({
+                body: { source: 'effective', expectedDraft: catalog.committed },
+              })
+            }
+          >
+            {t('seedFromCurrentCatalog')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!catalog.parsed}
             onClick={() => {
-              setDiscarding(true);
-              setDiscardError(null);
-              catalog
-                .discardLocalEdits()
-                .catch((error: unknown) =>
-                  setDiscardError(getApiErrorMessage(error)),
-                )
-                .finally(() => setDiscarding(false));
+              setEditing(null);
+              setDialogOpen(true);
             }}
           >
-            {t('discardMyEditsAndLoadTheSavedDraft')}
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            {t('addModel')}
           </Button>
-          {discardError && (
-            <p className="text-xs text-destructive">{discardError}</p>
-          )}
         </div>
-      )}
 
-      {/* Model list */}
-      {models.length > 0 && (
-        <div className="divide-y divide-border rounded-md border border-border">
-          {models.map((model, index) => (
-            <div
-              key={`${entryText(model, 'slug')}-${index}`}
-              className="flex items-center justify-between gap-2 px-3 py-2"
+        {catalog.draft.isSuccess && catalog.working === null && (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'noDraftYetSeedOneFirstACatalogReplacesTheWholeModelListSoStartingFromTheFullSet1870dd18',
+            )}
+          </p>
+        )}
+
+        {/* The document survives; only the structured view steps aside, so the
+          raw editor below stays the way to fix it. */}
+        {catalog.working !== null && !catalog.parsed && (
+          <p className="text-xs text-amber-500">
+            {t(
+              'thisDraftIsNotAReadableCatalogSoTheModelListIsUnavailableFixItInTheJsonEditorBelow',
+            )}
+          </p>
+        )}
+
+        {conflict && <p className="text-xs text-destructive">{conflict}</p>}
+
+        {/* Refusing the overwrite is only useful with a way out: the baseline is
+          deliberately stale now, so every save would keep failing until the
+          user decides whose version wins. */}
+        {catalog.stale && catalog.dirty && (
+          <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              {t(
+                'theSavedDraftChangedElsewhereWhileYouWereEditingSavingNowWouldOverwriteIt',
+              )}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={catalog.writing || discarding}
+              onClick={() => {
+                setDiscarding(true);
+                setDiscardError(null);
+                catalog
+                  .discardLocalEdits()
+                  .catch((error: unknown) =>
+                    setDiscardError(getApiErrorMessage(error)),
+                  )
+                  .finally(() => setDiscarding(false));
+              }}
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm">{entryLabel(model)}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  <code>{entryText(model, 'slug')}</code>
-                  {' · '}
-                  {String(model.context_window ?? '—')}
-                  {' / '}
-                  {String(model.max_context_window ?? '—')}
-                  {' · '}
-                  {entryText(model, 'visibility') || '—'}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setEditing(model);
-                    setDialogOpen(true);
-                  }}
-                >
-                  {t('edit')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    writeModels(models.filter((item) => item !== model))
-                  }
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              {t('discardMyEditsAndLoadTheSavedDraft')}
+            </Button>
+            {discardError && (
+              <p className="text-xs text-destructive">{discardError}</p>
+            )}
+          </div>
+        )}
 
+        {/* Model list */}
+        {models.length > 0 && (
+          <div className="divide-y divide-border rounded-md border border-border">
+            {models.map((model, index) => (
+              <div
+                key={`${entryText(model, 'slug')}-${index}`}
+                className="flex items-center justify-between gap-2 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm">{entryLabel(model)}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    <code>{entryText(model, 'slug')}</code>
+                    {' · '}
+                    {String(model.context_window ?? '—')}
+                    {' / '}
+                    {String(model.max_context_window ?? '—')}
+                    {' · '}
+                    {entryText(model, 'visibility') || '—'}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditing(model);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    {t('edit')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      writeModels(models.filter((item) => item !== model))
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       {catalog.warnings.length > 0 && (
         <ul className="space-y-1 text-xs text-amber-500">
           {catalog.warnings.map((warning, index) => (
@@ -320,74 +337,83 @@ export function CatalogSettings() {
           {getApiErrorMessage(error)}
         </p>
       )}
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-        <SettingsSaveBar
-          dirty={catalog.dirty}
-          saving={catalog.save.isPending}
-          onSave={saveDraft}
-          label="Save draft"
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={
-            !catalog.committed || catalog.dirty || catalog.apply.isPending
-          }
-          onClick={() => {
-            if (catalog.committed === null) return;
-            catalog.apply.mutate({
-              body: {
-                expectedDraft: catalog.committed,
-                expectedPointer: pointer,
-              },
-            });
-          }}
-        >
-          {t('applyRestartCodex')}
-        </Button>
-        {managed && (
+      <SettingsPanelActions active={active}>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+          <SettingsSaveBar
+            inline
+            dirty={catalog.dirty}
+            saving={catalog.save.isPending}
+            onSave={saveDraft}
+            label="Save draft"
+          />
           <Button
             size="sm"
-            variant="ghost"
-            disabled={catalog.useDefault.isPending}
-            onClick={() =>
-              catalog.useDefault.mutate({ body: { expectedPointer: pointer } })
+            variant="outline"
+            disabled={
+              !catalog.committed || catalog.dirty || catalog.apply.isPending
             }
+            onClick={() => {
+              if (catalog.committed === null) return;
+              catalog.apply.mutate({
+                body: {
+                  expectedDraft: catalog.committed,
+                  expectedPointer: pointer,
+                },
+              });
+            }}
           >
-            {t('useDefaultCatalog')}
+            {t('applyRestartCodex')}
           </Button>
-        )}
-        {/* Mirrors the backend precondition exactly. A failed activation leaves
+          {managed && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={catalog.useDefault.isPending}
+              onClick={() =>
+                catalog.useDefault.mutate({
+                  body: { expectedPointer: pointer },
+                })
+              }
+            >
+              {t('useDefaultCatalog')}
+            </Button>
+          )}
+          {/* Mirrors the backend precondition exactly. A failed activation leaves
             a `pending` record whose `before` pointer is what needs restoring,
             so restricting this to `accepted` hid the recovery path in the one
             state that needs it. */}
-        {restorable && (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={catalog.restore.isPending}
-            onClick={() =>
-              catalog.restore.mutate({ body: { expectedPointer: pointer } })
-            }
-          >
-            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-            {t('restorePrevious')}
-          </Button>
-        )}
+          {restorable && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={catalog.restore.isPending}
+              onClick={() =>
+                catalog.restore.mutate({ body: { expectedPointer: pointer } })
+              }
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              {t('restorePrevious')}
+            </Button>
+          )}
+        </div>
+      </SettingsPanelActions>
+      <div hidden={view === 'json'}>
+        <CatalogBlockerList query={catalog.blockers} />
       </div>
 
-      <CatalogBlockerList query={catalog.blockers} />
-
-      <CatalogRawEditor
-        content={catalog.working}
-        onChange={catalog.setWorking}
-        onValidate={() => {
-          if (catalog.working !== null)
-            catalog.validate.mutate({ body: { content: catalog.working } });
-        }}
-        validating={catalog.validate.isPending}
-      />
+      <div hidden={view === 'catalog'}>
+        <CatalogRawEditor
+          active={active && view !== 'catalog'}
+          forceExpanded={view === 'json'}
+          content={catalog.working}
+          onChange={catalog.setWorking}
+          onValidate={() => {
+            if (catalog.working !== null)
+              catalog.validate.mutate({ body: { content: catalog.working } });
+          }}
+          validating={catalog.validate.isPending}
+        />
+      </div>
 
       <CatalogEntryDialog
         open={dialogOpen}
@@ -406,19 +432,23 @@ export function CatalogSettings() {
 /** Guarded restart, needed both after a failed start and for a pending pointer change. */
 function RestartButton({
   catalog,
+  active = true,
 }: {
+  active?: boolean;
   catalog: ReturnType<typeof useCatalogDraft>;
 }) {
   const { t } = useTranslation();
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      disabled={catalog.restart.isPending}
-      onClick={() => catalog.restart.mutate({})}
-    >
-      <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-      {t('restartCodex')}
-    </Button>
+    <SettingsPanelActions active={active}>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={catalog.restart.isPending}
+        onClick={() => catalog.restart.mutate({})}
+      >
+        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+        {t('restartCodex')}
+      </Button>
+    </SettingsPanelActions>
   );
 }

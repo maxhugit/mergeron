@@ -1,3 +1,4 @@
+import { SettingsPanelActions } from '../settings-panel';
 /**
  * Raw JSON editing for the catalog draft, peer to the raw config.toml editor.
  *
@@ -23,6 +24,8 @@ interface Props {
   onChange: (content: string) => void;
   onValidate: () => void;
   validating: boolean;
+  active?: boolean;
+  forceExpanded?: boolean;
 }
 
 export function CatalogRawEditor({
@@ -30,6 +33,8 @@ export function CatalogRawEditor({
   onChange,
   onValidate,
   validating,
+  active = true,
+  forceExpanded = false,
 }: Props) {
   const { t } = useTranslation();
   const dark = useThemeStore((s) => s.dark);
@@ -37,21 +42,23 @@ export function CatalogRawEditor({
 
   return (
     <div className="space-y-3 border-t border-border pt-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {expanded ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronRight className="h-4 w-4" />
-        )}
-        <FileJson className="h-4 w-4" />
-        {t('editCatalogJson')}
-      </button>
+      {!forceExpanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {expanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          <FileJson className="h-4 w-4" />
+          {t('editCatalogJson')}
+        </button>
+      )}
 
-      {expanded && (
+      {(expanded || forceExpanded) && (
         <div className="space-y-2">
           <p className="flex items-start gap-1.5 text-xs text-amber-500">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -76,14 +83,16 @@ export function CatalogRawEditor({
               }}
             />
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={content === null || validating}
-            onClick={onValidate}
-          >
-            {t('validateWithCodex')}
-          </Button>
+          <SettingsPanelActions active={active}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={content === null || validating}
+              onClick={onValidate}
+            >
+              {t('validateWithCodex')}
+            </Button>
+          </SettingsPanelActions>
         </div>
       )}
     </div>
