@@ -32,6 +32,17 @@ pour traitement manuel, sans migration implicite.
 
 ## Corrections
 
+Cliquer sur une anomalie ouvre **Corrections proposées**. La popup présente
+l’élément concerné, les chemins, les explications et les seules réparations
+offertes par le diagnostic serveur. Choisir une réparation ouvre sa confirmation ;
+ouvrir la popup ne modifie aucune donnée. Le diagnostic peut aussi être actualisé
+depuis cette fenêtre. Si l’anomalie disparaît, ses anciens boutons ne restent pas
+disponibles. Une référence d’agent permet également d’ouvrir cet agent pour
+choisir un autre dossier dans son explorateur.
+
+Les anomalies sans réparation automatique et les diagnostics incomplets affichent
+les indications disponibles, sans proposer une action d’écriture arbitraire.
+
 Une action est proposée seulement lorsqu’une correction ciblée peut être vérifiée :
 
 - **Recréer ce dossier vide** : dossier attendu manquant, avec parent existant et
