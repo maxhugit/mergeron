@@ -6,13 +6,7 @@ import { forgetPresentations } from '@/lib/mockup-presentation';
  */
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { DragDropProvider } from '@dnd-kit/react';
-import {
-  BookOpen,
-  FolderKanban,
-  FolderOpen,
-  House,
-  ArrowLeft,
-} from 'lucide-react';
+import { FolderKanban, FolderOpen, House, ArrowLeft } from 'lucide-react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -989,20 +983,6 @@ export function ThreadSidebar() {
     <div className="flex h-full min-h-0 flex-col bg-card/80">
       {/* Global actions */}
       <div className="shrink-0 space-y-0.5 px-2 py-2">
-        <button
-          type="button"
-          onClick={() => void navigate({ to: '/help' })}
-          aria-current={activeView === 'help' ? 'page' : undefined}
-          className={cn(
-            'flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
-            activeView === 'help'
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-          )}
-        >
-          <BookOpen aria-hidden="true" className="h-4 w-4 shrink-0" />
-          {t('platformGuide')}
-        </button>
         <button
           type="button"
           onClick={() => void navigate({ to: '/' })}

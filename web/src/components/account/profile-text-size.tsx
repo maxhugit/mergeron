@@ -43,7 +43,7 @@ export function ProfileTextSizeApplier({
   }, [percent]);
   return null;
 }
-export function ProfileTextSize() {
+export function ProfileTextSize({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation('headerControls');
   const support = useBreakpoint();
   const session = usePlatformSession();
@@ -88,14 +88,16 @@ export function ProfileTextSize() {
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span>
           {t('textSize')}{' '}
-          <span className="text-xs text-muted-foreground">
-            ·{' '}
-            {support === 'mobile'
-              ? t('mobile')
-              : support === 'tablet'
-                ? t('tablet')
-                : t('desktop')}
-          </span>
+          {!compact && (
+            <span className="text-xs text-muted-foreground">
+              ·{' '}
+              {support === 'mobile'
+                ? t('mobile')
+                : support === 'tablet'
+                  ? t('tablet')
+                  : t('desktop')}
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-1">
           <Button
@@ -108,12 +110,24 @@ export function ProfileTextSize() {
           >
             <Minus className="size-4" />
           </Button>
-          <output
-            className="min-w-12 text-center tabular-nums"
-            aria-live="polite"
-          >
-            {percent}%
-          </output>
+          {compact ? (
+            <Button
+              variant="ghost"
+              className="min-w-12 px-1 tabular-nums"
+              aria-label={t('reset')}
+              disabled={disabled || percent === 100}
+              onClick={() => change(100)}
+            >
+              {percent}%
+            </Button>
+          ) : (
+            <output
+              className="min-w-12 text-center tabular-nums"
+              aria-live="polite"
+            >
+              {percent}%
+            </output>
+          )}
           <Button
             size="icon"
             variant="outline"
@@ -126,17 +140,19 @@ export function ProfileTextSize() {
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{t('savedForSupport')}</span>
-        <button
-          type="button"
-          disabled={disabled || percent === 100}
-          onClick={() => change(100)}
-          className="shrink-0 underline disabled:opacity-50"
-        >
-          {t('reset')}
-        </button>
-      </div>
+      {!compact && (
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>{t('savedForSupport')}</span>
+          <button
+            type="button"
+            disabled={disabled || percent === 100}
+            onClick={() => change(100)}
+            className="shrink-0 underline disabled:opacity-50"
+          >
+            {t('reset')}
+          </button>
+        </div>
+      )}
       {save.isError && (
         <p role="alert" className="text-xs text-destructive">
           {t('saveError')}

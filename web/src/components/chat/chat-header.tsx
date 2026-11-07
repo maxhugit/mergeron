@@ -2,13 +2,11 @@ import { CompactHeaderControls } from './compact-header-controls';
 import { translationKey } from '@/locales/translation-key';
 import { BrandIcon } from '@/components/brand-icon';
 import { PwaInstall } from '@/components/pwa-install';
-import { ReloadApplicationButton } from '@/components/reload-application-button';
 import { useState } from 'react';
 import {
   Check,
   Edit3,
   Menu,
-  MonitorCog,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
@@ -44,8 +42,6 @@ import { useTimelineStore } from '@/stores/timeline-store';
 import { useMessageVersions } from '@/hooks/use-message-branches';
 
 import { BranchGraphDialog } from '@/components/branches/branch-graph-dialog';
-import { AccountRateLimitBadge } from './account-rate-limit-badge';
-import { McpStatusBadge } from './mcp-status-badge';
 import { usePlatformSession } from '@/lib/platform-session';
 import { ProjectResourceHeader } from '@/components/projects/project-resource-header';
 import { ProjectHeader } from '@/components/projects/project-header';
@@ -304,57 +300,11 @@ export function ChatHeader() {
           )}
         </div>
         {/* Full-size controls stay inline on desktop. */}
-        {isDesktop && (
-          <>
-            <McpStatusBadge mode="header" />
-            <span className="hidden sm:inline-flex">
-              <AccountRateLimitBadge />
-            </span>
-            <Badge
-              variant={connected ? 'default' : 'secondary'}
-              className="text-xs transition-colors duration-300"
-            >
-              <span
-                className={`inline-block h-1.5 w-1.5 rounded-full sm:mr-1.5 ${
-                  connected
-                    ? 'animate-pulse bg-green-400'
-                    : 'bg-muted-foreground'
-                }`}
-              />
-              <span className="hidden sm:inline">
-                {connected ? t('connected') : t('disconnected')}
-              </span>
-            </Badge>
-          </>
-        )}
-        {/* Desktop: inline action buttons */}
-        {isDesktop ? (
-          <>
-            {isAdministrator && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => void navigate({ to: '/settings' })}
-                    aria-label={t('platformSettings')}
-                  >
-                    <MonitorCog className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('platformSettings')}</TooltipContent>
-              </Tooltip>
-            )}
-          </>
-        ) : (
-          <CompactHeaderControls
-            connected={connected}
-            isAdministrator={isAdministrator}
-            onSettings={() => void navigate({ to: '/settings' })}
-          />
-        )}
-        {isDesktop && <ReloadApplicationButton />}
+        <CompactHeaderControls
+          connected={connected}
+          isAdministrator={isAdministrator}
+          onSettings={() => void navigate({ to: '/settings' })}
+        />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
