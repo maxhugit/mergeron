@@ -13,10 +13,15 @@ import {
   chmod,
   chown,
   rename,
+  readdir,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { TransactionalUpdater, copyPersistentTree } from '../src/updater.mjs';
+import {
+  TransactionalUpdater,
+  copyPersistentTree,
+  probeRestoreParent,
+} from '../src/updater.mjs';
 import {
   extractBackupArchive,
   BACKUP_ARCHIVE_NAME,
@@ -1983,4 +1988,36 @@ test('durably accepts before slow Manager preparation without stopping applicati
     await updater.task;
   }
   assert.equal(updater.current.status, 'succeeded');
+});
+
+test('full rollback preflight uses a real temporary directory and refuses aliased roots', async (t) => {
+  const { root } = await fixture(t);
+  const before = await readdir(root);
+  const info = await probeRestoreParent(root);
+  assert.equal(info.ino, (await lstat(root)).ino);
+  assert.deepEqual(await readdir(root), before);
+  const alias = root + '-alias';
+  await symlink(root, alias);
+  t.after(() => rm(alias));
+  await assert.rejects(probeRestoreParent(alias), /updateUnsafePath/);
+});
+
+test('blocked full rollback permissions prevent update acceptance before any service stop', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const original = await updater.plan(images, 'standard', 'full');
+  updater.probeRestoreParent = async () => {
+    throw Object.assign(new Error('denied'), { code: 'EACCES' });
+  };
+  const plan = await updater.plan(images, 'standard', 'full');
+  assert.equal(plan.applicable, false);
+  assert(plan.blockers.includes('updateRestoreParentNotWritable'));
+  await assert.rejects(
+    updater.begin({
+      images,
+      backupMode: 'full',
+      expectedFingerprint: original.fingerprint,
+      confirmation: original.confirmation,
+    }),
+  );
+  assert(!docker.calls.some(([action]) => action === 'stop'));
 });

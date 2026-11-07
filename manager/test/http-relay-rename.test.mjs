@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -19,6 +19,7 @@ async function fixture(t) {
     image: `ghcr.io/maxhugit/mergeron-manager@sha256:${'a'.repeat(64)}`,
     stateRoot: root,
     network: 'proxy',
+    applicationMiddlewares: [],
     proxyDirectory: join(root, 'proxy'),
   };
   const spec = gatewaySpecification(config);
@@ -44,6 +45,7 @@ async function fixture(t) {
   );
   const calls = [];
   const docker = {
+    listNetworks: async () => [{ Name: 'proxy' }],
     listContainers: async () =>
       [...values.values()].map((v) => ({ Id: v.Id, Names: [v.Name] })),
     inspectContainer: async (id) => structuredClone(values.get(id)),
@@ -152,4 +154,94 @@ test('failed named routing restores IP routing before rolling container names ba
   );
   assert.equal(f.values.get('a').Name, '/mergeron-dev-update-gateway-a');
   assert.equal(f.values.get('b').Name, '/mergeron-dev-update-gateway-b');
+});
+
+test('preserves the existing authentication chain when provisioning and renaming relays', async (t) => {
+  const f = await fixture(t);
+  f.config.applicationMiddlewares = ['authentik@file', 'site-security'];
+  await installGateways(f.config, f.docker);
+  const initial = JSON.parse(await readFile(f.path, 'utf8'));
+  initial.http.middlewares.authentik = {
+    forwardAuth: { address: 'http://sso.test/check' },
+  };
+  initial.http.routers.office = {
+    rule: 'PathPrefix(`/office`)',
+    service: 'office',
+  };
+  initial.http.middlewares[
+    'mergeron-dev-continuous-security'
+  ].headers.customResponseHeaders = { 'X-Keep': 'retained' };
+  await writeFile(f.path, JSON.stringify(initial));
+  delete f.config.applicationMiddlewares;
+  await renameHttpRelays(f.config, f.docker, f.verify);
+  const route = JSON.parse(await readFile(f.path, 'utf8'));
+  assert.deepEqual(route.http.routers['mergeron-dev-continuous'].middlewares, [
+    'authentik@file',
+    'site-security',
+    'mergeron-dev-continuous-security',
+  ]);
+  assert.deepEqual(
+    route.http.middlewares.authentik,
+    initial.http.middlewares.authentik,
+  );
+  assert.deepEqual(route.http.routers.office, initial.http.routers.office);
+  assert.equal(
+    route.http.middlewares['mergeron-dev-continuous-security'].headers
+      .customResponseHeaders['X-Keep'],
+    'retained',
+  );
+  // Independent monitoring authenticates with its scoped cookie, not forward-auth.
+  assert.equal(
+    route.http.routers['mergeron-dev-monitor'].middlewares,
+    undefined,
+  );
+  f.config.applicationMiddlewares = [];
+  await assert.rejects(
+    installGateways(f.config, f.docker),
+    /must not be removed/,
+  );
+});
+
+test('refuses an implicit first middleware chain or a missing network before changing replicas', async (t) => {
+  const f = await fixture(t);
+  delete f.config.applicationMiddlewares;
+  await assert.rejects(
+    installGateways(f.config, f.docker),
+    /Explicit application middlewares/,
+  );
+  assert.deepEqual(f.calls, []);
+  f.config.applicationMiddlewares = [];
+  f.docker.listNetworks = async () => [];
+  await assert.rejects(
+    installGateways(f.config, f.docker),
+    /Gateway network not found/,
+  );
+  assert.deepEqual(f.calls, []);
+});
+
+test('retries a never-started relay without stopping an already stopped container', async (t) => {
+  const f = await fixture(t);
+  f.values.get('a').State = { Running: false, Status: 'created' };
+  f.docker.removeContainer = async (id) => f.values.delete(id);
+  f.docker.createContainer = async (name, spec) => {
+    f.values.set('new', {
+      ...structuredClone(f.values.get('b')),
+      Id: 'new',
+      Name: '/' + name,
+      Config: { ...spec },
+      HostConfig: spec.HostConfig,
+    });
+    return { Id: 'new' };
+  };
+  f.docker.startContainer = async () => {};
+  await installGateways(f.config, f.docker);
+  assert(f.values.has('new'));
+});
+
+test('does not overwrite unreadable existing proxy configuration even with explicit middlewares', async (t) => {
+  const f = await fixture(t);
+  await writeFile(f.path, 'not generated JSON: keep');
+  await assert.rejects(installGateways(f.config, f.docker), SyntaxError);
+  assert.equal(await readFile(f.path, 'utf8'), 'not generated JSON: keep');
+  assert.deepEqual(f.calls, []);
 });

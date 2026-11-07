@@ -49,6 +49,7 @@
   "managerMinimalRollbackWarning": "Restaurer les anciennes images, la base et la configuration uniquement ? Les fichiers de projets, documents, versions et historiques Codex sur disque resteront inchangés et peuvent ne plus correspondre à la base restaurée. Les données remplacées sont conservées en quarantaine.",
   "updateMinimalBackupPathUnsupported": "Le mode minimal nécessite une base et une configuration situées sous /home/codex, sans chemin ambigu.",
   "updateMinimalDatabaseMissing": "La base SQLite n’a pas été trouvée. La sauvegarde minimale est bloquée.",
+  "updateRestoreParentNotWritable": "Le manager ne peut pas créer le dossier temporaire de restauration dans le répertoire parent de l’installation. Corrigez les droits de ce parent sur l’hôte avant la mise à jour ; ne modifiez pas récursivement les données.",
   "updateUnsafePath": "Un chemin de sauvegarde ou de restauration est absent, ambigu ou contient un lien symbolique non autorisé.",
   "managerBackupEssentialLabel": "Données essentielles",
   "managerBackupFullLabel": "Sauvegarde complète historique",

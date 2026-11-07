@@ -49,6 +49,7 @@
   "managerMinimalRollbackWarning": "Restore previous images, database and configuration only? Project files, documents, versions and on-disk Codex histories remain unchanged and may no longer match the restored database. Replaced data is kept in quarantine.",
   "updateMinimalBackupPathUnsupported": "Minimal backup requires the database and configuration to be under /home/codex, without ambiguous paths.",
   "updateMinimalDatabaseMissing": "The SQLite database was not found. Minimal backup is blocked.",
+  "updateRestoreParentNotWritable": "The Manager cannot create its temporary restore directory in the installation parent. Correct that parent’s permissions on the host before updating; do not recursively change the data.",
   "updateUnsafePath": "A backup or recovery path is missing, ambiguous or contains a disallowed symbolic link.",
   "managerBackupEssentialLabel": "Essential data",
   "managerBackupFullLabel": "Historical full backup",

@@ -36,7 +36,7 @@ export async function renameHttpRelays(
 ) {
   if (!config.proxyDirectory) throw new Error('Proxy directory required');
   // Reuse the provisioner's profile/image validation, preserving legacy names.
-  await installGateways(config, docker);
+  config = await installGateways(config, docker);
   const path = join(
     resolve(config.proxyDirectory),
     `${config.stack}-continuous.yml`,
@@ -74,6 +74,8 @@ export async function renameHttpRelays(
     routing.http.middlewares[
       `${config.stack}-continuous-security`
     ].headers.customResponseHeaders = {
+      ...routing.http.middlewares[`${config.stack}-continuous-security`].headers
+        .customResponseHeaders,
       'X-Mergeron-Relay-Rename': value,
     };
     return routing;

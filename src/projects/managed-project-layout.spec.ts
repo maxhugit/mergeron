@@ -105,6 +105,47 @@ describe('managed project layout v4', () => {
     database.sqlite.close();
     await fs.rm(parent, { recursive: true, force: true });
   });
+  it('preserves an empty legacy .external placeholder as imported user material', async () => {
+    const external = path.join(root, 'sources', '.external');
+    await fs.rm(external, { recursive: true });
+    await fs.writeFile(external, '', { mode: 0o444 });
+    const before = await fs.lstat(external);
+    await migrateManagedProject(database.db, 'p', root);
+    const preserved = path.join(
+      root,
+      'dossiers',
+      'sources-importees',
+      '.external',
+    );
+    expect(await fs.readFile(preserved, 'utf8')).toBe('');
+    expect((await fs.lstat(preserved)).ino).toBe(before.ino);
+    expect(
+      database.db.select().from(projects).get()?.workspaceLayoutVersion,
+    ).toBe(4);
+    await migrateManagedProject(database.db, 'p', root);
+    expect(await fs.readFile(preserved, 'utf8')).toBe('');
+  });
+  it.each(['nonempty', 'symlink'])(
+    'refuses an unsafe %s legacy external entry before moving data',
+    async (kind) => {
+      const external = path.join(root, 'sources', '.external');
+      await fs.rm(external, { recursive: true });
+      if (kind === 'symlink') {
+        const target = path.join(parent, 'empty');
+        await fs.writeFile(target, '');
+        await fs.symlink(target, external);
+      } else await fs.writeFile(external, 'preserve this content');
+      await expect(
+        migrateManagedProject(database.db, 'p', root),
+      ).rejects.toThrow('Invalid legacy Git copy directory');
+      expect(
+        await fs.readFile(path.join(root, 'documents', 'note.txt'), 'utf8'),
+      ).toBe('keep note');
+      expect(
+        database.db.select().from(projects).get()?.workspaceLayoutVersion,
+      ).toBe(3);
+    },
+  );
   it('preserves documents, dirty source files, versions and drafts and rewrites reference paths', async () => {
     await migrateManagedProject(database.db, 'p', root);
     expect(

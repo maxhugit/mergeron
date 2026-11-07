@@ -309,6 +309,30 @@ export async function restorePersistentEntry(
   if (saved && !(await exists(source))) await durableRename(restore, source);
 }
 
+// Exercise the exact parent write required by full rollback, using the Manager's
+// real UID/capabilities. access(W_OK) is insufficient with Linux capabilities.
+export async function probeRestoreParent(root) {
+  const info = await lstat(root);
+  if (!info.isDirectory() || info.isSymbolicLink())
+    throw new Error('updateUnsafePath');
+  const probe = join(root, `.manager-restore-probe-${randomUUID()}`);
+  await mkdir(probe, { mode: 0o700 });
+  try {
+    const current = await lstat(root);
+    if (current.dev !== info.dev || current.ino !== info.ino)
+      throw new Error('updateUnsafePath');
+  } finally {
+    await rmdir(probe);
+  }
+  return {
+    dev: info.dev,
+    ino: info.ino,
+    uid: info.uid,
+    gid: info.gid,
+    mode: info.mode,
+  };
+}
+
 export function specification(inspect, image, component) {
   const endpoints = Object.fromEntries(
     Object.entries(inspect.NetworkSettings.Networks).map(([name, endpoint]) => [
@@ -356,6 +380,7 @@ export class TransactionalUpdater {
     this.backupSizeCache = new Map();
     this.backupSizeTask = Promise.resolve();
     this.measureBackupSize = allocatedTreeSize;
+    this.probeRestoreParent = probeRestoreParent;
   }
 
   status() {
@@ -1196,6 +1221,18 @@ export class TransactionalUpdater {
       if (!(await exists(path)) || (await lstat(path)).isSymbolicLink())
         blockers.push(`persistent:${name}:updateUnsafePath`);
     }
+    let restoreParent = null;
+    if (backupPolicy !== MINIMAL && !withoutDataBackup(backupPolicy)) {
+      try {
+        restoreParent = await this.probeRestoreParent(
+          this.configuration.hostStatePath,
+        );
+      } catch (error) {
+        if (['EACCES', 'EPERM', 'EROFS'].includes(error?.code))
+          blockers.push('updateRestoreParentNotWritable');
+        else throw error;
+      }
+    }
     let backupScope = backupEntries(backupPolicy);
     if (backupPolicy === MINIMAL) {
       const application = containers.find(
@@ -1229,6 +1266,7 @@ export class TransactionalUpdater {
       backupPolicy,
       ...(backupMode !== undefined ? { backupMode } : {}),
       backupScope,
+      restoreParent,
       backupFormat: withoutDataBackup(backupPolicy)
         ? null
         : BACKUP_ARCHIVE_FORMAT,

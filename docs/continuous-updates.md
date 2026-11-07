@@ -39,8 +39,39 @@ node manager/scripts/install-update-gateway.mjs \
   --image=ghcr.io/maxhugit/mergeron-manager@sha256:EMPREINTE_VERIFIEE \
   --state-root=/srv/mergeron-dev/state \
   --network=mergeron-proxy \
+  --application-middlewares=authentik@file,mergeron-security-headers@file \
   --proxy-directory=/srv/traefik/dynamic
 ```
+
+Reprendre **dans le même ordre** les middlewares de la route applicative existante
+(authentification et en-têtes), en adaptant l’exemple à votre installation.
+`--application-middlewares=none` est réservé à une route sans middleware existant.
+Lors des exécutions suivantes, la chaîne déjà enregistrée dans le fichier des
+relais est conservée si l’option est omise ; sa suppression est refusée. Un fichier
+existant illisible n’est jamais écrasé. La route `/_mergeron-update` utilise son
+propre jeton de suivi, sans recopier le forward-auth de l’application. Les routes
+OnlyOffice existantes restent intactes.
+
+Choisir le **réseau existant partagé par Traefik et l’ingress**, qui peut porter
+un autre nom que `mergeron-proxy`. Un réseau absent est refusé avant création de
+conteneur. Une tentative interrompue ayant laissé un relais à l’état `created`
+peut être reprise sans essayer d’arrêter ce conteneur jamais démarré.
+
+### Droits nécessaires au retour arrière
+
+Avant l’arrêt des services, le plan d’une sauvegarde complète vérifie réellement
+la création et la suppression d’un répertoire temporaire dans le parent de
+l’installation, sous les droits actuels du Manager. `updateRestoreParentNotWritable`
+bloque la mise à jour si ce test échoue. Corriger sur l’hôte le propriétaire de
+**ce seul parent**, après vérification du chemin (`chown 0:0 /srv/mergeron/state`
+pour l’installation standard). Ne pas utiliser `chown -R` ni modifier les droits
+des projets. Le Manager conserve `CHOWN` et `DAC_READ_SEARCH`, sans ajout de
+`DAC_OVERRIDE` ni désactivation du sandbox.
+
+La migration des projets préserve également un ancien fichier `.external` vide :
+il accompagne les anciennes sources dans `dossiers/sources-importees/.external`.
+Il n’est ni supprimé ni traité comme une copie Git. Un fichier non vide, un lien
+symbolique ou une structure Git ambiguë reste refusé sans déplacer les données.
 
 Les deux conteneurs doivent passer une vraie sonde HTTP avant l’écriture de la
 configuration du fournisseur de fichiers Traefik. Chaque relais s’exécute sous
