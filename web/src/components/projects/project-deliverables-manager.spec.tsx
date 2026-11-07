@@ -442,7 +442,7 @@ it('shows active document names only outside compact mode and keeps card rows ex
     deliverableId: 'd',
     name: 'Design.docx',
     format: 'docx',
-    sourcePath: '/Design.docx',
+    sourcePath: '/workspaces/p/Design & notes #1.docx',
     currentVersionNumber: 1,
     deletedAt: null,
     createdAt: 1,
@@ -467,6 +467,13 @@ it('shows active document names only outside compact mode and keeps card rows ex
     'title',
     'Design.docx',
   );
+  const documentLink = within(names).getByRole('link', { name: 'Design.docx' });
+  expect(documentLink).toHaveAttribute(
+    'href',
+    '/document?path=%2Fworkspaces%2Fp%2FDesign%20%26%20notes%20%231.docx',
+  );
+  expect(documentLink).toHaveAttribute('target', '_blank');
+  expect(documentLink).toHaveAttribute('rel', 'noopener noreferrer');
   expect(screen.queryByText('Removed.docx')).not.toBeInTheDocument();
   expect(screen.getByTestId('deliverable-status-d')).toHaveClass(
     'col-start-2',
@@ -812,6 +819,58 @@ it.each([
     ).not.toBeInTheDocument();
   },
 );
+it('opens registered documents from the desktop table in the existing document viewer', async () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      private callback: (entries: { contentRect: { width: number } }[]) => void;
+      constructor(
+        callback: (entries: { contentRect: { width: number } }[]) => void,
+      ) {
+        this.callback = callback;
+      }
+      observe() {
+        this.callback([{ contentRect: { width: 1000 } }]);
+      }
+      disconnect() {}
+    },
+  );
+  try {
+    await setupList({
+      ...board,
+      deliverables: [
+        {
+          ...item,
+          documents: [
+            {
+              id: 'doc',
+              deliverableId: 'd',
+              name: 'Notes.pdf',
+              format: 'pdf',
+              sourcePath: '/workspaces/p/Notes & review.pdf',
+              currentVersionNumber: 2,
+              deletedAt: null,
+              createdAt: 1,
+              updatedAt: 1,
+              versions: [],
+            },
+          ],
+        },
+      ],
+    });
+    const link = within(
+      screen.getByRole('table', { name: 'Deliverables' }),
+    ).getByRole('link', { name: 'Notes.pdf' });
+    expect(link).toHaveAttribute(
+      'href',
+      '/document?path=%2Fworkspaces%2Fp%2FNotes%20%26%20review.pdf',
+    );
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 it('keeps the table search visible and exposes filters through a mobile toggle', async () => {
   await setupList();
 

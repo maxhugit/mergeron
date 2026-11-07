@@ -576,19 +576,19 @@ export function DeliverablesList({
                     <td className="px-4 py-4">
                       <button
                         type="button"
-                        className="block w-full min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="block w-fit max-w-full min-w-0 cursor-pointer rounded text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => onSelect(item.id)}
                       >
                         <strong className="block truncate" title={item.title}>
                           {item.title}
                         </strong>
-                        <span
-                          className="mt-1 block truncate text-xs text-muted-foreground"
-                          title={item.description}
-                        >
-                          {item.description || t('noDescription')}
-                        </span>
                       </button>
+                      <span
+                        className="mt-1 block truncate text-xs text-muted-foreground"
+                        title={item.description}
+                      >
+                        {item.description || t('noDescription')}
+                      </span>
                     </td>
                     <td className="px-4 py-4">
                       <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -605,7 +605,17 @@ export function DeliverablesList({
                             className="truncate"
                             title={document.name}
                           >
-                            {document.name}
+                            <a
+                              href={withBasePath(
+                                `/document?path=${encodeURIComponent(document.sourcePath)}`,
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block truncate rounded hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                              title={document.name}
+                            >
+                              {document.name}
+                            </a>
                           </li>
                         ))}
                       </ul>
@@ -670,16 +680,23 @@ export function DeliverablesList({
                 key={item.id}
                 className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-accent/60 @min-[68rem]:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_120px_120px_minmax(0,1.5fr)_120px_95px] @min-[68rem]:items-center @min-[68rem]:gap-3"
               >
-                <button
-                  type="button"
-                  className="col-start-1 row-start-1 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[68rem]:col-auto @min-[68rem]:row-auto"
-                  onClick={() => onSelect(item.id)}
-                >
-                  <strong className="block truncate">{item.title}</strong>
-                  <span className="mt-1 block truncate text-xs text-muted-foreground">
+                <div className="col-start-1 row-start-1 min-w-0 @min-[68rem]:col-auto @min-[68rem]:row-auto">
+                  <button
+                    type="button"
+                    className="col-start-1 row-start-1 block w-fit max-w-full min-w-0 cursor-pointer rounded text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[68rem]:col-auto @min-[68rem]:row-auto"
+                    onClick={() => onSelect(item.id)}
+                  >
+                    <strong className="block truncate" title={item.title}>
+                      {item.title}
+                    </strong>
+                  </button>
+                  <span
+                    className="mt-1 block truncate text-xs text-muted-foreground"
+                    title={item.description}
+                  >
                     {item.description || t('noDescription')}
                   </span>
-                </button>
+                </div>
                 <div className="col-start-1 row-start-2 min-w-0 text-sm @min-[68rem]:col-auto @min-[68rem]:row-auto">
                   <span className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground @min-[68rem]:hidden">
@@ -698,7 +715,17 @@ export function DeliverablesList({
                         className="truncate"
                         title={document.name}
                       >
-                        {document.name}
+                        <a
+                          href={withBasePath(
+                            `/document?path=${encodeURIComponent(document.sourcePath)}`,
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate rounded hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                          title={document.name}
+                        >
+                          {document.name}
+                        </a>
                       </li>
                     ))}
                   </ul>

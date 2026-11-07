@@ -30,10 +30,16 @@ const item = {
   primaryTaskId: null,
   updatedAt: Date.UTC(2026, 9, 25),
   documents: [
-    { id: 'first', name: 'Dossier de conception.docx', deletedAt: null },
+    {
+      id: 'first',
+      name: 'Dossier de conception.docx',
+      sourcePath: '/workspaces/project/Conception & notes.docx',
+      deletedAt: null,
+    },
     {
       id: 'second',
       name: 'Présentation des choix de conception et des arbitrages.pptx',
+      sourcePath: '/workspaces/project/Presentation.pptx',
       deletedAt: null,
     },
   ],
@@ -92,6 +98,53 @@ test.each([390, 800, 1001, 1280])(
       expect(Math.abs(bounds[0].top - bounds[1].top)).toBeLessThan(1);
       expect(Math.abs(bounds[1].top - bounds[2].top)).toBeLessThan(1);
     }
+  },
+);
+
+test.each([390, 1001])(
+  'opens only the deliverable title and exposes document links at %ipx',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('en');
+    const selected: string[] = [];
+    render(
+      <div style={{ padding: 16 }}>
+        <DeliverablesList
+          items={[item]}
+          board={board}
+          onSelect={(id) => selected.push(id)}
+        />
+      </div>,
+    );
+    await waitFor(() =>
+      expect(Boolean(screen.queryByRole('table'))).toBe(width >= 608),
+    );
+    const title = screen.getByRole('button', { name: item.title });
+    expect(getComputedStyle(title).cursor).toBe('pointer');
+    const description = screen.getByText(item.description);
+    expect(description.closest('button')).toBeNull();
+    fireEvent.click(description);
+    expect(selected).toEqual([]);
+    await page.getByRole('button', { name: item.title, exact: true }).click();
+    expect(selected).toEqual([item.id]);
+    if (width >= 608) {
+      const link = screen.getByRole('link', {
+        name: 'Dossier de conception.docx',
+      });
+      expect(link).toHaveAttribute(
+        'href',
+        '/document?path=%2Fworkspaces%2Fproject%2FConception%20%26%20notes.docx',
+      );
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+    const engine = navigator.userAgent.includes('Chrome')
+      ? 'chromium'
+      : 'webkit';
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/deliverables-document-links-${width}-${engine}.png`,
+    });
   },
 );
 
