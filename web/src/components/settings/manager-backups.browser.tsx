@@ -149,6 +149,8 @@ test.each([1000, 1295, 390])(
 test.each([
   [390, 600],
   [1280, 720],
+  [1290, 913],
+  [1280, 450],
 ])(
   'keeps the update monitor footer reachable at %ix%i',
   async (width, height) => {
@@ -190,9 +192,30 @@ test.each([
         ).toContain('Suivi synthétique'),
       );
       const dialog = screen.getByRole('dialog');
+      await waitFor(() => expect(getComputedStyle(dialog).opacity).toBe('1'));
       expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(
         height * 0.85 + 1,
       );
+      const journal = screen.getByRole('region', {
+        name: 'Journal de l’opération',
+      });
+      expect(journal.getBoundingClientRect().height).toBeGreaterThanOrEqual(
+        224,
+      );
+      const log = screen.getByRole('log');
+      expect(log.scrollHeight).toBeGreaterThan(log.clientHeight);
+      log.scrollTop = 200;
+      expect(log.scrollTop).toBeGreaterThan(0);
+      const footerTop = screen
+        .getByRole('button', { name: 'Fermer' })
+        .getBoundingClientRect().top;
+      const body =
+        dialog.querySelector('iframe')!.parentElement!.parentElement!;
+      body.scrollTop = body.scrollHeight;
+      expect(
+        screen.getByRole('button', { name: 'Fermer' }).getBoundingClientRect()
+          .top,
+      ).toBe(footerTop);
       await page.getByRole('button', { name: 'Fermer', exact: true }).click();
       expect(close).toHaveBeenCalledWith(false);
       const bounds = screen
