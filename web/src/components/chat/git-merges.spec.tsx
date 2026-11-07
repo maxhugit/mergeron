@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { GitMerges } from './git-merges';
+import { SurfaceActivityContext } from '@/lib/surface-activity';
 
 const api = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/projects-api', () => ({ projectsApi: api }));
@@ -45,12 +46,79 @@ beforeEach(async () => {
     );
 });
 afterEach(() => client.clear());
-function show() {
-  return render(
+it('does not start GitHub observations for an inactive agent surface', () => {
+  render(
+    <QueryClientProvider client={client}>
+      <SurfaceActivityContext.Provider value={false}>
+        <GitMerges projectId="p" resourceId="git" />
+      </SurfaceActivityContext.Provider>
+    </QueryClientProvider>,
+  );
+  expect(api).not.toHaveBeenCalled();
+});
+it('keeps details collapsed until their row is clicked and preserves the summary', async () => {
+  await show(false);
+  const row = await screen.findByRole('button', {
+    name: '#12 Correction fusionnée',
+  });
+  expect(row).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText('Tests après fusion')).not.toBeInTheDocument();
+  expect(await screen.findByText('En cours')).toBeInTheDocument();
+  fireEvent.click(row);
+  expect(await screen.findByText('Tests après fusion')).toBeInTheDocument();
+  expect(row).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(row);
+  expect(screen.queryByText('Tests après fusion')).not.toBeInTheDocument();
+  expect(screen.getByText('En cours')).toBeInTheDocument();
+});
+
+it('paginates five rows without requesting checks for off-page merges', async () => {
+  api.mockImplementation((url: string) =>
+    Promise.resolve(
+      url.endsWith('/merges')
+        ? {
+            ...merges,
+            items: Array.from({ length: 6 }, (_, i) => ({
+              ...merges.items[0],
+              number: 12 + i,
+            })),
+          }
+        : checks,
+    ),
+  );
+  await show(false);
+  expect(await screen.findByText('1 / 2')).toBeInTheDocument();
+  await waitFor(() =>
+    expect(
+      api.mock.calls.filter(([url]) => url.endsWith('/checks')),
+    ).toHaveLength(5),
+  );
+  expect(
+    screen.queryByRole('button', { name: '#17 Correction fusionnée' }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Suivantes' }));
+  expect(
+    await screen.findByRole('button', { name: '#17 Correction fusionnée' }),
+  ).toBeInTheDocument();
+  expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: '#12 Correction fusionnée' }),
+  ).toBeNull();
+  expect(screen.getByRole('button', { name: 'Suivantes' })).toBeDisabled();
+});
+
+async function show(open = true) {
+  const view = render(
     <QueryClientProvider client={client}>
       <GitMerges projectId="p" resourceId="git" />
     </QueryClientProvider>,
   );
+  if (open) {
+    fireEvent.click(
+      await screen.findByRole('button', { name: '#12 Correction fusionnée' }),
+    );
+  }
+  return view;
 }
 
 it('shows a strong waiting indicator and the verified PR dependency before any job exists', async () => {
@@ -87,16 +155,17 @@ it('shows a strong waiting indicator and the verified PR dependency before any j
           },
     ),
   );
-  const view = show();
+  const view = await show();
   expect(await screen.findByText('Attend la fin de :')).toBeInTheDocument();
-  expect(
-    screen.getByRole('link', { name: /PR #292/ }),
-  ).toHaveAttribute('href', 'https://github.com/example/demo/actions/runs/292');
+  expect(screen.getByRole('link', { name: /PR #292/ })).toHaveAttribute(
+    'href',
+    'https://github.com/example/demo/actions/runs/292',
+  );
   const indicator = view.container.querySelector(
     '[data-merge-state="waiting"]',
   )!;
   expect(indicator).toHaveTextContent('En attente');
-  expect(indicator.querySelector('svg')).toHaveClass('h-7', 'w-7');
+  expect(indicator.querySelector('svg')).toHaveClass('h-3.5', 'w-3.5');
   expect(indicator.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   expect(screen.queryByText(/Aucun check signalé/)).not.toBeInTheDocument();
   expect(screen.queryByText('Checks réussis')).not.toBeInTheDocument();
@@ -127,7 +196,7 @@ it('keeps an unknown dependency honest and never calls it a verified PR blocker'
           },
     ),
   );
-  show();
+  await show();
   expect(
     await screen.findByText(/GitHub n’a pas confirmé/),
   ).toBeInTheDocument();
@@ -146,7 +215,7 @@ it('does not keep a green result when Actions observation is unavailable', async
           },
     ),
   );
-  const view = show();
+  const view = await show();
   expect(
     await screen.findByText(/État des exécutions indisponible/),
   ).toBeInTheDocument();
@@ -187,7 +256,7 @@ it.each([
             },
       ),
     );
-    const view = show();
+    const view = await show();
     await screen.findByText('Publish');
     expect(
       view.container.querySelector(`[data-merge-state="${state}"]`),
@@ -196,7 +265,7 @@ it.each([
       const icon = view.container.querySelector(
         '[data-merge-state="cancelled"] svg',
       );
-      expect(icon).toHaveClass('lucide-ban', 'h-7', 'w-7');
+      expect(icon).toHaveClass('lucide-ban', 'h-3.5', 'w-3.5');
       expect(icon).not.toHaveClass('animate-spin');
       expect(screen.queryByText('Checks en échec')).not.toBeInTheDocument();
     }
@@ -204,7 +273,7 @@ it.each([
 );
 
 it('shows merge jobs and updates their result when the repository is refreshed', async () => {
-  show();
+  await show();
   expect(
     await screen.findByText('#12 Correction fusionnée'),
   ).toBeInTheDocument();
@@ -236,7 +305,7 @@ it('replaces a cached success with an explicit error when verification fails and
         : { ...checks, items: [{ ...checks.items[0], status: 'success' }] },
     ),
   );
-  show();
+  await show();
   expect(await screen.findByText('Checks réussis')).toBeInTheDocument();
   api.mockImplementation((url: string) =>
     url.endsWith('/merges')
@@ -266,7 +335,7 @@ it.each([
   [{ ...merges, supported: false, items: [] }, 'Les PR et checks'],
 ])('handles empty and unsupported repositories', async (result, expected) => {
   api.mockResolvedValue(result);
-  show();
+  await show(false);
   expect(
     await screen.findByText(new RegExp(expected, 'i')),
   ).toBeInTheDocument();
