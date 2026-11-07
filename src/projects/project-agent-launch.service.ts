@@ -13,6 +13,7 @@ import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
   projectAgentLaunches as launches,
   projectAgentThreads,
+  projectDeliverables,
   projectTasks,
   type AgentLaunchContext,
 } from '../database/schema';
@@ -603,6 +604,17 @@ export class ProjectAgentLaunchService {
     );
     const compatible = (threadId: string) => {
       if (threadId === receipt.threadId) return true;
+      if (
+        !bindings.has(threadId) &&
+        this.db
+          .select({ id: projectDeliverables.id })
+          .from(projectDeliverables)
+          .where(
+            sql`exists (select 1 from json_each(${projectDeliverables.conversations}) where json_extract(value, '$.type') = 'agent' and json_extract(value, '$.id') = ${threadId})`,
+          )
+          .get()
+      )
+        return false;
       if (!bindings.has(threadId))
         return !this.db
           .select()
