@@ -112,7 +112,9 @@ test.each([
       .toBe(true);
     expect(image.src).toContain(`work-relationships-${language}.svg`);
     expect(article).toHaveTextContent(
-      language === 'fr' ? 'reste à confirmer' : 'remains to be confirmed',
+      language === 'fr'
+        ? 'limité à un unique livrable'
+        : 'limited to a single deliverable',
     );
     expect(article.scrollWidth).toBeLessThanOrEqual(article.clientWidth);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);

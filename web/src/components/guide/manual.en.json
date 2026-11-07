@@ -946,7 +946,7 @@
           {
             "title": "Cardinality diagram",
             "workRelationshipsDiagram": {
-              "alt": "A task contains zero or more subtasks; each subtask belongs to one task. Task and deliverable: zero or one on either side. Agent and subtask: zero or one on either side. A deliverable can have several agents; the number of deliverables per agent remains to be confirmed."
+              "alt": "A task contains zero or more subtasks; each subtask belongs to one task. Task and deliverable: zero or one on either side. Agent and subtask: zero or one on either side. A deliverable can have zero or more agents; an agent is assigned to zero or one deliverable."
             },
             "paragraphs": [
               "0..1 means none or one, 0..N means none or several, and 1 means exactly one. This diagram describes business relationships; an assignment does not make the agent owned by the assigned item."
@@ -958,9 +958,10 @@
               "Task → subtasks: a task contains zero or more subtasks. Each subtask belongs to exactly one main task; there is no third level.",
               "Task ↔ deliverable: a main task can have zero or one primary deliverable, and a deliverable can belong to zero or one main task.",
               "Subtask ↔ agent: a subtask can have zero or one agent; under the current rule, an agent is assigned to zero or one subtask. Agents are never assigned directly to main tasks.",
-              "Deliverable → agents: a deliverable may be assigned to several agents or remain unassigned. This 0..N cardinality is confirmed. An agent can contribute to a deliverable without being assigned to a subtask."
+              "Deliverable → agents: a deliverable may be assigned to several agents or remain unassigned. This 0..N cardinality is confirmed. An agent can contribute to a deliverable without being assigned to a subtask.",
+              "Agent → deliverable: for now, an agent is limited to a single deliverable or may remain unassigned. Its cardinality is therefore 0..1."
             ],
-            "warning": "The number of deliverables to which one agent may be assigned remains to be confirmed. The agent–deliverables relationship is marked as an open cardinality; the diagram does not guarantee that every interface supports several deliverables for one agent."
+            "warning": "When an agent is assigned to both a subtask and a deliverable, they must share the same main task. Agents cannot be assigned directly to main tasks."
           },
           {
             "title": "Keep assignments consistent",
