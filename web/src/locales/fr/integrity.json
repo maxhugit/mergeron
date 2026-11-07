@@ -1,6 +1,6 @@
 {
   "title": "Cohérence des projets",
-  "intro": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite, sans suppression ni écrasement.",
+  "intro": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite. Les retraits disponibles passent par une corbeille récupérable, sans écrasement.",
   "administrator": "Cette page est réservée aux administrateurs.",
   "project": "Projet",
   "choose": "Choisir un projet",
@@ -303,5 +303,20 @@
       "explanation": "La connexion est connue, mais le dossier de référence n’a pas été retrouvé. Vérifiez le dossier ou choisissez une autre référence.",
       "title": "Un dossier de référence est introuvable"
     }
+  },
+  "trash": {
+    "title": "Corbeille du projet ({{count}})",
+    "move": "Mettre ces données à la corbeille",
+    "confirmTitle": "Retirer les données sans rattachement ?",
+    "confirmDescription": "Ces données peuvent encore contenir du travail utile ou des changements Git non publiés. Leur absence de rattachement ne prouve pas qu’elles sont inutiles. Le serveur les vérifiera de nouveau puis les déplacera dans une corbeille interne, sans suppression définitive ni modification d’un document enregistré.",
+    "typeName": "Pour confirmer, saisissez le nom exact : {{name}}",
+    "failed": "L’opération n’a pas pu être confirmée. Actualisez le diagnostic et consultez la corbeille avant de réessayer.",
+    "help": "Retraits explicites des données sans référence connue. Aucune purge automatique. La récupération conserve les fichiers dans Dossiers sous un nouveau nom, sans écraser ni rattacher de document. L’espace disque n’est pas libéré tant que les données restent dans cette corbeille.",
+    "loadFailed": "Impossible de lire la corbeille de ce projet.",
+    "empty": "La corbeille est vide.",
+    "recover": "Récupérer dans Dossiers",
+    "recoverDescription": "Les données seront déplacées dans Dossiers sous un nom unique. L’ancien emplacement et les documents enregistrés ne seront pas remplacés. Aucun document ne sera importé automatiquement.",
+    "recovered": "Données récupérées : {{path}}",
+    "candidateHelp": "Aucun rattachement automatique n’est proposé. Si vous décidez que ces données sont inutiles, le retrait vers la corbeille reste explicite et récupérable."
   }
 }

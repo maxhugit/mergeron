@@ -35,6 +35,14 @@ for (const width of [320, 390, 1100])
             counts: { documents: 10, versions: 23, copies: 6 },
             issues: [
               {
+                id: 'orphan',
+                kind: 'unregistered-document',
+                path: root + '/.mergeron-system/livrables/orphan.txt',
+                severity: 'warning',
+                action: null,
+                trash: { name: 'orphan.txt' },
+              },
+              {
                 id: 'missing',
                 kind: 'directory-missing',
                 path: root + '/dossiers/un-dossier-au-nom-long',
@@ -119,6 +127,31 @@ for (const width of [320, 390, 1100])
     await page.screenshot({
       path: `../../../.vitest-screenshots/project-integrity-manual-${width}-${engine}.png`,
     });
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page
+      .getByRole('button', { name: /^Un fichier n’est pas enregistré/ })
+      .click();
+    await screen.findByRole('dialog');
+    await page
+      .getByRole('button', {
+        name: 'Mettre ces données à la corbeille',
+        exact: true,
+      })
+      .click();
+    const removal = await screen.findByRole('alertdialog');
+    const removalButton = screen.getByRole('button', {
+      name: 'Mettre ces données à la corbeille',
+    });
+    expect(removalButton).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'orphan.txt' },
+    });
+    expect(removalButton).toBeEnabled();
+    expect(removal.scrollWidth).toBeLessThanOrEqual(removal.clientWidth);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/project-integrity-trash-${width}-${engine}.png`,
+    });
+    await page.getByRole('button', { name: 'Annuler', exact: true }).click();
     expect(
       vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
     ).toBe(false);

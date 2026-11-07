@@ -1667,5 +1667,5 @@
   "retiredQuestionReplyHint": "This request has ended. You can still prepare an answer to send as a message in the conversation.",
   "prepareQuestionReply": "Prepare a reply",
   "projectIntegrityTitle": "Project consistency",
-  "projectIntegrityDescription": "Compare database references with project directories. Inspection changes nothing and does not read document contents. External connections are outside this inspection. Each correction is explicit, without deletion or overwriting."
+  "projectIntegrityDescription": "Compare database references with project directories. Inspection changes nothing and does not read document contents. External connections are outside this inspection. Each correction is explicit. Available removals use recoverable trash, without overwriting data."
 }

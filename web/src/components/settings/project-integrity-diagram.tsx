@@ -253,6 +253,15 @@ export function IntegrityDiagram({
     issue.action === 'realign-override' ||
     issue.action === 'select-project-folder';
   const after = preview && supported;
+  const leftProblem = [
+    'unregistered-document',
+    'unregistered-deliverable-directory',
+    'unregistered-copy',
+  ].includes(issue.kind);
+  const problemClass =
+    'border border-dashed border-amber-500/70 bg-amber-500/10 text-amber-800 dark:text-amber-300';
+  const nodeClass =
+    'flex min-h-16 min-w-0 items-center gap-2 rounded-md p-2 sm:p-3';
   const left = t(profile?.left ?? 'visual.unknown.left');
   const right = after
     ? t(
@@ -274,18 +283,19 @@ export function IntegrityDiagram({
       aria-label={t('visual.diagram', { left, link, right })}
       className="grid min-w-0 grid-cols-[minmax(0,1fr)_5rem_minmax(0,1fr)] items-center gap-2 text-xs [overflow-wrap:anywhere] sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)]"
     >
-      <div className="flex min-h-16 min-w-0 items-center gap-2 rounded-md bg-muted p-2 sm:p-3">
+      <div
+        className={`${nodeClass} ${!after && leftProblem ? problemClass : 'bg-muted'}`}
+      >
         <Folder
           className="hidden h-4 w-4 shrink-0 sm:block"
           aria-hidden="true"
         />
         <span>{left}</span>
       </div>
-      <div className="flex min-w-0 flex-col items-center gap-1 text-center">
-        <span
-          className="flex items-center gap-1 text-muted-foreground"
-          aria-hidden="true"
-        >
+      <div
+        className={`flex min-w-0 flex-col items-center gap-1 text-center ${after ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}
+      >
+        <span className="flex items-center gap-1" aria-hidden="true">
           {after ? (
             <Link2 className="h-4 w-4" />
           ) : (
@@ -295,7 +305,9 @@ export function IntegrityDiagram({
         </span>
         <span>{link}</span>
       </div>
-      <div className="flex min-h-16 min-w-0 items-center gap-2 rounded-md bg-muted p-2 sm:p-3">
+      <div
+        className={`${nodeClass} ${after ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300' : !leftProblem ? problemClass : 'bg-muted'}`}
+      >
         {after ? (
           <FolderCheck
             className="hidden h-4 w-4 shrink-0 sm:block"

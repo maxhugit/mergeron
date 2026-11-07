@@ -1,3 +1,7 @@
+import {
+  IntegrityTrashAction,
+  ProjectIntegrityTrash,
+} from './project-integrity-trash';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -278,6 +282,9 @@ export function ProjectIntegritySettings() {
           ))}
         </>
       )}
+      {report.data && !report.isError && (
+        <ProjectIntegrityTrash key={projectId} projectId={projectId} />
+      )}
       <Dialog
         open={!!selected}
         onOpenChange={(open) => {
@@ -416,8 +423,22 @@ export function ProjectIntegritySettings() {
                 </ul>
               ) : (
                 <p className="rounded-lg bg-muted p-3 text-sm">
-                  {t('noAutomaticRepair')}
+                  {t(
+                    selectedIssue.trash && !selectedReport?.limited
+                      ? 'trash.candidateHelp'
+                      : 'noAutomaticRepair',
+                  )}
                 </p>
+              )}
+              {selectedReport && (
+                <IntegrityTrashAction
+                  key={selectedIssue.id}
+                  report={selectedReport}
+                  issue={selectedIssue}
+                  disabled={
+                    repair.isPending || report.isFetching || report.isError
+                  }
+                />
               )}
               {agentId && (
                 <Button
