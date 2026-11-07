@@ -34,12 +34,11 @@ function show(
   api.mockImplementation((_path, init) =>
     Promise.resolve(init ? {} : { launch, candidates }),
   );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+    <QueryClientProvider client={client}>
       <AgentLaunchRecovery
         projectId="p"
         resourceId="r"
@@ -50,7 +49,7 @@ function show(
       />
     </QueryClientProvider>,
   );
-  return { open, recovered };
+  return { open, recovered, client };
 }
 it('recovers an unknown allocation only after explicitly selecting an existing agent with observed revisions', async () => {
   const { recovered } = show();
@@ -162,3 +161,32 @@ it('only closes an unfinished association after explicit verification and preser
     expectedUpdatedAt: 10,
   });
 });
+
+it.each([
+  { id: 'another-receipt', revision: 10 },
+  { id: 'receipt', revision: 11 },
+])(
+  'requires fresh verification when the inspected receipt changes to %o',
+  async (change) => {
+    const launch = { ...initial, phase: 'dispatching', threadId: 'existing' };
+    const { client } = show(launch);
+    const confirm = await screen.findByRole('button', {
+      name: 'Confirm check',
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(confirm).not.toBeDisabled();
+    client.setQueryData(['agent-launch', 'p', 'r', 'task', 'task'], {
+      launch: { ...launch, ...change },
+      candidates: [],
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Confirm check' }),
+      ).toBeDisabled(),
+    );
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(api.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(
+      false,
+    );
+  },
+);

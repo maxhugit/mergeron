@@ -38,8 +38,11 @@ export function AgentLaunchRecovery({
   const { t } = useTranslation('workspaces');
   const session = usePlatformSession();
   const client = useQueryClient();
-  const [selected, setSelected] = useState(''),
-    [checked, setChecked] = useState(false);
+  const [decision, setDecision] = useState<{
+    scope: string;
+    selected: string;
+    checked: boolean;
+  } | null>(null);
   const base = `/${projectId}/resources/${resourceId}`;
   const query = useQuery({
     queryKey: ['agent-launch', projectId, resourceId, kind, targetId],
@@ -50,6 +53,22 @@ export function AgentLaunchRecovery({
     enabled: session.isAdministrator && Boolean(targetId),
     refetchInterval: 5_000,
   });
+  // A choice or verification only applies to the exact receipt the user inspected.
+  const scope = `${query.data?.launch?.id}:${query.data?.launch?.revision}`;
+  const selected = decision?.scope === scope ? decision.selected : '';
+  const checked = decision?.scope === scope ? decision.checked : false;
+  const setSelected = (value: string) =>
+    setDecision((previous) => ({
+      scope,
+      selected: value,
+      checked: previous?.scope === scope ? previous.checked : false,
+    }));
+  const setChecked = (value: boolean) =>
+    setDecision((previous) => ({
+      scope,
+      selected: previous?.scope === scope ? previous.selected : '',
+      checked: value,
+    }));
   const recover = useMutation({
     mutationFn: (action: 'attach' | 'resume' | 'acknowledge' | 'keep') =>
       projectsApi<{ threadId: string | null }>(
@@ -69,8 +88,7 @@ export function AgentLaunchRecovery({
         },
       ),
     onSuccess: async (result, action) => {
-      setChecked(false);
-      setSelected('');
+      setDecision(null);
       await client.invalidateQueries({ queryKey: ['agent-launch', projectId] });
       await onRecovered();
       if (result.threadId && action !== 'acknowledge') onOpen(result.threadId);
