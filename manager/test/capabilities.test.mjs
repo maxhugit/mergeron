@@ -307,3 +307,78 @@ test('restart grace prevents removal before active companion leases can renew', 
     false,
   );
 });
+
+test('a third reviewed driver uses the same catalogue, persistent state, actions and lease guard', async (t) => {
+  const { CAPABILITY_CATALOG } = await import('../src/capability-catalog.mjs');
+  const f = await fixture(t);
+  let installed = false;
+  const entry = {
+    ...CAPABILITY_CATALOG[1],
+    id: 'ocr',
+    driver: 'ocr',
+    imageRepository: 'ghcr.io/example/ocr',
+    title: { en: 'OCR', fr: 'OCR' },
+    description: { en: 'Synthetic fixture', fr: 'Fixture synthétique' },
+  };
+  const extra = new Capabilities({
+    ...f.capability,
+    catalogue: [...CAPABILITY_CATALOG, entry],
+    drivers: {
+      ...Object.fromEntries(
+        f.capability.registry.map((e) => [e.driver, e.lifecycle]),
+      ),
+      ocr: {
+        inspect: async () =>
+          installed ? { Id: 'ocr-owned', State: { Running: false } } : null,
+        status: async () => ({ state: installed ? 'stopped' : 'missing' }),
+        install: async () => {
+          installed = true;
+        },
+        configure: () => {},
+        prune: () => {},
+        busy: () => false,
+        activeLeases: () => 0,
+        legacyEnabled: () => false,
+      },
+    },
+  });
+  await extra.initialize();
+  assert.equal(extra.desired.ocr, false); // Added to an existing installation, not auto-installed.
+  const before = (await extra.status()).capabilities.find(
+    (c) => c.id === 'ocr',
+  );
+  assert.equal(before.state, 'notInstalled');
+  assert.equal(before.title.en, 'OCR');
+  await extra.change({
+    id: 'ocr',
+    action: 'install',
+    confirmation: 'install:ocr',
+  });
+  await extra.task;
+  assert.equal(extra.error, null);
+  assert.equal(extra.desired.ocr, true);
+  assert.equal(
+    (await extra.status()).capabilities.find((c) => c.id === 'ocr').state,
+    'stopped',
+  );
+  assert.equal(
+    JSON.stringify(await extra.status()).includes('lifecycle'),
+    false,
+  );
+});
+test('catalogue refuses unsafe defaults, duplicate ids and missing reviewed lifecycle adapters', async () => {
+  const { CAPABILITY_CATALOG, capabilityRegistry } =
+    await import('../src/capability-catalog.mjs');
+  assert.throws(
+    () =>
+      capabilityRegistry(
+        [{ ...CAPABILITY_CATALOG[0], defaultInstalled: true }],
+        {},
+      ),
+    /CATALOG_INVALID/,
+  );
+  assert.throws(
+    () => capabilityRegistry(CAPABILITY_CATALOG, {}),
+    /CATALOG_INVALID/,
+  );
+});

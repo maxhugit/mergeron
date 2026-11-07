@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { Capability } from './server-capabilities-api';
 import { ServerCapabilities } from './server-capabilities';
 import i18n, { i18nReady } from '@/i18n';
 const empty = {
@@ -21,7 +22,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-async function mount(value = empty) {
+async function mount(
+  value: { capabilities: Capability[]; operation: null; error: null } = empty,
+) {
   await i18nReady;
   await i18n.changeLanguage('fr');
   const fetcher = vi
@@ -47,7 +50,7 @@ async function mount(value = empty) {
       <ServerCapabilities />
     </QueryClientProvider>,
   );
-  await screen.findByText('Navigation web');
+  await screen.findByText(value.capabilities[0]?.title?.fr ?? 'Navigation web');
   return fetcher;
 }
 test('no mutation before confirmation; exact catalogue action and current state displayed', async () => {
@@ -83,4 +86,23 @@ test('active leases disable uninstall and explain the refusal', async () => {
       .disabled,
   ).toBe(true);
   expect(screen.getByText(/Terminez les sessions/)).toBeTruthy();
+});
+
+test('renders a new catalogue capability without a browser/transcription-specific interface', async () => {
+  await mount({
+    ...empty,
+    capabilities: [
+      {
+        id: 'ocr',
+        title: { fr: 'Reconnaissance de texte', en: 'OCR' },
+        description: { fr: 'Lire une image', en: 'Read an image' },
+        installed: false,
+        state: 'notInstalled',
+        activeLeases: 0,
+      },
+    ],
+  });
+  expect(screen.getByText('Reconnaissance de texte')).toBeTruthy();
+  expect(screen.getByText('Lire une image')).toBeTruthy();
+  expect(screen.queryByText('Transcription')).toBeNull();
 });

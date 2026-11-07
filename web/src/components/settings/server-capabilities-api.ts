@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { getAuthorizationHeader } from '@/auth-token';
 import { withBasePath } from '@/base-path';
 export type Capability = {
-  id: 'browser' | 'transcription';
+  id: string;
+  title?: Record<string, string>;
+  description?: Record<string, string>;
   installed: boolean;
   state: string;
   activeLeases: number;

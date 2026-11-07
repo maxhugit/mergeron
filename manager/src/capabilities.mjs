@@ -3,16 +3,49 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { documentSeccompProfile } from './installer.mjs';
 
-const ids = ['browser', 'transcription'];
+import {
+  CAPABILITY_CATALOG,
+  capabilityRegistry,
+} from './capability-catalog.mjs';
 /** Private durable intent. Never accepts images, mounts, paths or Docker options. */
 export class Capabilities {
   task = null;
   error = null;
   operation = null;
   recoveryGrace = new Map();
-  desired = { browser: false, transcription: false };
+  desired = {};
   constructor(options) {
     Object.assign(this, options);
+    this.registry = capabilityRegistry(
+      options.catalogue ?? CAPABILITY_CATALOG,
+      {
+        browser: {
+          inspect: () => this.browser.inspect(),
+          status: () => this.browser.status(),
+          install: (inventory) => this.installBrowser(inventory),
+          prune: () => this.browser.prune(),
+          busy: () => this.browser.busy,
+          activeLeases: () => this.browser.leases.size,
+          legacyEnabled: () => false,
+          configure: () => this.syncManifest(),
+        },
+        transcription: {
+          inspect: () => this.transcription.current(),
+          status: () => this.transcription.status(),
+          install: () => this.transcription.ensure(),
+          prune: () => this.transcription.prune(),
+          busy: () => this.transcription.busy,
+          activeLeases: () => this.transcription.leases.size,
+          legacyEnabled: () => this.transcription.enabled,
+          configure: (enabled) => {
+            this.transcription.enabled = enabled;
+          },
+        },
+        ...options.drivers,
+      },
+    );
+    this.ids = this.registry.map((entry) => entry.id);
+    this.desired = Object.fromEntries(this.ids.map((id) => [id, false]));
   }
   get busy() {
     return !!this.task;
@@ -36,32 +69,42 @@ export class Capabilities {
       const state = JSON.parse(await readFile(this.path, 'utf8'));
       if (
         state.version !== 1 ||
-        ids.some((id) => typeof state.desired?.[id] !== 'boolean')
+        !state.desired ||
+        typeof state.desired !== 'object' ||
+        Array.isArray(state.desired) ||
+        Object.values(state.desired).some((value) => typeof value !== 'boolean')
       )
         throw Error('CAPABILITY_STATE_INVALID');
-      this.desired = state.desired;
+      // Newly registered capabilities are absent by default; existing intent is retained.
+      this.desired = {
+        ...state.desired,
+        ...Object.fromEntries(
+          this.ids.map((id) => [id, state.desired[id] ?? false]),
+        ),
+      };
       if (state.pending) this.error = 'CAPABILITY_OPERATION_INTERRUPTED';
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
       // Existing validated companions and explicitly enabled legacy workers survive migration.
-      this.desired = {
-        browser: !!(await this.browser.inspect().catch(() => ({}))),
-        transcription:
-          this.transcription.enabled ||
-          !!(await this.transcription.current().catch(() => ({}))),
-      };
+      this.desired = Object.fromEntries(
+        await Promise.all(
+          this.registry.map(async (entry) => [
+            entry.id,
+            entry.lifecycle.legacyEnabled() ||
+              !!(await entry.lifecycle.inspect().catch(() => ({}))),
+          ]),
+        ),
+      );
       await this.save();
     }
-    this.transcription.enabled = this.desired.transcription;
-    this.syncManifest();
-    for (const [id, inspect] of [
-      ['browser', () => this.browser.inspect()],
-      ['transcription', () => this.transcription.current()],
-    ]) {
-      const item = await inspect().catch(() => null);
-      if (item?.State?.Running) this.recoveryGrace.set(id, Date.now() + 90_000);
+    for (const entry of this.registry) {
+      entry.lifecycle.configure(this.desired[entry.id]);
+      const item = await entry.lifecycle.inspect().catch(() => null);
+      if (item?.State?.Running)
+        this.recoveryGrace.set(entry.id, Date.now() + 90_000);
     }
   }
+
   syncManifest() {
     const index = this.manifest.components.findIndex((c) => c.id === 'browser');
     if (this.desired.browser && index < 0)
@@ -70,26 +113,32 @@ export class Capabilities {
       this.manifest.components.splice(index, 1);
   }
   async status() {
-    const [browser, transcription] = await Promise.all([
-      this.browser.status(),
-      this.transcription.status(),
-    ]);
+    const states = Object.fromEntries(
+      await Promise.all(
+        this.registry.map(async (entry) => [
+          entry.id,
+          await entry.lifecycle.status(),
+        ]),
+      ),
+    );
     return {
       operation: this.operation,
       error: this.error,
-      capabilities: ids.map((id) => ({
-        id,
-        installed: this.desired[id],
-        state:
-          this.operation?.id === id
-            ? this.operation.action === 'install'
-              ? 'installing'
-              : 'uninstalling'
-            : !this.desired[id]
-              ? 'notInstalled'
-              : { browser, transcription }[id].state,
-        activeLeases: { browser, transcription }[id].activeLeases ?? 0,
-      })),
+      capabilities: this.registry.map(
+        ({ lifecycle: _lifecycle, ...entry }) => ({
+          ...entry,
+          installed: this.desired[entry.id],
+          state:
+            this.operation?.id === entry.id
+              ? this.operation.action === 'install'
+                ? 'installing'
+                : 'uninstalling'
+              : !this.desired[entry.id]
+                ? 'notInstalled'
+                : states[entry.id].state,
+          activeLeases: states[entry.id].activeLeases ?? 0,
+        }),
+      ),
     };
   }
   async change(input) {
@@ -98,19 +147,18 @@ export class Capabilities {
       Object.keys(input).some(
         (k) => !['id', 'action', 'confirmation'].includes(k),
       ) ||
-      !ids.includes(input.id) ||
+      !this.ids.includes(input.id) ||
       !['install', 'uninstall'].includes(input.action) ||
       input.confirmation !== `${input.action}:${input.id}`
     )
       throw Error('CAPABILITY_CONFIRMATION_REQUIRED');
     if (this.busy || (await this.blocked())) throw Error('CAPABILITY_BUSY');
     if (this.busy) throw Error('CAPABILITY_BUSY');
-    this.browser.prune();
-    this.transcription.prune();
+    for (const entry of this.registry) entry.lifecycle.prune();
     if (
-      this.browser.busy ||
-      this.transcription.busy ||
-      this.browser.leases.size
+      this.registry.some(
+        (entry) => entry.lifecycle.busy() || entry.lifecycle.activeLeases(),
+      )
     )
       throw Error('CAPABILITY_IN_USE');
     if (
@@ -142,31 +190,24 @@ export class Capabilities {
     if (!(await this.coreTrusted(inventory)))
       throw Error('CAPABILITY_STACK_NOT_ADOPTED');
     await this.save();
+    const driver = this.registry.find((entry) => entry.id === id).lifecycle;
     if (action === 'install') {
-      if (id === 'browser') await this.installBrowser(inventory);
-      else await this.transcription.ensure();
+      await driver.install(inventory);
       this.desired[id] = true;
     } else {
-      const item =
-        id === 'browser'
-          ? await this.browser.inspect()
-          : await this.transcription.current();
+      const item = await driver.inspect();
       if (item) {
         const originalId = item.Id;
         if (item.State.Running) await this.docker.stopContainer(originalId, 15);
         // Revalidate identity and isolation after stop; never remove volumes or force deletion.
-        const checked =
-          id === 'browser'
-            ? await this.browser.inspect()
-            : await this.transcription.current();
+        const checked = await driver.inspect();
         if (checked?.Id !== originalId || checked.State.Running)
           throw Error('CAPABILITY_CONTAINER_CHANGED');
         await this.docker.removeContainer(originalId);
       }
       this.desired[id] = false;
     }
-    this.transcription.enabled = this.desired.transcription;
-    this.syncManifest();
+    driver.configure(this.desired[id]);
     await this.save();
     // An explicit operation may change the optional browser's adoption snapshot only.
     await this.recordAdoption(inventory);

@@ -104,7 +104,7 @@ it('loads the Manager on the Infrastructure route without duplicating update con
   expect(screen.queryByText('Application updates')).toBeNull();
   expect(
     await screen.findByText(
-      'The administrator must enable the transcription service in the Manager.',
+      'Transcription is not installed. An administrator can install it in Settings → Server → Capabilities.',
     ),
   ).toBeVisible();
   expect(transcriptionRequest).toHaveBeenCalledWith(

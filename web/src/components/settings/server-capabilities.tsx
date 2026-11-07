@@ -18,7 +18,8 @@ import {
   type Capability,
 } from './server-capabilities-api';
 export function ServerCapabilities() {
-  const { t } = useTranslation('manager');
+  const { t, i18n } = useTranslation('manager');
+  const language = i18n.resolvedLanguage?.split('-')[0] ?? 'en';
   const query = useServerCapabilities();
   const client = useQueryClient();
   const [choice, setChoice] = useState<Capability | null>(null);
@@ -64,18 +65,22 @@ export function ServerCapabilities() {
         >
           <div className="min-w-0 space-y-1">
             <h3 className="font-medium">
-              {t(
-                c.id === 'browser'
-                  ? 'capabilityBrowser'
-                  : 'capabilityTranscription',
-              )}
+              {c.title?.[language] ??
+                c.title?.en ??
+                t(
+                  c.id === 'browser'
+                    ? 'capabilityBrowser'
+                    : 'capabilityTranscription',
+                )}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {t(
-                c.id === 'browser'
-                  ? 'capabilityBrowserDescription'
-                  : 'capabilityTranscriptionDescription',
-              )}
+              {c.description?.[language] ??
+                c.description?.en ??
+                t(
+                  c.id === 'browser'
+                    ? 'capabilityBrowserDescription'
+                    : 'capabilityTranscriptionDescription',
+                )}
             </p>
             <p role="status" className="text-sm">
               {t(translationKey(`capabilityStates.${c.state}`), {
