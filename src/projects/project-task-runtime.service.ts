@@ -14,7 +14,7 @@ import {
   projectTasks,
   projectDeliverables,
   projectTaskActivity,
-  projectTaskLaunches,
+  projectAgentLaunches,
 } from '../database/schema';
 import { ThreadMetadataService } from '../threads/thread-metadata.service';
 import { randomUUID } from 'node:crypto';
@@ -164,8 +164,8 @@ export class ProjectTaskRuntimeService
   }
   deleted(threadId: string) {
     this.db.transaction((tx) => {
-      tx.delete(projectTaskLaunches)
-        .where(eq(projectTaskLaunches.threadId, threadId))
+      tx.delete(projectAgentLaunches)
+        .where(eq(projectAgentLaunches.threadId, threadId))
         .run();
       for (const task of tx
         .select()

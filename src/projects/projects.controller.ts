@@ -1,4 +1,4 @@
-import { TaskAgentLaunchService } from './task-agent-launch.service';
+import { ProjectAgentLaunchService } from './project-agent-launch.service';
 import {
   BadRequestException,
   ConflictException,
@@ -31,7 +31,7 @@ function activityActor(request: IdentityRequest): ProjectActivityActor {
 export class ProjectsController {
   constructor(
     private readonly projects: ProjectsService,
-    @Optional() private readonly launches?: TaskAgentLaunchService,
+    @Optional() private readonly launches?: ProjectAgentLaunchService,
   ) {}
 
   @Get('people')
@@ -532,6 +532,28 @@ export class ProjectsController {
     if (!this.launches)
       throw new BadRequestException('Task launch is unavailable');
     return this.launches.launch(id, resourceId, taskId, body);
+  }
+
+  @Get(':id/resources/:resourceId/tasks/:taskId/agent-launch')
+  taskLaunchStatus(
+    @Param('id') id: string,
+    @Param('resourceId') resourceId: string,
+    @Param('taskId') taskId: string,
+  ) {
+    if (!this.launches)
+      throw new BadRequestException('Task launch is unavailable');
+    return this.launches.status(id, resourceId, 'task', taskId);
+  }
+  @Post(':id/resources/:resourceId/agent-launches/:launchId/recover')
+  recoverAgentLaunch(
+    @Param('id') id: string,
+    @Param('resourceId') resourceId: string,
+    @Param('launchId') launchId: string,
+    @Body() body: Parameters<ProjectAgentLaunchService['recover']>[3],
+  ) {
+    if (!this.launches)
+      throw new BadRequestException('Agent recovery is unavailable');
+    return this.launches.recover(id, resourceId, launchId, body);
   }
 
   @Patch(':id/resources/:resourceId/tasks/:taskId')

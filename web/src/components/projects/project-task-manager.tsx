@@ -1,3 +1,4 @@
+import { AgentLaunchRecovery } from './agent-launch-recovery';
 import { TaskDeliverableLink } from './task-deliverable-link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -307,6 +308,7 @@ export function ProjectTaskManager({
   onModalClose?: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const { t: launchText } = useTranslation('workspaces');
   const people = usePeople();
   const participants = useParticipants(projectId);
   const client = useQueryClient();
@@ -381,6 +383,7 @@ export function ProjectTaskManager({
         queryKey: ['project-deliverables', projectId],
       }),
       client.invalidateQueries({ queryKey: projectsQueryKey }),
+      client.invalidateQueries({ queryKey: ['agent-launch', projectId] }),
     ]);
   const request = useMutation({
     mutationFn: ({
@@ -1256,10 +1259,10 @@ export function ProjectTaskManager({
         },
       );
       await refresh();
-      if (result.state !== 'submitted')
-        window.alert(
-          'L’état du lancement demande une vérification dans l’agent existant. Aucune nouvelle tentative automatique ne sera envoyée.',
-        );
+      if (!['submitted', 'ready', 'confirmed'].includes(result.state)) {
+        setTaskError(launchText('launchRecoveryNeeded'));
+        return;
+      }
       setTaskOpen(false);
       void navigate({
         to: '/t/$threadId',
@@ -2198,6 +2201,11 @@ export function ProjectTaskManager({
                   ? 'Nouvelle sous-tâche'
                   : 'Nouvelle tâche'}
       >
+            {editing && draft.executionMode === 'agent' && <AgentLaunchRecovery
+              projectId={projectId} resourceId={resourceId} kind="task" targetId={editing.id}
+              onOpen={threadId => { void navigate({ to: '/t/$threadId', params: { threadId } }); }}
+              onRecovered={() => { launchIds.current.delete(editing.id); return refresh(); }}
+            />}
           {rootTask && (
             <div className="flex shrink-0 gap-1 overflow-x-auto border-b px-6">
               <button
@@ -2755,6 +2763,7 @@ export function ProjectTaskManager({
                 </Button>
               )}
               {editing &&
+                !editing.linkedThreadId &&
                 draft.executionMode === 'agent' &&
                 editing.agentState !== 'running' &&
                 editing.agentState !== 'review' && (

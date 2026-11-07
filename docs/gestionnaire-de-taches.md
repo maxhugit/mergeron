@@ -148,7 +148,17 @@ l’interface suit ces étapes :
 3. Créer la conversation dans le dossier autorisé, conserver immédiatement son identifiant, puis l’associer au projet et à la sous-tâche.
 4. Envoyer les instructions et ouvrir la conversation existante pour suivre le travail.
 
-Une nouvelle demande ou un rechargement reprend le même reçu de lancement ; il ne crée pas un deuxième agent et ne renvoie pas automatiquement les instructions. Si la réponse du moteur est perdue, l’état `needs_attention` demande de vérifier l’agent existant. Si aucun identifiant n’a été confirmé, le lancement est bloqué (`TASK_LAUNCH_UNCONFIRMED`) pour éviter une création en double. Une suppression explicite de cet agent libère son reçu ; supprimer la tâche ne supprime jamais l’agent.
+Les tâches et les livrables utilisent le même service de lancement et le même journal durable. Pour un livrable, la création d’une éventuelle sous-tâche et la réservation du lancement sont atomiques, avant l’appel natif. Une réservation unique par sous-tâche empêche une double création même si les deux gestionnaires sont utilisés simultanément. Une demande non résolue reste prioritaire si la version du livrable change ; un nouvel identifiant de requête ne contourne pas cette protection.
+
+Une réponse perdue ne déclenche aucune nouvelle création ni aucun renvoi d’instructions. La fiche expose **Reprise du lancement de l’agent**, également après rechargement :
+
+- Demande encore en cours : attendre sa confirmation.
+- Agent identifié, association interrompue : terminer l’association avec le même agent, puis ouvrir sa conversation.
+- Création non confirmée : actualiser l’inventaire et choisir explicitement un agent disponible dans le même dossier. Une liste périmée ou un agent occupé n’autorise pas la réassociation.
+- Envoi incertain : ouvrir et vérifier la conversation, puis confirmer la vérification. Aucun tour n’est renvoyé.
+- Association devenue impossible ou non souhaitée : après vérification d’un agent identifié, conserver cet agent sans terminer l’association et clore la demande. L’agent et son historique ne sont ni archivés ni supprimés. Une création sans identifiant connu ne peut pas être close de cette façon.
+
+Les reprises exigent le même utilisateur actif, les droits d’exécution et les révisions observées du reçu et de sa destination. Les anciens reçus de lancement sont transférés dans la migration 0074, avec leurs identifiants, propriétaire et incertitudes conservés ; ils ne sont pas rejoués. La suppression explicite d’un agent libère ses reçus. Supprimer une tâche ne supprime jamais l’agent.
 
 Les instructions demandent à l’agent de résumer son travail et ses
 vérifications sans se déclarer définitivement validé. La restriction de
@@ -223,7 +233,7 @@ journal d’audit exhaustif des actions de chaque utilisateur.
 | [Contrôleur](../src/projects/projects.controller.ts)                                 | Routes sous `/api/projects`                                               |
 | [Service projets](../src/projects/projects.service.ts)                               | Validation, persistance, agrégats et dépendances                          |
 | [Projection d’exécution](../src/projects/project-task-runtime.service.ts)            | États des tâches depuis les événements et les instantanés frais du moteur |
-| [Lancement durable](../src/projects/task-agent-launch.service.ts)                    | Réservation et reprise sans duplication des lancements                    |
+| [Lancement durable](../src/projects/project-agent-launch.service.ts)                 | Réservation et reprise sans duplication des lancements                    |
 | [Service chat simple](../src/simple-chat/simple-chat.service.ts)                     | Appels IA de planification et de conseil                                  |
 | [Schéma SQLite](../src/database/schema.ts)                                           | Tables et relations                                                       |
 | [Contrôle d’accès](../src/auth/platform-access.guard.ts)                             | Autorisations des routes                                                  |

@@ -1,306 +1,109 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { DeliverablesController } from './deliverables.controller';
-
-const parent = {
-  id: 'parent',
-  title: 'Plan',
-  resourceId: 'tasks',
-  parentTaskId: null,
-};
-const child = {
-  id: 'child',
-  title: 'Produce',
-  resourceId: 'tasks',
-  parentTaskId: 'parent',
-  linkedThreadId: null,
-};
-let controller: DeliverablesController;
 const service = {
   get: vi.fn(),
   agentWorkspace: vi.fn(),
-  board: vi.fn(),
-  registerAgent: vi.fn(),
   availableAgentIds: vi.fn(),
 };
-const threads = {
-  startThread: vi.fn(),
-  rememberInitialThreadCwd: vi.fn(),
-  archiveThread: vi.fn(),
-  setThreadName: vi.fn(),
-};
-const projects = {
-  createTask: vi.fn(),
-  createDeliverableExecutionSubtask: vi.fn(),
-};
 const metadata = { read: vi.fn() };
-const mutations = {
-  mutate: vi.fn((operation: () => Promise<unknown>) => operation()),
-};
+const mutations = { mutate: vi.fn((fn: () => Promise<unknown>) => fn()) };
+const launches = { deliverable: vi.fn(), status: vi.fn() };
+let controller: DeliverablesController;
 beforeEach(() => {
   vi.resetAllMocks();
-  mutations.mutate.mockImplementation((operation) => operation());
-  service.availableAgentIds.mockReturnValue(['existing']);
-  metadata.read.mockResolvedValue({
-    entries: [
-      {
-        archived: false,
-        thread: {
-          id: 'existing',
-          name: 'Existing agent',
-          status: { type: 'idle' },
-        },
-      },
-    ],
-  });
-  service.get.mockReturnValue({
-    id: 'd',
-    title: 'Report',
-    criteria: 'Ready',
-    primaryTaskId: null,
-  });
-  service.agentWorkspace.mockReturnValue('/work/livrables/d');
-  service.board.mockReturnValue({ tasks: [parent, child] });
-  threads.startThread.mockResolvedValue({ thread: { id: 'agent' } });
-  threads.archiveThread.mockResolvedValue(undefined);
-  threads.setThreadName.mockResolvedValue(undefined);
-  projects.createTask.mockReturnValue(child);
-  controller = new DeliverablesController(
-    service as never,
-    {} as never,
-    threads as never,
-    projects as never,
-    metadata as never,
-    mutations as never,
-  );
-});
-const request = {} as never;
-
-it('lists only idle, non-archived eligible agents', async () => {
+  mutations.mutate.mockImplementation((fn) => fn());
+  service.get.mockReturnValue({ version: 3 });
+  service.agentWorkspace.mockReturnValue('/work/d');
   service.availableAgentIds.mockReturnValue([
-    'existing',
-    'archived',
-    'active',
+    'idle',
     'unloaded',
+    'active',
+    'archived',
+    'elsewhere',
   ]);
   metadata.read.mockResolvedValue({
     entries: [
       {
         archived: false,
-        thread: {
-          id: 'existing',
-          name: 'Existing agent',
-          status: { type: 'idle' },
-        },
+        thread: { id: 'idle', cwd: '/work/d', status: { type: 'idle' } },
       },
-      { archived: true, thread: { id: 'archived', status: { type: 'idle' } } },
-      { archived: false, thread: { id: 'active', status: { type: 'active' } } },
-      { archived: false, thread: { id: 'foreign', status: { type: 'idle' } } },
       {
         archived: false,
         thread: {
           id: 'unloaded',
-          name: 'Unloaded agent',
+          cwd: '/work/d',
           status: { type: 'notLoaded' },
         },
       },
+      {
+        archived: false,
+        thread: { id: 'active', cwd: '/work/d', status: { type: 'active' } },
+      },
+      {
+        archived: true,
+        thread: { id: 'archived', cwd: '/work/d', status: { type: 'idle' } },
+      },
+      {
+        archived: false,
+        thread: { id: 'elsewhere', cwd: '/other', status: { type: 'idle' } },
+      },
+      {
+        archived: false,
+        thread: { id: 'foreign', cwd: '/work/d', status: { type: 'idle' } },
+      },
     ],
   });
-  expect(await controller.availableAgents('p', 'r', 'd')).toEqual({
-    agents: [
-      { id: 'existing', title: 'Existing agent' },
-      { id: 'unloaded', title: 'Unloaded agent' },
-    ],
-  });
-});
-
-it('keeps the optional subtask link when assigning an existing agent', async () => {
-  service.get.mockReturnValue({
-    id: 'd',
-    title: 'Report',
-    primaryTaskId: 'parent',
-  });
-  await controller.agent(
-    'p',
-    'r',
-    'd',
-    { version: 1, existingThreadId: 'existing', subtaskId: 'child' },
-    request,
+  controller = new DeliverablesController(
+    service as never,
+    {} as never,
+    metadata as never,
+    mutations as never,
+    launches as never,
   );
-  expect(service.registerAgent).toHaveBeenCalledWith(
-    'p',
-    'r',
-    'd',
-    1,
-    'existing',
-    'child',
-    true,
-  );
-  expect(threads.startThread).not.toHaveBeenCalled();
 });
-
-it('does not assign while the execution gate is busy', async () => {
-  mutations.mutate.mockRejectedValue(new Error('GIT_BUSY'));
-  await expect(
-    controller.agent(
-      'p',
-      'r',
-      'd',
-      { version: 1, existingThreadId: 'existing' },
-      request,
-    ),
-  ).rejects.toThrow('GIT_BUSY');
-  expect(service.registerAgent).not.toHaveBeenCalled();
-});
-
-it('assigns an idle existing agent without changing its history, name or working folder', async () => {
+it('offers only eligible idle and non-archived agents in the deliverable working folder', async () => {
   expect(
-    await controller.agent(
-      'p',
-      'r',
-      'd',
-      { version: 1, existingThreadId: 'existing' },
-      request,
+    (await controller.availableAgents('p', 'r', 'd')).agents.map(
+      (agent) => agent.id,
     ),
-  ).toEqual({ threadId: 'existing', taskId: null, createdSubtask: false });
-  expect(service.registerAgent).toHaveBeenCalledWith(
+  ).toEqual(['idle', 'unloaded']);
+});
+it('routes native creation and its optional subtask through the shared durable service', async () => {
+  const body = { version: 3, requestId: 'one', subtaskTitle: 'Produce' };
+  launches.deliverable.mockResolvedValue({
+    id: 'receipt',
+    state: 'needs_attention',
+    threadId: null,
+  });
+  expect(await controller.agent('p', 'r', 'd', body)).toMatchObject({
+    id: 'receipt',
+    state: 'needs_attention',
+  });
+  expect(launches.deliverable).toHaveBeenCalledExactlyOnceWith(
     'p',
     'r',
     'd',
-    1,
-    'existing',
-    undefined,
-    true,
+    body,
   );
-  expect(threads.startThread).not.toHaveBeenCalled();
-  expect(threads.rememberInitialThreadCwd).not.toHaveBeenCalled();
-  expect(threads.setThreadName).not.toHaveBeenCalled();
+  expect(mutations.mutate).not.toHaveBeenCalled();
+});
+it('preserves the existing-agent mutation gate while using the same durable service', async () => {
+  const body = { version: 3, requestId: 'one', existingThreadId: 'idle' };
+  await controller.agent('p', 'r', 'd', body);
   expect(mutations.mutate).toHaveBeenCalledOnce();
-});
-
-it('rejects unavailable existing agents before any task or thread is created', async () => {
-  service.availableAgentIds.mockReturnValue([]);
-  await expect(
-    controller.agent(
-      'p',
-      'r',
-      'd',
-      { version: 1, existingThreadId: 'existing', subtaskTitle: 'New task' },
-      request,
-    ),
-  ).rejects.toThrow('no longer available');
-  expect(projects.createTask).not.toHaveBeenCalled();
-  expect(service.registerAgent).not.toHaveBeenCalled();
-});
-
-it('never archives an existing agent when association fails', async () => {
-  service.registerAgent.mockImplementation(() => {
-    throw new Error('changed');
-  });
-  await expect(
-    controller.agent(
-      'p',
-      'r',
-      'd',
-      { version: 1, existingThreadId: 'existing' },
-      request,
-    ),
-  ).rejects.toThrow('changed');
-  expect(threads.archiveThread).not.toHaveBeenCalled();
-});
-
-it.each([null, 'parent'])(
-  'creates a direct agent without task creation even with primaryTaskId=%s',
-  async (primaryTaskId) => {
-    service.get.mockReturnValue({ id: 'd', title: 'Report', primaryTaskId });
-    expect(
-      await controller.agent('p', 'r', 'd', { version: 1 }, request),
-    ).toEqual({ threadId: 'agent', taskId: null, createdSubtask: false });
-    expect(service.registerAgent).toHaveBeenCalledWith(
-      'p',
-      'r',
-      'd',
-      1,
-      'agent',
-      undefined,
-    );
-    expect(projects.createTask).not.toHaveBeenCalled();
-    expect(projects.createDeliverableExecutionSubtask).not.toHaveBeenCalled();
-    expect(threads.startThread).toHaveBeenCalledWith({
-      cwd: '/work/livrables/d',
-    });
-    expect(threads.setThreadName).toHaveBeenCalledWith('agent', 'Report');
-  },
-);
-
-it('passes the chosen subtask while always registering the deliverable association', async () => {
-  service.get.mockReturnValue({
-    id: 'd',
-    title: 'Report',
-    primaryTaskId: 'parent',
-  });
-  expect(
-    await controller.agent(
-      'p',
-      'r',
-      'd',
-      { version: 1, subtaskId: 'child' },
-      request,
-    ),
-  ).toMatchObject({ taskId: 'child' });
-  expect(service.registerAgent).toHaveBeenCalledWith(
+  expect(launches.deliverable).toHaveBeenCalledExactlyOnceWith(
     'p',
     'r',
     'd',
-    1,
-    'agent',
-    'child',
+    body,
   );
 });
-
-it('creates a subtask only when explicitly requested', async () => {
-  service.get.mockReturnValue({
-    id: 'd',
-    title: 'Report',
-    primaryTaskId: 'parent',
-  });
-  expect(
-    await controller.agent(
-      'p',
-      'r',
-      'd',
-      { version: 1, subtaskTitle: 'Produce' },
-      request,
-    ),
-  ).toMatchObject({ createdSubtask: true, taskId: 'child' });
-  expect(projects.createTask).toHaveBeenCalledWith(
+it('delegates recovery discovery to the same project and resource scope', async () => {
+  await controller.agentLaunchStatus('p', 'r', 'd');
+  expect(launches.status).toHaveBeenCalledExactlyOnceWith(
     'p',
-    'tasks',
-    expect.objectContaining({ parentTaskId: 'parent', title: 'Produce' }),
-    expect.anything(),
+    'r',
+    'deliverable',
+    'd',
   );
-});
-
-it.each([
-  { subtaskId: 'missing' },
-  { subtaskId: 'child' },
-  { subtaskId: '' },
-  { subtaskId: 'child', subtaskTitle: 'New' },
-])(
-  'rejects invalid subtask selections before creating a thread: %j',
-  async (selection) => {
-    await expect(
-      controller.agent('p', 'r', 'd', { version: 1, ...selection }, request),
-    ).rejects.toThrow();
-    expect(threads.startThread).not.toHaveBeenCalled();
-  },
-);
-
-it('archives a newly created thread if concurrent association fails', async () => {
-  service.registerAgent.mockImplementation(() => {
-    throw new Error('Deliverable changed');
-  });
-  await expect(
-    controller.agent('p', 'r', 'd', { version: 1 }, request),
-  ).rejects.toThrow('changed');
-  expect(threads.archiveThread).toHaveBeenCalledWith('agent');
 });

@@ -376,6 +376,9 @@ it('reserves agent and automation execution for administrators while allowing si
     '/projects/p/agents',
     '/projects/p/agents/t',
     '/projects/p/resources/r/automations',
+    '/projects/p/resources/r/deliverables/d/agent',
+    '/projects/p/resources/r/tasks/t/agent',
+    '/projects/p/resources/r/agent-launches/l/recover',
     '/simple-chat/audio-sessions',
     '/simple-chat/audio-sessions/session-id/finish',
   ]) {

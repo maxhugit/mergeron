@@ -1141,20 +1141,56 @@ export const projectTasks = sqliteTable(
   ],
 );
 
-/** Durable launch receipt: unknown external outcomes never authorize a duplicate agent. */
-export const projectTaskLaunches = sqliteTable('project_task_launches', {
-  taskId: text('task_id')
-    .primaryKey()
-    .references(() => projectTasks.id, { onDelete: 'cascade' }),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id, { onDelete: 'cascade' }),
-  requestId: text('request_id').notNull(),
-  ownerId: text('owner_id').notNull(),
-  state: text('state').notNull(),
-  threadId: text('thread_id'),
-  updatedAt: integer('updated_at').notNull(),
-});
+/** Persisted allocation and dispatch state shared by task and deliverable agents. */
+export interface AgentLaunchContext {
+  kind: 'task' | 'deliverable';
+  targetId: string;
+  targetRevision: number;
+  cwd: string;
+  title: string;
+  taskId: string | null;
+  createdSubtask: boolean;
+  existing: boolean;
+  instructions?: string;
+}
+export const projectAgentLaunches = sqliteTable(
+  'project_agent_launches',
+  {
+    id: text('id').primaryKey(),
+    scope: text('scope').notNull().unique(),
+    targetKey: text('target_key').notNull(),
+    taskId: text('task_id').references(() => projectTasks.id, {
+      onDelete: 'set null',
+    }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    resourceId: text('resource_id')
+      .notNull()
+      .references(() => projectResources.id, { onDelete: 'cascade' }),
+    ownerId: text('owner_id').notNull(),
+    requestId: text('request_id').notNull(),
+    context: text('context', { mode: 'json' })
+      .$type<AgentLaunchContext>()
+      .notNull(),
+    state: text('state').notNull(),
+    phase: text('phase').notNull(),
+    threadId: text('thread_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_project_agent_launches_task').on(table.taskId),
+    uniqueIndex('idx_project_agent_launches_unresolved')
+      .on(table.projectId, table.targetKey)
+      .where(sql`${table.state} in ('pending', 'needs_attention')`),
+    index('idx_project_agent_launches_scope').on(
+      table.projectId,
+      table.resourceId,
+    ),
+    index('idx_project_agent_launches_thread').on(table.threadId),
+  ],
+);
 
 export type ProjectTask = typeof projectTasks.$inferSelect;
 

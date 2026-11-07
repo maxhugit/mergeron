@@ -1,3 +1,4 @@
+import { ProjectAgentLaunchService } from '../projects/project-agent-launch.service';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -210,6 +211,7 @@ beforeEach(async () => {
       DeliverablesController,
     ],
     providers: [
+      ProjectAgentLaunchService,
       ActiveFoldersService,
       IdentityService,
       AuthService,

@@ -108,10 +108,16 @@ vi.mock('@/lib/document-organization', () => ({
   }),
 }));
 beforeEach(() => {
+  vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+    '00000000-0000-4000-8000-000000000001',
+  );
   api.mockReset();
   api.mockImplementation((_path, input) => Promise.resolve(input ? {} : board));
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 it('selects an existing active folder from the deliverable without moving documents', async () => {
   await setup(
     board,
@@ -1014,7 +1020,11 @@ it('selects an existing free agent without creating one', async () => {
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/p/resources/r/deliverables/d/agent', {
       method: 'POST',
-      body: JSON.stringify({ version: 3, existingThreadId: 'existing' }),
+      body: JSON.stringify({
+        version: 3,
+        requestId: '00000000-0000-4000-8000-000000000001',
+        existingThreadId: 'existing',
+      }),
     }),
   );
 });
@@ -1065,6 +1075,7 @@ it('creates a linked agent only through an explicit action', async () => {
       method: 'POST',
       body: JSON.stringify({
         version: 3,
+        requestId: '00000000-0000-4000-8000-000000000001',
         subtaskId: 'child',
       }),
     }),
@@ -1096,6 +1107,7 @@ it('assigns directly without a task manager or hidden execution unit', async () 
       method: 'POST',
       body: JSON.stringify({
         version: 3,
+        requestId: '00000000-0000-4000-8000-000000000001',
       }),
     }),
   );

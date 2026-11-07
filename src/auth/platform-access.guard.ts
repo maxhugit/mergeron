@@ -190,6 +190,8 @@ export class PlatformAccessGuard implements CanActivate {
       )?.[1];
       const serverExecution =
         /\/deliverables\/[^/]+\/agent$/.test(url) ||
+        /\/tasks\/[^/]+\/agent$/.test(url) ||
+        /\/agent-launches\/[^/]+\/recover$/.test(url) ||
         /\/(?:ai-plan|ai-replan|ai-advice|ai-subtasks)$/.test(url) ||
         /\/organization\/proposals(?:\/[^/]+\/apply)?$/.test(url) ||
         (/^\/projects\/[^/]+\/agents(?:\/|$)/.test(url) &&

@@ -18,7 +18,7 @@ import {
   projectTaskStatuses,
   projectTasks,
   projectAgentThreads,
-  projectTaskLaunches,
+  projectAgentLaunches,
 } from '../database/schema';
 import { IdentityService } from '../auth/identity.service';
 import { accessContext } from '../auth/access-context';
@@ -31,7 +31,7 @@ import { ProjectAgentToolsService } from '../project-knowledge/project-agent-too
 import type { ModuleRef } from '@nestjs/core';
 import { ProjectsService } from './projects.service';
 import { ProjectTaskRuntimeService } from './project-task-runtime.service';
-import { TaskAgentLaunchService } from './task-agent-launch.service';
+import { ProjectAgentLaunchService } from './project-agent-launch.service';
 import type { CodexProcessManager } from '../codex/codex-process-manager.service';
 import type { ThreadMetadataService } from '../threads/thread-metadata.service';
 import type { ThreadsService } from '../threads/threads.service';
@@ -357,10 +357,16 @@ it('keeps one recoverable agent after an uncertain first turn and never replays 
         return Promise.resolve();
       },
     );
-    const launch = new TaskAgentLaunchService(database.db, domain, {
-      startThread,
-      startTurn,
-    } as unknown as ThreadsService);
+    const launch = new ProjectAgentLaunchService(
+      database.db,
+      domain,
+      {
+        startThread,
+        startTurn,
+      } as unknown as ThreadsService,
+      deliverables,
+      {} as ThreadMetadataService,
+    );
     const request = { requestId: 'stable-1', expectedUpdatedAt: sub.updatedAt };
     const first = await launch.launch('p', 'tasks', sub.id, request);
     expect(first.state).toBe('needs_attention');
@@ -376,20 +382,26 @@ it('blocks another allocation after an unknown native creation outcome', async (
     const main = parent(),
       sub = child(main.id);
     startThread.mockRejectedValue(Error('RPC disconnected'));
-    const launch = new TaskAgentLaunchService(database.db, domain, {
-      startThread,
-      startTurn,
-    } as unknown as ThreadsService);
+    const launch = new ProjectAgentLaunchService(
+      database.db,
+      domain,
+      {
+        startThread,
+        startTurn,
+      } as unknown as ThreadsService,
+      deliverables,
+      {} as ThreadMetadataService,
+    );
     for (const requestId of ['one', 'one', 'two'])
       await expect(
         launch.launch('p', 'tasks', sub.id, {
           requestId,
           expectedUpdatedAt: sub.updatedAt,
         }),
-      ).rejects.toThrow('UNCONFIRMED');
+      ).resolves.toMatchObject({ state: 'needs_attention', threadId: null });
     expect(startThread).toHaveBeenCalledTimes(1);
     expect(startTurn).not.toHaveBeenCalled();
-    expect(database.db.select().from(projectTaskLaunches).get()!.state).toBe(
+    expect(database.db.select().from(projectAgentLaunches).get()!.state).toBe(
       'needs_attention',
     );
   }));
@@ -453,14 +465,30 @@ it('cleans links and durable receipts only on explicit native deletion', async (
       primaryTaskId: sub.parentTaskId,
     });
     database.db
-      .insert(projectTaskLaunches)
+      .insert(projectAgentLaunches)
       .values({
+        id: 'receipt',
         taskId: sub.id,
+        scope: `task:${sub.id}`,
+        targetKey: `task:${sub.id}`,
         projectId: 'p',
-        requestId: 'one',
+        resourceId: 'tasks',
         ownerId: 'admin',
+        requestId: 'one',
+        context: {
+          kind: 'task',
+          targetId: sub.id,
+          targetRevision: sub.updatedAt,
+          cwd: root,
+          title: sub.title,
+          taskId: sub.id,
+          createdSubtask: false,
+          existing: false,
+        },
         threadId: 'agent',
+        phase: 'submitted',
         state: 'submitted',
+        createdAt: Date.now(),
         updatedAt: Date.now(),
       })
       .run();
@@ -474,7 +502,7 @@ it('cleans links and durable receipts only on explicit native deletion', async (
       linkedThreadId: null,
       agentState: 'error',
     });
-    expect(database.db.select().from(projectTaskLaunches).all()).toEqual([]);
+    expect(database.db.select().from(projectAgentLaunches).all()).toEqual([]);
     expect(
       deliverables
         .board('p', 'deliverables')
@@ -509,15 +537,27 @@ it('reserves a launch across concurrent callers and reuses its successful receip
       },
     );
     const native = { startThread, startTurn } as unknown as ThreadsService;
-    const launch = new TaskAgentLaunchService(database.db, domain, native);
+    const launch = new ProjectAgentLaunchService(
+      database.db,
+      domain,
+      native,
+      deliverables,
+      {} as ThreadMetadataService,
+    );
     const request = { requestId: 'one', expectedUpdatedAt: sub.updatedAt };
     const first = launch.launch('p', 'tasks', sub.id, request);
     await expect(
       launch.launch('p', 'tasks', sub.id, { ...request, requestId: 'two' }),
-    ).rejects.toThrow('UNCONFIRMED');
+    ).resolves.toMatchObject({ state: 'pending', threadId: null });
     resolve({ thread: { id: 'new-agent' } });
     await expect(first).resolves.toMatchObject({ state: 'submitted' });
-    const restarted = new TaskAgentLaunchService(database.db, domain, native);
+    const restarted = new ProjectAgentLaunchService(
+      database.db,
+      domain,
+      native,
+      deliverables,
+      {} as ThreadMetadataService,
+    );
     await expect(
       restarted.launch('p', 'tasks', sub.id, request),
     ).resolves.toMatchObject({ threadId: 'new-agent', resumed: true });
@@ -530,10 +570,16 @@ it('reserves a launch across concurrent callers and reuses its successful receip
 
 it('refuses a stale or unauthorized launch before allocating an agent', async () => {
   const sub = asAdmin(() => child(parent().id));
-  const launch = new TaskAgentLaunchService(database.db, domain, {
-    startThread,
-    startTurn,
-  } as unknown as ThreadsService);
+  const launch = new ProjectAgentLaunchService(
+    database.db,
+    domain,
+    {
+      startThread,
+      startTurn,
+    } as unknown as ThreadsService,
+    deliverables,
+    {} as ThreadMetadataService,
+  );
   await expect(
     launch.launch('p', 'tasks', sub.id, {
       requestId: 'one',
@@ -598,4 +644,642 @@ it('never lets a stale or in-flight discovery overwrite a more recent failed tur
     await runtime.reconcile();
     expect(task(sub.id).agentState).toBe('error');
     runtime.onModuleDestroy();
+  }));
+
+function recoveryService(
+  entries: Array<{
+    archived: boolean;
+    thread: {
+      id: string;
+      cwd: string;
+      status: { type: string };
+      name?: string;
+    };
+  }> = [],
+) {
+  const read = vi
+    .fn()
+    .mockResolvedValue({ entries, freshness: { stale: false } });
+  const gate = {
+    mutate: vi.fn((operation: () => Promise<void>) => operation()),
+  };
+  const native = {
+    startThread,
+    startTurn,
+    rememberInitialThreadCwd: vi.fn(),
+    setThreadName: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    launch: new ProjectAgentLaunchService(
+      database.db,
+      domain,
+      native as unknown as ThreadsService,
+      deliverables,
+      { read } as unknown as ThreadMetadataService,
+      gate as never,
+    ),
+    read,
+    native,
+    gate,
+  };
+}
+it.each([false, true])(
+  'creates and reuses one direct deliverable agent, with primary task present=%s',
+  async (primary) =>
+    asAdmin(async () => {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Output',
+        ...(primary ? { primaryTaskId: parent().id } : {}),
+      });
+      const before = database.db.select().from(projectTasks).all().length;
+      const { launch } = recoveryService();
+      startThread.mockResolvedValue({ thread: { id: 'delivery-agent' } });
+      const input = { version: item.version, requestId: 'one' };
+      const first = await launch.deliverable(
+        'p',
+        'deliverables',
+        item.id,
+        input,
+      );
+      expect(first).toMatchObject({
+        state: 'ready',
+        taskId: null,
+        createdSubtask: false,
+        threadId: 'delivery-agent',
+      });
+      expect(
+        (await launch.deliverable('p', 'deliverables', item.id, input)).id,
+      ).toBe(first.id);
+      expect(database.db.select().from(projectTasks).all()).toHaveLength(
+        before,
+      );
+      expect(startThread).toHaveBeenCalledTimes(1);
+      expect(startTurn).not.toHaveBeenCalled();
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toContainEqual({ type: 'agent', id: 'delivery-agent' });
+    }),
+);
+it('reserves a deliverable and its requested subtask before native allocation, including concurrent retries and target edits', async () =>
+  asAdmin(async () => {
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: parent().id,
+    });
+    let finish!: (value: unknown) => void;
+    startThread.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { launch, read } = recoveryService();
+    const input = {
+      version: item.version,
+      requestId: 'one',
+      subtaskTitle: 'Produce',
+    };
+    const first = launch.deliverable('p', 'deliverables', item.id, input);
+    const second = await launch.deliverable('p', 'deliverables', item.id, {
+      ...input,
+      requestId: 'two',
+    });
+    expect(second).toMatchObject({ state: 'pending', createdSubtask: true });
+    expect(
+      database.db
+        .select()
+        .from(projectTasks)
+        .all()
+        .filter((task) => task.parentTaskId),
+    ).toHaveLength(1);
+    const changed = deliverables.update('p', 'deliverables', item.id, {
+      version: item.version,
+      description: 'Edited during creation',
+    });
+    const third = await launch.deliverable('p', 'deliverables', item.id, {
+      ...input,
+      version: changed.version,
+      requestId: 'three',
+    });
+    expect(third.id).toBe(second.id);
+    finish({ thread: { id: 'delivery-agent' } });
+    expect(await first).toMatchObject({
+      state: 'needs_attention',
+      threadId: 'delivery-agent',
+    });
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(
+      database.db
+        .select()
+        .from(projectTasks)
+        .all()
+        .filter((task) => task.parentTaskId),
+    ).toHaveLength(1);
+    read.mockResolvedValue({
+      entries: [
+        {
+          archived: false,
+          thread: {
+            id: 'delivery-agent',
+            cwd: deliverables.agentWorkspace(
+              'p',
+              'deliverables',
+              item.id,
+              changed.version,
+            ),
+            status: { type: 'idle' },
+          },
+        },
+      ],
+      freshness: { stale: false },
+    });
+    const status = await launch.status(
+      'p',
+      'deliverables',
+      'deliverable',
+      item.id,
+    );
+    // Resume only associates; even this confirmed user action never starts a turn.
+    const receipt = status.launch!;
+    const resumed = await launch.recover('p', 'deliverables', receipt.id, {
+      action: 'resume',
+      expectedUpdatedAt: receipt.revision,
+      targetRevision: changed.version,
+    });
+    expect(resumed.state).toBe('confirmed');
+    expect(startTurn).not.toHaveBeenCalled();
+  }));
+it('retains one explicitly requested internal execution subtask when native creation fails', async () =>
+  asAdmin(async () => {
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'No primary task',
+    });
+    startThread.mockRejectedValue(Error('Disconnected'));
+    const { launch } = recoveryService();
+    for (const requestId of ['one', 'two'])
+      expect(
+        await launch.deliverable('p', 'deliverables', item.id, {
+          version: item.version,
+          requestId,
+          subtaskTitle: 'Work',
+        }),
+      ).toMatchObject({ state: 'needs_attention', createdSubtask: true });
+    expect(
+      database.db
+        .select()
+        .from(projectTasks)
+        .all()
+        .filter((task) => task.parentTaskId),
+    ).toHaveLength(1);
+    expect(startThread).toHaveBeenCalledTimes(1);
+  }));
+it('associates an existing deliverable agent without native creation or dispatch', async () =>
+  asAdmin(async () => {
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Existing agent',
+    });
+    const cwd = deliverables.agentWorkspace(
+      'p',
+      'deliverables',
+      item.id,
+      item.version,
+    );
+    const { launch } = recoveryService([
+      {
+        archived: false,
+        thread: { id: 'agent', cwd, status: { type: 'idle' } },
+      },
+    ]);
+    const result = await launch.deliverable('p', 'deliverables', item.id, {
+      version: item.version,
+      requestId: 'one',
+      existingThreadId: 'agent',
+    });
+    expect(result).toMatchObject({ state: 'ready', threadId: 'agent' });
+    expect(startThread).not.toHaveBeenCalled();
+    expect(startTurn).not.toHaveBeenCalled();
+  }));
+it('recovers an unknown native creation by explicitly selecting an existing eligible agent without replay', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    startThread.mockRejectedValue(Error('Response lost'));
+    const { launch } = recoveryService([
+      {
+        archived: false,
+        thread: { id: 'agent', cwd: root, status: { type: 'idle' } },
+      },
+    ]);
+    const result = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'one',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    const status = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(status.candidates.map((candidate) => candidate.id)).toEqual([
+      'agent',
+    ]);
+    const body = {
+      action: 'attach',
+      threadId: 'agent',
+      expectedUpdatedAt: status.launch!.revision,
+      targetRevision: status.launch!.targetRevision,
+    };
+    await expect(
+      launch.recover('p', 'tasks', result.id, {
+        ...body,
+        expectedUpdatedAt: body.expectedUpdatedAt - 1,
+      }),
+    ).rejects.toThrow('changed');
+    const recovered = await launch.recover('p', 'tasks', result.id, body);
+    expect(recovered).toMatchObject({ state: 'confirmed', threadId: 'agent' });
+    expect(task(sub.id).linkedThreadId).toBe('agent');
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(startTurn).not.toHaveBeenCalled();
+  }));
+it('acknowledges a checked uncertain send without starting another turn', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    startThread.mockResolvedValue({ thread: { id: 'agent' } });
+    startTurn.mockRejectedValue(Error('Response lost after send'));
+    const { launch } = recoveryService();
+    const result = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'one',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    expect(result).toMatchObject({
+      phase: 'dispatching',
+      state: 'needs_attention',
+    });
+    await expect(
+      launch.recover('p', 'tasks', result.id, {
+        action: 'resume',
+        expectedUpdatedAt: result.revision,
+      }),
+    ).rejects.toThrow('uncertain send');
+    const status = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(
+      await launch.recover('p', 'tasks', result.id, {
+        action: 'acknowledge',
+        verified: true,
+        expectedUpdatedAt: status.launch!.revision,
+      }),
+    ).toMatchObject({ state: 'confirmed' });
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(startTurn).toHaveBeenCalledTimes(1);
+  }));
+it('refuses stale inventory, busy, archived, foreign and already assigned candidates', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id),
+      other = child(sub.parentTaskId!);
+    await domain.updateTask('p', 'tasks', other.id, {
+      linkedThreadId: 'agent',
+    });
+    startThread.mockRejectedValue(Error('Unknown'));
+    const entries = [
+      {
+        archived: false,
+        thread: { id: 'agent', cwd: root, status: { type: 'idle' } },
+      },
+      {
+        archived: false,
+        thread: { id: 'foreign', cwd: root, status: { type: 'idle' } },
+      },
+      {
+        archived: false,
+        thread: { id: 'active', cwd: root, status: { type: 'active' } },
+      },
+      {
+        archived: true,
+        thread: { id: 'archived', cwd: root, status: { type: 'idle' } },
+      },
+    ];
+    const { launch, read } = recoveryService(entries);
+    const result = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'one',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    const status = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(status.candidates).toEqual([]);
+    await expect(
+      launch.recover('p', 'tasks', result.id, {
+        action: 'attach',
+        threadId: 'foreign',
+        expectedUpdatedAt: status.launch!.revision,
+        targetRevision: sub.updatedAt,
+      }),
+    ).rejects.toThrow('no longer available');
+    read.mockResolvedValue({ entries, freshness: { stale: true } });
+    expect(await launch.status('p', 'tasks', 'task', sub.id)).toMatchObject({
+      inventoryError: true,
+      candidates: [],
+    });
+  }));
+
+it('replays the same request identifier after target versions and later successful launches change', async () =>
+  asAdmin(async () => {
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+    });
+    const { launch } = recoveryService();
+    startThread
+      .mockResolvedValueOnce({ thread: { id: 'first' } })
+      .mockResolvedValueOnce({ thread: { id: 'second' } });
+    const first = await launch.deliverable('p', 'deliverables', item.id, {
+      requestId: 'first-request',
+      version: item.version,
+    });
+    const current = deliverables.get('p', 'deliverables', item.id);
+    const second = await launch.deliverable('p', 'deliverables', item.id, {
+      requestId: 'second-request',
+      version: current.version,
+    });
+    expect(second.threadId).toBe('second');
+    const replay = await launch.deliverable('p', 'deliverables', item.id, {
+      requestId: 'first-request',
+      version: current.version,
+    });
+    expect(replay.id).toBe(first.id);
+    expect(replay.threadId).toBe('first');
+    expect(startThread).toHaveBeenCalledTimes(2);
+  }));
+it('keeps creation busy while the native call is pending and rejects recovery by another identity', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    let finish!: (value: unknown) => void;
+    startThread.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { launch } = recoveryService();
+    const running = launch.launch('p', 'tasks', sub.id, {
+      requestId: 'one',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    const pending = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(pending.launch).toMatchObject({ state: 'pending', busy: true });
+    await expect(
+      launch.recover('p', 'tasks', pending.launch!.id, {
+        action: 'attach',
+        threadId: 'agent',
+        expectedUpdatedAt: pending.launch!.revision,
+        targetRevision: sub.updatedAt,
+      }),
+    ).rejects.toThrow('busy');
+    database.db
+      .insert(people)
+      .values({
+        id: 'other-admin',
+        reference: 'other-admin',
+        name: 'Other admin',
+        role: 'administrator',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    await accessContext.run(
+      { identity: identities.resolvePerson('other-admin'), identities },
+      async () => {
+        await expect(
+          launch.recover('p', 'tasks', pending.launch!.id, {
+            action: 'acknowledge',
+            expectedUpdatedAt: pending.launch!.revision,
+          }),
+        ).rejects.toThrow('not available');
+      },
+    );
+    finish({ thread: { id: 'agent' } });
+    startTurn.mockResolvedValue({});
+    await running;
+    expect(startThread).toHaveBeenCalledTimes(1);
+  }));
+it('rejects invalid deliverable selections before allocating or creating an execution subtask', async () =>
+  asAdmin(async () => {
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: parent().id,
+    });
+    const before = database.db.select().from(projectTasks).all().length;
+    const { launch } = recoveryService();
+    await expect(
+      launch.deliverable('p', 'deliverables', item.id, {
+        version: item.version,
+        requestId: 'one',
+        subtaskId: 'missing',
+      }),
+    ).rejects.toThrow();
+    await expect(
+      launch.deliverable('p', 'deliverables', item.id, {
+        version: item.version,
+        requestId: 'one',
+        subtaskId: 'missing',
+        subtaskTitle: 'New',
+      }),
+    ).rejects.toThrow();
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(before);
+    expect(database.db.select().from(projectAgentLaunches).all()).toHaveLength(
+      0,
+    );
+    expect(startThread).not.toHaveBeenCalled();
+  }));
+
+it('shares the same allocation and recovery handle when a task is launched from a deliverable and the task manager concurrently', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      sub = child(main.id);
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: main.id,
+    });
+    let finish!: (value: unknown) => void;
+    startThread.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { launch } = recoveryService();
+    const pending = launch.deliverable('p', 'deliverables', item.id, {
+      version: item.version,
+      requestId: 'delivery',
+      subtaskId: sub.id,
+    });
+    const taskAttempt = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'task',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    expect(taskAttempt).toMatchObject({
+      state: 'pending',
+      resourceId: 'deliverables',
+      taskId: sub.id,
+    });
+    expect((await launch.status('p', 'tasks', 'task', sub.id)).launch?.id).toBe(
+      taskAttempt.id,
+    );
+    finish({ thread: { id: 'shared-agent' } });
+    expect((await pending).threadId).toBe('shared-agent');
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(startTurn).not.toHaveBeenCalled();
+  }));
+
+it('can close an impossible association only after explicitly verifying a known agent, without deleting it or allocating again', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    startThread.mockResolvedValue({ thread: { id: 'known' } });
+    vi.spyOn(domain, 'associateAgent').mockRejectedValue(
+      Error('Folder changed'),
+    );
+    const { launch } = recoveryService();
+    const result = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'one',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    await expect(
+      launch.recover('p', 'tasks', result.id, {
+        action: 'keep',
+        expectedUpdatedAt: result.revision,
+      }),
+    ).rejects.toThrow('Verify');
+    const status = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(
+      await launch.recover('p', 'tasks', result.id, {
+        action: 'keep',
+        verified: true,
+        expectedUpdatedAt: status.launch!.revision,
+      }),
+    ).toMatchObject({ state: 'abandoned', threadId: 'known' });
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(startTurn).not.toHaveBeenCalled();
+    expect(deletion.deleteThread).not.toHaveBeenCalled();
+    expect(
+      (await launch.status('p', 'tasks', 'task', sub.id)).launch,
+    ).toBeNull();
+  }));
+it('never closes a creation with no confirmed agent identifier, even after user confirmation', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    startThread.mockRejectedValue(Error('Unknown outcome'));
+    const { launch } = recoveryService();
+    const result = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'one',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    await expect(
+      launch.recover('p', 'tasks', result.id, {
+        action: 'keep',
+        verified: true,
+        expectedUpdatedAt: result.revision,
+      }),
+    ).rejects.toThrow('Verify');
+    const again = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'two',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    expect(again.id).toBe(result.id);
+    expect(startThread).toHaveBeenCalledTimes(1);
+  }));
+
+it('keeps the existing-agent mutation barrier during recovery and permits retry after that barrier clears', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    startThread.mockRejectedValue(Error('Response lost'));
+    const { launch, gate } = recoveryService([
+      {
+        archived: false,
+        thread: { id: 'agent', cwd: root, status: { type: 'idle' } },
+      },
+    ]);
+    const result = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'one',
+      expectedUpdatedAt: sub.updatedAt,
+    });
+    gate.mutate.mockRejectedValueOnce(Error('GIT_BUSY'));
+    await expect(
+      launch.recover('p', 'tasks', result.id, {
+        action: 'attach',
+        threadId: 'agent',
+        expectedUpdatedAt: result.revision,
+        targetRevision: sub.updatedAt,
+      }),
+    ).rejects.toThrow('GIT_BUSY');
+    expect(task(sub.id).linkedThreadId).toBeNull();
+    const status = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(
+      await launch.recover('p', 'tasks', result.id, {
+        action: 'resume',
+        expectedUpdatedAt: status.launch!.revision,
+        targetRevision: status.launch!.targetRevision,
+      }),
+    ).toMatchObject({ state: 'confirmed', threadId: 'agent' });
+    expect(gate.mutate).toHaveBeenCalledTimes(2);
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(startTurn).not.toHaveBeenCalled();
+  }));
+
+it('repairs a migrated known agent association before allowing confirmation of its uncertain send', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    database.db
+      .insert(projectAgentLaunches)
+      .values({
+        id: 'migrated',
+        scope: `task:${sub.id}`,
+        targetKey: `task:${sub.id}`,
+        taskId: sub.id,
+        projectId: 'p',
+        resourceId: 'tasks',
+        ownerId: 'admin',
+        requestId: 'old',
+        state: 'needs_attention',
+        phase: 'legacy',
+        threadId: 'agent',
+        createdAt: 1,
+        updatedAt: 2,
+        context: {
+          kind: 'task',
+          targetId: sub.id,
+          targetRevision: sub.updatedAt,
+          taskId: sub.id,
+          cwd: root,
+          title: sub.title,
+          createdSubtask: false,
+          existing: false,
+        },
+      })
+      .run();
+    const { launch } = recoveryService([
+      {
+        archived: false,
+        thread: { id: 'agent', cwd: root, status: { type: 'idle' } },
+      },
+    ]);
+    const initial = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(initial.launch).toMatchObject({ associationPending: true });
+    await expect(
+      launch.recover('p', 'tasks', 'migrated', {
+        action: 'acknowledge',
+        verified: true,
+        expectedUpdatedAt: initial.launch!.revision,
+      }),
+    ).rejects.toThrow('First finish');
+    const before = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(
+      await launch.recover('p', 'tasks', 'migrated', {
+        action: 'resume',
+        expectedUpdatedAt: before.launch!.revision,
+        targetRevision: before.launch!.targetRevision,
+      }),
+    ).toMatchObject({ state: 'needs_attention', phase: 'legacy' });
+    expect(task(sub.id).linkedThreadId).toBe('agent');
+    const after = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(after.launch).toMatchObject({ associationPending: false });
+    expect(
+      await launch.recover('p', 'tasks', 'migrated', {
+        action: 'acknowledge',
+        verified: true,
+        expectedUpdatedAt: after.launch!.revision,
+      }),
+    ).toMatchObject({ state: 'confirmed' });
+    expect(startThread).not.toHaveBeenCalled();
+    expect(startTurn).not.toHaveBeenCalled();
   }));
