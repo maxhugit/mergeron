@@ -79,8 +79,27 @@ export function assertDeliverableAgentLinks(
   projectId: string,
   primaryTaskId: string | null,
   agentIds: string[],
+  deliverableId?: string,
 ) {
   for (const threadId of agentIds) {
+    if (
+      db
+        .select({ id: projectDeliverables.id })
+        .from(projectDeliverables)
+        .where(
+          and(
+            deliverableId
+              ? ne(projectDeliverables.id, deliverableId)
+              : undefined,
+            sql`exists (select 1 from json_each(${projectDeliverables.conversations}) where json_extract(value, '$.type') = 'agent' and json_extract(value, '$.id') = ${threadId})`,
+          ),
+        )
+        .get()
+    )
+      throw new ConflictException(
+        'This agent already belongs to another deliverable',
+      );
+
     const binding = db
       .select()
       .from(projectAgentThreads)

@@ -1,4 +1,12 @@
 import {
+  taskWorkReference,
+  validateTaskWorkReference,
+  applyTaskWorkReference,
+  normalizeDeliverableTaskReference,
+  assertWorkReferenceAgentLinks,
+  type TaskWorkReferenceInput,
+} from './task-work-reference';
+import {
   assertTaskAgent,
   assertTaskDeliverableLinks,
 } from './project-work-links';
@@ -16,7 +24,7 @@ import {
   WORKSPACE_LAYOUT_VERSION,
   projectSystemPath,
 } from './workspace-structure';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { identityEvents } from '../auth/identity-events';
 import {
@@ -35,6 +43,7 @@ import {
   projects,
   projectResources,
   projectTasks,
+  projectAgentLaunches,
   projectTaskActivity,
   projectTaskDependencies,
   projectTaskStatuses,
@@ -1697,6 +1706,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       .all()
       .sort((a, b) => a.position - b.position);
     const taskIds = new Set(tasks.map((task) => task.id));
+    const references = new Map<string, ReturnType<typeof taskWorkReference>>();
     return {
       resource,
       project,
@@ -1707,10 +1717,18 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         .where(eq(projectTaskStatuses.resourceId, resourceId))
         .all()
         .sort((a, b) => a.position - b.position),
-      tasks: tasks.map((task) => ({
-        ...task,
-        activeFolder: this.folders.get('task', task.id),
-      })),
+      tasks: tasks.map((task) => {
+        const rootId = task.parentTaskId ?? task.id;
+        const workReference =
+          references.get(rootId) ?? taskWorkReference(this.db, task);
+        references.set(rootId, workReference);
+        return {
+          ...task,
+          workspacePath: workReference.path,
+          workReference,
+          activeFolder: workReference.activeFolder,
+        };
+      }),
       activity: this.db
         .select()
         .from(projectTaskActivity)
@@ -1827,6 +1845,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       linkedFilePath?: string | null;
       parentTaskId?: string | null;
       workspacePath?: string | null;
+      workReference?: TaskWorkReferenceInput;
       executionMode?: string;
       estimateMinutes?: number;
       progress?: number;
@@ -1836,7 +1855,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       subtaskStatus?: string;
     },
     actor?: ProjectActivityActor,
-  ): ProjectTask {
+  ): ProjectTask & { workReference?: ReturnType<typeof taskWorkReference> } {
     this.getResource(projectId, resourceId);
     const fallback = this.db
       .select()
@@ -1858,6 +1877,31 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       : null;
     if (parent?.parentTaskId)
       throw new BadRequestException('A subtask cannot contain subtasks');
+    if (input.workReference !== undefined)
+      validateTaskWorkReference(input.workReference);
+    if (
+      parent &&
+      input.workspacePath &&
+      input.workspacePath !== taskWorkReference(this.db, parent).path
+    )
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (parent && input.workReference)
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (input.workReference?.type === 'folder')
+      input = {
+        ...input,
+        workReference: {
+          type: 'folder',
+          path: this.validateTaskWorkspace(projectId, input.workReference.path),
+        },
+      };
+    if (input.workReference && input.workspacePath)
+      throw new BadRequestException('Select one task work reference');
+
     const now = Date.now();
     const task: ProjectTask = {
       id: randomUUID(),
@@ -1894,8 +1938,25 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       updatedAt: now,
     };
     this.validateTaskDateRange(task.startAt, task.dueAt, parent);
+    const requestedFolder =
+      input.workReference?.type === 'folder'
+        ? input.workReference.path
+        : task.workspacePath;
+    if (requestedFolder)
+      this.folders.validateAbsoluteSelection(projectId, requestedFolder);
+
     this.db.transaction((tx) => {
       tx.insert(projectTasks).values(task).run();
+      if (input.workReference) {
+        applyTaskWorkReference(
+          this.db,
+          projectId,
+          task.id,
+          input.workReference,
+        );
+        assertWorkReferenceAgentLinks(this.db, task.id);
+      }
+      if (parent) normalizeDeliverableTaskReference(this.db, parent.id);
       tx.insert(projectTaskActivity)
         .values({
           id: randomUUID(),
@@ -1929,26 +1990,189 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
             createdAt: now,
           })
           .run();
+      if (task.parentTaskId)
+        this.recalculateParentEstimate(
+          resourceId,
+          task.parentTaskId,
+          true,
+          actor,
+        );
+      const saved = this.requireTask(resourceId, task.id);
+      const reference = taskWorkReference(this.db, saved);
+      if (reference.type === 'folder' && reference.path)
+        this.folders.setFromAbsolutePath(
+          projectId,
+          'task',
+          task.id,
+          reference.path,
+        );
     });
-    if (task.parentTaskId)
-      this.recalculateParentEstimate(
-        resourceId,
-        task.parentTaskId,
-        true,
-        actor,
-      );
-    this.folders.setFromAbsolutePath(
-      projectId,
-      'task',
-      task.id,
-      task.workspacePath,
-    );
-    return task;
+    const refreshed = this.requireTask(resourceId, task.id);
+    const finalReference = taskWorkReference(this.db, refreshed);
+    return {
+      ...refreshed,
+      workspacePath: finalReference.path,
+      workReference: finalReference,
+    };
   }
 
-  // Preserve the asynchronous service contract used by API and internal callers.
+  applyTaskBatch(
+    projectId: string,
+    resourceId: string,
+    input: {
+      requestId: string;
+      operations: Array<
+        | {
+            type: 'create';
+            key: string;
+            input: Parameters<ProjectsService['createTask']>[2];
+            dependsOnKeys?: string[];
+          }
+        | {
+            type: 'update';
+            taskId: string;
+            input: Parameters<ProjectsService['updateTask']>[3];
+          }
+      >;
+    },
+    actor?: ProjectActivityActor,
+  ) {
+    this.getResource(projectId, resourceId);
+    if (
+      !input ||
+      typeof input.requestId !== 'string' ||
+      !input.requestId.trim() ||
+      input.requestId.length > 100 ||
+      !Array.isArray(input.operations) ||
+      !input.operations.length ||
+      input.operations.length > 100
+    )
+      throw new BadRequestException('Invalid task batch');
+    const owner =
+      currentAccess()?.identity.personId ??
+      currentAccess()?.identity.subject ??
+      'system';
+    const id =
+      'task-batch:' +
+      createHash('sha256')
+        .update(JSON.stringify([projectId, resourceId, owner, input.requestId]))
+        .digest('hex');
+    const hash = createHash('sha256')
+      .update(JSON.stringify(input.operations))
+      .digest('hex');
+    const keys = new Set<string>(),
+      updates = new Set<string>();
+    for (const op of input.operations) {
+      if (!op || !op.input || typeof op.input !== 'object')
+        throw new BadRequestException('Invalid batch operation');
+      if (op.type === 'create') {
+        if (
+          typeof op.key !== 'string' ||
+          !op.key.trim() ||
+          keys.has(op.key) ||
+          (op.dependsOnKeys !== undefined &&
+            (!Array.isArray(op.dependsOnKeys) ||
+              op.dependsOnKeys.some((key) => typeof key !== 'string')))
+        )
+          throw new BadRequestException('Invalid or duplicate batch key');
+        keys.add(op.key);
+      } else if (op.type === 'update') {
+        if (
+          typeof op.taskId !== 'string' ||
+          updates.has(op.taskId) ||
+          !Number.isSafeInteger(op.input.expectedUpdatedAt)
+        )
+          throw new BadRequestException(
+            'An observed task revision is required for every batch update',
+          );
+        updates.add(op.taskId);
+      } else throw new BadRequestException('Unknown batch operation');
+    }
+    for (const op of input.operations)
+      if (
+        op.type === 'create' &&
+        op.dependsOnKeys?.some((key) => !keys.has(key))
+      )
+        throw new BadRequestException('Unknown batch dependency');
+    const result = this.db.transaction((tx) => {
+      const prior = tx
+        .select()
+        .from(projectActivity)
+        .where(eq(projectActivity.id, id))
+        .get();
+      if (prior) {
+        if (prior.details.hash !== hash)
+          throw new ConflictException(
+            'This request identifier belongs to another batch',
+          );
+        return { ids: prior.details.taskIds as string[], replayed: true };
+      }
+      const created = new Map<string, string>(),
+        ids: string[] = [];
+      for (const op of input.operations) {
+        const task =
+          op.type === 'create'
+            ? this.createTask(projectId, resourceId, op.input, actor)
+            : this.updateTaskSync(
+                projectId,
+                resourceId,
+                op.taskId,
+                op.input,
+                actor,
+              );
+        ids.push(task.id);
+        if (op.type === 'create') created.set(op.key, task.id);
+      }
+      for (const op of input.operations)
+        if (op.type === 'create' && op.dependsOnKeys?.length) {
+          const task = this.requireTask(resourceId, created.get(op.key)!);
+          this.updateTaskSync(
+            projectId,
+            resourceId,
+            task.id,
+            {
+              expectedUpdatedAt: task.updatedAt,
+              dependencyIds: [
+                ...(op.input.dependencyIds ?? []),
+                ...op.dependsOnKeys.map((key) => created.get(key)!),
+              ],
+            },
+            actor,
+          );
+        }
+      tx.insert(projectActivity)
+        .values({
+          id,
+          projectId,
+          action: 'task_batch_applied',
+          entityType: 'task_batch',
+          entityId: resourceId,
+          label: 'Task batch applied',
+          details: { hash, taskIds: ids },
+          actorPersonId: actor?.personId ?? null,
+          actorName: actor?.name ?? 'Système',
+          createdAt: Date.now(),
+        })
+        .run();
+      return { ids, replayed: false };
+    });
+    return {
+      replayed: result.replayed,
+      tasks: result.ids.map((id) => {
+        const task = this.requireTask(resourceId, id),
+          workReference = taskWorkReference(this.db, task);
+        return { ...task, workspacePath: workReference.path, workReference };
+      }),
+    };
+  }
+
+  // Preserve the public asynchronous contract; batches use the synchronous core.
   // eslint-disable-next-line @typescript-eslint/require-await
-  async updateTask(
+  async updateTask(...args: Parameters<ProjectsService['updateTaskSync']>) {
+    return this.updateTaskSync(...args);
+  }
+
+  private updateTaskSync(
     projectId: string,
     resourceId: string,
     taskId: string,
@@ -1967,6 +2191,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       linkedFilePath: string | null;
       parentTaskId: string | null;
       workspacePath: string | null;
+      workReference: TaskWorkReferenceInput;
       executionMode: string;
       agentState: string;
       estimateMinutes: number;
@@ -1977,9 +2202,48 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       subtaskStatus: string;
     }>,
     actor?: ProjectActivityActor,
-  ): Promise<ProjectTask> {
+  ): ProjectTask & { workReference?: ReturnType<typeof taskWorkReference> } {
     this.getResource(projectId, resourceId);
     const task = this.requireTask(resourceId, taskId);
+    if (
+      input.agentState !== undefined &&
+      ![
+        'manual',
+        'ready',
+        'running',
+        'waiting',
+        'error',
+        'review',
+        'validated',
+      ].includes(input.agentState)
+    )
+      throw new BadRequestException('Invalid agent state');
+    if (
+      input.linkedThreadId !== undefined &&
+      task.linkedThreadId &&
+      input.linkedThreadId !== task.linkedThreadId
+    ) {
+      requireThreadAccess(task.linkedThreadId);
+      if (
+        this.db
+          .select({ id: projectAgentLaunches.id })
+          .from(projectAgentLaunches)
+          .where(
+            and(
+              eq(projectAgentLaunches.taskId, task.id),
+              inArray(projectAgentLaunches.state, [
+                'pending',
+                'needs_attention',
+              ]),
+            ),
+          )
+          .get()
+      )
+        throw new ConflictException(
+          'Recover the uncertain launch before changing its assignment',
+        );
+    }
+
     if (
       input.expectedUpdatedAt !== undefined &&
       input.expectedUpdatedAt !== task.updatedAt
@@ -2032,6 +2296,40 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     const effectiveParent = effectiveParentId
       ? this.requireTask(resourceId, effectiveParentId)
       : null;
+    if (input.workReference !== undefined)
+      validateTaskWorkReference(input.workReference);
+    if (
+      effectiveParent &&
+      input.workspacePath &&
+      input.workspacePath !== taskWorkReference(this.db, effectiveParent).path
+    )
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (effectiveParentId && input.workReference)
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (input.workReference && input.workspacePath)
+      throw new BadRequestException('Select one task work reference');
+    if (input.workReference?.type === 'folder')
+      input = {
+        ...input,
+        workReference: {
+          type: 'folder',
+          path: this.validateTaskWorkspace(projectId, input.workReference.path),
+        },
+      };
+    const previousReference = taskWorkReference(this.db, task);
+    if (
+      !input.workReference &&
+      previousReference.type === 'deliverable' &&
+      input.workspacePath &&
+      input.workspacePath !== previousReference.path
+    )
+      throw new ConflictException(
+        'This task uses a deliverable. Select a folder reference explicitly to replace it',
+      );
     const hasChildren =
       !effectiveParentId &&
       this.db
@@ -2183,6 +2481,13 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       )
     )
       updated.progress = 100;
+    if (
+      input.linkedThreadId !== undefined &&
+      input.linkedThreadId !== task.linkedThreadId &&
+      input.agentState === undefined
+    )
+      updated.agentState =
+        updated.executionMode === 'agent' ? 'ready' : 'manual';
     this.validateTaskDateRange(updated.startAt, updated.dueAt, effectiveParent);
     if (!effectiveParentId) {
       const children = this.db
@@ -2199,6 +2504,17 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         updated.linkedThreadId,
         updated.parentTaskId,
       );
+    const requestedFolder =
+      input.workReference?.type === 'folder'
+        ? input.workReference.path
+        : updated.workspacePath;
+    if (
+      requestedFolder &&
+      (input.workReference?.type === 'folder' ||
+        input.workspacePath !== undefined ||
+        input.parentTaskId !== undefined)
+    )
+      this.folders.validateAbsoluteSelection(projectId, requestedFolder);
     // Completion is a business decision, never permission to destroy a conversation
     // or its managed Git copy. Keep the link and evidence until explicit deletion.
     this.db.transaction((tx) => {
@@ -2215,7 +2531,42 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           .run().changes
       )
         throw new ConflictException('Task changed. Reload before saving.');
+      if (
+        input.linkedThreadId !== undefined &&
+        task.linkedThreadId &&
+        input.linkedThreadId !== task.linkedThreadId
+      ) {
+        for (const receipt of tx
+          .select()
+          .from(projectAgentLaunches)
+          .where(eq(projectAgentLaunches.taskId, task.id))
+          .all())
+          tx.update(projectAgentLaunches)
+            .set({
+              taskId: null,
+              scope: receipt.scope + ':detached:' + receipt.id,
+            })
+            .where(eq(projectAgentLaunches.id, receipt.id))
+            .run();
+      }
       const changes = this.taskChanges(task, updated);
+      if (input.workReference)
+        changes.workReference = {
+          before:
+            previousReference.type === 'deliverable'
+              ? {
+                  type: 'deliverable',
+                  deliverableId: previousReference.deliverableId,
+                }
+              : { type: 'folder', path: previousReference.path },
+          after:
+            input.workReference.type === 'deliverable'
+              ? {
+                  type: 'deliverable',
+                  deliverableId: input.workReference.deliverableId,
+                }
+              : { type: 'folder', path: input.workReference.path },
+        };
       if (Object.keys(changes).length)
         tx.insert(projectTaskActivity)
           .values({
@@ -2231,9 +2582,24 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
             createdAt: updated.updatedAt,
           })
           .run();
+      if (input.workReference) {
+        applyTaskWorkReference(
+          this.db,
+          projectId,
+          task.id,
+          input.workReference,
+        );
+        assertWorkReferenceAgentLinks(this.db, task.id);
+      } else {
+        normalizeDeliverableTaskReference(
+          this.db,
+          effectiveParentId ?? task.id,
+        );
+      }
       if (
         !effectiveParentId &&
-        (input.workspacePath !== undefined || input.priority !== undefined)
+        (input.workspacePath !== undefined || input.priority !== undefined) &&
+        !input.workReference
       )
         tx.update(projectTasks)
           .set({
@@ -2244,6 +2610,14 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           })
           .where(eq(projectTasks.parentTaskId, task.id))
           .run();
+      if (
+        input.linkedThreadId !== undefined ||
+        input.parentTaskId !== undefined
+      ) {
+        for (const mainId of new Set([task.parentTaskId, effectiveParentId])) {
+          if (mainId) assertWorkReferenceAgentLinks(this.db, mainId);
+        }
+      }
       if (input.dependencyIds !== undefined) {
         tx.delete(projectTaskDependencies)
           .where(eq(projectTaskDependencies.taskId, task.id))
@@ -2262,49 +2636,69 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
               })
               .run();
       }
+      if (task.parentTaskId)
+        this.recalculateParentEstimate(
+          resourceId,
+          task.parentTaskId,
+          true,
+          actor,
+        );
+      if (effectiveParentId && effectiveParentId !== task.parentTaskId)
+        this.recalculateParentEstimate(
+          resourceId,
+          effectiveParentId,
+          true,
+          actor,
+        );
+      if (!effectiveParentId)
+        this.recalculateParentEstimate(resourceId, task.id, false, actor);
+      const saved = this.requireTask(resourceId, task.id);
+      const reference = taskWorkReference(this.db, saved);
+      if (
+        reference.type === 'folder' &&
+        reference.path &&
+        (input.workReference || !this.folders.get('task', task.id))
+      )
+        this.folders.setFromAbsolutePath(
+          projectId,
+          'task',
+          task.id,
+          reference.path,
+        );
+      if (
+        reference.type === 'folder' &&
+        reference.path &&
+        (input.workspacePath !== undefined ||
+          input.parentTaskId !== undefined ||
+          !this.folders.get('task', task.id))
+      ) {
+        this.folders.setFromAbsolutePath(
+          projectId,
+          'task',
+          task.id,
+          saved.workspacePath,
+        );
+        if (!effectiveParentId && input.workspacePath !== undefined)
+          for (const child of this.db
+            .select()
+            .from(projectTasks)
+            .where(eq(projectTasks.parentTaskId, task.id))
+            .all())
+            this.folders.setFromAbsolutePath(
+              projectId,
+              'task',
+              child.id,
+              saved.workspacePath,
+            );
+      }
     });
-    if (task.parentTaskId)
-      this.recalculateParentEstimate(
-        resourceId,
-        task.parentTaskId,
-        true,
-        actor,
-      );
-    if (effectiveParentId && effectiveParentId !== task.parentTaskId)
-      this.recalculateParentEstimate(
-        resourceId,
-        effectiveParentId,
-        true,
-        actor,
-      );
-    if (!effectiveParentId)
-      this.recalculateParentEstimate(resourceId, task.id, false, actor);
-    const saved = this.requireTask(resourceId, task.id);
-    if (
-      input.workspacePath !== undefined ||
-      input.parentTaskId !== undefined ||
-      !this.folders.get('task', task.id)
-    ) {
-      this.folders.setFromAbsolutePath(
-        projectId,
-        'task',
-        task.id,
-        saved.workspacePath,
-      );
-      if (!effectiveParentId && input.workspacePath !== undefined)
-        for (const child of this.db
-          .select()
-          .from(projectTasks)
-          .where(eq(projectTasks.parentTaskId, task.id))
-          .all())
-          this.folders.setFromAbsolutePath(
-            projectId,
-            'task',
-            child.id,
-            saved.workspacePath,
-          );
-    }
-    return saved;
+    const refreshed = this.requireTask(resourceId, task.id);
+    const finalReference = taskWorkReference(this.db, refreshed);
+    return {
+      ...refreshed,
+      workspacePath: finalReference.path,
+      workReference: finalReference,
+    };
   }
 
   // Preserve the asynchronous service contract used by API and internal callers.

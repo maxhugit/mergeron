@@ -1,3 +1,9 @@
+import { canAccessDeliverable } from './deliverable-access';
+import {
+  normalizeDeliverableTaskReference,
+  assertDeliverableWorkReference,
+  assertWorkReferenceAgentLinks,
+} from '../projects/task-work-reference';
 import {
   assertPrimaryTask,
   assertDeliverableAgentLinks,
@@ -39,9 +45,7 @@ import {
   projectDeliverableValidationEvents as validationEvents,
   projectWorkspaces,
   projectParticipants,
-  projectManagerAssignments,
   projectPersonGroups,
-  projectPersonGroupMembers,
   people,
   projectTasks,
   projectActivity,
@@ -631,9 +635,13 @@ export class DeliverablesService implements OnModuleInit {
     )
       return false;
     try {
-      assertDeliverableAgentLinks(this.db, projectId, item.primaryTaskId, [
-        threadId,
-      ]);
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        item.primaryTaskId,
+        [threadId],
+        item.id,
+      );
       return true;
     } catch (error) {
       if (
@@ -718,9 +726,13 @@ export class DeliverablesService implements OnModuleInit {
           })
           .onConflictDoNothing({ target: projectAgentThreads.threadId })
           .run();
-      assertDeliverableAgentLinks(this.db, projectId, item.primaryTaskId, [
-        threadId,
-      ]);
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        item.primaryTaskId,
+        [threadId],
+        item.id,
+      );
       if (task) assertTaskAgent(this.db, projectId, task.id, threadId);
       if (
         !tx
@@ -828,31 +840,9 @@ export class DeliverablesService implements OnModuleInit {
     projectId: string,
     item: Pick<Item, 'confidentiality' | 'authorizedGroupIds'>,
   ) {
-    if (item.confidentiality !== 'restricted') return true;
-    const access = currentAccess();
-    if (!access || access.identity.role === 'administrator') return true;
-    const personId = access.identity.personId;
-    if (!personId) return false;
-    const manager = this.db
-      .select({ personId: projectManagerAssignments.personId })
-      .from(projectManagerAssignments)
-      .where(eq(projectManagerAssignments.projectId, projectId))
-      .get();
-    if (manager?.personId === personId) return true;
-    if (!item.authorizedGroupIds.length) return false;
-    return Boolean(
-      this.db
-        .select({ groupId: projectPersonGroupMembers.groupId })
-        .from(projectPersonGroupMembers)
-        .where(
-          and(
-            inArray(projectPersonGroupMembers.groupId, item.authorizedGroupIds),
-            eq(projectPersonGroupMembers.personId, personId),
-          ),
-        )
-        .get(),
-    );
+    return canAccessDeliverable(this.db, projectId, item);
   }
+
   private options(projectId: string) {
     return {
       assignees: this.db
@@ -1298,6 +1288,7 @@ export class DeliverablesService implements OnModuleInit {
       conversations
         .filter((link) => link.type === 'agent')
         .map((link) => link.id),
+      current?.id,
     );
     return {
       title:
@@ -1401,6 +1392,20 @@ export class DeliverablesService implements OnModuleInit {
         })
         .returning()
         .get();
+      if (values.primaryTaskId) {
+        normalizeDeliverableTaskReference(this.db, values.primaryTaskId, true);
+        assertWorkReferenceAgentLinks(this.db, values.primaryTaskId);
+      }
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        created.primaryTaskId,
+        created.conversations
+          .filter((link) => link.type === 'agent')
+          .map((link) => link.id),
+        created.id,
+      );
+      assertDeliverableWorkReference(this.db, created);
       tx.insert(lifecycleEvents)
         .values({
           id: randomUUID(),
@@ -1528,6 +1533,27 @@ export class DeliverablesService implements OnModuleInit {
         throw new ConflictException(
           'Deliverable changed. Reload before saving.',
         );
+      if (current.primaryTaskId !== changed.primaryTaskId) {
+        for (const mainId of new Set([
+          current.primaryTaskId,
+          changed.primaryTaskId,
+        ])) {
+          if (mainId) {
+            normalizeDeliverableTaskReference(this.db, mainId, true);
+            assertWorkReferenceAgentLinks(this.db, mainId);
+          }
+        }
+      }
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        changed.primaryTaskId,
+        changed.conversations
+          .filter((link) => link.type === 'agent')
+          .map((link) => link.id),
+        changed.id,
+      );
+      assertDeliverableWorkReference(this.db, changed);
       const fields = Object.keys(changes).filter(
         (key) =>
           JSON.stringify(current[key as keyof Item]) !==

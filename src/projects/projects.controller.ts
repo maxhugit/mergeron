@@ -556,6 +556,21 @@ export class ProjectsController {
     return this.launches.recover(id, resourceId, launchId, body);
   }
 
+  @Post(':id/resources/:resourceId/task-batches')
+  applyTaskBatch(
+    @Param('id') id: string,
+    @Param('resourceId') resourceId: string,
+    @Body() body: Parameters<ProjectsService['applyTaskBatch']>[2],
+    @Req() request: IdentityRequest,
+  ) {
+    return this.projects.applyTaskBatch(
+      id,
+      resourceId,
+      body,
+      activityActor(request),
+    );
+  }
+
   @Patch(':id/resources/:resourceId/tasks/:taskId')
   async updateTask(
     @Param('id') id: string,
