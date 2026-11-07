@@ -5091,7 +5091,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'Système'"
+          "default": "'Syst\u00e8me'"
         },
         "created_at": {
           "name": "created_at",
@@ -5595,6 +5595,13 @@
           "columns": [
             "status_id",
             "position"
+          ],
+          "isUnique": false
+        },
+        "idx_project_tasks_linked_thread": {
+          "name": "idx_project_tasks_linked_thread",
+          "columns": [
+            "linked_thread_id"
           ],
           "isUnique": false
         }

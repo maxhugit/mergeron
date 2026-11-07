@@ -1133,6 +1133,7 @@ export const projectTasks = sqliteTable(
   },
   (table) => [
     index('idx_project_tasks_resource').on(table.resourceId),
+    index('idx_project_tasks_linked_thread').on(table.linkedThreadId),
     index('idx_project_tasks_status_position').on(
       table.statusId,
       table.position,

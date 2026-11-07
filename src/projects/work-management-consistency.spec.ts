@@ -551,3 +551,51 @@ it('refuses a stale or unauthorized launch before allocating an agent', async ()
   });
   expect(startThread).not.toHaveBeenCalled();
 });
+
+it('never lets a stale or in-flight discovery overwrite a more recent failed turn', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    await domain.updateTask('p', 'tasks', sub.id, {
+      linkedThreadId: 'agent',
+      agentState: 'running',
+    });
+    const manager = new EventEmitter(),
+      changes = new Subject<void>();
+    let resolve!: (value: unknown) => void;
+    const read = vi.fn().mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const runtime = new ProjectTaskRuntimeService(
+      database.db,
+      manager as unknown as CodexProcessManager,
+      { read, changes } as unknown as ThreadMetadataService,
+    );
+    runtime.onModuleInit();
+    manager.emit('notification', {
+      method: 'turn/completed',
+      params: { threadId: 'agent', turn: { status: 'failed' } },
+    });
+    const active = {
+      entries: [
+        {
+          thread: { id: 'agent', status: { type: 'active', activeFlags: [] } },
+        },
+      ],
+      freshness: { stale: false },
+    };
+    resolve(active);
+    await vi.waitFor(() => expect(task(sub.id).agentState).toBe('error'));
+    read.mockResolvedValue({ ...active, freshness: { stale: true } });
+    await runtime.reconcile();
+    expect(task(sub.id).agentState).toBe('error');
+    read.mockResolvedValue({
+      entries: [{ thread: { id: 'agent', status: { type: 'idle' } } }],
+      freshness: { stale: false },
+    });
+    await runtime.reconcile();
+    expect(task(sub.id).agentState).toBe('error');
+    runtime.onModuleDestroy();
+  }));

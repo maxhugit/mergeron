@@ -215,29 +215,32 @@ journal d’audit exhaustif des actions de chaque utilisateur.
 
 ## Repères dans le code
 
-| Fichier                                                                              | Responsabilité                                                               |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| [Interface du gestionnaire](../web/src/components/projects/project-task-manager.tsx) | Vues, formulaires, Gantt, propositions IA et lancement des agents            |
-| [Gantt](../web/src/components/projects/stable-project-gantt.tsx)                     | Intégration du composant de planning                                         |
-| [Types et client HTTP](../web/src/lib/projects-api.ts)                               | Contrats côté navigateur                                                     |
-| [Contrôleur](../src/projects/projects.controller.ts)                                 | Routes sous `/api/projects`                                                  |
-| [Service projets](../src/projects/projects.service.ts)                               | Validation, persistance, agrégats, dépendances et synchronisation des agents |
-| [Service chat simple](../src/simple-chat/simple-chat.service.ts)                     | Appels IA de planification et de conseil                                     |
-| [Schéma SQLite](../src/database/schema.ts)                                           | Tables et relations                                                          |
-| [Contrôle d’accès](../src/auth/platform-access.guard.ts)                             | Autorisations des routes                                                     |
+| Fichier                                                                              | Responsabilité                                                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| [Interface du gestionnaire](../web/src/components/projects/project-task-manager.tsx) | Vues, formulaires, Gantt, propositions IA et lancement des agents         |
+| [Gantt](../web/src/components/projects/stable-project-gantt.tsx)                     | Intégration du composant de planning                                      |
+| [Types et client HTTP](../web/src/lib/projects-api.ts)                               | Contrats côté navigateur                                                  |
+| [Contrôleur](../src/projects/projects.controller.ts)                                 | Routes sous `/api/projects`                                               |
+| [Service projets](../src/projects/projects.service.ts)                               | Validation, persistance, agrégats et dépendances                          |
+| [Projection d’exécution](../src/projects/project-task-runtime.service.ts)            | États des tâches depuis les événements et les instantanés frais du moteur |
+| [Lancement durable](../src/projects/task-agent-launch.service.ts)                    | Réservation et reprise sans duplication des lancements                    |
+| [Service chat simple](../src/simple-chat/simple-chat.service.ts)                     | Appels IA de planification et de conseil                                  |
+| [Schéma SQLite](../src/database/schema.ts)                                           | Tables et relations                                                       |
+| [Contrôle d’accès](../src/auth/platform-access.guard.ts)                             | Autorisations des routes                                                  |
 
 Les routes du tableau partagent le préfixe
 `/api/projects/:id/resources/:resourceId` :
 
-| Méthode et suffixe                                   | Fonction                                                           |
-| ---------------------------------------------------- | ------------------------------------------------------------------ |
-| `GET /`                                              | Lire le tableau, synchroniser les agents et recalculer les parents |
-| `POST /tasks`                                        | Créer une tâche ou sous-tâche                                      |
-| `PATCH /tasks/:taskId`                               | Modifier, lier une conversation ou valider                         |
-| `DELETE /tasks/:taskId`                              | Supprimer une tâche et ses sous-tâches                             |
-| `POST /statuses`, `PATCH/DELETE /statuses/:statusId` | Gérer les colonnes                                                 |
-| `POST /ai-plan`                                      | Proposer un plan                                                   |
-| `POST /ai-replan`                                    | Proposer une replanification                                       |
-| `POST /ai-advice`                                    | Obtenir analyse ou sélection de travail                            |
-| `POST /tasks/:taskId/ai-subtasks`                    | Proposer un découpage                                              |
-| `PATCH /`                                            | Modifier la ressource et ses paramètres                            |
+| Méthode et suffixe                                   | Fonction                                          |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `GET /`                                              | Lire le tableau et recalculer les parents         |
+| `POST /tasks`                                        | Créer une tâche ou sous-tâche                     |
+| `PATCH /tasks/:taskId`                               | Modifier, lier une conversation ou valider        |
+| `POST /tasks/:taskId/agent`                          | Lancer ou retrouver un agent avec un reçu durable |
+| `DELETE /tasks/:taskId`                              | Supprimer une tâche et ses sous-tâches            |
+| `POST /statuses`, `PATCH/DELETE /statuses/:statusId` | Gérer les colonnes                                |
+| `POST /ai-plan`                                      | Proposer un plan                                  |
+| `POST /ai-replan`                                    | Proposer une replanification                      |
+| `POST /ai-advice`                                    | Obtenir analyse ou sélection de travail           |
+| `POST /tasks/:taskId/ai-subtasks`                    | Proposer un découpage                             |
+| `PATCH /`                                            | Modifier la ressource et ses paramètres           |

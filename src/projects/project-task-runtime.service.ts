@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import type { Subscription } from 'rxjs';
 import { CodexProcessManager } from '../codex/codex-process-manager.service';
 import type { ServerNotification } from '../codex/codex-schema/ServerNotification';
@@ -27,6 +27,7 @@ export class ProjectTaskRuntimeService
   private refreshing = false;
   private stopped = false;
   private pending = false;
+  private observation = 0;
   constructor(
     @Inject(DRIZZLE_DB) private db: AppDatabase,
     private manager: CodexProcessManager,
@@ -34,6 +35,15 @@ export class ProjectTaskRuntimeService
   ) {}
   private listener = (event: ServerNotification) => {
     if (this.stopped) return;
+    if (
+      [
+        'thread/status/changed',
+        'turn/started',
+        'turn/completed',
+        'thread/deleted',
+      ].includes(event.method)
+    )
+      this.observation++;
     if (event.method === 'thread/status/changed')
       this.status(event.params.threadId, event.params.status);
     if (event.method === 'turn/started')
@@ -63,11 +73,27 @@ export class ProjectTaskRuntimeService
       return;
     }
     this.refreshing = true;
+    const observation = this.observation;
     try {
       const snapshot = await this.metadata.read();
-      if (!this.stopped)
+      // A cached snapshot must not overwrite a newer authoritative turn event.
+      if (
+        !this.stopped &&
+        observation === this.observation &&
+        !snapshot.freshness?.stale
+      ) {
+        const linked = new Set(
+          this.db
+            .select({ id: projectTasks.linkedThreadId })
+            .from(projectTasks)
+            .where(isNotNull(projectTasks.linkedThreadId))
+            .all()
+            .map((row) => row.id),
+        );
         for (const entry of snapshot.entries)
-          this.status(entry.thread.id, entry.thread.status);
+          if (linked.has(entry.thread.id))
+            this.status(entry.thread.id, entry.thread.status);
+      }
     } catch {
       /* An unavailable snapshot is not evidence of completion or deletion. */
     } finally {
