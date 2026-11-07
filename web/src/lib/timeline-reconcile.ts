@@ -22,13 +22,16 @@
  */
 import { mergeRecoveredItems } from '@/lib/turn-item-merge';
 import type { TimelineEntry } from '@/types/timeline';
+import { sameUserMessage, type UserEntry } from './timeline-user-messages';
 
 /** Detail levels ordered so the richer view can be kept. */
 const VIEW_RANK: Record<string, number> = { notLoaded: 0, summary: 1, full: 2 };
 
 /** Identity used for anchoring; entries without one cannot be reconciled. */
 function entryTurnId(entry: TimelineEntry): string | null {
-  return entry.kind === 'system' || entry.kind === 'interaction' ? null : (entry.turnId ?? null);
+  return entry.kind === 'system' || entry.kind === 'interaction'
+    ? null
+    : (entry.turnId ?? null);
 }
 
 /**
@@ -62,10 +65,10 @@ function selectEntry(page: TimelineEntry, live: TimelineEntry): TimelineEntry {
 /**
  * Merges the rows of one turn, keeping every row either side contributed.
  *
- * Rows are matched by kind, which is what distinguishes a turn's user message
- * from its assistant turn. A kind only the page has is inserted rather than
- * dropped — the page is durable history, and the live timeline may simply never
- * have received that notification.
+ * Response/failure rows are matched by kind. User rows are matched individually
+ * by native item identity, or by one unconfirmed occurrence, because steering
+ * contributes several user messages to the same turn. A row only the page has
+ * is inserted: live notifications can legitimately have been missed.
  *
  * @param pageRows - That turn's rows from the fetched page, in page order
  * @param liveRows - That turn's rows already rendered, in live order
@@ -76,10 +79,33 @@ function reconcileTurnRows(
   liveRows: TimelineEntry[],
 ): TimelineEntry[] {
   const pageByKind = new Map<string, TimelineEntry>();
-  for (const row of pageRows) pageByKind.set(row.kind, row);
+  for (const row of pageRows)
+    if (row.kind !== 'user') pageByKind.set(row.kind, row);
+  const remainingUsers = pageRows.filter(
+    (row): row is UserEntry => row.kind === 'user',
+  );
 
   const liveKinds = new Set(liveRows.map((row) => row.kind));
   const merged = liveRows.map((row) => {
+    if (row.kind === 'user') {
+      let index = remainingUsers.findIndex(
+        (candidate) => row.itemId && candidate.itemId === row.itemId,
+      );
+      if (index < 0)
+        index = remainingUsers.findIndex(
+          (candidate) =>
+            (!row.itemId || !candidate.itemId) &&
+            (sameUserMessage(row, candidate) ||
+              (!row.steering && !candidate.steering)),
+        );
+      if (index < 0) return row;
+      const [counterpart] = remainingUsers.splice(index, 1);
+      return {
+        ...row,
+        ...(counterpart.itemId && { itemId: counterpart.itemId }),
+        ...(counterpart.steering && { steering: true }),
+      };
+    }
     const counterpart = pageByKind.get(row.kind);
     return counterpart ? selectEntry(counterpart, row) : row;
   });
@@ -87,7 +113,12 @@ function reconcileTurnRows(
   // Unlike overlapping command items, these rows have a known presentation
   // order. A recovered prompt belongs before its response even if the prompt
   // notification was missed. This does not change item order inside the turn.
-  const extras = pageRows.filter((row) => !liveKinds.has(row.kind));
+  const extras = [
+    ...remainingUsers,
+    ...pageRows.filter(
+      (row) => row.kind !== 'user' && !liveKinds.has(row.kind),
+    ),
+  ];
   const rowRank: Record<TimelineEntry['kind'], number> = {
     user: 0,
     turn: 1,

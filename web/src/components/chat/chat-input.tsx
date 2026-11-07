@@ -30,6 +30,10 @@ import {
   rejectTurnSubmission,
 } from '@/lib/turn-submission';
 import { getApiErrorMessage } from '@/lib/api-error';
+import {
+  beginSteerSubmission,
+  rejectSteerSubmission,
+} from '@/lib/steer-submission';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { useComposerDraftStore } from '@/stores/composer-draft-store';
 import { useModelStore } from '@/stores/model-store';
@@ -280,13 +284,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   });
   const steer = useMutation({
     ...threadsSteerTurnMutation(),
-    onError: (err, variables) => {
-      const store = useTimelineStore.getState();
-      if (!store.getThreadRuntime(variables.path.threadId)) return;
-      store.addSystemErrorForThread(
+    onMutate: (variables) =>
+      beginSteerSubmission(
         variables.path.threadId,
-        getApiErrorMessage(err),
-      );
+        variables.path.turnId,
+        variables.body?.input,
+      ),
+    onError: (err, _variables, submission) => {
+      if (submission) rejectSteerSubmission(submission, err);
     },
   });
   const interruptTurn = useMutation({

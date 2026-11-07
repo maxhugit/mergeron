@@ -187,6 +187,12 @@ export function useCodexSocket(enabled = true) {
             .getState()
             .updateTurnItemForThread(threadId, turnId, itemId, updater);
       },
+      upsertUserMessage: (turnId, message) => {
+        if (ctx.threadId)
+          useTimelineStore
+            .getState()
+            .upsertUserMessageForThread(ctx.threadId, turnId, message);
+      },
       updateTurnDiff: (turnId, diff) => {
         const threadId = ctx.threadId;
         if (threadId)

@@ -118,6 +118,10 @@ export const handleItemStarted: Handler = (params, ctx) => {
     (item.id as string | undefined) ??
     '';
   const normalized = normalizeThreadItem(item, false, itemId);
+  if (normalized.kind === 'userMessage') {
+    ctx.upsertUserMessage(turnId, normalized.message);
+    return;
+  }
   if (normalized.kind === 'render' || normalized.kind === 'unknown') {
     // `item/started` carries an empty shell. Recovery can install the terminal
     // payload for an item before its own start notification is processed — on
@@ -139,6 +143,10 @@ export const handleItemCompleted: Handler = (params, ctx) => {
     (item.id as string | undefined) ??
     '';
   const normalized = normalizeThreadItem(item, true, completedItemId);
+  if (normalized.kind === 'userMessage') {
+    ctx.upsertUserMessage(turnId, normalized.message);
+    return;
+  }
   if (normalized.kind === 'render' || normalized.kind === 'unknown') {
     ctx.updateTurnItem(turnId, normalized.item.itemId, (existing) =>
       mergeTurnItem(existing, normalized.item),

@@ -13,6 +13,7 @@ import { createTimelineNavigationActions } from './timeline-navigation-actions';
 import { createTimelineHistoryActions } from './timeline-history-actions';
 import { createTimelineTurnsActions } from './timeline-turns-actions';
 import { createTimelineInteractionsActions } from './timeline-interactions-actions';
+import { upsertTimelineUserMessage } from '@/lib/timeline-user-messages';
 
 export const useTimelineStore = create<TimelineState>((set, get) => {
   const applyThreadUpdate = (
@@ -96,6 +97,42 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       }));
     },
 
+    addSteeringMessageForThread: (threadId, turnId, localId, text, images) => {
+      const runtime = get().getThreadRuntime(threadId);
+      if (!runtime || runtime.deletedRemotely) return;
+      applyThreadUpdate(threadId, (runtime) => ({
+        ...runtime,
+        timeline: [
+          ...runtime.timeline,
+          {
+            kind: 'user',
+            turnId,
+            localId,
+            steering: true,
+            content: text,
+            ...(images.length && { images }),
+          },
+        ],
+      }));
+    },
+    rejectSteeringMessageForThread: (threadId, localId) => {
+      if (!get().getThreadRuntime(threadId)) return;
+      applyThreadUpdate(threadId, (runtime) => ({
+        ...runtime,
+        timeline: runtime.timeline.filter(
+          (entry) =>
+            entry.kind !== 'user' ||
+            entry.localId !== localId ||
+            Boolean(entry.itemId),
+        ),
+      }));
+    },
+    upsertUserMessageForThread: (threadId, turnId, message) => {
+      applyThreadUpdate(threadId, (runtime) => ({
+        ...runtime,
+        timeline: upsertTimelineUserMessage(runtime.timeline, turnId, message),
+      }));
+    },
     addSystemError: (message) => {
       const threadId = selectedThread();
       if (threadId) get().addSystemErrorForThread(threadId, message);

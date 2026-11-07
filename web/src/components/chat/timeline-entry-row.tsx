@@ -42,7 +42,8 @@ export function TimelineEntryRow({
 }) {
   if (entry.kind === 'user') {
     const turnId = entry.turnId;
-    const versions = turnId ? versionsByTurnId.get(turnId) : undefined;
+    const versions =
+      turnId && !entry.steering ? versionsByTurnId.get(turnId) : undefined;
     return (
       <div className="group/user flex flex-col items-end">
         {/* A neutral tint, not an accent colour: the user's own message is the
@@ -69,7 +70,7 @@ export function TimelineEntryRow({
           )}
           {/* Rendered whenever the message has a turn, disabled rather than
               removed — dropping it mid-switch would move the version switcher. */}
-          {turnId && (
+          {turnId && !entry.steering && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
