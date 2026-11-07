@@ -447,6 +447,35 @@ it('stages security choices and discards them without a backend mutation', async
   expect(fixture.server.writes).toHaveLength(0);
 });
 
+it('saves a workspace-write security draft through the fixed footer and preserves other tab drafts', async () => {
+  editableConfig();
+  const user = userEvent.setup();
+  await renderModel();
+  await screen.findByRole('combobox', { name: 'Model' });
+  await user.click(screen.getByRole('tab', { name: 'Instructions' }));
+  await user.click(screen.getByRole('tab', { name: 'Session instructions' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Instructions' }), {
+    target: { value: 'Unrelated draft' },
+  });
+  await user.click(screen.getByRole('tab', { name: 'Security' }));
+  const sandbox = screen.getAllByRole('combobox')[1];
+  await user.selectOptions(sandbox, 'workspace-write');
+  expect(fixture.server.writes).toHaveLength(0);
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(fixture.server.writes).toHaveLength(1));
+  expect(fixture.server.writes[0].body).toEqual({
+    edits: [{ keyPath: 'sandbox_mode', value: 'workspace-write' }],
+  });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
+  );
+  expect(sandbox).toHaveValue('workspace-write');
+  await user.click(screen.getByRole('tab', { name: 'Instructions' }));
+  expect(screen.getByRole('textbox', { name: 'Instructions' })).toHaveValue(
+    'Unrelated draft',
+  );
+});
+
 it('retains every structured field across the new sections, including the conditional profile', async () => {
   const config = {
     ...Object.fromEntries(

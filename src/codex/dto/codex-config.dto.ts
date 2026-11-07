@@ -25,6 +25,8 @@ export const CODEX_CONFIG_EDITABLE_KEYS = [
   'web_search',
   'service_tier',
   'approvals_reviewer',
+  'approval_policy',
+  'sandbox_mode',
 ] as const;
 
 export const APP_DEFAULT_CONFIG_EDITABLE_FIELDS = [

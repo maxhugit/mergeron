@@ -342,7 +342,7 @@ export type CodexConfigResponseDto = {
 };
 
 export type ConfigEditDto = {
-    keyPath: 'profile' | 'model' | 'review_model' | 'model_provider' | 'model_context_window' | 'model_auto_compact_token_limit' | 'instructions' | 'developer_instructions' | 'compact_prompt' | 'model_reasoning_effort' | 'model_reasoning_summary' | 'model_verbosity' | 'web_search' | 'service_tier' | 'approvals_reviewer' | string | string | string;
+    keyPath: 'profile' | 'model' | 'review_model' | 'model_provider' | 'model_context_window' | 'model_auto_compact_token_limit' | 'instructions' | 'developer_instructions' | 'compact_prompt' | 'model_reasoning_effort' | 'model_reasoning_summary' | 'model_verbosity' | 'web_search' | 'service_tier' | 'approvals_reviewer' | 'approval_policy' | 'sandbox_mode' | string | string | string;
     value: number | string | boolean | Array<unknown> | {
         [key: string]: unknown;
     } | null;
