@@ -80,6 +80,50 @@ describe('CodexConfigController', () => {
     expect(codexStatusService.invalidateCache).toHaveBeenCalled();
   });
 
+  it.each([
+    ['sandbox_mode', 'workspace-write'],
+    ['approval_policy', 'on-request'],
+    ['sandbox_mode', null],
+    ['approval_policy', null],
+  ])(
+    'saves the security field %s through the structured editor (%s)',
+    async (keyPath, value) => {
+      codexService.request
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce(configReadResponse());
+      await controller.updateConfig({ edits: [{ keyPath, value }] });
+      expect(codexService.request).toHaveBeenCalledWith('config/batchWrite', {
+        edits: [{ keyPath, value, mergeStrategy: 'replace' }],
+        reloadUserConfig: true,
+      });
+      expect(codexStatusService.invalidateCache).toHaveBeenCalled();
+    },
+  );
+
+  it('saves the security panel as one native batch without broadening editable tables', async () => {
+    codexService.request
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce(configReadResponse());
+    const edits = [
+      { keyPath: 'sandbox_mode', value: 'workspace-write' },
+      { keyPath: 'approval_policy', value: 'on-request' },
+      { keyPath: 'approvals_reviewer', value: 'user' },
+    ];
+    await controller.updateConfig({ edits });
+    expect(codexService.request).toHaveBeenCalledWith('config/batchWrite', {
+      edits: edits.map((edit) => ({ ...edit, mergeStrategy: 'replace' })),
+      reloadUserConfig: true,
+    });
+    for (const key of [
+      'sandbox_workspace_write',
+      'sandbox_workspace_write.network_access',
+      'permissions',
+      'mcp_servers',
+    ]) {
+      expect(isCodexConfigEditableKey(key)).toBe(false);
+    }
+  });
+
   it('translates structured config validation refusals into a field error', async () => {
     codexService.request.mockRejectedValueOnce(
       new CodexRpcError(
