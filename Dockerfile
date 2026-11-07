@@ -14,6 +14,8 @@ FROM golang:1.27.3-bookworm AS github-cli-builder
 ARG GH_VERSION
 ARG GH_SOURCE_SHA256
 ENV GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+RUN apt-get update && apt-get install -y --no-install-recommends patch \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /build/gh
 COPY security/github-cli-dependencies.patch /tmp/github-cli-dependencies.patch
 RUN curl --fail --silent --show-error --location \
