@@ -828,3 +828,87 @@ test.each([390, 1180])(
     }
   },
 );
+
+test.each([390, 1280])(
+  'discovers an update from another tab during reconnection at %ipx without losing the draft',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    sessionStorage.clear();
+    let offline = false;
+    const network = vi
+      .spyOn(window, 'fetch')
+      .mockImplementation(async (input) => {
+        const path = input instanceof Request ? input.url : String(input);
+        if (path.includes('/_mergeron-update/status'))
+          return new Response(
+            JSON.stringify({
+              operation: {
+                id: '12345678-1234-1234-1234-123456789abc',
+                status: offline ? 'running' : 'succeeded',
+              },
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          );
+        if (path.endsWith('/me') && offline)
+          return new Response('', { status: 503 });
+        return new Response(
+          JSON.stringify(
+            path.endsWith('/me')
+              ? {
+                  active: true,
+                  kind: 'person',
+                  personId: 'original',
+                  name: 'Person',
+                  role: 'administrator',
+                }
+              : { maxIdleSubscriptions: 30 },
+          ),
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+      });
+    dispose = installSessionRecovery();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    try {
+      const input = await screen.findByRole('textbox', {
+        name: 'Unsent message',
+      });
+      fireEvent.change(input, {
+        target: { value: 'Brouillon conservé pendant la mise à jour' },
+      });
+      offline = true;
+      await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+      await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' });
+      await waitFor(() =>
+        expect(
+          document.querySelector('iframe')?.contentDocument?.body.textContent,
+        ).toContain('Suivi synthétique'),
+      );
+      expect(screen.queryByRole('textbox')).toBeNull();
+      expect(
+        network.mock.calls.some(([input]) =>
+          String(input).includes('/api/settings/manager/update/monitor'),
+        ),
+      ).toBe(false);
+      await page.screenshot({
+        path: `../../.vitest-screenshots/discovered-update-${width}.png`,
+      });
+      offline = false;
+      await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+      await waitFor(() => expect(screen.getByRole('textbox')).toBe(input));
+      expect(input).toHaveValue('Brouillon conservé pendant la mise à jour');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);

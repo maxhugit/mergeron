@@ -257,7 +257,9 @@ export default mergeConfig(
             const url = new URL(request.url ?? '/', 'http://localhost');
             if (
               url.pathname !== '/_mergeron-update/' ||
-              url.searchParams.get('operation') !== 'fixture'
+              !['fixture', '12345678-1234-1234-1234-123456789abc'].includes(
+                url.searchParams.get('operation') ?? '',
+              )
             )
               return next();
             response.setHeader('Content-Type', 'text/html');
