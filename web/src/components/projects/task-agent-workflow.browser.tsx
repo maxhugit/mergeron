@@ -34,6 +34,13 @@ afterEach(() => {
 async function setup(
   agentState: ProjectTaskSummary['agentState'] = 'ready',
   failLaunch = false,
+  initialTaskId: string | null = 'sub',
+  withDeliverables = false,
+  agentThreads: Array<{
+    threadId: string;
+    title: string;
+    archived?: boolean;
+  }> = [],
 ) {
   await i18nReady;
   await i18n.changeLanguage('fr');
@@ -101,9 +108,25 @@ async function setup(
   } as unknown as ProjectTaskBoard;
   let requested = false;
   api.mockImplementation((path?: string, init?: RequestInit) => {
+    if (path?.endsWith('/deliverables'))
+      return Promise.resolve({
+        deliverables: [
+          {
+            id: 'output',
+            title: 'Présentation',
+            version: 7,
+            primaryTaskId: null,
+            lifecycleStatus: 'draft',
+          },
+        ],
+      });
     if (init?.method === 'PATCH')
       return Promise.resolve({
-        task: { ...sub, ...JSON.parse(String(init.body)), updatedAt: 43 },
+        task: {
+          ...(String(path).endsWith('/main') ? main : sub),
+          ...JSON.parse(String(init.body)),
+          updatedAt: 43,
+        },
       });
     if (path?.endsWith('/agent')) {
       requested = true;
@@ -134,7 +157,16 @@ async function setup(
       return Promise.resolve({ participants: [] });
     if (!path)
       return Promise.resolve({
-        projects: [{ id: 'p', resources: [], workspaces: [] }],
+        projects: [
+          {
+            id: 'p',
+            agentThreads,
+            resources: withDeliverables
+              ? [{ id: 'deliverables', type: 'deliverable_board' }]
+              : [],
+            workspaces: [],
+          },
+        ],
       });
     return Promise.resolve(board);
   });
@@ -146,12 +178,13 @@ async function setup(
       <ProjectTaskManager
         projectId="p"
         resourceId="r"
-        initialTaskId="sub"
-        modalOnly
+        initialTaskId={initialTaskId ?? undefined}
+        modalOnly={initialTaskId !== null}
       />
     </QueryClientProvider>,
   );
-  await screen.findByRole('button', { name: 'Enregistrer' });
+  if (initialTaskId) await screen.findByRole('button', { name: 'Enregistrer' });
+  else await screen.findByRole('button', { name: 'Dossier principal' });
   return { client, board };
 }
 
@@ -253,3 +286,181 @@ test.each([390, 1280])(
     });
   },
 );
+
+test.each([390, 1280])(
+  'selects an exclusive task reference and hides deliverables without a manager at %ipx',
+  async (width) => {
+    await page.viewport(width, 950);
+    await setup('ready', false, 'main', false);
+    let selector = screen.getByRole('combobox', {
+      name: 'Type de référence',
+    }) as HTMLSelectElement;
+    expect(Array.from(selector.options).map((option) => option.value)).toEqual([
+      'folder',
+    ]);
+    cleanup();
+    await setup('ready', false, 'main', true);
+    selector = screen.getByRole('combobox', {
+      name: 'Type de référence',
+    }) as HTMLSelectElement;
+    await expect
+      .poll(() => Array.from(selector.options).map((option) => option.value))
+      .toEqual(['folder', 'deliverable']);
+    fireEvent.change(selector, { target: { value: 'deliverable' } });
+    const choice = screen
+      .getAllByRole('combobox')
+      .find((element) =>
+        Array.from((element as HTMLSelectElement).options).some(
+          (option) => option.value === 'output',
+        ),
+      ) as HTMLSelectElement;
+    expect(choice).toBeDefined();
+    fireEvent.change(choice, { target: { value: 'output' } });
+    selector.focus();
+    selector.scrollIntoView({ block: 'center' });
+    await expect
+      .poll(
+        () =>
+          selector.getBoundingClientRect().top >= 0 &&
+          selector.getBoundingClientRect().bottom <= window.innerHeight,
+      )
+      .toBe(true);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/task-work-reference-${width}.png`,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await expect
+      .poll(
+        () =>
+          api.mock.calls.filter(([, init]) => init?.method === 'PATCH').length,
+      )
+      .toBe(1);
+    const patch = api.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
+    const body = JSON.parse(String(patch[1].body));
+    expect(body.workReference).toEqual({
+      type: 'deliverable',
+      deliverableId: 'output',
+      expectedVersion: 7,
+    });
+    expect(body.workspacePath).toBeUndefined();
+  },
+);
+
+test.each([390, 1280])(
+  'assigns and removes an existing agent without starting a turn at %ipx',
+  async (width) => {
+    await page.viewport(width, 950);
+    await setup('ready', false, 'sub', false, [
+      { threadId: 'available', title: 'Agent disponible' },
+    ]);
+    const selector = screen.getByRole<HTMLSelectElement>('combobox', {
+      name: 'Choisir un agent existant',
+    });
+    await expect
+      .poll(() =>
+        Array.from(selector.options).some(
+          (option) => option.value === 'available',
+        ),
+      )
+      .toBe(true);
+    fireEvent.change(selector, { target: { value: 'available' } });
+    expect(
+      screen.queryByRole('button', { name: 'Exécuter avec un agent' }),
+    ).toBeNull();
+    selector.focus();
+    selector.scrollIntoView({ block: 'center' });
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/task-agent-assignment-${width}.png`,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await expect
+      .poll(() => api.mock.calls.some(([, init]) => init?.method === 'PATCH'))
+      .toBe(true);
+    expect(
+      JSON.parse(
+        String(
+          api.mock.calls.find(([, init]) => init?.method === 'PATCH')![1].body,
+        ),
+      ),
+    ).toMatchObject({ linkedThreadId: 'available', executionMode: 'agent' });
+    expect(
+      api.mock.calls.some(([path]) => String(path).endsWith('/agent')),
+    ).toBe(false);
+    cleanup();
+    await setup('review', false, 'sub', false, [
+      { threadId: 'existing', title: 'Agent existant' },
+    ]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Retirer l’affectation' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await expect
+      .poll(() => api.mock.calls.some(([, init]) => init?.method === 'PATCH'))
+      .toBe(true);
+    expect(
+      JSON.parse(
+        String(
+          api.mock.calls.find(([, init]) => init?.method === 'PATCH')![1].body,
+        ),
+      ).linkedThreadId,
+    ).toBeNull();
+    expect(api.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(
+      false,
+    );
+  },
+);
+
+test('submits a plan atomically and reuses the exact request after a lost response', async () => {
+  await page.viewport(1280, 950);
+  await setup('ready', false, null);
+  const original = api.getMockImplementation()!;
+  let calls = 0;
+  api.mockImplementation((path?: string, init?: RequestInit) => {
+    if (path?.endsWith('/ai-plan'))
+      return Promise.resolve({
+        tasks: [
+          {
+            title: 'Atomic task',
+            description: 'Draft',
+            priority: 'normal',
+            estimateHours: 1,
+            validationCriteria: 'Done',
+            labels: [],
+            dependsOnTitles: [],
+            parentTitle: '',
+            reason: 'Example',
+          },
+        ],
+      });
+    if (path?.endsWith('/task-batches'))
+      return ++calls === 1
+        ? Promise.reject(new Error('Response lost'))
+        : Promise.resolve({ tasks: [], replayed: true });
+    return original(path, init);
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Planifier avec l’IA' }));
+  fireEvent.change(
+    screen.getByPlaceholderText(
+      'Décrivez l’objectif, les contraintes et le résultat attendu…',
+    ),
+    { target: { value: 'Create an atomic plan' } },
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Générer le plan' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Créer les 1 tâches' }),
+  );
+  await screen.findByText('Response lost');
+  fireEvent.click(screen.getByRole('button', { name: 'Créer les 1 tâches' }));
+  await expect.poll(() => calls).toBe(2);
+  const requests = api.mock.calls.filter(([path]) =>
+    String(path).endsWith('/task-batches'),
+  );
+  expect(requests[1][1].body).toBe(requests[0][1].body);
+  expect(JSON.parse(String(requests[0][1].body)).operations).toHaveLength(1);
+  expect(
+    api.mock.calls.some(
+      ([path, init]) =>
+        String(path).endsWith('/tasks') && init?.method === 'POST',
+    ),
+  ).toBe(false);
+});

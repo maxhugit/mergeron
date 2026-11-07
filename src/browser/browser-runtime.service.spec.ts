@@ -65,3 +65,19 @@ it('transient cancelled preparations expire without making another session lose 
   expect(call).toHaveBeenCalled();
   expect(call.mock.calls.every(([body]) => body.release === false)).toBe(true);
 });
+
+it('keeps the dynamically installed browser credential private and rejects arbitrary endpoints', async () => {
+  const endpoint = 'ws://mergeron-dev-browser:3000/' + 'a'.repeat(64);
+  call.mockResolvedValueOnce({ state: 'ready', transport: { endpoint } } as {
+    state: string;
+  });
+  const status = await runtime.prepare('new');
+  expect(status).toEqual({ state: 'ready' });
+  expect(runtime.endpoint()).toBe(endpoint);
+  call.mockResolvedValueOnce({
+    state: 'ready',
+    transport: { endpoint: 'ws://evil.invalid/secret' },
+  } as { state: string });
+  expect(await runtime.prepare('again')).toEqual({ state: 'ready' });
+  expect(runtime.endpoint()).toBe(endpoint);
+});

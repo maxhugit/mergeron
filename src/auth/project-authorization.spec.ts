@@ -796,3 +796,51 @@ it('checks live OnlyOffice download and save callbacks, including readonly and r
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(readFileSync(path, 'utf8')).toBe('edited');
 });
+
+it('authorizes task batches per project and replays them without duplicate rows', async () => {
+  const create = await app.inject({
+    method: 'POST',
+    url: '/api/projects/a/resources',
+    headers: headers('admin'),
+    payload: { type: 'task_board' },
+  });
+  const resourceId = create.json<{ resource: { id: string } }>().resource.id;
+  const body = {
+    requestId: 'http-batch',
+    operations: [
+      {
+        type: 'create',
+        key: 'one',
+        input: { title: 'Atomic task', workspacePath: join(root, 'a') },
+      },
+    ],
+  };
+  const url = `/api/projects/a/resources/${resourceId}/task-batches`;
+  const denied = await app.inject({
+    method: 'POST',
+    url,
+    headers: headers('bob'),
+    payload: body,
+  });
+  expect(denied.statusCode).toBe(403);
+  const first = await app.inject({
+    method: 'POST',
+    url,
+    headers: headers('alice'),
+    payload: body,
+  });
+  expect(first.statusCode).toBe(201);
+  const again = await app.inject({
+    method: 'POST',
+    url,
+    headers: headers('alice'),
+    payload: body,
+  });
+  expect(again.statusCode).toBe(201);
+  expect(again.json<{ replayed: boolean }>().replayed).toBe(true);
+  expect(
+    again.json<{ tasks: Array<{ id: string }> }>().tasks.map((task) => task.id),
+  ).toEqual(
+    first.json<{ tasks: Array<{ id: string }> }>().tasks.map((task) => task.id),
+  );
+});

@@ -964,6 +964,14 @@
             ]
           },
           {
+            "title": "Folder or deliverable: one exclusive reference",
+            "paragraphs": [
+              "A main task uses either a project folder or a deliverable, never two independent references. In Work reference, choose the type and then the folder or deliverable. Without a deliverables manager in the project, only Folder is available.",
+              "With a Deliverable reference, the task and its subtasks inherit that deliverable’s effective folder. Subtasks cannot choose their own reference. Missing or unavailable references must be resolved before starting an agent; no fallback folder is silently selected.",
+              "Changing the reference does not delete agents or their history and does not move their folders. Remove incompatible agent assignments first. Changes use observed revisions so an old form cannot overwrite a newer change."
+            ]
+          },
+          {
             "title": "Statuses and progress",
             "paragraphs": [
               "Main-task columns are customizable except Unassigned actions. Deleting a column moves its tasks to that system column.",
@@ -1012,7 +1020,14 @@
               "Review titles, estimates, execution modes and criteria before applying.",
               "For replanning, inspect selected tasks, dates and dependencies and apply only useful proposals."
             ],
-            "warning": "These functions use simple-chat API access and its model. Dependencies are between main tasks within one board and cannot form cycles; this is not an automatic scheduler. Partially failed application may leave earlier changes saved."
+            "warning": "AI features use the authenticated CLI in the project context. Dependencies are between main tasks within one board and cannot form cycles; this is not an automatic scheduler. Review suggestions before applying them."
+          },
+          {
+            "title": "Save suggestions together",
+            "paragraphs": [
+              "Plan creation, replanning and AI-generated subtasks use a batch save. If any step is rejected, none of that batch’s changes are retained.",
+              "After a network interruption, retry the same suggestion: its request is recognized and tasks are not created twice. Generating a new suggestion or changing the selection prepares a new request."
+            ]
           }
         ],
         "related": ["task-board"]
@@ -1046,6 +1061,13 @@
               "Validating a subtask with an agent may delete its linked conversation after checks and remove the link. Deleting a task also affects its children and associated agents."
             ],
             "warning": "Preserve useful results and inspect the conversation before validation. An execution conversation is not guaranteed permanent history."
+          },
+          {
+            "title": "Assign or unassign an existing agent",
+            "paragraphs": [
+              "In a subtask, Agent assignment lets you select an existing conversation or remove its assignment. Save the form to apply the choice. This sends no instructions and deletes neither the agent nor its history.",
+              "An agent may be assigned to at most one subtask and one deliverable. A dual assignment requires the same main task. Resolve an uncertain launch before changing its assignment."
+            ]
           }
         ],
         "related": ["agent-approvals", "deliverable-agent", "task-board"]

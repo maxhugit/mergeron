@@ -1,3 +1,4 @@
+import { taskWorkReference } from './task-work-reference';
 /** Creation is reserved before native work; recovery never replays an uncertain turn. */
 import {
   BadRequestException,
@@ -77,7 +78,7 @@ export class ProjectAgentLaunchService {
       .get();
     if (!task?.parentTaskId || task.executionMode !== 'agent')
       throw new BadRequestException('Select an agent execution subtask');
-    return task;
+    return { ...task, workspacePath: taskWorkReference(this.db, task).path };
   }
   private view(receipt: Receipt) {
     if (receipt.threadId) requireThreadAccess(receipt.threadId);
@@ -381,12 +382,6 @@ export class ProjectAgentLaunchService {
             'This subtask already has a launch. Recover its existing agent from the task manager.',
           );
         if (input.subtaskTitle !== undefined) {
-          if (item.primaryTaskId && !parent)
-            throw new ConflictException('The primary task no longer exists');
-          const actor = {
-            personId: currentAccess()?.identity.personId ?? null,
-            name: currentAccess()?.identity.name ?? 'Système',
-          };
           if (!parent)
             throw new ConflictException(
               'Link the deliverable to a main task before creating an execution subtask',
@@ -401,7 +396,10 @@ export class ProjectAgentLaunchService {
               validationCriteria: item.criteria,
               executionMode: 'agent',
             },
-            actor,
+            {
+              personId: currentAccess()?.identity.personId ?? null,
+              name: currentAccess()?.identity.name ?? 'Système',
+            },
           );
         }
         return {

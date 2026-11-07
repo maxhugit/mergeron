@@ -16,6 +16,13 @@ export class ManagerStatusService {
     @Optional() private readonly registry?: RegistryImageIdentityService,
   ) {}
 
+  capabilities() {
+    return this.requestManager('/v1/capabilities');
+  }
+  changeCapability(payload: Record<string, unknown>) {
+    return this.requestManager('/v1/capabilities', 'POST', payload);
+  }
+
   async transcriptionStatus() {
     const status = await this.requestManager('/v1/transcription/status');
     if (

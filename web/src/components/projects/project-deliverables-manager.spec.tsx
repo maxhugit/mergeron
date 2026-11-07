@@ -1594,3 +1594,16 @@ it('uploads and registers selected documents with a single scoped request', asyn
 
   vi.unstubAllGlobals();
 });
+
+it('keeps an unnamed assigned agent reachable through a fallback label', async () => {
+  await setup({
+    ...board,
+    deliverables: [
+      { ...item, conversations: [{ id: 'agent-id', type: 'agent' }] },
+    ],
+    conversations: [{ id: 'agent-id', type: 'agent', title: 'agent-id' }],
+  });
+  expect(document.querySelector('a[href="/t/agent-id"]')).toHaveTextContent(
+    'Open agent',
+  );
+});

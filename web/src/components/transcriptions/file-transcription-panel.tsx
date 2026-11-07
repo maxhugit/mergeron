@@ -57,6 +57,7 @@ export function FileTranscriptionPanel({ source }: { source: PreviewSource }) {
         signal,
       }),
     staleTime: 30_000,
+    refetchInterval: 5000,
   });
   const queryKey = ['transcription-jobs', key];
   const jobs = useQuery({

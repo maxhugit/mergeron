@@ -420,5 +420,18 @@
   "launchRecoveryNoReplay": "Aucune instruction n’est renvoyée pendant la reprise. Après association, poursuivez le travail dans la conversation existante. Vous pouvez aussi clore cette demande après vérification : l’agent et son historique seront conservés.",
   "launchRecoveryConflict": "La reprise n’a pas été confirmée. Actualisez les informations et vérifiez que l’agent et sa destination sont toujours disponibles.",
   "launchRecoveryNeeded": "Le lancement demande une vérification. Utilisez le panneau de reprise.",
-  "launchRecoveryKeep": "Conserver l’agent sans terminer l’association"
+  "launchRecoveryKeep": "Conserver l’agent sans terminer l’association",
+  "taskWorkReference": "Référence de travail",
+  "taskWorkReferenceType": "Type de référence",
+  "taskChooseDeliverable": "Choisir un livrable",
+  "taskDeliverableFolderInherited": "La tâche et ses sous-tâches utilisent le dossier du livrable.",
+  "taskCreateOrLinkDeliverable": "Créer ou associer un livrable",
+  "taskFolderOnly": "Sans gestionnaire de livrables, seule une référence de dossier est disponible.",
+  "taskReferenceInherited": "La référence de travail est héritée de la tâche principale.",
+  "taskAgentFolderPreserved": "Les agents conservent leur propre dossier et leur historique. Leurs affectations incompatibles doivent être retirées avant le changement.",
+  "taskAgentAssignment": "Affectation de l’agent",
+  "taskSelectExistingAgent": "Choisir un agent existant",
+  "taskNoAgentAssignment": "Aucun agent affecté",
+  "taskRemoveAgentAssignment": "Retirer l’affectation",
+  "taskAgentAssignmentHelp": "L’affectation est enregistrée avec la sous-tâche. Elle ne lance aucune instruction, ne déplace pas le dossier de l’agent et ne supprime pas son historique."
 }

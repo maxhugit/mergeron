@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 export const ADOPTION_CONFIRMATION = 'ADOPT_EXISTING_INSTALLATION';
@@ -202,4 +202,76 @@ export async function confirmAdoption({
     mode: 0o600,
   });
   return evaluateAdoption(inventory, record);
+}
+
+/** Explicit companion operation only. Preserve every core identity/mount/image;
+ * the sole allowed core change is attaching the reviewed browser control network. */
+export async function recordCapabilityChange({ before, after, path }) {
+  const core = (value) =>
+    snapshotComponents(value)
+      .filter((c) => c.id !== 'browser')
+      .map((c) => ({
+        ...c,
+        networks: c.networks.filter(
+          (n) => n !== `${value.stack}-browser-control`,
+        ),
+      }));
+  const record = await readAdoptionRecord(path);
+  if (
+    !capabilityCoreTrusted(before, record) ||
+    JSON.stringify(core(before)) !== JSON.stringify(core(after))
+  )
+    throw Error('CAPABILITY_CORE_CHANGED');
+  const candidate = evaluateAdoption(after);
+  if (candidate.adoption.blockers.length)
+    throw Error('CAPABILITY_ADOPTION_BLOCKED');
+  const next = {
+    ...canonicalSnapshot(after),
+    fingerprint: inventoryFingerprint(after),
+    adoptedAt: record?.adoptedAt ?? new Date().toISOString(),
+  };
+  const temporary = path + '.capability.tmp';
+  await writeFile(temporary, JSON.stringify(next), { mode: 0o600 });
+  await rename(temporary, path);
+}
+
+export function capabilityCoreTrusted(inventory, record) {
+  if (inventory.dataSafety?.blockers?.length) return false;
+  const core = inventory.components.filter(
+    (c) => !c.observational && c.id !== 'browser',
+  );
+  if (
+    core.length !== 3 ||
+    !['application', 'ingress', 'egress'].every((id) =>
+      core.some((c) => c.id === id),
+    ) ||
+    core.some(
+      (c) =>
+        c.adoption !== 'managed' ||
+        c.imageRepositoryAllowed !== true ||
+        c.missingNetworks.length ||
+        c.protectedMounts.some((m) => !m.present || !m.writable),
+    )
+  )
+    return false;
+  if (!record) return true;
+  if (
+    record.stack !== inventory.stack ||
+    (record.environment && record.environment !== inventory.environment)
+  )
+    return false;
+  const normalized = (value) =>
+    value
+      .filter((c) => c.id !== 'browser')
+      .map((c) => ({
+        ...c,
+        networks: c.networks.filter(
+          (n) => n !== `${inventory.stack}-browser-control`,
+        ),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  return (
+    JSON.stringify(normalized(snapshotComponents(inventory))) ===
+    JSON.stringify(normalized(record.components))
+  );
 }

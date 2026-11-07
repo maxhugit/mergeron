@@ -179,3 +179,7 @@ variables actives. Ne pas retirer les dépendances ni les données.
 Les mises à jour applicatives se font ensuite depuis Mergeron, avec plan et
 confirmation. Le remplacement du Manager reste une opération sur l’hôte.
 Conserver cette définition et une [sauvegarde externe](sauvegarde-restauration.md).
+
+## Compétences optionnelles
+
+Une installation neuve ne crée ni navigateur isolé ni service de transcription. Un administrateur peut les installer et les désinstaller dans **Serveur → Compétences**. Voir le [guide des compétences](server-capabilities.md) pour les protections, la migration des installations existantes et les états à la demande.

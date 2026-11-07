@@ -85,6 +85,16 @@ Passer une sous-tâche à Terminée ou Annulée fixe son avancement à 100 %.
 Ce pourcentage représente donc aussi la clôture, pas uniquement du travail
 réalisé. Supprimer la dernière sous-tâche remet les agrégats du parent à zéro.
 
+## Référence de travail : dossier ou livrable
+
+Une tâche principale choisit soit un dossier du projet, soit un livrable du gestionnaire du même projet. Les choix sont exclusifs. Sans gestionnaire de livrables, seule la référence Dossier est disponible. Les sous-tâches héritent de la référence de leur tâche principale.
+
+Le lien `primaryTaskId` du livrable est la source de vérité de la référence Livrable. La tâche ne conserve alors pas de dossier indépendant ; son chemin effectif vient du dossier actif du livrable. Les lectures des tâches existantes donnent priorité à ce lien sans migration destructive. L’enregistrement d’un lien normalise les anciennes références directes. Un livrable indisponible bloque l’exécution, sans repli implicite vers un ancien dossier.
+
+Les créations et modifications de tâches acceptent `workReference: { type: 'folder', path }` ou `{ type: 'deliverable', deliverableId, expectedVersion }`. Un chemin direct simultané, un livrable étranger au projet, une révision périmée ou une référence propre à une sous-tâche sont refusés. Le changement est transactionnel ; les routes du gestionnaire de livrables appliquent la même normalisation et invalident les révisions des tâches concernées.
+
+Les agents restent indépendants. Changer la référence ne déplace ni ne supprime leurs dossiers ou historiques. Un lien agent incompatible avec la nouvelle tâche principale doit être retiré avant le changement.
+
 ## Les quatre vues
 
 | Vue      | Utilisation                                                                                         |
@@ -257,3 +267,13 @@ Les routes du tableau partagent le préfixe
 | `POST /ai-advice`                                    | Obtenir analyse ou sélection de travail           |
 | `POST /tasks/:taskId/ai-subtasks`                    | Proposer un découpage                             |
 | `PATCH /`                                            | Modifier la ressource et ses paramètres           |
+
+## Affectations et enregistrements groupés
+
+Un agent ne peut contribuer explicitement qu’à un livrable et une sous-tâche au maximum. Les contrôles d’unicité sont communs à la création, aux éditions génériques et aux associations ; ils sont revérifiés dans la transaction avant validation, y compris après une préparation asynchrone. Un agent sans titre garde un lien d’ouverture avec un libellé de secours.
+
+Le formulaire d’une sous-tâche permet de choisir un agent existant ou de retirer l’affectation à l’enregistrement, sans exécuter de tour ni supprimer de conversation. Un reçu de lancement encore incertain bloque le changement ; les reçus résolus sont conservés comme historique sans retenir la réservation de la sous-tâche.
+
+`POST /projects/:projectId/resources/:resourceId/task-batches` applique jusqu’à 100 créations/modifications en une transaction synchrone. Chaque modification exige sa révision observée. Les dépendances entre créations utilisent des clés uniques au groupe. Une erreur annule tâches, dépendances, affectations, dossiers actifs et journal du groupe. La validation physique et l’enregistrement du dossier font partie de la transaction de tâche, y compris pour les opérations individuelles.
+
+La requête groupée porte un `requestId`, lié au projet, à la ressource et à l’identité. Un reçu conservé dans le journal reconnaît une répétition identique et retourne les tâches existantes ; réutiliser cet identifiant avec un autre contenu est refusé. L’interface conserve le contenu et l’identifiant lors d’une nouvelle tentative après perte de réponse, puis prépare une nouvelle demande pour une proposition ou une sélection différente.
