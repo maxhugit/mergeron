@@ -189,7 +189,7 @@ export function ManagerUpdateProgressDialog({
       }}
     >
       <DialogContent
-        className="flex max-h-[85dvh] flex-col overflow-y-auto sm:max-w-2xl"
+        className="flex h-[85dvh] max-h-[85dvh] flex-col overflow-hidden sm:max-w-6xl"
         showCloseButton={false}
         onEscapeKeyDown={(event) => {
           if (locked) event.preventDefault();
@@ -198,141 +198,156 @@ export function ManagerUpdateProgressDialog({
           if (locked) event.preventDefault();
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <DialogTitle>{t('managerUpdateProgressTitle')}</DialogTitle>
           <DialogDescription>
             {t('managerUpdateProgressDescription')}
           </DialogDescription>
         </DialogHeader>
-        {independent && (
-          <div className="space-y-2">
-            <a
-              className="text-primary underline"
-              href={monitorUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t('independentMonitorOpen')}
-            </a>
-            <iframe
-              src={monitorUrl}
-              title={t('independentMonitorOpen')}
-              className="h-[45vh] w-full rounded border"
-            />
-          </div>
-        )}
-        <div className="space-y-3" role="status" aria-live="polite">
-          <p className="flex items-center gap-2 font-medium">
-            {running && (
-              <LoaderCircle
-                aria-hidden="true"
-                className="size-4 animate-spin"
-              />
-            )}
-            {t(translationKey(title))}
-          </p>
-          <p>
-            {t(
-              translationKey(
-                superseded
-                  ? 'managerUpdateSupersededHelp'
-                  : (updatePhaseLabels[phase] ?? 'managerUpdatePreparing'),
-              ),
-            )}
-          </p>
-          <div
-            hidden={superseded}
-            role="progressbar"
-            aria-label={t('managerUpdateProgressTitle')}
-            aria-valuetext={t(
-              translationKey(
-                updatePhaseLabels[phase] ?? 'managerUpdatePreparing',
-              ),
-            )}
-            aria-valuemin={0}
-            aria-valuemax={stages.length}
-            aria-valuenow={
-              completed ? stages.length : stage >= 0 ? stage : undefined
-            }
-            className="flex gap-1"
-          >
-            {stages.map((item, index) => (
-              <span
-                key={item}
-                className={`h-2 flex-1 rounded-full ${completed || index < stage ? 'bg-primary' : index === stage && running ? 'animate-pulse bg-primary/60' : 'bg-muted'}`}
-              />
-            ))}
-          </div>
-          <p hidden={superseded} className="text-xs text-muted-foreground">
-            {stage >= 0 && running && (
-              <span className="mr-2 font-medium">
-                {t('managerUpdateStageCount', {
-                  current: stage + 1,
-                  total: stages.length,
-                })}
-              </span>
-            )}
-            {t('managerUpdateStageProgress')}
-          </p>
-          {(monitoringPaused || query.isError) && (
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              {t('managerUpdateReconnecting')}
-            </p>
-          )}
-          {requestError && !operation && (
-            <p role="alert" className="text-destructive">
-              {t(translationKey(requestError), {
-                defaultValue: t('managerUpdateRequestFailed'),
-              })}{' '}
-              {t('managerUpdateRequestUncertain')}
-            </p>
-          )}
-          {operation?.error && (
-            <p role="alert" className="text-destructive">
-              {t(translationKey(operation.error))}
-            </p>
-          )}
-        </div>
-        <section
-          className="min-h-0 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/30 p-3"
-          aria-label={t('managerUpdateJournal')}
+        <div
+          className={`min-h-0 flex-1 overflow-y-auto ${independent ? 'flex flex-col gap-4 lg:grid lg:grid-cols-2' : 'flex flex-col'}`}
         >
-          <h3 className="text-sm font-medium">{t('managerUpdateJournal')}</h3>
-          <ol
-            role="log"
-            aria-live="polite"
-            aria-relevant="additions"
-            className="space-y-2 font-mono text-xs"
+          {independent && (
+            <div className="flex min-h-0 min-w-0 shrink-0 flex-col gap-2">
+              <a
+                className="shrink-0 text-primary underline"
+                href={monitorUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t('independentMonitorOpen')}
+              </a>
+              <iframe
+                src={monitorUrl}
+                title={t('independentMonitorOpen')}
+                className="h-48 w-full shrink-0 rounded border lg:h-0 lg:flex-1"
+              />
+            </div>
+          )}
+          <div
+            className={`flex min-h-0 min-w-0 flex-col gap-3 ${independent ? 'shrink-0' : 'flex-1'}`}
           >
-            {!operation?.events.length && (
-              <li>{t('managerUpdateAwaitingJournal')}</li>
-            )}
-            {operation?.events.map((event, index) => (
-              <li key={`${operation.id}-${index}`}>
-                <time dateTime={event.at}>
-                  {new Date(event.at).toLocaleTimeString(i18n.language)}
-                </time>
-                {' · '}
+            <div
+              className="shrink-0 space-y-3 break-words"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="flex items-center gap-2 font-medium">
+                {running && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="size-4 animate-spin"
+                  />
+                )}
+                {t(translationKey(title))}
+              </p>
+              <p>
                 {t(
                   translationKey(
-                    updatePhaseLabels[event.phase] ?? 'managerUpdatePreparing',
+                    superseded
+                      ? 'managerUpdateSupersededHelp'
+                      : (updatePhaseLabels[phase] ?? 'managerUpdatePreparing'),
                   ),
                 )}
-              </li>
-            ))}
-          </ol>
-        </section>
-        {operation?.backupPolicy && (
-          <p className="text-xs text-muted-foreground">
-            {t(translationKey(backupDescription(operation.backupPolicy)))}
-          </p>
-        )}
-        {operation?.backupRetained && (
-          <p className="text-xs text-muted-foreground">
-            {t('managerUpdateBackupRetained')}
-          </p>
-        )}
-        <DialogFooter>
+              </p>
+              <div
+                hidden={superseded}
+                role="progressbar"
+                aria-label={t('managerUpdateProgressTitle')}
+                aria-valuetext={t(
+                  translationKey(
+                    updatePhaseLabels[phase] ?? 'managerUpdatePreparing',
+                  ),
+                )}
+                aria-valuemin={0}
+                aria-valuemax={stages.length}
+                aria-valuenow={
+                  completed ? stages.length : stage >= 0 ? stage : undefined
+                }
+                className="flex gap-1"
+              >
+                {stages.map((item, index) => (
+                  <span
+                    key={item}
+                    className={`h-2 flex-1 rounded-full ${completed || index < stage ? 'bg-primary' : index === stage && running ? 'animate-pulse bg-primary/60' : 'bg-muted'}`}
+                  />
+                ))}
+              </div>
+              <p hidden={superseded} className="text-xs text-muted-foreground">
+                {stage >= 0 && running && (
+                  <span className="mr-2 font-medium">
+                    {t('managerUpdateStageCount', {
+                      current: stage + 1,
+                      total: stages.length,
+                    })}
+                  </span>
+                )}
+                {t('managerUpdateStageProgress')}
+              </p>
+              {(monitoringPaused || query.isError) && (
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  {t('managerUpdateReconnecting')}
+                </p>
+              )}
+              {requestError && !operation && (
+                <p role="alert" className="text-destructive">
+                  {t(translationKey(requestError), {
+                    defaultValue: t('managerUpdateRequestFailed'),
+                  })}{' '}
+                  {t('managerUpdateRequestUncertain')}
+                </p>
+              )}
+              {operation?.error && (
+                <p role="alert" className="text-destructive">
+                  {t(translationKey(operation.error))}
+                </p>
+              )}
+            </div>
+            <section
+              className="flex h-64 min-h-56 flex-none flex-col gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 p-3 lg:h-auto lg:flex-1"
+              aria-label={t('managerUpdateJournal')}
+            >
+              <h3 className="shrink-0 text-sm font-medium">
+                {t('managerUpdateJournal')}
+              </h3>
+              <ol
+                role="log"
+                aria-live="polite"
+                aria-relevant="additions"
+                className="min-h-0 flex-1 space-y-2 overflow-y-auto break-words font-mono text-xs"
+              >
+                {!operation?.events.length && (
+                  <li>{t('managerUpdateAwaitingJournal')}</li>
+                )}
+                {operation?.events.map((event, index) => (
+                  <li key={`${operation.id}-${index}`}>
+                    <time dateTime={event.at}>
+                      {new Date(event.at).toLocaleTimeString(i18n.language)}
+                    </time>
+                    {' · '}
+                    {t(
+                      translationKey(
+                        updatePhaseLabels[event.phase] ??
+                          'managerUpdatePreparing',
+                      ),
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </section>
+            {operation?.backupPolicy && (
+              <p className="shrink-0 text-xs text-muted-foreground">
+                {t(translationKey(backupDescription(operation.backupPolicy)))}
+              </p>
+            )}
+            {operation?.backupRetained && (
+              <p className="shrink-0 text-xs text-muted-foreground">
+                {t('managerUpdateBackupRetained')}
+              </p>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="shrink-0">
           <Button
             variant="outline"
             disabled={locked}
