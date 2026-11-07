@@ -350,7 +350,7 @@
             "steps": [
               "In Locations and connections, add either a local folder or a remote connection.",
               "Prepare a local copy when offered if an agent needs to work on remote files.",
-              "Explicitly select an authorized working folder in the agent. Browsing a folder does not make it active."
+              "Explicitly select an authorized working folder in the agent. Browsing a folder does not make it active. After choosing another reference, the Primary button next to Agent reference returns to the project’s primary location on desktop and mobile."
             ],
             "warning": "An alias is a display name, not a relocation. A missing, disabled or inconsistent location blocks work rather than silently selecting another folder."
           }

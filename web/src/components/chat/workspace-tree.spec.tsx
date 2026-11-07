@@ -1,3 +1,4 @@
+import { localExecutionSelection } from '@/lib/project-execution-location';
 /**
  * Explorer adoption waits for its conversation, then allows free navigation.
  *
@@ -310,4 +311,110 @@ describe('project explorer views', () => {
       expect(screen.queryByRole('button', { name: 'System space' })).toBeNull();
     },
   );
+});
+
+describe('return to the primary agent reference', () => {
+  const project = {
+    id: 'p',
+    name: 'Project',
+    workspacePath: '/project',
+    createdAt: 1,
+    updatedAt: 1,
+    resources: [],
+    workspaces: [
+      {
+        id: 'primary',
+        projectId: 'p',
+        name: 'Principal',
+        path: '/project',
+        primary: true,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: 'git-copy',
+        projectId: 'p',
+        name: 'Copy',
+        path: '/project/sources/copy',
+        primary: false,
+        sourceResourceId: 'git',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  };
+  it.each([
+    '/project/dossiers/nested',
+    '/project/.mergeron-system/livrables/report',
+    '/project/sources/copy',
+  ])(
+    'requests the actual primary root from %s, without changing the reference before confirmation',
+    async (cwd) => {
+      const change = vi.fn();
+      const ui = (path: string, pending = false) => (
+        <WorkspaceTree
+          cwd={path}
+          project={project}
+          desktop
+          mobileOpen={false}
+          onMobileClose={() => {}}
+          onFile={() => {}}
+          activeWorkspacePending={pending}
+          onActiveWorkspaceChange={change}
+        />
+      );
+      const view = render(ui(cwd));
+      await screen.findByTestId('file-tree');
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Return to the primary agent reference',
+        }),
+      );
+      expect(change).toHaveBeenCalledExactlyOnceWith('/project');
+      expect(localExecutionSelection(project, change.mock.calls[0][0])).toEqual(
+        { locationId: 'local:primary', relativePath: '' },
+      );
+      // Browsing the Dossiers tree does not mean the agent's reference has moved.
+      expect(screen.getByTitle(cwd)).toBeInTheDocument();
+      view.rerender(ui(cwd, true));
+      const pending = screen.getByRole('button', {
+        name: 'Return to the primary agent reference',
+      });
+      expect(pending).toBeDisabled();
+      fireEvent.click(pending);
+      expect(change).toHaveBeenCalledTimes(1);
+      // A rejected request retains the old reference and leaves retry available.
+      view.rerender(ui(cwd));
+      expect(
+        screen.getByRole('button', {
+          name: 'Return to the primary agent reference',
+        }),
+      ).toBeEnabled();
+      view.rerender(ui('/project'));
+      expect(
+        screen.queryByRole('button', {
+          name: 'Return to the primary agent reference',
+        }),
+      ).toBeNull();
+      expect(screen.getByTitle('/project')).toHaveTextContent('Principal');
+    },
+  );
+  it('does not offer another return when already at the primary root, including a trailing slash', () => {
+    render(
+      <WorkspaceTree
+        cwd="/project/"
+        project={project}
+        desktop
+        mobileOpen={false}
+        onMobileClose={() => {}}
+        onFile={() => {}}
+        onActiveWorkspaceChange={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', {
+        name: 'Return to the primary agent reference',
+      }),
+    ).toBeNull();
+  });
 });
