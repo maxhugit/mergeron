@@ -6,6 +6,7 @@ import { ProfileTextSizeApplier } from '@/components/account/profile-text-size';
 import { useEffect, useState } from 'react';
 import { RetainedSurface } from '@/components/retained-surface';
 import { readManagerUpdateReceipt } from '@/components/settings/manager-update-recovery';
+import { useUpdateDiscovery } from '@/components/settings/use-update-discovery';
 import { ManagerUpdateReconnecting } from '@/components/settings/manager-update-reconnecting';
 import { LoaderCircle } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -170,14 +171,15 @@ function SessionRecovery({
     resuming ||
     session.isPending ||
     (session.paused && !session.isError && session.data?.active);
-  // A local receipt only restores progress display, never the authenticated workspace.
-  if (
+  const canShowUpdate =
     !changed &&
     (session.isPending ||
       (session.paused && !session.isError) ||
-      (session.isError && reconnecting))
-  ) {
-    const receipt = readManagerUpdateReceipt();
+      (session.isError && reconnecting));
+  const discoveredUpdate = useUpdateDiscovery(canShowUpdate && reconnecting);
+  // A receipt/discovery only restores progress display, never the workspace.
+  if (canShowUpdate) {
+    const receipt = discoveredUpdate ?? readManagerUpdateReceipt();
     // This recovery view must already be loaded before the server goes offline.
     // A lazy import here would require a network request precisely during downtime.
     if (receipt) return <ManagerUpdateReconnecting receipt={receipt} />;

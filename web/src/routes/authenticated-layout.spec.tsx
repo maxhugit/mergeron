@@ -186,7 +186,11 @@ it('renders the retained update monitor synchronously during restart, without au
   expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
   expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
   expect(screen.queryByText('cached@example.test')).not.toBeInTheDocument();
-  expect(fetch).not.toHaveBeenCalled();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledWith(
+    '/_mergeron-update/status',
+    expect.objectContaining({ credentials: 'same-origin', redirect: 'manual' }),
+  );
   view.unmount();
   client.clear();
 });
@@ -321,4 +325,56 @@ it('keeps the independent monitor visible while retained identity is paused befo
   expect(fetch).not.toHaveBeenCalled();
   view.unmount();
   client.clear();
+});
+
+it('discovers an authorized running update from another tab without a local receipt', async () => {
+  sessionFailure(new AuthResourceError('Restarting', 503));
+  const id = '12345678-1234-1234-1234-123456789abc';
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValue(
+      new Response(JSON.stringify({ operation: { id, status: 'running' } }), {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  const client = new QueryClient();
+  const view = render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedLayout />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole('dialog', { name: 'Update progress' });
+  expect(document.querySelector('iframe')).toHaveAttribute(
+    'src',
+    expect.stringContaining('operation=' + id),
+  );
+  expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0][0]).toBe('/_mergeron-update/status');
+  view.unmount();
+  client.clear();
+});
+it('keeps normal recovery when the independent monitor denies access', async () => {
+  sessionFailure(new AuthResourceError('Restarting', 503));
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValue(new Response('', { status: 401 }));
+  const view = render(<AuthenticatedLayout />);
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  expect(
+    screen.getByRole('heading', { name: 'Reconnecting to the server…' }),
+  ).toBeInTheDocument();
+  expect(document.querySelector('iframe')).toBeNull();
+  expect(
+    fetch.mock.calls.every((call) => call[0] === '/_mergeron-update/status'),
+  ).toBe(true);
+  view.unmount();
+});
+it('does not discover updates to bypass a genuine access denial', () => {
+  sessionFailure(new AuthResourceError('Forbidden', 403));
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  const view = render(<AuthenticatedLayout />);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(document.querySelector('iframe')).toBeNull();
+  view.unmount();
 });

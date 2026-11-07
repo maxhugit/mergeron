@@ -157,3 +157,21 @@ le proxy vers leurs IP inchangées, puis attend une confirmation HTTPS de la
 nouvelle configuration avant le renommage Docker. Il rétablit ensuite le routage
 par les nouveaux noms. Aucun conteneur n’est arrêté ou recréé. Un échec du
 routage final rétablit d’abord le routage par IP avant de restaurer les noms.
+
+
+## Détection depuis les autres onglets
+
+Lors d’une reconnexion liée à une interruption de transport, l’interface consulte
+le statut du relais indépendant, même si cet onglet n’a pas lancé la mise à jour.
+Si une opération est en cours et que le cookie de suivi partagé par le navigateur
+l’autorise, la fenêtre de reconnexion affiche automatiquement sa page d’avancement.
+La lecture est bornée à quatre secondes et réessayée toutes les cinq secondes.
+Une ancienne opération terminée n’est pas utilisée pour expliquer une nouvelle
+panne réseau.
+
+Cette détection ne crée aucune autorisation pendant la suspension de session :
+elle ne contacte pas l’API applicative pour obtenir un jeton et ne rétablit aucun
+droit métier. Sans autorisation de suivi, ou si le relais est indisponible, la
+reconnexion habituelle continue. Un refus d’accès ou changement d’identité reste
+bloquant. Après vérification de la session, la conversation et son brouillon
+reprennent dans le même onglet, sans rechargement complet.

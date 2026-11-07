@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { ensureUpdateMonitor } from './update-monitor-api';
+import {
+  discoverRunningUpdate,
+  ensureUpdateMonitor,
+} from './update-monitor-api';
 vi.mock('@/auth-token', () => ({
   getAuthorizationHeader: () => 'Bearer existing-admin-session',
 }));
@@ -44,3 +47,25 @@ it('authorizes a browser opening an existing operation without leaking its token
     fetcher.mock.calls.every(([url]) => !String(url).includes(token)),
   ).toBe(true);
 });
+
+it.each([
+  { id: '12345678-1234-1234-1234-123456789abc', status: 'succeeded' },
+  { id: '../api/private', status: 'running' },
+  null,
+])(
+  'does not discover completed or invalid operations: %j',
+  async (operation) => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ operation }), {
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetcher);
+    expect(
+      await discoverRunningUpdate(new AbortController().signal),
+    ).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  },
+);
