@@ -138,14 +138,11 @@ export class ProjectAgentToolsService {
     scope: ReturnType<ProjectAgentToolsService['scope']>,
     threadId: string,
   ) {
-    return this.deliverables
-      .agentCatalog(scope.project.id)
-      .map(({ conversations, ...item }) => ({
-        ...item,
-        linkedToThisConversation: conversations.some(
-          (c) => c.type === 'agent' && c.id === threadId,
-        ),
-      }));
+    return this.deliverables.agentCatalog(scope.project.id).map((item) => ({
+      ...item,
+      conversations: undefined,
+      linkedToThisConversation: item.linkedAgentIds.includes(threadId),
+    }));
   }
 
   async context(threadId: string, cwd?: string | null): Promise<string | null> {

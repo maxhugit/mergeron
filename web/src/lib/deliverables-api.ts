@@ -49,6 +49,8 @@ export interface DeliverableDocument {
   versions: DeliverableDocumentVersion[];
 }
 export interface Deliverable {
+  /** Server-resolved direct and task-derived agent associations. */
+  linkedAgentIds?: string[];
   activityEvents?: ProjectActivitySummary[];
   id: string;
   title: string;

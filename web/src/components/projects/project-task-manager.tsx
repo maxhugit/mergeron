@@ -51,7 +51,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { VoiceDictationButton } from '@/components/chat/voice-dictation-button';
 import { DirectorySelectionTree } from '@/components/files/directory-selection-tree';
-import { threadsStartThread, threadsStartTurn } from '@/generated/api/sdk.gen';
 import { useThemeStore } from '@/stores/theme-store';
 import { englishGanttLocale, frenchGanttLocale } from '@/lib/gantt-locales';
 import {
@@ -112,6 +111,7 @@ type AdviceResult = {
 };
 type ReplanSuggestion = {
   taskId: string;
+  expectedUpdatedAt?: number;
   priority: ProjectTaskSummary['priority'];
   estimateHours: number;
   startAt: number | null;
@@ -310,6 +310,43 @@ export function ProjectTaskManager({
   const people = usePeople();
   const participants = useParticipants(projectId);
   const client = useQueryClient();
+  const newlyCreatedVersions = useRef(new Map<string, number>());
+  const launchIds = useRef(new Map<string, string>());
+  async function taskApi<T = unknown>(
+    path = '',
+    init?: RequestInit,
+  ): Promise<T> {
+    if (init?.method === 'PATCH' && /\/tasks\/[^/]+$/.test(path)) {
+      const id = path.split('/').at(-1)!;
+      const body = JSON.parse(String(init.body ?? '{}')) as Record<
+        string,
+        unknown
+      >;
+      const version =
+        body.expectedUpdatedAt ??
+        client.getQueryData<ProjectTaskBoard>(key)?.tasks.find((task) => task.id === id)?.updatedAt ??
+        newlyCreatedVersions.current.get(id);
+      if (typeof version !== 'number')
+        throw new Error('Actualisez la tâche avant de la modifier.');
+      init = {
+        ...init,
+        body: JSON.stringify({ ...body, expectedUpdatedAt: version }),
+      };
+    }
+    const result = await projectsApi<T>(path, init);
+    if (
+      init?.method === 'POST' &&
+      path.endsWith('/tasks') &&
+      result &&
+      typeof result === 'object' &&
+      'task' in result
+    ) {
+      const task = result.task as ProjectTaskSummary;
+      newlyCreatedVersions.current.set(task.id, task.updatedAt);
+    }
+    return result;
+  }
+
   const navigate = useNavigate();
   const dark = useThemeStore((state) => state.dark);
   const GanttTheme = dark ? WillowDark : Willow;
@@ -319,12 +356,12 @@ export function ProjectTaskManager({
   const query = useQuery({
     queryKey: key,
     queryFn: () =>
-      projectsApi<ProjectTaskBoard>(`/${projectId}/resources/${resourceId}`),
+      taskApi<ProjectTaskBoard>(`/${projectId}/resources/${resourceId}`),
     refetchInterval: 5000,
   });
   const projects = useQuery({
     queryKey: projectsQueryKey,
-    queryFn: () => projectsApi<{ projects: ProjectSummary[] }>(),
+    queryFn: () => taskApi<{ projects: ProjectSummary[] }>(),
   });
   const deliverableResource = projects.data?.projects
     .find((project) => project.id === projectId)
@@ -332,12 +369,19 @@ export function ProjectTaskManager({
   const deliverables = useQuery({
     queryKey: ['project-deliverables', projectId, deliverableResource?.id],
     queryFn: () =>
-      projectsApi<DeliverablesBoard>(
+      taskApi<DeliverablesBoard>(
         `/${projectId}/resources/${deliverableResource!.id}/deliverables`,
       ),
     enabled: Boolean(deliverableResource),
   });
-  const refresh = () => client.invalidateQueries({ queryKey: key });
+  const refresh = () =>
+    Promise.all([
+      client.invalidateQueries({ queryKey: key }),
+      client.invalidateQueries({
+        queryKey: ['project-deliverables', projectId],
+      }),
+      client.invalidateQueries({ queryKey: projectsQueryKey }),
+    ]);
   const request = useMutation({
     mutationFn: ({
       path,
@@ -348,9 +392,12 @@ export function ProjectTaskManager({
       method: string;
       body?: unknown;
     }) =>
-      projectsApi(path, {
+      taskApi(path, {
         method,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body:
+          body === undefined
+            ? undefined
+            : JSON.stringify(body),
       }),
     onSuccess: refresh,
   });
@@ -364,7 +411,7 @@ export function ProjectTaskManager({
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskError, setTaskError] = useState('');
   const [savingTask, setSavingTask] = useState(false);
-  const [linkDeliverableOpen,setLinkDeliverableOpen] = useState(false);
+  const [linkDeliverableOpen, setLinkDeliverableOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectTaskSummary | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [folderOpen, setFolderOpen] = useState(false);
@@ -658,6 +705,7 @@ export function ProjectTaskManager({
     setTaskOpen(true);
   };
   const payload = () => ({
+    ...(editing ? { expectedUpdatedAt: editing.updatedAt } : {}),
     assigneeId: draft.assigneeId || null,
     title: draft.title.trim(),
     description: draft.description.trim(),
@@ -686,13 +734,10 @@ export function ProjectTaskManager({
     dependencyIds: draft.parentTaskId ? [] : draft.dependencyIds,
   });
   const completeParent = async (parentId: string, statusId: string) => {
-    await projectsApi(
-      `/${projectId}/resources/${resourceId}/tasks/${parentId}`,
-      {
+    await taskApi(`/${projectId}/resources/${resourceId}/tasks/${parentId}`, {
         method: 'PATCH',
         body: JSON.stringify({ statusId }),
-      },
-    );
+    });
     setCompletionStatusOpen(false);
     setParentToComplete(null);
     await refresh();
@@ -702,7 +747,7 @@ export function ProjectTaskManager({
     setTaskError('');
     setSavingTask(true);
     try {
-      const result = await projectsApi<{ task: ProjectTaskSummary }>(
+      const result = await taskApi<{ task: ProjectTaskSummary }>(
         editing
           ? `/${projectId}/resources/${resourceId}/tasks/${editing.id}`
           : `/${projectId}/resources/${resourceId}/tasks`,
@@ -730,8 +775,11 @@ export function ProjectTaskManager({
         isTerminalSubtask(result.task.subtaskStatus) &&
         (!editing || !isTerminalSubtask(editing.subtaskStatus));
       if (parentId && becameTerminal) {
-        const parent = board.tasks.find((task) => task.id === parentId);
-        const allChildrenTerminal = board.tasks
+        // Saving a child recalculates the parent's revision on the server.
+        await client.invalidateQueries({ queryKey: key });
+        const currentBoard = client.getQueryData<ProjectTaskBoard>(key) ?? board;
+        const parent = currentBoard.tasks.find((task) => task.id === parentId);
+        const allChildrenTerminal = currentBoard.tasks
           .filter((task) => task.parentTaskId === parentId)
           .map((task) => (task.id === result.task.id ? result.task : task))
           .every((task) => isTerminalSubtask(task.subtaskStatus));
@@ -770,7 +818,7 @@ export function ProjectTaskManager({
         ? `Ses ${children.length} sous-tâche${children.length > 1 ? 's' : ''} seront également supprimées.`
         : '',
       linkedAgentCount
-        ? `${linkedAgentCount > 1 ? `Les ${linkedAgentCount} agents associés seront supprimés` : 'L’agent associé sera supprimé'}. Le workspace et ses fichiers seront conservés.`
+        ? `${linkedAgentCount > 1 ? `Les ${linkedAgentCount} agents associés seront conservés` : 'L’agent associé sera conservé'}, avec leur historique et leurs copies Git. Les fichiers ne seront pas supprimés.`
         : '',
     ]
       .filter(Boolean)
@@ -877,20 +925,14 @@ export function ProjectTaskManager({
     const target = board.statuses[targetIndex];
     if (!current || !target) return;
     await Promise.all([
-      projectsApi(
-        `/${projectId}/resources/${resourceId}/statuses/${current.id}`,
-        {
+      taskApi(`/${projectId}/resources/${resourceId}/statuses/${current.id}`, {
           method: 'PATCH',
           body: JSON.stringify({ position: targetIndex }),
-        },
-      ),
-      projectsApi(
-        `/${projectId}/resources/${resourceId}/statuses/${target.id}`,
-        {
+      }),
+      taskApi(`/${projectId}/resources/${resourceId}/statuses/${target.id}`, {
           method: 'PATCH',
           body: JSON.stringify({ position: index }),
-        },
-      ),
+      }),
     ]);
     await refresh();
   };
@@ -899,7 +941,7 @@ export function ProjectTaskManager({
     setAiError('');
     setAiSuggestions([]);
     try {
-      const result = await projectsApi<{ tasks: Suggestion[] }>(
+      const result = await taskApi<{ tasks: Suggestion[] }>(
         `/${projectId}/resources/${resourceId}/ai-plan`,
         { method: 'POST', body: JSON.stringify({ prompt: aiPrompt }) },
       );
@@ -921,7 +963,7 @@ export function ProjectTaskManager({
     setAdviceLoading(mode);
     setAdviceError('');
     try {
-      const result = await projectsApi<AdviceResult>(
+      const result = await taskApi<AdviceResult>(
         `/${projectId}/resources/${resourceId}/ai-advice`,
         {
           method: 'POST',
@@ -947,7 +989,7 @@ export function ProjectTaskManager({
     setAiLoading(true);
     setAiError('');
     try {
-      const result = await projectsApi<{ tasks: ReplanSuggestion[] }>(
+      const result = await taskApi<{ tasks: ReplanSuggestion[] }>(
         `/${projectId}/resources/${resourceId}/ai-replan`,
         { method: 'POST', body: JSON.stringify({ prompt: aiPrompt }) },
       );
@@ -967,7 +1009,10 @@ export function ProjectTaskManager({
             [...suggestion.dependencyIds].sort().join('|')
         );
       });
-      setReplanSuggestions(changed);
+      setReplanSuggestions(changed.map((suggestion) => ({
+        ...suggestion,
+        expectedUpdatedAt: board.tasks.find((task) => task.id === suggestion.taskId)?.updatedAt,
+      })));
       setSelectedReplanTasks(new Set(changed.map((item) => item.taskId)));
       if (!changed.length)
         setAiError('L’IA ne propose aucune modification du planning actuel.');
@@ -985,11 +1030,12 @@ export function ProjectTaskManager({
     try {
       for (const suggestion of replanSuggestions) {
         if (!selectedReplanTasks.has(suggestion.taskId)) continue;
-        await projectsApi(
+        await taskApi(
           `/${projectId}/resources/${resourceId}/tasks/${suggestion.taskId}`,
           {
             method: 'PATCH',
             body: JSON.stringify({
+              expectedUpdatedAt: suggestion.expectedUpdatedAt,
               priority: suggestion.priority,
               estimateMinutes: Math.round(suggestion.estimateHours * 60),
               startAt: suggestion.startAt,
@@ -1060,7 +1106,7 @@ export function ProjectTaskManager({
       for (const suggestion of aiSuggestions) schedule(suggestion);
       for (const suggestion of aiSuggestions) {
         const dates = plannedDates.get(suggestion.title)!;
-        const result = await projectsApi<{ task: ProjectTaskSummary }>(
+        const result = await taskApi<{ task: ProjectTaskSummary }>(
           `/${projectId}/resources/${resourceId}/tasks`,
           {
             method: 'POST',
@@ -1078,7 +1124,7 @@ export function ProjectTaskManager({
       for (const suggestion of aiSuggestions) {
         const id = created.get(suggestion.title);
         if (!id) continue;
-        await projectsApi(`/${projectId}/resources/${resourceId}/tasks/${id}`, {
+        await taskApi(`/${projectId}/resources/${resourceId}/tasks/${id}`, {
           method: 'PATCH',
           body: JSON.stringify({
             parentTaskId: null,
@@ -1113,13 +1159,13 @@ export function ProjectTaskManager({
     try {
       let parent = editing;
       if (parent) {
-        const result = await projectsApi<{ task: ProjectTaskSummary }>(
+        const result = await taskApi<{ task: ProjectTaskSummary }>(
           `/${projectId}/resources/${resourceId}/tasks/${parent.id}`,
           { method: 'PATCH', body: JSON.stringify(payload()) },
         );
         parent = result.task;
       } else {
-        const result = await projectsApi<{ task: ProjectTaskSummary }>(
+        const result = await taskApi<{ task: ProjectTaskSummary }>(
           `/${projectId}/resources/${resourceId}/tasks`,
           { method: 'POST', body: JSON.stringify(payload()) },
         );
@@ -1128,7 +1174,7 @@ export function ProjectTaskManager({
         setRootTaskId(parent.id);
         setTaskTab(parent.id);
       }
-      const result = await projectsApi<{ tasks: Suggestion[] }>(
+      const result = await taskApi<{ tasks: Suggestion[] }>(
         `/${projectId}/resources/${resourceId}/tasks/${parent.id}/ai-subtasks`,
         {
           method: 'POST',
@@ -1161,7 +1207,7 @@ export function ProjectTaskManager({
     try {
       for (const suggestion of breakdownSuggestions) {
         if (!suggestion.title.trim()) continue;
-        await projectsApi(`/${projectId}/resources/${resourceId}/tasks`, {
+        await taskApi(`/${projectId}/resources/${resourceId}/tasks`, {
           method: 'POST',
           body: JSON.stringify({
             title: suggestion.title,
@@ -1189,70 +1235,42 @@ export function ProjectTaskManager({
     }
   };
   const runAgent = async () => {
-    if (!editing || blocked(editing)) return;
+    if (!editing || blocked(editing) || agentBusy) return;
     setAgentBusy(true);
     try {
-      await projectsApi(
+      const saved = await taskApi<{ task: ProjectTaskSummary }>(
         `/${projectId}/resources/${resourceId}/tasks/${editing.id}`,
         { method: 'PATCH', body: JSON.stringify(payload()) },
       );
-      const cwd = draft.workspacePath || board.project.workspacePath;
-      const started = await threadsStartThread({
-        body: { cwd },
-        throwOnError: true,
-      });
-      const thread = started.data?.thread;
-      if (!thread) throw new Error('Impossible de créer l’agent');
-      await projectsApi(`/${projectId}/agents/${thread.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          workspacePath: cwd,
-          alreadyAtWorkspace: true,
-        }),
-      });
-      const inProgress = statusByKind('in_progress');
-      await projectsApi(
-        `/${projectId}/resources/${resourceId}/tasks/${editing.id}`,
+      const requestId =
+        launchIds.current.get(editing.id) ?? crypto.randomUUID();
+      launchIds.current.set(editing.id, requestId);
+      const result = await taskApi<{ threadId: string; state: string }>(
+        `/${projectId}/resources/${resourceId}/tasks/${editing.id}/agent`,
         {
-          method: 'PATCH',
-          body: JSON.stringify({
-            linkedThreadId: thread.id,
-            executionMode: 'agent',
-            agentState: 'running',
-            ...(editing.parentTaskId
-              ? { subtaskStatus: 'started' }
-              : inProgress
-                ? { statusId: inProgress.id }
-                : {}),
+          method: 'POST',
+        body: JSON.stringify({
+            requestId,
+            expectedUpdatedAt: saved.task.updatedAt,
           }),
         },
       );
-      const instructions = `Exécute cette tâche de projet.\n\nTitre : ${draft.title}\nDescription : ${draft.description || 'Non précisée'}\nCharge estimée : ${draft.estimateHours || 'non estimée'} heure(s)\nConditions de validation : ${draft.validationCriteria || 'Non précisées'}\n\nTravaille uniquement dans ${cwd}. Lorsque le résultat est prêt, résume ce qui a été réalisé et les vérifications effectuées. Ne déclare pas toi-même la tâche définitivement validée.`;
-      await threadsStartTurn({
-        path: { threadId: thread.id },
-        body: {
-          input: [{ type: 'text', text: instructions, text_elements: [] }],
-        },
-        throwOnError: true,
-      });
       await refresh();
+      if (result.state !== 'submitted')
+        window.alert(
+          'L’état du lancement demande une vérification dans l’agent existant. Aucune nouvelle tentative automatique ne sera envoyée.',
+        );
       setTaskOpen(false);
-      void navigate({ to: '/t/$threadId', params: { threadId: thread.id } });
+      void navigate({
+        to: '/t/$threadId',
+        params: { threadId: result.threadId },
+      });
     } catch (error) {
-      await projectsApi(
-        `/${projectId}/resources/${resourceId}/tasks/${editing.id}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({
-            executionMode: 'agent',
-            agentState: 'error',
-          }),
-        },
-      ).catch(() => undefined);
-      window.alert(
+      await refresh();
+      setTaskError(
         error instanceof Error
           ? error.message
-          : 'Le lancement de l’agent a échoué.',
+          : 'Le lancement n’est pas confirmé. Vérifiez les agents existants avant de réessayer.',
       );
     } finally {
       setAgentBusy(false);
@@ -1261,14 +1279,20 @@ export function ProjectTaskManager({
   const validateTask = async () => {
     if (!editing) return;
     const done = statusByKind('done');
-    await request.mutateAsync({
-      path: `/${projectId}/resources/${resourceId}/tasks/${editing.id}`,
-      method: 'PATCH',
-      body: editing.parentTaskId
-        ? { agentState: 'validated', subtaskStatus: 'done' }
-        : { agentState: 'validated', ...(done ? { statusId: done.id } : {}) },
-    });
-    setTaskOpen(false);
+    try {
+      await request.mutateAsync({
+        path: `/${projectId}/resources/${resourceId}/tasks/${editing.id}`,
+        method: 'PATCH',
+        body: {
+          expectedUpdatedAt: editing.updatedAt,
+          agentState: 'validated',
+          ...(editing.parentTaskId ? { subtaskStatus: 'done' } : done ? { statusId: done.id } : {}),
+        },
+      });
+      setTaskOpen(false);
+    } catch (error) {
+      setTaskError(error instanceof Error ? error.message : 'Validation impossible.');
+    }
   };
   const ganttTasks = board.tasks
     .filter((task) => !task.parentTaskId)
@@ -1509,7 +1533,7 @@ export function ProjectTaskManager({
       return;
     }
     try {
-      await projectsApi(
+      await taskApi(
         `/${projectId}/resources/${resourceId}/tasks/${current.id}`,
         {
           method: 'PATCH',
@@ -1542,13 +1566,10 @@ export function ProjectTaskManager({
       new Set([...dependencyIdsFor(target), source]),
     );
     try {
-      await projectsApi(
-        `/${projectId}/resources/${resourceId}/tasks/${target}`,
-        {
+      await taskApi(`/${projectId}/resources/${resourceId}/tasks/${target}`, {
           method: 'PATCH',
           body: JSON.stringify({ dependencyIds }),
-        },
-      );
+      });
       await refresh();
     } catch (error) {
       await refresh();
@@ -1571,7 +1592,7 @@ export function ProjectTaskManager({
       (id) => id !== link.source,
     );
     try {
-      await projectsApi(
+      await taskApi(
         `/${projectId}/resources/${resourceId}/tasks/${link.target}`,
         {
           method: 'PATCH',
@@ -2674,7 +2695,7 @@ export function ProjectTaskManager({
               </fieldset>
             )}
             {taskError && (
-              <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                 {taskError}
               </p>
             )}

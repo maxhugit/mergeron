@@ -512,6 +512,13 @@
       "when": 1794024287644,
       "tag": "0072_person_display_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1794042434972,
+      "tag": "0073_task_agent_launch_receipts",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 export function TaskDetailSurface({
   open,
@@ -28,12 +28,18 @@ export function TaskDetailSurface({
         >
           <ArrowLeft />
         </Button>
-        <h2
-          id="task-detail-title"
-          className="min-w-0 truncate text-lg font-semibold"
-        >
-          {title}
-        </h2>
+        {embedded ? (
+          <DialogTitle className="min-w-0 truncate text-lg font-semibold">
+            {title}
+          </DialogTitle>
+        ) : (
+          <h2
+            id="task-detail-title"
+            className="min-w-0 truncate text-lg font-semibold"
+          >
+            {title}
+          </h2>
+        )}
       </header>
       {children}
     </>
@@ -48,7 +54,7 @@ export function TaskDetailSurface({
         }}
       >
         <DialogContent
-          aria-labelledby="task-detail-title"
+          aria-describedby={undefined}
           className="flex max-h-[92vh] flex-col overflow-hidden p-0 sm:max-w-2xl"
         >
           {content}

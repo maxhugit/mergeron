@@ -1,3 +1,4 @@
+import { assertTaskAgent } from './project-work-links';
 import {
   BadRequestException,
   ConflictException,
@@ -24,7 +25,7 @@ import {
   requireExecutionAccess,
 } from '../auth/access-context';
 import * as path from 'node:path';
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { Inject } from '@nestjs/common';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
 import {
@@ -1660,6 +1661,8 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     return this.readTaskBoard(projectId, resourceId);
   }
 
+  // Preserve the asynchronous service contract used by API and internal callers.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async readTaskBoard(projectId: string, resourceId: string) {
     const resource = this.getResource(projectId, resourceId);
     const project = this.get(projectId);
@@ -1683,7 +1686,6 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       .from(projectWorkspaces)
       .where(eq(projectWorkspaces.projectId, projectId))
       .all();
-    await this.syncAgentStates(resourceId);
     this.recalculateAllParentEstimates(resourceId);
     const tasks = this.db
       .select()
@@ -1941,11 +1943,14 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     return task;
   }
 
+  // Preserve the asynchronous service contract used by API and internal callers.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async updateTask(
     projectId: string,
     resourceId: string,
     taskId: string,
     input: Partial<{
+      expectedUpdatedAt: number;
       assigneeId: string | null;
       title: string;
       description: string;
@@ -1972,6 +1977,11 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<ProjectTask> {
     this.getResource(projectId, resourceId);
     const task = this.requireTask(resourceId, taskId);
+    if (
+      input.expectedUpdatedAt !== undefined &&
+      input.expectedUpdatedAt !== task.updatedAt
+    )
+      throw new ConflictException('Task changed. Reload before saving.');
     if (input.assigneeId !== undefined && input.assigneeId !== task.assigneeId)
       this.validateAssignee(projectId, input.assigneeId);
     if (input.statusId) this.requireTaskStatus(resourceId, input.statusId);
@@ -1982,8 +1992,40 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       if (parent.parentTaskId)
         throw new BadRequestException('A subtask cannot contain subtasks');
     }
+    if (
+      input.parentTaskId &&
+      this.db
+        .select({ id: projectTasks.id })
+        .from(projectTasks)
+        .where(eq(projectTasks.parentTaskId, task.id))
+        .get()
+    )
+      throw new BadRequestException(
+        'A task with subtasks cannot become a subtask',
+      );
+    if (input.linkedThreadId && input.linkedThreadId !== task.linkedThreadId)
+      assertTaskAgent(this.db, projectId, task.id, input.linkedThreadId);
     const effectiveParentId =
       input.parentTaskId !== undefined ? input.parentTaskId : task.parentTaskId;
+    if (
+      effectiveParentId &&
+      this.db
+        .select({ id: projectDeliverables.id })
+        .from(projectDeliverables)
+        .where(eq(projectDeliverables.primaryTaskId, task.id))
+        .get()
+    )
+      throw new ConflictException(
+        'A deliverable primary task must remain a main task',
+      );
+    if (
+      !effectiveParentId &&
+      (input.linkedThreadId ||
+        (input.parentTaskId === null && task.linkedThreadId))
+    )
+      throw new BadRequestException(
+        'Only subtasks can be assigned to an agent',
+      );
     const effectiveParent = effectiveParentId
       ? this.requireTask(resourceId, effectiveParentId)
       : null;
@@ -2129,7 +2171,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         : input.linkedFilePath !== undefined
           ? { linkedFilePath: input.linkedFilePath?.trim() || null }
           : {}),
-      updatedAt: Date.now(),
+      updatedAt: Math.max(Date.now(), task.updatedAt + 1),
     };
     if (
       effectiveParentId &&
@@ -2148,39 +2190,22 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       for (const child of children)
         this.validateTaskDateRange(child.startAt, child.dueAt, updated);
     }
-    const validatedAgentThreadId =
-      effectiveParentId &&
-      task.linkedThreadId &&
-      input.agentState === 'validated' &&
-      input.subtaskStatus === 'done'
-        ? task.linkedThreadId
-        : null;
-    if (validatedAgentThreadId) {
-      requireExecutionAccess();
-      const preview = await this.deletion.previewDelete(validatedAgentThreadId);
-      if (!preview.canDelete)
-        throw new ConflictException(
-          'The completed work agent cannot be deleted safely',
-        );
-      const result = await this.deletion.deleteThread(validatedAgentThreadId, {
-        expectedThreadIds: preview.threadIds,
-        expectedRunningThreadIds: preview.runningThreadIds,
-        expectedPendingApprovalThreadIds: preview.pendingApprovalThreadIds,
-        expectedPendingApprovalRequestIds: preview.pendingApprovals.map(
-          (approval) => approval.requestId,
-        ),
-      });
-      if (result.status !== 'completed')
-        throw new ConflictException(
-          'The subtask was not validated because its work agent could not be deleted',
-        );
-      updated.linkedThreadId = null;
-    }
+    // Completion is a business decision, never permission to destroy a conversation
+    // or its managed Git copy. Keep the link and evidence until explicit deletion.
     this.db.transaction((tx) => {
-      tx.update(projectTasks)
-        .set(updated)
-        .where(eq(projectTasks.id, task.id))
-        .run();
+      if (
+        !tx
+          .update(projectTasks)
+          .set(updated)
+          .where(
+            and(
+              eq(projectTasks.id, task.id),
+              eq(projectTasks.updatedAt, task.updatedAt),
+            ),
+          )
+          .run().changes
+      )
+        throw new ConflictException('Task changed. Reload before saving.');
       const changes = this.taskChanges(task, updated);
       if (Object.keys(changes).length)
         tx.insert(projectTaskActivity)
@@ -2206,7 +2231,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
             workspacePath: updated.workspacePath,
             priority: updated.priority,
             linkedFilePath: null,
-            updatedAt: Date.now(),
+            updatedAt: sql`max(${projectTasks.updatedAt} + 1, ${Date.now()})`,
           })
           .where(eq(projectTasks.parentTaskId, task.id))
           .run();
@@ -2273,6 +2298,8 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     return saved;
   }
 
+  // Preserve the asynchronous service contract used by API and internal callers.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async deleteTask(
     projectId: string,
     resourceId: string,
@@ -2296,26 +2323,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           .filter((threadId): threadId is string => Boolean(threadId)),
       ),
     ];
-    for (const threadId of linkedAgentIds) {
-      requireExecutionAccess();
-      const preview = await this.deletion.previewDelete(threadId);
-      if (!preview.canDelete)
-        throw new ConflictException(
-          'The task cannot be deleted because a linked work agent cannot be deleted safely',
-        );
-      const result = await this.deletion.deleteThread(threadId, {
-        expectedThreadIds: preview.threadIds,
-        expectedRunningThreadIds: preview.runningThreadIds,
-        expectedPendingApprovalThreadIds: preview.pendingApprovalThreadIds,
-        expectedPendingApprovalRequestIds: preview.pendingApprovals.map(
-          (approval) => approval.requestId,
-        ),
-      });
-      if (result.status !== 'completed')
-        throw new ConflictException(
-          'Task deletion stopped while deleting its linked work agent',
-        );
-    }
+    // Deleting a task preserves agents, their history and managed copies.
     this.db.transaction((tx) => {
       for (const deletedTask of deletedTasks)
         tx.insert(projectTaskActivity)
@@ -2346,7 +2354,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         true,
         actor,
       );
-    return { ok: true };
+    return { ok: true, preservedAgentIds: linkedAgentIds };
   }
 
   private taskChanges(
@@ -2405,7 +2413,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       parent.progress === progress
     )
       return;
-    const now = Date.now();
+    const now = Math.max(Date.now(), parent.updatedAt + 1);
     this.db.transaction((tx) => {
       tx.update(projectTasks)
         .set({ estimateMinutes, progress, updatedAt: now })
@@ -2957,59 +2965,6 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       .some((dependency) =>
         this.dependencyReaches(dependency.dependsOnTaskId, targetId, visited),
       );
-  }
-
-  private async syncAgentStates(resourceId: string) {
-    const snapshot = await this.metadata.read().catch(() => null);
-    if (!snapshot) return;
-    const states = new Map(
-      snapshot.entries.map((entry) => [entry.thread.id, entry.thread.status]),
-    );
-    const review = this.db
-      .select()
-      .from(projectTaskStatuses)
-      .where(eq(projectTaskStatuses.resourceId, resourceId))
-      .all()
-      .find((status) => status.kind === 'review');
-    for (const task of this.db
-      .select()
-      .from(projectTasks)
-      .where(eq(projectTasks.resourceId, resourceId))
-      .all()) {
-      if (
-        !task.linkedThreadId ||
-        !['running', 'waiting'].includes(task.agentState)
-      )
-        continue;
-      const state = states.get(task.linkedThreadId);
-      if (!state) continue;
-      if (state.type === 'active') {
-        const waiting = state.activeFlags.some((flag) =>
-          ['waitingOnApproval', 'waitingOnUserInput'].includes(flag),
-        );
-        const next = waiting ? 'waiting' : 'running';
-        if (task.agentState !== next)
-          this.db
-            .update(projectTasks)
-            .set({ agentState: next, updatedAt: Date.now() })
-            .where(eq(projectTasks.id, task.id))
-            .run();
-        continue;
-      }
-      this.db
-        .update(projectTasks)
-        .set({
-          agentState: 'review',
-          ...(task.parentTaskId
-            ? { subtaskStatus: 'review' }
-            : review
-              ? { statusId: review.id }
-              : {}),
-          updatedAt: Date.now(),
-        })
-        .where(eq(projectTasks.id, task.id))
-        .run();
-    }
   }
 
   private automationConfig(resource: ProjectResource): {

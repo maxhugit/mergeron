@@ -1,5 +1,7 @@
+import { TaskAgentLaunchService } from './task-agent-launch.service';
 import {
   BadRequestException,
+  ConflictException,
   Body,
   Controller,
   Delete,
@@ -9,6 +11,7 @@ import {
   Patch,
   Post,
   Put,
+  Optional,
   Req,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
@@ -26,7 +29,10 @@ function activityActor(request: IdentityRequest): ProjectActivityActor {
 
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    @Optional() private readonly launches?: TaskAgentLaunchService,
+  ) {}
 
   @Get('people')
   people(@Req() request: IdentityRequest) {
@@ -516,6 +522,18 @@ export class ProjectsController {
     return this.projects.suggestSubtasks(id, resourceId, taskId, body);
   }
 
+  @Post(':id/resources/:resourceId/tasks/:taskId/agent')
+  launchTaskAgent(
+    @Param('id') id: string,
+    @Param('resourceId') resourceId: string,
+    @Param('taskId') taskId: string,
+    @Body() body: { requestId?: unknown; expectedUpdatedAt?: unknown },
+  ) {
+    if (!this.launches)
+      throw new BadRequestException('Task launch is unavailable');
+    return this.launches.launch(id, resourceId, taskId, body);
+  }
+
   @Patch(':id/resources/:resourceId/tasks/:taskId')
   async updateTask(
     @Param('id') id: string,
@@ -524,6 +542,10 @@ export class ProjectsController {
     @Body() body: Parameters<ProjectsService['updateTask']>[3],
     @Req() request: IdentityRequest,
   ) {
+    if (!Number.isSafeInteger(body?.expectedUpdatedAt))
+      throw new ConflictException(
+        'Reload the task before saving. An observed revision is required.',
+      );
     return {
       task: await this.projects.updateTask(
         id,

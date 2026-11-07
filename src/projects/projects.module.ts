@@ -1,3 +1,6 @@
+import { TaskAgentLaunchService } from './task-agent-launch.service';
+import { CodexModule } from '../codex/codex.module';
+import { ProjectTaskRuntimeService } from './project-task-runtime.service';
 import { ProjectIntegrityService } from './project-integrity.service';
 import { PullRequestTrackerService } from './pull-request-tracker.service';
 import { ProjectIntegrityController } from './project-integrity.controller';
@@ -33,6 +36,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
 
 @Module({
   imports: [
+    CodexModule,
     ActiveFoldersModule,
     AuthModule,
     DeliverablesModule,
@@ -56,6 +60,8 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     WorkspaceResourcesController,
   ],
   providers: [
+    ProjectTaskRuntimeService,
+    TaskAgentLaunchService,
     PullRequestTrackerService,
     ProjectIntegrityService,
     DocumentLabelsAiAdapter,
