@@ -1,0 +1,2 @@
+# Unified patch context prefixes upstream Go indentation with a literal space.
+github-cli-dependencies.patch whitespace=-space-before-tab
