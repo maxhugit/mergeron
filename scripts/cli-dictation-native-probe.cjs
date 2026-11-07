@@ -13,7 +13,7 @@ const { createInterface } = require('node:readline');
 const { createHash } = require('node:crypto');
 const appRoot = process.env.MERGERON_PROBE_APP_ROOT || '/app';
 const { CodexAudioService } = require(
-  join(appRoot, 'dist/simple-chat/codex-audio.service'),
+  join(appRoot, 'dist/voice-dictation/codex-audio.service'),
 );
 const { CatalogAdmissionService } = require(
   join(appRoot, 'dist/codex/catalog/catalog-admission.service'),

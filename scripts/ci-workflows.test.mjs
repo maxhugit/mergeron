@@ -691,7 +691,7 @@ test('the isolated real CLI checks the actual dictation service before passing t
   );
   assert.match(
     probe,
-    /require\(\s*join\(appRoot, 'dist\/simple-chat\/codex-audio\.service'\),?\s*\)/,
+    /require\(\s*join\(appRoot, 'dist\/voice-dictation\/codex-audio\.service'\),?\s*\)/,
   );
   assert.match(
     probe,
