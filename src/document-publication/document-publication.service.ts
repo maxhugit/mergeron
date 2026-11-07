@@ -211,12 +211,9 @@ export class DocumentPublicationService implements OnModuleDestroy {
         bind: () => {},
         abort: () => {},
       };
-    if (!this.protection.enabled)
-      return {
-        context: `<document_publication>\n${rule}\nProtected publication is unavailable in this runtime. Do not claim that documents have been published.\n</document_publication>`,
-        bind: () => {},
-        abort: () => {},
-      };
+    // Versioned publication is available independently of the optional outer
+    // Linux mount isolation. Keep the same checked drafts, identity, lease and
+    // optimistic document-version checks in either protection mode.
     let scope = this.scopes.get(threadId);
     // Never reuse an execution lease across browser identities/security modes.
     if (

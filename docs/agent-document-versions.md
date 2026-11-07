@@ -52,6 +52,13 @@ Le fichier original et l'historique sont conservés et un avertissement
 Une destination identique permet de reprendre une copie interrompue sans
 écrasement. Aucun fichier inconnu ni aucune sauvegarde de données n'est supprimé.
 
+Le circuit de brouillon et d’enregistrement versionné est disponible même
+lorsque `MERGERON_PUBLISHED_DOCUMENT_PROTECTION` n’est pas activé. Il conserve
+les contrôles d’identité, de projet, de chemin, de bail d’exécution et de version
+attendue. Le paramètre commande uniquement l’isolation Linux supplémentaire ;
+son absence ne désactive pas la publication et ne garantit pas le blocage des
+écritures directes par le système de montage.
+
 ## Protection Linux
 
 `MERGERON_PUBLISHED_DOCUMENT_PROTECTION=required` impose une frontière de montage
