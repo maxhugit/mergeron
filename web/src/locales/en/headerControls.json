@@ -14,5 +14,8 @@
   "saveError": "Unable to save text size. Try again.",
   "quotaLoading": "Loading quota…",
   "quotaUnavailable": "Quota unavailable.",
-  "quotaNotApplicable": "Quota is available for ChatGPT accounts only."
+  "quotaNotApplicable": "Quota is available for ChatGPT accounts only.",
+  "account": "Codex account",
+  "suggestImprovement": "Suggest an improvement",
+  "reportIncident": "Report an issue"
 }

@@ -51,9 +51,12 @@ vi.mock('@/lib/platform-session', async (original) => ({
   updateAuthResource: async (
     _path: string,
     body: {
-      textSize: { support: 'mobile' | 'tablet' | 'desktop'; percent: number };
+      textSize?: { support: 'mobile' | 'tablet' | 'desktop'; percent: number };
+      language?: string;
     },
   ) => {
+    if (body.language) return { language: body.language };
+    if (!body.textSize) throw Error('Missing preference');
     saved.sizes[body.textSize.support] = body.textSize.percent;
     return { textSizes: { ...saved.sizes } };
   },
@@ -123,17 +126,41 @@ afterEach(() => {
   document.documentElement.classList.toggle('dark', wasDark);
   client.clear();
 });
-for (const width of [390, 800])
+for (const width of [390, 800, 1280])
   test(`groups quota, connection and actions without header overflow at ${width}px, including 150% text`, async () => {
     await page.viewport(width, 844);
+    if (width >= 1024) {
+      saved.sizes.desktop = 100;
+      client.setQueryData<PlatformSession>(platformSessionKey, (current) =>
+        current ? { ...current, textSizes: { ...saved.sizes } } : current,
+      );
+    }
     const view = render(ui());
     expect(
       screen.queryByRole('button', { name: 'Refresh the app' }),
     ).toBeNull();
     await page.getByRole('button', { name: 'More actions' }).click();
-    expect(await screen.findByText('Codex account quota')).toBeVisible();
+    expect(await screen.findByText('Codex account')).toBeVisible();
     expect(screen.getByText('42%')).toBeVisible();
     expect(screen.getByText('7%')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Mergeron documentation' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Suggest an improvement' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/maxhugit/mergeron/issues/new?template=feature_request.yml',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Report an issue' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/maxhugit/mergeron/issues/new?template=bug_report.yml',
+    );
+    expect(
+      screen.queryByText('Saved in your profile for this screen category.'),
+    ).toBeNull();
     expect(screen.getByText('Connected')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Platform' })).toBeVisible();
     expect(
@@ -149,12 +176,17 @@ for (const width of [390, 800])
     await page.screenshot({
       path: `../../../.vitest-screenshots/compact-header-${width}.png`,
     });
-    await i18n.changeLanguage('fr');
-    expect(await screen.findByText('Quota du compte Codex')).toBeVisible();
+    await page.getByRole('button', { name: 'Français', exact: true }).click();
+    expect(await screen.findByText('Compte Codex')).toBeVisible();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Français' }),
+      ).toHaveAttribute('aria-pressed', 'true'),
+    );
     await page.screenshot({
       path: `../../../.vitest-screenshots/compact-header-${width}-fr.png`,
     });
-    await i18n.changeLanguage('en');
+    await page.getByRole('button', { name: 'English', exact: true }).click();
     await screen.findByRole('button', { name: 'Increase text size' });
     for (let percent = 120; percent <= 150; percent += 10) {
       await page.getByRole('button', { name: 'Increase text size' }).click();
@@ -180,9 +212,11 @@ for (const width of [390, 800])
     expect(document.documentElement.style.fontSize).toBe('150%');
     await page.viewport(1200, 844);
     await waitFor(() =>
-      expect(document.documentElement.style.fontSize).toBe('90%'),
+      expect(document.documentElement.style.fontSize).toBe(
+        width >= 1024 ? '150%' : '90%',
+      ),
     );
-    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull();
+    await page.getByRole('button', { name: 'More actions' }).click();
     expect(
       screen.getByRole('button', { name: 'Refresh the app' }),
     ).toBeVisible();

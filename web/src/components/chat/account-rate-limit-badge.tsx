@@ -31,8 +31,10 @@ function periodLabel(windowDurationMins: number | null): string {
 
 export function AccountRateLimitBadge({
   showUnavailable = false,
+  compact = false,
 }: {
   showUnavailable?: boolean;
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const { t: th } = useTranslation('headerControls');
@@ -121,7 +123,7 @@ export function AccountRateLimitBadge({
       <Badge variant={variant} className="text-xs" title={primaryTitle}>
         <Gauge className="h-3 w-3" />
         {used !== null && <span>{used}%</span>}
-        {creditLabel && (
+        {creditLabel && !compact && (
           <span className="hidden sm:inline text-muted-foreground">
             {used !== null ? '· ' : ''}
             {creditLabel}

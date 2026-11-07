@@ -58,7 +58,7 @@ describe('ChatHeader', () => {
     async (breakpoint) => {
       vi.mocked(useBreakpoint).mockReturnValue(breakpoint);
       renderHeader();
-      if (breakpoint !== 'desktop') {
+      {
         expect(
           screen.queryByRole('button', { name: 'Refresh the app' }),
         ).toBeNull();
