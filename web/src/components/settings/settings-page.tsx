@@ -113,7 +113,6 @@ export function SettingsPage() {
           {(section === 'codex' ||
             section === 'account' ||
             section === 'codexCli' ||
-            section === 'simpleChat' ||
             section === 'integrations') && (
             <CodexSettings
               key={section}
@@ -122,9 +121,7 @@ export function SettingsPage() {
                   ? 'integrations'
                   : section === 'codexCli'
                     ? 'cli'
-                    : section === 'simpleChat'
-                      ? 'chatAudio'
-                      : 'account'
+                    : 'account'
               }
             />
           )}

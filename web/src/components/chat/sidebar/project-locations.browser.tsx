@@ -86,7 +86,6 @@ test.each([390, 1180])(
                     updatedAt: 1,
                   })),
                   threads: [],
-                  simpleChats: [],
                 },
               ]}
               collapsedGroups={new Set()}
@@ -96,14 +95,12 @@ test.each([390, 1180])(
               onOpenArchivedDetail={vi.fn()}
               onOpenWorkspaceDetail={vi.fn()}
               onCreateAgentInWorkspace={vi.fn()}
-              onCreateSimpleChatInWorkspace={vi.fn()}
               onCreateTaskBoard={vi.fn()}
               onOpenResource={vi.fn()}
               resourceActionPending={false}
               onRenameResource={vi.fn()}
               onDeleteResource={vi.fn()}
               renderThreadRow={() => null}
-              renderSimpleChatRow={() => null}
               movingThread={false}
             />
           </DragDropProvider>

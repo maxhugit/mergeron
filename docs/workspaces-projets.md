@@ -8,7 +8,7 @@ Chaque projet possède un workspace principal permanent dans `/workspaces/<id-du
 | Secondaire | Autre dossier rattaché au projet, détachable sans supprimer ses fichiers |
 | Actif      | Référence stable vers une ressource du projet et un chemin relatif       |
 
-Chaque agent, conversation simple, tâche et livrable possède son propre dossier actif. Le choix d'un dossier actif ne change pas le principal du projet. Parcourir un dossier dans l'explorateur ne change pas non plus le contexte d'exécution.
+Chaque agent, tâche et livrable possède son propre dossier actif. Le choix d'un dossier actif ne change pas le principal du projet. Parcourir un dossier dans l'explorateur ne change pas non plus le contexte d'exécution.
 
 La sidebar présente les vues **Dossiers**, **Livrables** et **Sources**. La référence
 courante de l’agent est affichée indépendamment de la vue parcourue. Les menus
@@ -16,7 +16,7 @@ contextuels proposent **Utiliser comme référence de l’agent**. Les détails 
 l’interface, de l’organisation et des protections sont dans le
 [guide de l’explorateur](explorateur-projet.md).
 
-À la création, un agent ou une conversation simple utilise le principal. Une tâche utilise le dossier explicitement choisi, celui de sa tâche parente, puis le principal. Un livrable utilise son propre sous-dossier dans `.mergeron-system/livrables/`. Lorsqu'un agent est lié à une tâche, le dossier actif de la tâche est prioritaire sur le défaut de l'agent.
+À la création, un agent utilise le principal. Une tâche utilise le dossier explicitement choisi, celui de sa tâche parente, puis le principal. Un livrable utilise son propre sous-dossier dans `.mergeron-system/livrables/`. Lorsqu'un agent est lié à une tâche, le dossier actif de la tâche est prioritaire sur le défaut de l'agent.
 
 Le serveur résout la ressource et le chemin relatif avant chaque nouvelle opération. Il vérifie leur appartenance au projet, l'existence du dossier, son confinement dans la ressource et l'absence de lien symbolique. Un changement s'applique aux opérations suivantes ; une exécution déjà lancée conserve le contexte résolu à son démarrage.
 
@@ -66,11 +66,11 @@ L'évolution distingue le principal, les dossiers actifs, les connexions externe
 
 ## Connaissance partagée entre conversations
 
-Les fichiers sont relus dans l’espace système du projet à chaque nouveau tour Codex et à chaque réponse OpenAI des conversations simples du projet. Le workspace actif reste inchangé, y compris pour une conversation dans un secondaire. Les agents sont rattachés par leur association explicite au projet ; les exécutions éphémères utilisent le rattachement du workspace. Les conversations simples OpenAI utilisent directement leur identifiant de projet.
+Les fichiers sont relus dans l’espace système du projet à chaque nouveau tour Codex. Le workspace actif reste inchangé, y compris pour une conversation dans un secondaire. Les agents sont rattachés par leur association explicite au projet ; les exécutions éphémères utilisent le rattachement du workspace.
 
 Les changements enregistrés s'appliquent au prochain échange d'une conversation existante. Une réponse déjà en cours continue avec son instantané de départ. Un instantané vide précise au modèle que les anciennes connaissances ont été retirées. La connaissance reste du contexte de projet et ne remplace pas les règles de sécurité ni les instructions de priorité supérieure.
 
-Les conversations Codex reçoivent un bloc de contexte utilisateur distinct, préfixé par `<project_shared_knowledge>`, avant le message envoyé. Ce bloc peut être conservé dans l'historique brut Codex ; WebUI le retire du texte affiché et éditable du message utilisateur. Les titres et aperçus de branches continuent à utiliser la demande originale. Les conversations simples OpenAI transmettent le contexte à l'API sans l'enregistrer comme un message de conversation.
+Les conversations Codex reçoivent un bloc de contexte utilisateur distinct, préfixé par `<project_shared_knowledge>`, avant le message envoyé. Ce bloc peut être conservé dans l'historique brut Codex ; WebUI le retire du texte affiché et éditable du message utilisateur. Les titres et aperçus de branches continuent à utiliser la demande originale.
 
 Chaque fichier est limité à **32 Kio de texte UTF-8**. Les noms sont fixes : l'API n'accepte pas de chemin libre. Les liens symboliques vers les fichiers ou les dossiers système sont refusés. Un document supprimé peut être recréé par l'éditeur ; un dossier principal manquant doit être restauré.
 
@@ -96,13 +96,13 @@ Une modification locale de la proposition doit être enregistrée avant son acce
 
 Chaque proposition conserve sa version de départ. Si les connaissances ont changé entre-temps, l'acceptation est refusée et la proposition reste en attente. Refuser cette proposition périmée puis demander une nouvelle suggestion dans la conversation, qui recevra les connaissances actuelles au prochain échange. Deux validateurs ne peuvent pas accepter ou refuser silencieusement une même version concurrente. Une proposition déjà traitée ne peut pas être appliquée une seconde fois.
 
-Les fichiers de connaissance restent dans `knowledge/` de l’espace système séparé. Les versions de départ et les propositions sont des données applicatives conservées dans SQLite, comme les tâches et les conversations simples ; sauvegarder la base avec les espaces de travail et système. Les propositions survivent à un redémarrage et sont supprimées avec leur projet. La suppression d'une conversation ne modifie pas la référence historique conservée dans une proposition, mais son lien peut alors ne plus être disponible.
+Les fichiers de connaissance restent dans `knowledge/` de l’espace système séparé. Les versions de départ et les propositions sont des données applicatives conservées dans SQLite, comme les tâches ; sauvegarder la base avec les espaces de travail et système. Les propositions survivent à un redémarrage et sont supprimées avec leur projet. La suppression d'une conversation ne modifie pas la référence historique conservée dans une proposition, mais son lien peut alors ne plus être disponible.
 
 ### Capture et API
 
 Le contexte envoyé au modèle décrit le format `webui-memory-proposal`. Un bloc JSON borné précise une révision connue du projet, un titre, un fichier autorisé et soit un ajout, soit un remplacement d'un fragment exact et unique. Le serveur valide ces champs, les limites et la révision avant de créer une proposition en attente. Les suggestions identiques déjà en attente et les relectures d'une même réponse ne créent pas de doublons.
 
-Pour les agents Codex, seuls les messages d'assistant terminés dans un tour réussi et une conversation durable du projet sont capturés. Les commentaires, échecs et exécutions éphémères de planification ne créent pas de propositions. Les conversations simples, avec OpenAI ou Codex, utilisent l'identifiant de leur message d'assistant enregistré comme origine. Une erreur de stockage d'une proposition ne bloque pas la réponse de conversation. Un format invalide est ignoré ; si aucune suggestion n'apparaît, demander à la conversation de la reformuler.
+Pour les agents Codex, seuls les messages d'assistant terminés dans un tour réussi et une conversation durable du projet sont capturés. Les commentaires, échecs et exécutions éphémères de planification ne créent pas de propositions. Une erreur de stockage d'une proposition ne bloque pas la réponse de conversation. Un format invalide est ignoré ; si aucune suggestion n'apparaît, demander à la conversation de la reformuler.
 
 Le bloc structuré reste dans l'historique brut, mais s'affiche comme une suggestion lisible dans WebUI. Cette présentation ne constitue pas une preuve d'acceptation : le statut de la proposition dans les paramètres est la référence.
 
@@ -122,9 +122,9 @@ Les migrations SQL existantes fournissent `workspace_layout_version` et imposent
 2. Il conserve l'ancien dossier comme secondaire, en ajoutant son rattachement s'il manquait.
 3. Une transaction remplace le chemin principal du projet, normalise les rôles et inscrit la version de structure courante (version 3 intermédiaire, puis version 4).
 
-Aucun fichier existant n'est déplacé ou supprimé. Les chemins des conversations d'agents, des conversations simples et des tâches restent inchangés. Les conversations simples utilisant Codex exécutent désormais dans leur chemin conservé, plutôt que dans le nouveau principal.
+Aucun fichier existant n'est déplacé ou supprimé. Les chemins des conversations d’agents et des tâches restent inchangés.
 
-La migration SQL `0046_graceful_white_queen` ajoute les références de dossiers actifs. Au démarrage, un rattrapage idempotent associe chaque chemin absolu existant à la ressource locale la plus précise du même projet et conserve son chemin relatif. Les agents, conversations simples, tâches et livrables ne sont ni déplacés ni réaffectés. Une référence qui ne peut plus être résolue reste visible à corriger au lieu d'être remplacée.
+La migration SQL `0046_graceful_white_queen` ajoute les références de dossiers actifs. Au démarrage, un rattrapage idempotent associe chaque chemin absolu existant à la ressource locale la plus précise du même projet et conserve son chemin relatif. Les agents, tâches et livrables ne sont ni déplacés ni réaffectés. Une référence qui ne peut plus être résolue reste visible à corriger au lieu d'être remplacée.
 
 Les principaux existants en version 1 ou 2 contiennent encore un dossier
 interne `.webui` ou `.mergeron`. La migration vers la version 3 vérifie leur

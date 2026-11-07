@@ -84,12 +84,6 @@ for (const width of [320, 390, 1100])
           defaultValue: 'Instructions par défaut',
         }),
     );
-    fixture.server.overrides.set('GET /api/simple-chat/api-key', () =>
-      json({ configured: true, managed: true }),
-    );
-    fixture.server.overrides.set('GET /api/simple-chat/settings', () =>
-      json({ backend: 'codex', configured: true, audioBackend: 'codex' }),
-    );
     fixture.server.overrides.set('GET /api/local-agents/configuration', () =>
       json({
         enabled: true,
@@ -225,11 +219,9 @@ for (const width of [320, 390, 1100])
         .click();
       await screen.findByRole('checkbox');
       await inspect();
-      await tab('Chat and Audio');
-      await screen.findByLabelText(
-        i18n.t('dictationBackendLabel', { ns: 'codexSettings' }),
-      );
-      await inspect();
+      expect(
+        screen.queryByRole('tab', { name: i18n.t('chatAudioTitle') }),
+      ).toBeNull();
       await tab('Raw configuration');
       await page
         .getByRole('button', { name: label('Edit config.toml') })

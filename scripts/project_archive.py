@@ -958,8 +958,31 @@ def insert_rows(db, records):
             db.execute(sql, tuple(decoded(record[k]) for k in keys))
 
 
+def without_retired_conversations(manifest):
+    """Legacy ZIPs stay readable, but cannot recreate the removed conversation feature."""
+    result = copy.deepcopy(manifest)
+    records = result['tables']
+    records.pop('simple_chat_threads', None)
+    records.pop('simple_chat_messages', None)
+    if 'conversation_owners' in records:
+        records['conversation_owners'] = [r for r in records['conversation_owners'] if r.get('kind') != 'simple']
+    if 'project_active_folders' in records:
+        records['project_active_folders'] = [r for r in records['project_active_folders'] if r.get('context_type') != 'simple_chat']
+    for row in records.get('projects', []):
+        row['sidebar_order'] = json.dumps([key for key in json.loads(row.get('sidebar_order') or '[]') if not key.startswith('simple:')])
+    for row in records.get('project_tasks', []):
+        row['linked_simple_chat_id'] = None
+    for row in records.get('project_deliverables', []):
+        row['conversations'] = json.dumps([link for link in json.loads(row.get('conversations') or '[]') if link.get('type') != 'simple'])
+    for row in records.get('project_knowledge_proposals', []):
+        if row.get('source_type') == 'simple':
+            row['source_type'] = 'retired'
+    return result
+
+
 def select_import_content(manifest, selection):
     """Coarse bundles; dependencies are included, never references silently severed."""
+    manifest = without_retired_conversations(manifest)
     if selection is None:
         return manifest
     if not isinstance(selection, list) or any(not isinstance(s, str) or s not in {'files', 'conversations', 'work'} for s in selection):

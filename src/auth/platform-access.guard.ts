@@ -117,11 +117,7 @@ export class PlatformAccessGuard implements CanActivate {
     if (typeof request.body?.projectId === 'string')
       this.identities.requireProject(identity, request.body.projectId);
     if (typeof request.params?.threadId === 'string')
-      this.identities.requireThread(
-        identity,
-        request.params.threadId,
-        url.startsWith('/simple-chat/') ? 'simple' : 'agent',
-      );
+      this.identities.requireThread(identity, request.params.threadId, 'agent');
     const ids = request.body?.threadIds ?? request.query?.threadIds;
     if (ids !== undefined) {
       const values =
@@ -145,9 +141,7 @@ export class PlatformAccessGuard implements CanActivate {
         /^\/codex\/(approval-policy|sandbox-mode)$/.test(url)) ||
       (request.method !== 'GET' && /^\/skills(\/|$)/.test(url)) ||
       (request.method !== 'GET' && /^\/pending-approvals(\/|$)/.test(url)) ||
-      (request.method !== 'GET' &&
-        /^\/simple-chat\/(config|settings|models)(\/|$)/.test(url)) ||
-      /^\/simple-chat\/(?:api-key|settings|audio-sessions)(\/|$)/.test(url) ||
+      /^\/voice-dictation\/audio-sessions(\/|$)/.test(url) ||
       /^\/auth\/(?:configuration|local-accounts|sessions|impersonation-audit)(\/|$)/.test(
         url,
       ) ||

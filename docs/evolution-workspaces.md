@@ -12,7 +12,7 @@ Les administrateurs de plateforme ont accès à tous les projets ; les participa
 - `ProjectKnowledgeService` relit les connaissances dans le principal, indépendamment du contexte de travail de la conversation. Ce comportement est conservé.
 - `FilesService` protège déjà les racines permanentes et le dossier système. La protection des dossiers structurants est ajoutée dans la PR 1.
 - Les historiques des livrables contiennent des chemins absolus : JSON `project_deliverable_versions.files`, colonnes `snapshot_path` et `onlyoffice_changes_path` des versions de documents. Renommer le dossier sans migrer ces références casserait les téléchargements et restaurations.
-- Les agents, conversations simples et tâches possèdent déjà des champs `workspacePath` ou `cwd`. Les secondaires sont actuellement des chemins de dossiers locaux. Ils ne modélisent pas encore le type de connexion, les capacités ou la distinction entre ressource distante et copie locale.
+- Les agents et tâches possèdent déjà des champs `workspacePath` ou `cwd`. Les secondaires sont actuellement des chemins de dossiers locaux. Ils ne modélisent pas encore le type de connexion, les capacités ou la distinction entre ressource distante et copie locale.
 - Les automatisations et les restrictions propres aux modules existent déjà. Leur intégration aux futures ressources externes doit être auditée dans les lots correspondants, sans supposer qu'un chemin actif suffit à les autoriser ou les isoler.
 
 ## Découpage en cinq PR maximum
@@ -77,9 +77,9 @@ La migration v2 ne change pas encore les dossiers actifs, les secondaires ou les
 
 La table `project_active_folders` stocke le type et l'identifiant du contexte, le projet, la ressource locale et le chemin relatif. Le service commun résout cette référence au moment de l'opération et expose les états `ready`, `detached`, `missing` et `invalid`. La référence à une ressource détachée est volontairement conservée afin de rendre le problème réparable.
 
-Le rattrapage au démarrage reprend les chemins absolus des agents, conversations simples, tâches et livrables sans déplacer de fichiers. Il sélectionne uniquement une ressource du même projet contenant déjà le chemin. Le détachement d'un secondaire ne réaffecte aucune activité. Les vues de tâches et de livrables signalent les références qui demandent une correction, et les réponses de l'API exposent la ressource, le chemin relatif, le chemin effectif et l'état.
+Le rattrapage au démarrage reprend les chemins absolus des agents, tâches et livrables sans déplacer de fichiers. Il sélectionne uniquement une ressource du même projet contenant déjà le chemin. Le détachement d'un secondaire ne réaffecte aucune activité. Les vues de tâches et de livrables signalent les références qui demandent une correction, et les réponses de l'API exposent la ressource, le chemin relatif, le chemin effectif et l'état.
 
-Les nouvelles opérations des agents résolvent d'abord la tâche liée, puis le défaut de l'agent. Les conversations simples utilisent leur propre référence. La navigation de l'explorateur demeure un état d'interface indépendant. Les ressources distantes, copies locales et transferts restent dans les PR 3 à 5.
+Les nouvelles opérations des agents résolvent d'abord la tâche liée, puis le défaut de l'agent. La navigation de l'explorateur demeure un état d'interface indépendant. Les ressources distantes, copies locales et transferts restent dans les PR 3 à 5.
 
 ## Mise en œuvre de la troisième PR
 

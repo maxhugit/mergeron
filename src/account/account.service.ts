@@ -37,7 +37,7 @@ export class AccountService {
     return { ...account, provider };
   }
 
-  /** Starts API-key, ChatGPT browser, device-code, or external-token login. */
+  /** Starts ChatGPT browser, device-code, or external-token login. */
   async login(body: LoginAccountDto): Promise<v2.LoginAccountResponse> {
     const params = this.normalizeLoginParams(body);
     const response = await this.codex.request<v2.LoginAccountResponse>(
@@ -78,17 +78,6 @@ export class AccountService {
 
   private normalizeLoginParams(body: LoginAccountDto): v2.LoginAccountParams {
     switch (body?.type) {
-      case 'apiKey': {
-        const apiKey =
-          typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
-        if (!apiKey) {
-          throw BusinessException.badRequest(
-            ErrorCode.account.apiKeyRequired,
-            'apiKey is required',
-          );
-        }
-        return { type: 'apiKey', apiKey };
-      }
       case 'chatgpt':
         return { type: 'chatgpt' };
       case 'chatgptDeviceCode':

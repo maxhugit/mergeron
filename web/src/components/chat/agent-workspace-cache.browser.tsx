@@ -226,7 +226,6 @@ export function Fixture() {
                 projectId: p.id,
                 cwd: p.workspacePath,
                 threads: [],
-                simpleChats: [],
               }))}
               collapsedGroups={new Set()}
               isLoading={false}
@@ -235,7 +234,6 @@ export function Fixture() {
               onOpenArchivedDetail={vi.fn()}
               onOpenWorkspaceDetail={vi.fn()}
               onCreateAgentInWorkspace={vi.fn()}
-              onCreateSimpleChatInWorkspace={vi.fn()}
               onCreateTaskBoard={vi.fn()}
               onCreateAutomationBoard={vi.fn()}
               onCreateDeliverables={vi.fn()}
@@ -245,7 +243,6 @@ export function Fixture() {
               onRenameResource={vi.fn()}
               onDeleteResource={vi.fn()}
               renderThreadRow={() => null}
-              renderSimpleChatRow={() => null}
               movingThread={false}
             />
           </DragDropProvider>

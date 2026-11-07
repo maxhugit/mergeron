@@ -143,8 +143,7 @@ La protection des documents publiés reste applicable, y compris en accès compl
 Le MCP métier ne dépend ni du client Python ni de l’activation de la protection
 documentaire pour consulter/créer des entités. Il ne réactive aucune intégration
 externe désactivée : `codex_apps`, Home Assistant et les autres connecteurs restent
-soumis aux restrictions par projet. Les conversations simples, non rattachées
-comme agents de travail, ne reçoivent pas ce canal.
+soumis aux restrictions par projet.
 
 ## Connexions du projet et utilisation de Git
 

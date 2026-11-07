@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  MessageCircle,
   ListTodo,
   Zap,
   Trash2,
@@ -67,7 +66,7 @@ interface Props {
   onOpenWorkspaceDetail: (cwd: string) => void;
   onCreateAgentInWorkspace: (group: WorkspaceGroup) => void;
   onCreateLocalAgent?: (group: WorkspaceGroup) => void;
-  onCreateSimpleChatInWorkspace: (group: WorkspaceGroup) => void;
+
   onCreateTaskBoard: (group: WorkspaceGroup) => void;
   onCreateAutomationBoard?: (group: WorkspaceGroup) => void;
   onCreateDeliverables?: (group: WorkspaceGroup) => void;
@@ -84,9 +83,7 @@ interface Props {
     archived: boolean,
     projectId?: string,
   ) => React.ReactNode;
-  renderSimpleChatRow: (
-    thread: WorkspaceGroup['simpleChats'][number],
-  ) => React.ReactNode;
+
   movingThread: boolean;
 }
 
@@ -104,7 +101,7 @@ export function WorkspaceOverview({
   onOpenWorkspaceDetail,
   onCreateAgentInWorkspace,
   onCreateLocalAgent,
-  onCreateSimpleChatInWorkspace,
+
   onCreateTaskBoard,
   onCreateAutomationBoard,
   onCreateDeliverables,
@@ -117,7 +114,7 @@ export function WorkspaceOverview({
   onDeleteProject,
   onExportProject,
   renderThreadRow,
-  renderSimpleChatRow,
+
   movingThread,
 }: Props) {
   const { t } = useTranslation(['common', 'projectArchives', 'localAgents'], {
@@ -273,17 +270,7 @@ export function WorkspaceOverview({
                         {t('localAgentCreate')}
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      className="h-8 w-full justify-start gap-2 px-2 text-xs"
-                      onClick={() => {
-                        setOpenMenu(null);
-                        onCreateSimpleChatInWorkspace(group);
-                      }}
-                    >
-                      <MessageCircle className="h-3.5 w-3.5" />
-                      {t('simpleConversation')}
-                    </Button>
+
                     <Button
                       variant="ghost"
                       className="h-8 w-full justify-start gap-2 px-2 text-xs"
@@ -428,10 +415,8 @@ export function WorkspaceOverview({
                             onRename={() => onRenameResource(item.resource)}
                             onDelete={() => onDeleteResource(item.resource)}
                           />
-                        ) : item.kind === 'agent' ? (
-                          renderThreadRow(item.thread, false, group.projectId)
                         ) : (
-                          renderSimpleChatRow(item.thread)
+                          renderThreadRow(item.thread, false, group.projectId)
                         )}
                       </SidebarItemDropTarget>
                     ))}
@@ -470,12 +455,7 @@ export function WorkspaceOverview({
 
 type SidebarItem =
   | { kind: 'resource'; key: string; resource: ProjectResourceSummary }
-  | { kind: 'agent'; key: string; thread: ThreadDto }
-  | {
-      kind: 'simple';
-      key: string;
-      thread: WorkspaceGroup['simpleChats'][number];
-    };
+  | { kind: 'agent'; key: string; thread: ThreadDto };
 
 function orderSidebarItems(
   group: WorkspaceGroup,
@@ -493,13 +473,6 @@ function orderSidebarItems(
       (thread): SidebarItem => ({
         kind: 'agent',
         key: `agent:${thread.id}`,
-        thread,
-      }),
-    ),
-    ...group.simpleChats.map(
-      (thread): SidebarItem => ({
-        kind: 'simple',
-        key: `simple:${thread.id}`,
         thread,
       }),
     ),

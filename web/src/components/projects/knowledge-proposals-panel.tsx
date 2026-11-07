@@ -13,7 +13,7 @@ interface Proposal {
   file: string;
   status: 'pending' | 'accepted' | 'rejected';
   version: number;
-  sourceType: 'agent' | 'simple';
+  sourceType: 'agent' | 'retired';
   threadId: string;
   createdAt: number;
   reviewedAt: number | null;
@@ -233,16 +233,14 @@ function ProposalReview({
         <p className="text-xs text-muted-foreground">
           {item.file} · {date(item.createdAt)}
         </p>
-        <a
-          className="block break-all text-sm underline"
-          href={withBasePath(
-            item.sourceType === 'agent'
-              ? `/t/${encodeURIComponent(item.threadId)}`
-              : `/simple-chat?thread=${encodeURIComponent(item.threadId)}`,
-          )}
-        >
-          {t('openSourceConversation')} · {item.threadId}
-        </a>
+        {item.sourceType === 'agent' && (
+          <a
+            className="block break-all text-sm underline"
+            href={withBasePath(`/t/${encodeURIComponent(item.threadId)}`)}
+          >
+            {t('openSourceConversation')} · {item.threadId}
+          </a>
+        )}
         {displayed.reviewedAt && (
           <p className="text-xs text-muted-foreground">
             {displayed.reviewer} · {date(displayed.reviewedAt)}

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { dictationBackend, startCliDictation } from './cli-dictation';
+import { startCliDictation } from './cli-dictation';
 
 const id = '55555555-1111-4111-8111-111111111111';
 const offer = 'v=0\r\nm=audio 9\r\nm=application 9\r\n';
@@ -44,18 +44,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('chooses the explicitly configured engine and refuses unknown status without API fallback', async () => {
-  const { fetchMock } = setup();
-  await expect(dictationBackend()).resolves.toBe('codex');
-  fetchMock.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({}),
-  } as never);
-  await expect(dictationBackend()).rejects.toThrow(
-    /Moteur de dictée indisponible/,
-  );
-});
-
 it('forwards browser SDP with a data channel, sends no recording, mutes for the tail, then releases media', async () => {
   const { track, fetchMock } = setup();
   const handle = await startCliDictation(new AbortController().signal);
@@ -76,8 +64,8 @@ it('forwards browser SDP with a data channel, sends no recording, mutes for the 
   expect(track.stop).toHaveBeenCalled();
   expect(pc.close).toHaveBeenCalled();
   expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-    '/api/simple-chat/audio-sessions',
-    `/api/simple-chat/audio-sessions/${id}/finish`,
+    '/api/voice-dictation/audio-sessions',
+    `/api/voice-dictation/audio-sessions/${id}/finish`,
   ]);
 });
 

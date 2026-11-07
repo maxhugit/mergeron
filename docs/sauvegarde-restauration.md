@@ -119,8 +119,7 @@ Les montages externes `/appdata` restent hors périmètre dans tous les modes.
 
 ### Périmètre et limites du mode minimal
 
-La base entière conserve aussi ses métadonnées de projets/livrables et certains
-messages de chat simple : le mode minimal n’est **pas** un export sélectif de
+La base entière conserve aussi ses métadonnées de projets/livrables : le mode minimal n’est **pas** un export sélectif de
 tables. En revanche, aucun fichier de `workspace`, aucun historique Codex de
 `sessions`/`archived_sessions`, aucun document/version de livrable ni brouillon
 de projet n’est copié. Une base restaurée peut donc ne plus correspondre aux

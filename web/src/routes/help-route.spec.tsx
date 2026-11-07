@@ -18,11 +18,11 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-it('separates simple conversations from work agents in an expandable contents list', () => {
+it('opens work agents from the expandable contents list without a retired chat chapter', () => {
   render(<HelpRoute />);
   expect(
-    screen.getByRole('button', { name: /Simple conversations/ }),
-  ).toHaveAttribute('aria-expanded', 'false');
+    screen.queryByRole('button', { name: /Simple conversations/ }),
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Work agents/ }));
   fireEvent.click(
     within(document.getElementById('guide-navigation')!).getByRole('link', {
@@ -106,10 +106,10 @@ it('supports direct links and browser history events', () => {
   expect(screen.getByRole('article')).toHaveAccessibleName(
     'Create and follow a pull request',
   );
-  window.history.replaceState(null, '', '/help#guide/simple-chat');
+  window.history.replaceState(null, '', '/help#guide/agent-create');
   fireEvent.popState(window);
   expect(screen.getByRole('article')).toHaveAccessibleName(
-    'Create a simple conversation',
+    'Create and assign an agent',
   );
 });
 it('keeps article links and history on the help route with the application base URL', () => {

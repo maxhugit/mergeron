@@ -27,7 +27,6 @@ import {
   projectWorkspaces,
   projectAgentThreads,
   simpleChatThreads,
-  settings,
   conversationBranchEdges,
   projectResources,
   projectDeliverables,
@@ -44,8 +43,6 @@ import { ProjectsService } from '../projects/projects.service';
 import { ProjectWorkspaceLayout } from '../projects/project-workspace-layout';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { WORKSPACE_LAYOUT_VERSION } from '../projects/workspace-structure';
-import { SimpleChatController } from '../simple-chat/simple-chat.controller';
-import { SimpleChatService } from '../simple-chat/simple-chat.service';
 import { FilesController } from '../files/files.controller';
 import { FilesService } from '../files/files.service';
 import { SettingsService } from '../settings/settings.service';
@@ -205,7 +202,6 @@ beforeEach(async () => {
     imports: [JwtModule.register({})],
     controllers: [
       ProjectsController,
-      SimpleChatController,
       FilesController,
       OnlyOfficeController,
       DeliverablesController,
@@ -226,10 +222,6 @@ beforeEach(async () => {
       { provide: ProjectsService, useValue: service },
       { provide: FilesService, useValue: files },
       { provide: SettingsService, useValue: configuration },
-      {
-        provide: SimpleChatService,
-        useValue: new SimpleChatService(database.db, {} as never, {} as never),
-      },
       { provide: ThreadsService, useValue: {} },
       { provide: ThreadMetadataService, useValue: {} },
       { provide: GitMutationGateService, useValue: {} },
@@ -315,54 +307,16 @@ it('denies direct project writes and moves to an unauthorized project without ch
   ).toBe('Project b');
 });
 
-it('filters simple chats and rejects guessed IDs, forged project IDs and unknown legacy owners', async () => {
-  const response = await app.inject({
-    method: 'GET',
-    url: '/api/simple-chat/threads',
-    headers: headers(),
-  });
-  expect(
-    response.json<{ threads: { id: string }[] }>().threads.map((t) => t.id),
-  ).toEqual(['chat-a']);
-  for (const id of ['chat-b', 'legacy']) {
-    for (const method of ['GET', 'PATCH', 'DELETE'] as const)
+it('does not expose retired conversation endpoints, even with historical rows present', async () => {
+  for (const person of ['alice', 'admin'])
+    for (const url of [
+      '/api/simple-chat/threads',
+      '/api/simple-chat/threads/chat-a',
+    ])
       expect(
-        (
-          await app.inject({
-            method,
-            url: `/api/simple-chat/threads/${id}`,
-            headers: headers(),
-            ...(method === 'PATCH' ? { payload: { title: 'stolen' } } : {}),
-          })
-        ).statusCode,
-      ).toBe(403);
-  }
-  expect(
-    (
-      await app.inject({
-        method: 'POST',
-        url: '/api/simple-chat/threads',
-        headers: headers(),
-        payload: { projectId: 'b' },
-      })
-    ).statusCode,
-  ).toBe(403);
-  expect(
-    (
-      await app.inject({
-        method: 'GET',
-        url: '/api/simple-chat/threads/legacy',
-        headers: headers('admin'),
-      })
-    ).statusCode,
-  ).toBe(200);
-  expect(
-    database.db
-      .select()
-      .from(simpleChatThreads)
-      .where(eq(simpleChatThreads.id, 'legacy'))
-      .get()?.projectId,
-  ).toBeNull();
+        (await app.inject({ method: 'GET', url, headers: headers(person) }))
+          .statusCode,
+      ).toBe(404);
 });
 
 it('reserves raw system files for administrators, including guessed old URLs and symbolic links', async () => {
@@ -460,7 +414,7 @@ it('checks file reads, writes, roots, copies and symlink targets against project
   expect(readFileSync(b, 'utf8')).toBe('confidential-b');
 });
 
-it('blocks indirect Codex planning and simple-chat execution before any process is started', async () => {
+it('blocks indirect Codex planning before any process is started', async () => {
   const create = await app.inject({
     method: 'POST',
     url: '/api/projects/a/resources',
@@ -479,26 +433,6 @@ it('blocks indirect Codex planning and simple-chat execution before any process 
         })
       ).statusCode,
     ).toBe(403);
-  database.db
-    .insert(settings)
-    .values({
-      key: 'simple-chat:backend',
-      value: 'codex',
-      type: 'string',
-      category: 'simple-chat',
-      description: '',
-      defaultValue: 'openai',
-      constraints: '{}',
-      updatedAt: 1,
-    })
-    .run();
-  const response = await app.inject({
-    method: 'POST',
-    url: '/api/simple-chat/threads/chat-a/messages',
-    headers: headers(),
-    payload: { message: 'test' },
-  });
-  expect(response.statusCode).toBe(403);
 });
 
 it('enforces the same policy inside domain services and isolates concurrent requests', async () => {

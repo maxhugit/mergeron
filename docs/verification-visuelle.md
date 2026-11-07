@@ -27,7 +27,7 @@ Le réglage `general.agentInstructions` est conservé dans la base de paramètre
 persistante, sans changer les fichiers `AGENTS.md`, les consignes des projets ou
 les permissions. Il est relu à chaque nouvel échange, y compris pour les agents
 déjà créés ; un échange en cours n’est pas modifié et aucun redémarrage n’est
-nécessaire. Les conversations simples ne sont pas des agents de travail. Cette
+nécessaire. Cette
 consigne n’est pas une garantie technique d’exécution : si l’outil, le serveur,
 les droits ou la consultation des images ne sont pas disponibles, l’agent doit
 le dire au lieu de prétendre avoir vérifié le rendu.

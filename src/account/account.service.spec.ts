@@ -58,23 +58,9 @@ describe('AccountService', () => {
     });
   });
 
-  it('starts API key login with trimmed key and invalidates cache', async () => {
-    codexService.request.mockResolvedValueOnce({ type: 'apiKey' });
-    const result = await service.login({
-      type: 'apiKey',
-      apiKey: '  sk-test  ',
-    });
-    expect(result).toEqual({ type: 'apiKey' });
-    expect(codexService.request).toHaveBeenCalledWith('account/login/start', {
-      type: 'apiKey',
-      apiKey: 'sk-test',
-    });
-    expect(codexStatusService.invalidateCache).toHaveBeenCalledTimes(1);
-  });
-
-  it('rejects empty API key', async () => {
+  it('rejects retired API-key login without contacting Codex', async () => {
     await expect(
-      service.login({ type: 'apiKey', apiKey: '   ' }),
+      service.login({ type: 'apiKey', apiKey: 'retired' } as never),
     ).rejects.toBeInstanceOf(BusinessException);
     expect(codexService.request).not.toHaveBeenCalled();
   });

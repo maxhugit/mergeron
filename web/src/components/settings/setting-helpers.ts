@@ -52,7 +52,7 @@ export function formatSettingValue(value: SettingValue): string {
 }
 
 export function sectionLabel(section: string): string {
-  if (section === 'simpleChat' || section === 'integrations') return 'Codex';
+  if (section === 'integrations') return 'Codex';
   const labels: Record<string, string> = {
     general: 'General',
     onlyOffice: 'OnlyOffice',
@@ -96,8 +96,6 @@ export function settingsPageDescription(section: string): string {
       'Manage Codex app-server settings. Changes are saved to user config.toml and hot-reloaded.',
     codexCli:
       'Review installed and available Codex CLI versions, then manage updates safely.',
-    simpleChat:
-      'Choose the execution engine used by Simple Chat conversations.',
     terminal:
       'Runtime changes apply only to new terminals and future detach timers.',
     files: 'File upload limits take effect after server restart.',

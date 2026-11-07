@@ -57,7 +57,7 @@ envoyé le fichier. La compatibilité est revérifiée à la confirmation.
 - Tableaux de tâches, états personnalisés, tâches, sous-tâches, dépendances et journal.
 - Livrables, documents, versions historiques, compositions figées, validations
   et historique du cycle de vie ; archives de changements OnlyOffice conservées.
-- Conversations simples et messages ; agents associés, branches, historique
+- Agents associés, branches, historique
   JSONL, index paginé, noms, compteurs, objectifs et mémoires propres aux agents.
 - Fichiers des espaces locaux associés, dossiers vides et pièces jointes locales
   de conversation référencées par le projet.

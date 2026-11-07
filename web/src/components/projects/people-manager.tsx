@@ -780,9 +780,7 @@ export function PeopleManager({
                 </select>
               </label>
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                {t(
-                  'standardUsersCanUseSimpleChatAndManualTasksServerSettingsAgentsAutomationsAndTe4c76bab1',
-                )}
+                {t('standardProjectPermissionsHelp')}
               </p>
               {form.role === 'administrator' &&
                 !people.data?.people.find((person) => person.id === editing)

@@ -31,8 +31,6 @@ services:
       WEBUI_PROTECTED_PATHS: /home/codex,/run/secrets,/app,/proc,/sys,/dev,/etc,/root,/appdata/mergeron
       WORKSPACE_ROOTS: /workspaces,/appdata
       LOG_LEVEL: info
-      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
-      OPENAI_CHAT_MODEL: gpt-5-mini
       HTTP_PROXY: http://mergeron-squid:3128
       HTTPS_PROXY: http://mergeron-squid:3128
       ALL_PROXY: http://mergeron-squid:3128
@@ -48,7 +46,6 @@ services:
       - ${MERGERON_APPDATA_ROOT:-${STATE_ROOT}/appdata}:/appdata
       - ${STATE_ROOT}/logs:/app/logs
       - ${STATE_ROOT}/backend-token.txt:/run/secrets/backend_token:ro
-      - ${STATE_ROOT}/openai-api-key.txt:/run/secrets/openai_api_key:ro
       - ${STATE_ROOT}/ssh:/home/codex/.ssh:ro
       - ${STATE_ROOT}/manager-run:/run/mergeron-manager
     networks:

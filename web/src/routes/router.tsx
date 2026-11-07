@@ -23,7 +23,6 @@ export type LoginSearch = {
   renew?: boolean;
 };
 export type IntegrationsSearch = { tab: 'plugins' | 'apps' | 'mcps' };
-export type SimpleChatSearch = { thread?: string };
 
 const INTEGRATION_TABS = ['plugins', 'apps', 'mcps'] as const;
 
@@ -61,10 +60,7 @@ const DiagnosticsRoute = lazyRouteComponent(
   'DiagnosticsRoute',
 );
 const LogsRoute = lazyRouteComponent(() => import('./logs-route'), 'LogsRoute');
-const SimpleChatRoute = lazyRouteComponent(
-  () => import('./simple-chat-route'),
-  'SimpleChatRoute',
-);
+
 const ProjectResourceRoute = lazyRouteComponent(
   () => import('./project-resource-route'),
   'ProjectResourceRoute',
@@ -201,17 +197,6 @@ const logsRoute = createRoute({
 });
 
 /** General-purpose low-cost chat backed directly by the OpenAI API. */
-export const simpleChatRoute = createRoute({
-  getParentRoute: () => authenticatedRoute,
-  path: '/simple-chat',
-  validateSearch: (search: Record<string, unknown>): SimpleChatSearch => ({
-    thread:
-      typeof search.thread === 'string' && search.thread
-        ? search.thread
-        : undefined,
-  }),
-  component: SimpleChatRoute,
-});
 
 const projectResourceRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
@@ -273,7 +258,7 @@ const routeTree = rootRoute.addChildren([
     terminalRoute,
     diagnosticsRoute,
     logsRoute,
-    simpleChatRoute,
+
     projectRoute,
     projectResourceRoute,
     projectArchivesRoute,

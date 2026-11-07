@@ -1734,7 +1734,7 @@ export const agentMonitorRuns = sqliteTable(
   ],
 );
 
-/** Lightweight OpenAI API conversations, separate from Codex work threads. */
+/** Retired storage, emptied by migration 0073. No conversation creation API remains. */
 export const simpleChatThreads = sqliteTable(
   'simple_chat_threads',
   {

@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { nullableStringEnumSchema } from '../../codex/dto/v2/openapi.schema';
 
 export const ACCOUNT_LOGIN_TYPES = [
-  'apiKey',
   'chatgpt',
   'chatgptDeviceCode',
   'chatgptAuthTokens',
@@ -96,9 +95,6 @@ export class AccountReadResponseDto {
 export class LoginAccountDto {
   @ApiProperty({ enum: ACCOUNT_LOGIN_TYPES })
   type!: (typeof ACCOUNT_LOGIN_TYPES)[number];
-
-  @ApiPropertyOptional({ description: 'Required for API key login.' })
-  apiKey?: string;
 
   @ApiPropertyOptional({
     description: 'Required for externally managed ChatGPT token login.',

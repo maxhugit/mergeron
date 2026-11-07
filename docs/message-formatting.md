@@ -11,8 +11,7 @@ entre les demandes et les réponses. Une liste démarrant à 3 conserve ce numé
 les alignements gauche, centre et droite des tableaux sont respectés.
 
 Les nouvelles demandes gardent leurs espaces et sauts de ligne à l’envoi et à
-l’enregistrement. Un texte composé uniquement d’espaces reste refusé. Cela vaut
-également pour le texte envoyé depuis Chat simple. Les espaces déjà supprimés
+l’enregistrement. Un texte composé uniquement d’espaces reste refusé. Les espaces déjà supprimés
 par une ancienne version ne peuvent pas être reconstitués ; les retours internes
 encore présents dans l’historique bénéficient immédiatement du nouveau rendu.
 

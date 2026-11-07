@@ -1,6 +1,6 @@
 # Copier une réponse avec mise en forme
 
-Dans les conversations simples et les conversations avec un agent, le bouton
+Dans les conversations avec un agent, le bouton
 est une icône dans le coin supérieur droit de chaque réponse. Sur ordinateur,
 elle apparaît uniquement au survol de cette réponse ou au focus clavier.
 Le libellé « Copier avec mise en forme » apparaît dans l’infobulle, pas dans

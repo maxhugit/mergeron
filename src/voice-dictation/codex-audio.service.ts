@@ -28,7 +28,7 @@ const owner = () => {
 };
 const unavailable = (reason: string) =>
   BusinessException.badRequest(
-    ErrorCode.simpleChat.upstreamFailed,
+    ErrorCode.voiceDictation.upstreamFailed,
     `Dictée Codex CLI indisponible : ${reason} Aucun repli vers la clé API n’a été effectué.`,
   );
 
@@ -47,7 +47,7 @@ export class CodexAudioService implements OnModuleDestroy {
     if (!wav.length)
       return Promise.reject(
         BusinessException.badRequest(
-          ErrorCode.simpleChat.audioRequired,
+          ErrorCode.voiceDictation.audioRequired,
           'Voice recording is empty',
         ),
       );
@@ -69,7 +69,7 @@ export class CodexAudioService implements OnModuleDestroy {
       !/^m=application /m.test(offer)
     )
       throw BusinessException.badRequest(
-        ErrorCode.simpleChat.audioInvalid,
+        ErrorCode.voiceDictation.audioInvalid,
         'Offre WebRTC audio invalide.',
       );
     if (this.active) throw unavailable('une dictée est déjà en cours.');

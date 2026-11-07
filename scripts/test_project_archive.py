@@ -183,7 +183,7 @@ class ProjectArchiveTest(unittest.TestCase):
                 with engine.connect(self.target_db) as db:
                     pid = result['projectId']
                     self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
-                    self.assertEqual(db.execute('SELECT count(*) FROM simple_chat_threads WHERE project_id=?', (pid,)).fetchone()[0], int(selection in (['conversations'], ['work'])))
+                    self.assertEqual(db.execute('SELECT count(*) FROM simple_chat_threads WHERE project_id=?', (pid,)).fetchone()[0], 0)
                     resources = db.execute('SELECT count(*) FROM project_resources WHERE project_id=?', (pid,)).fetchone()[0]
                     self.assertEqual(resources, int(selection == ['work']))
                     self.assertEqual(db.execute('SELECT count(*) FROM project_agent_threads WHERE project_id=?', (pid,)).fetchone()[0], int(selection in (['conversations'], ['work'])))
@@ -212,7 +212,7 @@ class ProjectArchiveTest(unittest.TestCase):
             child = db.execute("SELECT * FROM project_tasks WHERE title='Enfant'").fetchone()
             self.assertEqual(child['parent_task_id'], parent['id'])
             self.assertNotEqual(parent['id'], 'task')
-            self.assertEqual(db.execute('SELECT content FROM simple_chat_messages').fetchone()[0], 'Bonjour')
+            self.assertEqual(db.execute('SELECT count(*) FROM simple_chat_messages').fetchone()[0], 0)
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
             self.assertEqual(db.execute('SELECT count(*) FROM projects').fetchone()[0], 1)
 
@@ -680,7 +680,7 @@ class ProjectArchiveTest(unittest.TestCase):
                              (connection['id'], resource['root_path']))
             self.assertEqual(db.execute('SELECT count(*) FROM project_workspace_secrets').fetchone()[0], 0)
 
-    def test_chat_attachments_are_copied_and_relinked(self):
+    def test_legacy_chat_attachments_are_preserved_without_recreating_messages(self):
         upload = self.home / 'webui-uploads/image.png'
         upload.parent.mkdir()
         upload.write_bytes(b'image-data')
@@ -692,7 +692,7 @@ class ProjectArchiveTest(unittest.TestCase):
         self.assertEqual(len(copies), 1)
         self.assertEqual(copies[0].read_bytes(), b'image-data')
         with engine.connect(self.target_db) as db:
-            self.assertEqual(db.execute('SELECT content FROM simple_chat_messages').fetchone()[0], 'Image: ' + str(copies[0].resolve()))
+            self.assertEqual(db.execute('SELECT count(*) FROM simple_chat_messages').fetchone()[0], 0)
 
     def test_native_commit_is_compensated_if_filesystem_publication_fails(self):
         self.add_agent()

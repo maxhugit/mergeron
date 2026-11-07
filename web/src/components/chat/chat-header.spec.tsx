@@ -4,10 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatHeader } from './chat-header';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useTimelineStore } from '@/stores/timeline-store';
-import { simpleChatThreadsQueryKey } from '@/lib/simple-chat-api';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 
-let pathname = '/simple-chat';
+let pathname = '/';
 let search: { thread?: string; section?: string } = {};
 
 vi.mock('@tanstack/react-router', () => ({
@@ -33,21 +32,8 @@ vi.mock('./mcp-status-badge', () => ({
   McpStatusBadge: () => null,
 }));
 
-function renderHeader(simpleChatTitle?: string) {
+function renderHeader() {
   const client = new QueryClient();
-  if (simpleChatTitle) {
-    client.setQueryData(simpleChatThreadsQueryKey, {
-      threads: [
-        {
-          id: 'simple-123',
-          title: simpleChatTitle,
-          model: 'gpt-5-mini',
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      ],
-    });
-  }
   return render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
@@ -60,7 +46,7 @@ function renderHeader(simpleChatTitle?: string) {
 describe('ChatHeader', () => {
   beforeEach(() => {
     vi.mocked(useBreakpoint).mockReturnValue('desktop');
-    pathname = '/simple-chat';
+    pathname = '/';
     search = {};
     useTimelineStore
       .getState()
@@ -90,27 +76,6 @@ describe('ChatHeader', () => {
     renderHeader();
     expect(screen.getByText('Read only')).toBeInTheDocument();
     expect(screen.queryByText('Archived read-only')).toBeNull();
-  });
-
-  it('shows the selected Simple Chat title in the global header', () => {
-    search = { thread: 'simple-123' };
-    renderHeader('Actualités tech');
-
-    expect(
-      screen.getByRole('heading', { name: 'Actualités tech' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'Mergeron' }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('does not leak the cached Codex thread title into Simple Chat', () => {
-    renderHeader();
-
-    expect(
-      screen.getByRole('heading', { name: 'Mergeron' }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Titre conservé')).not.toBeInTheDocument();
   });
 
   it('shows the active title on an actual Codex thread route', () => {

@@ -9,7 +9,7 @@ utilisent toute la largeur du contenu disponible.
 
 | Onglet                                             | Champs et fonctions conservés                                                                                                                                                                                                                                                                             |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Compte                                             | Identité, fournisseur, URL masquée, variable et état des identifiants ; quotas et crédits selon le compte ; actualisation, connexion ChatGPT ou clé API, changement de compte et déconnexion.                                                                                                             |
+| Compte                                             | Identité, fournisseur, URL masquée, variable et état des identifiants ; quotas et crédits selon le compte ; actualisation, connexion ChatGPT, changement de compte et déconnexion.                                                                                                                        |
 | Codex CLI                                          | Versions, intégrité, paquet du Manager et empreinte, vérification, installation validée, installation/mise à jour officielle lorsqu’autorisée, restauration précédente, confirmations et notes de version.                                                                                                |
 | Agents locaux                                      | Activation, URL privée, modèles autorisés, contexte ; enregistrement, vérification et redémarrage conditionnel des métadonnées. Le bouton de soumission conserve explicitement le formulaire propriétaire.                                                                                                |
 | Profil                                             | Profil actif, uniquement lorsque des profils sont configurés.                                                                                                                                                                                                                                             |
@@ -87,23 +87,12 @@ n’expose pas d’annulation de l’opération déjà reçue par le CLI : elle 
 côté serveur, sans mettre à jour la vue quittée. L’ouverture d’un projet ne
 précharge plus les catalogues.
 
-## Chat et Audio
+## Dictée avec Codex CLI
 
-Les réglages du chat simple sont regroupés dans **Codex → Chat et Audio**,
-entre les onglets Modèle et Instructions. L’ancienne URL
-`/settings?section=simpleChat` ouvre ce même onglet ; l’entrée séparée de la
-sidebar est retirée. Cet onglet reste accessible sans connexion Codex pour
-permettre la configuration du mode API.
-
-Deux choix indépendants sont enregistrés côté serveur :
-
-- moteur du chat : clé API OpenAI ou session Codex CLI ;
-- moteur de dictée : clé API OpenAI ou **Codex CLI — expérimental**.
-
-Sans réglage audio explicite, la dictée suit le moteur du chat. Après un choix
-audio enregistré, changer le moteur du chat ne le modifie plus. La clé API est
-commune aux fonctions qui choisissent explicitement ce moteur ; elle n’est jamais
-utilisée comme repli en cas d’échec du CLI.
+La dictée utilise uniquement le compte ChatGPT authentifié dans le CLI. Elle ne
+possède plus de sélecteur de fournisseur ni de clé API propre à Mergeron. La
+connexion du compte se prépare dans **Codex → Compte**, et l’exécutable dans
+**Codex CLI**. Les agents locaux Ollama conservent leurs réglages distincts.
 
 ### Dictée CLI expérimentale
 
@@ -115,8 +104,7 @@ TOML et bloquer `thread/start`, même pour un serveur désactivé. Les délais
 numériques renseignés sont conservés ; les configurations MCP enregistrées ne
 sont pas modifiées.
 
-Le moteur API conserve l’enregistrement WAV PCM16 mono 24 kHz. Pour le moteur
-CLI, le navigateur ouvre le microphone et génère une offre WebRTC avec une piste
+Le navigateur ouvre le microphone et génère une offre WebRTC avec une piste
 audio et le canal `oai-events`. `CodexAudioService` négocie cette offre via
 `thread/realtime/start` (`transport.type: "webrtc"`) et attend la notification
 `thread/realtime/sdp`, pas seulement l’accusé de réception RPC. Le CLI utilise
@@ -258,9 +246,7 @@ Si un projet contient plusieurs répertoires indépendants, son seul regroupemen
 dans le WebUI ne suffit pas à rendre ces fichiers communs : définir explicitement
 leur emplacement et leur accès pour chaque espace de travail.
 
-Cette méthode vise les conversations exécutées par Codex. Le chat simple utilisant
-directement l'API OpenAI n'importe pas automatiquement ces fichiers : une
-fonction d'injection du contexte serait nécessaire pour lui donner le même accès.
+Cette méthode vise les agents exécutés par Codex.
 
 Références officielles :
 [configuration](https://learn.chatgpt.com/docs/config-file/config-reference) et
@@ -286,7 +272,7 @@ son interface : une mise à jour du WebUI peut également être nécessaire.
 ## Enregistrement par onglet
 
 Les formulaires Codex et les paramètres serveur généraux, terminal, fichiers,
-sécurité et chat simple utilisent une barre d'enregistrement fixe en bas de page.
+et sécurité utilisent une barre d'enregistrement fixe en bas de page.
 Dans Codex, seul l'onglet actif est enregistré. Ses autres brouillons sont gardés
 pendant la navigation entre les sous-onglets. Annuler rétablit les valeurs de cet
 onglet. Les champs Codex sont validés avant un envoi groupé.
@@ -361,3 +347,27 @@ l'image ne supprime pas cette sélection.
 
 Les versions téléchargées sont conservées pour faciliter les retours arrière ;
 aucune purge automatique de ce répertoire persistant n'est effectuée.
+
+## Retrait du mode de conversation historique
+
+La migration `0075_retire_simple_conversations` supprime les conversations légères
+et leurs messages, les propriétaires et références de dossiers associés, ainsi
+que les anciens choix de moteur. Elle nettoie les liens des tâches, livrables et
+l’ordre de la sidebar en conservant les agents, documents, fichiers, versions,
+connaissances déjà acceptées et historique de validation. Les propositions de
+connaissances conservent leur contenu et leur historique, sans lien d’ouverture
+vers une conversation supprimée.
+
+Les API de ce mode et le client direct `/v1/responses` sont retirés. La connexion
+par clé API n’est plus proposée dans Compte Codex et le serveur refuse ce type de
+nouvelle connexion. La dictée WebRTC a ses propres routes `voice-dictation` et
+les rapports d’automatisation passent par un échange CLI éphémère en lecture
+seule. Les agents locaux restent disponibles.
+
+Effectuer une sauvegarde avant cette migration : la suppression des conversations
+n’est pas réversible depuis l’application. Un retour à l’ancienne version exige
+une restauration cohérente de la sauvegarde. Les imports de ZIP historiques
+ignorent désormais ces conversations ; ils ne peuvent pas les réintroduire.
+Les anciens fichiers de secret fournis par l’hôte et les sauvegardes existantes
+ne sont pas purgés : l’application ne les lit plus pour ce mode et les nouveaux
+modèles d’installation ne demandent plus leur montage.

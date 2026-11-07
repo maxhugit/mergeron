@@ -130,7 +130,7 @@ export function AccountSettings() {
         <div className="flex flex-wrap gap-2">
           <Button size="sm" className="h-8" onClick={() => setLoginOpen(true)}>
             <KeyRound className="h-3.5 w-3.5" />
-            {isChatGpt ? t('switchAccount') : t('loginWithChatGptOrApiKey')}
+            {isChatGpt ? t('switchAccount') : t('loginWithChatGpt')}
           </Button>
           {canLogout && (
             <Button

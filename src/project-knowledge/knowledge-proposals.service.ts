@@ -68,7 +68,7 @@ export class KnowledgeProposalsService {
   capture(
     projectId: string,
     source: {
-      sourceType: 'agent' | 'simple';
+      sourceType: 'agent';
       threadId: string;
       sourceId: string;
     },
