@@ -1268,6 +1268,13 @@
             ]
           },
           {
+            "title": "Ask an agent to attach itself",
+            "paragraphs": [
+              "In a project agent, explicitly ask “Attach yourself to the deliverable you just created.” It reads the record, then uses the MCP self-assignment tool. Creation alone does not trigger assignment.",
+              "Only the calling agent can attach itself, within its project, with administrator execution authority and a writable turn. Stale versions and conflicting assignments are refused. Its working reference, documents and current-turn permissions are preserved; linked context appears on the next exchange."
+            ]
+          },
+          {
             "title": "Check production",
             "paragraphs": [
               "The linked deliverable brief, criteria and folder provide context. The link does not remove the need to check the active folder and permissions.",

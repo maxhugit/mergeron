@@ -46,25 +46,26 @@ une collection, `get` le détail d’un élément et `read` une consultation reg
 plusieurs opérations. `prepare` ne démarre ni ne publie ; `manage` regroupe des
 opérations explicites et bornées. Le champ `operation` garde ses valeurs actuelles.
 
-| Ancien nom accepté         | Nom canonique exposé         |
-| -------------------------- | ---------------------------- |
-| `get_project`              | `project_get`                |
-| `list_tasks`               | `project_task_list`          |
-| `get_task`                 | `project_task_get`           |
-| `create_task`              | `project_task_create`        |
-| `list_deliverables`        | `project_deliverable_list`   |
-| `get_deliverable`          | `project_deliverable_get`    |
-| `create_deliverable`       | `project_deliverable_create` |
-| `list_project_connections` | `project_connection_list`    |
-| `create_project_git_copy`  | `project_git_copy_create`    |
-| `read_project_git`         | `project_git_read`           |
-| `prepare_project_git`      | `project_git_local_manage`   |
-| `publish_project_git`      | `project_git_publish`        |
-| `local_browser_action`     | `local_browser_interact`     |
-| `rename_agent`             | `agent_rename`               |
+| Ancien nom accepté         | Nom canonique exposé               |
+| -------------------------- | ---------------------------------- |
+| `get_project`              | `project_get`                      |
+| `list_tasks`               | `project_task_list`                |
+| `get_task`                 | `project_task_get`                 |
+| `create_task`              | `project_task_create`              |
+| `list_deliverables`        | `project_deliverable_list`         |
+| `get_deliverable`          | `project_deliverable_get`          |
+| `create_deliverable`       | `project_deliverable_create`       |
+| `attach_deliverable`       | `project_deliverable_agent_manage` |
+| `list_project_connections` | `project_connection_list`          |
+| `create_project_git_copy`  | `project_git_copy_create`          |
+| `read_project_git`         | `project_git_read`                 |
+| `prepare_project_git`      | `project_git_local_manage`         |
+| `publish_project_git`      | `project_git_publish`              |
+| `local_browser_action`     | `local_browser_interact`           |
+| `rename_agent`             | `agent_rename`                     |
 
 Les familles `agent_monitor_*`, `project_preview_*` et `local_browser_read` ne
-changent pas. Seuls les 21 noms canoniques apparaissent dans `tools/list`, sans
+changent pas. Seuls les noms canoniques du registre apparaissent dans `tools/list`, sans
 doublons. Les anciens noms restent acceptés pour les conversations déjà chargées :
 seul le nom d’un appel `tools/call` est traduit avant la validation du SDK. Les
 arguments, les droits, les limites de tour et les confirmations restent identiques.
@@ -98,6 +99,43 @@ La consigne exige une demande humaine explicite. Le champ `userRequest` est
 journalisé, mais n’est pas une preuve automatique de cette demande : aucune
 seconde confirmation humaine n’est ajoutée. Le serveur contrôle les permissions ;
 l’agent reste responsable de l’interprétation de la demande.
+
+### Se rattacher explicitement à un livrable
+
+Après une création, l’agent n’est pas affecté automatiquement. À la demande
+« Rattache-toi au livrable que tu viens de créer », il consulte
+`project_deliverable_get` puis appelle `project_deliverable_agent_manage` :
+
+```json
+{
+  "operation": "attach_self",
+  "requestId": "attach-presentation-01",
+  "resourceId": "deliverable-board-id",
+  "id": "deliverable-id",
+  "expectedVersion": 1,
+  "userRequest": "Rattache-toi au livrable Présentation."
+}
+```
+
+Le projet, la personne et l’agent sont déterminés par le tour authentifié.
+Aucun `threadId`, `projectId` ou propriétaire ne peut être choisi dans l’appel.
+L’opération exige un tour modifiable et les droits d’exécution administrateur.
+Elle respecte la confidentialité et les contraintes existantes : pas de
+remplacement d’un lien avec un autre livrable ni de tâche incompatible. Elle ne
+crée pas de sous-tâche, ne change pas le statut et ne publie aucun document.
+
+Une version périmée est refusée ; relire le livrable avant une nouvelle demande.
+Un `requestId` identique avec les mêmes arguments renvoie le résultat confirmé
+sans doubler le lien, la révision ou l’activité `agent_assigned`. Réutiliser cet
+identifiant pour une autre demande est refusé. L’association, l’activité et le
+résultat durable sont atomiques. Si le lien a été retiré depuis, un ancien reçu
+ne constitue pas une confirmation actuelle.
+
+Le dossier de référence de l’agent est conservé, notamment sa copie Git. Le
+contexte du livrable lié apparaît au prochain échange (`contextEffective:
+"next_turn"`) ; les permissions du tour courant ne sont pas élargies. Les
+publications restent obligatoirement versionnées. Les listes et le détail du
+livrable permettent de vérifier `linkedToThisConversation` après l’opération.
 
 ### Documentation dans l’administration
 
@@ -137,7 +175,8 @@ doit pas être rejouée sous un nouvel identifiant sans vérifier le nom actuel.
 Créer un livrable crée sa fiche et son dossier, **pas une version de document**.
 Les documents conservés passent toujours par « Enregistrer une nouvelle version »
 et le circuit de brouillon isolé existant. Aucun outil projet n’accepte de contenu
-de fichier, chemin arbitraire, changement de statut, affectation ou validation.
+de fichier, chemin arbitraire, changement de statut ou validation. Le seul
+rattachement disponible est celui de la conversation appelante, décrit ci-dessous.
 La protection des documents publiés reste applicable, y compris en accès complet.
 
 Le MCP métier ne dépend ni du client Python ni de l’activation de la protection

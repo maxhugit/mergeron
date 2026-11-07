@@ -981,7 +981,7 @@ describe('native internal MCP over HTTP', () => {
     expect(JSON.stringify(catalog)).not.toContain('Bearer ');
   });
 
-  it('executes all seven native tools, creates real entities and preserves idempotency', async () => {
+  it('executes native project tools including explicit self-assignment, creates real entities and preserves idempotency', async () => {
     const { client } = await connect();
     activate();
     const project = await client.callTool({
@@ -1047,6 +1047,43 @@ describe('native internal MCP over HTTP', () => {
         })
       ).structuredContent,
     ).toMatchObject({ title: 'Presentation', linkedToThisConversation: false });
+    const current = await client.callTool({
+      name: 'project_deliverable_get',
+      arguments: { id: itemId },
+    });
+    const attachArgs = {
+      requestId: 'attach-created-1',
+      operation: 'attach_self',
+      resourceId: 'deliverables',
+      id: itemId,
+      expectedVersion: (current.structuredContent as { version: number })
+        .version,
+      userRequest: 'Attach yourself to the deliverable you just created.',
+    };
+    const attached = await client.callTool({
+      name: 'project_deliverable_agent_manage',
+      arguments: attachArgs,
+    });
+    expect(attached.isError).not.toBe(true);
+    expect(attached.structuredContent).toMatchObject({
+      id: itemId,
+      threadId: 'agent',
+      status: 'attached',
+    });
+    expect(
+      await client.callTool({
+        name: 'project_deliverable_agent_manage',
+        arguments: attachArgs,
+      }),
+    ).toEqual(attached);
+    const refreshed = await client.callTool({
+      name: 'project_deliverable_get',
+      arguments: { id: itemId },
+    });
+    expect(refreshed.structuredContent).toMatchObject({
+      linkedToThisConversation: true,
+    });
+
     expect(
       database.db
         .select()

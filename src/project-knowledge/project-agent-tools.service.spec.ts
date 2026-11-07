@@ -520,4 +520,268 @@ describe('project context and business tools', () => {
       expect(deliverables.agentCatalog('p')).toHaveLength(0);
     });
   });
+  const attachInput = (
+    id: string,
+    expectedVersion: number,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    tool: 'attach_deliverable',
+    operation: 'attach_self',
+    requestId: 'attach-1',
+    resourceId: 'deliverables',
+    id,
+    expectedVersion,
+    userRequest: 'Attach yourself to this deliverable.',
+    ...extra,
+  });
+  const attach = (
+    input: Record<string, unknown>,
+    writable = true,
+    check = () => {},
+  ) => tools.execute('agent', input, check, 'turn-1', writable);
+
+  it('attaches the calling agent to its newly created deliverable, audits once and replays safely', async () => {
+    await asPerson('admin', async () => {
+      const created = (await tools.execute(
+        'agent',
+        create('create_deliverable'),
+      )) as { id: string };
+      const item = deliverables.get('p', 'deliverables', created.id);
+      const beforeFolder = new ActiveFoldersService(database.db).get(
+        'agent',
+        'agent',
+      );
+      const input = attachInput(item.id, item.version);
+      const result = await attach(input);
+      expect(result).toMatchObject({
+        id: item.id,
+        threadId: 'agent',
+        status: 'attached',
+        version: item.version + 1,
+        contextEffective: 'next_turn',
+      });
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([{ type: 'agent', id: 'agent' }]);
+      expect(
+        new ActiveFoldersService(database.db).get('agent', 'agent'),
+      ).toEqual(beforeFolder);
+      expect(await attach(input)).toEqual(result);
+      expect(deliverables.get('p', 'deliverables', item.id).version).toBe(
+        item.version + 1,
+      );
+      expect(
+        database.db
+          .select()
+          .from(projectActivity)
+          .all()
+          .filter((x) => x.action === 'agent_assigned'),
+      ).toHaveLength(1);
+      const binding = database.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.threadId, 'agent'))
+        .get();
+      expect(binding?.projectId).toBe('p');
+    });
+  });
+  it('does not duplicate a pre-existing attachment with a new request', async () => {
+    await asPerson('admin', async () => {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Self',
+      });
+      await attach(attachInput(item.id, item.version));
+      const current = deliverables.get('p', 'deliverables', item.id);
+      expect(
+        await attach(
+          attachInput(item.id, current.version, { requestId: 'attach-2' }),
+        ),
+      ).toMatchObject({ status: 'already_attached', version: current.version });
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toHaveLength(1);
+    });
+  });
+  it('refuses stale versions without a partial assignment or a receipt', async () => {
+    await asPerson('admin', async () => {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Stale',
+      });
+      await expect(
+        attach(attachInput(item.id, item.version + 1)),
+      ).rejects.toThrow('Deliverable changed');
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([]);
+      expect(
+        database.db.select().from(projectAgentToolRequests).all(),
+      ).toHaveLength(0);
+    });
+  });
+  it.each([
+    ['threadId', 'other-agent'],
+    ['projectId', 'other'],
+    ['operation', 'detach'],
+  ])('rejects caller-selected identity or operation %s', async (key, value) => {
+    await asPerson('admin', async () => {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Self only',
+      });
+      await expect(
+        attach(attachInput(item.id, item.version, { [key]: value })),
+      ).rejects.toThrow();
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([]);
+    });
+  });
+  it('refuses read-only execution, non-administrators and foreign managers', async () => {
+    const item = await asPerson('admin', () =>
+      deliverables.create('p', 'deliverables', { title: 'Protected' }),
+    );
+    await asPerson('admin', async () => {
+      await expect(
+        attach(attachInput(item.id, item.version), false),
+      ).rejects.toThrow('writable');
+      await expect(
+        attach(attachInput(item.id, item.version, { resourceId: 'foreign' })),
+      ).rejects.toThrow('this project');
+    });
+    await expect(
+      asPerson('reader', () => attach(attachInput(item.id, item.version))),
+    ).rejects.toThrow();
+    expect(
+      database.db.select().from(projectAgentToolRequests).all(),
+    ).toHaveLength(0);
+  });
+  it('never replaces an assignment to another deliverable', async () => {
+    await asPerson('admin', async () => {
+      const first = await deliverables.create('p', 'deliverables', {
+        title: 'First',
+      });
+      const second = await deliverables.create('p', 'deliverables', {
+        title: 'Second',
+      });
+      await attach(attachInput(first.id, first.version));
+      await expect(
+        attach(
+          attachInput(second.id, second.version, { requestId: 'attach-2' }),
+        ),
+      ).rejects.toThrow();
+      expect(
+        deliverables.get('p', 'deliverables', first.id).conversations,
+      ).toHaveLength(1);
+      expect(
+        deliverables.get('p', 'deliverables', second.id).conversations,
+      ).toEqual([]);
+    });
+  });
+  it('rejects incompatible task assignments instead of changing the task', async () => {
+    await asPerson('admin', async () => {
+      const task = (await tools.execute('agent', create())) as { id: string };
+      database.db
+        .update(projectTasks)
+        .set({ linkedThreadId: 'agent' })
+        .where(eq(projectTasks.id, task.id))
+        .run();
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Unrelated task',
+      });
+      await expect(
+        attach(attachInput(item.id, item.version)),
+      ).rejects.toThrow();
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([]);
+      expect(
+        database.db
+          .select()
+          .from(projectTasks)
+          .where(eq(projectTasks.id, task.id))
+          .get()?.linkedThreadId,
+      ).toBe('agent');
+    });
+  });
+  it('rolls back the association and reference if the activity log cannot commit', async () => {
+    await asPerson('admin', async () => {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Atomic',
+      });
+      const before = new ActiveFoldersService(database.db).get(
+        'agent',
+        'agent',
+      );
+      vi.spyOn(domain, 'recordActivity').mockImplementation(() => {
+        throw new Error('Audit unavailable');
+      });
+      await expect(attach(attachInput(item.id, item.version))).rejects.toThrow(
+        'Audit unavailable',
+      );
+      expect(deliverables.get('p', 'deliverables', item.id).version).toBe(
+        item.version,
+      );
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([]);
+      expect(
+        new ActiveFoldersService(database.db).get('agent', 'agent'),
+      ).toEqual(before);
+      expect(
+        database.db.select().from(projectAgentToolRequests).all(),
+      ).toHaveLength(0);
+    });
+  });
+  it('rechecks the active turn before committing and rejects reuse for another request', async () => {
+    await asPerson('admin', async () => {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Lease',
+      });
+      let calls = 0;
+      await expect(
+        attach(attachInput(item.id, item.version), true, () => {
+          if (++calls > 1) throw new Error('Stopped');
+        }),
+      ).rejects.toThrow('Stopped');
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([]);
+      await attach(attachInput(item.id, item.version));
+      await expect(
+        attach(
+          attachInput(item.id, item.version, {
+            userRequest: 'A different request',
+          }),
+        ),
+      ).rejects.toThrow('Request id already used');
+    });
+  });
+  it('rolls back an attachment if the turn expires immediately before commit', async () => {
+    await asPerson('admin', async () => {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Final lease check',
+      });
+      let calls = 0;
+      await expect(
+        attach(attachInput(item.id, item.version), true, () => {
+          if (++calls > 2) throw new Error('Expired at commit');
+        }),
+      ).rejects.toThrow('Expired at commit');
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([]);
+      expect(deliverables.get('p', 'deliverables', item.id).version).toBe(
+        item.version,
+      );
+      expect(
+        database.db.select().from(projectAgentToolRequests).all(),
+      ).toHaveLength(0);
+      expect(
+        database.db
+          .select()
+          .from(projectActivity)
+          .all()
+          .filter((x) => x.action === 'agent_assigned'),
+      ).toHaveLength(0);
+    });
+  });
 });
