@@ -2,7 +2,7 @@ import {
   projectsApi,
   type ProjectWorkspaceResourceSummary,
   type ProjectWorkspaceCopySummary,
-  type ProjectSummary,
+  type ProjectWorkspaceSummary,
 } from './projects-api';
 
 export interface ProjectConnection {
@@ -104,7 +104,9 @@ export function connectionResourceViews(inventory: ProjectLocationInventory) {
 }
 
 export function projectDirectorySelection(
-  project: Pick<ProjectSummary, 'id' | 'workspaces'>,
+  project: {
+    workspaces: ReadonlyArray<Pick<ProjectWorkspaceSummary, 'id' | 'path'>>;
+  },
   directory: string,
 ) {
   const workspace = [...(project.workspaces ?? [])]
