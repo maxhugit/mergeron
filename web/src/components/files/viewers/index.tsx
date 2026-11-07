@@ -149,6 +149,7 @@ export function FileContentViewer({
               documentId={documentId}
               viewId={viewId}
               active={active}
+              readOnly={readOnly}
             />
           ) : (
             <ReadOnlyCodeViewer source={previewSource} />

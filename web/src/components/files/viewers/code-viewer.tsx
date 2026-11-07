@@ -20,6 +20,7 @@ import {
 } from '@/stores/document-store';
 import { useWorkspaceStore, EMPTY_FILE_VIEW } from '@/stores/workspace-store';
 import { showSnackbar } from '@/stores/snackbar-store';
+import { MarkdownDocument } from './markdown-document';
 import { SaveAsDialog } from '@/components/files/save-as-dialog';
 
 interface Props {
@@ -27,6 +28,7 @@ interface Props {
   documentId?: string;
   viewId: string;
   active: boolean;
+  readOnly?: boolean;
 }
 
 /** Mounts one editor without owning, resetting, or disposing the document's working text. */
@@ -35,6 +37,7 @@ export function CodeViewer({
   documentId: stableDocumentId,
   viewId,
   active,
+  readOnly = false,
 }: Props) {
   const { t } = useTranslation();
   const document = useDocumentStore((s) => {
@@ -45,6 +48,10 @@ export function CodeViewer({
   const [editor, setEditor] = useState<Parameters<OnMount>[0] | null>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const documentId = useRef<string | null>(null);
+  const markdown = /\.(?:md|markdown|mdown)$/i.test(document?.path ?? filePath);
+  const mode = view.reveal ? 'edit' : (view.markdownMode ?? 'read');
+  const showEditor = !markdown || mode !== 'read';
+  const showPreview = markdown && mode !== 'edit';
 
   useEffect(() => {
     documentId.current = stableDocumentId
@@ -79,6 +86,7 @@ export function CodeViewer({
 
   useEffect(() => {
     if (
+      !showEditor ||
       !active ||
       !editor ||
       !document?.model ||
@@ -102,7 +110,7 @@ export function CodeViewer({
         }),
         'warning',
       );
-  }, [active, document?.model, editor, view.reveal, viewId, t]);
+  }, [active, showEditor, document?.model, editor, view.reveal, viewId, t]);
 
   useEffect(() => {
     if (!editor) return;
@@ -112,11 +120,11 @@ export function CodeViewer({
         event.browserEvent.key.toLowerCase() === 's'
       ) {
         event.preventDefault();
-        void saveDocument(documentId.current ?? filePath);
+        if (!readOnly) void saveDocument(documentId.current ?? filePath);
       }
     });
     return () => key.dispose();
-  }, [editor, filePath]);
+  }, [editor, filePath, readOnly]);
 
   if (!document?.model)
     return (
@@ -142,8 +150,35 @@ export function CodeViewer({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1 text-xs">
-        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-1 text-xs">
+        {markdown && (
+          <div
+            role="group"
+            aria-label={t('markdownViewMode')}
+            className="flex items-center gap-1"
+          >
+            {(['read', 'edit', 'split'] as const).map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={mode === value ? 'secondary' : 'ghost'}
+                aria-pressed={mode === value}
+                onClick={() =>
+                  useWorkspaceStore.getState().setMarkdownMode(viewId, value)
+                }
+              >
+                {t(
+                  value === 'read'
+                    ? 'markdownRead'
+                    : value === 'edit'
+                      ? 'edit'
+                      : 'markdownSplit',
+                )}
+              </Button>
+            ))}
+          </div>
+        )}
+        <span className="order-last w-full min-w-0 truncate text-muted-foreground md:order-none md:w-auto md:flex-1">
           {document.error ??
             (document.conflict
               ? t('fileChangedOnDiskYourUnsavedChangesAreRetained')
@@ -167,6 +202,7 @@ export function CodeViewer({
           className="h-7 w-7"
           title={t('saveCtrlS')}
           disabled={
+            readOnly ||
             document.detached ||
             document.saving ||
             document.loading ||
@@ -188,22 +224,35 @@ export function CodeViewer({
           </Button>
         )}
       </div>
-      <div className="min-h-0 flex-1">
-        <Editor
-          path={document.model.uri.toString()}
-          keepCurrentModel
-          saveViewState={false}
-          height="100%"
-          theme="vs-dark"
-          onMount={mount}
-          options={{
-            minimap: { enabled: false },
-            fontSize: 13,
-            wordWrap: 'on',
-            scrollBeyondLastLine: false,
-            padding: { top: 8 },
-          }}
-        />
+      <div
+        className={`flex min-h-0 min-w-0 flex-1 ${markdown && mode === 'split' ? 'flex-col md:flex-row' : ''}`}
+      >
+        <div className={`min-h-0 min-w-0 flex-1 ${showEditor ? '' : 'hidden'}`}>
+          <Editor
+            path={document.model.uri.toString()}
+            keepCurrentModel
+            saveViewState={false}
+            height="100%"
+            theme="vs-dark"
+            onMount={mount}
+            options={{
+              readOnly,
+              automaticLayout: true,
+              minimap: { enabled: false },
+              fontSize: 13,
+              wordWrap: 'on',
+              scrollBeyondLastLine: false,
+              padding: { top: 8 },
+            }}
+          />
+        </div>
+        {showPreview && (
+          <div
+            className={`min-h-0 min-w-0 flex-1 ${mode === 'split' ? 'border-t md:border-t-0 md:border-l' : ''}`}
+          >
+            <MarkdownDocument model={document.model} />
+          </div>
+        )}
       </div>
       {document.detached && (
         <SaveAsDialog

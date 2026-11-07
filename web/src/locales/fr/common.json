@@ -1660,5 +1660,10 @@
   "projectIntegrityTitle": "Cohérence des projets",
   "projectIntegrityDescription": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite. Les retraits disponibles passent par une corbeille récupérable, sans écrasement.",
   "loginWithChatGpt": "Se connecter avec ChatGPT",
-  "standardProjectPermissionsHelp": "Les utilisateurs standards peuvent consulter les projets autorisés et gérer les tâches et documents manuels. Les paramètres serveur, l’exécution des agents, les automatisations et le terminal sont réservés aux administrateurs."
+  "standardProjectPermissionsHelp": "Les utilisateurs standards peuvent consulter les projets autorisés et gérer les tâches et documents manuels. Les paramètres serveur, l’exécution des agents, les automatisations et le terminal sont réservés aux administrateurs.",
+  "markdownViewMode": "Affichage Markdown",
+  "markdownRead": "Lecture",
+  "markdownSplit": "Vue partagée",
+  "markdownContents": "Sommaire",
+  "markdownImage": "Image : {{alt}}"
 }
