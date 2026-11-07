@@ -18,7 +18,8 @@ se configurent dans l’assistant Web, sans fichier de compte à préparer.
 1. [Installer Mergeron avec le Manager](installation.md)
 2. [Variables du Manager : défauts, rôle et utilisation](variables-manager.md)
 3. [Raccordement réseau et SSO facultatif](installation-portable.md)
-4. [Architecture de Mergeron](architecture.md)
+4. [Architecture de Mergeron](architecture.md) : relais d’accès web permanents,
+   réseaux, sécurité et déroulement des mises à jour.
 5. [Fonctionnement du dépôt](fonctionnement-du-depot.md)
 6. [Configuration des intégrations facultatives](configuration-integrations.md)
 7. [Mergeron Manager](mergeron-manager.md)
