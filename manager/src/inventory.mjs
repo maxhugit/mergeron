@@ -124,6 +124,9 @@ function normalizedNames(container) {
 }
 
 function candidatesFor(component, containers) {
+  if (component.discovered)
+    return containers.filter((c) => c.Id === component.discoveredContainerId);
+
   const acceptedNames = new Set([
     component.canonicalName,
     ...(component.legacyNames ?? []),
@@ -131,7 +134,7 @@ function candidatesFor(component, containers) {
   return containers.filter((container) => {
     const labels = container.Labels ?? {};
     const labeledComponent =
-      labels[COMPONENT_LABEL] === component.id &&
+      labels[COMPONENT_LABEL] === (component.labelRole ?? component.id) &&
       (labels[STACK_LABEL] === component.stackName ||
         (component.stackName === 'mergeron' && !labels[STACK_LABEL]));
     return (
@@ -225,13 +228,27 @@ async function inspectComponent(component, containers, docker) {
   }
 
   const summary = candidates[0];
-  const inspect = await docker.inspectContainer(summary.Id);
+  let inspect;
+  try {
+    inspect = await docker.inspectContainer(summary.Id);
+  } catch (error) {
+    if (component.discovered && error.statusCode === 404) return null;
+    throw error;
+  }
+  if (
+    component.discovered &&
+    (inspect.Config?.Labels?.[MANAGED_LABEL] !== 'true' ||
+      inspect.Config?.Labels?.[STACK_LABEL] !== component.stackName ||
+      inspect.Config?.Labels?.[COMPONENT_LABEL] !== component.labelRole)
+  )
+    return null;
   const labels = inspect.Config?.Labels ?? summary.Labels ?? {};
   const networks = Object.keys(inspect.NetworkSettings?.Networks ?? {}).sort();
   const image = inspect.Config?.Image ?? summary.Image ?? null;
   const repository = imageRepository(image);
-  let imageRepositoryAllowed =
-    component.allowedImageRepositories.includes(repository);
+  let imageRepositoryAllowed = component.discovered
+    ? null
+    : component.allowedImageRepositories.includes(repository);
   if (
     component.id === 'browser' &&
     /^sha256:[a-f0-9]{64}$/.test(image ?? '') &&
@@ -247,11 +264,14 @@ async function inspectComponent(component, containers, docker) {
   return {
     id: component.id,
     ...(component.observational ? { observational: true } : {}),
+    ...(component.discovered
+      ? { discovered: true, role: component.labelRole }
+      : {}),
     displayName: component.displayName,
     state: componentState(inspect),
     adoption:
       labels[MANAGED_LABEL] === 'true' &&
-      labels[COMPONENT_LABEL] === component.id &&
+      labels[COMPONENT_LABEL] === (component.labelRole ?? component.id) &&
       (labels[STACK_LABEL] === component.stackName ||
         (component.stackName === 'mergeron' && !labels[STACK_LABEL]))
         ? 'managed'
@@ -296,14 +316,47 @@ export async function collectInventory(manifest, docker, now = new Date()) {
   const containers = await docker.listContainers();
   if (!Array.isArray(containers))
     throw new Error('Docker container inventory is invalid');
-  const [components, manager] = await Promise.all([
+  const declared = [
+    ...manifest.components,
+    ...(manifest.observedComponents ?? []),
+  ];
+  const represented = new Set(
+    declared.flatMap((c) =>
+      candidatesFor(c, containers).map((item) => item.Id),
+    ),
+  );
+  const discovered = containers
+    .filter(
+      (c) =>
+        !represented.has(c.Id) &&
+        c.Labels?.[MANAGED_LABEL] === 'true' &&
+        c.Labels?.[STACK_LABEL] === manifest.stack &&
+        /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(c.Labels?.[COMPONENT_LABEL] ?? ''),
+    )
+    .map((c) => ({
+      id: `container:${c.Labels[COMPONENT_LABEL]}:${c.Id}`,
+      labelRole: c.Labels[COMPONENT_LABEL],
+      displayName: normalizedNames(c)[0] ?? c.Labels[COMPONENT_LABEL],
+      discovered: true,
+      discoveredContainerId: c.Id,
+      observational: true,
+      canonicalName: normalizedNames(c)[0],
+      stackName: manifest.stack,
+      legacyNames: [],
+      allowedImageRepositories: [],
+      requiredNetworks: [],
+      protectedMounts: [],
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const [collected, manager] = await Promise.all([
     Promise.all(
-      [...manifest.components, ...(manifest.observedComponents ?? [])]
+      [...declared, ...discovered]
         .filter((c) => !c.observational || candidatesFor(c, containers).length)
         .map((component) => inspectComponent(component, containers, docker)),
     ),
     inspectManagerBuild(manifest, containers, docker),
   ]);
+  const components = collected.filter(Boolean);
   const protectedMounts = components.flatMap((component) =>
     component.protectedMounts.map((mount) => ({
       component: component.id,

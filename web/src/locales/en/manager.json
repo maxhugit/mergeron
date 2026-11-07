@@ -295,5 +295,6 @@
     "error": "Error — check the service",
     "disabled": "Disabled",
     "external": "External service"
-  }
+  },
+  "discoveredInfrastructure": "Additional stack container · role: {{role}}. Observation only; this listing does not add it to update plans or adoption records."
 }

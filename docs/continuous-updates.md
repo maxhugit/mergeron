@@ -110,7 +110,6 @@ HTTP final arrête le serveur applicatif local et exige toujours une réponse 20
 de la page de maintenance. Ces simulations complètent les tests transactionnels ;
 elles ne remplacent pas l’essai d’une mise à jour réelle sur la dev.
 
-
 Les images anciennes du Manager ne contiennent pas l’auxiliaire de remplacement.
 La première activation nécessite donc une installation contrôlée du Manager
 compatible sur l’hôte, avec conservation de son ancien conteneur. Le label
@@ -123,7 +122,6 @@ image sans une procédure de retrait du routage ; il conserve les instances en
 place. Leur propre évolution nécessite une maintenance distincte avec retrait,
 remplacement et vérification d’une seule instance à la fois. Une modification de
 leurs protections ou un échec de santé bloque l’activation du nouveau routage.
-
 
 Une installation historique dont tous les composants sont déjà marqués comme
 gérés peut légitimement ne pas posséder de registre d’adoption. La vérification
@@ -158,7 +156,6 @@ nouvelle configuration avant le renommage Docker. Il rétablit ensuite le routag
 par les nouveaux noms. Aucun conteneur n’est arrêté ou recréé. Un échec du
 routage final rétablit d’abord le routage par IP avant de restaurer les noms.
 
-
 ## Détection depuis les autres onglets
 
 Lors d’une reconnexion liée à une interruption de transport, l’interface consulte
@@ -175,3 +172,9 @@ droit métier. Sans autorisation de suivi, ou si le relais est indisponible, la
 reconnexion habituelle continue. Un refus d’accès ou changement d’identité reste
 bloquant. Après vérification de la session, la conversation et son brouillon
 reprennent dans le même onglet, sans rechargement complet.
+
+### Inventaire automatique des conteneurs supplémentaires
+
+L’écran **Infrastructure** affiche aussi les conteneurs supplémentaires portant les trois labels `io.mergeron.managed=true`, `io.mergeron.stack=<stack exacte>` et `io.mergeron.component=<rôle>`. Cette découverte s’applique aux relais d’accès web comme aux futurs services, sans liste de noms dans l’interface. Chaque réplique conserve une entrée distincte. Le Manager vérifie à nouveau les labels lors de l’inspection ; les conteneurs disparus ou passés dans une autre stack sont écartés.
+
+Ces entrées sont **observées uniquement** : leurs labels décrivent leur appartenance, sans approuver leur image ou leur configuration pour une opération. Elles ne modifient pas l’empreinte d’adoption, les protections des données du socle ou le plan de mise à jour. Les valeurs des variables d’environnement restent masquées selon la politique habituelle. La suppression d’un relais permanent coupe l’accès HTTP ; sa présence dans cet inventaire ne constitue pas une invitation à le nettoyer.
