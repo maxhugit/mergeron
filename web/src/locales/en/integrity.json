@@ -60,7 +60,7 @@
     "directoryMissing": "An empty directory can only be recreated when its identity and parent are verified and no registered content needs restoring.",
     "agentReferenceObsolete": "The migrated directory exists. The database reference can be realigned without moving data or changing permissions.",
     "agentOverrideObsolete": "The migrated directory exists. The remembered conversation directory can be realigned without changing its security policy.",
-    "activeFolderRegistrationMissing": "This item’s saved connection no longer exists. Confirm using Folders below, or choose another reference in its explorer.",
+    "activeFolderRegistrationMissing": "The connection saved for this item no longer exists. Open the corrections to confirm using the project folder, or choose another reference in the relevant item’s explorer.",
     "unregisteredCopy": "Inspect files and unpublished Git changes before relinking or cleaning up. No repository is deleted automatically."
   },
   "unknown": "Issue to review",
@@ -72,5 +72,13 @@
     "task": "Task",
     "deliverable": "Deliverable",
     "simpleChat": "Conversation"
-  }
+  },
+  "viewCorrections": "View corrections",
+  "viewCorrectionsFor": "Corrections: {{issue}} — {{target}}",
+  "correctionsTitle": "Suggested corrections",
+  "correctionsIntro": "Choose an action for this issue. A correction only runs after confirmation.",
+  "availableCorrections": "Available corrections",
+  "noAutomaticRepair": "No automatic correction is available for this issue. Follow the guidance above to locate or reconnect existing data.",
+  "openAgentReference": "Open the agent to choose another reference",
+  "issueResolved": "This issue is no longer present in the refreshed inspection."
 }

@@ -10,12 +10,17 @@ vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: true }),
 }));
 vi.mock('./project-integrity-api', () => ({ integrityRequest: vi.fn() }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  document.documentElement.classList.remove('dark');
+});
 for (const width of [390, 1100])
   test(`shows project anomalies and a confirmation without overflow at ${width}px`, async () => {
     await i18nReady;
     await i18n.changeLanguage('fr');
-    await page.viewport(width, 850);
+    const height = width === 390 ? 600 : 850;
+    await page.viewport(width, height);
+    document.documentElement.classList.add('dark');
     const root = '/workspaces/81f92635-f4b2-4b69-ba9c-cd8763336ad4';
     vi.mocked(integrityRequest).mockImplementation(async (p = '') =>
       p === ''
@@ -65,12 +70,45 @@ for (const width of [390, 1100])
     await page.screenshot({
       path: `../../../.vitest-screenshots/project-integrity-${width}.png`,
     });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Recréer ce dossier vide' }),
+    await page
+      .getByRole('button', { name: /^Corrections : Dossier attendu/ })
+      .click();
+    const dialog = await screen.findByRole('dialog');
+    await expect.poll(() => getComputedStyle(dialog).opacity).toBe('1');
+    expect(dialog.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
+    expect(dialog.getBoundingClientRect().bottom).toBeLessThanOrEqual(height);
+    expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
     );
+    const engine = navigator.userAgent.includes('Chrome')
+      ? 'chromium'
+      : 'webkit';
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/project-integrity-corrections-${width}-${engine}.png`,
+    });
+    await page
+      .getByRole('button', { name: 'Recréer ce dossier vide', exact: true })
+      .click();
     await screen.findByRole('alertdialog');
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
-    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    await page.getByRole('button', { name: 'Annuler', exact: true }).click();
+    await page
+      .getByRole('button', { name: /^Corrections : Document référencé/ })
+      .click();
+    await screen.findByRole('dialog');
+    await expect
+      .poll(() => getComputedStyle(screen.getByRole('dialog')).opacity)
+      .toBe('1');
+    expect(
+      await screen.findByText(/Aucune correction automatique n’est disponible/),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Appliquer la correction' }),
+    ).toBeNull();
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/project-integrity-manual-${width}-${engine}.png`,
+    });
     expect(
       vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
     ).toBe(false);

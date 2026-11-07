@@ -1,9 +1,22 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  ChevronRight,
+  ArrowUpRight,
+} from 'lucide-react';
+import { withBasePath } from '@/base-path';
 import { usePlatformSession } from '@/lib/platform-session';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -73,6 +86,10 @@ export function ProjectIntegritySettings() {
   const session = usePlatformSession();
   const client = useQueryClient();
   const [projectId, setProjectId] = useState('');
+  const [selected, setSelected] = useState<{
+    projectId: string;
+    issueId: string;
+  } | null>(null);
   const [confirmation, setConfirmation] = useState<{
     report: IntegrityReport;
     issue: IntegrityIssue;
@@ -111,6 +128,35 @@ export function ProjectIntegritySettings() {
       void report.refetch();
     },
   });
+  const selectedReport =
+    selected?.projectId === report.data?.projectId ? report.data : undefined;
+  const selectedIssue = selectedReport?.issues.find(
+    (issue) => issue.id === selected?.issueId,
+  );
+  const actionLabels = {
+    'create-directory': 'createDirectory',
+    'realign-agent': 'realign',
+    'realign-override': 'realign',
+    'select-project-folder': 'selectProjectFolder',
+  };
+  const actionDescriptions = {
+    'create-directory': 'confirmDirectory',
+    'realign-agent': 'confirmReference',
+    'realign-override': 'confirmReference',
+    'select-project-folder': 'confirmProjectFolder',
+  };
+  const selectedAction =
+    !selectedReport?.limited &&
+    selectedIssue?.action &&
+    Object.hasOwn(actionLabels, selectedIssue.action)
+      ? selectedIssue.action
+      : null;
+  const agentId =
+    selectedIssue?.reference?.contextType === 'agent'
+      ? selectedIssue.reference.contextId
+      : selectedIssue?.kind === 'agent-reference-obsolete'
+        ? selectedIssue.entityId
+        : null;
   if (!session.isAdministrator) return <p role="alert">{t('administrator')}</p>;
   return (
     <section className="min-w-0 space-y-4">
@@ -124,6 +170,7 @@ export function ProjectIntegritySettings() {
           disabled={repair.isPending}
           onChange={(e) => {
             setProjectId(e.target.value);
+            setSelected(null);
             setConfirmation(null);
             repair.reset();
           }}
@@ -178,17 +225,33 @@ export function ProjectIntegritySettings() {
           {report.data.issues.map((issue) => (
             <article
               key={issue.id}
-              className="min-w-0 space-y-2 rounded-lg border p-3"
+              className="relative min-w-0 space-y-2 rounded-lg border p-3 hover:bg-muted/40 focus-within:ring-2 focus-within:ring-ring"
             >
-              <h3 className="flex items-center gap-2 font-medium">
-                <AlertTriangle
-                  className={
-                    issue.severity === 'error'
-                      ? 'shrink-0 text-destructive'
-                      : 'shrink-0 text-amber-500'
+              <h3 className="font-medium">
+                <button
+                  type="button"
+                  aria-haspopup="dialog"
+                  className="flex w-full items-start gap-2 text-left after:absolute after:inset-0 after:rounded-lg focus:outline-none"
+                  aria-label={t('viewCorrectionsFor', {
+                    issue: t(issueKindKeys[issue.kind] ?? 'unknown'),
+                    target: issue.reference?.label ?? issue.path,
+                  })}
+                  onClick={() =>
+                    setSelected({
+                      projectId: report.data!.projectId,
+                      issueId: issue.id,
+                    })
                   }
-                />
-                {t(issueKindKeys[issue.kind] ?? 'unknown')}
+                >
+                  <AlertTriangle
+                    className={
+                      issue.severity === 'error'
+                        ? 'shrink-0 text-destructive'
+                        : 'shrink-0 text-amber-500'
+                    }
+                  />
+                  {t(issueKindKeys[issue.kind] ?? 'unknown')}
+                </button>
               </h3>
               {issue.reference && (
                 <div className="space-y-1 text-sm">
@@ -217,34 +280,151 @@ export function ProjectIntegritySettings() {
               <p className="text-sm text-muted-foreground">
                 {t(issueHelpKeys[issue.kind] ?? 'manual')}
               </p>
-              {issue.action && (
-                <Button
-                  variant="outline"
-                  disabled={repair.isPending || report.isFetching}
-                  onClick={() =>
-                    setConfirmation({ report: report.data!, issue })
-                  }
-                >
-                  {t(
-                    issue.action === 'select-project-folder'
-                      ? 'selectProjectFolder'
-                      : issue.action === 'create-directory'
-                        ? 'createDirectory'
-                        : 'realign',
-                  )}
-                </Button>
-              )}
+              <span className="inline-flex items-center gap-1 text-xs text-primary">
+                {t('viewCorrections')}
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
             </article>
           ))}
         </>
       )}
+      <Dialog
+        open={!!selected}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+      >
+        <DialogContent
+          className="max-h-[85dvh] overflow-y-auto sm:max-w-lg"
+          style={{ background: 'var(--popover)' }}
+        >
+          <DialogTitle className="pr-7">{t('correctionsTitle')}</DialogTitle>
+          <DialogDescription>{t('correctionsIntro')}</DialogDescription>
+          {selectedIssue ? (
+            <>
+              <div className="min-w-0 space-y-2 rounded-lg border p-3 [overflow-wrap:anywhere]">
+                <h3 className="font-medium">
+                  {t(issueKindKeys[selectedIssue.kind] ?? 'unknown')}
+                </h3>
+                {selectedIssue.reference && (
+                  <div className="space-y-1">
+                    <p className="text-sm">
+                      {t(
+                        contextKeys[selectedIssue.reference.contextType] ??
+                          'unknown',
+                      )}{' '}
+                      : {selectedIssue.reference.label}
+                    </p>
+                    <p className="text-xs">
+                      {t('missingConnection', {
+                        id: selectedIssue.reference.resourceId,
+                      })}
+                    </p>
+                    {selectedIssue.reference.relativePath && (
+                      <p className="text-xs">
+                        {selectedIssue.reference.relativePath}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {selectedIssue.path}
+                </p>
+                {selectedIssue.expectedPath && (
+                  <p className="text-xs">
+                    {t('expected')}: {selectedIssue.expectedPath}
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  {t(issueHelpKeys[selectedIssue.kind] ?? 'manual')}
+                </p>
+              </div>
+              <h4 className="font-medium">{t('availableCorrections')}</h4>
+              {selectedReport?.limited && (
+                <p role="alert" className="text-sm text-muted-foreground">
+                  {t('help.scanLimited')}
+                </p>
+              )}
+              {selectedAction ? (
+                <ul>
+                  <li>
+                    <Button
+                      variant="outline"
+                      aria-label={t(actionLabels[selectedAction] ?? 'realign')}
+                      aria-describedby="integrity-repair-help"
+                      className="h-auto w-full flex-col items-start whitespace-normal p-3 text-left"
+                      disabled={
+                        repair.isPending || report.isFetching || report.isError
+                      }
+                      onClick={() => {
+                        if (!selectedReport) return;
+                        setSelected(null);
+                        setConfirmation({
+                          report: selectedReport,
+                          issue: selectedIssue,
+                        });
+                      }}
+                    >
+                      <span className="font-medium">
+                        {t(actionLabels[selectedAction] ?? 'realign')}
+                      </span>
+                      <span
+                        id="integrity-repair-help"
+                        className="text-xs font-normal text-muted-foreground"
+                      >
+                        {t(
+                          actionDescriptions[selectedAction] ??
+                            'confirmReference',
+                        )}
+                      </span>
+                    </Button>
+                  </li>
+                </ul>
+              ) : (
+                <p className="rounded-lg bg-muted p-3 text-sm">
+                  {t('noAutomaticRepair')}
+                </p>
+              )}
+              {agentId && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-auto justify-start whitespace-normal"
+                >
+                  <a href={withBasePath(`/t/${encodeURIComponent(agentId)}`)}>
+                    <ArrowUpRight className="h-4 w-4 shrink-0" />
+                    {t('openAgentReference')}
+                  </a>
+                </Button>
+              )}
+            </>
+          ) : (
+            <p role="status">
+              {t(report.isError ? 'failed' : 'issueResolved')}
+            </p>
+          )}
+          {report.isFetching && <p role="status">{t('scanning')}</p>}
+          {report.isError && selectedIssue && <p role="alert">{t('failed')}</p>}
+          <Button
+            variant="outline"
+            disabled={report.isFetching || repair.isPending}
+            onClick={() => void report.refetch()}
+          >
+            <RefreshCw className="h-4 w-4" />
+            {t('scan')}
+          </Button>
+        </DialogContent>
+      </Dialog>
       <AlertDialog
         open={!!confirmation}
         onOpenChange={(open) => {
           if (!open && !repair.isPending) setConfirmation(null);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          className="max-h-[85dvh] overflow-y-auto"
+          style={{ background: 'var(--popover)' }}
+        >
           <AlertDialogTitle>{t('confirmTitle')}</AlertDialogTitle>
           <AlertDialogDescription>
             {t(

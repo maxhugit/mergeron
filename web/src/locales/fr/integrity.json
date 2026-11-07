@@ -60,7 +60,7 @@
     "directoryMissing": "Un dossier vide ne peut être recréé que si son identité et son parent sont vérifiés et qu’aucun contenu déclaré ne doit être restauré.",
     "agentReferenceObsolete": "Le dossier migré existe. La référence en base peut être réalignée sans déplacer de données ni modifier les droits.",
     "agentOverrideObsolete": "Le dossier migré existe. Le chemin mémorisé pour cette conversation peut être réaligné sans modifier sa politique de sécurité.",
-    "activeFolderRegistrationMissing": "La connexion mémorisée pour cet élément n’existe plus. Vous pouvez confirmer son rattachement à Dossiers ci-dessous, ou choisir une autre référence dans son explorateur.",
+    "activeFolderRegistrationMissing": "La connexion mémorisée pour cet élément n’existe plus. Ouvrez les corrections pour confirmer son rattachement à Dossiers, ou choisir une autre référence dans l’explorateur de l’élément concerné.",
     "unregisteredCopy": "Vérifiez les fichiers et les changements Git non publiés avant tout rattachement ou nettoyage. Aucun dépôt n’est supprimé automatiquement."
   },
   "unknown": "Anomalie à vérifier",
@@ -72,5 +72,13 @@
     "task": "Tâche",
     "deliverable": "Livrable",
     "simpleChat": "Conversation"
-  }
+  },
+  "viewCorrections": "Voir les corrections",
+  "viewCorrectionsFor": "Corrections : {{issue}} — {{target}}",
+  "correctionsTitle": "Corrections proposées",
+  "correctionsIntro": "Choisissez une action adaptée à cette anomalie. Une correction ne sera exécutée qu’après confirmation.",
+  "availableCorrections": "Corrections disponibles",
+  "noAutomaticRepair": "Aucune correction automatique n’est disponible pour cette anomalie. Suivez les indications ci-dessus pour retrouver ou rattacher les données existantes.",
+  "openAgentReference": "Ouvrir l’agent pour choisir une autre référence",
+  "issueResolved": "Cette anomalie n’apparaît plus dans le diagnostic actualisé."
 }

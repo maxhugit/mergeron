@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -73,9 +74,16 @@ async function choose() {
   });
   await screen.findByText('Dossier attendu absent');
 }
+async function openCorrections() {
+  fireEvent.click(
+    await screen.findByRole('button', { name: /^Corrections :/ }),
+  );
+  await screen.findByRole('dialog');
+}
 it('requires explicit confirmation and uses the server fingerprint, never a client path', async () => {
   show();
   await choose();
+  await openCorrections();
   fireEvent.click(
     screen.getByRole('button', { name: 'Recréer ce dossier vide' }),
   );
@@ -97,6 +105,7 @@ it('requires explicit confirmation and uses the server fingerprint, never a clie
 it('does not apply a cancelled correction', async () => {
   show();
   await choose();
+  await openCorrections();
   fireEvent.click(
     screen.getByRole('button', { name: 'Recréer ce dossier vide' }),
   );
@@ -113,6 +122,7 @@ it('reports a stale plan and re-reads the project instead of retrying the write'
   });
   show();
   await choose();
+  await openCorrections();
   fireEvent.click(
     screen.getByRole('button', { name: 'Recréer ce dossier vide' }),
   );
@@ -176,6 +186,7 @@ it('identifies the affected task and confirms its new reference from the diagnos
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'p' } });
   await screen.findByText('Tâche : Préparer la réunion');
   expect(screen.getByText('Connexion absente : removed')).toBeTruthy();
+  await openCorrections();
   fireEvent.click(
     screen.getByRole('button', { name: 'Utiliser Dossiers comme référence…' }),
   );
@@ -195,4 +206,128 @@ it('identifies the affected task and confirms its new reference from the diagnos
       confirmation: 'REPAIR_PROJECT',
     }),
   );
+});
+
+it('opens guidance for an issue without a supported automatic repair and refreshes without writing', async () => {
+  report.issues[0].action = null;
+  show();
+  await choose();
+  await openCorrections();
+  const dialog = screen.getByRole('dialog');
+  expect(
+    within(dialog).getByText(/Aucune correction automatique n’est disponible/),
+  ).toBeInTheDocument();
+  expect(
+    within(dialog).queryByRole('button', { name: 'Recréer ce dossier vide' }),
+  ).toBeNull();
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Actualiser le diagnostic' }),
+  );
+  await waitFor(() =>
+    expect(
+      vi.mocked(integrityRequest).mock.calls.filter(([p]) => p === '/p'),
+    ).toHaveLength(2),
+  );
+  expect(
+    vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
+  ).toBe(false);
+});
+
+it('shows that a selected issue has disappeared after a refreshed inspection', async () => {
+  show();
+  await choose();
+  await openCorrections();
+  vi.mocked(integrityRequest).mockResolvedValue({ ...report, issues: [] });
+  fireEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Actualiser le diagnostic',
+    }),
+  );
+  expect(
+    await screen.findByText(
+      'Cette anomalie n’apparaît plus dans le diagnostic actualisé.',
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Recréer ce dossier vide' }),
+  ).toBeNull();
+  expect(
+    vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
+  ).toBe(false);
+});
+
+it.each([
+  'create-directory',
+  'realign-agent',
+  'realign-override',
+  'select-project-folder',
+] as const)(
+  'offers only the server-supported correction %s and confirms its exact issue',
+  async (action) => {
+    report.issues[0].action = action;
+    show();
+    await choose();
+    await openCorrections();
+    const label =
+      action === 'create-directory'
+        ? 'Recréer ce dossier vide'
+        : action === 'select-project-folder'
+          ? 'Utiliser Dossiers comme référence…'
+          : 'Réaligner cette référence';
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: label }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(
+      vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
+    ).toBe(false);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Appliquer la correction' }),
+    );
+    await waitFor(() =>
+      expect(integrityRequest).toHaveBeenCalledWith('/p/repair', {
+        fingerprint: 'fresh',
+        issueId: 'missing',
+        confirmation: 'REPAIR_PROJECT',
+      }),
+    );
+  },
+);
+
+it('does not offer automatic writes from an incomplete inspection', async () => {
+  report.limited = true;
+  show();
+  await choose();
+  await openCorrections();
+  expect(
+    within(screen.getByRole('dialog')).queryByRole('button', {
+      name: 'Recréer ce dossier vide',
+    }),
+  ).toBeNull();
+  expect(
+    screen.getByText(/Aucune correction automatique n’est disponible/),
+  ).toBeInTheDocument();
+});
+
+it('offers opening the affected agent to choose its reference, without a repair request', async () => {
+  report.issues[0].action = null;
+  report.issues[0].reference = {
+    contextType: 'agent',
+    contextId: 'agent-1',
+    label: 'Agent exemple',
+    resourceId: 'gone',
+    relativePath: '',
+  };
+  show();
+  await choose();
+  await openCorrections();
+  expect(
+    within(screen.getByRole('dialog')).getByRole('link', {
+      name: 'Ouvrir l’agent pour choisir une autre référence',
+    }),
+  ).toHaveAttribute('href', '/t/agent-1');
+  expect(
+    vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
+  ).toBe(false);
 });
