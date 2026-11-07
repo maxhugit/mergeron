@@ -8,7 +8,7 @@
   "tooLarge": "Le fichier dépasse 128 Mio.",
   "failed": "La transcription a échoué.",
   "serviceError": "Le service de transcription est inaccessible.",
-  "disabled": "L’administrateur doit activer le service de transcription dans le Manager.",
+  "disabled": "La compétence Transcription n’est pas installée. Un administrateur peut l’installer dans Paramètres → Serveur → Compétences.",
   "language": "Langue : {{language}} · confiance {{confidence}} %",
   "anonymous": "Les locuteurs sont des repères anonymes, pas des personnes identifiées. Leur attribution peut être imparfaite.",
   "speakersFailed": "La séparation des locuteurs a échoué. La transcription reste disponible.",

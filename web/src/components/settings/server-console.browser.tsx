@@ -110,6 +110,25 @@ test.each([1100, 390])(
           releases: [],
           checkError: null,
         };
+      else if (path.endsWith('/manager/capabilities'))
+        value = {
+          operation: null,
+          error: null,
+          capabilities: [
+            {
+              id: 'browser',
+              installed: false,
+              state: 'notInstalled',
+              activeLeases: 0,
+            },
+            {
+              id: 'transcription',
+              installed: true,
+              state: 'stopped',
+              activeLeases: 0,
+            },
+          ],
+        };
       else if (path.endsWith('/manager/status')) value = status;
       else if (path.includes('/manager/image-updates')) value = updates;
       else if (path.endsWith('/general.updateBackupMode')) {
@@ -216,6 +235,15 @@ test.each([1100, 390])(
       await page.screenshot({
         path: `../../../.vitest-screenshots/server-console-current-${width}.png`,
       });
+      await page.getByRole('tab', { name: 'Compétences', exact: true }).click();
+      await screen.findByText('Navigation web');
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/server-console-capabilities-${width}.png`,
+      });
+      await page
+        .getByRole('tab', { name: 'Version actuelle', exact: true })
+        .click();
       await page
         .getByRole('tab', { name: 'Journal des mises à jour', exact: true })
         .click();

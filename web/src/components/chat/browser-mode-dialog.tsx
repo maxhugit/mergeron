@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useServerCapabilities } from '../settings/server-capabilities-api';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +21,11 @@ export function BrowserModeDialog({
   isolatedDisabled?: boolean;
 }) {
   const { t } = useTranslation('browser');
+  const { t: tm } = useTranslation('manager');
+  const capabilities = useServerCapabilities(open);
+  const installed = capabilities.data?.capabilities.find(
+    (c) => c.id === 'browser',
+  )?.installed;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -31,10 +37,14 @@ export function BrowserModeDialog({
           <Button
             key={mode}
             variant="outline"
-            disabled={mode === 'isolated' && isolatedDisabled}
+            disabled={
+              mode === 'isolated' && (isolatedDisabled || installed !== true)
+            }
             onClick={() => onChoose(mode)}
           >
-            {t(mode === 'local' ? 'localTitle' : 'isolatedTitle')}
+            {mode === 'isolated' && installed === false
+              ? tm('capabilityStates.notInstalled') + ' — ' + t('isolatedTitle')
+              : t(mode === 'local' ? 'localTitle' : 'isolatedTitle')}
           </Button>
         ))}
       </DialogContent>

@@ -397,6 +397,13 @@ export class DockerClient {
     );
   }
 
+  connectNetwork(name, container) {
+    return this.request(`/networks/${encodeURIComponent(name)}/connect`, {
+      method: 'POST',
+      body: { Container: container },
+    });
+  }
+
   removeContainer(id) {
     // Never force a running container or remove its persistent volumes.
     return this.request(

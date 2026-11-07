@@ -1,3 +1,4 @@
+import { Capabilities } from './capabilities.mjs';
 import { ManagerReplacement } from './manager-replacement.mjs';
 import { GlobalUpdateCoordinator } from './global-update-coordinator.mjs';
 import { grantMonitor } from './update-monitor-journal.mjs';
@@ -18,6 +19,8 @@ import { ManagedCodexCli } from './codex-cli.mjs';
 import { startHealthDiagnostics } from './health-diagnostics.mjs';
 import {
   confirmAdoption,
+  recordCapabilityChange,
+  capabilityCoreTrusted,
   evaluateAdoption,
   readAdoptionRecord,
 } from './adoption.mjs';
@@ -123,16 +126,56 @@ const transcription = new ManagedTranscription({
     appCatalog.busy ||
     updater.current?.status === 'recoveryRequired',
 });
+const browserManifest = scopeManifest(
+  JSON.parse(await readFile(manifestPath, 'utf8')),
+  manifest.stack,
+  manifest.environment,
+  process.env.MERGERON_PROXY_NETWORK,
+  { enabled: true },
+);
 const browserLifecycle = new BrowserLifecycle({
   docker,
-  manifest,
+  manifest: browserManifest,
   blocked: () =>
     !ready ||
     installing ||
     adopting ||
+    capabilities.busy ||
     updater.busy ||
     codexCli.busy ||
     updater.current?.status === 'recoveryRequired',
+});
+const capabilities = new Capabilities({
+  docker,
+  manifest,
+  browser: browserLifecycle,
+  transcription,
+  path: `${dirname(adoptionPath)}/capabilities.json`,
+  blocked: async () =>
+    !ready ||
+    !!installing ||
+    !!adopting ||
+    updater.busy ||
+    (await managerReplacement.busy()) ||
+    previews.busy ||
+    codexCli.busy ||
+    appCatalog.busy ||
+    updater.current?.status === 'recoveryRequired',
+  inventory: async () =>
+    evaluateAdoption(
+      await collectInventory(manifest, docker),
+      await readAdoptionRecord(adoptionPath),
+    ),
+  coreTrusted: async (inventory) =>
+    capabilityCoreTrusted(inventory, await readAdoptionRecord(adoptionPath)),
+  recordAdoption: async (before) => {
+    await recordCapabilityChange({
+      before,
+      after: await collectInventory(manifest, docker),
+      path: adoptionPath,
+    });
+    await refresh();
+  },
 });
 startHealthDiagnostics();
 let ready = false;
@@ -234,6 +277,7 @@ async function adopt(body) {
     codexCli.busy ||
     appCatalog.busy ||
     transcription.busy ||
+    capabilities.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -272,6 +316,7 @@ async function install(body, automatic = false) {
     codexCli.busy ||
     appCatalog.busy ||
     transcription.busy ||
+    capabilities.busy ||
     updater.busy ||
     previews.busy ||
     updater.current?.status === 'recoveryRequired'
@@ -327,6 +372,7 @@ const server = http.createServer(async (request, response) => {
         installing ||
         adopting ||
         browserLifecycle.busy ||
+        capabilities.busy ||
         updater.busy ||
         codexCli.busy ||
         updater.current?.status === 'recoveryRequired'
@@ -367,6 +413,37 @@ const server = http.createServer(async (request, response) => {
       });
     }
   }
+  if (request.url === '/v1/capabilities') {
+    try {
+      if (request.method === 'GET')
+        return json(response, 200, await capabilities.status());
+      if (request.method === 'POST')
+        return json(
+          response,
+          200,
+          await capabilities.change(await readJsonBody(request)),
+        );
+      return json(response, 405, { error: 'methodNotAllowed' });
+    } catch (error) {
+      return json(response, 409, {
+        error: /^CAPABILITY_[A-Z_]+$/.test(error.message ?? '')
+          ? error.message
+          : 'CAPABILITY_UNAVAILABLE',
+      });
+    }
+  }
+  if (
+    request.method === 'POST' &&
+    ['/v1/transcription/lease', '/v1/services/browser'].includes(request.url) &&
+    capabilities.busy
+  )
+    return json(response, 409, { error: 'CAPABILITY_BUSY' });
+  if (
+    request.method === 'POST' &&
+    request.url === '/v1/services/browser' &&
+    !capabilities.desired.browser
+  )
+    return json(response, 409, { error: 'BROWSER_RUNTIME_NOT_INSTALLED' });
   if (
     ['/v1/transcription/status', '/v1/transcription/lease'].includes(
       request.url,
@@ -394,12 +471,25 @@ const server = http.createServer(async (request, response) => {
     try {
       if (request.method === 'GET')
         return json(response, 200, await browserLifecycle.status());
-      if (request.method === 'POST')
-        return json(
-          response,
-          200,
-          await browserLifecycle.lease(await readJsonBody(request)),
+      if (request.method === 'POST') {
+        const status = await browserLifecycle.lease(
+          await readJsonBody(request),
         );
+        const item = await browserLifecycle.inspect();
+        const path = item?.Config.Env?.find((e) =>
+          e.startsWith('BROWSER_WS_PATH='),
+        )?.slice(16);
+        return json(response, 200, {
+          ...status,
+          ...(path && /^[A-Za-z0-9_-]{32,128}$/.test(path)
+            ? {
+                transport: {
+                  endpoint: `ws://${browserLifecycle.component.canonicalName}:3000/${path}`,
+                },
+              }
+            : {}),
+        });
+      }
       return json(response, 405, { error: 'methodNotAllowed' });
     } catch (error) {
       return json(response, 409, {
@@ -475,6 +565,7 @@ const server = http.createServer(async (request, response) => {
         installing ||
         adopting ||
         browserLifecycle.busy ||
+        capabilities.busy ||
         updater.busy ||
         codexCli.busy ||
         previews.busy
@@ -512,6 +603,7 @@ const server = http.createServer(async (request, response) => {
           installing ||
           adopting ||
           browserLifecycle.busy ||
+          capabilities.busy ||
           updater.busy ||
           previews.busy ||
           updater.current?.status === 'recoveryRequired'
@@ -581,6 +673,7 @@ const server = http.createServer(async (request, response) => {
         installing ||
         adopting ||
         browserLifecycle.busy ||
+        capabilities.busy ||
         updater.busy ||
         (await managerReplacement.busy()) ||
         previews.busy ||
@@ -665,6 +758,7 @@ const server = http.createServer(async (request, response) => {
           (installing ||
             adopting ||
             browserLifecycle.busy ||
+            capabilities.busy ||
             updater.busy ||
             previews.busy ||
             codexCli.busy ||
@@ -707,6 +801,7 @@ const server = http.createServer(async (request, response) => {
         installing ||
         adopting ||
         browserLifecycle.busy ||
+        capabilities.busy ||
         updater.busy ||
         (await managerReplacement.busy()) ||
         previews.busy ||
@@ -796,6 +891,7 @@ server.listen(socketPath, async () => {
   if (Number.isInteger(socketGroup) && socketGroup >= 0) {
     await chown(socketPath, 0, socketGroup).catch(() => undefined);
   }
+  await capabilities.initialize();
   await updater.recover();
   ready = true;
   setInterval(() => {
@@ -807,10 +903,9 @@ server.listen(socketPath, async () => {
           transcription.checkingUpdates = null;
         });
   }, 300_000).unref();
-  setInterval(
-    () => void transcription.tick().catch(() => undefined),
-    10000,
-  ).unref();
+  setInterval(() => {
+    if (!capabilities.busy) void transcription.tick().catch(() => undefined);
+  }, 10000).unref();
   setInterval(
     () =>
       void previews
