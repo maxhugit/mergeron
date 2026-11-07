@@ -218,7 +218,7 @@ export function VirtualTranscript({
   return (
     <TranscriptSnapshot beforeCommit={() => owner.beforeCommit(active)}>
       <div
-        className="relative flex h-full min-h-0 flex-1 flex-col"
+        className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
         style={{ visibility: ready && measured ? undefined : 'hidden' }}
       >
         <div
@@ -227,7 +227,7 @@ export function VirtualTranscript({
           tabIndex={0}
           onFocusCapture={() => owner.beginInput()}
           style={composerFade}
-          className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] [overflow-anchor:none]"
+          className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] [overflow-anchor:none]"
           onWheel={(event) =>
             owner.beginWheel(event.ctrlKey ? 0 : event.deltaY)
           }
