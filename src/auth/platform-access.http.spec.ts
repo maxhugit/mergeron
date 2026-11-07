@@ -1,3 +1,4 @@
+import { ProjectAgentLaunchService } from '../projects/project-agent-launch.service';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as fsp from 'node:fs/promises';
 import * as os from 'node:os';
@@ -20,6 +21,7 @@ import {
   people,
   projectParticipants,
   projectResources,
+  projectAgentLaunches,
   projects,
 } from '../database/schema';
 import { SettingsController } from '../settings/settings.controller';
@@ -146,6 +148,7 @@ beforeEach(async () => {
       DeliverablesController,
     ],
     providers: [
+      ProjectAgentLaunchService,
       AuthService,
       AuthConfigService,
       LocalAuthService,
@@ -238,7 +241,7 @@ it('blocks private deliverable sources, private snapshot downloads and agent exe
   expect(download.statusCode).toBe(403);
 });
 afterEach(async () => {
-  await app.close();
+  await app?.close();
   database.sqlite.close();
   await fsp.rm(workspaceRoot, { recursive: true, force: true });
   vi.unstubAllEnvs();
@@ -1092,4 +1095,75 @@ it('stores text size separately for each support and connected person, rejects i
       )
       .get('unused'),
   ).toEqual({ count: 0 });
+});
+
+it('denies agent launch recovery over HTTP to standard users and to a different receipt owner', async () => {
+  const base = '/api/projects/member-project/resources/recovery-resource';
+  database.db
+    .insert(projectResources)
+    .values({
+      id: 'recovery-resource',
+      projectId: 'member-project',
+      type: 'task_board',
+      name: 'Recovery tests',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  database.db
+    .insert(projectAgentLaunches)
+    .values({
+      id: 'private-receipt',
+      scope: 'task:private-target',
+      targetKey: 'task:private-target',
+      projectId: 'member-project',
+      resourceId: 'recovery-resource',
+      ownerId: 'standard',
+      requestId: 'one',
+      state: 'needs_attention',
+      phase: 'creating',
+      context: {
+        kind: 'task',
+        targetId: 'private-target',
+        targetRevision: 1,
+        cwd: workspaceRoot,
+        title: 'Private target',
+        taskId: null,
+        createdSubtask: false,
+        existing: false,
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  const recovery = {
+    method: 'POST' as const,
+    url: `${base}/agent-launches/private-receipt/recover`,
+    payload: { action: 'keep', verified: true, expectedUpdatedAt: 1 },
+  };
+  expect(
+    (await app.inject({ ...recovery, headers: proxyHeaders() })).statusCode,
+  ).toBe(403);
+  expect(
+    (
+      await app.inject({
+        ...recovery,
+        headers: proxyHeaders('administrator@example.com'),
+      })
+    ).statusCode,
+  ).toBe(403);
+  expect(
+    (
+      await app.inject({
+        method: 'GET',
+        url: `${base}/tasks/private-target/agent-launch`,
+        headers: proxyHeaders(),
+      })
+    ).statusCode,
+  ).toBe(403);
+  expect(database.db.select().from(projectAgentLaunches).get()).toMatchObject({
+    state: 'needs_attention',
+    phase: 'creating',
+    threadId: null,
+  });
 });
