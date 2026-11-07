@@ -635,9 +635,13 @@ export class DeliverablesService implements OnModuleInit {
     )
       return false;
     try {
-      assertDeliverableAgentLinks(this.db, projectId, item.primaryTaskId, [
-        threadId,
-      ]);
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        item.primaryTaskId,
+        [threadId],
+        item.id,
+      );
       return true;
     } catch (error) {
       if (
@@ -722,9 +726,13 @@ export class DeliverablesService implements OnModuleInit {
           })
           .onConflictDoNothing({ target: projectAgentThreads.threadId })
           .run();
-      assertDeliverableAgentLinks(this.db, projectId, item.primaryTaskId, [
-        threadId,
-      ]);
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        item.primaryTaskId,
+        [threadId],
+        item.id,
+      );
       if (task) assertTaskAgent(this.db, projectId, task.id, threadId);
       if (
         !tx
@@ -1280,6 +1288,7 @@ export class DeliverablesService implements OnModuleInit {
       conversations
         .filter((link) => link.type === 'agent')
         .map((link) => link.id),
+      current?.id,
     );
     return {
       title:
@@ -1387,6 +1396,15 @@ export class DeliverablesService implements OnModuleInit {
         normalizeDeliverableTaskReference(this.db, values.primaryTaskId, true);
         assertWorkReferenceAgentLinks(this.db, values.primaryTaskId);
       }
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        created.primaryTaskId,
+        created.conversations
+          .filter((link) => link.type === 'agent')
+          .map((link) => link.id),
+        created.id,
+      );
       assertDeliverableWorkReference(this.db, created);
       tx.insert(lifecycleEvents)
         .values({
@@ -1526,6 +1544,15 @@ export class DeliverablesService implements OnModuleInit {
           }
         }
       }
+      assertDeliverableAgentLinks(
+        this.db,
+        projectId,
+        changed.primaryTaskId,
+        changed.conversations
+          .filter((link) => link.type === 'agent')
+          .map((link) => link.id),
+        changed.id,
+      );
       assertDeliverableWorkReference(this.db, changed);
       const fields = Object.keys(changes).filter(
         (key) =>

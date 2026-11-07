@@ -1780,3 +1780,98 @@ it('recovers a subtask with its coherent deliverable agent without creating or s
     expect(startThread).toHaveBeenCalledTimes(1);
     expect(startTurn).not.toHaveBeenCalled();
   }));
+
+it('keeps an agent unique across deliverables, including concurrent creations and generic edits', async () =>
+  asAdmin(async () => {
+    const results = await Promise.allSettled([
+      deliverables.create('p', 'deliverables', {
+        title: 'First',
+        conversations: [{ type: 'agent', id: 'agent' }],
+      }),
+      deliverables.create('p', 'deliverables', {
+        title: 'Second',
+        conversations: [{ type: 'agent', id: 'agent' }],
+      }),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    const first = results.find((result) => result.status === 'fulfilled')!;
+    if (first.status !== 'fulfilled') throw new Error('Expected one creation');
+    const second = await deliverables.create('p', 'deliverables', {
+      title: 'Other',
+    });
+    expect(() =>
+      deliverables.update('p', 'deliverables', second.id, {
+        version: second.version,
+        conversations: [{ type: 'agent', id: 'agent' }],
+      }),
+    ).toThrow('another deliverable');
+    expect(() =>
+      deliverables.update('p', 'deliverables', first.value.id, {
+        version: first.value.version,
+        title: 'Renamed',
+      }),
+    ).not.toThrow();
+  }));
+
+it('rejects a missing folder without creating a task or unlinking a deliverable', async () =>
+  asAdmin(async () => {
+    const missing = path.join(root, 'missing-folder');
+    expect(() =>
+      domain.createTask('p', 'tasks', {
+        title: 'No ghost',
+        workReference: { type: 'folder', path: missing },
+      }),
+    ).toThrow();
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+    const main = parent();
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: main.id,
+    });
+    const revision = task(main.id).updatedAt;
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, {
+        expectedUpdatedAt: revision,
+        workReference: { type: 'folder', path: missing },
+      }),
+    ).rejects.toThrow();
+    expect(task(main.id).updatedAt).toBe(revision);
+    expect(deliverables.get('p', 'deliverables', item.id).primaryTaskId).toBe(
+      main.id,
+    );
+  }));
+
+it('rolls back reference writes when folder registration fails after validation', async () =>
+  asAdmin(async () => {
+    const main = parent();
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: main.id,
+    });
+    const revision = task(main.id).updatedAt;
+    vi.spyOn(
+      ActiveFoldersService.prototype,
+      'setFromAbsolutePath',
+    ).mockImplementation(() => {
+      throw new Error('Registration failed');
+    });
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, {
+        expectedUpdatedAt: revision,
+        workReference: { type: 'folder', path: root },
+      }),
+    ).rejects.toThrow('Registration failed');
+    expect(task(main.id).updatedAt).toBe(revision);
+    expect(deliverables.get('p', 'deliverables', item.id).primaryTaskId).toBe(
+      main.id,
+    );
+    expect(() =>
+      domain.createTask('p', 'tasks', {
+        title: 'Not saved',
+        workReference: { type: 'folder', path: root },
+      }),
+    ).toThrow('Registration failed');
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(1);
+  }));

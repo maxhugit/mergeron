@@ -1937,6 +1937,13 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       updatedAt: now,
     };
     this.validateTaskDateRange(task.startAt, task.dueAt, parent);
+    const requestedFolder =
+      input.workReference?.type === 'folder'
+        ? input.workReference.path
+        : task.workspacePath;
+    if (requestedFolder)
+      this.folders.validateAbsoluteSelection(projectId, requestedFolder);
+
     this.db.transaction((tx) => {
       tx.insert(projectTasks).values(task).run();
       if (input.workReference) {
@@ -1982,23 +1989,23 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
             createdAt: now,
           })
           .run();
+      if (task.parentTaskId)
+        this.recalculateParentEstimate(
+          resourceId,
+          task.parentTaskId,
+          true,
+          actor,
+        );
+      const saved = this.requireTask(resourceId, task.id);
+      const reference = taskWorkReference(this.db, saved);
+      if (reference.type === 'folder' && reference.path)
+        this.folders.setFromAbsolutePath(
+          projectId,
+          'task',
+          task.id,
+          reference.path,
+        );
     });
-    if (task.parentTaskId)
-      this.recalculateParentEstimate(
-        resourceId,
-        task.parentTaskId,
-        true,
-        actor,
-      );
-    const saved = this.requireTask(resourceId, task.id);
-    const reference = taskWorkReference(this.db, saved);
-    if (reference.type === 'folder' && reference.path)
-      this.folders.setFromAbsolutePath(
-        projectId,
-        'task',
-        task.id,
-        reference.path,
-      );
     const refreshed = this.requireTask(resourceId, task.id);
     const finalReference = taskWorkReference(this.db, refreshed);
     return {
@@ -2298,6 +2305,17 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         updated.linkedThreadId,
         updated.parentTaskId,
       );
+    const requestedFolder =
+      input.workReference?.type === 'folder'
+        ? input.workReference.path
+        : updated.workspacePath;
+    if (
+      requestedFolder &&
+      (input.workReference?.type === 'folder' ||
+        input.workspacePath !== undefined ||
+        input.parentTaskId !== undefined)
+    )
+      this.folders.validateAbsoluteSelection(projectId, requestedFolder);
     // Completion is a business decision, never permission to destroy a conversation
     // or its managed Git copy. Keep the link and evidence until explicit deletion.
     this.db.transaction((tx) => {
@@ -2401,62 +2419,62 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
               })
               .run();
       }
+      if (task.parentTaskId)
+        this.recalculateParentEstimate(
+          resourceId,
+          task.parentTaskId,
+          true,
+          actor,
+        );
+      if (effectiveParentId && effectiveParentId !== task.parentTaskId)
+        this.recalculateParentEstimate(
+          resourceId,
+          effectiveParentId,
+          true,
+          actor,
+        );
+      if (!effectiveParentId)
+        this.recalculateParentEstimate(resourceId, task.id, false, actor);
+      const saved = this.requireTask(resourceId, task.id);
+      const reference = taskWorkReference(this.db, saved);
+      if (
+        reference.type === 'folder' &&
+        reference.path &&
+        (input.workReference || !this.folders.get('task', task.id))
+      )
+        this.folders.setFromAbsolutePath(
+          projectId,
+          'task',
+          task.id,
+          reference.path,
+        );
+      if (
+        reference.type === 'folder' &&
+        reference.path &&
+        (input.workspacePath !== undefined ||
+          input.parentTaskId !== undefined ||
+          !this.folders.get('task', task.id))
+      ) {
+        this.folders.setFromAbsolutePath(
+          projectId,
+          'task',
+          task.id,
+          saved.workspacePath,
+        );
+        if (!effectiveParentId && input.workspacePath !== undefined)
+          for (const child of this.db
+            .select()
+            .from(projectTasks)
+            .where(eq(projectTasks.parentTaskId, task.id))
+            .all())
+            this.folders.setFromAbsolutePath(
+              projectId,
+              'task',
+              child.id,
+              saved.workspacePath,
+            );
+      }
     });
-    if (task.parentTaskId)
-      this.recalculateParentEstimate(
-        resourceId,
-        task.parentTaskId,
-        true,
-        actor,
-      );
-    if (effectiveParentId && effectiveParentId !== task.parentTaskId)
-      this.recalculateParentEstimate(
-        resourceId,
-        effectiveParentId,
-        true,
-        actor,
-      );
-    if (!effectiveParentId)
-      this.recalculateParentEstimate(resourceId, task.id, false, actor);
-    const saved = this.requireTask(resourceId, task.id);
-    const reference = taskWorkReference(this.db, saved);
-    if (
-      reference.type === 'folder' &&
-      reference.path &&
-      (input.workReference || !this.folders.get('task', task.id))
-    )
-      this.folders.setFromAbsolutePath(
-        projectId,
-        'task',
-        task.id,
-        reference.path,
-      );
-    if (
-      reference.type === 'folder' &&
-      reference.path &&
-      (input.workspacePath !== undefined ||
-        input.parentTaskId !== undefined ||
-        !this.folders.get('task', task.id))
-    ) {
-      this.folders.setFromAbsolutePath(
-        projectId,
-        'task',
-        task.id,
-        saved.workspacePath,
-      );
-      if (!effectiveParentId && input.workspacePath !== undefined)
-        for (const child of this.db
-          .select()
-          .from(projectTasks)
-          .where(eq(projectTasks.parentTaskId, task.id))
-          .all())
-          this.folders.setFromAbsolutePath(
-            projectId,
-            'task',
-            child.id,
-            saved.workspacePath,
-          );
-    }
     const refreshed = this.requireTask(resourceId, task.id);
     const finalReference = taskWorkReference(this.db, refreshed);
     return {
