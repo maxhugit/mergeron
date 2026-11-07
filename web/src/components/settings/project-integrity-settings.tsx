@@ -32,6 +32,12 @@ import {
   type IntegrityIssue,
 } from './project-integrity-api';
 
+import {
+  IntegrityIssueTitle,
+  IntegrityDiagram,
+  IntegrityExplanation,
+} from './project-integrity-diagram';
+
 const contextKeys = {
   agent: 'context.agent',
   task: 'context.task',
@@ -86,6 +92,7 @@ export function ProjectIntegritySettings() {
   const session = usePlatformSession();
   const client = useQueryClient();
   const [projectId, setProjectId] = useState('');
+  const [preview, setPreview] = useState(false);
   const [selected, setSelected] = useState<{
     projectId: string;
     issueId: string;
@@ -171,6 +178,7 @@ export function ProjectIntegritySettings() {
           onChange={(e) => {
             setProjectId(e.target.value);
             setSelected(null);
+            setPreview(false);
             setConfirmation(null);
             repair.reset();
           }}
@@ -232,16 +240,13 @@ export function ProjectIntegritySettings() {
                   type="button"
                   aria-haspopup="dialog"
                   className="flex w-full items-start gap-2 text-left after:absolute after:inset-0 after:rounded-lg focus:outline-none"
-                  aria-label={t('viewCorrectionsFor', {
-                    issue: t(issueKindKeys[issue.kind] ?? 'unknown'),
-                    target: issue.reference?.label ?? issue.path,
-                  })}
-                  onClick={() =>
+                  onClick={() => {
+                    setPreview(false);
                     setSelected({
                       projectId: report.data!.projectId,
                       issueId: issue.id,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <AlertTriangle
                     className={
@@ -250,36 +255,21 @@ export function ProjectIntegritySettings() {
                         : 'shrink-0 text-amber-500'
                     }
                   />
-                  {t(issueKindKeys[issue.kind] ?? 'unknown')}
+                  <IntegrityIssueTitle kind={issue.kind} />
+                  <span className="sr-only">
+                    {' '}
+                    — {issue.reference?.label ?? issue.path}
+                  </span>
                 </button>
               </h3>
               {issue.reference && (
-                <div className="space-y-1 text-sm">
-                  <p className="break-words font-medium">
-                    {t(contextKeys[issue.reference.contextType] ?? 'unknown')} :{' '}
-                    {issue.reference.label}
-                  </p>
-                  <p className="break-all text-xs">
-                    {t('missingConnection', { id: issue.reference.resourceId })}
-                  </p>
-                  {issue.reference.relativePath && (
-                    <p className="break-all text-xs">
-                      {issue.reference.relativePath}
-                    </p>
-                  )}
-                </div>
-              )}
-              {!issue.reference && (
-                <p className="break-all text-xs">{issue.path}</p>
-              )}
-              {issue.expectedPath && (
-                <p className="break-all text-xs">
-                  {t('expected')}: {issue.expectedPath}
+                <p className="break-words text-sm font-medium">
+                  {t(contextKeys[issue.reference.contextType] ?? 'unknown')} :{' '}
+                  {issue.reference.label}
                 </p>
               )}
-              <p className="text-sm text-muted-foreground">
-                {t(issueHelpKeys[issue.kind] ?? 'manual')}
-              </p>
+              <IntegrityDiagram issue={issue} />
+              <IntegrityExplanation kind={issue.kind} />
               <span className="inline-flex items-center gap-1 text-xs text-primary">
                 {t('viewCorrections')}
                 <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -302,43 +292,87 @@ export function ProjectIntegritySettings() {
           <DialogDescription>{t('correctionsIntro')}</DialogDescription>
           {selectedIssue ? (
             <>
-              <div className="min-w-0 space-y-2 rounded-lg border p-3 [overflow-wrap:anywhere]">
-                <h3 className="font-medium">
-                  {t(issueKindKeys[selectedIssue.kind] ?? 'unknown')}
-                </h3>
+              <h3 className="font-medium">
+                <IntegrityIssueTitle kind={selectedIssue.kind} />
+              </h3>
+              {selectedIssue.reference && (
+                <p className="break-words text-sm">
+                  {t(
+                    contextKeys[selectedIssue.reference.contextType] ??
+                      'unknown',
+                  )}{' '}
+                  : {selectedIssue.reference.label}
+                </p>
+              )}
+              {selectedAction && (
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label={t('correctionsTitle')}
+                >
+                  <Button
+                    variant={preview ? 'outline' : 'default'}
+                    aria-pressed={!preview}
+                    onClick={() => setPreview(false)}
+                  >
+                    {t('visual.current')}
+                  </Button>
+                  <Button
+                    variant={preview ? 'default' : 'outline'}
+                    aria-pressed={preview}
+                    onClick={() => setPreview(true)}
+                  >
+                    {t('visual.after')}
+                  </Button>
+                </div>
+              )}
+              <IntegrityDiagram
+                issue={selectedIssue}
+                preview={preview && !!selectedAction}
+              />
+              {preview && selectedAction ? (
+                <div className="space-y-2" role="status">
+                  <h4 className="font-medium">{t('visual.afterLabel')}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      actionDescriptions[selectedAction] ?? 'confirmReference',
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('visual.beforeConfirm')}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <h4 className="font-medium">{t('visual.explanation')}</h4>
+                  <IntegrityExplanation kind={selectedIssue.kind} />
+                  <p className="text-sm text-muted-foreground">
+                    {t(issueHelpKeys[selectedIssue.kind] ?? 'manual')}
+                  </p>
+                </div>
+              )}
+              <details className="min-w-0 space-y-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                <summary className="cursor-pointer py-2">
+                  {t('visual.details')}
+                </summary>
+                <p>{t(issueKindKeys[selectedIssue.kind] ?? 'unknown')}</p>
                 {selectedIssue.reference && (
-                  <div className="space-y-1">
-                    <p className="text-sm">
-                      {t(
-                        contextKeys[selectedIssue.reference.contextType] ??
-                          'unknown',
-                      )}{' '}
-                      : {selectedIssue.reference.label}
-                    </p>
-                    <p className="text-xs">
+                  <>
+                    <p>
                       {t('missingConnection', {
                         id: selectedIssue.reference.resourceId,
                       })}
                     </p>
-                    {selectedIssue.reference.relativePath && (
-                      <p className="text-xs">
-                        {selectedIssue.reference.relativePath}
-                      </p>
-                    )}
-                  </div>
+                    <p>{selectedIssue.reference.relativePath}</p>
+                  </>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  {selectedIssue.path}
-                </p>
+                <p>{selectedIssue.path}</p>
                 {selectedIssue.expectedPath && (
-                  <p className="text-xs">
+                  <p>
                     {t('expected')}: {selectedIssue.expectedPath}
                   </p>
                 )}
-                <p className="text-sm text-muted-foreground">
-                  {t(issueHelpKeys[selectedIssue.kind] ?? 'manual')}
-                </p>
-              </div>
+              </details>
               <h4 className="font-medium">{t('availableCorrections')}</h4>
               {selectedReport?.limited && (
                 <p role="alert" className="text-sm text-muted-foreground">
@@ -435,6 +469,9 @@ export function ProjectIntegritySettings() {
                   : 'confirmReference',
             )}
           </AlertDialogDescription>
+          {confirmation && (
+            <IntegrityDiagram issue={confirmation.issue} preview />
+          )}
           <p className="break-all text-xs">
             {confirmation?.issue.reference?.label ?? confirmation?.issue.path}
           </p>

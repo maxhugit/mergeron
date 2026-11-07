@@ -80,5 +80,228 @@
   "availableCorrections": "Available corrections",
   "noAutomaticRepair": "No automatic correction is available for this issue. Follow the guidance above to locate or reconnect existing data.",
   "openAgentReference": "Open the agent to choose another reference",
-  "issueResolved": "This issue is no longer present in the refreshed inspection."
+  "issueResolved": "This issue is no longer present in the refreshed inspection.",
+  "visual": {
+    "current": "Current situation",
+    "after": "After correction",
+    "afterLabel": "Expected result after confirmation",
+    "details": "Technical details",
+    "explanation": "What is wrong",
+    "diagram": "{{left}} — {{link}} — {{right}}",
+    "created": "Empty folder",
+    "linked": "Reference restored",
+    "createdLink": "Folder created",
+    "linkedLink": "Link restored",
+    "beforeConfirm": "Preview of the expected result. No correction has been applied yet.",
+    "unknown": {
+      "left": "Project item",
+      "right": "State to check",
+      "link": "Needs inspection",
+      "explanation": "The inspection reported an issue. Review the details and available actions before making changes.",
+      "title": "Issue to review"
+    },
+    "outsideProject": {
+      "left": "Allowed project",
+      "right": "Path to inspect",
+      "link": "Out of scope",
+      "explanation": "This path is outside the project boundaries. The inspection cannot access this location.",
+      "title": "A path is outside the project"
+    },
+    "symbolicLink": {
+      "left": "Project folder",
+      "right": "Symbolic link",
+      "link": "Access blocked",
+      "explanation": "This location redirects to another path. The inspection does not follow the link to stay within its allowed scope.",
+      "title": "A folder redirects to another location"
+    },
+    "pathCollision": {
+      "left": "Expected folder",
+      "right": "Existing file",
+      "link": "Different type",
+      "explanation": "A file occupies the location reserved for a folder. Check its contents before reorganizing this location.",
+      "title": "A file occupies a folder’s location"
+    },
+    "projectRootMissing": {
+      "left": "Registered project",
+      "right": "Main folder",
+      "link": "Not found",
+      "explanation": "Mergeron knows this project but cannot find its main folder at the expected location.",
+      "title": "The main project folder was not found"
+    },
+    "projectLocationMismatch": {
+      "left": "Registered project",
+      "right": "Main location",
+      "link": "Unexpected layout",
+      "explanation": "The main path does not match the expected layout. Its origin needs checking before making changes.",
+      "title": "The main folder is in an unexpected location"
+    },
+    "migrationRequired": {
+      "left": "Current layout",
+      "right": "Expected layout",
+      "link": "Migration required",
+      "explanation": "This project uses an older folder layout. A dedicated migration is required to preserve its data.",
+      "title": "The project layout needs migrating"
+    },
+    "projectIdentityMismatch": {
+      "left": "Project identity",
+      "right": "Folder identity",
+      "link": "Not verified",
+      "explanation": "The inspection cannot confirm that this folder belongs to this project. No change is proposed on that basis.",
+      "title": "The folder identity needs checking"
+    },
+    "directoryMissing": {
+      "left": "Project layout",
+      "right": "Expected folder",
+      "link": "Missing",
+      "explanation": "An expected folder was not found. Creating it empty is only offered when the server has verified that it is safe.",
+      "title": "A storage folder is missing"
+    },
+    "documentMissing": {
+      "left": "Registered document",
+      "right": "File on disk",
+      "link": "Missing or invalid",
+      "explanation": "This document is registered but its file was not found or is not a valid file. It may have moved: look for the original or a backup.",
+      "title": "A registered document was not found"
+    },
+    "currentVersionMissing": {
+      "left": "Current document",
+      "right": "Registered version",
+      "link": "Not linked",
+      "explanation": "The current document version is not registered in its history. This does not establish that the file is missing.",
+      "title": "The current version is not registered"
+    },
+    "snapshotMissing": {
+      "left": "Historical version",
+      "right": "Version file",
+      "link": "Missing or invalid",
+      "explanation": "A version is registered in history but its file is unavailable at the expected location. Check backups.",
+      "title": "A historical version file was not found"
+    },
+    "documentLocationMismatch": {
+      "left": "Document deliverable",
+      "right": "File location",
+      "link": "Different location",
+      "explanation": "The document is outside its expected deliverable storage. Check the file and its association.",
+      "title": "A document is outside its deliverable"
+    },
+    "snapshotLocationMismatch": {
+      "left": "Version history",
+      "right": "Version location",
+      "link": "Different location",
+      "explanation": "This version file is outside its expected history storage. Check its location.",
+      "title": "A version is outside history storage"
+    },
+    "copyRegistrationMissing": {
+      "left": "Registered Git copy",
+      "right": "Registered location",
+      "link": "Association missing",
+      "explanation": "This Git copy is known but its location is not registered. Check the copy and its changes before linking it.",
+      "title": "A Git copy lost its registered location"
+    },
+    "copyLocationMismatch": {
+      "left": "Expected Git location",
+      "right": "Copy location",
+      "link": "Different location",
+      "explanation": "This Git copy is located elsewhere than expected. Preserve its files and local changes during inspection.",
+      "title": "A Git copy is in an unexpected location"
+    },
+    "copyMissing": {
+      "left": "Registered Git copy",
+      "right": "Copy folder",
+      "link": "Not found",
+      "explanation": "Mergeron knows this Git copy but cannot find its folder. A fresh remote copy would not recover unpublished changes.",
+      "title": "A registered Git copy was not found"
+    },
+    "gitMetadataMissing": {
+      "left": "Copy folder",
+      "right": "Git information",
+      "link": "Missing",
+      "explanation": "The folder exists but its Git information is not present as expected. Check the files before recreating a copy.",
+      "title": "This copy’s Git information is missing"
+    },
+    "agentReferenceObsolete": {
+      "left": "Agent reference",
+      "right": "Migrated folder",
+      "link": "Old path",
+      "explanation": "The migrated folder was found but the agent still stores an old reference. The inspection may offer to restore this link.",
+      "title": "An agent still uses an old reference"
+    },
+    "agentOverrideObsolete": {
+      "left": "Conversation",
+      "right": "Migrated folder",
+      "link": "Old path",
+      "explanation": "This conversation stores an old path although the migrated folder exists. The reference can be aligned if the server offers it.",
+      "title": "A conversation still uses an old folder"
+    },
+    "agentReferenceMissing": {
+      "left": "Agent reference",
+      "right": "Reference folder",
+      "link": "Not found",
+      "explanation": "The folder used as this agent’s reference was not found. Check its location or select another reference.",
+      "title": "An agent’s reference folder was not found"
+    },
+    "unregisteredDocument": {
+      "left": "Deliverable documents",
+      "right": "File on disk",
+      "link": "Not registered",
+      "explanation": "A file exists without a matching document in Mergeron. Document import preserves identity, versions and checks.",
+      "title": "A file is not registered in the deliverable"
+    },
+    "unregisteredDeliverableDirectory": {
+      "left": "Registered deliverable",
+      "right": "Folder on disk",
+      "link": "Not linked",
+      "explanation": "A folder exists without a matching deliverable. It may be a technical folder: verify its origin before linking or cleaning up.",
+      "title": "A folder exists without an associated deliverable"
+    },
+    "unregisteredCopy": {
+      "left": "Known Mergeron copy",
+      "right": "Git copy on disk",
+      "link": "Not linked",
+      "explanation": "A Git copy exists without a registered association. It may contain unpublished changes: verify its origin and contents.",
+      "title": "A Git copy exists without being registered"
+    },
+    "scanLimited": {
+      "left": "Scope to inspect",
+      "right": "Inspected portion",
+      "link": "Incomplete inspection",
+      "explanation": "The inspection limit was reached. Results are partial and automatic corrections are disabled for this report.",
+      "title": "The inspection is incomplete"
+    },
+    "transferRunning": {
+      "left": "Project folders",
+      "right": "Transfer in progress",
+      "link": "Corrections paused",
+      "explanation": "Folders are being transferred. Wait for completion and refresh the inspection before correcting a reference.",
+      "title": "A transfer has paused corrections"
+    },
+    "primaryLocationMismatch": {
+      "left": "Registered project",
+      "right": "Primary connection",
+      "link": "Inconsistent",
+      "explanation": "The primary location stored in the database does not match the expected project location. References need checking.",
+      "title": "The project’s primary connection is inconsistent"
+    },
+    "activeFolderRegistrationMissing": {
+      "left": "Project item",
+      "right": "Old connection",
+      "link": "Broken link",
+      "explanation": "This item stores a connection that no longer exists. This does not mean its files were deleted. The inspection may offer Folders as a new reference.",
+      "title": "An item lost its link to a folder"
+    },
+    "activeFolderOutsideWorkspace": {
+      "left": "Allowed connection",
+      "right": "Reference folder",
+      "link": "Outside connection",
+      "explanation": "The reference path is outside its connection boundaries. Select a reference in an allowed location.",
+      "title": "A reference is outside its allowed connection"
+    },
+    "activeFolderMissing": {
+      "left": "Project item",
+      "right": "Reference folder",
+      "link": "Not found",
+      "explanation": "The connection is known but its reference folder was not found. Check the folder or select another reference.",
+      "title": "A reference folder was not found"
+    }
+  }
 }

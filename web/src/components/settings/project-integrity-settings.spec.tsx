@@ -72,11 +72,11 @@ async function choose() {
   fireEvent.change(await screen.findByRole('combobox'), {
     target: { value: 'p' },
   });
-  await screen.findByText('Dossier attendu absent');
+  await screen.findByText('Un dossier de rangement est absent');
 }
 async function openCorrections() {
   fireEvent.click(
-    await screen.findByRole('button', { name: /^Corrections :/ }),
+    within((await screen.findAllByRole('article'))[0]).getByRole('button'),
   );
   await screen.findByRole('dialog');
 }
@@ -185,8 +185,10 @@ it('identifies the affected task and confirms its new reference from the diagnos
   await screen.findByRole('option', { name: 'Project' });
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'p' } });
   await screen.findByText('Tâche : Préparer la réunion');
-  expect(screen.getByText('Connexion absente : removed')).toBeTruthy();
+  expect(screen.queryByText('Connexion absente : removed')).toBeNull();
   await openCorrections();
+  fireEvent.click(screen.getByText('Détails techniques'));
+  expect(screen.getByText('Connexion absente : removed')).toBeVisible();
   fireEvent.click(
     screen.getByRole('button', { name: 'Utiliser Dossiers comme référence…' }),
   );
@@ -330,4 +332,67 @@ it('offers opening the affected agent to choose its reference, without a repair 
   expect(
     vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
   ).toBe(false);
+});
+
+it('previews a repair without writing, keeps technical details collapsed, and still requires confirmation', async () => {
+  show();
+  await choose();
+  await openCorrections();
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByRole('img')).toHaveAccessibleName(
+    /Dossier attendu/,
+  );
+  expect(
+    within(dialog).getByText('Détails techniques').closest('details'),
+  ).not.toHaveAttribute('open');
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Après correction' }),
+  );
+  expect(within(dialog).getByRole('img')).toHaveAccessibleName(
+    /Dossier créé — Dossier vide/,
+  );
+  expect(within(dialog).getByRole('status')).toHaveTextContent(
+    'Aucune correction n’a encore été appliquée',
+  );
+  expect(
+    vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
+  ).toBe(false);
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Situation actuelle' }),
+  );
+  expect(within(dialog).getByRole('img')).toHaveAccessibleName(/Absent/);
+});
+it('does not offer an after preview for manual, unknown, or incomplete diagnoses', async () => {
+  report.limited = true;
+  show();
+  await choose();
+  await openCorrections();
+  expect(screen.queryByRole('button', { name: 'Après correction' })).toBeNull();
+  expect(screen.queryByText('Dossier créé')).toBeNull();
+  expect(
+    vi.mocked(integrityRequest).mock.calls.some(([, body]) => !!body),
+  ).toBe(false);
+});
+it('revokes the visual preview if refreshed inspection no longer permits repair', async () => {
+  show();
+  await choose();
+  await openCorrections();
+  fireEvent.click(screen.getByRole('button', { name: 'Après correction' }));
+  vi.mocked(integrityRequest).mockResolvedValue({ ...report, limited: true });
+  fireEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Actualiser le diagnostic',
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('button', { name: 'Après correction' }),
+    ).toBeNull(),
+  );
+  expect(
+    within(screen.getByRole('dialog')).getByRole('img'),
+  ).toHaveAccessibleName(/Absent/);
+  expect(
+    screen.queryByRole('button', { name: 'Recréer ce dossier vide' }),
+  ).toBeNull();
 });
