@@ -1,4 +1,4 @@
-import { TaskAgentLaunchService } from './task-agent-launch.service';
+import { ProjectAgentLaunchService } from './project-agent-launch.service';
 import { CodexModule } from '../codex/codex.module';
 import { ProjectTaskRuntimeService } from './project-task-runtime.service';
 import { ProjectIntegrityService } from './project-integrity.service';
@@ -61,7 +61,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
   ],
   providers: [
     ProjectTaskRuntimeService,
-    TaskAgentLaunchService,
+    ProjectAgentLaunchService,
     PullRequestTrackerService,
     ProjectIntegrityService,
     DocumentLabelsAiAdapter,

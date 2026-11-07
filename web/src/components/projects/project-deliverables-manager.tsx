@@ -1,3 +1,4 @@
+import { AgentLaunchRecovery } from './agent-launch-recovery';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
@@ -1109,7 +1110,10 @@ function DeliverableDetail({
   const [renameTitle, setRenameTitle] = useState(item.title);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const { t: agentText } = useTranslation('deliverables');
+  const { t: launchText } = useTranslation('workspaces');
+  const client = useQueryClient();
   const [agentMode, setAgentMode] = useState('new');
+  const agentRequestId = useRef<string | null>(null);
   const [existingThreadId, setExistingThreadId] = useState('');
   const availableAgents = useQuery({
     queryKey: ['deliverable-available-agents', base, item.id],
@@ -1170,14 +1174,21 @@ function DeliverableDetail({
       subtaskTitle?: string;
       existingThreadId?: string;
     }) =>
-      projectsApi<{ threadId: string; taskId: string | null }>(
+      projectsApi<{ threadId: string | null; taskId: string | null; state: string }>(
         `${base}/${item.id}/agent`,
         {
           method: 'POST',
-          body: JSON.stringify({ version: item.version, ...input }),
+          body: JSON.stringify({ version: item.version, requestId: agentRequestId.current ??= crypto.randomUUID(), ...input }),
         },
       ),
-    onSuccess: async ({ threadId }) => {
+    onSuccess: async ({ threadId, state }) => {
+      await client.invalidateQueries({ queryKey: ['agent-launch', base.split('/')[1]] });
+      if (state === 'needs_attention' || state === 'pending' || !threadId) {
+        setError(launchText('launchRecoveryNeeded'));
+        await refresh();
+        return;
+      }
+      agentRequestId.current = null;
       setAgentDialogOpen(false);
       await refresh();
       await navigate({ to: '/t/$threadId', params: { threadId } });
@@ -1243,6 +1254,8 @@ function DeliverableDetail({
   ];
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <AgentLaunchRecovery projectId={base.split('/')[1]} resourceId={base.split('/')[3]} kind="deliverable" targetId={item.id}
+        onOpen={threadId => { void navigate({ to: '/t/$threadId', params: { threadId } }); }} onRecovered={() => { agentRequestId.current = null; return refresh(); }} />
       <DeliverableHeaderSlot
         id={
           embedded
@@ -1536,6 +1549,8 @@ function DeliverableDetail({
               {t('deliverableAgentOptionalSubtask')}
             </DialogDescription>
           </DialogHeader>
+          <AgentLaunchRecovery projectId={base.split('/')[1]} resourceId={base.split('/')[3]} kind="deliverable" targetId={item.id}
+            onOpen={threadId => { void navigate({ to: '/t/$threadId', params: { threadId } }); }} onRecovered={() => { agentRequestId.current = null; return refresh(); }} />
           <form
             className="space-y-4"
             onSubmit={(event) => {

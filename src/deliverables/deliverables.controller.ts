@@ -1,7 +1,5 @@
 import {
-  BadRequestException,
   Body,
-  ConflictException,
   Controller,
   Delete,
   Get,
@@ -17,8 +15,10 @@ import type { FastifyReply } from 'fastify';
 import type { FileUploadInput } from '../files/files.service';
 import type { IdentityRequest } from '../auth/platform-access.guard';
 import { IdentityService } from '../auth/identity.service';
-import { ThreadsService } from '../threads/threads.service';
-import { ProjectsService } from '../projects/projects.service';
+import {
+  ProjectAgentLaunchService,
+  type DeliverableAgentInput,
+} from '../projects/project-agent-launch.service';
 import { ThreadMetadataService } from '../threads/thread-metadata.service';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { requireExecutionAccess } from '../auth/access-context';
@@ -31,10 +31,9 @@ export class DeliverablesController {
   constructor(
     private readonly service: DeliverablesService,
     private readonly identities: IdentityService,
-    private readonly threads: ThreadsService,
-    private readonly projects: ProjectsService,
     private readonly metadata: ThreadMetadataService,
     private readonly mutations: GitMutationGateService,
+    private readonly launches: ProjectAgentLaunchService,
   ) {}
   @Post('link-task')
   linkTask(
@@ -81,11 +80,14 @@ export class DeliverablesController {
   ) {
     const ids = new Set(this.service.availableAgentIds(p, r, id));
     const { entries } = await this.metadata.read();
+    const item = this.service.get(p, r, id);
+    const cwd = this.service.agentWorkspace(p, r, id, item.version);
     return {
       agents: entries
         .filter(
           ({ thread, archived }) =>
             ids.has(thread.id) &&
+            thread.cwd === cwd &&
             !archived &&
             (thread.status.type === 'idle' ||
               thread.status.type === 'notLoaded'),
@@ -97,148 +99,26 @@ export class DeliverablesController {
     };
   }
   @Post(':id/agent')
-  async agent(
+  agent(
     @Param('projectId') p: string,
     @Param('resourceId') r: string,
     @Param('id') id: string,
-    @Body()
-    body: {
-      version: number;
-      subtaskId?: string;
-      subtaskTitle?: string;
-      existingThreadId?: string;
-    },
-    @Req() request: IdentityRequest,
+    @Body() body: DeliverableAgentInput,
   ) {
-    if (body.existingThreadId !== undefined) {
-      requireExecutionAccess();
-      if (
-        typeof body.existingThreadId !== 'string' ||
-        !body.existingThreadId.trim()
-      )
-        throw new BadRequestException('Select an existing agent');
-      const existingThreadId = body.existingThreadId;
-      return this.mutations.mutate(async () => {
-        const available = await this.availableAgents(p, r, id);
-        if (!available.agents.some((agent) => agent.id === existingThreadId))
-          throw new ConflictException('This agent is no longer available');
-        return this.assignAgent(p, r, id, body, request, existingThreadId);
-      });
-    }
-    return this.assignAgent(p, r, id, body, request);
+    requireExecutionAccess();
+    if (body.existingThreadId !== undefined)
+      return this.mutations.mutate(() =>
+        this.launches.deliverable(p, r, id, body),
+      );
+    return this.launches.deliverable(p, r, id, body);
   }
-  private async assignAgent(
-    p: string,
-    r: string,
-    id: string,
-    body: { version: number; subtaskId?: string; subtaskTitle?: string },
-    request: IdentityRequest,
-    existingThreadId?: string,
+  @Get(':id/agent-launch')
+  agentLaunchStatus(
+    @Param('projectId') p: string,
+    @Param('resourceId') r: string,
+    @Param('id') id: string,
   ) {
-    const deliverable = this.service.get(p, r, id);
-    const cwd = this.service.agentWorkspace(p, r, id, body.version);
-    if (
-      (body.subtaskId !== undefined &&
-        (typeof body.subtaskId !== 'string' || !body.subtaskId.trim())) ||
-      (body.subtaskTitle !== undefined &&
-        (typeof body.subtaskTitle !== 'string' || !body.subtaskTitle.trim())) ||
-      (body.subtaskId !== undefined && body.subtaskTitle !== undefined)
-    )
-      throw new BadRequestException(
-        'Select one subtask or create one, not both',
-      );
-    const board = this.service.board(p, r);
-    const primaryTask = deliverable.primaryTaskId
-      ? board.tasks.find((task) => task.id === deliverable.primaryTaskId)
-      : undefined;
-    if (
-      (body.subtaskId || body.subtaskTitle) &&
-      deliverable.primaryTaskId &&
-      !primaryTask
-    )
-      throw new BadRequestException('The primary task no longer exists');
-    let createdSubtask = false;
-    let subtask:
-      | {
-          id: string;
-          title: string;
-          resourceId: string;
-          parentTaskId: string | null;
-          linkedThreadId?: string | null;
-        }
-      | undefined = body.subtaskId
-      ? board.tasks.find((task) => task.id === body.subtaskId)
-      : undefined;
-    if (body.subtaskId) {
-      if (!primaryTask || !subtask || subtask.parentTaskId !== primaryTask.id)
-        throw new BadRequestException(
-          'The selected task must be a subtask of the primary task',
-        );
-      if (subtask.linkedThreadId)
-        throw new ConflictException('This subtask already has an agent');
-    } else if (body.subtaskTitle !== undefined) {
-      const actor = {
-        personId: request.platformIdentity?.personId ?? null,
-        name: request.platformIdentity?.name ?? 'Système',
-      };
-      subtask = primaryTask
-        ? this.projects.createTask(
-            p,
-            primaryTask.resourceId,
-            {
-              parentTaskId: primaryTask.id,
-              title:
-                typeof body.subtaskTitle === 'string' &&
-                body.subtaskTitle.trim()
-                  ? body.subtaskTitle.trim()
-                  : `Produire — ${deliverable.title}`,
-              description: `Produire le livrable « ${deliverable.title} » depuis cette sous-tâche.`,
-              validationCriteria: deliverable.criteria,
-              executionMode: 'agent',
-            },
-            actor,
-          )
-        : this.projects.createDeliverableExecutionSubtask(
-            p,
-            deliverable.id,
-            deliverable.title,
-            deliverable.criteria,
-            actor,
-            typeof body.subtaskTitle === 'string'
-              ? body.subtaskTitle
-              : undefined,
-          );
-      createdSubtask = true;
-    }
-    const started = existingThreadId
-      ? { thread: { id: existingThreadId } }
-      : await this.threads.startThread({ cwd });
-    try {
-      if (!existingThreadId)
-        this.threads.rememberInitialThreadCwd(started.thread.id, cwd);
-      this.service.registerAgent(
-        p,
-        r,
-        id,
-        body.version,
-        started.thread.id,
-        subtask?.id,
-        ...(existingThreadId ? ([true] as const) : ([] as const)),
-      );
-    } catch (error) {
-      if (!existingThreadId)
-        await this.threads.archiveThread(started.thread.id).catch(() => {});
-      throw error;
-    }
-    if (!existingThreadId)
-      await this.threads
-        .setThreadName(started.thread.id, subtask?.title ?? deliverable.title)
-        .catch(() => {});
-    return {
-      threadId: started.thread.id,
-      taskId: subtask?.id ?? null,
-      createdSubtask,
-    };
+    return this.launches.status(p, r, 'deliverable', id);
   }
   @Get() list(@Param('projectId') p: string, @Param('resourceId') r: string) {
     return this.service.board(p, r);

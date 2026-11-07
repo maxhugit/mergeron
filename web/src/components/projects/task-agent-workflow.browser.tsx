@@ -15,6 +15,10 @@ vi.mock('@/lib/projects-api', async (original) => ({
   ...(await original<typeof import('@/lib/projects-api')>()),
   projectsApi: api,
 }));
+vi.mock('@/lib/platform-session', async (original) => ({
+  ...(await original<typeof import('@/lib/platform-session')>()),
+  usePlatformSession: () => ({ isAdministrator: true }),
+}));
 vi.mock('@tanstack/react-router', async (original) => ({
   ...(await original<typeof import('@tanstack/react-router')>()),
   useNavigate: () => navigate,
@@ -100,8 +104,10 @@ async function setup(agentState: ProjectTaskSummary['agentState'] = 'ready') {
     if (path?.endsWith('/agent'))
       return Promise.resolve({
         threadId: 'existing',
-        state: 'needs_attention',
+        state: 'submitted',
       });
+    if (path?.endsWith('/agent-launch'))
+      return Promise.resolve({ launch: null, candidates: [] });
     if (path === '/people') return Promise.resolve({ people: [] });
     if (path?.endsWith('/participants'))
       return Promise.resolve({ participants: [] });
@@ -150,7 +156,7 @@ test.each([390, 1280])(
       expectedUpdatedAt: 43,
       requestId: expect.any(String),
     });
-    expect(warning).toHaveBeenCalledOnce();
+    expect(warning).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith({
       to: '/t/$threadId',
       params: { threadId: 'existing' },
