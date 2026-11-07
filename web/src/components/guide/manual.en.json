@@ -979,6 +979,14 @@
             ]
           },
           {
+            "title": "Folder or deliverable: one exclusive reference",
+            "paragraphs": [
+              "A main task uses either a project folder or a deliverable, never two independent references. In Work reference, choose the type and then the folder or deliverable. Without a deliverables manager in the project, only Folder is available.",
+              "With a Deliverable reference, the task and its subtasks inherit that deliverable’s effective folder. Subtasks cannot choose their own reference. Missing or unavailable references must be resolved before starting an agent; no fallback folder is silently selected.",
+              "Changing the reference does not delete agents or their history and does not move their folders. Remove incompatible agent assignments first. Changes use observed revisions so an old form cannot overwrite a newer change."
+            ]
+          },
+          {
             "title": "Statuses and progress",
             "paragraphs": [
               "Main-task columns are customizable except Unassigned actions. Deleting a column moves its tasks to that system column.",

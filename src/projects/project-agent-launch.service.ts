@@ -1,3 +1,4 @@
+import { taskWorkReference } from './task-work-reference';
 /** Creation is reserved before native work; recovery never replays an uncertain turn. */
 import {
   BadRequestException,
@@ -76,7 +77,7 @@ export class ProjectAgentLaunchService {
       .get();
     if (!task?.parentTaskId || task.executionMode !== 'agent')
       throw new BadRequestException('Select an agent execution subtask');
-    return task;
+    return { ...task, workspacePath: taskWorkReference(this.db, task).path };
   }
   private view(receipt: Receipt) {
     if (receipt.threadId) requireThreadAccess(receipt.threadId);
@@ -379,33 +380,25 @@ export class ProjectAgentLaunchService {
             'This subtask already has a launch. Recover its existing agent from the task manager.',
           );
         if (input.subtaskTitle !== undefined) {
-          if (item.primaryTaskId && !parent)
-            throw new ConflictException('The primary task no longer exists');
-          const actor = {
-            personId: currentAccess()?.identity.personId ?? null,
-            name: currentAccess()?.identity.name ?? 'Système',
-          };
-          task = parent
-            ? this.projects.createTask(
-                projectId,
-                parent.resourceId,
-                {
-                  parentTaskId: parent.id,
-                  title: input.subtaskTitle,
-                  description: `Produire le livrable « ${item.title} ».`,
-                  validationCriteria: item.criteria,
-                  executionMode: 'agent',
-                },
-                actor,
-              )
-            : this.projects.createDeliverableExecutionSubtask(
-                projectId,
-                id,
-                item.title,
-                item.criteria,
-                actor,
-                input.subtaskTitle,
-              );
+          if (!parent)
+            throw new ConflictException(
+              'Link the deliverable to a main task before creating an execution subtask',
+            );
+          task = this.projects.createTask(
+            projectId,
+            parent.resourceId,
+            {
+              parentTaskId: parent.id,
+              title: input.subtaskTitle,
+              description: `Produire le livrable « ${item.title} ».`,
+              validationCriteria: item.criteria,
+              executionMode: 'agent',
+            },
+            {
+              personId: currentAccess()?.identity.personId ?? null,
+              name: currentAccess()?.identity.name ?? 'Système',
+            },
+          );
         }
         return {
           kind: 'deliverable',

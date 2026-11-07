@@ -34,6 +34,8 @@ afterEach(() => {
 async function setup(
   agentState: ProjectTaskSummary['agentState'] = 'ready',
   failLaunch = false,
+  initialTaskId = 'sub',
+  withDeliverables = false,
 ) {
   await i18nReady;
   await i18n.changeLanguage('fr');
@@ -101,9 +103,25 @@ async function setup(
   } as unknown as ProjectTaskBoard;
   let requested = false;
   api.mockImplementation((path?: string, init?: RequestInit) => {
+    if (path?.endsWith('/deliverables'))
+      return Promise.resolve({
+        deliverables: [
+          {
+            id: 'output',
+            title: 'Présentation',
+            version: 7,
+            primaryTaskId: null,
+            lifecycleStatus: 'draft',
+          },
+        ],
+      });
     if (init?.method === 'PATCH')
       return Promise.resolve({
-        task: { ...sub, ...JSON.parse(String(init.body)), updatedAt: 43 },
+        task: {
+          ...(String(path).endsWith('/main') ? main : sub),
+          ...JSON.parse(String(init.body)),
+          updatedAt: 43,
+        },
       });
     if (path?.endsWith('/agent')) {
       requested = true;
@@ -134,7 +152,15 @@ async function setup(
       return Promise.resolve({ participants: [] });
     if (!path)
       return Promise.resolve({
-        projects: [{ id: 'p', resources: [], workspaces: [] }],
+        projects: [
+          {
+            id: 'p',
+            resources: withDeliverables
+              ? [{ id: 'deliverables', type: 'deliverable_board' }]
+              : [],
+            workspaces: [],
+          },
+        ],
       });
     return Promise.resolve(board);
   });
@@ -146,7 +172,7 @@ async function setup(
       <ProjectTaskManager
         projectId="p"
         resourceId="r"
-        initialTaskId="sub"
+        initialTaskId={initialTaskId}
         modalOnly
       />
     </QueryClientProvider>,
@@ -251,5 +277,64 @@ test.each([390, 1280])(
     await page.screenshot({
       path: `../../../.vitest-screenshots/task-editor-recovery-${width}.png`,
     });
+  },
+);
+
+test.each([390, 1280])(
+  'selects an exclusive task reference and hides deliverables without a manager at %ipx',
+  async (width) => {
+    await page.viewport(width, 950);
+    await setup('ready', false, 'main', false);
+    let selector = screen.getByRole('combobox', {
+      name: 'Type de référence',
+    }) as HTMLSelectElement;
+    expect(Array.from(selector.options).map((option) => option.value)).toEqual([
+      'folder',
+    ]);
+    cleanup();
+    await setup('ready', false, 'main', true);
+    selector = screen.getByRole('combobox', {
+      name: 'Type de référence',
+    }) as HTMLSelectElement;
+    await expect
+      .poll(() => Array.from(selector.options).map((option) => option.value))
+      .toEqual(['folder', 'deliverable']);
+    fireEvent.change(selector, { target: { value: 'deliverable' } });
+    const choice = screen
+      .getAllByRole('combobox')
+      .find((element) =>
+        Array.from((element as HTMLSelectElement).options).some(
+          (option) => option.value === 'output',
+        ),
+      ) as HTMLSelectElement;
+    expect(choice).toBeDefined();
+    fireEvent.change(choice, { target: { value: 'output' } });
+    selector.focus();
+    selector.scrollIntoView({ block: 'center' });
+    await expect
+      .poll(
+        () =>
+          selector.getBoundingClientRect().top >= 0 &&
+          selector.getBoundingClientRect().bottom <= window.innerHeight,
+      )
+      .toBe(true);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/task-work-reference-${width}.png`,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await expect
+      .poll(
+        () =>
+          api.mock.calls.filter(([, init]) => init?.method === 'PATCH').length,
+      )
+      .toBe(1);
+    const patch = api.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
+    const body = JSON.parse(String(patch[1].body));
+    expect(body.workReference).toEqual({
+      type: 'deliverable',
+      deliverableId: 'output',
+      expectedVersion: 7,
+    });
+    expect(body.workspacePath).toBeUndefined();
   },
 );

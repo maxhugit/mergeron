@@ -420,5 +420,13 @@
   "launchRecoveryNoReplay": "Recovery never resends instructions. After association, continue in the existing conversation. You can also close this request after checking: the agent and its history will be kept.",
   "launchRecoveryConflict": "Recovery was not confirmed. Refresh and check that the agent and its destination are still available.",
   "launchRecoveryNeeded": "This launch needs checking. Use the recovery panel.",
-  "launchRecoveryKeep": "Keep agent without finishing the association"
+  "launchRecoveryKeep": "Keep agent without finishing the association",
+  "taskWorkReference": "Work reference",
+  "taskWorkReferenceType": "Reference type",
+  "taskChooseDeliverable": "Choose a deliverable",
+  "taskDeliverableFolderInherited": "The task and its subtasks use the deliverable folder.",
+  "taskCreateOrLinkDeliverable": "Create or link a deliverable",
+  "taskFolderOnly": "Without a deliverables manager, only a folder reference is available.",
+  "taskReferenceInherited": "The work reference is inherited from the main task.",
+  "taskAgentFolderPreserved": "Agents keep their own folder and history. Incompatible assignments must be removed before changing the reference."
 }

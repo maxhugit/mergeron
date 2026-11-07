@@ -1,3 +1,11 @@
+import {
+  taskWorkReference,
+  validateTaskWorkReference,
+  applyTaskWorkReference,
+  normalizeDeliverableTaskReference,
+  assertWorkReferenceAgentLinks,
+  type TaskWorkReferenceInput,
+} from './task-work-reference';
 import { assertTaskAgent } from './project-work-links';
 import {
   BadRequestException,
@@ -1694,6 +1702,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       .all()
       .sort((a, b) => a.position - b.position);
     const taskIds = new Set(tasks.map((task) => task.id));
+    const references = new Map<string, ReturnType<typeof taskWorkReference>>();
     return {
       resource,
       project,
@@ -1704,10 +1713,18 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         .where(eq(projectTaskStatuses.resourceId, resourceId))
         .all()
         .sort((a, b) => a.position - b.position),
-      tasks: tasks.map((task) => ({
-        ...task,
-        activeFolder: this.folders.get('task', task.id),
-      })),
+      tasks: tasks.map((task) => {
+        const rootId = task.parentTaskId ?? task.id;
+        const workReference =
+          references.get(rootId) ?? taskWorkReference(this.db, task);
+        references.set(rootId, workReference);
+        return {
+          ...task,
+          workspacePath: workReference.path,
+          workReference,
+          activeFolder: workReference.activeFolder,
+        };
+      }),
       activity: this.db
         .select()
         .from(projectTaskActivity)
@@ -1824,6 +1841,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       linkedFilePath?: string | null;
       parentTaskId?: string | null;
       workspacePath?: string | null;
+      workReference?: TaskWorkReferenceInput;
       executionMode?: string;
       estimateMinutes?: number;
       progress?: number;
@@ -1833,7 +1851,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       subtaskStatus?: string;
     },
     actor?: ProjectActivityActor,
-  ): ProjectTask {
+  ): ProjectTask & { workReference?: ReturnType<typeof taskWorkReference> } {
     this.getResource(projectId, resourceId);
     const fallback = this.db
       .select()
@@ -1855,6 +1873,31 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       : null;
     if (parent?.parentTaskId)
       throw new BadRequestException('A subtask cannot contain subtasks');
+    if (input.workReference !== undefined)
+      validateTaskWorkReference(input.workReference);
+    if (
+      parent &&
+      input.workspacePath &&
+      input.workspacePath !== taskWorkReference(this.db, parent).path
+    )
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (parent && input.workReference)
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (input.workReference?.type === 'folder')
+      input = {
+        ...input,
+        workReference: {
+          type: 'folder',
+          path: this.validateTaskWorkspace(projectId, input.workReference.path),
+        },
+      };
+    if (input.workReference && input.workspacePath)
+      throw new BadRequestException('Select one task work reference');
+
     const now = Date.now();
     const task: ProjectTask = {
       id: randomUUID(),
@@ -1893,6 +1936,16 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     this.validateTaskDateRange(task.startAt, task.dueAt, parent);
     this.db.transaction((tx) => {
       tx.insert(projectTasks).values(task).run();
+      if (input.workReference) {
+        applyTaskWorkReference(
+          this.db,
+          projectId,
+          task.id,
+          input.workReference,
+        );
+        assertWorkReferenceAgentLinks(this.db, task.id);
+      }
+      if (parent) normalizeDeliverableTaskReference(this.db, parent.id);
       tx.insert(projectTaskActivity)
         .values({
           id: randomUUID(),
@@ -1934,13 +1987,22 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
         true,
         actor,
       );
-    this.folders.setFromAbsolutePath(
-      projectId,
-      'task',
-      task.id,
-      task.workspacePath,
-    );
-    return task;
+    const saved = this.requireTask(resourceId, task.id);
+    const reference = taskWorkReference(this.db, saved);
+    if (reference.type === 'folder' && reference.path)
+      this.folders.setFromAbsolutePath(
+        projectId,
+        'task',
+        task.id,
+        reference.path,
+      );
+    const refreshed = this.requireTask(resourceId, task.id);
+    const finalReference = taskWorkReference(this.db, refreshed);
+    return {
+      ...refreshed,
+      workspacePath: finalReference.path,
+      workReference: finalReference,
+    };
   }
 
   // Preserve the asynchronous service contract used by API and internal callers.
@@ -1964,6 +2026,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       linkedFilePath: string | null;
       parentTaskId: string | null;
       workspacePath: string | null;
+      workReference: TaskWorkReferenceInput;
       executionMode: string;
       agentState: string;
       estimateMinutes: number;
@@ -1974,7 +2037,9 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       subtaskStatus: string;
     }>,
     actor?: ProjectActivityActor,
-  ): Promise<ProjectTask> {
+  ): Promise<
+    ProjectTask & { workReference?: ReturnType<typeof taskWorkReference> }
+  > {
     this.getResource(projectId, resourceId);
     const task = this.requireTask(resourceId, taskId);
     if (
@@ -2029,6 +2094,40 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     const effectiveParent = effectiveParentId
       ? this.requireTask(resourceId, effectiveParentId)
       : null;
+    if (input.workReference !== undefined)
+      validateTaskWorkReference(input.workReference);
+    if (
+      effectiveParent &&
+      input.workspacePath &&
+      input.workspacePath !== taskWorkReference(this.db, effectiveParent).path
+    )
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (effectiveParentId && input.workReference)
+      throw new BadRequestException(
+        'Subtasks inherit the main task work reference',
+      );
+    if (input.workReference && input.workspacePath)
+      throw new BadRequestException('Select one task work reference');
+    if (input.workReference?.type === 'folder')
+      input = {
+        ...input,
+        workReference: {
+          type: 'folder',
+          path: this.validateTaskWorkspace(projectId, input.workReference.path),
+        },
+      };
+    const previousReference = taskWorkReference(this.db, task);
+    if (
+      !input.workReference &&
+      previousReference.type === 'deliverable' &&
+      input.workspacePath &&
+      input.workspacePath !== previousReference.path
+    )
+      throw new ConflictException(
+        'This task uses a deliverable. Select a folder reference explicitly to replace it',
+      );
     const hasChildren =
       !effectiveParentId &&
       this.db
@@ -2207,6 +2306,23 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       )
         throw new ConflictException('Task changed. Reload before saving.');
       const changes = this.taskChanges(task, updated);
+      if (input.workReference)
+        changes.workReference = {
+          before:
+            previousReference.type === 'deliverable'
+              ? {
+                  type: 'deliverable',
+                  deliverableId: previousReference.deliverableId,
+                }
+              : { type: 'folder', path: previousReference.path },
+          after:
+            input.workReference.type === 'deliverable'
+              ? {
+                  type: 'deliverable',
+                  deliverableId: input.workReference.deliverableId,
+                }
+              : { type: 'folder', path: input.workReference.path },
+        };
       if (Object.keys(changes).length)
         tx.insert(projectTaskActivity)
           .values({
@@ -2222,9 +2338,24 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
             createdAt: updated.updatedAt,
           })
           .run();
+      if (input.workReference) {
+        applyTaskWorkReference(
+          this.db,
+          projectId,
+          task.id,
+          input.workReference,
+        );
+        assertWorkReferenceAgentLinks(this.db, task.id);
+      } else {
+        normalizeDeliverableTaskReference(
+          this.db,
+          effectiveParentId ?? task.id,
+        );
+      }
       if (
         !effectiveParentId &&
-        (input.workspacePath !== undefined || input.priority !== undefined)
+        (input.workspacePath !== undefined || input.priority !== undefined) &&
+        !input.workReference
       )
         tx.update(projectTasks)
           .set({
@@ -2235,6 +2366,14 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           })
           .where(eq(projectTasks.parentTaskId, task.id))
           .run();
+      if (
+        input.linkedThreadId !== undefined ||
+        input.parentTaskId !== undefined
+      ) {
+        for (const mainId of new Set([task.parentTaskId, effectiveParentId])) {
+          if (mainId) assertWorkReferenceAgentLinks(this.db, mainId);
+        }
+      }
       if (input.dependencyIds !== undefined) {
         tx.delete(projectTaskDependencies)
           .where(eq(projectTaskDependencies.taskId, task.id))
@@ -2271,10 +2410,24 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     if (!effectiveParentId)
       this.recalculateParentEstimate(resourceId, task.id, false, actor);
     const saved = this.requireTask(resourceId, task.id);
+    const reference = taskWorkReference(this.db, saved);
     if (
-      input.workspacePath !== undefined ||
-      input.parentTaskId !== undefined ||
-      !this.folders.get('task', task.id)
+      reference.type === 'folder' &&
+      reference.path &&
+      (input.workReference || !this.folders.get('task', task.id))
+    )
+      this.folders.setFromAbsolutePath(
+        projectId,
+        'task',
+        task.id,
+        reference.path,
+      );
+    if (
+      reference.type === 'folder' &&
+      reference.path &&
+      (input.workspacePath !== undefined ||
+        input.parentTaskId !== undefined ||
+        !this.folders.get('task', task.id))
     ) {
       this.folders.setFromAbsolutePath(
         projectId,
@@ -2295,7 +2448,13 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
             saved.workspacePath,
           );
     }
-    return saved;
+    const refreshed = this.requireTask(resourceId, task.id);
+    const finalReference = taskWorkReference(this.db, refreshed);
+    return {
+      ...refreshed,
+      workspacePath: finalReference.path,
+      workReference: finalReference,
+    };
   }
 
   // Preserve the asynchronous service contract used by API and internal callers.

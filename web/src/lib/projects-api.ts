@@ -86,6 +86,14 @@ export interface ProjectTaskSummary {
   parentTaskId: string | null;
   subtaskStatus: 'todo' | 'started' | 'review' | 'done' | 'cancelled';
   workspacePath: string | null;
+  workReference?: {
+    type: 'folder' | 'deliverable';
+    path: string | null;
+    deliverableId?: string;
+    resourceId?: string;
+    title?: string;
+    version?: number;
+  };
   activeFolder?: ActiveFolderSummary | null;
   executionMode: 'manual' | 'agent';
   agentState:

@@ -85,6 +85,16 @@ Passer une sous-tâche à Terminée ou Annulée fixe son avancement à 100 %.
 Ce pourcentage représente donc aussi la clôture, pas uniquement du travail
 réalisé. Supprimer la dernière sous-tâche remet les agrégats du parent à zéro.
 
+## Référence de travail : dossier ou livrable
+
+Une tâche principale choisit soit un dossier du projet, soit un livrable du gestionnaire du même projet. Les choix sont exclusifs. Sans gestionnaire de livrables, seule la référence Dossier est disponible. Les sous-tâches héritent de la référence de leur tâche principale.
+
+Le lien `primaryTaskId` du livrable est la source de vérité de la référence Livrable. La tâche ne conserve alors pas de dossier indépendant ; son chemin effectif vient du dossier actif du livrable. Les lectures des tâches existantes donnent priorité à ce lien sans migration destructive. L’enregistrement d’un lien normalise les anciennes références directes. Un livrable indisponible bloque l’exécution, sans repli implicite vers un ancien dossier.
+
+Les créations et modifications de tâches acceptent `workReference: { type: 'folder', path }` ou `{ type: 'deliverable', deliverableId, expectedVersion }`. Un chemin direct simultané, un livrable étranger au projet, une révision périmée ou une référence propre à une sous-tâche sont refusés. Le changement est transactionnel ; les routes du gestionnaire de livrables appliquent la même normalisation et invalident les révisions des tâches concernées.
+
+Les agents restent indépendants. Changer la référence ne déplace ni ne supprime leurs dossiers ou historiques. Un lien agent incompatible avec la nouvelle tâche principale doit être retiré avant le changement.
+
 ## Les quatre vues
 
 | Vue      | Utilisation                                                                                         |

@@ -1,3 +1,4 @@
+import { canAccessDeliverable } from '../deliverables/deliverable-access';
 import { managedContentAccess } from '../projects/managed-content-access';
 import { projectDeliverablesPath } from '../projects/workspace-structure';
 import {
@@ -9,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { lstatSync, realpathSync } from 'node:fs';
 import * as path from 'node:path';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { requireProjectAccess } from '../auth/access-context';
 import { claimAgentCopy } from '../projects/git-copy-ownership';
 import { isPrivateProjectSpace } from '../projects/workspace-structure';
@@ -87,7 +88,47 @@ export class ActiveFoldersService {
       contextId,
       options.allowUnboundAgent === true,
     );
+    if (contextType === 'deliverable') {
+      const item = this.db
+        .select()
+        .from(projectDeliverables)
+        .where(eq(projectDeliverables.id, contextId))
+        .get();
+      if (item && !canAccessDeliverable(this.db, projectId, item))
+        throw new NotFoundException('Deliverable not found');
+    }
     const selection = this.validateSelection(projectId, input);
+    if (contextType === 'task') {
+      const task = this.db
+        .select()
+        .from(projectTasks)
+        .where(eq(projectTasks.id, contextId))
+        .get()!;
+      const linked =
+        !task.parentTaskId &&
+        this.db
+          .select()
+          .from(projectDeliverables)
+          .where(eq(projectDeliverables.primaryTaskId, task.id))
+          .get();
+      if (task.parentTaskId || linked) {
+        const inherited = task.parentTaskId
+          ? this.get('task', task.parentTaskId)
+          : linked
+            ? this.get('deliverable', linked.id)
+            : null;
+        if (
+          !inherited ||
+          inherited.state !== 'ready' ||
+          selection.effectivePath !== inherited.effectivePath
+        )
+          throw new ConflictException(
+            'Task folder is inherited from its work reference',
+          );
+        return inherited;
+      }
+    }
+
     const agentId =
       contextType === 'agent'
         ? contextId
@@ -105,30 +146,54 @@ export class ActiveFoldersService {
         selection.effectivePath,
       );
     const now = Date.now();
-    this.db
-      .insert(projectActiveFolders)
-      .values({
-        contextType,
-        contextId,
-        projectId,
-        resourceId: selection.resourceId,
-        relativePath: selection.relativePath,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [
-          projectActiveFolders.contextType,
-          projectActiveFolders.contextId,
-        ],
-        set: {
+    this.db.transaction((tx) => {
+      if (contextType === 'task') {
+        const task = tx
+          .select()
+          .from(projectTasks)
+          .where(eq(projectTasks.id, contextId))
+          .get()!;
+        if (task.workspacePath !== selection.effectivePath) {
+          tx.update(projectTasks)
+            .set({
+              workspacePath: selection.effectivePath,
+              updatedAt: Math.max(now, task.updatedAt + 1),
+            })
+            .where(eq(projectTasks.id, task.id))
+            .run();
+          tx.update(projectTasks)
+            .set({
+              workspacePath: selection.effectivePath,
+              updatedAt: sql`max(${projectTasks.updatedAt}+1, ${now})`,
+            })
+            .where(eq(projectTasks.parentTaskId, task.id))
+            .run();
+        }
+      }
+      tx.insert(projectActiveFolders)
+        .values({
+          contextType,
+          contextId,
           projectId,
           resourceId: selection.resourceId,
           relativePath: selection.relativePath,
+          createdAt: now,
           updatedAt: now,
-        },
-      })
-      .run();
+        })
+        .onConflictDoUpdate({
+          target: [
+            projectActiveFolders.contextType,
+            projectActiveFolders.contextId,
+          ],
+          set: {
+            projectId,
+            resourceId: selection.resourceId,
+            relativePath: selection.relativePath,
+            updatedAt: now,
+          },
+        })
+        .run();
+    });
     return this.get(contextType, contextId)!;
   }
 
@@ -394,6 +459,36 @@ export class ActiveFoldersService {
     contextType: ActiveFolderContext,
     contextId: string,
   ): ActiveFolderView | null {
+    if (contextType === 'deliverable') {
+      const item = this.db
+        .select({
+          item: projectDeliverables,
+          projectId: projectResources.projectId,
+        })
+        .from(projectDeliverables)
+        .innerJoin(
+          projectResources,
+          eq(projectResources.id, projectDeliverables.resourceId),
+        )
+        .where(eq(projectDeliverables.id, contextId))
+        .get();
+      if (item && !canAccessDeliverable(this.db, item.projectId, item.item))
+        return null;
+    }
+    if (contextType === 'task') {
+      const task = this.db
+        .select()
+        .from(projectTasks)
+        .where(eq(projectTasks.id, contextId))
+        .get();
+      if (task?.parentTaskId) return this.get('task', task.parentTaskId);
+      const deliverable = this.db
+        .select()
+        .from(projectDeliverables)
+        .where(eq(projectDeliverables.primaryTaskId, contextId))
+        .get();
+      if (deliverable) return this.get('deliverable', deliverable.id);
+    }
     const reference = this.db
       .select()
       .from(projectActiveFolders)

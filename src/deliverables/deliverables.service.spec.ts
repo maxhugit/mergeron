@@ -1909,7 +1909,7 @@ describe.each([1, 4])('project deliverables (layout %i)', (layoutVersion) => {
     ).toThrow('already has an agent');
     expect(service.contextForConversation('stale-agent')).toBeNull();
   });
-  it('accepts a hidden execution subtask when the deliverable has no task manager', async () => {
+  it('rejects a hidden execution subtask without the deliverable main-task link', async () => {
     const now = Date.now();
     database.db
       .insert(projectResources)
@@ -1963,17 +1963,17 @@ describe.each([1, 4])('project deliverables (layout %i)', (layoutVersion) => {
         },
       ])
       .run();
-    service.registerAgent(
-      'p',
-      'r',
-      item.id,
-      item.version,
-      'internal-agent',
-      'internal-subtask',
-    );
-    expect(service.contextForConversation('internal-agent')).toContain(
-      'Standalone',
-    );
+    expect(() =>
+      service.registerAgent(
+        'p',
+        'r',
+        item.id,
+        item.version,
+        'internal-agent',
+        'internal-subtask',
+      ),
+    ).toThrow('execution subtask associated with the deliverable');
+    expect(service.get('p', 'r', item.id).conversations).toEqual([]);
     expect(service.board('p', 'r')).toMatchObject({
       taskManagers: [],
       tasks: [],

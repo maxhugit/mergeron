@@ -24,7 +24,6 @@ import {
   Hand,
   ListFilter,
   Loader2,
-  PackageOpen,
   Pencil,
   Play,
   Plus,
@@ -74,6 +73,8 @@ type Draft = {
   labels: string;
   statusId: string;
   workspacePath: string;
+  referenceType: 'folder' | 'deliverable';
+  deliverableId: string;
   executionMode: 'manual' | 'agent';
   estimateHours: string;
   progress: string;
@@ -135,6 +136,8 @@ const emptyDraft: Draft = {
   labels: '',
   statusId: '',
   workspacePath: '',
+  referenceType: 'folder',
+  deliverableId: '',
   executionMode: 'manual',
   estimateHours: '',
   progress: '0',
@@ -326,7 +329,9 @@ export function ProjectTaskManager({
       >;
       const version =
         body.expectedUpdatedAt ??
-        client.getQueryData<ProjectTaskBoard>(key)?.tasks.find((task) => task.id === id)?.updatedAt ??
+        client
+          .getQueryData<ProjectTaskBoard>(key)
+          ?.tasks.find((task) => task.id === id)?.updatedAt ??
         newlyCreatedVersions.current.get(id);
       if (typeof version !== 'number')
         throw new Error('Actualisez la tâche avant de la modifier.');
@@ -397,10 +402,7 @@ export function ProjectTaskManager({
     }) =>
       taskApi(path, {
         method,
-        body:
-          body === undefined
-            ? undefined
-            : JSON.stringify(body),
+        body: body === undefined ? undefined : JSON.stringify(body),
       }),
     onSuccess: refresh,
   });
@@ -508,6 +510,8 @@ export function ProjectTaskManager({
         labels: task.labels.join(', '),
         statusId: task.statusId,
         workspacePath: storedWorkspace,
+        referenceType: task.workReference?.type ?? 'folder',
+        deliverableId: task.workReference?.deliverableId ?? '',
         executionMode: task.parentTaskId ? task.executionMode : 'manual',
         estimateHours: task.estimateMinutes
           ? String(task.estimateMinutes / 60)
@@ -629,11 +633,7 @@ export function ProjectTaskManager({
       .map((d) => d.dependsOnTaskId);
   const childrenFor = (id: string) =>
     board.tasks.filter((t) => t.parentTaskId === id);
-  const linkedDeliverable = editing
-    ? deliverables.data?.deliverables.find(
-        (deliverable) => deliverable.primaryTaskId === editing.id,
-      )
-    : undefined;
+
   const rootTask = rootTaskId
     ? (board.tasks.find((task) => task.id === rootTaskId) ?? null)
     : null;
@@ -693,6 +693,8 @@ export function ProjectTaskManager({
       labels: task.labels.join(', '),
       statusId: task.statusId,
       workspacePath: storedWorkspace,
+      referenceType: task.workReference?.type ?? 'folder',
+      deliverableId: task.workReference?.deliverableId ?? '',
       executionMode: task.parentTaskId ? task.executionMode : 'manual',
       estimateHours: task.estimateMinutes
         ? String(task.estimateMinutes / 60)
@@ -722,9 +724,21 @@ export function ProjectTaskManager({
       .map((x) => x.trim())
       .filter(Boolean),
     statusId: draft.statusId,
-    workspacePath: draft.parentTaskId
-      ? (rootTask?.workspacePath ?? board.project.workspacePath)
-      : draft.workspacePath || board.project.workspacePath,
+    ...(!draft.parentTaskId
+      ? {
+          workReference:
+            draft.referenceType === 'deliverable'
+              ? {
+                  type: 'deliverable',
+                  deliverableId: draft.deliverableId,
+                  expectedVersion:
+                    deliverables.data?.deliverables.find(
+                      (item) => item.id === draft.deliverableId,
+                    )?.version ?? editing?.workReference?.version,
+                }
+              : { type: 'folder', path: draft.workspacePath || null },
+        }
+      : {}),
     executionMode: draft.parentTaskId ? draft.executionMode : 'manual',
     estimateMinutes: Math.round((Number(draft.estimateHours) || 0) * 60),
     progress: Math.min(100, Math.max(0, Number(draft.progress) || 0)),
@@ -780,7 +794,8 @@ export function ProjectTaskManager({
       if (parentId && becameTerminal) {
         // Saving a child recalculates the parent's revision on the server.
         await client.invalidateQueries({ queryKey: key });
-        const currentBoard = client.getQueryData<ProjectTaskBoard>(key) ?? board;
+        const currentBoard =
+          client.getQueryData<ProjectTaskBoard>(key) ?? board;
         const parent = currentBoard.tasks.find((task) => task.id === parentId);
         const allChildrenTerminal = currentBoard.tasks
           .filter((task) => task.parentTaskId === parentId)
@@ -1012,10 +1027,14 @@ export function ProjectTaskManager({
             [...suggestion.dependencyIds].sort().join('|')
         );
       });
-      setReplanSuggestions(changed.map((suggestion) => ({
+      setReplanSuggestions(
+        changed.map((suggestion) => ({
         ...suggestion,
-        expectedUpdatedAt: board.tasks.find((task) => task.id === suggestion.taskId)?.updatedAt,
-      })));
+          expectedUpdatedAt: board.tasks.find(
+            (task) => task.id === suggestion.taskId,
+          )?.updatedAt,
+        })),
+      );
       setSelectedReplanTasks(new Set(changed.map((item) => item.taskId)));
       if (!changed.length)
         setAiError('L’IA ne propose aucune modification du planning actuel.');
@@ -1289,12 +1308,18 @@ export function ProjectTaskManager({
         body: {
           expectedUpdatedAt: editing.updatedAt,
           agentState: 'validated',
-          ...(editing.parentTaskId ? { subtaskStatus: 'done' } : done ? { statusId: done.id } : {}),
+          ...(editing.parentTaskId
+            ? { subtaskStatus: 'done' }
+            : done
+              ? { statusId: done.id }
+              : {}),
         },
       });
       setTaskOpen(false);
     } catch (error) {
-      setTaskError(error instanceof Error ? error.message : 'Validation impossible.');
+      setTaskError(
+        error instanceof Error ? error.message : 'Validation impossible.',
+      );
     }
   };
   const ganttTasks = board.tasks
@@ -1748,14 +1773,18 @@ export function ProjectTaskManager({
               </div>
               <div className="flex flex-wrap items-end gap-3">
                 <label className="min-w-44 flex-1 space-y-1 text-sm">
-                  <span className="font-medium">Temps disponible (heures)</span>
+                    <span className="font-medium">
+                      Temps disponible (heures)
+                    </span>
                   <Input
                     type="number"
                     min="0.25"
                     max="168"
                     step="0.25"
                     value={availableHours}
-                    onChange={(event) => setAvailableHours(event.target.value)}
+                      onChange={(event) =>
+                        setAvailableHours(event.target.value)
+                      }
                   />
                 </label>
                 <Button
@@ -1917,7 +1946,8 @@ export function ProjectTaskManager({
                             blocked={blocked(task)}
                             overdue={
                               (Boolean(task.dueAt) &&
-                                dateValue(task.dueAt) < dateValue(Date.now()) &&
+                                  dateValue(task.dueAt) <
+                                    dateValue(Date.now()) &&
                                 !isTerminalStatus(task.statusId)) ||
                               childrenFor(task.id).some(
                                 (child) =>
@@ -2016,7 +2046,9 @@ export function ProjectTaskManager({
                         palette[paletteColor(status?.color, 'slate')];
                       const subtasks = childrenFor(task.id);
                       const dependencies = dependencyIdsFor(task.id)
-                        .map((id) => board.tasks.find((item) => item.id === id))
+                          .map((id) =>
+                            board.tasks.find((item) => item.id === id),
+                          )
                         .filter((item): item is ProjectTaskSummary =>
                           Boolean(item),
                         );
@@ -2193,19 +2225,31 @@ export function ProjectTaskManager({
           setTaskOpen(false);
           onModalClose?.();
         }}
-        title={editing
+        title={
+          editing
                 ? editing.parentTaskId
                   ? 'Modifier la sous-tâche'
                   : 'Modifier la tâche'
                 : draft.parentTaskId
                   ? 'Nouvelle sous-tâche'
-                  : 'Nouvelle tâche'}
+              : 'Nouvelle tâche'
+        }
       >
-            {editing && draft.executionMode === 'agent' && <AgentLaunchRecovery
-              projectId={projectId} resourceId={resourceId} kind="task" targetId={editing.id}
-              onOpen={threadId => { void navigate({ to: '/t/$threadId', params: { threadId } }); }}
-              onRecovered={() => { launchIds.current.delete(editing.id); return refresh(); }}
-            />}
+        {editing && draft.executionMode === 'agent' && (
+          <AgentLaunchRecovery
+            projectId={projectId}
+            resourceId={resourceId}
+            kind="task"
+            targetId={editing.id}
+            onOpen={(threadId) => {
+              void navigate({ to: '/t/$threadId', params: { threadId } });
+            }}
+            onRecovered={() => {
+              launchIds.current.delete(editing.id);
+              return refresh();
+            }}
+          />
+        )}
           {rootTask && (
             <div className="flex shrink-0 gap-1 overflow-x-auto border-b px-6">
               <button
@@ -2418,9 +2462,7 @@ export function ProjectTaskManager({
                   min={dateValue(dateParent?.startAt ?? null) || undefined}
                   max={dateValue(dateParent?.dueAt ?? null) || undefined}
                   value={draft.dueAt}
-                  onChange={(e) =>
-                    setDraft({ ...draft, dueAt: e.target.value })
-                  }
+                onChange={(e) => setDraft({ ...draft, dueAt: e.target.value })}
                 />
               </label>
             </div>
@@ -2435,11 +2477,36 @@ export function ProjectTaskManager({
               />
             </label>
             {!draft.parentTaskId && (
+            <fieldset className="space-y-3 rounded-lg border p-3">
+              <legend className="px-1 text-xs text-muted-foreground">
+                {launchText('taskWorkReference')}
+              </legend>
               <label className="grid gap-1 text-xs text-muted-foreground">
-                {t('workingFolder')}
+                {launchText('taskWorkReferenceType')}
+                <select
+                  aria-label={launchText('taskWorkReferenceType')}
+                  className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
+                  value={draft.referenceType}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      referenceType: event.target
+                        .value as Draft['referenceType'],
+                    })
+                  }
+                >
+                  <option value="folder">{t('workingFolder')}</option>
+                  {deliverableResource && (
+                    <option value="deliverable">
+                      {t('linkedDeliverable')}
+                    </option>
+                  )}
+                </select>
+              </label>
+              {draft.referenceType === 'folder' ? (
                 <button
                   type="button"
-                  className="flex h-9 items-center gap-2 rounded-lg border px-3 text-left text-sm text-foreground"
+                  className="flex h-9 w-full items-center gap-2 rounded-lg border px-3 text-left text-sm"
                   onClick={() => {
                     setFolderSelection(
                       draft.workspacePath || board.project.workspacePath,
@@ -2453,14 +2520,58 @@ export function ProjectTaskManager({
                   </span>
                   <ChevronRight className="h-4 w-4" />
                 </button>
-                {editing?.activeFolder &&
-                  editing.activeFolder.state !== 'ready' && (
-                    <span className="text-xs font-medium text-destructive">
-                      {t('activeFolderNeedsResolution')}
-                    </span>
+              ) : (
+                <label className="grid gap-1 text-xs text-muted-foreground">
+                  {t('linkedDeliverable')}
+                  <select
+                    aria-label={t('linkedDeliverable')}
+                    className="h-9 rounded-lg border bg-background px-2 text-sm text-foreground"
+                    value={draft.deliverableId}
+                    onChange={(event) =>
+                      setDraft({ ...draft, deliverableId: event.target.value })
+                    }
+                  >
+                    <option value="">
+                      {launchText('taskChooseDeliverable')}
+                    </option>
+                    {deliverables.data?.deliverables
+                      .filter(
+                        (item) =>
+                          (!item.primaryTaskId ||
+                            item.primaryTaskId === editing?.id) &&
+                          item.lifecycleStatus !== 'archived',
+                      )
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                  </select>
+                  <span>{launchText('taskDeliverableFolderInherited')}</span>
+                  {editing && (
+                    <button
+                      type="button"
+                      className="text-left underline"
+                      onClick={() => setLinkDeliverableOpen(true)}
+                    >
+                      {launchText('taskCreateOrLinkDeliverable')}
+                    </button>
                   )}
               </label>
             )}
+              {editing && ((editing.workReference?.type ?? 'folder') !== draft.referenceType || (draft.referenceType === 'deliverable' && editing.workReference?.deliverableId !== draft.deliverableId)) && <p className="text-xs text-muted-foreground">{launchText('taskAgentFolderPreserved')}</p>}
+              {!deliverableResource && (
+                <p className="text-xs text-muted-foreground">
+                  {launchText('taskFolderOnly')}
+                </p>
+              )}
+            </fieldset>
+          )}
+          {draft.parentTaskId && (
+            <p className="text-xs text-muted-foreground">
+              {launchText('taskReferenceInherited')}
+            </p>
+          )}
             <div
               className={`grid gap-2 ${draft.parentTaskId ? 'grid-cols-1' : 'grid-cols-2'}`}
             >
@@ -2604,38 +2715,22 @@ export function ProjectTaskManager({
                 )}
               </div>
             </fieldset>
-            {linkDeliverableOpen && editing && deliverableResource && <TaskDeliverableLink projectId={projectId} resourceId={deliverableResource.id} task={editing} deliverables={deliverables.data?.deliverables??[]} onClose={()=>setLinkDeliverableOpen(false)}/>}
-            {!draft.parentTaskId && deliverableResource && (
-              <div className="grid gap-1 text-xs text-muted-foreground">
-                <span>{t('linkedDeliverable')}</span>
-                {linkedDeliverable ? (
-                  <button
-                    type="button"
-                    className="flex h-10 items-center gap-2 rounded-lg border px-3 text-left text-sm text-foreground hover:bg-muted"
-                    onClick={() => {
-                      setTaskOpen(false);
-                      void navigate({
-                        to: '/projects/$projectId/resources/$resourceId',
-                        params: {
-                          projectId,
-                          resourceId: deliverableResource.id,
-                        },
-                        search: { task: undefined },
+          {linkDeliverableOpen && editing && deliverableResource && (
+            <TaskDeliverableLink
+              projectId={projectId}
+              resourceId={deliverableResource.id}
+              task={editing}
+              deliverables={deliverables.data?.deliverables ?? []}
+              onClose={() => {
+                setLinkDeliverableOpen(false);
+                void refresh().then(() => {
+                  const fresh = client
+                    .getQueryData<ProjectTaskBoard>(key)
+                    ?.tasks.find((task) => task.id === editing.id);
+                  if (fresh) openEdit(fresh);
                       });
                     }}
-                  >
-                    <PackageOpen className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="min-w-0 flex-1 truncate">{linkedDeliverable.title}</span>
-                    <ChevronRight className="h-4 w-4 shrink-0" />
-                  </button>
-                ) : (
-                  <button type="button" disabled={!editing || savingTask} onClick={()=>setLinkDeliverableOpen(true)} className="flex h-10 items-center gap-2 rounded-lg border bg-muted/30 px-3 text-left text-sm text-muted-foreground hover:bg-muted disabled:opacity-50">
-                    <PackageOpen className="h-4 w-4" />
-                    {t('noLinkedDeliverable')}
-                    <ChevronRight className="ml-auto h-4 w-4 shrink-0"/>
-                  </button>
-                )}
-              </div>
+            />
             )}
             {!draft.parentTaskId && (
               <fieldset className="rounded-lg border p-3">
@@ -2684,26 +2779,23 @@ export function ProjectTaskManager({
                   <div>
                     <dt className="text-muted-foreground">{t('createdOn')}</dt>
                     <dd className="mt-1 font-medium">
-                      {new Date(editing.createdAt).toLocaleString(
-                        i18n.language,
-                      )}
+                    {new Date(editing.createdAt).toLocaleString(i18n.language)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-muted-foreground">
-                      {t('lastModified')}
-                    </dt>
+                  <dt className="text-muted-foreground">{t('lastModified')}</dt>
                     <dd className="mt-1 font-medium">
-                      {new Date(editing.updatedAt).toLocaleString(
-                        i18n.language,
-                      )}
+                    {new Date(editing.updatedAt).toLocaleString(i18n.language)}
                     </dd>
                   </div>
                 </dl>
               </fieldset>
             )}
             {taskError && (
-              <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            >
                 {taskError}
               </p>
             )}
@@ -2772,17 +2864,21 @@ export function ProjectTaskManager({
                     disabled={agentBusy || blocked(editing)}
                     onClick={runAgent}
                   >
-                    {agentBusy ? (
-                      <Loader2 className="animate-spin" />
-                    ) : (
-                      <Play />
-                    )}
+                  {agentBusy ? <Loader2 className="animate-spin" /> : <Play />}
                     Exécuter avec un agent
                   </Button>
                 )}
               <Button
                 onClick={saveTask}
-                disabled={!draft.title.trim() || savingTask}
+              disabled={
+                !draft.title.trim() ||
+                savingTask ||
+                (!draft.parentTaskId &&
+                  draft.referenceType === 'deliverable' &&
+                  (!draft.deliverableId ||
+                    !deliverableResource ||
+                    deliverables.isFetching))
+              }
               >
                 {savingTask && <Loader2 className="animate-spin" />}
                 Enregistrer

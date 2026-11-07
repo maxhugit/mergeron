@@ -1,3 +1,9 @@
+import { canAccessDeliverable } from './deliverable-access';
+import {
+  normalizeDeliverableTaskReference,
+  assertDeliverableWorkReference,
+  assertWorkReferenceAgentLinks,
+} from '../projects/task-work-reference';
 import {
   assertPrimaryTask,
   projectAgentLinks,
@@ -37,9 +43,7 @@ import {
   projectDeliverableValidationEvents as validationEvents,
   projectWorkspaces,
   projectParticipants,
-  projectManagerAssignments,
   projectPersonGroups,
-  projectPersonGroupMembers,
   people,
   projectTasks,
   projectActivity,
@@ -675,17 +679,7 @@ export class DeliverablesService implements OnModuleInit {
       task?.parentTaskId === item.primaryTaskId &&
       taskResource?.projectId === projectId &&
       parent?.resourceId === task?.resourceId;
-    const belongsToInternalExecution =
-      !item.primaryTaskId &&
-      taskResource?.projectId === projectId &&
-      taskResource.config.internal === true &&
-      taskResource.config.purpose === 'deliverable_execution' &&
-      parent?.resourceId === task?.resourceId &&
-      parent?.labels.includes(`mergeron:deliverable:${item.id}`);
-    if (
-      taskId &&
-      (!task || (!belongsToVisibleTask && !belongsToInternalExecution))
-    )
+    if (taskId && (!task || !belongsToVisibleTask))
       throw new BadRequestException(
         'The agent must be assigned through an execution subtask associated with the deliverable',
       );
@@ -829,31 +823,9 @@ export class DeliverablesService implements OnModuleInit {
     projectId: string,
     item: Pick<Item, 'confidentiality' | 'authorizedGroupIds'>,
   ) {
-    if (item.confidentiality !== 'restricted') return true;
-    const access = currentAccess();
-    if (!access || access.identity.role === 'administrator') return true;
-    const personId = access.identity.personId;
-    if (!personId) return false;
-    const manager = this.db
-      .select({ personId: projectManagerAssignments.personId })
-      .from(projectManagerAssignments)
-      .where(eq(projectManagerAssignments.projectId, projectId))
-      .get();
-    if (manager?.personId === personId) return true;
-    if (!item.authorizedGroupIds.length) return false;
-    return Boolean(
-      this.db
-        .select({ groupId: projectPersonGroupMembers.groupId })
-        .from(projectPersonGroupMembers)
-        .where(
-          and(
-            inArray(projectPersonGroupMembers.groupId, item.authorizedGroupIds),
-            eq(projectPersonGroupMembers.personId, personId),
-          ),
-        )
-        .get(),
-    );
+    return canAccessDeliverable(this.db, projectId, item);
   }
+
   private options(projectId: string) {
     return {
       assignees: this.db
@@ -1394,6 +1366,11 @@ export class DeliverablesService implements OnModuleInit {
         })
         .returning()
         .get();
+      if (values.primaryTaskId) {
+        normalizeDeliverableTaskReference(this.db, values.primaryTaskId, true);
+        assertWorkReferenceAgentLinks(this.db, values.primaryTaskId);
+      }
+      assertDeliverableWorkReference(this.db, created);
       tx.insert(lifecycleEvents)
         .values({
           id: randomUUID(),
@@ -1521,6 +1498,18 @@ export class DeliverablesService implements OnModuleInit {
         throw new ConflictException(
           'Deliverable changed. Reload before saving.',
         );
+      if (current.primaryTaskId !== changed.primaryTaskId) {
+        for (const mainId of new Set([
+          current.primaryTaskId,
+          changed.primaryTaskId,
+        ])) {
+          if (mainId) {
+            normalizeDeliverableTaskReference(this.db, mainId, true);
+            assertWorkReferenceAgentLinks(this.db, mainId);
+          }
+        }
+      }
+      assertDeliverableWorkReference(this.db, changed);
       const fields = Object.keys(changes).filter(
         (key) =>
           JSON.stringify(current[key as keyof Item]) !==

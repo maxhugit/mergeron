@@ -19,6 +19,8 @@ import {
   projectTasks,
   projectAgentThreads,
   projectAgentLaunches,
+  projectDeliverables,
+  projectParticipants,
 } from '../database/schema';
 import { IdentityService } from '../auth/identity.service';
 import { accessContext } from '../auth/access-context';
@@ -809,29 +811,21 @@ it('reserves a deliverable and its requested subtask before native allocation, i
     expect(resumed.state).toBe('confirmed');
     expect(startTurn).not.toHaveBeenCalled();
   }));
-it('retains one explicitly requested internal execution subtask when native creation fails', async () =>
+it('requires a main task before creating a deliverable execution subtask', async () =>
   asAdmin(async () => {
     const item = await deliverables.create('p', 'deliverables', {
       title: 'No primary task',
     });
-    startThread.mockRejectedValue(Error('Disconnected'));
     const { launch } = recoveryService();
-    for (const requestId of ['one', 'two'])
-      expect(
-        await launch.deliverable('p', 'deliverables', item.id, {
-          version: item.version,
-          requestId,
-          subtaskTitle: 'Work',
-        }),
-      ).toMatchObject({ state: 'needs_attention', createdSubtask: true });
-    expect(
-      database.db
-        .select()
-        .from(projectTasks)
-        .all()
-        .filter((task) => task.parentTaskId),
-    ).toHaveLength(1);
-    expect(startThread).toHaveBeenCalledTimes(1);
+    await expect(
+      launch.deliverable('p', 'deliverables', item.id, {
+        version: item.version,
+        requestId: 'one',
+        subtaskTitle: 'Work',
+      }),
+    ).rejects.toThrow('main task');
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+    expect(startThread).not.toHaveBeenCalled();
   }));
 it('associates an existing deliverable agent without native creation or dispatch', async () =>
   asAdmin(async () => {
@@ -1282,4 +1276,355 @@ it('repairs a migrated known agent association before allowing confirmation of i
     ).toMatchObject({ state: 'confirmed' });
     expect(startThread).not.toHaveBeenCalled();
     expect(startTurn).not.toHaveBeenCalled();
+  }));
+
+it('uses either a direct folder or a deliverable reference, inherited by subtasks', async () =>
+  asAdmin(async () => {
+    const output = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+    });
+    const main = domain.createTask('p', 'tasks', {
+      title: 'Produce',
+      workReference: {
+        type: 'deliverable',
+        deliverableId: output.id,
+        expectedVersion: output.version,
+      },
+    });
+    const sub = child(main.id);
+    const cwd = new ActiveFoldersService(database.db).resolve(
+      'deliverable',
+      output.id,
+    );
+    expect(task(main.id).workspacePath).toBeNull();
+    expect(task(sub.id).workspacePath).toBeNull();
+    const board = await domain.readTaskBoard('p', 'tasks');
+    expect(board.tasks.find((t) => t.id === sub.id)).toMatchObject({
+      workspacePath: cwd,
+      workReference: { type: 'deliverable', deliverableId: output.id },
+    });
+    expect(new ActiveFoldersService(database.db).resolve('task', sub.id)).toBe(
+      cwd,
+    );
+    expect(() =>
+      new ActiveFoldersService(database.db).setFromAbsolutePath(
+        'p',
+        'task',
+        main.id,
+        root,
+      ),
+    ).toThrow('inherited');
+    expect(() =>
+      new ActiveFoldersService(database.db).setFromAbsolutePath(
+        'p',
+        'task',
+        sub.id,
+        root,
+      ),
+    ).toThrow('inherited');
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, { workspacePath: root }),
+    ).rejects.toThrow('Select a folder reference');
+    await domain.updateTask('p', 'tasks', main.id, {
+      workReference: { type: 'folder', path: root },
+    });
+    expect(
+      deliverables.get('p', 'deliverables', output.id).primaryTaskId,
+    ).toBeNull();
+    expect(new ActiveFoldersService(database.db).resolve('task', sub.id)).toBe(
+      root,
+    );
+  }));
+
+it('replaces a direct task folder when a deliverable is linked from its manager', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      sub = child(main.id);
+    const output = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: main.id,
+    });
+    expect(task(main.id).workspacePath).toBeNull();
+    expect(task(sub.id).workspacePath).toBeNull();
+    const cwd = new ActiveFoldersService(database.db).resolve(
+      'deliverable',
+      output.id,
+    );
+    const { launch } = recoveryService();
+    startThread.mockResolvedValue({ thread: { id: 'reference-agent' } });
+    vi.spyOn(domain, 'associateAgent').mockImplementation(
+      (_project, threadId) => {
+        database.db
+          .insert(projectAgentThreads)
+          .values({
+            threadId,
+            projectId: 'p',
+            workspacePath: root,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          })
+          .run();
+        return Promise.resolve();
+      },
+    );
+    await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'reference',
+      expectedUpdatedAt: task(sub.id).updatedAt,
+    });
+    expect(startThread.mock.calls[0][0]).toMatchObject({ cwd });
+    expect(startTurn).toHaveBeenCalledOnce();
+  }));
+
+it('rolls back missing, foreign, stale and double-reference selections', async () =>
+  asAdmin(async () => {
+    const main = parent();
+    const output = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+    });
+    for (const ref of [
+      {
+        type: 'deliverable' as const,
+        deliverableId: 'missing',
+        expectedVersion: 1,
+      },
+      {
+        type: 'deliverable' as const,
+        deliverableId: output.id,
+        expectedVersion: output.version + 1,
+      },
+    ])
+      await expect(
+        domain.updateTask('p', 'tasks', main.id, { workReference: ref }),
+      ).rejects.toThrow();
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, {
+        workspacePath: root,
+        workReference: {
+          type: 'deliverable',
+          deliverableId: output.id,
+          expectedVersion: output.version,
+        },
+      }),
+    ).rejects.toThrow('one task work reference');
+    expect(task(main.id).workspacePath).toBe(root);
+    expect(
+      deliverables.get('p', 'deliverables', output.id).primaryTaskId,
+    ).toBeNull();
+    const sub = child(main.id);
+    await expect(
+      domain.updateTask('p', 'tasks', sub.id, {
+        workReference: { type: 'folder', path: root },
+      }),
+    ).rejects.toThrow('inherit');
+  }));
+
+it('offers only folder references without a deliverables manager and rejects malformed references', async () =>
+  asAdmin(async () => {
+    database.db
+      .delete(projectResources)
+      .where(eq(projectResources.id, 'deliverables'))
+      .run();
+    const main = domain.createTask('p', 'tasks', {
+      title: 'Folder only',
+      workReference: { type: 'folder', path: root },
+    });
+    expect(main.workReference).toMatchObject({ type: 'folder', path: root });
+    expect(() =>
+      domain.createTask('p', 'tasks', {
+        title: 'Invalid',
+        workReference: {
+          type: 'deliverable',
+          deliverableId: 'missing',
+          expectedVersion: 1,
+        },
+      }),
+    ).toThrow('from this project');
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, {
+        workReference: { type: 'folder', path: 42 } as never,
+      }),
+    ).rejects.toThrow('Invalid task work reference');
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(1);
+    await domain.updateTask('p', 'tasks', main.id, {
+      workReference: { type: 'folder', path: null },
+    });
+    expect(task(main.id).workspacePath).toBeNull();
+    expect(
+      new ActiveFoldersService(database.db).get('task', main.id),
+    ).toBeNull();
+  }));
+
+it('rejects a deliverable from another project without moving either reference', async () =>
+  asAdmin(async () => {
+    const now = Date.now();
+    database.db
+      .insert(projectResources)
+      .values({
+        id: 'foreign-deliverables',
+        projectId: 'other',
+        type: 'deliverable_board',
+        name: 'Foreign',
+        config: {},
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    database.db
+      .insert(projectDeliverables)
+      .values({
+        id: 'foreign-output',
+        resourceId: 'foreign-deliverables',
+        title: 'Foreign',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    const main = parent();
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, {
+        workReference: {
+          type: 'deliverable',
+          deliverableId: 'foreign-output',
+          expectedVersion: 1,
+        },
+      }),
+    ).rejects.toThrow('from this project');
+    expect(task(main.id).workspacePath).toBe(root);
+  }));
+
+it('invalidates open task revisions on a deliverable-side reference change', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      sub = child(main.id);
+    const output = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: main.id,
+    });
+    const before = task(main.id).updatedAt,
+      childBefore = task(sub.id).updatedAt;
+    deliverables.update('p', 'deliverables', output.id, {
+      version: output.version,
+      primaryTaskId: null,
+    });
+    expect(task(main.id).updatedAt).toBeGreaterThan(before);
+    expect(task(sub.id).updatedAt).toBeGreaterThan(childBefore);
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, {
+        expectedUpdatedAt: before,
+        title: 'Stale',
+      }),
+    ).rejects.toThrow('changed');
+    expect(
+      new ActiveFoldersService(database.db).get('task', sub.id),
+    ).toBeNull();
+  }));
+
+it('does not expose or replace a restricted deliverable through its task reference', async () => {
+  const main = asAdmin(() => parent());
+  const output = await asAdmin(() =>
+    deliverables.create('p', 'deliverables', {
+      title: 'Private output',
+      primaryTaskId: main.id,
+    }),
+  );
+  const now = Date.now();
+  database.db
+    .insert(people)
+    .values({
+      id: 'reader',
+      reference: 'reader',
+      name: 'Reader',
+      role: 'standard',
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+  database.db
+    .insert(projectParticipants)
+    .values({ projectId: 'p', personId: 'reader', createdAt: now })
+    .run();
+  database.db
+    .update(projectDeliverables)
+    .set({ confidentiality: 'restricted', authorizedGroupIds: [] })
+    .where(eq(projectDeliverables.id, output.id))
+    .run();
+  await accessContext.run(
+    { identity: identities.resolvePerson('reader'), identities },
+    async () => {
+      const board = await domain.readTaskBoard('p', 'tasks');
+      expect(
+        board.tasks.find((item) => item.id === main.id)?.workReference,
+      ).toMatchObject({
+        type: 'deliverable',
+        path: null,
+        deliverableId: undefined,
+        title: undefined,
+      });
+      expect(
+        new ActiveFoldersService(database.db).get('task', main.id),
+      ).toBeNull();
+      await expect(
+        domain.updateTask('p', 'tasks', main.id, {
+          workReference: { type: 'folder', path: root },
+        }),
+      ).rejects.toThrow('not found');
+    },
+  );
+  expect(
+    database.db
+      .select()
+      .from(projectDeliverables)
+      .where(eq(projectDeliverables.id, output.id))
+      .get()?.primaryTaskId,
+  ).toBe(main.id);
+});
+
+it('rolls back an incompatible reference change without deleting the agent or its assignments', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      sub = child(main.id);
+    const output = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: main.id,
+      conversations: [{ type: 'agent', id: 'agent' }],
+    });
+    await domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: 'agent' });
+    const before = task(main.id).updatedAt;
+    await expect(
+      domain.updateTask('p', 'tasks', main.id, {
+        expectedUpdatedAt: before,
+        workReference: { type: 'folder', path: root },
+      }),
+    ).rejects.toThrow('incompatible agent assignments');
+    expect(task(main.id).updatedAt).toBe(before);
+    expect(task(main.id).workspacePath).toBeNull();
+    expect(deliverables.get('p', 'deliverables', output.id).primaryTaskId).toBe(
+      main.id,
+    );
+    expect(task(sub.id).linkedThreadId).toBe('agent');
+    expect(deletion.deleteThread).not.toHaveBeenCalled();
+  }));
+
+it('never falls back to the old task folder when its deliverable reference is missing', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      sub = child(main.id);
+    const output = await deliverables.create('p', 'deliverables', {
+      title: 'Output',
+      primaryTaskId: main.id,
+    });
+    new ActiveFoldersService(database.db).removeContext(
+      'deliverable',
+      output.id,
+    );
+    const board = await domain.readTaskBoard('p', 'tasks');
+    expect(board.tasks.find((t) => t.id === sub.id)?.workspacePath).toBeNull();
+    const { launch } = recoveryService();
+    await expect(
+      launch.launch('p', 'tasks', sub.id, {
+        requestId: 'missing-reference',
+        expectedUpdatedAt: task(sub.id).updatedAt,
+      }),
+    ).rejects.toThrow('working folder');
+    expect(startThread).not.toHaveBeenCalled();
   }));

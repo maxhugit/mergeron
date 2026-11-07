@@ -1000,6 +1000,14 @@
             ]
           },
           {
+            "title": "Dossier ou livrable : une référence exclusive",
+            "paragraphs": [
+              "Une tâche principale utilise soit un dossier du projet, soit un livrable, jamais deux références indépendantes. Dans Référence de travail, choisissez le type puis le dossier ou le livrable. Sans gestionnaire de livrables dans le projet, seul le choix Dossier est proposé.",
+              "Avec une référence Livrable, la tâche et ses sous-tâches héritent du dossier effectif de ce livrable. Les sous-tâches ne choisissent pas leur propre référence. Une référence manquante ou indisponible doit être résolue avant de lancer un agent ; aucun dossier de secours n’est choisi silencieusement.",
+              "Changer de référence ne supprime pas les agents ni leurs historiques et ne déplace pas leurs dossiers. Retirez d’abord les affectations d’agents incompatibles. Les changements sont vérifiés avec les versions observées pour éviter qu’un ancien formulaire écrase une modification récente."
+            ]
+          },
+          {
             "title": "Statuts et avancement",
             "paragraphs": [
               "Les colonnes principales sont personnalisables, sauf Actions non assignées. Supprimer une colonne replace ses tâches dans cette colonne système.",
