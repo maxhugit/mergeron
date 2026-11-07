@@ -180,7 +180,7 @@ for (const width of [390, 800, 1280])
     expect(await screen.findByText('Compte Codex')).toBeVisible();
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Français', exact: true }),
+        screen.getByRole('button', { name: 'Français' }),
       ).toHaveAttribute('aria-pressed', 'true'),
     );
     await page.screenshot({
