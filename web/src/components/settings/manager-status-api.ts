@@ -29,7 +29,9 @@ export interface ManagerProtectedMount {
 }
 
 export interface ManagerComponent {
-  id: 'application' | 'ingress' | 'egress' | 'browser' | 'appCatalog';
+  id: string;
+  discovered?: boolean;
+  role?: string;
   observational?: boolean;
   lifecycle?: { onDemand: boolean; idleSeconds: number };
   displayName: string;

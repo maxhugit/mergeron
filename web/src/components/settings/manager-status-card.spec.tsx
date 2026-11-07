@@ -286,3 +286,39 @@ it('shows Byparr in infrastructure and a stopped on-demand browser without an un
       ?.querySelector('[aria-hidden]'),
   ).not.toHaveClass('bg-destructive');
 });
+
+it('renders discovered replica and future-service cards without adding adoption controls', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        json({
+          ...protectedStatus,
+          components: ['relay-1', 'relay-2', 'future-worker'].map(
+            (name, index) => ({
+              ...protectedStatus.components[0],
+              id: `container:role:${index}`,
+              discovered: true,
+              observational: true,
+              role: index < 2 ? 'updateGateway' : 'futureWorker',
+              displayName: name,
+              containerName: name,
+              adoption: 'managed',
+              imageRepositoryAllowed: null,
+              protectedMounts: [],
+            }),
+          ),
+          adoption: { ...protectedStatus.adoption, canAdopt: false },
+        }),
+      ),
+    ),
+  );
+  fixture.render(<ManagerStatusCard />);
+  await screen.findAllByText('relay-1');
+  expect(screen.getAllByText('relay-2')[0]).toBeVisible();
+  expect(screen.getAllByText('future-worker')[0]).toBeVisible();
+  expect(screen.getAllByText(/^Additional stack container/)).toHaveLength(3);
+  expect(
+    screen.queryByRole('button', { name: 'Adopt this installation' }),
+  ).not.toBeInTheDocument();
+});

@@ -80,6 +80,11 @@ function ComponentRow({ component }: { component: ManagerComponent }) {
           })}
         </p>
       )}
+      {component.discovered && (
+        <p className="text-xs text-muted-foreground">
+          {tm('discoveredInfrastructure', { role: component.role })}
+        </p>
+      )}
       {component.id === 'appCatalog' && (
         <p className="text-xs text-muted-foreground">
           {tm('byparrManagedUpdates')}

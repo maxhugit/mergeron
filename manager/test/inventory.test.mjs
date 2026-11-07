@@ -313,3 +313,83 @@ test('includes the installed stopped Byparr in inventory, without waking it or e
   assert.equal(byparr.adoption, 'managed');
   assert.ok(!JSON.stringify(result).includes('never-expose'));
 });
+
+test('discovers arbitrary managed stack containers and keeps replicas distinct without granting management', async () => {
+  const { inventoryFingerprint } = await import('../src/adoption.mjs');
+  const base = fixtureDocker();
+  const before = await collectInventory(manifest, base);
+  const labels = (role) => ({
+    'io.mergeron.managed': 'true',
+    'io.mergeron.component': role,
+    'io.mergeron.stack': manifest.stack,
+  });
+  const extras = [
+    {
+      Id: 'relay-one',
+      Names: ['/mergeron-acces-web-1'],
+      Labels: labels('updateGateway'),
+    },
+    {
+      Id: 'relay-two',
+      Names: ['/mergeron-acces-web-2'],
+      Labels: labels('updateGateway'),
+    },
+    {
+      Id: 'new-service',
+      Names: ['/mergeron-future-worker'],
+      Labels: labels('futureWorker'),
+    },
+    {
+      Id: 'foreign',
+      Names: ['/mergeron-foreign'],
+      Labels: { ...labels('worker'), 'io.mergeron.stack': 'another-stack' },
+    },
+    {
+      Id: 'unmanaged',
+      Names: ['/mergeron-unmanaged'],
+      Labels: { ...labels('worker'), 'io.mergeron.managed': 'false' },
+    },
+    { Id: 'changed', Names: ['/mergeron-changed'], Labels: labels('worker') },
+  ];
+  const result = await collectInventory(manifest, {
+    ...base,
+    listContainers: async () => [...(await base.listContainers()), ...extras],
+    inspectContainer: async (id) => {
+      const c = extras.find((c) => c.Id === id);
+      if (!c) return base.inspectContainer(id);
+      if (id === 'foreign' || id === 'unmanaged')
+        throw Error('must not inspect unrelated containers');
+      return {
+        Id: id,
+        Name: c.Names[0],
+        Config: {
+          Image: 'registry.example/worker:1',
+          Labels:
+            id === 'changed'
+              ? { ...c.Labels, 'io.mergeron.stack': 'another-stack' }
+              : c.Labels,
+          Env: ['TOKEN=private'],
+        },
+        State: { Running: true, Health: { Status: 'healthy' } },
+        NetworkSettings: { Networks: {} },
+        HostConfig: {},
+        Mounts: [],
+      };
+    },
+  });
+  const extra = result.components.filter((c) => c.discovered);
+  assert.equal(extra.length, 3);
+  assert.equal(new Set(extra.map((c) => c.id)).size, 3);
+  assert.ok(
+    extra.every(
+      (c) =>
+        c.observational &&
+        c.state === 'healthy' &&
+        c.imageRepositoryAllowed === null,
+    ),
+  );
+  assert.equal(extra.filter((c) => c.role === 'updateGateway').length, 2);
+  assert.equal(JSON.stringify(result).includes('private'), false);
+  assert.equal(inventoryFingerprint(result), inventoryFingerprint(before));
+  assert.deepEqual(result.dataSafety, before.dataSafety);
+});
