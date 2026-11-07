@@ -193,7 +193,7 @@ export class ProjectAgentToolsService {
           .slice(0, 10)
           .map((d) => ({ id: d.id, title: d.title.slice(0, 200) })),
       }) +
-      '\nUse MCP project_get, project_task_list, project_deliverable_list and detail tools on demand. Use the names actually advertised in this conversation’s MCP inventory; cached legacy names remain compatible with identical arguments and permissions. previewEnvironment is a configuration snapshot, not authorization by itself or a guarantee that a launch succeeds. Recheck project_preview_read with operation=status. A null preview means no instance, not that the service is available. If preparation.projectAuthorized is true, the administrator granted standing preview authorization within the assigned project task. Inspect the project, ask the human about missing requirements, prepare an agent-owned recipe with project_preview_prepare using observed revisions and allowed runtimes, then use project_preview_manage start/sync/refresh/stop. To change an active preview duration without restarting it, use operation=lifetime, a stable requestId and lifetimeMinutes=60,180,300,600,1440 or null (never). The new duration begins when applied; access-session expiry is separate. Otherwise require an explicit human request for the approved manual recipe. Stop removes the owned Docker containers, private networks and ephemeral volumes; confirm removal only when preview.cleanup.runtimeResourcesRemoved is true. Source files, launch configuration and history are preserved. A stopped history entry is not a retained Docker environment. A writable administrator turn remains required. Never enable the project yourself, raise its CPU, memory or storage limits, copy production data or secrets, or bypass a refusal with terminal Docker commands. Lifetime is selectable through the authorized lifetime operation. Announce readiness and share the returned public URL only when preview.ready is true. Mergeron authorizes browser access on opening that URL; it is not an access grant. Discover configured project connections with project_connection_list; use project_git_read for authenticated GitHub consultation and your own local copy. If you need a copy for authorized project work, use project_git_copy_create: Mergeron creates and registers it for THIS conversation, without choosing an owner or path. Never clone manually, inspect or edit another agent’s copy. A created copy becomes writable after native permissions refresh on the next turn; do not bypass that boundary. On explicit human request, project_git_publish can push an observed commit, create a PR after push or change an existing PR base with operation=retarget_pull_request (number, base, expectedBase, expectedPullRequestHead from pull_requests and the usual observed local copy state), without exposing credentials. Re-read pull_requests and checks after changing a PR base. Other protocols are inventory-only, not shell access. Connection capabilities never authorize an action by themselves. Creating a managed Git copy for authorized project work needs no separate confirmation. Creating tasks or deliverables, renaming, or publishing still requires an explicit human request. For file audio processing, use project_media_read status/documents, then project_media_manage start on an observed immutable document version, with extract, transcribe or both. Poll this conversation’s job and publish its audio into an existing deliverable only on explicit human request. Never run shell ffmpeg or use a URL to bypass a refusal. Retained documents require versioned publication.\n</mergeron_project_context>'
+      '\nUse MCP project_get, project_task_list, project_deliverable_list and detail tools on demand. Use the names actually advertised in this conversation’s MCP inventory; cached legacy names remain compatible with identical arguments and permissions. previewEnvironment is a configuration snapshot, not authorization by itself or a guarantee that a launch succeeds. Recheck project_preview_read with operation=status. A null preview means no instance, not that the service is available. If preparation.projectAuthorized is true, the administrator granted standing preview authorization within the assigned project task. Inspect the project, ask the human about missing requirements, prepare an agent-owned recipe with project_preview_prepare using observed revisions and allowed runtimes, then use project_preview_manage start/sync/refresh/stop. To change an active preview duration without restarting it, use operation=lifetime, a stable requestId and lifetimeMinutes=60,180,300,600,1440 or null (never). The new duration begins when applied; access-session expiry is separate. Otherwise require an explicit human request for the approved manual recipe. Stop removes the owned Docker containers, private networks and ephemeral volumes; confirm removal only when preview.cleanup.runtimeResourcesRemoved is true. Source files, launch configuration and history are preserved. A stopped history entry is not a retained Docker environment. A writable administrator turn remains required. Never enable the project yourself, raise its CPU, memory or storage limits, copy production data or secrets, or bypass a refusal with terminal Docker commands. Lifetime is selectable through the authorized lifetime operation. Announce readiness and share the returned public URL only when preview.ready is true. Mergeron authorizes browser access on opening that URL; it is not an access grant. Discover configured project connections with project_connection_list; use project_git_read for authenticated GitHub consultation and your own local copy. If you need a copy for authorized project work, use project_git_copy_create: Mergeron creates and registers it for THIS conversation, without choosing an owner or path. Never clone manually, inspect or edit another agent’s copy. A created copy becomes writable after native permissions refresh on the next turn; do not bypass that boundary. On explicit human request, project_git_publish can push an observed commit, create a PR after push or change an existing PR base with operation=retarget_pull_request (number, base, expectedBase, expectedPullRequestHead from pull_requests and the usual observed local copy state), without exposing credentials. Re-read pull_requests and checks after changing a PR base. Other protocols are inventory-only, not shell access. Connection capabilities never authorize an action by themselves. Creating a managed Git copy for authorized project work needs no separate confirmation. Creating tasks or deliverables, renaming, or publishing still requires an explicit human request. To attach THIS conversation to a deliverable on explicit human request, read project_deliverable_get then call project_deliverable_agent_manage with operation=attach_self, observed expectedVersion and a stable requestId. It cannot assign another agent or replace a conflicting assignment. Linked deliverable context appears next turn; the existing working reference and current-turn filesystem permissions are preserved. For file audio processing, use project_media_read status/documents, then project_media_manage start on an observed immutable document version, with extract, transcribe or both. Poll this conversation’s job and publish its audio into an existing deliverable only on explicit human request. Never run shell ffmpeg or use a URL to bypass a refusal. Retained documents require versioned publication.\n</mergeron_project_context>'
     );
   }
 
@@ -286,6 +286,8 @@ export class ProjectAgentToolsService {
       'criteria',
       'parentTaskId',
       'userRequest',
+      'expectedVersion',
+      'operation',
     ];
     if (Object.keys(input).some((k) => !names.includes(k)))
       throw new BadRequestException('Unknown tool field');
@@ -298,6 +300,13 @@ export class ProjectAgentToolsService {
     };
     const tool = text('tool', 50, true)!;
     const fields: Record<string, string[]> = {
+      attach_deliverable: [
+        'resourceId',
+        'id',
+        'expectedVersion',
+        'operation',
+        'userRequest',
+      ],
       rename_agent: ['title', 'userRequest'],
       get_project: [],
       list_tasks: ['resourceId', 'query', 'offset'],
@@ -331,6 +340,137 @@ export class ProjectAgentToolsService {
     const id = text('id', 100);
     const query = (text('query', 200) ?? '').toLocaleLowerCase();
     const offset = input.offset ?? 0;
+    if (tool === 'attach_deliverable') {
+      if (!canWrite)
+        throw new ForbiddenException('A writable turn is required');
+      scope.access.identities.requireAdministrator(scope.access.identity);
+      if (
+        input.operation !== 'attach_self' ||
+        !Number.isSafeInteger(input.expectedVersion) ||
+        Number(input.expectedVersion) < 1
+      )
+        throw new BadRequestException(
+          'Read the deliverable version before attaching this agent',
+        );
+      const requestId = text('requestId', 100, true)!;
+      const userRequest = text('userRequest', 2000, true)!;
+      if (
+        !/^[a-zA-Z0-9_-]+$/.test(requestId) ||
+        !resourceId ||
+        !id ||
+        !scope.boards.some(
+          (b) => b.id === resourceId && b.type === 'deliverable_board',
+        )
+      )
+        throw new BadRequestException(
+          'Select an existing deliverable in this project',
+        );
+      const version = Number(input.expectedVersion);
+      const digest = createHash('sha256')
+        .update(JSON.stringify({ tool, resourceId, id, version, userRequest }))
+        .digest('hex');
+      const key = and(
+        eq(projectAgentToolRequests.projectId, scope.project.id),
+        eq(projectAgentToolRequests.threadId, threadId),
+        eq(projectAgentToolRequests.requestId, requestId),
+      );
+      // Association, audit and receipt commit together. A failed
+      // optimistic write cannot leave a partial association or a success receipt.
+      return this.db.transaction(() => {
+        assertActive();
+        const fresh = this.scope(threadId);
+        fresh.access.identities.requireAdministrator(fresh.access.identity);
+        this.assertProject(threadId, scope.project.id);
+        const item = this.deliverables.get(scope.project.id, resourceId, id);
+        const linked = item.conversations.some(
+          (link) => link.type === 'agent' && link.id === threadId,
+        );
+        const previous = this.db
+          .select()
+          .from(projectAgentToolRequests)
+          .where(key)
+          .get();
+        if (previous) {
+          if (
+            previous.digest !== digest ||
+            previous.personId !== scope.access.identity.personId
+          )
+            throw new ConflictException('Request id already used');
+          if (!previous.result || !linked)
+            throw new ConflictException(
+              'Assignment changed; read the deliverable before another request',
+            );
+          return previous.result;
+        }
+        if (item.version !== version)
+          throw new ConflictException(
+            'Deliverable changed; read its current version',
+          );
+        if (!linked)
+          this.deliverables.registerAgent(
+            scope.project.id,
+            resourceId,
+            id,
+            version,
+            threadId,
+            undefined,
+            true,
+          );
+        const current = this.deliverables.get(scope.project.id, resourceId, id);
+        const result = {
+          id,
+          resourceId,
+          threadId,
+          title: current.title,
+          version: current.version,
+          status: linked ? 'already_attached' : 'attached',
+          contextEffective: 'next_turn',
+          url: `/projects/${scope.project.id}/resources/${resourceId}`,
+        };
+        const service = this.modules.get<ProjectsService>(
+          'PROJECT_AGENT_DOMAIN_SERVICE',
+          { strict: false },
+        );
+        if (!linked)
+          service.recordActivity(
+            scope.project.id,
+            'agent_assigned',
+            'deliverable_history',
+            id,
+            current.title,
+            {
+              threadId,
+              requestId,
+              userRequest,
+              administratorId:
+                scope.access.identity.impersonation?.administratorId ?? null,
+            },
+            {
+              personId: scope.access.identity.personId,
+              name: `Agent ${threadId} — ${scope.access.identity.name ?? 'Service'}`,
+            },
+          );
+        this.db
+          .insert(projectAgentToolRequests)
+          .values({
+            projectId: scope.project.id,
+            threadId,
+            requestId,
+            digest,
+            personId: scope.access.identity.personId,
+            result,
+            createdAt: Date.now(),
+          })
+          .run();
+        assertActive();
+        this.assertProject(threadId, scope.project.id);
+        const finalScope = this.scope(threadId);
+        finalScope.access.identities.requireAdministrator(
+          finalScope.access.identity,
+        );
+        return result;
+      });
+    }
     if (tool === 'rename_agent') {
       scope.access.identities.requireAdministrator(scope.access.identity);
       const requestId = text('requestId', 100, true)!;

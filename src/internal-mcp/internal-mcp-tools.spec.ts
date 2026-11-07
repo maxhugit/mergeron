@@ -11,11 +11,11 @@ import {
 
 describe('internal MCP public names and stable execution identities', () => {
   it('gives every schema exactly one canonical definition and localized title', () => {
-    expect(INTERNAL_MCP_TOOLS).toHaveLength(30);
+    expect(INTERNAL_MCP_TOOLS).toHaveLength(31);
     expect(INTERNAL_MCP_TOOLS.map((t) => t.operation)).toEqual(
       INTERNAL_MCP_IDENTITIES.map((t) => t.operation),
     );
-    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(30);
+    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(31);
     for (const tool of INTERNAL_MCP_TOOLS) {
       expect(tool.titleFr).toContain(' — ');
       expect(tool.title).toContain(' — ');
@@ -130,6 +130,29 @@ describe('internal MCP public names and stable execution identities', () => {
       agent_monitor_report: { approval_mode: 'approve' },
       project_git_publish: { approval_mode: 'approve' },
       publish_project_git: { approval_mode: 'approve' },
+    });
+  });
+  it('advertises self-assignment with a strict versioned schema and no caller-selected owner', () => {
+    const tool = INTERNAL_MCP_TOOLS.find(
+      (t) => t.operation === 'attach_deliverable',
+    )!;
+    expect(tool.name).toBe('project_deliverable_agent_manage');
+    expect(tool.input.safeParse(tool.example).success).toBe(true);
+    for (const extra of [
+      { threadId: 'another-agent' },
+      { projectId: 'other' },
+      { personId: 'admin' },
+      { operation: 'detach' },
+      { expectedVersion: 0 },
+    ])
+      expect(tool.input.safeParse({ ...tool.example, ...extra }).success).toBe(
+        false,
+      );
+    expect(tool.policy).toMatchObject({
+      readOnly: false,
+      requiresWorkspaceWrite: true,
+      idempotent: true,
+      openWorld: false,
     });
   });
 });

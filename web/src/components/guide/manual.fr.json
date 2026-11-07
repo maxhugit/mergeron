@@ -1282,6 +1282,13 @@
             ]
           },
           {
+            "title": "Demander à l’agent de se rattacher",
+            "paragraphs": [
+              "Dans un agent du projet, demandez explicitement « Rattache-toi au livrable que tu viens de créer ». Il lit la fiche puis utilise l’outil MCP de rattachement. La création seule ne déclenche pas cette affectation.",
+              "Seul l’agent appelant peut être rattaché, dans son propre projet, avec les droits d’exécution administrateur et un mode modifiable. Une version périmée ou une affectation incompatible est refusée. Le dossier de référence, les documents et les permissions du tour courant restent inchangés ; le contexte lié apparaît au prochain échange."
+            ]
+          },
+          {
             "title": "Contrôler la production",
             "paragraphs": [
               "Le brief, les critères et le dossier du livrable servent de contexte au travail lié. Le lien ne dispense pas de vérifier le dossier actif et les autorisations.",

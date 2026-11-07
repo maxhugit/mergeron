@@ -264,6 +264,13 @@ const definitions = {
     handler: 'project',
     policy: projectWrite,
   },
+  attach_deliverable: {
+    name: 'project_deliverable_agent_manage',
+    title: 'Deliverables — Attach this agent',
+    titleFr: 'Livrables — Rattacher cet agent',
+    handler: 'project',
+    policy: projectWrite,
+  },
   create_deliverable: {
     name: 'project_deliverable_create',
     title: 'Deliverables — Create a deliverable',
