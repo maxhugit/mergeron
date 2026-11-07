@@ -18,12 +18,16 @@ export function useUpdateDiscovery(enabled: boolean) {
       try {
         const id = await discoverRunningUpdate(request.signal);
         if (active && id)
-          setDiscovered({
-            startedAt: Date.now(),
-            operationId: id,
-            excludedOperationId: null,
-            independentMonitor: true,
-          });
+          setDiscovered((current) =>
+            current?.operationId === id
+              ? current
+              : {
+                  startedAt: Date.now(),
+                  operationId: id,
+                  excludedOperationId: null,
+                  independentMonitor: true,
+                },
+          );
       } catch {
         /* Unavailable or unauthorized: keep ordinary session recovery. */
       } finally {
