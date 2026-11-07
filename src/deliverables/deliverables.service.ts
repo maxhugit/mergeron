@@ -6,6 +6,8 @@ import {
 } from '../projects/task-work-reference';
 import {
   assertPrimaryTask,
+  assertDeliverableAgentLinks,
+  assertTaskAgent,
   projectAgentLinks,
 } from '../projects/project-work-links';
 import { projectDeliverablesPath } from '../projects/workspace-structure';
@@ -602,7 +604,7 @@ export class DeliverablesService implements OnModuleInit {
     return this.activeFolders.resolve('deliverable', id);
   }
   availableAgentIds(projectId: string, resourceId: string, id: string) {
-    this.get(projectId, resourceId, id);
+    const item = this.get(projectId, resourceId, id);
     return this.db
       .select()
       .from(projectAgentThreads)
@@ -611,37 +613,40 @@ export class DeliverablesService implements OnModuleInit {
       .filter(
         ({ threadId }) =>
           canReadThread(threadId, 'agent') &&
-          this.isUnassignedAgent(projectId, threadId),
+          this.isAgentAvailable(projectId, threadId, item),
       )
       .map(({ threadId }) => threadId);
   }
-  private isUnassignedAgent(projectId: string, threadId: string) {
-    return (
-      Boolean(
-        this.db
-          .select()
-          .from(projectAgentThreads)
-          .where(
-            and(
-              eq(projectAgentThreads.threadId, threadId),
-              eq(projectAgentThreads.projectId, projectId),
-            ),
-          )
-          .get(),
-      ) &&
-      !this.db
-        .select({ id: projectTasks.id })
-        .from(projectTasks)
-        .where(eq(projectTasks.linkedThreadId, threadId))
-        .get() &&
-      !this.db
+  isAgentAvailable(projectId: string, threadId: string, item: Item) {
+    if (
+      item.conversations.some(
+        (link) => link.type === 'agent' && link.id === threadId,
+      )
+    )
+      return false;
+    if (
+      this.db
         .select({ id: items.id })
         .from(items)
         .where(
           sql`exists (select 1 from json_each(${items.conversations}) where json_extract(value, '$.type') = 'agent' and json_extract(value, '$.id') = ${threadId})`,
         )
         .get()
-    );
+    )
+      return false;
+    try {
+      assertDeliverableAgentLinks(this.db, projectId, item.primaryTaskId, [
+        threadId,
+      ]);
+      return true;
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      )
+        return false;
+      throw error;
+    }
   }
   registerAgent(
     projectId: string,
@@ -683,7 +688,7 @@ export class DeliverablesService implements OnModuleInit {
       throw new BadRequestException(
         'The agent must be assigned through an execution subtask associated with the deliverable',
       );
-    if (task?.linkedThreadId)
+    if (task?.linkedThreadId && task.linkedThreadId !== threadId)
       throw new ConflictException('This subtask already has an agent');
     const folder = this.activeFolders.get('deliverable', id);
     if (!folder || folder.state !== 'ready')
@@ -702,7 +707,7 @@ export class DeliverablesService implements OnModuleInit {
       if (existing) {
         if (
           !canReadThread(threadId, 'agent') ||
-          !this.isUnassignedAgent(projectId, threadId)
+          !this.isAgentAvailable(projectId, threadId, item)
         )
           throw new ConflictException('This agent is no longer available');
       } else
@@ -717,6 +722,10 @@ export class DeliverablesService implements OnModuleInit {
           })
           .onConflictDoNothing({ target: projectAgentThreads.threadId })
           .run();
+      assertDeliverableAgentLinks(this.db, projectId, item.primaryTaskId, [
+        threadId,
+      ]);
+      if (task) assertTaskAgent(this.db, projectId, task.id, threadId);
       if (
         !tx
           .update(items)
@@ -1264,6 +1273,14 @@ export class DeliverablesService implements OnModuleInit {
       throw new BadRequestException(
         'Conversations must belong to this project',
       );
+    assertDeliverableAgentLinks(
+      this.db,
+      projectId,
+      primaryTaskId,
+      conversations
+        .filter((link) => link.type === 'agent')
+        .map((link) => link.id),
+    );
     return {
       title:
         input.title === undefined && current

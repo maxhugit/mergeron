@@ -1628,3 +1628,155 @@ it('never falls back to the old task folder when its deliverable reference is mi
     ).rejects.toThrow('working folder');
     expect(startThread).not.toHaveBeenCalled();
   }));
+
+it('allows coherent dual assignments in either order and blocks incompatible reparenting', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      other = parent(),
+      sub = child(main.id);
+    await domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: 'agent' });
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Result',
+      primaryTaskId: main.id,
+    });
+    expect(
+      deliverables.availableAgentIds('p', 'deliverables', item.id),
+    ).toContain('agent');
+    const linked = deliverables.update('p', 'deliverables', item.id, {
+      version: item.version,
+      conversations: [{ type: 'agent', id: 'agent' }],
+    });
+    expect(() =>
+      deliverables.update('p', 'deliverables', item.id, {
+        version: linked.version,
+        primaryTaskId: other.id,
+      }),
+    ).toThrow('same main task');
+    expect(() =>
+      deliverables.update('p', 'deliverables', item.id, {
+        version: linked.version,
+        primaryTaskId: null,
+      }),
+    ).toThrow('same main task');
+    await expect(
+      domain.updateTask('p', 'tasks', sub.id, {
+        parentTaskId: other.id,
+      }),
+    ).rejects.toThrow('same main task');
+    await domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: null });
+    await domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: 'agent' });
+    const incompatible = child(other.id);
+    await domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: null });
+    await expect(
+      domain.updateTask('p', 'tasks', incompatible.id, {
+        linkedThreadId: 'agent',
+      }),
+    ).rejects.toThrow('same main task');
+    expect(task(incompatible.id).linkedThreadId).toBeNull();
+    expect(deliverables.get('p', 'deliverables', item.id).primaryTaskId).toBe(
+      main.id,
+    );
+  }));
+
+it.each([false, true])(
+  'associates an already assigned subtask agent from the deliverable launcher (explicit subtask: %s)',
+  async (explicitSubtask) =>
+    asAdmin(async () => {
+      const main = parent(),
+        sub = child(main.id);
+      await domain.updateTask('p', 'tasks', sub.id, {
+        linkedThreadId: 'agent',
+      });
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Result',
+        primaryTaskId: main.id,
+      });
+      const cwd = deliverables.agentWorkspace(
+        'p',
+        'deliverables',
+        item.id,
+        item.version,
+      );
+      const { launch } = recoveryService([
+        {
+          archived: false,
+          thread: { id: 'agent', cwd, status: { type: 'idle' } },
+        },
+      ]);
+      const result = await launch.deliverable('p', 'deliverables', item.id, {
+        version: item.version,
+        requestId: 'dual',
+        ...(explicitSubtask ? { subtaskId: sub.id } : {}),
+        existingThreadId: 'agent',
+      });
+      expect(result).toMatchObject({ state: 'ready', threadId: 'agent' });
+      expect(task(sub.id).linkedThreadId).toBe('agent');
+      expect(startThread).not.toHaveBeenCalled();
+      expect(startTurn).not.toHaveBeenCalled();
+    }),
+);
+
+it('rejects adding a mismatched explicit agent through generic deliverable edits', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      other = parent(),
+      sub = child(main.id);
+    await domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: 'agent' });
+    for (const primaryTaskId of [null, other.id]) {
+      const item = await deliverables.create('p', 'deliverables', {
+        title: 'Other result',
+        primaryTaskId,
+      });
+      expect(
+        deliverables.availableAgentIds('p', 'deliverables', item.id),
+      ).not.toContain('agent');
+      expect(() =>
+        deliverables.update('p', 'deliverables', item.id, {
+          version: item.version,
+          conversations: [{ type: 'agent', id: 'agent' }],
+        }),
+      ).toThrow('same main task');
+      expect(
+        deliverables.get('p', 'deliverables', item.id).conversations,
+      ).toEqual([]);
+    }
+  }));
+
+it('recovers a subtask with its coherent deliverable agent without creating or sending again', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      sub = child(main.id);
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Result',
+      primaryTaskId: main.id,
+      conversations: [{ type: 'agent', id: 'agent' }],
+    });
+    const cwd = new ActiveFoldersService(database.db).resolve(
+      'deliverable',
+      item.id,
+    );
+    startThread.mockRejectedValue(Error('Response lost'));
+    const { launch } = recoveryService([
+      {
+        archived: false,
+        thread: { id: 'agent', cwd, status: { type: 'idle' } },
+      },
+    ]);
+    const result = await launch.launch('p', 'tasks', sub.id, {
+      requestId: 'dual-recovery',
+      expectedUpdatedAt: task(sub.id).updatedAt,
+    });
+    const status = await launch.status('p', 'tasks', 'task', sub.id);
+    expect(status.candidates.map((candidate) => candidate.id)).toContain(
+      'agent',
+    );
+    await launch.recover('p', 'tasks', result.id, {
+      action: 'attach',
+      threadId: 'agent',
+      expectedUpdatedAt: status.launch!.revision,
+      targetRevision: status.launch!.targetRevision,
+    });
+    expect(task(sub.id).linkedThreadId).toBe('agent');
+    expect(startThread).toHaveBeenCalledTimes(1);
+    expect(startTurn).not.toHaveBeenCalled();
+  }));

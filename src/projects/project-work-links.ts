@@ -1,6 +1,6 @@
 /** Shared business relationships. Browsing folders never creates these links. */
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../database/database.constants';
 import {
   projectAgentThreads,
@@ -71,6 +71,60 @@ export function assertTaskAgent(
       .get()
   )
     throw new ConflictException('This agent already belongs to another task');
+}
+
+/** Explicit dual assignments must share the same main task. */
+export function assertDeliverableAgentLinks(
+  db: AppDatabase,
+  projectId: string,
+  primaryTaskId: string | null,
+  agentIds: string[],
+) {
+  for (const threadId of agentIds) {
+    const binding = db
+      .select()
+      .from(projectAgentThreads)
+      .where(eq(projectAgentThreads.threadId, threadId))
+      .get();
+    if (!binding || binding.projectId !== projectId)
+      throw new BadRequestException('Agent must belong to this project');
+    const assigned = db
+      .select()
+      .from(projectTasks)
+      .where(eq(projectTasks.linkedThreadId, threadId))
+      .all();
+    if (
+      assigned.some(
+        (task) => !primaryTaskId || task.parentTaskId !== primaryTaskId,
+      )
+    )
+      throw new ConflictException(
+        'Agent subtask and deliverable must share the same main task',
+      );
+  }
+}
+
+export function assertTaskDeliverableLinks(
+  db: AppDatabase,
+  threadId: string,
+  parentTaskId: string | null,
+) {
+  const incompatible = db
+    .select({ id: projectDeliverables.id })
+    .from(projectDeliverables)
+    .where(
+      and(
+        sql`exists (select 1 from json_each(${projectDeliverables.conversations}) where json_extract(value, '$.type') = 'agent' and json_extract(value, '$.id') = ${threadId})`,
+        parentTaskId
+          ? sql`(${projectDeliverables.primaryTaskId} is null or ${projectDeliverables.primaryTaskId} != ${parentTaskId})`
+          : undefined,
+      ),
+    )
+    .get();
+  if (incompatible)
+    throw new ConflictException(
+      'Agent subtask and deliverable must share the same main task',
+    );
 }
 
 export function projectAgentLinks(db: AppDatabase, projectId: string) {

@@ -6,7 +6,10 @@ import {
   assertWorkReferenceAgentLinks,
   type TaskWorkReferenceInput,
 } from './task-work-reference';
-import { assertTaskAgent } from './project-work-links';
+import {
+  assertTaskAgent,
+  assertTaskDeliverableLinks,
+} from './project-work-links';
 import {
   BadRequestException,
   ConflictException,
@@ -2289,6 +2292,12 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       for (const child of children)
         this.validateTaskDateRange(child.startAt, child.dueAt, updated);
     }
+    if (updated.linkedThreadId)
+      assertTaskDeliverableLinks(
+        this.db,
+        updated.linkedThreadId,
+        updated.parentTaskId,
+      );
     // Completion is a business decision, never permission to destroy a conversation
     // or its managed Git copy. Keep the link and evidence until explicit deletion.
     this.db.transaction((tx) => {

@@ -385,6 +385,27 @@ export function HelpRoute() {
                 >
                   {section.title}
                 </h3>
+                {section.workRelationshipsDiagram && (
+                  <div className="overflow-x-auto rounded-lg border bg-slate-950 p-3">
+                    <picture>
+                      <source
+                        media="(max-width: 600px)"
+                        srcSet={withBasePath(
+                          `/guide/work-relationships-${language}-mobile.svg`,
+                        )}
+                      />
+                      <img
+                        src={withBasePath(
+                          `/guide/work-relationships-${language}.svg`,
+                        )}
+                        alt={section.workRelationshipsDiagram.alt}
+                        className="mx-auto h-auto w-full max-w-3xl"
+                        width={720}
+                        height={440}
+                      />
+                    </picture>
+                  </div>
+                )}
                 {section.paragraphs?.map((paragraph) => (
                   <p key={paragraph} className="text-sm leading-7">
                     {paragraph}

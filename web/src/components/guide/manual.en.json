@@ -542,7 +542,8 @@
           "agent-composer",
           "task-execution",
           "deliverable-agent",
-          "locations"
+          "locations",
+          "work-relationships"
         ]
       },
       {
@@ -956,6 +957,56 @@
     "title": "Task management",
     "articles": [
       {
+        "id": "work-relationships",
+        "title": "Agents, tasks and deliverables: relationships",
+        "summary": "Understand cardinalities, independent assignments and consistency between a deliverable and an execution subtask.",
+        "keywords": [
+          "cardinality",
+          "diagram",
+          "relationships",
+          "assignments",
+          "main task",
+          "subtask"
+        ],
+        "sections": [
+          {
+            "title": "Cardinality diagram",
+            "workRelationshipsDiagram": {
+              "alt": "A task contains zero or more subtasks; each subtask belongs to one task. Task and deliverable: zero or one on either side. Agent and subtask: zero or one on either side. A deliverable can have zero or more agents; an agent is assigned to zero or one deliverable."
+            },
+            "paragraphs": [
+              "0..1 means none or one, 0..N means none or several, and 1 means exactly one. This diagram describes business relationships; an assignment does not make the agent owned by the assigned item."
+            ]
+          },
+          {
+            "title": "Read each relationship",
+            "paragraphs": [
+              "Task → subtasks: a task contains zero or more subtasks. Each subtask belongs to exactly one main task; there is no third level.",
+              "Task ↔ deliverable: a main task can have zero or one primary deliverable, and a deliverable can belong to zero or one main task.",
+              "Subtask ↔ agent: a subtask can have zero or one agent; under the current rule, an agent is assigned to zero or one subtask. Agents are never assigned directly to main tasks.",
+              "Deliverable → agents: a deliverable may be assigned to several agents or remain unassigned. This 0..N cardinality is confirmed. An agent can contribute to a deliverable without being assigned to a subtask.",
+              "Agent → deliverable: for now, an agent is limited to a single deliverable or may remain unassigned. Its cardinality is therefore 0..1."
+            ],
+            "warning": "When an agent is assigned to both a subtask and a deliverable, they must share the same main task. Agents cannot be assigned directly to main tasks."
+          },
+          {
+            "title": "Keep assignments consistent",
+            "paragraphs": [
+              "When an agent is assigned to both a subtask and a deliverable, the deliverable must belong to that subtask’s main task. For example, Prepare the presentation contains the Write slides subtask and has the Presentation deliverable; the same agent may be assigned to both.",
+              "A main task coordinates work, a subtask describes an executable action, and a deliverable represents the expected result. Agents exist independently and may remain unassigned.",
+              "Deleting a task, subtask or deliverable must not delete the agent or its history: only the affected assignments are removed. Deleting an entire project is a separate operation with its own warnings.",
+              "Before moving a deliverable or subtask to another main task, remove or reorganize incompatible assignments. Availability of these checks depends on the installed version."
+            ]
+          }
+        ],
+        "related": [
+          "task-board",
+          "task-execution",
+          "deliverable-agent",
+          "agent-create"
+        ]
+      },
+      {
         "id": "task-board",
         "title": "Create tasks and use the board",
         "summary": "Organize cards, subtasks, owners and statuses.",
@@ -995,7 +1046,7 @@
             "warning": "A parent cannot close while a child is neither completed nor cancelled. Closing all children does not automatically move the parent to a final column."
           }
         ],
-        "related": ["task-planning", "task-execution"]
+        "related": ["task-planning", "task-execution", "work-relationships"]
       },
       {
         "id": "task-planning",
@@ -1277,7 +1328,12 @@
             "warning": "Reusing a session requires an eligible available agent. Linking a deliverable and linking a subtask are separate choices, not an automatic assignment to both."
           }
         ],
-        "related": ["agent-create", "deliverable-versions", "task-execution"]
+        "related": [
+          "agent-create",
+          "deliverable-versions",
+          "task-execution",
+          "work-relationships"
+        ]
       }
     ]
   },

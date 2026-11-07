@@ -21,6 +21,7 @@ export function guideExternalUrl(destination: string): string | undefined {
 export interface GuideSection {
   title: string;
   paragraphs?: string[];
+  workRelationshipsDiagram?: { alt: string };
   steps?: string[];
   actions?: { label: string; effect: string }[];
   links?: { destination: string; label: string; description?: string }[];

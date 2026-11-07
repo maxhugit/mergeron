@@ -569,7 +569,8 @@
           "agent-composer",
           "task-execution",
           "deliverable-agent",
-          "locations"
+          "locations",
+          "work-relationships"
         ]
       },
       {
@@ -977,6 +978,56 @@
     "title": "Gestion des tâches",
     "articles": [
       {
+        "id": "work-relationships",
+        "title": "Agents, tâches et livrables : les relations",
+        "summary": "Comprendre les cardinalités, les affectations indépendantes et la cohérence entre un livrable et une sous-tâche.",
+        "keywords": [
+          "cardinalité",
+          "schéma",
+          "relations",
+          "affectations",
+          "tâche principale",
+          "sous-tâche"
+        ],
+        "sections": [
+          {
+            "title": "Schéma des cardinalités",
+            "workRelationshipsDiagram": {
+              "alt": "Une tâche contient zéro à plusieurs sous-tâches ; chaque sous-tâche appartient à une tâche. Tâche et livrable : zéro ou un de chaque côté. Agent et sous-tâche : zéro ou un de chaque côté. Un livrable peut recevoir zéro à plusieurs agents ; un agent est affecté à zéro ou un livrable."
+            },
+            "paragraphs": [
+              "La notation 0..1 signifie « aucun ou un », 0..N « aucun ou plusieurs », et 1 « exactement un ». Le schéma décrit les relations métier ; une affectation ne crée pas de lien de propriété sur l’agent."
+            ]
+          },
+          {
+            "title": "Lire chaque relation",
+            "paragraphs": [
+              "Tâche → sous-tâches : une tâche contient de zéro à plusieurs sous-tâches. Chaque sous-tâche appartient à exactement une tâche principale ; il n’y a pas de troisième niveau.",
+              "Tâche ↔ livrable : une tâche principale peut être liée à zéro ou un livrable principal, et un livrable peut être rattaché à zéro ou une tâche principale.",
+              "Sous-tâche ↔ agent : une sous-tâche peut être affectée à zéro ou un agent ; selon la règle actuelle, un agent est affecté à zéro ou une sous-tâche. Aucun agent n’est affecté directement à une tâche principale.",
+              "Livrable → agents : un livrable peut être affecté à plusieurs agents, ou rester sans agent. Cette cardinalité 0..N est confirmée. Un agent peut contribuer à un livrable sans être affecté à une sous-tâche.",
+              "Agent → livrable : pour le moment, un agent est limité à un unique livrable, ou peut rester sans livrable. Sa cardinalité est donc 0..1."
+            ],
+            "warning": "Si un agent est affecté à une sous-tâche et à un livrable, les deux doivent avoir la même tâche principale. Aucun agent ne peut être affecté directement à une tâche principale."
+          },
+          {
+            "title": "Conserver la cohérence des affectations",
+            "paragraphs": [
+              "Si un agent est affecté simultanément à une sous-tâche et à un livrable, le livrable doit appartenir à la tâche principale de cette sous-tâche. Exemple : la tâche Préparer la présentation contient la sous-tâche Rédiger les slides et porte le livrable Présentation ; le même agent peut être affecté aux deux.",
+              "Une tâche principale coordonne le travail, une sous-tâche décrit une action exécutable, et un livrable représente le résultat attendu. Les agents existent indépendamment et peuvent rester sans affectation.",
+              "Supprimer une tâche, une sous-tâche ou un livrable ne doit pas supprimer l’agent ni son historique : ce sont les affectations concernées qui sont retirées. La suppression d’un projet entier est une opération distincte, avec ses propres avertissements.",
+              "Avant de déplacer un livrable ou une sous-tâche vers une autre tâche principale, retirez ou réorganisez les affectations devenues incompatibles. La disponibilité de ces contrôles dépend de la version installée."
+            ]
+          }
+        ],
+        "related": [
+          "task-board",
+          "task-execution",
+          "deliverable-agent",
+          "agent-create"
+        ]
+      },
+      {
         "id": "task-board",
         "title": "Créer des tâches et utiliser le tableau",
         "summary": "Organiser les cartes, les sous-tâches, les responsables et les statuts.",
@@ -1016,7 +1067,7 @@
             "warning": "Un parent ne peut pas être clôturé tant qu’un enfant n’est ni terminé ni annulé. La clôture des enfants ne déplace pas automatiquement le parent dans une colonne finale."
           }
         ],
-        "related": ["task-planning", "task-execution"]
+        "related": ["task-planning", "task-execution", "work-relationships"]
       },
       {
         "id": "task-planning",
@@ -1298,7 +1349,12 @@
             "warning": "L’agent doit rester disponible pour une affectation existante. Lier au livrable et lier à une sous-tâche sont deux choix distincts, pas une affectation automatique aux deux."
           }
         ],
-        "related": ["agent-create", "deliverable-versions", "task-execution"]
+        "related": [
+          "agent-create",
+          "deliverable-versions",
+          "task-execution",
+          "work-relationships"
+        ]
       }
     ]
   },
