@@ -355,7 +355,13 @@
             "warning": "An alias is a display name, not a relocation. A missing, disabled or inconsistent location blocks work rather than silently selecting another folder."
           }
         ],
-        "related": ["file-explorer", "transfers", "agent-create", "git-local"]
+        "related": [
+          "file-explorer",
+          "transfers",
+          "agent-create",
+          "git-local",
+          "project-integrity"
+        ]
       },
       {
         "id": "project-archive",
@@ -647,6 +653,12 @@
               "A conversation branch is not a Git branch: files are not automatically copied or restored when switching conversation versions. Preserve useful documents before deleting or validating a subtask’s work session."
             ],
             "warning": "Review conversation or branch deletion carefully, especially when dependencies exist. There is no automatic merging of two conversations’ reasoning."
+          },
+          {
+            "title": "Read a conversation in compact view",
+            "paragraphs": [
+              "Long questions and answers stay within the available screen width. Text wraps; a table or code block may retain its own horizontal scrolling without widening the entire conversation. This lets you review long instructions on a phone."
+            ]
           }
         ],
         "related": ["response-copy", "git-branches", "task-execution"]
@@ -1056,6 +1068,13 @@
             ]
           },
           {
+            "title": "Open the record or a document from the list",
+            "paragraphs": [
+              "Click the deliverable title to open its record. A pointer cursor and hover underline identify the action; the description and the rest of the row are not open buttons.",
+              "In the Documents column, click a file name to open the same viewer used by the record’s Documents tab. It opens in a new tab or window according to the browser. Document permissions still apply; removed documents are excluded from this list."
+            ]
+          },
+          {
             "title": "Navigate the record",
             "paragraphs": [
               "Overview gives the summary; Documents manages files and versions; Validation contains requests and decisions; History preserves snapshots and transitions. Links open related tasks and conversations.",
@@ -1087,6 +1106,7 @@
             "title": "Manage deliverable files",
             "steps": [
               "Open Documents and Add document; select files and optionally add a comment.",
+              "Click the name to open the viewer in a separate window or tab; use the ⋮ menu for the other actions.",
               "Use the document ⋮ menu for offered actions: preview, download, versions or removal.",
               "To recover an older version, open history and confirm the proposed restoration.",
               "For agent-produced documents, inspect the draft and use the versioned-save workflow instead of overwriting a published file."
@@ -1886,8 +1906,8 @@
           {
             "title": "Before and during an update",
             "steps": [
-              "In Settings → Server → Update, read the application version and Container updates cards: application, NGINX ingress, Squid egress and the browser when managed.",
-              "Refresh detection checks images without installing or downloading them. Each card shows the installed image, channel and availability; an unknown state or error does not mean “up to date”.",
+              "In Settings → Server → Current version, consult the component table: application, Manager, Mergeron Browser and vendor components NGINX and Squid, depending on the installation.",
+              "Refresh detection checks versions without installing them. Each row distinguishes the installed version, vendor version when known and update status. An unknown value or error does not mean up to date. Available actions depend on the component and the installed Manager.",
               "Review Backup before this update: Full, Minimal — database and configuration, or No backup. Save backup choice remembers this setting for this installation without starting the operation; an unsaved selection applies only to this update.",
               "Choose Update for the intended component, or Replace with published image when migration of a known local browser is offered. Review the component and exact image digest in the plan, then confirm.",
               "Even when only one image is upgraded, the stack is stopped and recreated within the transaction. Any backup and rollback possibilities depend on the confirmed scope. Tracking is prepared before the server stops; keep it open during the operation.",
@@ -1895,10 +1915,10 @@
             ]
           },
           {
-            "title": "Rollback and DEV mode",
+            "title": "Rollback and Manager compatibility",
             "paragraphs": [
               "The confirmed plan scope determines which data can be restored: full, minimal or no backup. Without a backup, rollback may restore images but does not undo migrations or data changes. Inspect failures or states requiring recovery in the operation tracking.",
-              "Fast mode is restricted to a dedicated Dev stack. Dev and production have separate settings: never infer backup scope from the environment name alone and review the plan before confirming.",
+              "If the interface requires a Manager update first, have it performed from the host before retrying component updates. Dev and production remain separate installations; always review the plan and its scope.",
               "These features require compatible application and Manager versions. Unselected images remain unchanged. An existing browser can be managed in Dev or production after explicit operator configuration; the Manager itself is updated from the host."
             ],
             "warning": "Do not run concurrent operations. Refreshing the application, updating Codex CLI and updating the server image are different actions."
@@ -1908,6 +1928,18 @@
             "paragraphs": [
               "Server → Current version distinguishes the application, Manager, browser and other available components. Record the installed version, channel, Git revision and, if needed, image identity. Unknown means information is missing, not that the component is up to date.",
               "The latest published release, a Dev build revision and the Codex CLI version are separate information. A merged pull request may not yet be installed. For support, identify the components actually involved without sharing private configuration."
+            ]
+          },
+          {
+            "title": "Find progress again after reconnecting",
+            "paragraphs": [
+              "When an update is already running, a reconnecting tab can discover the operation and reopen its progress. Discovery installs nothing and does not start a second update. Keep the latest monitor until the result, then check the versions actually installed."
+            ]
+          },
+          {
+            "title": "Read the update history",
+            "paragraphs": [
+              "Update history shows recorded operations, their author, time, outcome and before/after versions when known. Available improvements are associated with the relevant versions; missing information is not guessed. Reopen an operation’s logs to examine its steps and errors."
             ]
           }
         ],
@@ -1930,7 +1962,7 @@
           {
             "title": "Inspect backups",
             "paragraphs": [
-              "Backup lists update copies with date, identifier, server path, disk usage, state and actions. Total usage helps monitor accumulation.",
+              "In Settings → Server → Restoration, inspect update backups with their date, identifier, server path, disk usage, state and actions. Total usage helps monitor accumulation. Set the maximum retained backup count and the backup choice for future updates here.",
               "The maximum-count setting controls retention. Cleanup runs after a successful update while protecting items needed for current rollback; a copy is not simply deleted to make room before a risky migration."
             ]
           },
@@ -1946,7 +1978,7 @@
             "title": "Choose restoration or removal",
             "steps": [
               "Identify the exact backup and the operation that created it.",
-              "Before restoration, check more recent changes and Manager tracking.",
+              "To return to an available backup, choose Restore this backup, review the plan and explicitly confirm restoration. Check newer changes and the scope of replaced data; the operation may interrupt services.",
               "Before Delete backup, confirm it is no longer needed and target only the intended copy."
             ],
             "warning": "Deletion is permanent and removes rollback based on that copy. Update backups and project ZIP exports have different scopes. Protect external data not covered by Manager separately."
@@ -1973,15 +2005,16 @@
             "title": "What the screen shows",
             "paragraphs": [
               "Infrastructure lists stack components, state, image, networks, management and configuration metadata. Sensitive environment values are not displayed as public settings.",
-              "Protected persistent data shows expected mounts. Diagnose unavailable or inconsistent state before changing infrastructure."
+              "Protected persistent data shows expected mounts. Diagnose unavailable or inconsistent state before changing infrastructure.",
+              "Permanent web relays provide web entry and update-progress display during an update. Their presence alone does not indicate that an operation is running; consult the Manager monitor for the actual state."
             ]
           },
           {
             "title": "Browser managed by the Manager",
             "paragraphs": [
               "An existing browser can appear in the inventory and participate in Manager transactions when the operator explicitly enables management. This requires a compatible Manager and the expected protected topology. Existing installations are not enabled automatically.",
-              "Server → Update can detect and individually update its published image, like NGINX and Squid, with confirmation and a transaction affecting the entire stack. The browser image must remain compatible with the application. A locally built browser without a published digest may require Replace with published image; an unknown state does not prove it is up to date.",
-              "Infrastructure displays state and configuration; update actions are in the Update tab. The Manager itself remains administered from the host."
+              "Server → Current version can detect and individually update its published image, like NGINX and Squid, with confirmation and a transaction affecting the entire stack. The browser image must remain compatible with the application. A locally built browser without a published digest may require Replace with published image; an unknown state does not prove it is up to date.",
+              "Infrastructure displays state and configuration; update actions are in Current version. The Manager itself remains administered from the host."
             ],
             "warning": "Do not disable the sandbox or expose the control port to fix an error. Production configuration must use a compatible official stable image and be validated by the operator; Dev settings are never applied implicitly."
           }
@@ -1999,7 +2032,10 @@
           "account",
           "instructions",
           "save",
-          "restart"
+          "restart",
+          "subtabs",
+          "verbosity",
+          "Ollama"
         ],
         "sections": [
           {
@@ -2007,9 +2043,17 @@
             "steps": [
               "Open Codex administration and Account for required authentication.",
               "Choose models, reasoning, instructions and security in their configuration tabs.",
-              "Use the fixed Save bar for the active tab. Other tab drafts are not automatically applied.",
+              "Use Save and Cancel changes in the active panel. These actions remain at the bottom of that panel; switching a subtab does not save or restart anything.",
               "For a custom catalog, distinguish saving its draft from applying it with restart, and check inactivity before confirming.",
               "Chat and Audio groups the simple chat and dictation engines, including without a connected Codex account when preparing API mode. Instructions also contains Common agent instructions, with its own save button independent of native Codex settings."
+            ]
+          },
+          {
+            "title": "Find the right panel",
+            "paragraphs": [
+              "The main tabs remain Account, Codex CLI, Model, Chat and Audio, Instructions, Reasoning, Security, Integrations and Raw configuration, with local settings when available. Profile appears only when declared in the configuration; it is not a new user profile.",
+              "Model separates defaults, context and the catalog, including its JSON view. Instructions separates common instructions, session instructions and compaction. Reasoning retains effort, reasoning summary, response verbosity, web search and service tier, depending on the available catalog.",
+              "When useful subtabs are not needed, the title and explanation remain fixed at the top of the panel. Content scrolls in the middle, and large text editors use the available width. Account and Codex CLI actions also stay inside their panel. Controls for common instructions, the catalog and the local engine retain their own scope and confirmations."
             ]
           },
           {
@@ -2196,7 +2240,66 @@
           "backups",
           "onlyoffice",
           "impersonation",
-          "report-bug"
+          "report-bug",
+          "project-integrity"
+        ]
+      },
+      {
+        "id": "project-integrity",
+        "title": "Understand and repair project consistency",
+        "summary": "Read the diagrams, confirm a correction and recover data moved to the project trash.",
+        "keywords": [
+          "consistency",
+          "diagnostic",
+          "diagram",
+          "yellow",
+          "reference",
+          "connection",
+          "deliverable",
+          "Git copy",
+          "trash",
+          "recover"
+        ],
+        "sections": [
+          {
+            "title": "Run a read-only diagnostic",
+            "steps": [
+              "As an administrator, open Settings → Operations tools → Project consistency, select the project and refresh the diagnostic.",
+              "Check the project, inspection time and counts of documents, versions and Git copies. The scan compares stored references with managed local paths; it does not read document contents or inspect external connections."
+            ],
+            "warning": "An incomplete or failed diagnostic does not prove that the project is consistent. Corrections are suspended when the scope cannot be verified or a transfer is running."
+          },
+          {
+            "title": "Read the diagrams",
+            "paragraphs": [
+              "Each card shows a project item, its link and the expected folder or file. Yellow and a dashed outline mark the link or location to check. Technical details provide useful paths and IDs alongside the explanation.",
+              "A broken link means a stored reference is no longer valid; the files may still exist. A missing document or version requires finding the contents or a backup; creating an empty file does not repair it. An unregistered file or Git copy may contain useful unpublished work."
+            ]
+          },
+          {
+            "title": "Choose and confirm a correction",
+            "steps": [
+              "Click the card or View corrections. Read the current situation and the actions actually offered for that issue.",
+              "Where supported, After correction previews the expected result; it is not an applied change. Recreating an empty folder restores no contents; realigning a reference or choosing Dossiers moves no files.",
+              "Review the project, item and path, then explicitly confirm. The server checks the situation again. If the diagnostic changed, refresh it and review the new proposal instead of repeating the old confirmation."
+            ]
+          },
+          {
+            "title": "Remove and recover unregistered data",
+            "paragraphs": [
+              "Move this data to trash is offered only when the server verifies that an unregistered deliverable file, deliverable folder or source copy can be removed without a known persistent reference. A missing connection does not allow deleting an agent or its documents. Technical paths, links and unverifiable scans are excluded.",
+              "First review the files and any unpublished Git changes. In the confirmation, type the requested name exactly. Data is moved to the recoverable project trash, and the operation’s author and time are retained. Opening the dialog alone removes nothing.",
+              "In the same project’s trash, Recover requires another confirmation and puts the data in Dossiers under a unique name. The resulting path is displayed: recovery does not overwrite the original location or automatically reimport a document or its validation."
+            ],
+            "warning": "Trash retains the bytes: it does not reclaim disk space, and no automatic purge is provided here. It is not an independent backup. If an operation is unconfirmed, refresh the diagnostic and trash before retrying."
+          }
+        ],
+        "related": [
+          "locations",
+          "file-explorer",
+          "deliverable-versions",
+          "backups",
+          "admin-operations"
         ]
       }
     ]
