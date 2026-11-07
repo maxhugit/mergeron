@@ -61,3 +61,14 @@ export function isCodexUnavailableError(
 ): err is CodexUnavailableError {
   return err instanceof CodexUnavailableError;
 }
+
+/** The caller cannot assume a timed-out mutating RPC was never accepted. */
+export class CodexRequestTimeoutError extends Error {
+  constructor(
+    readonly method: string,
+    readonly requestId: RequestId,
+  ) {
+    super(`Request ${method} (id=${requestId}) timed out`);
+    this.name = 'CodexRequestTimeoutError';
+  }
+}

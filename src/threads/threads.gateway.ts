@@ -239,6 +239,20 @@ export class ThreadsGateway
     const signal: ConversationChangeSignal = {
       generation: this.codexManager.getGeneration(),
     };
+    client.emit(
+      'codex.lifecycle',
+      this.codexManager.getClient()
+        ? {
+            type: 'appServerReady',
+            generation: signal.generation,
+            restarted: false,
+          }
+        : {
+            type: 'appServerUnavailable',
+            generation: signal.generation,
+            message: 'Codex app-server is not connected',
+          },
+    );
     client.emit('conversation.overview.changed', signal);
     client.emit('conversation.pending.changed', signal);
     this.logger.debug(`Client connected: ${client.id}`);

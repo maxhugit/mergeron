@@ -84,8 +84,12 @@ export function useCodexSocket(enabled = true) {
         })();
       }, 0);
     };
+    let newestLifecycleGeneration = -1;
+    let lifecycleConnection = 0;
     const refreshOverview = () => invalidateThreadListSoon(queryClient);
     const handleConnect = () => {
+      newestLifecycleGeneration = -1;
+      lifecycleConnection++;
       setConnected(true);
       const store = useTimelineStore.getState();
       store.clearConfirmedThreads();
@@ -357,6 +361,9 @@ export function useCodexSocket(enabled = true) {
     socket.on('fs.changed', handleFilesystemChanged);
 
     const handleCodexLifecycle = (event: CodexLifecycleEvent) => {
+      if (event.generation < newestLifecycleGeneration) return;
+      newestLifecycleGeneration = event.generation;
+      const observedConnection = lifecycleConnection;
       const store = useTimelineStore.getState();
       const liveThreadIds = [...store.subscribedThreadIds];
 
@@ -365,6 +372,11 @@ export function useCodexSocket(enabled = true) {
         for (const threadId of liveThreadIds) {
           store.clearActiveTurnForThread(threadId);
           store.setThreadStatusForThread(threadId, { type: 'systemError' });
+          store.setCodexRecoveryForThread(
+            threadId,
+            { generation: event.generation, phase: 'unavailable' },
+            i18n.t('codexRecoveryUnavailable'),
+          );
         }
       }
 
@@ -381,15 +393,23 @@ export function useCodexSocket(enabled = true) {
           // restarted server reports.
           store.clearActiveTurnForThread(threadId);
           store.setThreadStatusForThread(threadId, { type: 'systemError' });
-          store.addSystemMessageForThread(
+          store.setCodexRecoveryForThread(
             threadId,
+            { generation: event.generation, phase: 'restarting' },
             i18n.t('codexAppServerIsRestartingWaitingToResumeThisThread'),
-            'warning',
           );
         }
       }
 
       if (event.type === 'appServerReady') {
+        for (const id of liveThreadIds)
+          store.setCodexRecoveryForThread(
+            id,
+            { generation: event.generation, phase: 'ready' },
+            i18n.t('codexRecoveryReady'),
+          );
+        // A reconnect snapshot is already repaired by handleConnect after room ACK.
+        if (!event.restarted) return;
         // Retained background agents need the same passive history repair as
         // the visible one, without starting an agent or taking writer ownership.
         store.resubscribeAll((id) => void restoreThread(id, 'reconnect'));
@@ -405,30 +425,35 @@ export function useCodexSocket(enabled = true) {
       for (const threadId of event.failedThreadIds.filter((id) =>
         store.subscribedThreadIds.has(id),
       )) {
-        store.addSystemMessageForThread(
+        store.setCodexRecoveryForThread(
           threadId,
+          { generation: event.generation, phase: 'failed' },
           i18n.t('autoResumeFailedReopenThisThreadToRetry'),
-          'error',
         );
       }
 
       for (const threadId of event.resumedThreadIds.filter((id) =>
         store.subscribedThreadIds.has(id),
       )) {
-        store.addSystemMessageForThread(
+        store.setCodexRecoveryForThread(
           threadId,
+          { generation: event.generation, phase: 'resumed' },
           i18n.t('threadResumedAfterAppServerRestart'),
-          'info',
         );
         // The backend already owns execution reattachment. Only this viewed
         // transcript needs browser hydration; background ids create no runtimes.
-        void restoreThread(threadId, 'appServerRestart').catch(() =>
-          store.addSystemMessageForThread(
+        void restoreThread(threadId, 'appServerRestart').catch(() => {
+          if (
+            observedConnection !== lifecycleConnection ||
+            event.generation !== newestLifecycleGeneration
+          )
+            return;
+          store.setCodexRecoveryForThread(
             threadId,
+            { generation: event.generation, phase: 'failed' },
             i18n.t('stateRecoveryFailedAfterResume'),
-            'warning',
-          ),
-        );
+          );
+        });
       }
     };
 

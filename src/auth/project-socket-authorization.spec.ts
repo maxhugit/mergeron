@@ -135,6 +135,7 @@ it('isolates live thread and filesystem data and revokes already-connected parti
         provide: CodexProcessManager,
         useValue: {
           getGeneration: () => 1,
+          getClient: () => ({}),
           addListener: (event: string, listener: (value: unknown) => void) =>
             listeners.set(event, listener),
         },

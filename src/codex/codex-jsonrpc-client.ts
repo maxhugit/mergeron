@@ -80,7 +80,7 @@ import type {
   ServerNotification,
   ServerRequest,
 } from './codex-schema';
-import { CodexRpcError } from './codex-errors';
+import { CodexRpcError, CodexRequestTimeoutError } from './codex-errors';
 import { CodexAcceptedWork } from './codex-accepted-work';
 import {
   ServerRequestOwner,
@@ -204,10 +204,26 @@ export class CodexJsonRpcClient extends EventEmitter<CodexJsonRpcClientEvents> {
     this.acceptedWork.dispatch(id, method, params);
 
     return new Promise<T>((resolve, reject) => {
+      // Native connector discovery can take >30s immediately after startup.
+      // Allow only the first catalog page a bounded cold-start budget; mutating
+      // RPCs, subsequent pages and explicit caller deadlines remain unchanged.
+      const coldCatalog =
+        method === 'app/list' &&
+        !(
+          params &&
+          typeof params === 'object' &&
+          'cursor' in params &&
+          params.cursor
+        );
+      const deadline =
+        timeoutMs ??
+        (coldCatalog
+          ? Math.max(this.requestTimeoutMs, 60_000)
+          : this.requestTimeoutMs);
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Request ${method} (id=${id}) timed out`));
-      }, timeoutMs ?? this.requestTimeoutMs);
+        reject(new CodexRequestTimeoutError(method, id));
+      }, deadline);
 
       this.pending.set(id, {
         observationSequence: this.observationSequence,

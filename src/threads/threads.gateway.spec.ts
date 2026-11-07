@@ -310,6 +310,32 @@ describe('ThreadsGateway', () => {
     );
   });
 
+  it.each([false, true])(
+    'reports current Codex availability on authenticated reconnect: %s',
+    async (ready) => {
+      mockAuthService.authenticateToken.mockResolvedValue({
+        ok: true,
+        authType: 'apiKey',
+      });
+      mockManager.getClient.mockReturnValue(ready ? {} : null);
+      const client = {
+        id: 'reconnect',
+        handshake: { auth: { token: 'test-api-key' }, headers: {} },
+        join: vi.fn(),
+        emit: vi.fn(),
+        disconnect: vi.fn(),
+      };
+      await gateway.handleConnection(client as never);
+      expect(client.emit).toHaveBeenCalledWith(
+        'codex.lifecycle',
+        expect.objectContaining({
+          type: ready ? 'appServerReady' : 'appServerUnavailable',
+          generation: 1,
+        }),
+      );
+    },
+  );
+
   it('should accept connection with valid token', async () => {
     mockAuthService.authenticateToken.mockResolvedValue({
       ok: true,

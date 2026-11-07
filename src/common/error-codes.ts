@@ -238,6 +238,7 @@ export const ErrorCode = {
   // ── Codex Config ───────────────────────────────────────────────────
   codex: {
     rpcError: 'codex.rpc_error',
+    requestTimeout: 'codex.request_timeout',
     serverUnavailable: 'codex.server_unavailable',
     rawContentInvalid: 'codex.raw_content_invalid',
     editsNotArray: 'codex.edits_not_array',

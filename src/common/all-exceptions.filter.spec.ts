@@ -1,6 +1,6 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter';
-import { CodexRpcError } from '../codex/codex-errors';
+import { CodexRpcError, CodexRequestTimeoutError } from '../codex/codex-errors';
 
 it('retains RPC context but omits an upstream Cloudflare HTML document and challenge tokens', () => {
   const send = vi.fn();
@@ -31,4 +31,24 @@ it('retains RPC context but omits an upstream Cloudflare HTML document and chall
   expect(body).not.toContain('<html>');
   expect(body).not.toContain('PRIVATE');
   expect(body.length).toBeLessThan(400);
+});
+
+it('reports a native app/list timeout as 504 with safe method context instead of internal error', () => {
+  const send = vi.fn();
+  const status = vi.fn().mockReturnValue({ send });
+  const host = {
+    getType: () => 'http',
+    switchToHttp: () => ({ getResponse: () => ({ status }) }),
+  } as unknown as ArgumentsHost;
+  new AllExceptionsFilter().catch(
+    new CodexRequestTimeoutError('app/list', 41),
+    host,
+  );
+  expect(status).toHaveBeenCalledWith(504);
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      errorCode: 'codex.request_timeout',
+      params: { method: 'app/list' },
+    }),
+  );
 });

@@ -1,6 +1,6 @@
 import { ChildProcess } from 'node:child_process';
 import { EventEmitter, Readable, Writable } from 'node:stream';
-import { CodexRpcError } from './codex-errors';
+import { CodexRpcError, CodexRequestTimeoutError } from './codex-errors';
 import {
   CodexJsonRpcClient,
   serializeCodexAuditEntry,
@@ -214,9 +214,61 @@ describe('CodexJsonRpcClient', () => {
   it('should reject pending requests on timeout', async () => {
     const shortClient = new CodexJsonRpcClient(proc, 50);
     const promise = shortClient.request('slow/method', {});
-    await expect(promise).rejects.toThrow('timed out');
+    await expect(promise).rejects.toBeInstanceOf(CodexRequestTimeoutError);
     shortClient.destroy();
   });
+
+  it('accepts a 33-second cold app catalog without resending it', async () => {
+    vi.useFakeTimers();
+    try {
+      const write = vi.spyOn(proc.stdin!, 'write');
+      const promise = client.request('app/list', { limit: 100 });
+      const request = JSON.parse(String(write.mock.calls[0][0])) as {
+        id: number;
+      };
+      await vi.advanceTimersByTimeAsync(33_200);
+      proc.stdout!.emit(
+        'data',
+        JSON.stringify({
+          id: request.id,
+          result: { data: [], nextCursor: null },
+        }) + '\n',
+      );
+      await expect(promise).resolves.toEqual({ data: [], nextCursor: null });
+      expect(write).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds cold catalog discovery at sixty seconds without retrying', async () => {
+    vi.useFakeTimers();
+    try {
+      const write = vi.spyOn(proc.stdin!, 'write');
+      const result = expect(
+        client.request('app/list', {}),
+      ).rejects.toMatchObject({
+        name: 'CodexRequestTimeoutError',
+        method: 'app/list',
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await result;
+      expect(write).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([{ cursor: 'next' }, {}])(
+    'retains explicit deadlines for app discovery: %j',
+    async (params) => {
+      const promise = client.request('app/list', params, 5);
+      await expect(promise).rejects.toMatchObject({
+        name: 'CodexRequestTimeoutError',
+        method: 'app/list',
+      });
+    },
+  );
 
   it('should reject pending requests on destroy', async () => {
     const promise = client.request('test/method', {});

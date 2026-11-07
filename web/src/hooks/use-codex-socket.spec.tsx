@@ -390,3 +390,83 @@ it('coalesces recursive transport recovery events while a wake refetch is runnin
   view.unmount();
   client.clear();
 });
+
+it.each([false, true])(
+  'settles restart notices without reloading with fast navigation=%s',
+  async (retained) => {
+    const store = useTimelineStore.getState();
+    store.ensureThreadState({ threadId: 'a' });
+    store.ensureThreadState({ threadId: 'b' });
+    useTimelineStore.setState({
+      threadId: 'a',
+      subscribedThreadIds: new Set(retained ? ['a', 'b'] : ['a']),
+    });
+    const view = mount();
+    const event = (value: unknown) =>
+      act(() => transport.listeners.get('codex.lifecycle')?.(value));
+    event({ type: 'appServerRestarting', generation: 2, delayMs: 3000 });
+    const notice = (id: string) =>
+      store
+        .getThreadRuntime(id)
+        ?.timeline.filter((e) => e.kind === 'system' && e.codexRecovery);
+    expect(notice('a')).toHaveLength(1);
+    expect(notice('a')?.[0]).toMatchObject({
+      codexRecovery: { phase: 'restarting' },
+    });
+    event({ type: 'appServerReady', generation: 3, restarted: true });
+    expect(notice('a')?.[0]).toMatchObject({
+      codexRecovery: { phase: 'ready' },
+    });
+    expect(notice('a')).toHaveLength(1);
+    event({
+      type: 'autoResumeCompleted',
+      generation: 3,
+      resumedThreadIds: ['a'],
+      failedThreadIds: retained ? ['b'] : [],
+    });
+    expect(notice('a')?.[0]).toMatchObject({
+      codexRecovery: { phase: 'resumed' },
+    });
+    if (retained)
+      expect(notice('b')?.[0]).toMatchObject({
+        codexRecovery: { phase: 'failed' },
+      });
+    event({ type: 'appServerUnavailable', generation: 2, message: 'old' });
+    expect(notice('a')?.[0]).toMatchObject({
+      codexRecovery: { phase: 'resumed', generation: 3 },
+    });
+    expect(useTimelineStore.getState().threadId).toBe('a');
+    view.unmount();
+  },
+);
+
+it('accepts an engine generation reset after the application itself reconnects', () => {
+  const store = useTimelineStore.getState();
+  store.ensureThreadState({ threadId: 'a' });
+  useTimelineStore.setState({
+    threadId: 'a',
+    subscribedThreadIds: new Set(['a']),
+  });
+  const view = mount();
+  act(() =>
+    transport.listeners.get('codex.lifecycle')?.({
+      type: 'appServerRestarting',
+      generation: 8,
+      delayMs: 0,
+    }),
+  );
+  act(() => transport.listeners.get('connect')?.(undefined));
+  act(() =>
+    transport.listeners.get('codex.lifecycle')?.({
+      type: 'appServerReady',
+      generation: 1,
+      restarted: false,
+    }),
+  );
+  expect(
+    store
+      .getThreadRuntime('a')
+      ?.timeline.find((e) => e.kind === 'system' && e.codexRecovery),
+  ).toMatchObject({ codexRecovery: { phase: 'ready', generation: 1 } });
+  view.unmount();
+});

@@ -39,6 +39,7 @@ export function createTimelineTurnsActions({
   | 'clearActiveTurnForThread'
   | 'settleTurnLifecycleForThread'
   | 'addSystemMessageForThread'
+  | 'setCodexRecoveryForThread'
   | 'addSystemErrorForThread'
   | 'upsertTurnFailureForThread'
   | 'setThreadTitleForThread'
@@ -283,6 +284,24 @@ export function createTimelineTurnsActions({
           },
         ],
       }));
+    },
+
+    setCodexRecoveryForThread: (threadId, state, message) => {
+      applyThreadUpdate(threadId, (runtime) => {
+        const index = runtime.timeline.findIndex(
+          (entry) => entry.kind === 'system' && entry.codexRecovery,
+        );
+        if (index < 0 && state.phase === 'ready') return runtime;
+        const entry = {
+          kind: 'system' as const,
+          content: message,
+          codexRecovery: state,
+        };
+        const timeline = [...runtime.timeline];
+        if (index < 0) timeline.push(entry);
+        else timeline[index] = entry;
+        return { ...runtime, timeline };
+      });
     },
 
     addSystemErrorForThread: (threadId, message) => {
