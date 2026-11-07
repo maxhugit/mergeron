@@ -42,11 +42,9 @@ test.each([
       ? 'chromium'
       : 'webkit';
     const capture = async (name: string) =>
-      page
-        .getByRole('main')
-        .screenshot({
-          path: `../../.vitest-screenshots/guide-${name}-${language}-${engine}-${width}.png`,
-        });
+      page.getByRole('main').screenshot({
+        path: `../../.vitest-screenshots/guide-${name}-${language}-${engine}-${width}.png`,
+      });
     expect(article).toHaveTextContent(
       language === 'fr' ? 'plateforme auto-hébergée' : 'self-hosted platform',
     );
@@ -71,7 +69,7 @@ test.each([
       });
       const link = article.querySelector<HTMLAnchorElement>(
         `a[href$="template=${template}"]`,
-      )!;
+      );
       expect(link).not.toBeNull();
       link.scrollIntoView({ block: 'center' });
       expect(link).toBeVisible();
@@ -86,5 +84,40 @@ test.each([
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       await capture(id);
     }
+  },
+);
+
+test.each([
+  [390, 'fr'],
+  [1280, 'fr'],
+  [390, 'en'],
+  [1280, 'en'],
+] as const)(
+  'shows the cardinality diagram and its qualified explanations at %ipx in %s',
+  async (width, language) => {
+    await i18nReady;
+    await i18n.changeLanguage(language);
+    await page.viewport(width, 913);
+    document.documentElement.classList.add('dark');
+    window.history.replaceState(null, '', '/help#guide/work-relationships');
+    render(
+      <div className="flex h-screen min-h-0">
+        <HelpRoute />
+      </div>,
+    );
+    const article = screen.getByRole('article');
+    const image = within(article).getByRole('img');
+    await expect
+      .poll(() => image.complete && image.naturalWidth > 0)
+      .toBe(true);
+    expect(image.src).toContain(`work-relationships-${language}.svg`);
+    expect(article).toHaveTextContent(
+      language === 'fr' ? 'reste à confirmer' : 'remains to be confirmed',
+    );
+    expect(article.scrollWidth).toBeLessThanOrEqual(article.clientWidth);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.getByRole('main').screenshot({
+      path: `../../.vitest-screenshots/guide-relationships-${language}-${width}.png`,
+    });
   },
 );
