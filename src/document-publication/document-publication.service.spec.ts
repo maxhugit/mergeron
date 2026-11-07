@@ -247,6 +247,43 @@ describe('agent saves retained documents as new versions', () => {
     ).toBe(3);
   });
 
+  it('publishes immutable versions without enabling outer document isolation in production', async () => {
+    vi.stubEnv('MERGERON_PUBLISHED_DOCUMENT_PROTECTION', '');
+    vi.stubEnv('MERGERON_STACK_ENVIRONMENT', 'production');
+    const protection = new DocumentProtectionService(database.db, {
+      databasePath: ':memory:',
+    } as DatabaseService);
+    expect(protection.enabled).toBe(false);
+    expect(await protection.plan()).toBeNull();
+    const prepared = await publication.prepare('agent', 'Writer');
+    expect(prepared?.context).toContain('publication-request.json');
+    expect(prepared?.draftDirectory).toBeTruthy();
+    const first = await request({});
+    expect(first.result.status).toBe('published');
+    const document = deliverables.board('p', 'r').deliverables[0].documents[0];
+    const second = await request(
+      { requestId: 'save-2', documentId: document.id, expectedVersion: 1 },
+      'Version two',
+    );
+    expect(second.result.status).toBe('published');
+    const stale = await request(
+      { requestId: 'save-3', documentId: document.id, expectedVersion: 1 },
+      'Must not replace version two',
+    );
+    expect(stale.result.status).toBe('failed');
+    const current = deliverables.board('p', 'r').deliverables[0].documents[0];
+    expect(current.currentVersionNumber).toBe(2);
+    expect(current.versions.map((v) => v.number).sort()).toEqual([1, 2]);
+    expect(
+      await fs.readFile(
+        current.versions.find((v) => v.number === 1)!.snapshotPath,
+        'utf8',
+      ),
+    ).toBe('Version one');
+    expect(await fs.readFile(current.sourcePath, 'utf8')).toBe('Version two');
+    expect(protection.enabled).toBe(false);
+  });
+
   it('retains a protected source, immutable V1, actor and version comment', async () => {
     const { result } = await request({});
     expect(result.status).toBe('published');
