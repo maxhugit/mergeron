@@ -1,5 +1,34 @@
 # Administration Codex : listes, enregistrement et version du CLI
 
+## Organisation des paramètres
+
+Les paramètres Codex utilisent un panneau avec un en-tête ou une navigation de
+sous-onglets fixes, un contenu défilant et un pied d’actions fixe **dans le
+panneau**. Les intégrations gardent leur interface existante. Les grands éditeurs
+utilisent toute la largeur du contenu disponible.
+
+| Onglet                                             | Champs et fonctions conservés                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Compte                                             | Identité, fournisseur, URL masquée, variable et état des identifiants ; quotas et crédits selon le compte ; actualisation, connexion ChatGPT ou clé API, changement de compte et déconnexion.                                                                                                             |
+| Codex CLI                                          | Versions, intégrité, paquet du Manager et empreinte, vérification, installation validée, installation/mise à jour officielle lorsqu’autorisée, restauration précédente, confirmations et notes de version.                                                                                                |
+| Agents locaux                                      | Activation, URL privée, modèles autorisés, contexte ; enregistrement, vérification et redémarrage conditionnel des métadonnées. Le bouton de soumission conserve explicitement le formulaire propriétaire.                                                                                                |
+| Profil                                             | Profil actif, uniquement lorsque des profils sont configurés.                                                                                                                                                                                                                                             |
+| Modèle → Modèles par défaut                        | `model`, `review_model`, `model_provider`, valeurs personnalisées et origine des valeurs.                                                                                                                                                                                                                 |
+| Modèle → Contexte                                  | `model_context_window`, `model_auto_compact_token_limit`.                                                                                                                                                                                                                                                 |
+| Modèle → Catalogue / JSON du catalogue             | Un même brouillon conservé entre les deux vues, initialisation, ajout/modification/suppression d’une entrée, toutes les propriétés dynamiques des modèles, JSON, validation, enregistrement, application/redémarrage et récupération. Les propriétés inconnues restent conservées par l’éditeur existant. |
+| Instructions → Consignes communes                  | Texte administrateur (12 000 caractères), texte par défaut, enregistrement et annulation du brouillon ; indépendant de la connexion Codex.                                                                                                                                                                |
+| Instructions → Consignes de session / Condensation | `instructions` (champ réservé), `developer_instructions`, `compact_prompt`.                                                                                                                                                                                                                               |
+| Raisonnement                                       | `model_reasoning_effort`, `model_reasoning_summary`, `model_verbosity`, `web_search`, `service_tier` ; choix annoncés par le modèle/catalogue conservés.                                                                                                                                                  |
+| Sécurité                                           | `approval_policy`, `sandbox_mode`, `approvals_reviewer` ; `sandbox_workspace_write` en lecture seule.                                                                                                                                                                                                     |
+| Configuration brute                                | Éditeur TOML indépendant, brouillon conservé, enregistrement/rechargement, avertissements et indication d’un redémarrage requis.                                                                                                                                                                          |
+
+Les barres fixes réutilisent les gestionnaires d’origine, leurs conditions de
+disponibilité et leurs confirmations. Les retours à l’héritage et l’annulation
+restent disponibles. Un sous-onglet enregistre uniquement ses champs visibles ;
+les brouillons des autres rubriques sont conservés. Les actions d’un éditeur
+masqué ne sont pas affichées dans le pied actif. La mise en page ne modifie aucune
+API, permission ou règle de validation serveur.
+
 ## Agents locaux
 
 L’onglet **Agents locaux · Ollama**, accessible sans connexion au compte OpenAI,

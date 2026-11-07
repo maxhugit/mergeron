@@ -1,3 +1,9 @@
+import { useContext } from 'react';
+import { SettingsPanelContext } from './settings-panel-context';
+import {
+  SettingsPanelActions,
+  SettingsStandaloneIntro,
+} from './settings-panel';
 import { translationKey } from '@/locales/translation-key';
 /** Administrator-only controls for the managed app-server CLI, not a shell console. */
 import { useState } from 'react';
@@ -43,6 +49,7 @@ export function CodexCliSettings() {
   const { t, i18n } = useTranslation(['common', 'codexSettings'], {
     nsMode: 'fallback',
   });
+  const embedded = useContext(SettingsPanelContext);
   const client = useQueryClient();
   const [confirmation, setConfirmation] = useState<
     'install' | 'update' | 'rollback' | 'managed' | null
@@ -116,8 +123,16 @@ export function CodexCliSettings() {
   };
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-xl border border-border bg-card/50 p-4">
-        <h3 className="text-sm font-semibold">{t('codexCliOnThisServer')}</h3>
+      <div
+        className={
+          embedded
+            ? 'space-y-3'
+            : 'space-y-3 rounded-xl border border-border bg-card/50 p-4'
+        }
+      >
+        <SettingsStandaloneIntro>
+          <h3 className="text-sm font-semibold">{t('codexCliOnThisServer')}</h3>
+        </SettingsStandaloneIntro>
         <dl className="grid grid-cols-2 gap-3 text-sm">
           <dt>{t('installedVersion')}</dt>
           <dd>
@@ -167,16 +182,18 @@ export function CodexCliSettings() {
             <p className="break-all text-xs text-muted-foreground">
               SHA-256: {data.managedRelease.manifestSha256}
             </p>
-            <Button
-              disabled={
-                busy ||
-                !data.canManage ||
-                data.selectedVersion === data.managedRelease.id
-              }
-              onClick={() => setConfirmation('managed')}
-            >
-              {t('installManagedCli', { ns: 'codexSettings' })}
-            </Button>
+            <SettingsPanelActions>
+              <Button
+                disabled={
+                  busy ||
+                  !data.canManage ||
+                  data.selectedVersion === data.managedRelease.id
+                }
+                onClick={() => setConfirmation('managed')}
+              >
+                {t('installManagedCli', { ns: 'codexSettings' })}
+              </Button>
+            </SettingsPanelActions>
           </section>
         )}
         {data?.checkedAt && (
@@ -228,46 +245,48 @@ export function CodexCliSettings() {
         {mutation.isSuccess && (
           <p role="status">{t('cliOperationCompleted')}</p>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() => void check()}
-          >
-            {t('checkForCliUpdates')}
-          </Button>
-          <Button
-            disabled={
-              busy ||
-              !data?.canManage ||
-              data.officialUpdateBlocked ||
-              !data.latestVersion ||
-              (data.installationState !== 'missing' && !data.updateAvailable)
-            }
-            onClick={() =>
-              setConfirmation(
-                data?.installationState === 'missing' ? 'install' : 'update',
-              )
-            }
-          >
-            {t(
-              data?.installationState === 'missing'
-                ? 'installCodexCli'
-                : 'updateCodexCli',
-            )}
-          </Button>
-          {data?.canRollback && (
+        <SettingsPanelActions>
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              disabled={
-                busy || !(data.selectedVersion ?? data.installedVersion)
-              }
-              onClick={() => setConfirmation('rollback')}
+              disabled={busy}
+              onClick={() => void check()}
             >
-              {t('restorePreviousCli')}
+              {t('checkForCliUpdates')}
             </Button>
-          )}
-        </div>
+            <Button
+              disabled={
+                busy ||
+                !data?.canManage ||
+                data.officialUpdateBlocked ||
+                !data.latestVersion ||
+                (data.installationState !== 'missing' && !data.updateAvailable)
+              }
+              onClick={() =>
+                setConfirmation(
+                  data?.installationState === 'missing' ? 'install' : 'update',
+                )
+              }
+            >
+              {t(
+                data?.installationState === 'missing'
+                  ? 'installCodexCli'
+                  : 'updateCodexCli',
+              )}
+            </Button>
+            {data?.canRollback && (
+              <Button
+                variant="outline"
+                disabled={
+                  busy || !(data.selectedVersion ?? data.installedVersion)
+                }
+                onClick={() => setConfirmation('rollback')}
+              >
+                {t('restorePreviousCli')}
+              </Button>
+            )}
+          </div>
+        </SettingsPanelActions>
         {busy && (
           <p role="status">{t('cliOperationInProgressDoNotStartNewWork')}</p>
         )}

@@ -1,5 +1,11 @@
+import { useContext } from 'react';
+import { SettingsPanelContext } from './settings-panel-context';
+import {
+  SettingsPanelActions,
+  SettingsStandaloneIntro,
+} from './settings-panel';
 import { catalogRestartMutation } from '@/generated/api/@tanstack/react-query.gen';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -15,7 +21,9 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
   const { t } = useTranslation(['common', 'localAgents'], {
     nsMode: 'fallback',
   });
+  const embedded = useContext(SettingsPanelContext);
   const client = useQueryClient();
+  const formId = useId();
   const [draft, setDraft] = useState(initial);
   const save = useMutation({
     mutationFn: () =>
@@ -52,14 +60,19 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
   });
   return (
     <form
-      className="space-y-3 rounded-xl border border-border p-4"
+      id={formId}
+      className={
+        embedded ? 'space-y-3' : 'space-y-3 rounded-xl border border-border p-4'
+      }
       onSubmit={(e) => {
         e.preventDefault();
         if (!save.isPending && !restart.isPending) save.mutate();
       }}
     >
-      <h3 className="font-medium">{t('localAgentsTitle')}</h3>
-      <p className="text-sm text-muted-foreground">{t('localAgentsScope')}</p>
+      <SettingsStandaloneIntro>
+        <h3 className="font-medium">{t('localAgentsTitle')}</h3>
+        <p className="text-sm text-muted-foreground">{t('localAgentsScope')}</p>
+      </SettingsStandaloneIntro>
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
@@ -99,19 +112,25 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
       <p className="text-xs text-muted-foreground">
         {t('localAgentsContextHelp')}
       </p>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={save.isPending || restart.isPending}>
-          {t('save')}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={models.isFetching || save.isPending || restart.isPending}
-          onClick={() => void models.refetch()}
-        >
-          {t('localAgentsCheck')}
-        </Button>
-      </div>
+      <SettingsPanelActions>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="submit"
+            form={formId}
+            disabled={save.isPending || restart.isPending}
+          >
+            {t('save')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={models.isFetching || save.isPending || restart.isPending}
+            onClick={() => void models.refetch()}
+          >
+            {t('localAgentsCheck')}
+          </Button>
+        </div>
+      </SettingsPanelActions>
       {save.isError && (
         <p role="alert" className="text-sm text-destructive">
           {t('localAgentsSaveError')}
@@ -125,14 +144,17 @@ function ConfigurationForm({ initial }: { initial: LocalAgentConfiguration }) {
       {configured.metadataRestartRequired && (
         <div role="status" className="space-y-2 rounded border p-3 text-sm">
           <p>{t('localAgentsMetadataRestart')}</p>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={restart.isPending || save.isPending}
-            onClick={() => restart.mutate({})}
-          >
-            {t('restartCodex')}
-          </Button>
+          <SettingsPanelActions>
+            {' '}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={restart.isPending || save.isPending}
+              onClick={() => restart.mutate({})}
+            >
+              {t('restartCodex')}
+            </Button>
+          </SettingsPanelActions>
         </div>
       )}
       {restart.isError && (

@@ -1,5 +1,8 @@
 import { translationKey } from '@/locales/translation-key';
 /** Shared, mobile-safe action bar for one administration tab. */
+import { useContext } from 'react';
+import { SettingsPanelContext } from './settings-panel-context';
+import { SettingsPanelActions } from './settings-panel';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -12,6 +15,8 @@ export function SettingsSaveBar({
   onDiscard,
   label = 'Save',
   hideWhenClean = false,
+  inline = false,
+  active = true,
 }: {
   dirty: boolean;
   saving: boolean;
@@ -19,12 +24,40 @@ export function SettingsSaveBar({
   onDiscard?: () => void;
   label?: string;
   hideWhenClean?: boolean;
+  inline?: boolean;
+  active?: boolean;
 }) {
   const { t } = useTranslation();
   const desktopSidebarCollapsed = useLayoutStore(
     (state) => state.desktopSidebarCollapsed,
   );
-  if (hideWhenClean && !dirty && !saving) return null;
+  const panel = useContext(SettingsPanelContext);
+  if (!active || (hideWhenClean && !dirty && !saving)) return null;
+  const controls = (
+    <div
+      role="region"
+      aria-label={t('saveSettings')}
+      className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-3"
+    >
+      <span role="status" className="mr-auto text-xs text-muted-foreground">
+        {dirty ? t('unsavedChanges') : t('noPendingChanges')}
+      </span>
+      {onDiscard && (
+        <Button
+          variant="outline"
+          disabled={!dirty || saving}
+          onClick={onDiscard}
+        >
+          {t('cancel')}
+        </Button>
+      )}
+      <Button disabled={!dirty || saving} onClick={onSave}>
+        {saving ? t('saving') : t(translationKey(label))}
+      </Button>
+    </div>
+  );
+  if (inline) return controls;
+  if (panel) return <SettingsPanelActions>{controls}</SettingsPanelActions>;
   return (
     <>
       <div className="h-24" aria-hidden="true" />

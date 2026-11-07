@@ -53,5 +53,17 @@
   "responseVerbosity": "Response verbosity",
   "reasoningEffortDescription": "Controls the effort spent solving the task. Higher effort may require more time and tokens; available levels depend on the model.",
   "reasoningSummaryDescription": "Controls the detail of the summary provided in the thinking blocks. This is not raw internal reasoning, and a more detailed summary does not increase reasoning effort.",
-  "responseVerbosityDescription": "Controls how concise or detailed the agent’s response text is. Does not hide commands, results or logs; their display is controlled by each agent’s Technical details setting."
+  "responseVerbosityDescription": "Controls how concise or detailed the agent’s response text is. Does not hide commands, results or logs; their display is controlled by each agent’s Technical details setting.",
+  "panelSections": "Codex settings sections",
+  "panelModelsDefaults": "Default models",
+  "panelModelContext": "Context",
+  "panelCatalogJson": "Catalog JSON",
+  "panelCommonInstructions": "Common instructions",
+  "panelSessionInstructions": "Session instructions",
+  "panelCompactInstructions": "Compaction",
+  "panelAccountDescription": "Identity, provider and quotas for the account used by Codex.",
+  "panelCliDescription": "Installation status and operations on the server-managed CLI.",
+  "panelChatDescription": "Independent chat and dictation engines, and API key configuration.",
+  "panelReasoningDescription": "Effort, summary, verbosity, web search and service tier.",
+  "panelRawDescription": "Direct config.toml editing, retaining warnings and reload behavior."
 }

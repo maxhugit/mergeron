@@ -1,3 +1,4 @@
+import { FIELD_DEFS } from './codex-settings-defs';
 /** The raw repair editor must survive structured config failure and restart invalidation. */
 import {
   act,
@@ -54,7 +55,7 @@ it('configures Ollama without an OpenAI account', async () => {
     await screen.findByRole('heading', { name: 'Local agents · Ollama' }),
   ).toBeVisible();
   expect(
-    screen.getByRole('checkbox', { name: 'Enable local agents' }),
+    await screen.findByRole('checkbox', { name: 'Enable local agents' }),
   ).toBeVisible();
 });
 
@@ -93,7 +94,10 @@ it('puts Account first, disables other tabs without a connection and responds to
   const model = screen.getByRole('tab', { name: 'Model' });
   await waitFor(() => expect(model).toBeEnabled());
   fireEvent.click(model);
-  expect(screen.getByRole('heading', { name: 'Model catalog' })).toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Model catalog' }));
+  expect(
+    await screen.findByRole('heading', { name: 'Model catalog' }),
+  ).toBeVisible();
   fixture.server.overrides.set('GET /api/account', () => json(disconnected));
   act(() =>
     useAccountStore
@@ -202,7 +206,10 @@ it('preserves unsaved TOML through loading, failure and success, then exposes th
     return json({ restartRequired: true, reloaded: false, warnings: [] });
   });
   await renderModel();
-  expect(screen.getByRole('heading', { name: 'Model catalog' })).toBeVisible();
+  fireEvent.click(screen.getByRole('tab', { name: 'Model catalog' }));
+  expect(
+    await screen.findByRole('heading', { name: 'Model catalog' }),
+  ).toBeVisible();
   await user.click(screen.getByRole('tab', { name: 'Raw configuration' }));
   await user.click(screen.getByRole('button', { name: 'Edit config.toml' }));
   const raw = await screen.findByRole('textbox', { name: 'Raw TOML' });
@@ -274,16 +281,18 @@ it('shows Codex setting groups as tabs instead of one long page', async () => {
     'flex-col',
   );
   expect(await screen.findByText('Default model name')).toBeVisible();
+  expect(screen.getByRole('tab', { name: 'Default models' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.getByRole('tab', { name: 'Context' })).toBeVisible();
+  await user.click(screen.getByRole('tab', { name: 'Model catalog' }));
   expect(
-    screen.queryByRole('tab', { name: 'Catalog' }),
-  ).not.toBeInTheDocument();
-  const catalogHeading = screen.getByRole('heading', { name: 'Model catalog' });
-  expect(
-    catalogHeading.compareDocumentPosition(
-      screen.getByText('Default model name'),
-    ) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
-  expect(screen.getByRole('tabpanel').parentElement).toHaveClass(
+    await screen.findByRole('heading', { name: 'Model catalog' }),
+  ).toBeVisible();
+  await user.click(screen.getByRole('tab', { name: 'Default models' }));
+  expect(screen.getByText('Default model name')).toBeVisible();
+  expect(document.querySelector('[data-settings-body]')).toHaveClass(
     'flex-1',
     'overflow-y-auto',
   );
@@ -294,6 +303,7 @@ it('shows Codex setting groups as tabs instead of one long page', async () => {
   ).not.toBeInTheDocument();
 
   await user.click(screen.getByRole('tab', { name: 'Instructions' }));
+  await user.click(screen.getByRole('tab', { name: 'Session instructions' }));
 
   expect(
     screen.getByRole('tab', { name: 'Instructions', selected: true }),
@@ -376,6 +386,7 @@ it('loads live model pages and saves only the active tab in one request', async 
   );
   expect(fixture.server.writes).toHaveLength(0);
   await user.click(screen.getByRole('tab', { name: 'Instructions' }));
+  await user.click(screen.getByRole('tab', { name: 'Session instructions' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Instructions' }), {
     target: { value: 'Pending instructions' },
   });
@@ -440,4 +451,96 @@ it('stages security choices and discards them without a backend mutation', async
   await user.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(policy).toHaveValue('on-request');
   expect(fixture.server.writes).toHaveLength(0);
+});
+
+it('retains every structured field across the new sections, including the conditional profile', async () => {
+  const config = {
+    ...Object.fromEntries(
+      FIELD_DEFS.map((field) => [
+        field.key,
+        field.control === 'number' ? 16384 : (field.options?.[0] ?? 'example'),
+      ]),
+    ),
+    profiles: { work: {} },
+    profile: 'work',
+  };
+  fixture.server.overrides.set('GET /api/codex/config', () =>
+    json({ config, origins: {} }),
+  );
+  fixture.server.overrides.set('GET /api/models', () =>
+    json({ data: [], nextCursor: null }),
+  );
+  await renderModel();
+  const user = userEvent.setup();
+  const visited = new Set<string>();
+  const cases = [
+    ['Model', 'Default models'],
+    ['Model', 'Context'],
+    ['Instructions', 'Session instructions'],
+    ['Instructions', 'Compaction'],
+    ['Reasoning', null],
+    ['Profile', null],
+  ] as const;
+  for (const [tab, sub] of cases) {
+    await user.click(screen.getByRole('tab', { name: tab }));
+    if (sub) await user.click(screen.getByRole('tab', { name: sub }));
+    for (const field of FIELD_DEFS) {
+      const input = document.getElementById('codex-field-' + field.key);
+      if (input && !input.closest('[hidden]')) {
+        expect(input).toBeVisible();
+        visited.add(field.key);
+      }
+    }
+  }
+  expect([...visited].sort()).toEqual(
+    FIELD_DEFS.map((field) => field.key).sort(),
+  );
+  await user.click(screen.getByRole('tab', { name: 'Security' }));
+  expect(screen.getByText('Sandbox Workspace Write')).toBeVisible();
+  expect(screen.getByText('Approval Policy')).toBeVisible();
+  expect(screen.getByText('Approvals Reviewer')).toBeVisible();
+  expect(fixture.server.writes).toHaveLength(0);
+});
+
+it('preserves the catalog draft across defaults and JSON and keeps inactive footer actions hidden', async () => {
+  editableConfig();
+  await renderModel();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('tab', { name: 'Catalog JSON' }));
+  const jsonEditor = await screen.findByRole('textbox', { name: 'Raw JSON' });
+  await waitFor(() => expect(jsonEditor).toHaveValue(fixture.server.content));
+  const original = fixture.server.content!;
+  const next = JSON.stringify({
+    ...JSON.parse(original),
+    unknown_document: 'new preserved field',
+  });
+  fireEvent.change(jsonEditor, { target: { value: next } });
+  await user.click(screen.getByRole('tab', { name: 'Default models' }));
+  expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Validate with Codex' }),
+  ).toBeNull();
+  await user.click(screen.getByRole('tab', { name: 'Catalog JSON' }));
+  expect(screen.getByRole('textbox', { name: 'Raw JSON' })).toHaveValue(next);
+  await user.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() =>
+    expect(fixture.server.writes).toContainEqual({
+      method: 'PUT',
+      path: '/api/codex/catalog/draft',
+      body: { content: next, expectedDraft: original },
+    }),
+  );
+});
+
+it('keeps validation errors visible in the JSON section', async () => {
+  editableConfig();
+  fixture.server.overrides.set('POST /api/codex/catalog/validate', () =>
+    json({ message: 'Invalid synthetic catalog' }, 400),
+  );
+  await renderModel();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('tab', { name: 'Catalog JSON' }));
+  await screen.findByRole('textbox', { name: 'Raw JSON' });
+  await user.click(screen.getByRole('button', { name: 'Validate with Codex' }));
+  expect(await screen.findByText('Invalid synthetic catalog')).toBeVisible();
 });

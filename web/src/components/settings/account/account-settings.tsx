@@ -1,3 +1,4 @@
+import { SettingsPanelActions } from '../settings-panel';
 /** Settings tab for Codex account/provider auth state and login flows. */
 import { useEffect, useState } from 'react';
 import { KeyRound, Loader2, LogOut, RefreshCw, UserRound } from 'lucide-react';
@@ -80,22 +81,24 @@ export function AccountSettings() {
 
   return (
     <section className="space-y-4">
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8"
-          disabled={accountQuery.isFetching}
-          onClick={() => accountQuery.refetch()}
-        >
-          {accountQuery.isFetching ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          {t('refresh')}
-        </Button>
-      </div>
+      <SettingsPanelActions>
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            disabled={accountQuery.isFetching}
+            onClick={() => accountQuery.refetch()}
+          >
+            {accountQuery.isFetching ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {t('refresh')}
+          </Button>
+        </div>
+      </SettingsPanelActions>
 
       {accountQuery.isLoading && !account && (
         <div className="rounded-lg border border-border bg-card/50 px-4 py-3 text-sm text-muted-foreground">
@@ -123,28 +126,30 @@ export function AccountSettings() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" className="h-8" onClick={() => setLoginOpen(true)}>
-          <KeyRound className="h-3.5 w-3.5" />
-          {isChatGpt ? t('switchAccount') : t('loginWithChatGptOrApiKey')}
-        </Button>
-        {canLogout && (
-          <Button
-            size="sm"
-            variant="destructive"
-            className="h-8"
-            disabled={logoutMutation.isPending}
-            onClick={() => logoutMutation.mutate()}
-          >
-            {logoutMutation.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <LogOut className="h-3.5 w-3.5" />
-            )}
-            {t('logoutCodexAccount')}
+      <SettingsPanelActions>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" className="h-8" onClick={() => setLoginOpen(true)}>
+            <KeyRound className="h-3.5 w-3.5" />
+            {isChatGpt ? t('switchAccount') : t('loginWithChatGptOrApiKey')}
           </Button>
-        )}
-      </div>
+          {canLogout && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-8"
+              disabled={logoutMutation.isPending}
+              onClick={() => logoutMutation.mutate()}
+            >
+              {logoutMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <LogOut className="h-3.5 w-3.5" />
+              )}
+              {t('logoutCodexAccount')}
+            </Button>
+          )}
+        </div>
+      </SettingsPanelActions>
 
       {loginOpen && (
         <AccountLoginDialog

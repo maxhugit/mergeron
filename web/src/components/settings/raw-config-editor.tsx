@@ -21,7 +21,13 @@ import {
 } from '@/generated/api/@tanstack/react-query.gen';
 import type { CatalogWarningDto } from '@/generated/api';
 
-export function RawConfigEditor({ onSaved }: { onSaved?: () => void }) {
+export function RawConfigEditor({
+  onSaved,
+  active = true,
+}: {
+  onSaved?: () => void;
+  active?: boolean;
+}) {
   const { t } = useTranslation();
   const dark = useThemeStore((s) => s.dark);
   const [expanded, setExpanded] = useState(false);
@@ -147,6 +153,7 @@ export function RawConfigEditor({ onSaved }: { onSaved?: () => void }) {
           )}
 
           <SettingsSaveBar
+            active={active}
             dirty={dirty}
             saving={mutation.isPending}
             label="Save & Reload"
