@@ -1667,5 +1667,5 @@
   "retiredQuestionReplyHint": "Cette demande est terminée. Vous pouvez encore préparer une réponse à envoyer comme message dans la conversation.",
   "prepareQuestionReply": "Préparer une réponse",
   "projectIntegrityTitle": "Cohérence des projets",
-  "projectIntegrityDescription": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite, sans suppression ni écrasement."
+  "projectIntegrityDescription": "Comparez les références en base avec les dossiers du projet. L’analyse ne modifie rien et ne lit pas le contenu des documents. Les connexions externes restent hors de ce contrôle. Chaque correction est explicite. Les retraits disponibles passent par une corbeille récupérable, sans écrasement."
 }

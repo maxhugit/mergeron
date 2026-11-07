@@ -4,7 +4,7 @@
 
 ## Utilisation
 
-Dans les paramètres globaux, ouvrir **Cohérence des projets**, puis choisir un
+Dans **Paramètres → Outils d’exploitation**, ouvrir **Cohérence des projets**, puis choisir un
 projet. Le diagnostic compare les références en base avec l’organisation physique
 attendue. **Actualiser le diagnostic** relance la lecture sans modifier de données.
 La page et ses API sont réservées aux administrateurs actifs.
@@ -51,7 +51,10 @@ disponibles. Une référence d’agent permet également d’ouvrir cet agent po
 choisir un autre dossier dans son explorateur.
 
 Les anomalies sans réparation automatique et les diagnostics incomplets affichent
-les indications disponibles, sans proposer une action d’écriture arbitraire.
+les indications disponibles, sans proposer une action d’écriture arbitraire. Les
+liens en anomalie et le nœud concerné sont signalés en jaune ; les fichiers sans
+rattachement ont le côté « enregistrement absent » en jaune. L’aperçu d’une
+réparation proposée utilise un lien vert, sans annoncer qu’elle a déjà été faite.
 
 Une action est proposée seulement lorsqu’une correction ciblée peut être vérifiée :
 
@@ -73,8 +76,40 @@ l’auteur, le chemin et l’action. Une nouvelle analyse suit chaque correction
 Pour les anomalies sans action automatique, une consigne est donnée : rechercher
 ou restaurer le document, retrouver une copie Git et ses changements non publiés,
 ou importer un fichier via la gestion documentaire du livrable. L’outil ne supprime
-rien, n’adopte pas un fichier arbitraire en base et ne fait aucun clone, checkout,
+rien définitivement, n’adopte pas un fichier arbitraire en base et ne fait aucun clone, checkout,
 reset ou changement de droits. Aucun bouton « tout corriger » n’est proposé.
+
+## Retrait explicite des données sans rattachement
+
+Une action **Mettre ces données à la corbeille** peut être proposée pour un
+fichier non enregistré, un dossier de livrable non enregistré ou une copie Git
+non enregistrée. Une connexion manquante n’autorise jamais à supprimer un agent,
+un document enregistré ou des fichiers supposés inutiles. L’absence de lien
+ne prouve pas l’absence de contenu utile.
+
+L’administrateur doit ouvrir la confirmation et saisir le nom exact. Le serveur
+relit le diagnostic et son empreinte, vérifie les chemins référencés (y compris
+ceux des autres projets, les documents supprimés et leurs historiques), les
+sélections actives et les chemins mémorisés. Les éléments techniques cachés,
+liens symboliques, liens physiques multiples et arbres non inspectables ne
+reçoivent pas cette action. Une analyse incomplète ou un transfert la bloque.
+Le contrôle de l’arbre est borné à 5 000 entrées et 16 niveaux ; les métadonnées
+sont intégrées à l’empreinte, sans lire les contenus documentaires.
+
+Les fichiers sont renommés, sans purge, sous
+`.mergeron-system/operations/integrity-trash/`. Les opérations utilisent des
+répertoires ouverts par descripteur sans suivre les liens symboliques et ne sont
+proposées que sur Linux. Le journal du projet enregistre d’abord la demande avec
+son auteur, sa date, son origine et l’identifiant de récupération, puis son état
+final. Si l’écriture finale du journal échoue après le déplacement, l’entrée
+préalable reste récupérable et l’interface relit le diagnostic et la corbeille.
+
+La section **Corbeille du projet** affiche les noms, chemins d’origine, dates et
+auteurs. **Récupérer dans Dossiers** demande confirmation et conserve le contenu
+sous un nouveau nom unique, sans remplacer l’ancien emplacement, écraser un
+document ou l’importer automatiquement. Les changements Git non publiés restent
+présents dans la copie récupérée. Aucune suppression définitive ni purge
+automatique n’est prévue ; l’espace disque reste utilisé pendant la conservation.
 
 ## Technique
 
@@ -85,6 +120,12 @@ reset ou changement de droits. Aucun bouton « tout corriger » n’est proposé
 - `POST /api/project-integrity/:id/repair` : corps `fingerprint`, `issueId` et
   `confirmation: "REPAIR_PROJECT"`. Les chemins et les actions sont recalculés
   côté serveur ; le client ne fournit jamais un chemin à créer.
+
+Les routes administrateur de corbeille sont `GET /api/project-integrity/:id/trash`,
+`POST /api/project-integrity/:id/trash` (empreinte, anomalie, nom et confirmation
+`MOVE_TO_PROJECT_TRASH`) et `POST /api/project-integrity/:id/trash/recover`
+(identifiant et confirmation `RECOVER_PROJECT_TRASH`). Le client ne transmet
+jamais un chemin à déplacer ou une destination de récupération.
 
 `ProjectIntegrityService` utilise les tables réelles et les alias de migration
 existants. Les corrections partagent la sérialisation des migrations du projet.

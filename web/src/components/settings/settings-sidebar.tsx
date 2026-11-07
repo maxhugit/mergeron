@@ -155,7 +155,8 @@ export function SettingsSidebar() {
               entry !== 'integrations' &&
               entry !== 'account' &&
               entry !== 'codexCli' &&
-              entry !== 'simpleChat',
+              entry !== 'simpleChat' &&
+              entry !== 'projectIntegrity',
           ).map((entry) => {
             const Icon = sectionIcons[entry];
             return (
@@ -199,6 +200,26 @@ export function SettingsSidebar() {
           <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {t('operationsTools')}
           </h2>
+          <button
+            aria-current={
+              pathname === '/settings' && section === 'projectIntegrity'
+                ? 'page'
+                : undefined
+            }
+            className={itemClass(
+              pathname === '/settings' && section === 'projectIntegrity',
+            )}
+            onClick={() => {
+              close(false);
+              void navigate({
+                to: '/settings',
+                search: { section: 'projectIntegrity' },
+              });
+            }}
+          >
+            <FolderCog className="h-4 w-4" />
+            {t(translationKey(settingsPageLabel('projectIntegrity')))}
+          </button>
           <button
             aria-current={pathname === '/files' ? 'page' : undefined}
             className={itemClass(pathname === '/files')}

@@ -12,6 +12,7 @@ export interface IntegrityIssue {
     | 'realign-override'
     | 'select-project-folder'
     | null;
+  trash?: { name: string };
   expectedPath?: string;
   reference?: {
     contextType: 'agent' | 'task' | 'deliverable' | 'simple_chat';

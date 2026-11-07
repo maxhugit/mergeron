@@ -1,6 +1,6 @@
 {
   "title": "Project consistency",
-  "intro": "Compare database references with project directories. Inspection changes nothing and does not read document contents. External connections are outside this inspection. Each correction is explicit, without deletion or overwriting.",
+  "intro": "Compare database references with project directories. Inspection changes nothing and does not read document contents. External connections are outside this inspection. Each correction is explicit. Available removals use recoverable trash, without overwriting data.",
   "administrator": "This page is restricted to administrators.",
   "project": "Project",
   "choose": "Choose a project",
@@ -303,5 +303,20 @@
       "explanation": "The connection is known but its reference folder was not found. Check the folder or select another reference.",
       "title": "A reference folder was not found"
     }
+  },
+  "trash": {
+    "title": "Project trash ({{count}})",
+    "move": "Move these data to trash",
+    "confirmTitle": "Remove data with no registered association?",
+    "confirmDescription": "These data may still contain useful work or unpublished Git changes. A missing association does not prove that they are unnecessary. The server will check them again and move them to internal trash, without permanent deletion or changes to a registered document.",
+    "typeName": "To confirm, type the exact name: {{name}}",
+    "failed": "The operation could not be confirmed. Refresh the inspection and check project trash before trying again.",
+    "help": "Explicit removal of data with no known reference. No automatic purge. Recovery preserves the files in Folders under a new name, without overwriting or linking a document. Disk space is not reclaimed while the data remain in this trash.",
+    "loadFailed": "Unable to read this project’s trash.",
+    "empty": "Trash is empty.",
+    "recover": "Recover into Folders",
+    "recoverDescription": "The data will be moved into Folders under a unique name. The old location and registered documents will not be replaced. No document will be imported automatically.",
+    "recovered": "Data recovered: {{path}}",
+    "candidateHelp": "No automatic association is proposed. If you decide these data are unnecessary, moving them to trash remains explicit and recoverable."
   }
 }

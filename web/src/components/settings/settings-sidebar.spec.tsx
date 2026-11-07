@@ -163,3 +163,19 @@ it('does not advertise an update when discovery reports an error', () => {
   renderSidebar();
   expect(screen.queryByRole('status')).toBeNull();
 });
+
+it('places project integrity only in operations and preserves its route and mobile close', () => {
+  renderSidebar();
+  const item = screen.getByRole('button', { name: 'Project consistency' });
+  expect(item.closest('section')).toBe(
+    screen
+      .getByRole('heading', { name: 'Operations tools' })
+      .closest('section'),
+  );
+  fireEvent.click(item);
+  expect(routing.navigate).toHaveBeenCalledWith({
+    to: '/settings',
+    search: { section: 'projectIntegrity' },
+  });
+  expect(useLayoutStore.getState().sidebarOpen).toBe(false);
+});

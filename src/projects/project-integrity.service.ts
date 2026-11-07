@@ -1,4 +1,11 @@
 import {
+  canTrashIntegrityIssue,
+  integrityProtectedPaths,
+  listIntegrityTrash,
+  putIntegrityTrash,
+  recoverIntegrityTrash,
+} from './project-integrity-trash';
+import {
   BadRequestException,
   ConflictException,
   Inject,
@@ -29,6 +36,7 @@ export type IntegrityIssue = {
     | 'realign-override'
     | 'select-project-folder'
     | null;
+  trash?: { name: string };
   expectedPath?: string;
   reference?: {
     contextType: schema.ProjectActiveFolder['contextType'];
@@ -58,7 +66,7 @@ const stat = async (p: string) =>
     throw e;
   });
 
-/** Administrative reconciliation: never reads document bytes, deletes data or adopts unknown files. */
+/** Administrative reconciliation: never reads document bytes or adopts unknown files. Removal is explicit and reversible. */
 @Injectable()
 export class ProjectIntegrityService {
   constructor(
@@ -608,9 +616,35 @@ export class ProjectIntegrityService {
       }
     };
     await walk(path.join(system, 'livrables'), 0);
+    const orphanIssues = issues.filter((issue) =>
+      [
+        'unregistered-document',
+        'unregistered-deliverable-directory',
+        'unregistered-copy',
+      ].includes(issue.kind),
+    );
+    if (editable && !limited && orphanIssues.length) {
+      const protectedPaths = integrityProtectedPaths(this.db);
+      facts.push(['trash-protection', digest(protectedPaths)]);
+      const trashBudget = { remaining: 5000 };
+      for (const issue of orphanIssues)
+        if (
+          await canTrashIntegrityIssue(
+            root,
+            issue,
+            protectedPaths,
+            facts,
+            trashBudget,
+          )
+        )
+          issue.trash = { name: path.basename(issue.path) };
+    }
     if (limited) {
       add('scan-limited', system, 'warning');
-      for (const issue of issues) issue.action = null;
+      for (const issue of issues) {
+        issue.action = null;
+        delete issue.trash;
+      }
     }
     return this.report(project, issues, facts, limited, {
       documents: documents.length,
@@ -738,6 +772,95 @@ export class ProjectIntegrityService {
       });
       return this.inspect(projectId);
     });
+  }
+
+  async trashList(projectId: string) {
+    const report = await this.inspect(projectId);
+    this.assertTrashProject(report);
+    return {
+      entries: await listIntegrityTrash(this.db, projectId, report.root),
+    };
+  }
+
+  async trash(
+    projectId: string,
+    body: {
+      fingerprint?: unknown;
+      issueId?: unknown;
+      confirmation?: unknown;
+      name?: unknown;
+    },
+    actor: { personId: string | null; name: string },
+  ) {
+    if (
+      !body ||
+      body.confirmation !== 'MOVE_TO_PROJECT_TRASH' ||
+      typeof body.fingerprint !== 'string' ||
+      typeof body.issueId !== 'string' ||
+      typeof body.name !== 'string'
+    )
+      throw new BadRequestException('Explicit trash confirmation required');
+    return serializeProjectLayout(this.db, async () => {
+      const report = await this.inspect(projectId);
+      this.assertTrashProject(report);
+      if (report.fingerprint !== body.fingerprint)
+        throw new ConflictException('Diagnostic changed; inspect again');
+      const issue = report.issues.find((item) => item.id === body.issueId);
+      if (
+        !issue?.trash ||
+        issue.trash.name !== body.name ||
+        !(await canTrashIntegrityIssue(
+          report.root,
+          issue,
+          integrityProtectedPaths(this.db),
+        ))
+      )
+        throw new ConflictException('No removable unreferenced data');
+      await putIntegrityTrash(this.db, projectId, report.root, issue, actor);
+      return this.inspect(projectId);
+    });
+  }
+
+  async recoverTrash(
+    projectId: string,
+    body: { entryId?: unknown; confirmation?: unknown },
+    actor: { personId: string | null; name: string },
+  ) {
+    if (
+      !body ||
+      body.confirmation !== 'RECOVER_PROJECT_TRASH' ||
+      typeof body.entryId !== 'string'
+    )
+      throw new BadRequestException('Explicit recovery confirmation required');
+    return serializeProjectLayout(this.db, async () => {
+      const report = await this.inspect(projectId);
+      this.assertTrashProject(report);
+      return recoverIntegrityTrash(
+        this.db,
+        projectId,
+        report.root,
+        body.entryId as string,
+        actor,
+      );
+    });
+  }
+
+  private assertTrashProject(report: IntegrityReport) {
+    if (
+      report.limited ||
+      report.issues.some((issue) =>
+        [
+          'project-root-missing',
+          'project-location-mismatch',
+          'project-identity-mismatch',
+          'migration-required',
+          'transfer-running',
+        ].includes(issue.kind),
+      )
+    )
+      throw new ConflictException(
+        'Project identity or activity does not allow trash operations',
+      );
   }
 
   /** Linux descriptor-relative creation: no recursive mkdir and no symlink traversal race. */

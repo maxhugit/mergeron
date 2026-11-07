@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -463,6 +463,194 @@ describe('project integrity', () => {
       expect(() => controller.list(request)).toThrow();
       expect(() => controller.inspect('p', request)).toThrow();
       expect(() => controller.repair('p', request, {})).toThrow();
+      expect(() => controller.trashList('p', request)).toThrow();
+      expect(() => controller.trash('p', request, {})).toThrow();
+      expect(() => controller.recover('p', request, {})).toThrow();
     }
   });
+  const orphan = async (name = 'orphan.txt') => {
+    const file = path.join(root, '.mergeron-system', 'livrables', name);
+    await fs.writeFile(file, 'unpublished useful data');
+    const report = await service.inspect('p');
+    const issue = report.issues.find((item) => item.path === file)!;
+    return { file, report, issue };
+  };
+  const trashBody = (
+    report: Awaited<ReturnType<ProjectIntegrityService['inspect']>>,
+    issue: { id: string; path: string },
+  ) => ({
+    fingerprint: report.fingerprint,
+    issueId: issue.id,
+    name: path.basename(issue.path),
+    confirmation: 'MOVE_TO_PROJECT_TRASH',
+  });
+  it('never offers removal for a broken connection or a limited report', async () => {
+    missingReference();
+    const report = await service.inspect('p');
+    expect(
+      report.issues.find(
+        (item) => item.kind === 'active-folder-registration-missing',
+      )?.trash,
+    ).toBeUndefined();
+  });
+  it.skipIf(process.platform !== 'linux')(
+    'moves only an explicitly named orphan to recoverable trash and recovers it without overwriting',
+    async () => {
+      const { file, report, issue } = await orphan();
+      expect(issue.trash?.name).toBe('orphan.txt');
+      await expect(
+        service.trash(
+          'p',
+          { ...trashBody(report, issue), name: 'wrong' },
+          actor,
+        ),
+      ).rejects.toThrow();
+      expect(await fs.readFile(file, 'utf8')).toBe('unpublished useful data');
+      const next = await service.trash('p', trashBody(report, issue), actor);
+      expect(next.issues.some((item) => item.path === file)).toBe(false);
+      const { entries } = await service.trashList('p');
+      expect(entries).toHaveLength(1);
+      expect(entries[0].actorName).toBe(actor.name);
+      // A new file occupies the old name: recovery must leave it untouched.
+      await fs.writeFile(file, 'new original');
+      const recovered = await service.recoverTrash(
+        'p',
+        { entryId: entries[0].id, confirmation: 'RECOVER_PROJECT_TRASH' },
+        actor,
+      );
+      expect(
+        recovered.path.startsWith(path.join(root, 'dossiers') + path.sep),
+      ).toBe(true);
+      expect(await fs.readFile(recovered.path, 'utf8')).toBe(
+        'unpublished useful data',
+      );
+      expect(await fs.readFile(file, 'utf8')).toBe('new original');
+      expect((await service.trashList('p')).entries).toHaveLength(0);
+      expect(
+        database.db
+          .select()
+          .from(schema.projectActivity)
+          .all()
+          .map((item) => item.action),
+      ).toEqual(['integrity.trash', 'integrity.recover']);
+    },
+  );
+  it.skipIf(process.platform !== 'linux')(
+    'refuses a changed report and linked data',
+    async () => {
+      const { file, report, issue } = await orphan();
+      await fs.writeFile(file, 'changed and longer');
+      await expect(
+        service.trash('p', trashBody(report, issue), actor),
+      ).rejects.toThrow('changed');
+      database.db
+        .insert(schema.projectAgentThreads)
+        .values({
+          threadId: 'in-use',
+          projectId: 'p',
+          workspacePath: file,
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      const fresh = await service.inspect('p');
+      expect(
+        fresh.issues.find(
+          (item) => item.path === file && item.kind === 'unregistered-document',
+        )?.trash,
+      ).toBeUndefined();
+      await expect(
+        service.trash('p', trashBody(fresh, issue), actor),
+      ).rejects.toThrow('No removable');
+      expect(await fs.readFile(file, 'utf8')).toBe('changed and longer');
+    },
+  );
+  it.skipIf(process.platform !== 'linux')(
+    'does not offer technical staging, hard links, or symlink trees for removal',
+    async () => {
+      const staging = path.join(
+        root,
+        '.mergeron-system',
+        'livrables',
+        '.version-staging',
+      );
+      await fs.mkdir(staging);
+      await fs.writeFile(path.join(staging, 'pending.txt'), 'keep');
+      const link = path.join(root, '.mergeron-system', 'livrables', 'linked');
+      await fs.mkdir(link);
+      await fs.symlink(parent, path.join(link, 'escape'));
+      const { file } = await orphan('hard.txt');
+      await fs.link(file, path.join(root, 'dossiers', 'other-link.txt'));
+      const report = await service.inspect('p');
+      expect(
+        report.issues
+          .filter(
+            (item) =>
+              item.path.includes('.version-staging') ||
+              item.path === link ||
+              item.path === file,
+          )
+          .every((item) => !item.trash),
+      ).toBe(true);
+    },
+  );
+  it.skipIf(process.platform !== 'linux')(
+    'retains a pending recovery record if updating the journal after the move fails',
+    async () => {
+      const { report, issue } = await orphan();
+      const spy = vi.spyOn(database.db, 'update').mockImplementation(() => {
+        throw new Error('Synthetic journal failure');
+      });
+      try {
+        await expect(
+          service.trash('p', trashBody(report, issue), actor),
+        ).rejects.toThrow('Synthetic journal failure');
+      } finally {
+        spy.mockRestore();
+      }
+      const { entries } = await service.trashList('p');
+      expect(entries).toHaveLength(1);
+      const recovered = await service.recoverTrash(
+        'p',
+        { entryId: entries[0].id, confirmation: 'RECOVER_PROJECT_TRASH' },
+        actor,
+      );
+      expect(await fs.readFile(recovered.path, 'utf8')).toBe(
+        'unpublished useful data',
+      );
+    },
+  );
+  it.skipIf(process.platform !== 'linux')(
+    'retains a whole orphan directory and unpublished Git contents',
+    async () => {
+      const folder = path.join(
+        root,
+        '.mergeron-system',
+        'sources',
+        'unregistered-connection',
+        'copies',
+        'orphan-copy',
+      );
+      await fs.mkdir(path.join(folder, '.git'), { recursive: true });
+      await fs.writeFile(path.join(folder, 'local.txt'), 'not pushed');
+      const report = await service.inspect('p');
+      const issue = report.issues.find(
+        (item) => item.kind === 'unregistered-copy',
+      )!;
+      expect(issue.trash).toBeTruthy();
+      await service.trash('p', trashBody(report, issue), actor);
+      const { entries } = await service.trashList('p');
+      const recovered = await service.recoverTrash(
+        'p',
+        { entryId: entries[0].id, confirmation: 'RECOVER_PROJECT_TRASH' },
+        actor,
+      );
+      expect(
+        await fs.readFile(path.join(recovered.path, 'local.txt'), 'utf8'),
+      ).toBe('not pushed');
+      expect(
+        (await fs.stat(path.join(recovered.path, '.git'))).isDirectory(),
+      ).toBe(true);
+    },
+  );
 });

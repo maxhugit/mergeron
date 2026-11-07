@@ -39,4 +39,36 @@ export class ProjectIntegrityController {
       name: request.platformIdentity!.name ?? 'Administrateur',
     });
   }
+  @Get(':id/trash')
+  @Header('Cache-Control', 'private, no-store')
+  trashList(@Param('id') id: string, @Req() request: IdentityRequest) {
+    archiveAdministrator(request);
+    return this.integrity.trashList(id);
+  }
+  @Post(':id/trash')
+  @Header('Cache-Control', 'private, no-store')
+  trash(
+    @Param('id') id: string,
+    @Req() request: IdentityRequest,
+    @Body() body: Parameters<ProjectIntegrityService['trash']>[1],
+  ) {
+    archiveAdministrator(request);
+    return this.integrity.trash(id, body, {
+      personId: request.platformIdentity!.personId ?? null,
+      name: request.platformIdentity!.name ?? 'Administrateur',
+    });
+  }
+  @Post(':id/trash/recover')
+  @Header('Cache-Control', 'private, no-store')
+  recover(
+    @Param('id') id: string,
+    @Req() request: IdentityRequest,
+    @Body() body: Parameters<ProjectIntegrityService['recoverTrash']>[1],
+  ) {
+    archiveAdministrator(request);
+    return this.integrity.recoverTrash(id, body, {
+      personId: request.platformIdentity!.personId ?? null,
+      name: request.platformIdentity!.name ?? 'Administrateur',
+    });
+  }
 }
