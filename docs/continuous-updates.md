@@ -75,8 +75,15 @@ ne le reçoivent jamais.
 Après réussite de la sauvegarde et de la transaction applicative, l’auxiliaire
 renomme et arrête l’ancien Manager, puis crée le nouveau avec la spécification
 existante : mêmes droits, secrets, montages, limites et réseau. Il attend le
-contrôle Docker et une vraie réponse de la sonde Unix. Le conteneur précédent
-reste conservé à l’arrêt. Les spécifications privées sont écrites en mode 0600,
+contrôle Docker et une vraie réponse de la sonde Unix. Après validation complète,
+l’ancien conteneur Manager arrêté est supprimé,
+sans suppression de volumes ni des sauvegardes de données. Son identifiant, son
+nom, son image et ses protections sont revérifiés avant suppression. Un échec
+de nettoyage conserve la réussite et l’ancien conteneur ; une reprise de
+l’auxiliaire réessaie le nettoyage de façon idempotente (jusqu’à trois
+redémarrages automatiques). En cas d’échec de mise à jour, l’ancien Manager
+reste disponible pour le retour arrière. Les spécifications privées sont écrites
+en mode 0600,
 avec synchronisation avant renommage du journal de remplacement.
 
 Un échec de santé restaure le Manager précédent. L’état global reste
