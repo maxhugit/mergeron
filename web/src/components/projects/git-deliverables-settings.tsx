@@ -3,6 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { projectsApi, projectsQueryKey } from '@/lib/projects-api';
 import { translationKey } from '@/locales/translation-key';
 
@@ -25,6 +31,7 @@ export function GitDeliverablesSettings({
   const { t } = useTranslation(['workspaces', 'common'], {
     nsMode: 'fallback',
   });
+  const [reviewCopyId, setReviewCopyId] = useState<string | null>(null);
   const query = useQuery({
     queryKey: key(projectId),
     queryFn: () => projectsApi<Status>(url(projectId)),
@@ -48,6 +55,98 @@ export function GitDeliverablesSettings({
         <p>{t('gitDeliverablesNoBoard')}</p>
       ) : (
         <>
+          {!preferredCopyId && query.data.copies.length > 0 && (
+            <div
+              className="max-h-64 overflow-auto rounded-lg border"
+              role="region"
+              aria-label={t('gitDeliverablesCopiesStatus')}
+            >
+              <table className="w-full table-fixed text-left text-sm">
+                <thead className="sticky top-0 bg-background">
+                  <tr>
+                    <th className="w-1/5 p-2">
+                      {t('gitDeliverablesCopyName')}
+                    </th>
+                    <th className="w-1/5 p-2">{t('gitDeliverablesBranch')}</th>
+                    <th className="w-2/5 p-2">
+                      {t('gitDeliverablesCopyState')}
+                    </th>
+                    <th className="w-1/5 p-2">
+                      <span className="sr-only">
+                        {t('gitDeliverablesReview')}
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {query.data.copies.map((copy) => (
+                    <tr key={copy.id} className="border-t">
+                      <td className="break-words p-2">{copy.name}</td>
+                      <td className="break-all p-2">
+                        {copy.context?.branch?.replace(/^refs\/heads\//, '') ??
+                          '—'}
+                        {copy.context?.head && (
+                          <span className="block text-xs text-muted-foreground">
+                            {copy.context.head.slice(0, 7)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="break-words p-2">
+                        {copy.lastError ? (
+                          <span className="text-amber-600">
+                            {t('gitDeliverablesSyncNeedsReview')}{' '}
+                            <code className="block break-all text-xs">
+                              {copy.lastError}
+                            </code>
+                          </span>
+                        ) : !copy.eligible ? (
+                          t('gitDeliverablesUnavailable')
+                        ) : copy.pending ? (
+                          t('gitDeliverablesPending')
+                        ) : copy.lastSyncAt ? (
+                          new Date(copy.lastSyncAt).toLocaleString()
+                        ) : (
+                          t('gitDeliverablesNotSynchronized')
+                        )}
+                      </td>
+                      <td className="p-2">
+                        <Button
+                          size="sm"
+                          className="h-auto w-full min-w-0 whitespace-normal px-1"
+                          variant="outline"
+                          disabled={!copy.eligible}
+                          onClick={() => setReviewCopyId(copy.id)}
+                        >
+                          {t('gitDeliverablesReview')}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <Dialog
+            open={!!reviewCopyId}
+            onOpenChange={(open) => {
+              if (!open) setReviewCopyId(null);
+            }}
+          >
+            <DialogContent className="max-h-[90dvh] min-w-0 overflow-y-auto sm:max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>{t('gitDeliverablesReview')}</DialogTitle>
+              </DialogHeader>
+              {reviewCopyId && (
+                <GitDeliverablesConfiguration
+                  key={reviewCopyId}
+                  projectId={projectId}
+                  board={board}
+                  copies={query.data.copies}
+                  preferredCopyId={reviewCopyId}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
           <GitDeliverablesConfiguration
             key={board.id}
             projectId={projectId}
@@ -78,6 +177,9 @@ function GitDeliverablesConfiguration({
   const client = useQueryClient();
   const [enabled, setEnabled] = useState(board.settings?.enabled ?? false);
   const copyId = preferredCopyId;
+  const copy = copies.find((c) => c.id === copyId);
+  const lastError = copyId ? copy?.lastError : board.settings?.lastError;
+  const lastSyncAt = copyId ? copy?.lastSyncAt : board.settings?.lastSyncAt;
   const eligible = copies.filter((c) => c.eligible);
   const available = copyId
     ? eligible.some((c) => c.id === copyId)
@@ -162,6 +264,13 @@ function GitDeliverablesConfiguration({
           {t('gitDeliverablesMissingAgentCopy')}
         </p>
       )}
+      {copyId && (
+        <p className="break-all text-sm">
+          {copy?.name} · {t('gitDeliverablesBranch')}:{' '}
+          {copy?.context?.branch?.replace(/^refs\/heads\//, '') ?? '—'}{' '}
+          {copy?.context?.head?.slice(0, 7)}
+        </p>
+      )}
       <fieldset disabled={mutation.isPending} className="min-w-0 space-y-3">
         <label className="grid gap-1 text-sm">
           {t('gitDeliverablesDirectory')}
@@ -222,16 +331,14 @@ function GitDeliverablesConfiguration({
       <p className="text-sm text-muted-foreground">
         {t('gitDeliverablesLargeFiles')}
       </p>
-      {board.settings?.lastError && (
+      {lastError && (
         <p role="alert" className="break-words text-amber-600">
-          {t('gitDeliverablesSyncNeedsReview')}{' '}
-          <code>{board.settings.lastError}</code>
+          {t('gitDeliverablesSyncNeedsReview')} <code>{lastError}</code>
         </p>
       )}
-      {board.settings?.lastSyncAt && (
+      {lastSyncAt && (
         <p className="text-xs text-muted-foreground">
-          {t('gitDeliverablesLastSync')}{' '}
-          {new Date(board.settings.lastSyncAt).toLocaleString()}
+          {t('gitDeliverablesLastSync')} {new Date(lastSyncAt).toLocaleString()}
         </p>
       )}
       {mutation.error && (
@@ -247,6 +354,13 @@ function GitDeliverablesConfiguration({
           aria-label={t('gitDeliverablesPreview')}
         >
           <h4 className="font-medium">{t('gitDeliverablesPreview')}</h4>
+          {preview.context && (
+            <p className="break-all text-xs">
+              {t('gitDeliverablesBranch')}:{' '}
+              {preview.context.branch?.replace(/^refs\/heads\//, '') ?? 'HEAD'}{' '}
+              · {preview.context.head?.slice(0, 7) ?? '—'}
+            </p>
+          )}
           {!preview.changes.length && <p>{t('gitDeliverablesNoChanges')}</p>}
           <ul className="divide-y">
             {preview.changes.map((change, i) => (

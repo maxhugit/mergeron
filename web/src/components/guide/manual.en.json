@@ -1486,7 +1486,8 @@
             "title": "Keep history and protections",
             "paragraphs": [
               "Commit .mergeron-deliverables.json, livrable.json manifests and documents to make the repository portable. The folder can be customized but must remain inside the repository.",
-              "Mergeron versions and approvals remain distinct from commits. Each agent copy retains its own comparison baselines. Existing shared copies remain intact but are no longer used for automatic writes."
+              "Mergeron versions and approvals remain distinct from commits. Each agent copy retains its own comparison baselines. Existing shared copies remain intact but are no longer used for automatic writes.",
+              "Confirmation is bound to the reviewed branch and commit. The copy table tracks errors and pending exports separately. One conflicted copy does not block the others. After a restart, use Review Git deliverables to resume with your current permissions. A change refused during synchronization can be retried afterwards."
             ],
             "warning": "Synchronization is neither human validation nor a Git push. Review conflicts and retain necessary backups before confirming exchanges."
           }

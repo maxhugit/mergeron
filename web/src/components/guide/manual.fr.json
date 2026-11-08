@@ -1486,7 +1486,8 @@
             "title": "Conserver les historiques et protections",
             "paragraphs": [
               "L’index .mergeron-deliverables.json, les manifestes livrable.json et les documents doivent être commités pour rendre le dépôt portable. Le dossier peut être personnalisé sans sortir du dépôt.",
-              "Les versions et validations de Mergeron restent distinctes des commits. Chaque copie d’agent conserve ses propres bases de comparaison. Une ancienne copie partagée reste intacte mais n’est plus utilisée pour les écritures automatiques."
+              "Les versions et validations de Mergeron restent distinctes des commits. Chaque copie d’agent conserve ses propres bases de comparaison. Une ancienne copie partagée reste intacte mais n’est plus utilisée pour les écritures automatiques.",
+              "La confirmation est liée à la branche et au commit examinés. Le tableau des copies conserve les erreurs et les exports en attente séparément. Une copie en conflit ne bloque pas les autres. Après un redémarrage, utilisez Examiner les livrables Git pour reprendre avec vos droits actuels. Une modification refusée pendant une synchronisation peut être réessayée ensuite."
             ],
             "warning": "Une synchronisation n’est ni une validation humaine ni un push Git. Examinez les conflits et conservez les sauvegardes nécessaires avant de confirmer les échanges."
           }

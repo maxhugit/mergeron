@@ -510,5 +510,11 @@
   "gitDeliverablesAgentCopies": "This mode applies to the project. Each agent editing a deliverable needs its own available, writable Git copy. Files are synchronized to that copy; imports require review, with no automatic commit or push.",
   "gitDeliverablesMissingAgentCopy": "No writable agent Git copy is available. Create or assign one in Locations and connections before enabling this mode. Agents without a copy cannot edit deliverables while this mode is active.",
   "gitDeliverablesSaveMode": "Save Git deliverables mode",
-  "gitDeliverablesAmbiguousBoard": "Multiple deliverable managers were detected. Resolve this inconsistency before configuring Git."
+  "gitDeliverablesAmbiguousBoard": "Multiple deliverable managers were detected. Resolve this inconsistency before configuring Git.",
+  "gitDeliverablesCopiesStatus": "Git copy synchronization",
+  "gitDeliverablesCopyName": "Git copy",
+  "gitDeliverablesBranch": "Branch",
+  "gitDeliverablesCopyState": "Synchronization",
+  "gitDeliverablesPending": "Export pending · review after a restart",
+  "gitDeliverablesNotSynchronized": "Not synchronized yet"
 }

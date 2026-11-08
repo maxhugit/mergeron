@@ -24,6 +24,10 @@ export interface Status {
     writable: boolean;
     owned: boolean;
     eligible?: boolean;
+    context?: { branch: string | null; head: string | null } | null;
+    lastError?: string | null;
+    lastSyncAt?: number | null;
+    pending?: boolean;
     directory?: string;
   }[];
   discovered: { id: string; title: string; documents: number }[];
@@ -31,6 +35,7 @@ export interface Status {
 }
 export type Preview = {
   fingerprint: string;
+  context?: { branch: string | null; head: string | null };
   canApply: boolean;
   changes: {
     deliverable: string;

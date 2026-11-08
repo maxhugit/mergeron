@@ -108,6 +108,38 @@ Après un redémarrage, les fichiers, correspondances et erreurs sont conservés
 une opération automatique interrompue peut être relancée par une prévisualisation
 et une confirmation. La désactivation conserve les fichiers et les historiques.
 
+## Écritures simultanées et suivi des copies
+
+Une application de plan réserve le gestionnaire pendant ses écritures. Une autre
+requête qui modifie un document ou ses étiquettes reçoit un conflit temporaire
+avant l'enregistrement ; elle peut être réessayée après la synchronisation.
+Les contrôles de version et de révision restent actifs, y compris à la fin des
+opérations documentaires asynchrones. Un import confirmé ne devient pas un export
+parce qu'une nouvelle version a été enregistrée pendant sa préparation.
+
+La prévisualisation est liée à la branche et au commit HEAD examinés. Un changement
+de branche ou de commit invalide la confirmation. Chaque copie conserve des bases
+de comparaison distinctes par branche. Un export automatique différé reste lié à
+la branche sur laquelle la modification a été signalée ; il ne suit pas un
+changement de branche intervenu ensuite.
+
+Le tableau des copies affiche la branche, le commit, la dernière synchronisation,
+les erreurs et les exports en attente. Un conflit sur une copie n'empêche pas
+l'examen des suivantes. Le succès d'une copie ne masque pas l'erreur d'une autre.
+Le bouton **Examiner les livrables Git** ouvre une fenêtre sur la copie concernée.
+
+Les demandes d'export en attente sont conservées dans la configuration du
+gestionnaire. Une demande reçue pendant une opération reste à traiter après sa
+fin. Après un redémarrage, cet état reste visible : examiner puis confirmer le
+plan pour reprendre avec l'identité et les droits actuels. Aucun ancien contexte
+d'authentification n'est réutilisé automatiquement.
+
+Un premier export est journalisé avant l'écriture de ses fichiers. S'il est
+interrompu avant la création du manifeste, une nouvelle prévisualisation peut
+reprendre les fichiers déjà écrits lorsqu'ils correspondent au contenu attendu.
+Une suppression de manifeste après un export achevé reste un conflit ; les
+fichiers inconnus ou divergents ne sont pas écrasés pour forcer la reprise.
+
 ## Confidentialité et limites
 
 Les livrables à accès restreint sont exclus par défaut. Leur inclusion doit être
