@@ -327,3 +327,19 @@ operation and the shared directory selector, keeps the document id and model, an
 referring to it. An application-level recovery bar also covers deleted buffers from the standalone
 Files view, including after navigation. Path reconciliation and document watches live at application
 scope; no file browser needs to be mounted. See files-service.md for external observation limits.
+
+## Markdown documents
+
+Files ending in `.md`, `.markdown` or `.mdown` open in **Read** mode with formatted
+headings, lists, GFM tables and a clickable contents list. **Edit** displays the
+existing source editor; **Split view** keeps the source and live reading view
+side by side on desktop and stacks them on narrow screens. Both views share the
+same document model. Switching modes retains the working text, undo history and
+existing save/conflict handling. The display choice is kept in the current file
+view's in-memory state; an explicit source-line navigation selects Edit.
+
+Save and Refresh retain their existing backend paths and preconditions, including
+versioning where supported by the document write endpoint. Read-only documents
+remain read-only. The preview uses local rendering, never executes raw HTML and
+does not automatically fetch remote images. External web links open only when
+clicked, in a separate tab. No document content is sent to a rendering service.

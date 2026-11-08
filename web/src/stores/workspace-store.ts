@@ -61,7 +61,10 @@ export interface WorkspaceContext {
   lastBrowserId?: string;
 }
 
+export type MarkdownMode = 'read' | 'edit' | 'split';
+
 export interface FileViewState {
+  markdownMode?: MarkdownMode;
   editor: EditorViewState;
   reveal: { line: number; request: number } | null;
 }
@@ -94,6 +97,7 @@ interface WorkspaceState {
   select: (context: string, id: string) => void;
   remove: (context: string, id: string) => void;
   forgetConversations: (threadIds: readonly string[]) => void;
+  setMarkdownMode: (viewId: string, mode: MarkdownMode) => void;
   saveEditor: (viewId: string, editor: EditorViewState) => void;
   revealLine: (viewId: string, line: number | null) => void;
   consumeReveal: (viewId: string, request: number) => void;
@@ -451,6 +455,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
       return { contexts, fileViews };
     }),
+  setMarkdownMode: (viewId, markdownMode) =>
+    set((state) => ({
+      fileViews: {
+        ...state.fileViews,
+        [viewId]: {
+          ...(state.fileViews[viewId] ?? EMPTY_FILE_VIEW),
+          markdownMode,
+        },
+      },
+    })),
   saveEditor: (viewId, editor) =>
     set((state) => ({
       fileViews: {
@@ -475,7 +489,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return {
         fileViews: {
           ...state.fileViews,
-          [viewId]: { ...current, reveal: null },
+          [viewId]: { ...current, reveal: null, markdownMode: 'edit' },
         },
       };
     }),

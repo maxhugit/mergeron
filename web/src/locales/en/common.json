@@ -1660,5 +1660,10 @@
   "projectIntegrityTitle": "Project consistency",
   "projectIntegrityDescription": "Compare database references with project directories. Inspection changes nothing and does not read document contents. External connections are outside this inspection. Each correction is explicit. Available removals use recoverable trash, without overwriting data.",
   "loginWithChatGpt": "Sign in with ChatGPT",
-  "standardProjectPermissionsHelp": "Standard users can view authorized projects and manage manual tasks and documents. Server settings, agent execution, automations and terminals are reserved for administrators."
+  "standardProjectPermissionsHelp": "Standard users can view authorized projects and manage manual tasks and documents. Server settings, agent execution, automations and terminals are reserved for administrators.",
+  "markdownViewMode": "Markdown display",
+  "markdownRead": "Read",
+  "markdownSplit": "Split view",
+  "markdownContents": "Contents",
+  "markdownImage": "Image: {{alt}}"
 }

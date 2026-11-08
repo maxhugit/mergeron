@@ -178,3 +178,46 @@ it('rejects a save response from before relocation without getting stuck saving'
   expect(await saving).toBe(false);
   expect(getDocumentForPath('/new.ts')).toMatchObject({ revision: 10, dirty: true, saving: false });
 });
+
+it('opens Markdown in reading mode, keeps live drafts across modes and saves the shared buffer', async () => {
+  io.read.mockResolvedValue({ data: { content: '# Document\n\n## Section\n\nOriginal', mtime: 10 } });
+  render(<CodeViewer filePath="/readme.md" viewId="markdown" active />);
+  expect(await screen.findByRole('heading', { name: 'Document' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Read' })).toHaveAttribute('aria-pressed', 'true');
+  const model = getDocumentForPath('/readme.md')!.model!;
+  await act(async () => { useWorkspaceStore.getState().setMarkdownMode('markdown', 'split'); });
+  await act(async () => { model.setValue('# Updated\n\nUncommitted draft'); });
+  expect(await screen.findByRole('heading', { name: 'Updated' })).toBeVisible();
+  await act(async () => { useWorkspaceStore.getState().setMarkdownMode('markdown', 'edit'); });
+  expect(screen.queryByRole('heading', { name: 'Updated' })).toBeNull();
+  await act(async () => { useWorkspaceStore.getState().setMarkdownMode('markdown', 'read'); });
+  expect(await screen.findByText('Uncommitted draft')).toBeVisible();
+  expect(getDocumentForPath('/readme.md')!.model).toBe(model);
+  await act(async () => { await saveDocument('/readme.md'); });
+  expect(io.write).toHaveBeenLastCalledWith(expect.objectContaining({ body: { path: '/readme.md', content: '# Updated\n\nUncommitted draft', expectedMtime: 10 } }));
+});
+
+it('reveals a requested Markdown source line and stays in edit mode after consuming it', async () => {
+  useWorkspaceStore.getState().revealLine('md-line', 2);
+  render(<CodeViewer filePath="/lines.md" viewId="md-line" active />);
+  await waitFor(() => expect(io.reveal).toHaveBeenCalledWith(2));
+  expect(useWorkspaceStore.getState().fileViews['md-line'].markdownMode).toBe('edit');
+  expect(screen.queryByRole('navigation')).toBeNull();
+});
+
+it('renders Markdown without executable HTML, unsafe links or remote image requests', async () => {
+  io.read.mockResolvedValue({ data: { content: '# Safe\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))\n\n![tracking](https://example.com/pixel.png)\n\n| Col | Value |\n| --- | --- |\n| A | B |', mtime: 10 } });
+  const { container } = render(<CodeViewer filePath="/safe.md" viewId="safe-md" active />);
+  await screen.findByRole('heading', { name: 'Safe' });
+  expect(screen.getByRole('table')).toBeVisible();
+  expect(container.querySelector('script, img, a[href^="javascript:"]')).toBeNull();
+});
+
+it('does not offer saving a read-only Markdown document', async () => {
+  render(<CodeViewer filePath="/locked.md" viewId="locked-md" active readOnly />);
+  await screen.findByRole('button', { name: 'Read' });
+  const model = getDocumentForPath('/locked.md')!.model!;
+  await act(async () => { model.setValue('A draft from another view'); });
+  expect(screen.getByRole('button', { name: 'Save (Ctrl+S)' })).toBeDisabled();
+  expect(io.write).not.toHaveBeenCalled();
+});
