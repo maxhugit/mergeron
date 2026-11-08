@@ -2,19 +2,32 @@
 
 Le mode **Livrables Git** est optionnel et désactivé par défaut. Un administrateur
 peut l’activer dans **Projet → Espaces de travail → Livrables Git**, après avoir
-créé une copie Git partagée, accessible en écriture et non réservée à un agent.
+créé au moins une copie Git propre à un agent, disponible et accessible en écriture.
+Le projet possède un seul gestionnaire de livrables : il est utilisé automatiquement,
+sans liste de sélection. Le réglage ne désigne aucune copie partagée.
 Les livrables et leurs historiques Mergeron continuent de fonctionner sans Git.
 
 ## Activer et reconnaître
 
-1. Sélectionner le gestionnaire de livrables, la copie et un dossier relatif
-   (par défaut `livrables`). Une copie déjà liée ne peut pas être remplacée
-   implicitement par une autre : ses bases de comparaison restent attachées
-   au dépôt et au dossier d’origine.
-2. Activer le commutateur et **Prévisualiser les changements**. Cette lecture
-   ne crée aucun document, fichier, commit ou réglage actif.
-3. Examiner les imports, exports, exclusions et conflits. Puis **Confirmer et
-   synchroniser** pour activer le mode et effectuer le transfert.
+1. Activer le commutateur, choisir le dossier relatif commun (par défaut
+   `livrables`) et **Enregistrer le mode Livrables Git**. Ce réglage s’applique
+   au projet ; il n’importe aucun document et n’écrit dans aucune copie.
+2. Chaque agent qui modifie un livrable doit posséder sa propre copie Git prête
+   en écriture. Sans copie, ou si elle est indisponible, l’enregistrement est
+   refusé avant de changer le document ou ses métadonnées. Aucun repli vers une
+   copie partagée ou celle d’un autre agent n’est effectué. L’interface signale
+   l’absence de copie disponible ; créer ou affecter une copie dans les emplacements
+   du projet avant d’activer le mode. Sans gestionnaire, en créer un d’abord.
+3. Dans l’explorateur de la copie concernée, **Examiner les livrables Git** puis
+   **Prévisualiser les changements**. Examiner imports, exports, exclusions et
+   conflits avant **Confirmer et synchroniser**. La copie est celle de l’explorateur,
+   sans sélecteur supplémentaire. Les imports restent toujours explicites.
+
+Les bases de comparaison et les correspondances sont conservées séparément pour
+chaque copie. Une synchronisation ne remplace pas celles des autres agents.
+Les anciens réglages et fichiers restent conservés ; une ancienne cible partagée
+n’est plus utilisée pour les écritures automatiques. Le dossier ne peut pas changer
+silencieusement dès qu’une copie possède des correspondances enregistrées.
 
 À l’ouverture d’une copie dans l’explorateur Sources/Git, Mergeron recherche
 automatiquement les manifestes et signale les livrables reconnus. **Examiner les
@@ -71,8 +84,10 @@ si elles avaient été réalisées sur cette installation.
 
 - Un enregistrement de version, une modification de titre ou d’étiquettes
   programme un export des **instantanés enregistrés**, pas des brouillons.
-  L’export attend que le verrou des opérations Git autorise l’écriture ; si un
-  agent travaille encore, il réessaie de manière espacée. Aucun commit ou push
+  Une modification par un agent exporte vers sa propre copie, avec la barrière Git
+  de cet agent. Une modification depuis l’interface programme les copies d’agents
+  disponibles sous le verrou global. Une copie occupée attend une nouvelle tentative.
+  Les changements entrants restent soumis à validation, même après un pull. Aucun commit ou push
   automatique n’est réalisé, même si le dépôt distant est configuré.
 - Un import utilise l’enregistrement versionné habituel. Il conserve les versions
   précédentes et l’identité du document, y compris lors d’un renommage.

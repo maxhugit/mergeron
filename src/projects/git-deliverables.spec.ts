@@ -33,6 +33,22 @@ describe('optional Git deliverables with real retained versions and a real repos
     deliverables: DeliverablesService,
     organization: DocumentOrganizationService,
     service: GitDeliverablesService;
+  let copyViews: ReturnType<WorkspaceCopiesService['list']>;
+  const scopedMutation = vi.fn((thread: string, fn: () => Promise<unknown>) =>
+    fn(),
+  );
+  const asAgent = <T>(thread: string, fn: () => T) =>
+    accessContext.run(
+      {
+        localAgentThreadId: thread,
+        identity: { role: 'administrator' } as never,
+        identities: {
+          requireProject: () => {},
+          requireAdministrator: () => {},
+        } as unknown as IdentityService,
+      },
+      fn,
+    );
   const options = {
     boardId: 'board',
     copyId: 'copy',
@@ -102,27 +118,30 @@ describe('optional Git deliverables with real retained versions and a real repos
       deliverables,
       identities,
     );
+    copyViews = [
+      {
+        id: 'copy',
+        projectId: 'p',
+        name: 'Agent Git',
+        state: 'ready',
+        sourceEnabled: true,
+        sourceType: 'git',
+        localPath: repo,
+        accessMode: 'read_write',
+        ownerThreadIds: ['agent'],
+      },
+    ] as ReturnType<WorkspaceCopiesService['list']>;
     const copies = {
-      list: () => [
-        {
-          id: 'copy',
-          projectId: 'p',
-          name: 'Shared',
-          state: 'ready',
-          sourceEnabled: true,
-          sourceType: 'git',
-          localPath: repo,
-          accessMode: 'read_write',
-          ownerThreadIds: [],
-        },
-      ],
+      list: () => copyViews,
     } as unknown as WorkspaceCopiesService;
+    scopedMutation.mockClear();
     const git = new WorkspaceGitService(
       copies,
       {} as WorkspaceResourcesService,
     );
     const gate = {
       mutate: (fn: () => Promise<unknown>) => fn(),
+      mutateDeferredFromAgent: scopedMutation,
     } as unknown as GitMutationGateService;
     service = new GitDeliverablesService(
       database.db,
@@ -521,5 +540,273 @@ describe('optional Git deliverables with real retained versions and a real repos
         ).toBe('new retained version'),
       { timeout: 4000 },
     );
+  });
+  it('configures the single project board without choosing a copy or writing repository files', async () => {
+    service.configure('p', {
+      boardId: 'board',
+      enabled: true,
+      directory: 'livrables',
+      restrictedIds: [],
+    });
+    const status = await service.status('p');
+    expect(status.boards[0].settings).toMatchObject({
+      enabled: true,
+      mode: 'agent_copies',
+    });
+    expect(status.boards[0].settings).not.toHaveProperty('copyId');
+    await expect(fs.stat(path.join(repo, 'livrables'))).rejects.toThrow();
+    copyViews[0].ownerThreadIds = [];
+    expect(() =>
+      service.configure('p', {
+        boardId: 'board',
+        enabled: true,
+        directory: 'livrables',
+      }),
+    ).toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+    expect(
+      service.configure('p', {
+        boardId: 'board',
+        enabled: false,
+        directory: 'livrables',
+      }),
+    ).toEqual({ enabled: false });
+  });
+  it('requires an agent-owned copy and refuses a shared, foreign, read-only or unavailable copy', async () => {
+    for (const change of [
+      { ownerThreadIds: [] },
+      { ownerThreadIds: ['someone-else'] },
+      { ownerThreadIds: ['agent', 'other'] },
+      { accessMode: 'read_only' },
+      { state: 'missing' },
+      { sourceEnabled: false },
+      { sourceType: 'ftp' },
+    ]) {
+      const original = { ...copyViews[0] };
+      Object.assign(copyViews[0], change);
+      await expect(
+        asAgent('agent', () => service.preview('p', options)),
+      ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+      Object.assign(copyViews[0], original);
+    }
+    const item = await deliverables.create('p', 'board', { title: 'Own copy' });
+    await upload(item.id, 'retained');
+    await asAgent('agent', async () => {
+      const { copyId, ...automatic } = options;
+      expect(copyId).toBe('copy');
+      const plan = await service.preview('p', automatic);
+      expect(plan.copyId).toBe('copy');
+      await service.apply('p', {
+        options: automatic,
+        fingerprint: plan.fingerprint,
+      });
+    });
+    expect(scopedMutation).toHaveBeenCalledWith('agent', expect.any(Function), {
+      copyPath: repo,
+    });
+  });
+  it('rejects agent modifications before changing versions or metadata if their copy is absent', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Preserved',
+    });
+    const doc = await upload(item.id, 'original');
+    await sync();
+    service.onModuleInit();
+    await expect(
+      asAgent('missing-agent', () =>
+        deliverables.create('p', 'board', { title: 'Must not exist' }),
+      ),
+    ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+    expect(() =>
+      asAgent('missing-agent', () =>
+        deliverables.update('p', 'board', item.id, {
+          title: 'Must not change',
+          version: item.version,
+        }),
+      ),
+    ).toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+    await expect(
+      asAgent('missing-agent', () => upload(item.id, 'must not save', doc.id)),
+    ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+    expect(() =>
+      asAgent('missing-agent', () =>
+        organization.createLabel('p', 'board', item.id, {
+          name: 'No label',
+          expectedRevision: 0,
+        }),
+      ),
+    ).toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+    expect(deliverables.board('p', 'board').deliverables).toHaveLength(1);
+    expect(deliverables.get('p', 'board', item.id).title).toBe('Preserved');
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
+    ).toBe(1);
+    await fs.rename(repo, repo + '-moved');
+    await expect(
+      asAgent('agent', () => upload(item.id, 'lost clone', doc.id)),
+    ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+  });
+  it('keeps independent comparison baselines for two agent clones without writing the other copy', async () => {
+    const repo2 = path.join(root, 'repository2');
+    await fs.mkdir(repo2);
+    execFileSync('git', ['init', '--quiet', repo2]);
+    copyViews.push({
+      ...copyViews[0],
+      id: 'copy2',
+      localPath: repo2,
+      ownerThreadIds: ['agent2'],
+    });
+    const item = await deliverables.create('p', 'board', {
+      title: 'Both agents',
+    });
+    const doc = await upload(item.id, 'base');
+    await sync();
+    const second = { ...options, copyId: 'copy2' };
+    const plan = await service.preview('p', second);
+    await service.apply('p', {
+      options: second,
+      fingerprint: plan.fingerprint,
+    });
+    await upload(item.id, 'next', doc.id);
+    await sync();
+    expect(
+      await fs.readFile(
+        path.join(repo2, 'livrables', item.id, 'notes.md'),
+        'utf8',
+      ),
+    ).toBe('base');
+    const pending = await service.preview('p', second);
+    expect(pending.changes).toContainEqual(
+      expect.objectContaining({ action: 'export', reason: 'document' }),
+    );
+    await service.apply('p', {
+      options: second,
+      fingerprint: pending.fingerprint,
+    });
+    expect(
+      await fs.readFile(
+        path.join(repo2, 'livrables', item.id, 'notes.md'),
+        'utf8',
+      ),
+    ).toBe('next');
+    expect((await service.preview('p', options)).changes).toEqual([]);
+  });
+  it('preserves legacy shared bindings and files without exporting to the shared copy', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Legacy' });
+    await upload(item.id, 'retained');
+    await sync();
+    const board = database.db
+      .select()
+      .from(schema.projectResources)
+      .where(eq(schema.projectResources.id, 'board'))
+      .get()!;
+    const stored = board.config.gitDeliverables as {
+      copies: Record<string, { bindings: unknown }>;
+      [key: string]: unknown;
+    };
+    const legacy = {
+      ...options,
+      enabled: true,
+      lastError: null,
+      lastSyncAt: 1,
+      bindings: stored.copies.copy.bindings,
+    };
+    database.db
+      .update(schema.projectResources)
+      .set({ config: { gitDeliverables: legacy } })
+      .where(eq(schema.projectResources.id, 'board'))
+      .run();
+    copyViews[0].ownerThreadIds = [];
+    const repo2 = path.join(root, 'agent-repo');
+    await fs.mkdir(repo2);
+    execFileSync('git', ['init', '--quiet', repo2]);
+    copyViews.push({
+      ...copyViews[0],
+      id: 'copy2',
+      localPath: repo2,
+      ownerThreadIds: ['agent2'],
+    });
+    service.configure('p', {
+      boardId: 'board',
+      enabled: true,
+      directory: 'livrables',
+    });
+    const after = database.db
+      .select()
+      .from(schema.projectResources)
+      .where(eq(schema.projectResources.id, 'board'))
+      .get()!;
+    expect(after.config.gitDeliverables).toMatchObject({
+      copies: { copy: { bindings: legacy.bindings } },
+    });
+    await expect(service.preview('p', options)).rejects.toThrow(
+      'GIT_DELIVERABLES_AGENT_COPY_REQUIRED',
+    );
+    const second = { ...options, copyId: 'copy2' };
+    const plan = await service.preview('p', second);
+    await service.apply('p', {
+      options: second,
+      fingerprint: plan.fingerprint,
+    });
+    expect(
+      await fs.readFile(
+        path.join(repo, 'livrables', item.id, 'notes.md'),
+        'utf8',
+      ),
+    ).toBe('retained');
+    expect(
+      await fs.readFile(
+        path.join(repo2, 'livrables', item.id, 'notes.md'),
+        'utf8',
+      ),
+    ).toBe('retained');
+  });
+  it('refuses a foreign manager and keeps the database single-manager invariant', async () => {
+    await expect(service.preview('another-project', options)).rejects.toThrow(
+      'GIT_DELIVERABLES_BOARD_UNAVAILABLE',
+    );
+    expect(() =>
+      database.db
+        .insert(schema.projectResources)
+        .values({
+          id: 'duplicate',
+          projectId: 'p',
+          name: 'Duplicate',
+          type: 'deliverable_board',
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run(),
+    ).toThrow();
+    expect((await service.status('p')).boards).toHaveLength(1);
+  });
+  it('does not coalesce two agents into a single agent export queue', async () => {
+    const repo2 = path.join(root, 'agent-two');
+    await fs.mkdir(repo2);
+    execFileSync('git', ['init', '--quiet', repo2]);
+    copyViews.push({
+      ...copyViews[0],
+      id: 'copy2',
+      localPath: repo2,
+      ownerThreadIds: ['agent2'],
+    });
+    const item = await deliverables.create('p', 'board', { title: 'Queued' });
+    const doc = await upload(item.id, 'base');
+    await sync();
+    service.onModuleInit();
+    const preview = vi.spyOn(service, 'preview').mockResolvedValue({
+      fingerprint: 'no-change',
+      copyId: 'copy',
+      canApply: true,
+      changes: [],
+    });
+    await asAgent('agent', () => upload(item.id, 'one', doc.id));
+    await asAgent('agent2', () => upload(item.id, 'two', doc.id));
+    await vi.waitFor(() => expect(preview).toHaveBeenCalledTimes(2));
+    expect(
+      preview.mock.calls
+        .map(([, input]) => (input as { copyId: string }).copyId)
+        .sort(),
+    ).toEqual(['copy', 'copy2']);
+    preview.mockRestore();
   });
 });

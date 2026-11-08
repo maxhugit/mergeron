@@ -468,13 +468,9 @@
   "sidebarDocumentCount_other": "{{count}} documents",
   "sidebarNoDocuments": "No documents yet.",
   "sidebarOpenTask": "Open task in sidebar · {{title}}",
-  "gitDeliverablesDescription": "Keep documents and labels in a project Git copy. livrable.json files make them recognizable on another installation.",
+  "gitDeliverablesDescription": "Keep documents and their labels in the project agents’ Git copies. The livrable.json files let another installation recognize them.",
   "gitDeliverablesNoBoard": "Add a deliverables manager to this project first.",
-  "gitDeliverablesBoard": "Deliverables manager",
   "gitDeliverablesEnable": "Enable Git deliverables",
-  "gitDeliverablesCopy": "Shared, writable Git copy",
-  "gitDeliverablesChooseCopy": "Choose a Git copy",
-  "gitDeliverablesIneligibleCopy": "read-only or reserved for an agent",
   "gitDeliverablesDirectory": "Repository directory",
   "gitDeliverablesRestricted": "Explicitly include restricted deliverables",
   "gitDeliverablesRestrictedWarning": "Mergeron permissions do not protect files published to Git. Excluding them later does not remove them from repository history.",
@@ -510,5 +506,9 @@
   "gitDeliverablesReasonReadOnlyDeliverable": "Finalized or archived deliverable: imports are blocked while it remains read-only.",
   "gitDeliverablesReasonUntrackedFileCollision": "An unrecognized file occupies this path. It will not be overwritten.",
   "gitDeliverablesAdoptFolders": "Also propose converting subdirectories without livrable.json (directly contained files only).",
-  "gitDeliverablesReasonIgnoredByGit": "The directory or a document is excluded by .gitignore. Correct the rule before synchronizing."
+  "gitDeliverablesReasonIgnoredByGit": "The directory or a document is excluded by .gitignore. Correct the rule before synchronizing.",
+  "gitDeliverablesAgentCopies": "This mode applies to the project. Each agent editing a deliverable needs its own available, writable Git copy. Files are synchronized to that copy; imports require review, with no automatic commit or push.",
+  "gitDeliverablesMissingAgentCopy": "No writable agent Git copy is available. Create or assign one in Locations and connections before enabling this mode. Agents without a copy cannot edit deliverables while this mode is active.",
+  "gitDeliverablesSaveMode": "Save Git deliverables mode",
+  "gitDeliverablesAmbiguousBoard": "Multiple deliverable managers were detected. Resolve this inconsistency before configuring Git."
 }

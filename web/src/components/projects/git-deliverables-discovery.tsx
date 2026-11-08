@@ -41,7 +41,9 @@ export function GitDeliverablesDiscovery({
     retry: false,
   });
   const active = query.data?.boards?.some(
-    (b) => b.settings?.enabled && b.settings.copyId === copyId,
+    (b) =>
+      b.settings?.enabled &&
+      query.data?.copies.some((c) => c.id === copyId && c.eligible),
   );
   if (!active && !query.data?.discovered?.length && !query.data?.discoveryError)
     return null;

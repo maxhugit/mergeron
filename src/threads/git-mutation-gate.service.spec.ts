@@ -340,3 +340,39 @@ describe('concurrent operations on isolated agent copies', () => {
     ).rejects.toThrow('GIT_BUSY');
   });
 });
+
+it('deferred agent exports preserve scope while active and take the full barrier after the turn ends', async () => {
+  let active = ['agent'];
+  const gate = new GitMutationGateService(
+    { snapshot: () => active } as unknown as ThreadExecutionInventoryService,
+    manager,
+  );
+  const run = vi.fn(() => Promise.resolve('exported'));
+  const scope = { copyPath: '/project/agent' };
+  gate.recordIsolation('agent', {
+    writableCopyPath: scope.copyPath,
+    readOnlyRoots: [],
+  });
+  expect(await gate.mutateDeferredFromAgent('agent', run, scope)).toBe(
+    'exported',
+  );
+  active = ['other'];
+  await expect(
+    gate.mutateDeferredFromAgent('agent', run, scope),
+  ).rejects.toThrow('GIT_BUSY');
+  expect(run).toHaveBeenCalledTimes(1);
+  active = [];
+  expect(await gate.mutateDeferredFromAgent('agent', run, scope)).toBe(
+    'exported',
+  );
+  expect(run).toHaveBeenCalledTimes(2);
+  await expect(
+    gate.mutateDeferredFromAgent(
+      'agent',
+      async () => {
+        await gate.startTurn(() => Promise.resolve());
+      },
+      scope,
+    ),
+  ).rejects.toThrow('GIT_BUSY');
+});

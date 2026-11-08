@@ -468,13 +468,9 @@
   "sidebarDocumentCount_other": "{{count}} documents",
   "sidebarNoDocuments": "Aucun document pour le moment.",
   "sidebarOpenTask": "Ouvrir la tâche dans la sidebar · {{title}}",
-  "gitDeliverablesDescription": "Conserver les documents et leurs étiquettes dans une copie Git du projet. Les fichiers livrable.json permettent de les reconnaître sur une autre installation.",
+  "gitDeliverablesDescription": "Conserver les documents et leurs étiquettes dans les copies Git des agents du projet. Les fichiers livrable.json permettent de les reconnaître sur une autre installation.",
   "gitDeliverablesNoBoard": "Ajoutez d’abord un gestionnaire de livrables au projet.",
-  "gitDeliverablesBoard": "Gestionnaire de livrables",
   "gitDeliverablesEnable": "Activer les livrables dans Git",
-  "gitDeliverablesCopy": "Copie Git partagée, accessible en écriture",
-  "gitDeliverablesChooseCopy": "Choisir une copie Git",
-  "gitDeliverablesIneligibleCopy": "lecture seule ou réservée à un agent",
   "gitDeliverablesDirectory": "Dossier dans le dépôt",
   "gitDeliverablesRestricted": "Inclure explicitement des livrables confidentiels",
   "gitDeliverablesRestrictedWarning": "Les droits Mergeron ne protègent pas les fichiers publiés dans Git. Les exclure ensuite ne les retire pas de l’historique du dépôt.",
@@ -510,5 +506,9 @@
   "gitDeliverablesReasonReadOnlyDeliverable": "Livrable finalisé ou archivé : aucun import tant qu’il reste en lecture seule.",
   "gitDeliverablesReasonUntrackedFileCollision": "Un fichier non reconnu occupe ce chemin. Il ne sera pas écrasé.",
   "gitDeliverablesAdoptFolders": "Proposer aussi la conversion des sous-dossiers sans livrable.json (fichiers directement contenus uniquement).",
-  "gitDeliverablesReasonIgnoredByGit": "Le dossier ou un document est exclu par .gitignore. Corrigez cette règle avant de synchroniser."
+  "gitDeliverablesReasonIgnoredByGit": "Le dossier ou un document est exclu par .gitignore. Corrigez cette règle avant de synchroniser.",
+  "gitDeliverablesAgentCopies": "Ce mode s’applique au projet. Chaque agent qui modifie un livrable doit disposer de sa propre copie Git, disponible en écriture. Les fichiers sont synchronisés dans cette copie ; les imports restent à valider, sans commit ni push automatique.",
+  "gitDeliverablesMissingAgentCopy": "Aucune copie Git d’agent disponible en écriture. Créez ou affectez une copie dans Emplacements et connexions avant d’activer ce mode. Un agent sans copie ne peut pas modifier les livrables lorsque ce mode est actif.",
+  "gitDeliverablesSaveMode": "Enregistrer le mode Livrables Git",
+  "gitDeliverablesAmbiguousBoard": "Plusieurs gestionnaires de livrables ont été détectés. Corrigez cette incohérence avant de configurer Git."
 }
