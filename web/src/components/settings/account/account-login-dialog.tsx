@@ -91,30 +91,32 @@ export function AccountLoginDialog({ open, onOpenChange, onChanged }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="min-w-0 max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader className="min-w-0 pr-8">
           <DialogTitle>{t('loginToCodex')}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             {t('startADeviceCodeLoginAndCompleteItInYourBrowser')}
           </DialogDescription>
         </DialogHeader>
 
         {deviceResponse ? (
-          <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+          <div className="min-w-0 space-y-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">
             <p className="text-muted-foreground">
               {t('openTheVerificationUrlAndEnterThisCode')}
             </p>
-            <div className="rounded-md bg-background px-3 py-2 text-center font-mono text-lg tracking-widest">
+            <div className="break-all rounded-md bg-background px-3 py-2 text-center font-mono text-lg tracking-widest">
               {deviceResponse.userCode}
             </div>
             <a
               href={deviceResponse.verificationUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4"
+              className="flex min-w-0 items-center gap-1 text-sm text-primary underline underline-offset-4"
             >
-              {deviceResponse.verificationUrl}
-              <ExternalLink className="h-3.5 w-3.5" />
+              <span className="min-w-0 break-all">
+                {deviceResponse.verificationUrl}
+              </span>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
             </a>
           </div>
         ) : (
@@ -123,9 +125,10 @@ export function AccountLoginDialog({ open, onOpenChange, onChanged }: Props) {
           </p>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="min-w-0 sm:flex-wrap">
           {deviceResponse ? (
             <Button
+              className="h-auto min-w-0 max-w-full whitespace-normal py-2"
               variant="outline"
               disabled={pending}
               onClick={() => cancelMutation.mutate(deviceResponse.loginId)}
@@ -134,6 +137,7 @@ export function AccountLoginDialog({ open, onOpenChange, onChanged }: Props) {
             </Button>
           ) : null}
           <Button
+            className="h-auto min-w-0 max-w-full whitespace-normal py-2"
             disabled={pending || Boolean(deviceResponse)}
             onClick={() => loginMutation.mutate()}
           >
