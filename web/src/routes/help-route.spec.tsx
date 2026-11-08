@@ -17,6 +17,33 @@ afterEach(() => {
   cleanup();
   window.history.replaceState(null, '', '/');
 });
+it('opens and translates the published version timeline without changing its stable article link', async () => {
+  window.history.replaceState(null, '', '/help#guide/version-history');
+  render(<HelpRoute />);
+  const article = screen.getByRole('article', { name: 'Version history' });
+  const timeline = within(article).getByRole('list', {
+    name: 'Published release timeline',
+  });
+  expect(within(timeline).getAllByRole('heading')[0]).toHaveTextContent(
+    'v0.7.1',
+  );
+  expect(
+    within(timeline).getByRole('heading', { name: 'v0.1.0' }),
+  ).toBeVisible();
+  expect(
+    within(timeline).getByRole('link', { name: /Release notes for v0.7.1/ }),
+  ).toHaveAttribute('rel', 'noopener noreferrer');
+  await act(async () => {
+    await i18n.changeLanguage('fr');
+  });
+  expect(screen.getByRole('article')).toHaveAccessibleName(
+    'Historique des versions',
+  );
+  expect(
+    screen.getByRole('list', { name: 'Frise des versions publiées' }),
+  ).toHaveTextContent('Lecture Markdown avec sommaire et vue partagée.');
+  expect(window.location.hash).toBe('#guide/version-history');
+});
 
 it('opens work agents from the expandable contents list without a retired chat chapter', () => {
   render(<HelpRoute />);
@@ -155,7 +182,7 @@ it('keeps the same article when the interface language changes', async () => {
     'Infrastructure et Mergeron Manager',
   );
   expect(screen.getByRole('article')).toHaveTextContent(
-    'mettre à jour séparément son image publiée',
+    'Les mises à jour se déclenchent globalement',
   );
 });
 it.each(['fr', 'en'])(

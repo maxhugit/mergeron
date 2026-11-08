@@ -77,16 +77,20 @@
         "id": "first-project",
         "title": "Create your first project",
         "summary": "Prepare a usable project before assigning work to an agent.",
-        "keywords": ["create", "start", "new", "setup"],
+        "keywords": [
+          "create",
+          "start",
+          "new",
+          "setup"
+        ],
         "sections": [
           {
             "title": "Getting started",
             "steps": [
-              "Click + beside Projects and enter a clear name.",
-              "Open the project, complete its information and add authorized participants.",
-              "In Locations and connections, check the main workspace and add required folders or connections.",
-              "Provide useful shared knowledge and select appropriate project integrations.",
-              "Create an agent to ask a question or perform work, or a manager to organize tasks and deliverables."
+              "Click + beside Projects, enter a name and optionally a short description with multiple lines.",
+              "Open project settings: General information lets you edit its name and description later.",
+              "Add participants and configure folders and connections before creating an agent.",
+              "Provide shared knowledge and select authorized integrations. Check the reference and permissions before the first message."
             ]
           },
           {
@@ -104,7 +108,11 @@
             ]
           }
         ],
-        "related": ["project-people", "locations", "agent-composer"]
+        "related": [
+          "project-people",
+          "locations",
+          "agent-composer"
+        ]
       },
       {
         "id": "desktop",
@@ -125,9 +133,10 @@
           {
             "title": "Find your way around",
             "paragraphs": [
-              "The sidebar lists projects and their resources. Collapsing it frees space without deleting anything. Agent tabs switch between the conversation and open tools.",
-              "The account menu contains personal preferences and sign-out. On mobile and tablet, the … menu groups connection status, the Codex account quota, app refresh and administrator settings. Quota percentage is separate from conversation context. Text size ranges from 80 to 150% and is saved in your profile separately for mobile (below 640 px), tablet (640–1,023 px) and desktop (1,024 px and above). It is also available in account Appearance. Server administration is separate from project settings.",
-              "The Platform guide provides a chapter tree and local article search without querying your project data. On mobile, Contents opens navigation. Related articles, Previous and Next keep you in the guide; Copy link shares a direct link to an article."
+              "Dashboard shows visible projects and work requiring attention. The sidebar opens each project’s resources.",
+              "The … menu is shared across desktop, tablet and mobile: connection status, Codex quota, refresh, authorized Settings, Mergeron documentation and GitHub bug/improvement forms. The Français / English switch changes language quickly.",
+              "Text size is saved in your profile for each screen category. Account retains personal preferences, push notifications and sign-out.",
+              "The bell to the left of Account opens notifications. The guide provides contents, local search and direct article links, including Version history."
             ]
           },
           {
@@ -166,12 +175,49 @@
             "steps": [
               "After signing in, open My account → Install application, or use Edge’s Applications menu when offered.",
               "The installed application keeps the native title bar for moving the window and minimizing, maximizing or closing it.",
-              "After an update, the refresh icon between Settings and Account clears Mergeron’s technical caches, checks for a service worker update and reloads the server version. Sign-in, preferences and notifications are kept. Copy drafts before continuing: they are memory-only and a confirmation warns you if any remain."
+              "Use … → Refresh application to update caches and reload the interface. Copy drafts first; a confirmation warns about drafts still in memory. This does not update the server."
             ],
             "warning": "Installation depends on your browser and device policies. It does not provide offline access to APIs, conversations or files. Refreshing the interface does not install a server update."
           }
         ],
-        "related": ["server-update"]
+        "related": [
+          "server-update"
+        ]
+      },
+      {
+        "id": "notifications",
+        "title": "Read and manage notifications",
+        "summary": "Follow agent activity and errors in a personal panel without leaving your conversation.",
+        "keywords": [
+          "bell",
+          "notifications",
+          "read",
+          "retention",
+          "project"
+        ],
+        "sections": [
+          {
+            "title": "Open, read and return to an agent",
+            "paragraphs": [
+              "The bell left of Account opens a right panel. Its header stays fixed while only the list scrolls. The panel remains open when changing agents.",
+              "Events include completed work, failures, approval requests, questions and interface errors. Errors are red. Clicking marks the event read and opens its agent or project."
+            ]
+          },
+          {
+            "title": "Filter, group and retain",
+            "paragraphs": [
+              "All, Unread and Read filter the list. The envelope toggles read state and Mark all as read handles accessible events. The bell count remains the total unread.",
+              "By project orders groups by their newest event, and each list runs newest first. Load older notifications expands history.",
+              "Your profile sets retention from 1 to 365 days, defaulting to 7. Cleanup removes only this history. Per-device push notifications are independent.",
+              "Only accessible projects and agents appear, including counters. The server rechecks rights; the list refreshes every ten seconds."
+            ],
+            "warning": "Reading does not approve an action or answer a request. Conversations and pending requests are not deleted with this history."
+          }
+        ],
+        "related": [
+          "desktop",
+          "agent-approvals"
+        ]
       }
     ]
   },
@@ -296,7 +342,11 @@
             "warning": "The request is public and submission guarantees neither implementation nor a delivery date. Remove names, documents, private addresses and confidential screenshots before publishing."
           }
         ],
-        "related": ["report-bug", "overview", "git-pr"]
+        "related": [
+          "report-bug",
+          "overview",
+          "git-pr"
+        ]
       }
     ]
   },
@@ -308,7 +358,13 @@
         "id": "project-people",
         "title": "Participants, project lead and groups",
         "summary": "Organize people without confusing business assignments with access rights.",
-        "keywords": ["rights", "participants", "owner", "groups", "lead"],
+        "keywords": [
+          "rights",
+          "participants",
+          "owner",
+          "groups",
+          "lead"
+        ],
         "sections": [
           {
             "title": "Access and organization",
@@ -333,7 +389,10 @@
             ]
           }
         ],
-        "related": ["admin-people", "impersonation"]
+        "related": [
+          "admin-people",
+          "impersonation"
+        ]
       },
       {
         "id": "locations",
@@ -352,7 +411,7 @@
           {
             "title": "Types of locations",
             "paragraphs": [
-              "The permanent main workspace contains project documents, sources and deliverables. Associated local folders keep their server paths. A Git, SSH/SFTP or FTP/FTPS connection describes a remote destination; it is not a local copy.",
+              "Under /workspaces/<project>, Folders is reserved for user organization. Deliverables, Source copies and technical drafts live in managed internal project areas and appear in dedicated explorer views. A Git, SSH/SFTP or FTP/FTPS connection describes a destination, not a local copy.",
               "System space is separate and available to administrators for consultation. It contains history and internal technical data. It cannot become an agent’s working folder or be edited through the generic file explorer."
             ]
           },
@@ -378,7 +437,14 @@
         "id": "project-archive",
         "title": "Export and import a project",
         "summary": "Transfer a project ZIP and understand what is restored or disabled.",
-        "keywords": ["archive", "ZIP", "export", "import", "migration", "copy"],
+        "keywords": [
+          "archive",
+          "ZIP",
+          "export",
+          "import",
+          "migration",
+          "copy"
+        ],
         "sections": [
           {
             "title": "Export and import",
@@ -408,7 +474,11 @@
             "warning": "Keeping working files does not restore the complete project. System-space deletion is permanent; this operation does not retroactively clean up previously deleted projects."
           }
         ],
-        "related": ["locations", "backups", "project-people"]
+        "related": [
+          "locations",
+          "backups",
+          "project-people"
+        ]
       }
     ]
   },
@@ -445,6 +515,13 @@
               "A new agent can be associated with a Git copy before its first message. You do not need to create conversation history to prepare the association. The first message starts its conversation; changing locations still requires directory and permission checks."
             ],
             "warning": "Execution actions may be restricted to administrators. Project access or creating a record does not automatically grant permission to run tools."
+          },
+          {
+            "title": "Local Ollama agents",
+            "paragraphs": [
+              "When the local runtime is configured and available, explicitly select an allowed Ollama model during creation. This is distinct from an agent using the Codex account.",
+              "A local runtime failure does not automatically fall back to the cloud. Tool availability depends on runtime and model; project permissions, reference folder and protections still apply."
+            ]
           }
         ],
         "related": [
@@ -503,13 +580,24 @@
             "warning": "Do not select full access just to hide a folder error. Fix the location or relevant permissions first."
           }
         ],
-        "related": ["agent-approvals", "agent-history", "integrations"]
+        "related": [
+          "agent-approvals",
+          "agent-history",
+          "integrations"
+        ]
       },
       {
         "id": "response-copy",
         "title": "Copy an answer with formatting",
         "summary": "Reuse a response in a word processor or another editor.",
-        "keywords": ["copy", "clipboard", "HTML", "Word", "table", "style"],
+        "keywords": [
+          "copy",
+          "clipboard",
+          "HTML",
+          "Word",
+          "table",
+          "style"
+        ],
         "sections": [
           {
             "title": "Use the copy icon",
@@ -528,7 +616,9 @@
             "warning": "Clipboard failures are reported. Do not assume success after an error, and check sensitive information before pasting elsewhere."
           }
         ],
-        "related": ["agent-history"]
+        "related": [
+          "agent-history"
+        ]
       },
       {
         "id": "agent-approvals",
@@ -561,7 +651,11 @@
             "warning": "Stopping an agent, revoking access or leaving a session does not undo actions already accepted on files or external services."
           }
         ],
-        "related": ["agent-composer", "agent-history", "impersonation"]
+        "related": [
+          "agent-composer",
+          "agent-history",
+          "impersonation"
+        ]
       },
       {
         "id": "agent-history",
@@ -608,7 +702,11 @@
             ]
           }
         ],
-        "related": ["response-copy", "git-branches", "task-execution"]
+        "related": [
+          "response-copy",
+          "git-branches",
+          "task-execution"
+        ]
       },
       {
         "id": "agent-goals",
@@ -656,7 +754,11 @@
             "warning": "Pausing a goal prevents future continuations, but does not interrupt a turn already running. Also use Stop when that turn must end. Goals do not waive required approvals."
           }
         ],
-        "related": ["agent-composer", "agent-approvals", "task-planning"]
+        "related": [
+          "agent-composer",
+          "agent-approvals",
+          "task-planning"
+        ]
       },
       {
         "id": "voice-dictation",
@@ -686,9 +788,19 @@
               "Dictation uses the CLI’s authenticated ChatGPT account and browser microphone over WebRTC. Availability depends on the CLI and account. The resulting text remains a draft to review; it is never sent automatically to the agent."
             ],
             "warning": "Do not dictate secrets or sensitive information without considering the receiving service. Transcription can be wrong: adding text to a draft does not validate its accuracy."
+          },
+          {
+            "title": "Transcribe a file instead of dictating",
+            "paragraphs": [
+              "Local file transcription is separate from microphone dictation. Install the Transcription capability, open audio or video and choose Extract audio, Transcribe or Audio + transcription.",
+              "Follow progress until ready. Outputs can be downloaded as MP3, TXT, SRT or JSON depending on the action. A partial result may contain audio without a transcript; it is not full success.",
+              "SPEAKER_00 and SPEAKER_01 distinguish voices acoustically without identifying people. Review names, numbers and speaker attribution. Processing results are personal; publishing a deliverable document remains explicit."
+            ]
           }
         ],
-        "related": ["agent-composer"]
+        "related": [
+          "agent-composer"
+        ]
       },
       {
         "id": "agent-knowledge",
@@ -780,6 +892,13 @@
               "Settings → Internal MCP lists methods, parameters, examples and permission rules from the server catalogue. This reference is not an execution console and grants no additional rights.",
               "These tools are available to linked work agents;"
             ]
+          },
+          {
+            "title": "Update tasks and attach this agent",
+            "paragraphs": [
+              "On explicit request, internal MCP can manage authorized tasks and subtasks and attach the current agent to a deliverable. Project, status, assignment and execution checks still apply.",
+              "Tools do not bypass document validation or execution approval. After an uncertain response, ask the agent to inspect existing state rather than create a duplicate."
+            ]
           }
         ],
         "related": [
@@ -843,7 +962,11 @@
             ]
           }
         ],
-        "related": ["agent-visual-checks", "agent-project-tools", "report-bug"]
+        "related": [
+          "agent-visual-checks",
+          "agent-project-tools",
+          "report-bug"
+        ]
       },
       {
         "id": "agent-visual-checks",
@@ -982,7 +1105,11 @@
             "warning": "A parent cannot close while a child is neither completed nor cancelled. Closing all children does not automatically move the parent to a final column."
           }
         ],
-        "related": ["task-planning", "task-execution", "work-relationships"]
+        "related": [
+          "task-planning",
+          "task-execution",
+          "work-relationships"
+        ]
       },
       {
         "id": "task-planning",
@@ -1035,7 +1162,9 @@
             ]
           }
         ],
-        "related": ["task-board"]
+        "related": [
+          "task-board"
+        ]
       },
       {
         "id": "task-execution",
@@ -1062,10 +1191,10 @@
           {
             "title": "Before validation or deletion",
             "paragraphs": [
-              "An inactive session moves to review; inactivity does not prove correctness. A person must check the criteria.",
-              "Validating a subtask with an agent may delete its linked conversation after checks and remove the link. Deleting a task also affects its children and associated agents."
+              "An inactive execution moves to review; this does not prove the result is correct. Check its criteria before validating.",
+              "Completing or deleting a task does not automatically delete agents, their history or Git copies. Links are removed as appropriate; deleting an agent remains a separate explicit action."
             ],
-            "warning": "Preserve useful results and inspect the conversation before validation. An execution conversation is not guaranteed permanent history."
+            "warning": "Completion or a notification is not human validation. Review documents and changes before completing the task."
           },
           {
             "title": "Assign or unassign an existing agent",
@@ -1075,7 +1204,11 @@
             ]
           }
         ],
-        "related": ["agent-approvals", "deliverable-agent", "task-board"]
+        "related": [
+          "agent-approvals",
+          "deliverable-agent",
+          "task-board"
+        ]
       }
     ]
   },
@@ -1167,7 +1300,11 @@
             ]
           }
         ],
-        "related": ["deliverable-lifecycle", "onlyoffice", "deliverable-agent"]
+        "related": [
+          "deliverable-lifecycle",
+          "onlyoffice",
+          "deliverable-agent"
+        ]
       },
       {
         "id": "document-rename",
@@ -1249,7 +1386,10 @@
             "warning": "Cancel a pending request with a reason before disabling approval. Do not present a new document version as already approved."
           }
         ],
-        "related": ["deliverable-overview", "deliverable-versions"]
+        "related": [
+          "deliverable-overview",
+          "deliverable-versions"
+        ]
       },
       {
         "id": "deliverable-agent",
@@ -1299,7 +1439,13 @@
         "id": "deliverable-git",
         "title": "Keep and recognize deliverables in Git",
         "summary": "Enable optional integration, review transfers and retain versions.",
-        "keywords": ["Git", "livrable.json", "import", "versions", "conflicts"],
+        "keywords": [
+          "Git",
+          "livrable.json",
+          "import",
+          "versions",
+          "conflicts"
+        ],
         "sections": [
           {
             "title": "Enable after reviewing",
@@ -1316,6 +1462,39 @@
             ],
             "warning": "Mergeron permissions do not protect a document after publication to Git. Conflicts require explicit resolution."
           }
+        ]
+      },
+      {
+        "id": "deliverable-git-sync",
+        "title": "Synchronize deliverables with Git",
+        "summary": "Preview document exchange with a shared Git copy before confirming changes.",
+        "keywords": [
+          "Git",
+          "deliverables",
+          "synchronization",
+          "manifest"
+        ],
+        "sections": [
+          {
+            "title": "Prepare and confirm",
+            "paragraphs": [
+              "Git Deliverables is optional and disabled by default. In project settings, an administrator selects the board, a writable shared Git copy and a relative folder.",
+              "Preview changes does not modify anything. Review imports, exports, exclusions and conflicts before Confirm and synchronize. Opening a copy can detect manifests; Review Git deliverables inspects them, but importing remains explicit."
+            ]
+          },
+          {
+            "title": "Keep history and protections",
+            "paragraphs": [
+              "Commit .mergeron-deliverables.json, livrable.json manifests and documents to make the repository portable. The folder can be customized but must remain inside the repository.",
+              "Mergeron versions and approvals remain distinct from commits. Agent-reserved copies are not shared copies; an existing association cannot silently switch to another copy."
+            ],
+            "warning": "Synchronization is neither human validation nor a Git push. Review conflicts and retain necessary backups before confirming exchanges."
+          }
+        ],
+        "related": [
+          "deliverable-versions",
+          "git-local",
+          "file-explorer"
         ]
       }
     ]
@@ -1361,9 +1540,29 @@
               "While an agent works, Mergeron checks file changes in the background. An expected missing path or optional directory does not trigger a Path not found alert; the explorer and open documents still stay synchronized.",
               "Explicitly opening a missing file and access or server failures still produce errors. Connection and authentication issues keep their usual recovery flow. Do not confuse an expected absence with a failed save."
             ]
+          },
+          {
+            "title": "The explorer’s three views",
+            "paragraphs": [
+              "Folders shows the project’s user tree; Deliverables shows documents attached to deliverable records and versions; Sources opens Git connections and local copies.",
+              "Internal project areas are protected, not ordinary user folders. Use deliverable document actions when adding a file to preserve its association and history.",
+              "Without a local copy for this agent, Sources explains that one must be created. It does not invite browsing the server root. Use the Git resource menu to create an authorized copy.",
+              "A folder, deliverable or source context menu can set the agent reference. Browsing another folder does not change it. Main restores the project reference."
+            ]
+          },
+          {
+            "title": "Read Markdown and videos",
+            "paragraphs": [
+              "The Markdown reader offers contents and split view. Compact agent links return to the relevant conversation without copying a long address.",
+              "A video uses a single player. Matching SRT subtitles load automatically; Load an SRT file selects differently named subtitles. The transcript follows playback and remains scrollable."
+            ]
           }
         ],
-        "related": ["locations", "onlyoffice", "transfers"]
+        "related": [
+          "locations",
+          "onlyoffice",
+          "transfers"
+        ]
       },
       {
         "id": "onlyoffice",
@@ -1395,9 +1594,21 @@
               "Opening a document does not grant access to the rest of system space. Project ownership, document mode and deliverable approval continue to apply."
             ],
             "warning": "Do not ignore a save error or close the window assuming everything is saved. A finalized or archived document may require authorized reopening of its deliverable."
+          },
+          {
+            "title": "Work with an agent in OnlyOffice",
+            "paragraphs": [
+              "For text documents or presentations opened for editing from Mergeron, With Mergeron selects an accessible agent from the document’s project. Describe the change and review its proposal.",
+              "Apply in document confirms insertion, explicit selection replacement or a new slide. The presentation context menu also opens the assistant. A changed selection or slide requires a new proposal.",
+              "The assistant prepares its response in a temporary read-only session; it does not automatically send a message in the selected conversation. Document saving and permissions still apply."
+            ]
           }
         ],
-        "related": ["deliverable-versions", "file-explorer", "admin-operations"]
+        "related": [
+          "deliverable-versions",
+          "file-explorer",
+          "admin-operations"
+        ]
       },
       {
         "id": "transfers",
@@ -1431,7 +1642,11 @@
             "warning": "Changing the active location does not transfer anything. Check direction and possible replacements: closing a dialog does not undo a completed remote operation."
           }
         ],
-        "related": ["locations", "git-remote", "project-archive"]
+        "related": [
+          "locations",
+          "git-remote",
+          "project-archive"
+        ]
       }
     ]
   },
@@ -1486,13 +1701,23 @@
             "warning": "Unstage preserves the modified content; Discard changes replaces it. New files that are still untracked are not deleted by this action. Agents have restore_files_review followed by restore_files on their own writable copy, only on explicit human request and never during scheduled monitoring. Stale reviews are rejected. If the outcome is uncertain, inspect the copy and recovery branch without retrying automatically."
           }
         ],
-        "related": ["git-branches", "git-remote", "git-pr"]
+        "related": [
+          "git-branches",
+          "git-remote",
+          "git-pr"
+        ]
       },
       {
         "id": "git-branches",
         "title": "Create, switch, merge and delete local branches",
         "summary": "Work on Git branches without confusing them with conversation versions.",
-        "keywords": ["branch", "merge", "checkout", "switch", "delete"],
+        "keywords": [
+          "branch",
+          "merge",
+          "checkout",
+          "switch",
+          "delete"
+        ],
         "sections": [
           {
             "title": "Create a branch",
@@ -1522,7 +1747,11 @@
             "warning": "Check source and destination. Do not force a destructive reset to bypass conflicts or refused checks. A Git branch does not restore chat history."
           }
         ],
-        "related": ["git-local", "git-pr", "agent-history"]
+        "related": [
+          "git-local",
+          "git-pr",
+          "agent-history"
+        ]
       },
       {
         "id": "git-remote",
@@ -1576,7 +1805,11 @@
             "warning": "Being able to read GitHub does not prove write access. An unpushed commit is absent remotely; do not blindly retry an operation whose outcome is reported unknown."
           }
         ],
-        "related": ["git-local", "git-branches", "git-pr"]
+        "related": [
+          "git-local",
+          "git-branches",
+          "git-pr"
+        ]
       },
       {
         "id": "git-pr",
@@ -1629,7 +1862,11 @@
             "warning": "Missing Actions access or incomplete information is never displayed as success. If GitHub does not confirm a dependency, the interface says so without guessing. For a private repository, check the connection’s Actions read permission."
           }
         ],
-        "related": ["git-remote", "git-branches", "server-update"]
+        "related": [
+          "git-remote",
+          "git-branches",
+          "server-update"
+        ]
       }
     ]
   },
@@ -1727,7 +1964,11 @@
             "warning": "Reading may transmit private text displayed on the page. Known field values, cookies and passkeys are not exported; this does not detect every secret. Share a suitable page and inspect each screenshot before approving it. Extension updates are manual."
           }
         ],
-        "related": ["browser-live", "browser-annotation", "agent-approvals"]
+        "related": [
+          "browser-live",
+          "browser-annotation",
+          "agent-approvals"
+        ]
       },
       {
         "id": "browser-annotation",
@@ -1771,7 +2012,11 @@
             "warning": "Masking fields and iframes in the local screenshot does not detect every secret. Inspect the image. After updating, reload Mergeron and the shared page and pair again; if attachment is not confirmed, check the draft before manually retrying."
           }
         ],
-        "related": ["browser-live", "browser-local", "agent-create"]
+        "related": [
+          "browser-live",
+          "browser-local",
+          "agent-create"
+        ]
       }
     ]
   },
@@ -1820,7 +2065,11 @@
             "warning": "An automation may need approval like manual agent work. Failure does not guarantee earlier actions were undone. Imported automations are disabled for safety."
           }
         ],
-        "related": ["agent-approvals", "project-archive", "agent-monitors"]
+        "related": [
+          "agent-approvals",
+          "project-archive",
+          "agent-monitors"
+        ]
       },
       {
         "id": "agent-monitors",
@@ -1927,7 +2176,10 @@
             "warning": "Do not grant administrator rights to fix a missing project membership. Check account linking and project participants first."
           }
         ],
-        "related": ["project-people", "impersonation"]
+        "related": [
+          "project-people",
+          "impersonation"
+        ]
       },
       {
         "id": "impersonation",
@@ -1959,7 +2211,10 @@
             "warning": "This is not a sandbox. Ending a test does not undo accepted changes or background work. Expiration does not silently restore administrator permissions inside an old view."
           }
         ],
-        "related": ["admin-people", "project-people"]
+        "related": [
+          "admin-people",
+          "project-people"
+        ]
       },
       {
         "id": "server-update",
@@ -1979,20 +2234,20 @@
           {
             "title": "Before and during an update",
             "steps": [
-              "In Settings → Server → Current version, consult the component table: application, Manager, Mergeron Browser and vendor components NGINX and Squid, depending on the installation.",
-              "Refresh detection checks versions without installing them. Each row distinguishes the installed version, vendor version when known and update status. An unknown value or error does not mean up to date. Available actions depend on the component and the installed Manager.",
-              "Review Backup before this update: Full, Minimal — database and configuration, or No backup. Save backup choice remembers this setting for this installation without starting the operation; an unsaved selection applies only to this update.",
-              "Choose Update for the intended component, or Replace with published image when migration of a known local browser is offered. Review the component and exact image digest in the plan, then confirm.",
-              "Even when only one image is upgraded, the stack is stopped and recreated within the transaction. Any backup and rollback possibilities depend on the confirmed scope. Tracking is prepared before the server stops; keep it open during the operation.",
-              "After success, reload the interface and check important features. View progress and logs reopens the result; if an older monitor is marked superseded, open the latest operation."
+              "Open Settings → Server → Current version to review installed components and their channels. Refresh detection finds images without installing them.",
+              "Choose Full, Minimal — database and configuration, or No backup. Save backup choice stores the installation preference; always review the scope before confirmation.",
+              "Use Update Mergeron. The application chooses affected components and their order; individual container selection is no longer offered. Absent optional capabilities are not installed.",
+              "Review the plan, backup and warnings, then confirm. Independent progress tracking is prepared before replacements, including Manager replacement on compatible installations.",
+              "Keep progress open. Permanent web relays keep it accessible during application restarts. Reconnection discovers active updates and opens tracking; an installation without working relays can remain unavailable.",
+              "After success, verify important functions. View progress and logs reopens the result. Old replacement containers are cleaned up after success; keep permanent relays and retained backups."
             ]
           },
           {
             "title": "Rollback and Manager compatibility",
             "paragraphs": [
               "The confirmed plan scope determines which data can be restored: full, minimal or no backup. Without a backup, rollback may restore images but does not undo migrations or data changes. Inspect failures or states requiring recovery in the operation tracking.",
-              "If the interface requires a Manager update first, have it performed from the host before retrying component updates. Dev and production remain separate installations; always review the plan and its scope.",
-              "These features require compatible application and Manager versions. Unselected images remain unchanged. An existing browser can be managed in Dev or production after explicit operator configuration; the Manager itself is updated from the host."
+              "Compatible application and Manager versions are required. Manager replacement uses an independent helper with health checks and fallback; an old incompatible Manager can still require host intervention.",
+              "The global plan chooses images to replace; differing component revisions are not automatically an error. Dev and production remain separate: check channel, backup and scope."
             ],
             "warning": "Do not run concurrent operations. Refreshing the application, updating Codex CLI and updating the server image are different actions."
           },
@@ -2016,7 +2271,12 @@
             ]
           }
         ],
-        "related": ["backups", "infrastructure", "admin-codex", "desktop"]
+        "related": [
+          "backups",
+          "infrastructure",
+          "admin-codex",
+          "desktop"
+        ]
       },
       {
         "id": "backups",
@@ -2057,7 +2317,11 @@
             "warning": "Deletion is permanent and removes rollback based on that copy. Update backups and project ZIP exports have different scopes. Protect external data not covered by Manager separately."
           }
         ],
-        "related": ["server-update", "project-archive", "admin-operations"]
+        "related": [
+          "server-update",
+          "project-archive",
+          "admin-operations"
+        ]
       },
       {
         "id": "infrastructure",
@@ -2085,14 +2349,18 @@
           {
             "title": "Browser managed by the Manager",
             "paragraphs": [
-              "An existing browser can appear in the inventory and participate in Manager transactions when the operator explicitly enables management. This requires a compatible Manager and the expected protected topology. Existing installations are not enabled automatically.",
-              "Server → Current version can detect and individually update its published image, like NGINX and Squid, with confirmation and a transaction affecting the entire stack. The browser image must remain compatible with the application. A locally built browser without a published digest may require Replace with published image; an unknown state does not prove it is up to date.",
-              "Infrastructure displays state and configuration; update actions are in Current version. The Manager itself remains administered from the host."
+              "The Manager discovers managed containers from the installation inventory, including permanent relays and installed capabilities. Discovery errors do not mean healthy.",
+              "Updates start globally from Server → Current version. The plan orchestrates compatible components, including Manager replacement through an independent helper.",
+              "Web access relays remain necessary during normal operation. Do not confuse them with temporary old update containers."
             ],
             "warning": "Do not disable the sandbox or expose the control port to fix an error. Production configuration must use a compatible official stable image and be validated by the operator; Dev settings are never applied implicitly."
           }
         ],
-        "related": ["browser-live", "server-update", "backups"]
+        "related": [
+          "browser-live",
+          "server-update",
+          "backups"
+        ]
       },
       {
         "id": "admin-codex",
@@ -2136,6 +2404,13 @@
               "A protected Mergeron CLI variant has a channel and provenance distinct from an official version. Official updates or unvalidated rollbacks may be blocked to preserve sandbox protections. Do not bypass this block with a manual installation; consult the administrator."
             ],
             "warning": "Back up Codex data first: returning to an older executable does not automatically restore potentially migrated data."
+          },
+          {
+            "title": "Disconnected account and CLI operations",
+            "paragraphs": [
+              "Without a connected Codex account, only Codex CLI remains available to prepare the runtime and sign in. Other configuration tabs are disabled; an account read error is not a successful connection.",
+              "Install, update and version rollback dialogs show operation progress. Model and reasoning effort settings remain administrator-only."
+            ]
           }
         ],
         "related": [
@@ -2174,7 +2449,11 @@
             "warning": "Do not put secrets in text delivered to all work agents. It changes neither AGENTS.md, project instructions nor permissions. A text instruction does not guarantee that a check runs or authorize bypassing protections."
           }
         ],
-        "related": ["admin-codex", "agent-knowledge", "agent-visual-checks"]
+        "related": [
+          "admin-codex",
+          "agent-knowledge",
+          "agent-visual-checks"
+        ]
       },
       {
         "id": "integrations",
@@ -2222,7 +2501,11 @@
             ]
           }
         ],
-        "related": ["agent-composer", "agent-knowledge", "project-people"]
+        "related": [
+          "agent-composer",
+          "agent-knowledge",
+          "project-people"
+        ]
       },
       {
         "id": "admin-operations",
@@ -2342,6 +2625,78 @@
           "deliverable-versions",
           "backups",
           "admin-operations"
+        ]
+      },
+      {
+        "id": "server-capabilities",
+        "title": "Install server capabilities",
+        "summary": "Enable optional services while keeping installation, usage and permissions separate.",
+        "keywords": [
+          "capabilities",
+          "transcription",
+          "browser",
+          "installation"
+        ],
+        "sections": [
+          {
+            "title": "Install or uninstall",
+            "steps": [
+              "Open Settings → Server → Capabilities as an administrator.",
+              "Choose Web browsing or Transcription, review the action and confirm Install. The Manager prepares the image and shows progress.",
+              "Wait for readiness. Installed — start on demand can mean the service is waiting for use, not failing.",
+              "Choose Uninstall and confirm to remove a capability. Services in use cannot be removed."
+            ]
+          },
+          {
+            "title": "Effects on screens and data",
+            "paragraphs": [
+              "New installations have no optional capabilities by default. Existing services survive migration. Screens disable absent processing while saved results remain accessible.",
+              "The local browser extension is independent of the server’s isolated browser. Installed capabilities join the global update plan. Installing a service grants no extra agent permissions."
+            ],
+            "warning": "Uninstalling preserves documents and results. Sandbox and approval protections remain; do not substitute manual deletion of stack containers."
+          }
+        ],
+        "related": [
+          "server-update",
+          "infrastructure",
+          "browser-live",
+          "voice-dictation"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "versions",
+    "title": "Version history",
+    "articles": [
+      {
+        "id": "version-history",
+        "title": "Version history",
+        "summary": "Published tags, newest first, with each version’s main platform improvements.",
+        "keywords": [
+          "version",
+          "tag",
+          "release",
+          "history",
+          "changes"
+        ],
+        "sections": [
+          {
+            "title": "Read this history",
+            "paragraphs": [
+              "This timeline summarizes GitHub releases and their UTC dates. A tag describes the code published then; later merged changes are not assigned to older releases.",
+              "The guide follows this installation’s code. Features merged after the latest tag, such as the notification center and Git deliverables, can appear in development before the next release. Check Server → Current version for your build."
+            ],
+            "warning": "A tag appearing here does not mean it is installed or safe to deploy in your environment. Permissions, installed capabilities and Manager compatibility still apply."
+          },
+          {
+            "title": "Published versions",
+            "versionTimeline": true
+          }
+        ],
+        "related": [
+          "server-update",
+          "desktop"
         ]
       }
     ]

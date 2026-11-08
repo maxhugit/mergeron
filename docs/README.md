@@ -140,3 +140,5 @@ avant de supposer qu’une ancienne version stable possède toutes ces fonctions
 - [Suivi HTTP indépendant des mises à jour](continuous-updates.md)
 
 - [Centre de notifications : fonctionnement, droits et conservation](notifications.md)
+
+- [Historique des versions dans le guide](historique-des-versions.md) : frise publiée et procédure de maintenance FR/EN.
