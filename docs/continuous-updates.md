@@ -117,6 +117,19 @@ reste disponible pour le retour arrière. Les spécifications privées sont écr
 en mode 0600,
 avec synchronisation avant renommage du journal de remplacement.
 
+Le nouveau Manager vérifie au démarrage puis chaque minute les auxiliaires de
+remplacement de sa propre stack (au maximum 100 par passage). Il ne supprime
+qu'un auxiliaire arrêté avec code zéro, dont le journal privé confirme la réussite
+et le nettoyage de l'ancien Manager. L'opération courante, l'identité et les
+protections du nouveau Manager, sa santé Docker et sa réponse Unix sont vérifiées
+avant et après l'archivage des logs. Les 100 dernières lignes Docker (128 Kio
+maximum) sont conservées dans `manager-state/replacements/helper-logs/<id>.json`,
+en mode 0600, sans effacer le journal de remplacement. Ces archives ne sont pas
+supprimées automatiquement. Une erreur conserve le conteneur et affiche un avis
+dans Infrastructure ; la vérification suivante réessaie. Les auxiliaires actifs,
+échoués, inconnus ou liés à une autre opération restent conservés. Aucun arrêt
+forcé, volume, image, fichier de projet ou sauvegarde n'est supprimé par ce passage.
+
 Un échec de santé restaure le Manager précédent. L’état global reste
 **intervention nécessaire**, car l’application a pu être mise à jour : cela ne
 prétend pas avoir restauré toute la stack. Le retour arrière applicatif isolé

@@ -205,6 +205,15 @@ export function ManagerStatusCard() {
 
   return (
     <section className="space-y-4">
+      {data?.managerHelperCleanup?.retained ||
+      data?.managerHelperCleanup?.unavailable ? (
+        <p
+          role="status"
+          className="rounded-lg border border-amber-500/50 p-3 text-sm"
+        >
+          {tm('managerHelperCleanupPending')}
+        </p>
+      ) : null}
       <div className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Mergeron Manager</h2>

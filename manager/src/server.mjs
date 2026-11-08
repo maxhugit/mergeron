@@ -1,5 +1,7 @@
 import { Capabilities } from './capabilities.mjs';
 import { ManagerReplacement } from './manager-replacement.mjs';
+import { ManagerHelperCleanup } from './manager-helper-cleanup.mjs';
+import { probeManager } from './health-probe.mjs';
 import { GlobalUpdateCoordinator } from './global-update-coordinator.mjs';
 import { grantMonitor } from './update-monitor-journal.mjs';
 import { BrowserLifecycle } from './browser-lifecycle.mjs';
@@ -107,6 +109,16 @@ const globalUpdates = new GlobalUpdateCoordinator({
   replacement: managerReplacement,
   docker,
   stack: manifest.stack,
+});
+const helperCleanup = new ManagerHelperCleanup({
+  docker,
+  stack: manifest.stack,
+  directory: dirname(adoptionPath),
+  blocked: async () =>
+    !managerReplacement.enabled ||
+    updater.busy ||
+    (await managerReplacement.busy()),
+  probe: () => probeManager({ socketPath }),
 });
 const transcription = new ManagedTranscription({
   docker,
@@ -529,6 +541,7 @@ const server = http.createServer(async (request, response) => {
           : component,
       ),
       events: [...events],
+      managerHelperCleanup: helperCleanup.status,
       update: await globalUpdates.status(),
       backupPolicy: environmentBackupPolicy(manifest),
       capabilities: {
@@ -895,6 +908,9 @@ server.listen(socketPath, async () => {
   await capabilities.initialize();
   await updater.recover();
   ready = true;
+  // A fresh Manager can finish cleanup after the independent worker exits.
+  void helperCleanup.tick();
+  setInterval(() => void helperCleanup.tick(), 60_000).unref();
   setInterval(() => {
     if (!transcription.checkingUpdates)
       transcription.checkingUpdates = transcription

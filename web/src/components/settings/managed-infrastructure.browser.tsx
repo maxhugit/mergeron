@@ -16,6 +16,7 @@ for (const width of [390, 1280])
     await page.viewport(width, 1000);
     const status = {
       available: true,
+      managerHelperCleanup: { retained: 1, unavailable: false },
       mode: 'observe',
       dockerConnected: true,
       components: [
@@ -61,6 +62,11 @@ for (const width of [390, 1280])
       </QueryClientProvider>,
     );
     await screen.findAllByText('mergeron-dev-acces-web-1');
+    expect(
+      await screen.findByText(
+        /Le nettoyage des auxiliaires du Manager reste à vérifier/,
+      ),
+    ).toBeVisible();
     expect(screen.getAllByText('nouveau-service')[0]).toBeTruthy();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page.screenshot({

@@ -227,3 +227,14 @@ test('catalog exec writes credentials only to stdin and decodes split UTF-8 Dock
   assert.equal(command.Tty, false);
   assert.equal(command.Privileged, false);
 });
+
+test('container cleanup never forces removal or deletes volumes', async () => {
+  const mock = transport(() => ({ statusCode: 204 }));
+  const client = new DockerClient('/test-only/docker.sock', mock.factory);
+  await client.removeContainer('exact-helper');
+  assert.equal(mock.requests[0].options.method, 'DELETE');
+  assert.equal(
+    mock.requests[0].options.path,
+    '/containers/exact-helper?force=false&v=false',
+  );
+});
