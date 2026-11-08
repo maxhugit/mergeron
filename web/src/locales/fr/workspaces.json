@@ -510,5 +510,11 @@
   "gitDeliverablesAgentCopies": "Ce mode s’applique au projet. Chaque agent qui modifie un livrable doit disposer de sa propre copie Git, disponible en écriture. Les fichiers sont synchronisés dans cette copie ; les imports restent à valider, sans commit ni push automatique.",
   "gitDeliverablesMissingAgentCopy": "Aucune copie Git d’agent disponible en écriture. Créez ou affectez une copie dans Emplacements et connexions avant d’activer ce mode. Un agent sans copie ne peut pas modifier les livrables lorsque ce mode est actif.",
   "gitDeliverablesSaveMode": "Enregistrer le mode Livrables Git",
-  "gitDeliverablesAmbiguousBoard": "Plusieurs gestionnaires de livrables ont été détectés. Corrigez cette incohérence avant de configurer Git."
+  "gitDeliverablesAmbiguousBoard": "Plusieurs gestionnaires de livrables ont été détectés. Corrigez cette incohérence avant de configurer Git.",
+  "gitDeliverablesCopiesStatus": "Synchronisation des copies Git",
+  "gitDeliverablesCopyName": "Copie Git",
+  "gitDeliverablesBranch": "Branche",
+  "gitDeliverablesCopyState": "Synchronisation",
+  "gitDeliverablesPending": "Export en attente · à examiner après un redémarrage",
+  "gitDeliverablesNotSynchronized": "Pas encore synchronisée"
 }

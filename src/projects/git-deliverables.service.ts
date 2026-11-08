@@ -9,7 +9,16 @@ import {
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { lstat, readFile } from 'node:fs/promises';
-import { lstatSync, realpathSync } from 'node:fs';
+import {
+  lstatSync,
+  realpathSync,
+  readFileSync,
+  openSync,
+  fstatSync,
+  closeSync,
+  constants,
+} from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
@@ -53,18 +62,26 @@ const optionsSchema = z
 type Options = z.infer<typeof optionsSchema>;
 type Binding = {
   pendingImport?: boolean;
+  pendingExport?: boolean;
   localId: string;
   folder: string;
   metadata: string;
   documents: Record<string, { localId: string; hash: string }>;
 };
+type GitContext = { branch: string | null; head: string | null };
 type SyncState = {
+  context?: GitContext;
+  branches?: Record<string, Omit<SyncState, 'branches'>>;
+  pending?: boolean;
+  pendingBranch?: string;
+  generation?: number;
   bindings: Record<string, Binding>;
   lastError: string | null;
   lastSyncAt: number | null;
 };
 type Settings = Options & {
   copies?: Record<string, SyncState>;
+  context?: GitContext;
   enabled: boolean;
   bindings: Record<string, Binding>;
   lastError: string | null;
@@ -80,6 +97,7 @@ type Local = {
   item: ReturnType<DeliverablesService['get']>;
   manifest: GitDeliverableManifest;
   documents: ReturnType<DeliverablesService['documents']>;
+  organizationRevision: number;
 };
 const metadataHash = (m: GitDeliverableManifest) => digest(JSON.stringify(m));
 const errorCode = (e: unknown) =>
@@ -90,7 +108,12 @@ const errorCode = (e: unknown) =>
 /** Git is a portable projection of retained versions, never the version store. */
 @Injectable()
 export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
-  private readonly busy = new Set<string>();
+  private readonly busy = new Map<string, symbol>();
+  private readonly importing = new AsyncLocalStorage<{
+    board: string;
+    token: symbol;
+    active: boolean;
+  }>();
   private readonly planning = new Set<string>();
   private readonly queued = new Set<string>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -114,6 +137,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     this.deliverables.beforeGitChange = (p, r) => this.assertCanModify(p, r);
     this.deliverables.onGitChange = (p, r) => {
       try {
+        if (this.isImporting(r)) return;
+        this.markPending(p, r);
         this.enqueue(p, r);
       } catch {
         // Git is an optional projection. Scheduling it must never roll back
@@ -173,28 +198,163 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       ...s?.copies,
     };
   }
-  private forCopy(p: string, r: string, copyId: string): Settings | null {
+  private forCopy(
+    p: string,
+    r: string,
+    copyId: string,
+    context?: GitContext,
+  ): Settings | null {
     const s = this.settings(p, r);
     if (!s) return null;
-    const state = this.copyStates(s)[copyId];
+    const copy = this.copyStates(s)[copyId];
+    context ??= copy?.context;
+    const state =
+      context &&
+      copy?.context &&
+      this.branchKey(copy.context) !== this.branchKey(context)
+        ? copy.branches?.[this.branchKey(context)]
+        : copy;
     return {
       ...s,
       copyId,
+      context,
       bindings: state?.bindings ?? {},
       lastError: state?.lastError ?? null,
       lastSyncAt: state?.lastSyncAt ?? null,
     };
   }
+  private branchKey(context: GitContext) {
+    return context.branch ?? `detached:${context.head ?? 'unborn'}`;
+  }
+  private async gitContext(root: string): Promise<GitContext> {
+    const branch =
+      (
+        await this.git.git(
+          root,
+          ['symbolic-ref', '--quiet', 'HEAD'],
+          {},
+          15000,
+          [0, 1],
+        )
+      ).trim() || null;
+    const head =
+      (
+        await this.git.git(
+          root,
+          ['rev-parse', '--verify', '--quiet', 'HEAD'],
+          {},
+          15000,
+          [0, 1],
+        )
+      ).trim() || null;
+    return { branch, head };
+  }
+  private async assertGitContext(root: string, context: GitContext) {
+    if (JSON.stringify(await this.gitContext(root)) !== JSON.stringify(context))
+      throw new ConflictException('GIT_DELIVERABLES_BRANCH_CHANGED');
+  }
+  private isImporting(r: string) {
+    const scope = this.importing.getStore();
+    return (
+      scope?.active && scope.board === r && scope.token === this.busy.get(r)
+    );
+  }
+  private async importMutation<T>(
+    r: string,
+    operation: () => Promise<T> | T,
+  ): Promise<T> {
+    const token = this.busy.get(r);
+    if (!token) throw new ConflictException('GIT_DELIVERABLES_BUSY');
+    const scope = { board: r, token, active: true };
+    try {
+      return await this.importing.run(scope, operation);
+    } finally {
+      scope.active = false;
+    }
+  }
+  private markPending(p: string, r: string) {
+    const settings = this.settings(p, r);
+    if (!settings?.enabled) return;
+    const actor = currentAccess()?.localAgentThreadId;
+    const states = this.copyStates(settings);
+    for (const copy of this.eligible(p, actor)) {
+      const previous = states[copy.id];
+      const headPath = join(copy.localPath!, '.git', 'HEAD');
+      const descriptor = openSync(
+        headPath,
+        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      );
+      let head: string;
+      try {
+        const entry = fstatSync(descriptor);
+        if (!entry.isFile() || entry.size > 4096)
+          throw new ConflictException('GIT_DELIVERABLES_BRANCH_CHANGED');
+        head = readFileSync(descriptor, 'utf8').trim();
+      } finally {
+        closeSync(descriptor);
+      }
+      const branch = head.startsWith('ref: ')
+        ? head.slice(5)
+        : `detached:${head}`;
+      states[copy.id] = {
+        ...(previous ?? { bindings: {}, lastError: null, lastSyncAt: null }),
+        pending: true,
+        pendingBranch: previous?.pending
+          ? (previous.pendingBranch ?? branch)
+          : branch,
+        generation: (previous?.generation ?? 0) + 1,
+      };
+    }
+    const board = this.board(p, r);
+    this.db
+      .update(projectResources)
+      .set({
+        config: {
+          ...board.config,
+          gitDeliverables: { ...settings, copies: states },
+        },
+      })
+      .where(eq(projectResources.id, r))
+      .run();
+  }
+  private completePending(
+    p: string,
+    r: string,
+    copyId: string,
+    generation: number,
+  ) {
+    const settings = this.settings(p, r);
+    if (!settings) return;
+    const states = this.copyStates(settings),
+      state = states[copyId];
+    if (!state || (state.generation ?? 0) !== generation) return;
+    states[copyId] = { ...state, pending: false };
+    const board = this.board(p, r);
+    this.db
+      .update(projectResources)
+      .set({
+        config: {
+          ...board.config,
+          gitDeliverables: { ...settings, copies: states },
+        },
+      })
+      .where(eq(projectResources.id, r))
+      .run();
+  }
   private cloneExists(localPath: string | null) {
     try {
       if (!localPath || realpathSync(localPath) !== localPath) return false;
       const root = lstatSync(localPath),
-        git = lstatSync(join(localPath, '.git'));
+        git = lstatSync(join(localPath, '.git')),
+        head = lstatSync(join(localPath, '.git', 'HEAD'));
       return (
         root.isDirectory() &&
         !root.isSymbolicLink() &&
         git.isDirectory() &&
-        !git.isSymbolicLink()
+        !git.isSymbolicLink() &&
+        head.isFile() &&
+        !head.isSymbolicLink() &&
+        head.size <= 4096
       );
     } catch {
       return false;
@@ -228,6 +388,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
   }
   /** Precondition before domain writes. No fallback to a shared or another agent's copy. */
   assertCanModify(p: string, r: string) {
+    if (this.busy.has(r) && !this.isImporting(r))
+      throw new ConflictException('GIT_DELIVERABLES_BUSY');
     const row = this.db
       .select()
       .from(projectResources)
@@ -248,12 +410,26 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     const board = this.board(p, r);
     const previous = board.config.gitDeliverables as Settings | undefined;
     const states = this.copyStates(previous ?? null);
-    if (settings.copyId)
-      states[settings.copyId] = {
+    if (settings.copyId) {
+      const previousCopy = states[settings.copyId];
+      const state: SyncState = {
         bindings: settings.bindings,
         lastError: settings.lastError,
         lastSyncAt: settings.lastSyncAt,
+        context: settings.context,
+        pending: previousCopy?.pending,
+        generation: previousCopy?.generation,
+        pendingBranch: previousCopy?.pendingBranch,
       };
+      const branches = { ...previousCopy?.branches };
+      if (previousCopy?.context) {
+        const previousBranch = { ...previousCopy };
+        delete previousBranch.branches;
+        branches[this.branchKey(previousCopy.context)] = previousBranch;
+      }
+      if (settings.context) branches[this.branchKey(settings.context)] = state;
+      states[settings.copyId] = { ...state, branches };
+    }
     this.db
       .update(projectResources)
       .set({
@@ -305,6 +481,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
   }
   async status(p: string, copyId?: string) {
     requireProjectAccess(p);
+    const visibleCopies = this.copies
+      .list(p)
+      .filter((copy) => copy.sourceType === 'git');
+    const visibleIds = new Set(visibleCopies.map((copy) => copy.id));
     const boards = this.db
       .select()
       .from(projectResources)
@@ -331,7 +511,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 mode: 'agent_copies',
                 directory: s.directory,
                 restrictedIds: s.restrictedIds,
-                lastError: s.lastError,
+                lastError:
+                  Object.entries(this.copyStates(s)).find(
+                    ([id, copy]) => visibleIds.has(id) && copy.lastError,
+                  )?.[1].lastError ?? s.lastError,
                 lastSyncAt: s.lastSyncAt,
               }
             : null,
@@ -339,13 +522,25 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       });
     const eligibleIds = new Set(this.eligible(p).map((c) => c.id));
     const copies = await Promise.all(
-      this.copies
-        .list(p)
-        .filter(
-          (c) =>
-            c.sourceType === 'git' && c.state === 'ready' && c.sourceEnabled,
-        )
-        .map(async (c) => ({
+      visibleCopies.map(async (c) => {
+        const settings = boards[0] ? this.settings(p, boards[0].id) : null;
+        const saved = this.copyStates(settings)[c.id];
+        const root = await this.git.directory(p, c.id).catch(() => null);
+        const context = root
+          ? await this.gitContext(root).catch(() => null)
+          : null;
+        const branchState =
+          settings && context
+            ? this.forCopy(p, settings.boardId, c.id, context)
+            : null;
+        return {
+          context,
+          lastError: branchState
+            ? branchState.lastError
+            : (saved?.lastError ?? null),
+          lastSyncAt: branchState?.lastSyncAt ?? null,
+          pending: saved?.pending ?? false,
+          pendingBranch: saved?.pendingBranch ?? null,
           id: c.id,
           name: c.name,
           writable: c.accessMode === 'read_write',
@@ -356,7 +551,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             .then((root) => readGitDeliverablesIndex(root))
             .then((index) => index?.directory ?? 'livrables')
             .catch(() => 'livrables'),
-        })),
+        };
+      }),
     );
     let discovered: { id: string; title: string; documents: number }[] = [];
     let discoveryError: string | null = null;
@@ -433,6 +629,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         item: this.deliverables.get(p, r, row.id),
         manifest,
         documents,
+        organizationRevision: labels.revision,
       });
     }
     return result;
@@ -471,6 +668,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     )
       throw new ConflictException('GIT_DELIVERABLES_TARGET_IN_USE');
     const root = await this.git.directory(p, copy.id);
+    const context = await this.gitContext(root);
     const index = await readGitDeliverablesIndex(root);
     if (index && index.directory !== options.directory)
       throw new ConflictException('GIT_DELIVERABLES_TARGET_ALREADY_BOUND');
@@ -483,7 +681,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       )
     )
       throw new ConflictException('GIT_DELIVERABLES_TARGET_ALREADY_BOUND');
-    const previous = this.forCopy(p, options.boardId, copy.id);
+    const previous = this.forCopy(p, options.boardId, copy.id, context);
     if (
       previous &&
       Object.keys(previous.bindings).length &&
@@ -493,8 +691,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('GIT_DELIVERABLES_TARGET_ALREADY_BOUND');
     const identitySettings = this.settings(p, options.boardId);
     const identities: Record<string, Binding> = {};
-    for (const state of Object.values(this.copyStates(identitySettings)))
+    for (const state of Object.values(this.copyStates(identitySettings))) {
       Object.assign(identities, state.bindings);
+      for (const branch of Object.values(state.branches ?? {}))
+        Object.assign(identities, branch.bindings);
+    }
     const local = this.local(
       p,
       options.boardId,
@@ -506,7 +707,19 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       options.adoptFolders,
     );
     const changes: Change[] = [];
-    const evidence: unknown[] = [options, previous, index];
+    const evidence: unknown[] = [
+      options,
+      previous
+        ? {
+            enabled: previous.enabled,
+            directory: previous.directory,
+            restrictedIds: previous.restrictedIds,
+            bindings: previous.bindings,
+          }
+        : null,
+      index,
+      context,
+    ];
     const files = new Map<
       string,
       { bytes: Buffer | null; hash: string | null }
@@ -549,6 +762,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         id,
         l?.manifest,
         l?.item.version,
+        l?.item.lifecycleStatus,
+        l?.item.confidentiality,
+        l?.organizationRevision,
         l?.documents.map((d) => [d.id, d.currentVersionNumber]),
         r?.hash,
       ]);
@@ -564,7 +780,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         add('excluded', 'restricted');
         continue;
       }
-      if (base && (!l || !r)) {
+      if (base && (!l || !r) && !(base.pendingExport && l && !r)) {
         add('conflict', !r ? 'removed_in_git' : 'removed_in_mergeron');
         continue;
       }
@@ -691,7 +907,14 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           reason: 'ignored_by_git',
         });
     }
+    await this.assertGitContext(root, context);
+    for (const entry of local.values())
+      this.assertLocal(p, options.boardId, entry);
     return {
+      context,
+      generation:
+        this.copyStates(this.settings(p, options.boardId))[copy.id]
+          ?.generation ?? 0,
       options,
       previous,
       local,
@@ -703,6 +926,26 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       fingerprint: digest(JSON.stringify(evidence)),
     };
   }
+  private assertLocal(p: string, r: string, expected: Local) {
+    const current = this.deliverables.get(p, r, expected.item.id);
+    const docs = this.deliverables
+      .documents(p, r, current.id)
+      .filter((d) => d.deletedAt === null);
+    const organization = this.organization.read(p, r, current.id);
+    if (
+      current.version !== expected.item.version ||
+      current.lifecycleStatus !== expected.item.lifecycleStatus ||
+      current.confidentiality !== expected.item.confidentiality ||
+      organization.revision !== expected.organizationRevision ||
+      JSON.stringify(
+        docs.map((d) => [d.id, d.currentVersionNumber, d.name]),
+      ) !==
+        JSON.stringify(
+          expected.documents.map((d) => [d.id, d.currentVersionNumber, d.name]),
+        )
+    )
+      throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+  }
   async preview(p: string, input: unknown) {
     requireExecutionAccess();
     const plan = await this.build(p, this.options(input));
@@ -710,6 +953,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       fingerprint: plan.fingerprint,
       changes: plan.changes,
       copyId: plan.options.copyId,
+      context: plan.context,
       canApply: !plan.changes.some((c) => c.action === 'conflict'),
     };
   }
@@ -718,7 +962,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     const options = this.options(body?.options);
     if (this.busy.has(options.boardId))
       throw new ConflictException('GIT_DELIVERABLES_BUSY');
-    this.busy.add(options.boardId);
+    this.busy.set(options.boardId, Symbol());
     try {
       const copy = this.target(p, options.copyId);
       options.copyId = copy.id;
@@ -737,6 +981,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         const settings: Settings = {
           ...options,
           enabled: true,
+          context: plan.context,
           bindings: structuredClone(plan.previous?.bindings ?? {}),
           lastError: null,
           lastSyncAt: plan.previous?.lastSyncAt ?? null,
@@ -748,6 +993,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             ...plan.remotes.keys(),
           ])) {
             let l = plan.local.get(id);
+            if (l) this.assertLocal(p, options.boardId, l);
+            await this.assertGitContext(plan.root, plan.context);
             const r = plan.remotes.get(id);
             if (
               l?.item.confidentiality === 'restricted' &&
@@ -762,11 +1009,22 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                   settings.bindings[id]?.metadata ===
                     metadataHash(l.manifest)));
             if (!l && r) {
-              const item = await this.deliverables.create(p, options.boardId, {
-                title: r.manifest.title,
-                description: r.manifest.description,
-              });
-              l = { item, manifest: r.manifest, documents: [] };
+              const item = await this.importMutation(options.boardId, () =>
+                this.deliverables.create(p, options.boardId, {
+                  title: r.manifest.title,
+                  description: r.manifest.description,
+                }),
+              );
+              l = {
+                item,
+                manifest: r.manifest,
+                documents: [],
+                organizationRevision: this.organization.read(
+                  p,
+                  options.boardId,
+                  item.id,
+                ).revision,
+              };
               settings.bindings[id] = {
                 pendingImport: true,
                 localId: item.id,
@@ -787,16 +1045,25 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               metadata: '',
               documents: {},
             };
+            if (!r) {
+              binding.pendingExport = true;
+              settings.bindings[id] = binding;
+              this.save(p, options.boardId, settings);
+            }
             if (
               remotePreferred &&
               (l.item.title !== manifest.title ||
                 l.item.description !== manifest.description)
-            )
-              l.item = this.deliverables.update(p, options.boardId, l.item.id, {
-                title: manifest.title,
-                description: manifest.description,
-                version: l.item.version,
-              });
+            ) {
+              const item = l.item;
+              l.item = await this.importMutation(options.boardId, () =>
+                this.deliverables.update(p, options.boardId, item.id, {
+                  title: manifest.title,
+                  description: manifest.description,
+                  version: item.version,
+                }),
+              );
+            }
             // Merge document additions independently from metadata direction.
             for (const d of r?.manifest.documents ?? [])
               if (!manifest.documents.some((m) => m.id === d.id))
@@ -817,27 +1084,42 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               const remoteFile = remoteEntry
                 ? plan.files.get(`${folder}/${remoteEntry.path}`)
                 : undefined;
-              const latest = doc
-                ? doc.versions.find(
-                    (v) => v.number === doc?.currentVersionNumber,
-                  )
-                : undefined;
+              const plannedDocument = plan.local
+                .get(id)
+                ?.documents.find(
+                  (d) =>
+                    d.id === (binding.documents[entry.id]?.localId ?? entry.id),
+                );
+              const plannedVersion = plannedDocument?.versions.find(
+                (v) => v.number === plannedDocument.currentVersionNumber,
+              );
+              if (
+                plannedDocument &&
+                (!doc ||
+                  doc.currentVersionNumber !==
+                    plannedDocument.currentVersionNumber ||
+                  doc.name !== plannedDocument.name)
+              )
+                throw new ConflictException('GIT_DELIVERABLES_CHANGED');
               const importing =
                 remoteFile?.bytes &&
-                (!doc ||
-                  (latest?.sha256 !== remoteFile.hash &&
-                    binding.documents[entry.id]?.hash === latest?.sha256));
+                (!plannedDocument ||
+                  (plannedVersion?.sha256 !== remoteFile.hash &&
+                    binding.documents[entry.id]?.hash ===
+                      plannedVersion?.sha256));
               if (doc && doc.name !== entry.path) {
-                await this.deliverables.renameDocument(
-                  p,
-                  options.boardId,
-                  l.item.id,
-                  doc.id,
-                  {
-                    name: entry.path,
-                    expectedName: doc.name,
-                    expectedVersion: doc.currentVersionNumber,
-                  },
+                await this.importMutation(options.boardId, () =>
+                  this.deliverables.renameDocument(
+                    p,
+                    options.boardId,
+                    l.item.id,
+                    doc!.id,
+                    {
+                      name: entry.path,
+                      expectedName: doc!.name,
+                      expectedVersion: doc!.currentVersionNumber,
+                    },
+                  ),
                 );
                 const localId = doc.id;
                 doc = this.deliverables
@@ -850,16 +1132,18 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                   await Promise.resolve();
                   yield { filename: entry.path, stream: Readable.from(bytes) };
                 }
-                await this.deliverables.uploadDocuments(
-                  p,
-                  options.boardId,
-                  l.item.id,
-                  uploads(),
-                  {
-                    documentId: doc?.id,
-                    expectedVersion: doc?.currentVersionNumber,
-                    comment: 'Git import',
-                  },
+                await this.importMutation(options.boardId, () =>
+                  this.deliverables.uploadDocuments(
+                    p,
+                    options.boardId,
+                    l.item.id,
+                    uploads(),
+                    {
+                      documentId: doc?.id,
+                      expectedVersion: doc?.currentVersionNumber,
+                      comment: 'Git import',
+                    },
+                  ),
                 );
                 doc = this.deliverables
                   .documents(p, options.boardId, l.item.id)
@@ -872,6 +1156,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               const bytes = await readFile(version.snapshotPath);
               if (digest(bytes) !== version.sha256)
                 throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+              await this.assertGitContext(plan.root, plan.context);
               const target = `${folder}/${entry.path}`;
               const original = await readGitFile(plan.root, target);
               const expected = remoteEntry
@@ -894,18 +1179,22 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               if (r) this.save(p, options.boardId, settings);
             }
             if (remotePreferred)
-              this.organization.importGitOrganization(
-                p,
-                options.boardId,
-                l.item.id,
-                manifest.labels,
-                Object.fromEntries(
-                  manifest.documents.map((d) => [
-                    binding.documents[d.id].localId,
-                    d.labels,
-                  ]),
+              await this.importMutation(options.boardId, () =>
+                this.organization.importGitOrganization(
+                  p,
+                  options.boardId,
+                  l.item.id,
+                  manifest.labels,
+                  Object.fromEntries(
+                    manifest.documents.map((d) => [
+                      binding.documents[d.id].localId,
+                      d.labels,
+                    ]),
+                  ),
+                  l.organizationRevision,
                 ),
               );
+            await this.assertGitContext(plan.root, plan.context);
             const raw = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
             await writeGitFile(
               plan.root,
@@ -915,9 +1204,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             );
             binding.metadata = metadataHash(manifest);
             binding.pendingImport = false;
+            binding.pendingExport = false;
             settings.bindings[id] = binding;
             this.save(p, options.boardId, settings);
           }
+          await this.assertGitContext(plan.root, plan.context);
           await writeGitFile(
             plan.root,
             gitDeliverablesIndex,
@@ -934,8 +1225,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             ),
             plan.index?.hash ?? null,
           );
+          await this.assertGitContext(plan.root, plan.context);
           settings.lastSyncAt = Date.now();
           this.save(p, options.boardId, settings);
+          this.completePending(p, options.boardId, copy.id, plan.generation);
           const actor = currentAccess()?.identity;
           this.db
             .insert(projectActivity)
@@ -976,7 +1269,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       r,
       currentAccess()?.localAgentThreadId ?? null,
     ]);
-    if (this.stopped || this.busy.has(r) || this.queued.has(key)) return;
+    if (this.stopped || this.queued.has(key)) return;
     const settings = this.settings(p, r);
     if (!settings?.enabled) return;
     const access = currentAccess();
@@ -992,6 +1285,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           const copies = actor ? [this.target(p)] : this.eligible(p);
           if (!copies.length)
             throw new ConflictException('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+          let retry = false;
           for (const copy of copies) {
             const options = {
               boardId: r,
@@ -1000,24 +1294,54 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               restrictedIds: current.restrictedIds,
             };
             try {
+              const generation =
+                this.copyStates(this.settings(p, r))[copy.id]?.generation ?? 0;
               const preview = await this.preview(p, options);
+              const pending = this.copyStates(this.settings(p, r))[copy.id];
+              if (
+                pending?.pending &&
+                pending.pendingBranch &&
+                pending.pendingBranch !== this.branchKey(preview.context)
+              )
+                throw new ConflictException('GIT_DELIVERABLES_BRANCH_CHANGED');
               // Never import in the background, commit, pull or push automatically.
               if (
                 !preview.canApply ||
                 preview.changes.some((c) => c.action === 'import')
               )
                 throw new ConflictException('GIT_DELIVERABLES_REVIEW_REQUIRED');
-              if (preview.changes.some((c) => c.action === 'export'))
+              if (preview.changes.some((c) => c.action === 'export')) {
                 await this.apply(p, {
                   options,
                   fingerprint: preview.fingerprint,
                 });
+              } else {
+                const state = this.forCopy(p, r, copy.id, preview.context);
+                if (state) this.save(p, r, { ...state, lastError: null });
+                this.completePending(p, r, copy.id, generation);
+              }
             } catch (e) {
-              const state = this.forCopy(p, r, copy.id);
+              const context = await this.git
+                .directory(p, copy.id)
+                .then((root) => this.gitContext(root))
+                .catch(() => undefined);
+              const state = this.forCopy(p, r, copy.id, context);
               if (state) this.save(p, r, { ...state, lastError: errorCode(e) });
-              throw e;
+              if (
+                [
+                  'GIT_BUSY',
+                  'GIT_AGENT_STATE_UNKNOWN',
+                  'GIT_DELIVERABLES_BUSY',
+                  'GIT_DELIVERABLES_CHANGED',
+                ].includes(errorCode(e))
+              )
+                retry = true;
+              new Logger(GitDeliverablesService.name).warn(
+                'Git deliverable copy requires review',
+              );
             }
           }
+          if (retry) this.enqueue(p, r, 5000);
         } catch (e) {
           let current: Settings | null = null;
           try {

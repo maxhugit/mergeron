@@ -33,6 +33,10 @@ test.each([
             json({
               fingerprint: 'preview',
               canApply: false,
+              context: {
+                branch: 'refs/heads/agent-presentation',
+                head: '1234567890abcdef',
+              },
               changes: [
                 {
                   deliverable: 'Cadrage du projet et décisions partagées',
@@ -66,6 +70,13 @@ test.each([
                 writable: true,
                 owned: true,
                 eligible: true,
+                context: {
+                  branch: 'refs/heads/agent-presentation',
+                  head: '1234567890abcdef',
+                },
+                pending: true,
+                lastError: 'GIT_DELIVERABLES_REVIEW_REQUIRED',
+                lastSyncAt: null,
               },
             ],
             discovered: [],

@@ -192,8 +192,10 @@ export class DocumentOrganizationService
     id: string,
     names: string[],
     assignments: Record<string, string[]>,
+    expectedRevision: number,
   ) {
     const c = this.context(p, r, id, true);
+    this.revision(c.organization.revision, expectedRevision);
     const labels = names.map(
       (name) =>
         c.organization.labels.find((l) => l.name === name) ?? {

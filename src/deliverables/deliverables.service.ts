@@ -1389,6 +1389,7 @@ export class DeliverablesService implements OnModuleInit {
     const id = randomUUID(),
       now = Date.now();
     await this.directory(projectId, ['livrables', id]);
+    this.beforeGitChange?.(projectId, resourceId);
     beforeCommit?.();
     const actor = this.actor();
     const created = this.db.transaction((tx) => {
@@ -2297,6 +2298,7 @@ export class DeliverablesService implements OnModuleInit {
             throw new ConflictException(
               'Save pending document changes as a version before replacing the retained source',
             );
+          this.beforeGitChange?.(projectId, resourceId);
           beforeCommit?.();
           projectionPath = target;
           replacedProjection = Boolean(document);
@@ -2349,6 +2351,7 @@ export class DeliverablesService implements OnModuleInit {
           'Document changed while its version was created',
         );
       }
+      this.beforeGitChange?.(projectId, resourceId);
       beforeCommit?.();
       const now = Date.now();
       const saved = this.db.transaction((tx) => {
@@ -2721,6 +2724,7 @@ export class DeliverablesService implements OnModuleInit {
           (await this.hash(target)).sha256 !== digest.sha256
         )
           throw new ConflictException('Document changed during rename');
+        this.beforeGitChange?.(projectId, resourceId);
         const actor = this.actor();
         const now = Date.now();
         this.db.transaction((tx) => {

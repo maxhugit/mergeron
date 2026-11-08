@@ -124,6 +124,73 @@ it('warns about missing agent copies and refuses enabling the mode', async () =>
   ).toBeDisabled();
   expect(writes).toEqual([]);
 });
+
+it('keeps each copy error visible and opens review in its own branch context', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        json({
+          boards: [
+            {
+              id: 'board',
+              name: 'Deliverables',
+              restricted: [],
+              settings: {
+                enabled: true,
+                directory: 'livrables',
+                restrictedIds: [],
+                lastError: null,
+                lastSyncAt: null,
+              },
+            },
+          ],
+          copies: [
+            {
+              id: 'first',
+              name: 'Agent A',
+              eligible: true,
+              writable: true,
+              owned: true,
+              lastError: 'GIT_DELIVERABLES_REVIEW_REQUIRED',
+              context: { branch: 'refs/heads/work-A', head: 'aaaaaaaa' },
+            },
+            {
+              id: 'second',
+              name: 'Agent B',
+              eligible: true,
+              writable: true,
+              owned: true,
+              lastError: null,
+              pending: true,
+              context: { branch: 'refs/heads/work-B', head: 'bbbbbbbb' },
+            },
+          ],
+          discovered: [],
+          discoveryError: null,
+        }),
+      ),
+    ),
+  );
+  const user = userEvent.setup();
+  fixture.render(<GitDeliverablesSettings projectId="p" />);
+  const table = await screen.findByRole('region', {
+    name: 'Git copy synchronization',
+  });
+  expect(table).toHaveTextContent('Agent A');
+  expect(table).toHaveTextContent('GIT_DELIVERABLES_REVIEW_REQUIRED');
+  expect(table).toHaveTextContent('work-A');
+  expect(table).toHaveTextContent('work-B');
+  expect(table).toHaveTextContent('Export pending');
+  await user.click(
+    screen.getAllByRole('button', { name: 'Review Git deliverables' })[1],
+  );
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Agent B');
+  expect(screen.getByRole('dialog')).toHaveTextContent('work-B');
+  expect(screen.getByRole('dialog')).not.toHaveTextContent(
+    'GIT_DELIVERABLES_REVIEW_REQUIRED',
+  );
+});
 it('requires explicit opt-in and review, excludes restricted content and cancels a stale preview on edits', async () => {
   const user = userEvent.setup();
   fixture.render(
