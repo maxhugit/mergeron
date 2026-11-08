@@ -126,6 +126,7 @@ const MAX_FILE = 100 * 1024 * 1024;
 
 @Injectable()
 export class DeliverablesService implements OnModuleInit {
+  beforeGitChange?: (projectId: string, resourceId: string) => void;
   onGitChange?: (projectId: string, resourceId: string) => void;
   async onModuleInit() {
     const logger = new Logger(DeliverablesService.name);
@@ -497,6 +498,7 @@ export class DeliverablesService implements OnModuleInit {
     },
   ) {
     this.get(projectId, resourceId, deliverableId);
+    this.beforeGitChange?.(projectId, resourceId);
     const files: Array<{ path: string; size: number }> = [];
     for await (const upload of uploads) {
       this.files.validateEntryName(upload.filename);
@@ -1382,6 +1384,7 @@ export class DeliverablesService implements OnModuleInit {
     beforeCommit?: () => void,
   ) {
     this.resource(projectId, resourceId);
+    this.beforeGitChange?.(projectId, resourceId);
     const values = this.changes(projectId, input);
     const id = randomUUID(),
       now = Date.now();
@@ -1521,6 +1524,7 @@ export class DeliverablesService implements OnModuleInit {
     input: DeliverableInput,
   ) {
     const current = this.get(projectId, resourceId, id);
+    this.beforeGitChange?.(projectId, resourceId);
     if (current.lifecycleStatus === 'archived')
       throw new ConflictException('Archived deliverables are read-only');
     if (input.version !== current.version)
@@ -1715,6 +1719,12 @@ export class DeliverablesService implements OnModuleInit {
   }
 
   private requireDocumentMutable(item: Item) {
+    const resource = this.db
+      .select()
+      .from(projectResources)
+      .where(eq(projectResources.id, item.resourceId))
+      .get();
+    if (resource) this.beforeGitChange?.(resource.projectId, item.resourceId);
     if (
       item.lifecycleStatus !== 'draft' &&
       item.lifecycleStatus !== 'in_constitution'
@@ -1724,6 +1734,7 @@ export class DeliverablesService implements OnModuleInit {
       );
   }
   remove(projectId: string, resourceId: string, id: string, version: number) {
+    this.beforeGitChange?.(projectId, resourceId);
     const current = this.get(projectId, resourceId, id);
     if (
       ['finalized', 'archived'].includes(current.lifecycleStatus) &&
@@ -1742,6 +1753,7 @@ export class DeliverablesService implements OnModuleInit {
         'Deliverable changed. Reload before removing.',
       );
     this.activeFolders.removeContext('deliverable', id);
+    this.onGitChange?.(projectId, resourceId);
     return { ok: true, filesPreserved: true };
   }
   /** Reconcile retained sources by document identity, independently of agent/deliverable links.
@@ -2863,6 +2875,7 @@ export class DeliverablesService implements OnModuleInit {
         })
         .run();
     });
+    this.onGitChange?.(projectId, resourceId);
     return { ok: true };
   }
 

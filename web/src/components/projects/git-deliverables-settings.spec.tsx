@@ -54,7 +54,13 @@ beforeEach(() => {
             },
           ],
           copies: [
-            { id: 'copy', name: 'Shared Git', writable: true, owned: false },
+            {
+              id: 'copy',
+              name: 'Shared Git',
+              writable: true,
+              owned: true,
+              eligible: true,
+            },
           ],
           discovered: [{ id: 'remote', title: 'Cadrage', documents: 1 }],
           discoveryError: null,
@@ -68,9 +74,61 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('requires explicit opt-in and review, excludes restricted content and cancels a stale preview on edits', async () => {
+it('configures the project without a manager selector or copy selector', async () => {
   const user = userEvent.setup();
   fixture.render(<GitDeliverablesSettings projectId="p" />);
+  await user.click(await screen.findByRole('switch'));
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Preview changes' })).toBeNull();
+  await user.click(
+    screen.getByRole('button', { name: 'Save Git deliverables mode' }),
+  );
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0].url).toContain('/configure');
+  expect(writes[0].body).toEqual({
+    boardId: 'board',
+    enabled: true,
+    directory: 'livrables',
+    restrictedIds: [],
+  });
+});
+it('warns about missing agent copies and refuses enabling the mode', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        json({
+          boards: [
+            {
+              id: 'board',
+              name: 'Deliverables',
+              settings: null,
+              restricted: [],
+            },
+          ],
+          copies: [],
+          discovered: [],
+          discoveryError: null,
+        }),
+      ),
+    ),
+  );
+  const user = userEvent.setup();
+  fixture.render(<GitDeliverablesSettings projectId="p" />);
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'No writable agent Git copy',
+  );
+  await user.click(await screen.findByRole('switch'));
+  expect(
+    screen.getByRole('button', { name: 'Save Git deliverables mode' }),
+  ).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+it('requires explicit opt-in and review, excludes restricted content and cancels a stale preview on edits', async () => {
+  const user = userEvent.setup();
+  fixture.render(
+    <GitDeliverablesSettings projectId="p" preferredCopyId="copy" />,
+  );
   const enabled = await screen.findByRole('switch', {
     name: 'Enable Git deliverables',
   });
@@ -112,7 +170,9 @@ it('requires explicit opt-in and review, excludes restricted content and cancels
 it('does not allow applying a conflict', async () => {
   conflict = true;
   const user = userEvent.setup();
-  fixture.render(<GitDeliverablesSettings projectId="p" />);
+  fixture.render(
+    <GitDeliverablesSettings projectId="p" preferredCopyId="copy" />,
+  );
   await user.click(await screen.findByRole('switch'));
   await user.click(screen.getByRole('button', { name: 'Preview changes' }));
   expect(

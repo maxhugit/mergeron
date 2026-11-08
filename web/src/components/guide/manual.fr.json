@@ -1450,7 +1450,7 @@
           {
             "title": "Activer après prévisualisation",
             "paragraphs": [
-              "Dans les paramètres du projet, ouvrez Espaces de travail puis Livrables Git. Sélectionnez un gestionnaire, une copie Git partagée en écriture et le dossier cible. Activez le commutateur, prévisualisez les changements, puis confirmez. Aucun commit ou push n’est automatique.",
+              "Dans les paramètres du projet, ouvrez Emplacements et connexions puis Livrables Git. Le gestionnaire unique est utilisé automatiquement. Activez le mode du projet et enregistrez le dossier cible. Chaque agent qui modifie un livrable doit avoir sa propre copie Git disponible en écriture. Examinez les imports depuis la copie concernée avant de les confirmer. Aucun commit ou push n’est automatique.",
               "À l’ouverture d’un dépôt, les fichiers livrable.json permettent de reconnaître les livrables. Le bandeau Examiner les livrables Git ouvre la proposition d’import. Pour un dépôt sans manifestes, vous pouvez proposer la conversion des sous-dossiers contenant des fichiers directs."
             ]
           },
@@ -1467,7 +1467,7 @@
       {
         "id": "deliverable-git-sync",
         "title": "Synchroniser les livrables avec Git",
-        "summary": "Prévisualiser les échanges documentaires avec une copie Git partagée avant de les confirmer.",
+        "summary": "Configurer les copies Git propres aux agents et examiner les imports avant de les confirmer.",
         "keywords": [
           "Git",
           "livrables",
@@ -1478,7 +1478,7 @@
           {
             "title": "Préparer et confirmer",
             "paragraphs": [
-              "Le mode Livrables Git est facultatif et désactivé par défaut. Dans les paramètres du projet, un administrateur choisit le gestionnaire, une copie Git partagée modifiable et un dossier relatif.",
+              "Le mode Livrables Git est facultatif et désactivé par défaut. Un administrateur active ce mode pour le projet et définit un dossier relatif. Le gestionnaire unique est utilisé automatiquement ; chaque agent qui modifie un livrable doit disposer de sa propre copie Git prête en écriture. Sans copie, la modification est refusée avec un message explicite.",
               "Prévisualiser les changements ne modifie rien. Relisez imports, exports, exclusions et conflits avant Confirmer et synchroniser. À l’ouverture d’une copie, Examiner les livrables Git permet de consulter les manifestes reconnus ; leur import reste explicite."
             ]
           },
@@ -1486,7 +1486,7 @@
             "title": "Conserver les historiques et protections",
             "paragraphs": [
               "L’index .mergeron-deliverables.json, les manifestes livrable.json et les documents doivent être commités pour rendre le dépôt portable. Le dossier peut être personnalisé sans sortir du dépôt.",
-              "Les versions et validations de Mergeron restent distinctes des commits. Les copies réservées à un agent ne sont pas des copies partagées ; une copie déjà liée ne peut pas être remplacée implicitement."
+              "Les versions et validations de Mergeron restent distinctes des commits. Chaque copie d’agent conserve ses propres bases de comparaison. Une ancienne copie partagée reste intacte mais n’est plus utilisée pour les écritures automatiques."
             ],
             "warning": "Une synchronisation n’est ni une validation humaine ni un push Git. Examinez les conflits et conservez les sauvegardes nécessaires avant de confirmer les échanges."
           }

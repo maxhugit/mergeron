@@ -103,6 +103,16 @@ export class GitMutationGateService {
       this.writing = false;
     }
   }
+  /** Deferred work keeps the agent scope while active, or takes the full idle barrier. */
+  async mutateDeferredFromAgent<T>(
+    threadId: string,
+    operation: () => Promise<T>,
+    scope: AgentGitScope,
+  ): Promise<T> {
+    return this.inventory.snapshot().includes(threadId)
+      ? this.mutateFromAgent(threadId, operation, scope)
+      : this.mutate(operation);
+  }
   async publishFromAgent<T>(
     threadId: string,
     operation: () => Promise<T>,

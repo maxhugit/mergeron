@@ -11,9 +11,14 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-test.each([390, 1280])(
-  'reviews Git deliverables in French without overflow at %ipx',
-  async (width) => {
+test.each([
+  { width: 390, context: false },
+  { width: 1280, context: false },
+  { width: 390, context: true },
+  { width: 1280, context: true },
+])(
+  'reviews Git deliverables in French at $width px (copy context: $context)',
+  async ({ width, context }) => {
     const fixture = catalogFixture();
     await i18nReady;
     await i18n.changeLanguage('fr');
@@ -57,9 +62,10 @@ test.each([390, 1280])(
             copies: [
               {
                 id: 'copy',
-                name: 'Dépôt Git partagé du projet',
+                name: 'Copie Git de l’agent',
                 writable: true,
-                owned: false,
+                owned: true,
+                eligible: true,
               },
             ],
             discovered: [],
@@ -70,24 +76,38 @@ test.each([390, 1280])(
     );
     fixture.render(
       <main className="min-h-dvh bg-background p-4 text-foreground">
-        <GitDeliverablesSettings projectId="p" />
+        <GitDeliverablesSettings
+          projectId="p"
+          preferredCopyId={context ? 'copy' : undefined}
+        />
       </main>,
     );
     try {
       const user = userEvent.setup();
       await user.click(await screen.findByRole('switch'));
-      await user.click(
-        screen.getByRole('button', { name: 'Prévisualiser les changements' }),
-      );
-      expect(
-        await screen.findByRole('button', {
-          name: 'Confirmer et synchroniser',
-        }),
-      ).toBeDisabled();
+      expect(screen.queryByRole('combobox')).toBeNull();
+      if (context) {
+        await user.click(
+          screen.getByRole('button', { name: 'Prévisualiser les changements' }),
+        );
+        expect(
+          await screen.findByRole('button', {
+            name: 'Confirmer et synchroniser',
+          }),
+        ).toBeDisabled();
+      } else {
+        await user.click(
+          screen.getByRole('button', {
+            name: 'Enregistrer le mode Livrables Git',
+          }),
+        );
+        expect(await screen.findByRole('status')).toBeVisible();
+        expect(writes[0]).toContain('/configure');
+      }
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       expect(writes).toHaveLength(1);
       await page.screenshot({
-        path: `../../../.vitest-screenshots/git-deliverables-${width}.png`,
+        path: `../../../.vitest-screenshots/git-deliverables-${context ? 'copy' : 'project'}-${width}.png`,
       });
     } finally {
       fixture.dispose();

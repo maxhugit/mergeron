@@ -1450,7 +1450,7 @@
           {
             "title": "Enable after reviewing",
             "paragraphs": [
-              "In project settings, open Workspaces then Git deliverables. Choose a manager, a shared writable Git copy and a target directory. Enable the switch, preview changes and confirm. Commits and pushes are never automatic.",
+              "In project settings, open Locations and connections then Git deliverables. The single manager is selected automatically. Enable the project mode and save its target directory. Every agent editing a deliverable needs its own writable Git copy. Review imports from the relevant copy before confirming. Commits and pushes are never automatic.",
               "Opening a repository recognizes deliverables through livrable.json files. Review Git deliverables opens the import proposal. For repositories without manifests, you can propose converting subdirectories containing direct files."
             ]
           },
@@ -1467,7 +1467,7 @@
       {
         "id": "deliverable-git-sync",
         "title": "Synchronize deliverables with Git",
-        "summary": "Preview document exchange with a shared Git copy before confirming changes.",
+        "summary": "Configure each agent’s Git copy and review imports before confirming changes.",
         "keywords": [
           "Git",
           "deliverables",
@@ -1478,7 +1478,7 @@
           {
             "title": "Prepare and confirm",
             "paragraphs": [
-              "Git Deliverables is optional and disabled by default. In project settings, an administrator selects the board, a writable shared Git copy and a relative folder.",
+              "Git Deliverables is optional and disabled by default. An administrator enables this mode for the project and sets a relative folder. The single deliverable manager is selected automatically. Every agent editing a deliverable needs its own ready, writable Git copy; otherwise the change is refused with an explicit error.",
               "Preview changes does not modify anything. Review imports, exports, exclusions and conflicts before Confirm and synchronize. Opening a copy can detect manifests; Review Git deliverables inspects them, but importing remains explicit."
             ]
           },
@@ -1486,7 +1486,7 @@
             "title": "Keep history and protections",
             "paragraphs": [
               "Commit .mergeron-deliverables.json, livrable.json manifests and documents to make the repository portable. The folder can be customized but must remain inside the repository.",
-              "Mergeron versions and approvals remain distinct from commits. Agent-reserved copies are not shared copies; an existing association cannot silently switch to another copy."
+              "Mergeron versions and approvals remain distinct from commits. Each agent copy retains its own comparison baselines. Existing shared copies remain intact but are no longer used for automatic writes."
             ],
             "warning": "Synchronization is neither human validation nor a Git push. Review conflicts and retain necessary backups before confirming exchanges."
           }

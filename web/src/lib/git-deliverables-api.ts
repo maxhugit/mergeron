@@ -2,7 +2,7 @@ import { projectsApi } from './projects-api';
 
 export type Options = {
   boardId: string;
-  copyId: string;
+  copyId?: string;
   directory: string;
   restrictedIds: string[];
 };
@@ -23,6 +23,7 @@ export interface Status {
     name: string;
     writable: boolean;
     owned: boolean;
+    eligible?: boolean;
     directory?: string;
   }[];
   discovered: { id: string; title: string; documents: number }[];

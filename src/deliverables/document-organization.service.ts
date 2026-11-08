@@ -103,6 +103,7 @@ export class DocumentOrganizationService
   }
   private context(p: string, r: string, id: string, mutable = false) {
     const item = this.deliverables.get(p, r, id);
+    if (mutable) this.deliverables.beforeGitChange?.(p, r);
     if (mutable && !['draft', 'in_constitution'].includes(item.lifecycleStatus))
       throw new ConflictException('DELIVERABLE_READ_ONLY');
     const boardItem = this.deliverables

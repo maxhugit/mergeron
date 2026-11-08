@@ -17,6 +17,10 @@ export class GitDeliverablesController {
   status(@Param('projectId') p: string, @Query('copyId') c?: string) {
     return this.service.status(p, c);
   }
+  @Post('configure')
+  configure(@Param('projectId') p: string, @Body() body: unknown) {
+    return this.service.configure(p, body);
+  }
   @Post('preview')
   preview(@Param('projectId') p: string, @Body() body: unknown) {
     return this.service.preview(p, body);

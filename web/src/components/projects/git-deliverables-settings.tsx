@@ -25,15 +25,13 @@ export function GitDeliverablesSettings({
   const { t } = useTranslation(['workspaces', 'common'], {
     nsMode: 'fallback',
   });
-  const [selected, setSelected] = useState('');
   const query = useQuery({
     queryKey: key(projectId),
     queryFn: () => projectsApi<Status>(url(projectId)),
     staleTime: 30_000,
     retry: false,
   });
-  const board =
-    query.data?.boards.find((b) => b.id === selected) ?? query.data?.boards[0];
+  const board = query.data?.boards[0];
   if (query.error) return <p role="alert">{t('gitDeliverablesUnavailable')}</p>;
   if (!query.data) return <p>{t('loading')}</p>;
   return (
@@ -44,24 +42,12 @@ export function GitDeliverablesSettings({
           {t('gitDeliverablesDescription')}
         </p>
       </header>
-      {!board ? (
+      {query.data.boards.length > 1 ? (
+        <p role="alert">{t('gitDeliverablesAmbiguousBoard')}</p>
+      ) : !board ? (
         <p>{t('gitDeliverablesNoBoard')}</p>
       ) : (
         <>
-          <label className="grid gap-1 text-sm">
-            {t('gitDeliverablesBoard')}
-            <select
-              className="w-full rounded-md border bg-background p-2"
-              value={board.id}
-              onChange={(e) => setSelected(e.target.value)}
-            >
-              {query.data.boards.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <GitDeliverablesConfiguration
             key={board.id}
             projectId={projectId}
@@ -91,12 +77,11 @@ function GitDeliverablesConfiguration({
   });
   const client = useQueryClient();
   const [enabled, setEnabled] = useState(board.settings?.enabled ?? false);
-  const [copyId, setCopy] = useState(
-    board.settings?.copyId ??
-      preferredCopyId ??
-      copies.find((c) => c.writable && !c.owned)?.id ??
-      '',
-  );
+  const copyId = preferredCopyId;
+  const eligible = copies.filter((c) => c.eligible);
+  const available = copyId
+    ? eligible.some((c) => c.id === copyId)
+    : eligible.length > 0;
   const [directory, setDirectory] = useState(
     board.settings?.directory ??
       copies.find((c) => c.id === copyId)?.directory ??
@@ -116,19 +101,27 @@ function GitDeliverablesConfiguration({
     adoptFolders,
   };
   const mutation = useMutation({
-    mutationFn: async (action: 'preview' | 'apply' | 'disable') => {
+    mutationFn: async (
+      action: 'preview' | 'apply' | 'disable' | 'configure',
+    ) => {
       setSuccess(false);
-      if (action === 'preview') {
+      if (action === 'configure') {
+        await post(projectId, '/configure', {
+          boardId: board.id,
+          enabled,
+          directory,
+          restrictedIds,
+        });
+      } else if (action === 'preview') {
         setPreview(await post<Preview>(projectId, '/preview', options));
         return;
-      }
-      if (action === 'apply') {
+      } else if (action === 'apply') {
         if (!preview) return;
         await post(projectId, '/apply', {
           options,
           fingerprint: preview.fingerprint,
         });
-      } else
+      } else if (action === 'disable')
         await post(projectId, `/${encodeURIComponent(board.id)}/disable`, {});
       setPreview(null);
       setSuccess(true);
@@ -158,33 +151,18 @@ function GitDeliverablesConfiguration({
           }}
         />
       </label>
+      <p className="text-sm text-muted-foreground">
+        {t('gitDeliverablesAgentCopies')}
+      </p>
+      {!available && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-500/50 p-3 text-sm"
+        >
+          {t('gitDeliverablesMissingAgentCopy')}
+        </p>
+      )}
       <fieldset disabled={mutation.isPending} className="min-w-0 space-y-3">
-        <label className="grid gap-1 text-sm">
-          {t('gitDeliverablesCopy')}
-          <select
-            disabled={!enabled}
-            className="w-full rounded-md border bg-background p-2"
-            value={copyId}
-            onChange={(e) => {
-              setCopy(e.target.value);
-              setDirectory(
-                copies.find((c) => c.id === e.target.value)?.directory ??
-                  'livrables',
-              );
-              dirty();
-            }}
-          >
-            <option value="">{t('gitDeliverablesChooseCopy')}</option>
-            {copies.map((c) => (
-              <option disabled={!c.writable || c.owned} key={c.id} value={c.id}>
-                {c.name}
-                {!c.writable || c.owned
-                  ? ` · ${t('gitDeliverablesIneligibleCopy')}`
-                  : ''}
-              </option>
-            ))}
-          </select>
-        </label>
         <label className="grid gap-1 text-sm">
           {t('gitDeliverablesDirectory')}
           <input
@@ -224,18 +202,20 @@ function GitDeliverablesConfiguration({
           </fieldset>
         )}
       </fieldset>
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={adoptFolders}
-          disabled={!enabled || mutation.isPending}
-          onChange={(e) => {
-            setAdoptFolders(e.target.checked);
-            dirty();
-          }}
-        />
-        <span>{t('gitDeliverablesAdoptFolders')}</span>
-      </label>
+      {copyId && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={adoptFolders}
+            disabled={!enabled || mutation.isPending}
+            onChange={(e) => {
+              setAdoptFolders(e.target.checked);
+              dirty();
+            }}
+          />
+          <span>{t('gitDeliverablesAdoptFolders')}</span>
+        </label>
+      )}
       <p className="text-sm text-muted-foreground">
         {t('gitDeliverablesGuarantees')}
       </p>
@@ -314,10 +294,16 @@ function GitDeliverablesConfiguration({
           </Button>
         )}
         <Button
-          disabled={mutation.isPending || (enabled && (!copyId || !directory))}
-          onClick={() => mutation.mutate(enabled ? 'preview' : 'disable')}
+          disabled={
+            mutation.isPending || (enabled && (!available || !directory))
+          }
+          onClick={() =>
+            mutation.mutate(
+              !copyId ? 'configure' : enabled ? 'preview' : 'disable',
+            )
+          }
         >
-          {t('gitDeliverablesPreview')}
+          {t(copyId ? 'gitDeliverablesPreview' : 'gitDeliverablesSaveMode')}
         </Button>
         {preview && enabled && (
           <Button
