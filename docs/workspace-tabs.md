@@ -343,3 +343,36 @@ versioning where supported by the document write endpoint. Read-only documents
 remain read-only. The preview uses local rendering, never executes raw HTML and
 does not automatically fetch remote images. External web links open only when
 clicked, in a separate tab. No document content is sent to a rendering service.
+
+## Piloter les livrables et les tâches depuis un agent
+
+La sidebar droite conserve ses onglets Dossiers, Livrables et Sources. Un onglet
+Tâches apparaît lorsque le projet possède un gestionnaire de tâches.
+
+Dans Livrables, la barre de contrôle permet de créer un livrable en popup et de
+choisir un affichage commun à tous les documents : liste ou dossiers virtuels
+par étiquette. Chaque livrable se déplie indépendamment. Son menu permet de
+rattacher l’agent courant ou de retirer son rattachement ; les menus des documents
+conservent les actions de consultation, de téléchargement et de versionnement.
+
+Dans Tâches, chaque tâche principale se déplie pour montrer ses sous-tâches et
+leur avancement. Les menus contextuels (clic droit ou bouton ⋯) permettent
+l’édition et l’affectation de l’agent courant ; la création réutilise les
+formulaires du gestionnaire de tâches en popup. Un agent peut recevoir plusieurs
+sous-tâches d’une seule tâche principale. Les validations du serveur restent
+obligatoires, y compris pour les liens avec les livrables et les autres projets.
+Une affectation ne lance pas automatiquement un travail ni ne déplace l’agent.
+
+Les ouvertures des livrables, tâches et dossiers d’étiquettes sont enregistrées
+sur le serveur par personne et par agent. L’ouverture des projets dans la sidebar
+gauche est enregistrée par personne, indépendamment de l’agent. Une erreur de
+lecture ou d’enregistrement des préférences est affichée, sans confirmer une
+sauvegarde qui aurait échoué.
+
+La fenêtre ouverte depuis le compteur des sous-tâches permet également de régler
+l’avancement de chaque sous-tâche affectée à l’agent, par curseur ou saisie de
+0 à 100 %, puis Enregistrer. Le pourcentage ne modifie pas le statut : 100 % ne
+valide pas automatiquement une sous-tâche. Les tâches terminées ou annulées
+restent verrouillées jusqu’à leur réouverture dans le formulaire de tâche.
+L’enregistrement utilise la version observée au début de la saisie pour refuser
+l’écrasement d’une modification concurrente ; les erreurs restent visibles.

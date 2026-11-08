@@ -148,6 +148,7 @@ export interface DeliverablesBoard {
   taskManagers: Array<{ id: string; name: string }>;
   personGroups: Array<{ id: string; name: string }>;
   tasks: Array<{
+    updatedAt?: number;
     id: string;
     title: string;
     resourceId: string;

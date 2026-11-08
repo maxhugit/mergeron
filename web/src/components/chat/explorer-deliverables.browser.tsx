@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { ExplorerDeliverables } from './explorer-deliverables';
 import type { ProjectSummary } from '@/lib/projects-api';
@@ -33,8 +38,33 @@ vi.mock('@/hooks/use-deliverable-directory-aliases', () => ({
 }));
 vi.mock('@/hooks/use-agent-document-view', () => ({
   useAgentDocumentView: function usePreference() {
-    const [mode, setMode] = useState<'plain' | 'labels'>('plain');
-    return { mode, setMode, available: true, loading: false, error: false };
+    const client = useQueryClient();
+    const { data: mode } = useQuery({
+      queryKey: ['mock-mode'],
+      queryFn: async () => 'plain',
+      initialData: 'plain',
+      staleTime: Infinity,
+    });
+    return {
+      mode,
+      setMode: (value: string) => client.setQueryData(['mock-mode'], value),
+      available: true,
+      loading: false,
+      error: false,
+    };
+  },
+}));
+vi.mock('@/hooks/use-sidebar-preferences', () => ({
+  useSidebarPreferences: function usePreference() {
+    const [values, setValues] = useState<Record<string, boolean | string>>({});
+    return {
+      values,
+      ready: true,
+      pending: false,
+      error: false,
+      set: (key: string, value: boolean | string) =>
+        setValues((old) => ({ ...old, [key]: value })),
+    };
   },
 }));
 vi.mock('@/lib/document-organization', () => ({
@@ -150,8 +180,8 @@ test.each([390, 1180])(
       screen.getByRole('combobox', { name: 'Affichage des documents' }),
       { target: { value: 'labels' } },
     );
-    fireEvent.click(screen.getByRole('button', { name: /Sources/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Synthèse/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Sources/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Synthèse/ }));
     expect(screen.getAllByLabelText('Version 7')).toHaveLength(2);
     await page.screenshot({
       path: `../../../.vitest-screenshots/deliverable-document-labels-${width}.png`,

@@ -303,12 +303,14 @@ export function ProjectTaskManager({
   projectId,
   resourceId,
   initialTaskId,
+  initialCreateParentId,
   modalOnly = false,
   onModalClose,
 }: {
   projectId: string;
   resourceId: string;
   initialTaskId?: string;
+  initialCreateParentId?: string;
   modalOnly?: boolean;
   onModalClose?: () => void;
 }) {
@@ -506,18 +508,54 @@ export function ProjectTaskManager({
     return () => observer.disconnect();
   }, [view]);
   useEffect(() => {
-    if (
-      !initialTaskId ||
-      !query.data ||
-      openedInitialTask.current === initialTaskId
-    )
+    const requested =
+      initialCreateParentId !== undefined
+        ? `new:${initialCreateParentId}`
+        : initialTaskId;
+    if (!requested || !query.data || openedInitialTask.current === requested)
       return;
+    if (initialCreateParentId !== undefined) {
+      const parent = query.data.tasks.find(
+        (item) => item.id === initialCreateParentId,
+      );
+      if (initialCreateParentId && (!parent || parent.parentTaskId)) return;
+      openedInitialTask.current = requested;
+      queueMicrotask(() => {
+        setEditing(null);
+        setRootTaskId(parent?.id ?? null);
+        setDraft({
+          ...emptyDraft,
+          title: '',
+          parentTaskId: parent?.id ?? '',
+          workspacePath:
+            parent?.workspacePath ?? query.data!.project.workspacePath,
+          priority:
+            parent?.priority ??
+            readTaskBoardSettings(query.data!.resource.config).defaultPriority,
+          statusId:
+            (!parent &&
+            query.data!.statuses.some(
+              (status) =>
+                status.id ===
+                readTaskBoardSettings(query.data!.resource.config)
+                  .defaultStatusId,
+            )
+              ? readTaskBoardSettings(query.data!.resource.config).defaultStatusId
+              : query.data!.statuses.find(
+                  (status) => status.kind === 'unassigned',
+                )?.id) ?? '',
+        });
+        setTaskTab('new');
+        setTaskOpen(true);
+      });
+      return;
+    }
     const task = query.data.tasks.find((item) => item.id === initialTaskId);
     if (!task) return;
     const parent = task.parentTaskId
       ? query.data.tasks.find((item) => item.id === task.parentTaskId)
       : null;
-    openedInitialTask.current = initialTaskId;
+    openedInitialTask.current = requested;
     const dependencyIds = query.data.dependencies
       .filter((dependency) => dependency.taskId === task.id)
       .map((dependency) => dependency.dependsOnTaskId);
@@ -555,7 +593,7 @@ export function ProjectTaskManager({
       setTaskTab(task.id);
       setTaskOpen(true);
     });
-  }, [initialTaskId, query.data]);
+  }, [initialTaskId, initialCreateParentId, query.data]);
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return (query.data?.tasks ?? []).filter(

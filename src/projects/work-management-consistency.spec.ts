@@ -28,6 +28,8 @@ import { FilesService } from '../files/files.service';
 import type { SettingsService } from '../settings/settings.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
 import { ActiveFoldersService } from '../active-folders/active-folders.service';
+import { DeliverablesController } from '../deliverables/deliverables.controller';
+import type { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 import type { ModuleRef } from '@nestjs/core';
@@ -2043,4 +2045,92 @@ it('does not start every assigned subtask merely because their shared agent is a
     runtime.completed('agent', false);
     expect(task(first.id).subtaskStatus).toBe('review');
     expect(task(second.id).subtaskStatus).toBe('todo');
+  }));
+
+it('sidebar agent assignment uses the same cardinality and optimistic version guards', async () =>
+  asAdmin(async () => {
+    const controller = new DeliverablesController(
+      deliverables,
+      identities,
+      {} as ThreadMetadataService,
+      {
+        mutate: (fn: () => Promise<unknown>) => fn(),
+      } as unknown as GitMutationGateService,
+      {} as ProjectAgentLaunchService,
+    );
+    const main = parent(),
+      other = parent(),
+      sub = child(main.id);
+    await domain.updateTask('p', 'tasks', sub.id, { linkedThreadId: 'agent' });
+    const conflicting = await deliverables.create('p', 'deliverables', {
+      title: 'Other',
+      primaryTaskId: other.id,
+    });
+    expect(() =>
+      controller.assignExistingAgent('p', 'deliverables', conflicting.id, {
+        threadId: 'agent',
+        version: conflicting.version,
+      }),
+    ).toThrow();
+    expect(
+      deliverables.get('p', 'deliverables', conflicting.id).conversations,
+    ).toEqual([]);
+    const item = await deliverables.create('p', 'deliverables', {
+      title: 'Coherent',
+      primaryTaskId: main.id,
+    });
+    expect(() =>
+      controller.assignExistingAgent('p', 'deliverables', item.id, {
+        threadId: 'foreign',
+        version: item.version,
+      }),
+    ).toThrow();
+    expect(() =>
+      controller.assignExistingAgent('p', 'deliverables', item.id, {
+        threadId: 'agent',
+        version: 0,
+      }),
+    ).toThrow();
+    const revised = deliverables.update('p', 'deliverables', item.id, {
+      version: item.version,
+      title: 'Revised',
+    });
+    expect(() =>
+      controller.assignExistingAgent('p', 'deliverables', item.id, {
+        threadId: 'agent',
+        version: item.version,
+      }),
+    ).toThrow();
+    const linked = await controller.assignExistingAgent(
+      'p',
+      'deliverables',
+      item.id,
+      { threadId: 'agent', version: revised.version },
+    );
+    expect(linked.conversations).toContainEqual(
+      expect.objectContaining({ type: 'agent', id: 'agent' }),
+    );
+    const repeated = await controller.assignExistingAgent(
+      'p',
+      'deliverables',
+      item.id,
+      { threadId: 'agent', version: linked.version },
+    );
+    expect(repeated.version).toBe(linked.version);
+  }));
+
+it('exposes the observed task revision in deliverable context and refreshes progress without completing the subtask', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    const before = deliverables
+      .board('p', 'deliverables')
+      .tasks.find((item) => item.id === sub.id)!;
+    expect(before.updatedAt).toBe(task(sub.id).updatedAt);
+    await domain.updateTask('p', 'tasks', sub.id, { progress: 65 });
+    const after = deliverables
+      .board('p', 'deliverables')
+      .tasks.find((item) => item.id === sub.id)!;
+    expect(after.progress).toBe(65);
+    expect(after.updatedAt).toBeGreaterThan(before.updatedAt);
+    expect(after.subtaskStatus).toBe('todo');
   }));

@@ -1,6 +1,6 @@
 /** Actual links and popover with a controlled project HTTP boundary. */
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { AgentContextLinks } from './agent-context-links';
@@ -11,6 +11,9 @@ const api = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/projects-api', async (original) => ({
   ...(await original<typeof import('@/lib/projects-api')>()),
   projectsApi: api,
+}));
+vi.mock('@/lib/platform-session', () => ({
+  usePlatformSession: () => ({ isAdministrator: true }),
 }));
 vi.mock('@/components/projects/project-task-manager', () => ({
   ProjectTaskManager: ({ initialTaskId }: { initialTaskId: string }) => (
@@ -57,6 +60,7 @@ test.each([390, 1280])(
       },
       ...Array.from({ length: 8 }, (_, index) => ({
         id: `sub-${index}`,
+        updatedAt: 7,
         resourceId: 'tasks',
         title:
           [
@@ -75,7 +79,7 @@ test.each([390, 1280])(
               : 'todo',
       })),
     ];
-    api.mockResolvedValue({
+    const data = {
       tasks,
       deliverables: [
         {
@@ -87,6 +91,13 @@ test.each([390, 1280])(
           conversations: [],
         },
       ],
+    };
+    api.mockImplementation((path: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        const task = tasks.find((task) => task.id === path.split('/').at(-1))!;
+        Object.assign(task, JSON.parse(String(init.body)));
+      }
+      return Promise.resolve(structuredClone(data));
     });
     const folder = vi.fn();
     render(
@@ -146,6 +157,33 @@ test.each([390, 1280])(
     expect(
       screen.queryByRole('button', { name: /Autre sous-tâche/ }),
     ).toBeNull();
+    const percentage = screen.getByRole('spinbutton', {
+      name: 'Pourcentage de Formaliser les problèmes à résoudre',
+    });
+    fireEvent.change(percentage, { target: { value: '65' } });
+    const group = percentage.closest('[role=group]')!;
+    fireEvent.click(group.querySelector('button')!);
+    await expect
+      .poll(
+        () =>
+          screen.getByRole('button', { name: /Formaliser les problèmes/ })
+            .textContent,
+      )
+      .toContain('65 %');
+    expect(api).toHaveBeenCalledWith('/p/resources/tasks/tasks/sub-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ progress: 65, expectedUpdatedAt: 7 }),
+    });
+    await expect
+      .poll(
+        () =>
+          getComputedStyle(
+            screen
+              .getByText('Tâche principale')
+              .closest('[data-slot=popover-content]')!,
+          ).opacity,
+      )
+      .toBe('1');
     document.documentElement.classList.add('dark');
     await page.screenshot({
       path: `../../../.vitest-screenshots/agent-context-menu-${width}.png`,

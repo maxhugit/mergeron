@@ -1,3 +1,4 @@
+import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
 import { forgetPresentations } from '@/lib/mockup-presentation';
 /**
  * Left sidebar: global actions (top) + workspace-grouped thread navigation.
@@ -140,11 +141,55 @@ export function ThreadSidebar() {
   const sidebarView = useLayoutStore((s) => s.sidebarView);
   const setSidebarView = useLayoutStore((s) => s.setSidebarView);
   const collapsedGroupKeys = useLayoutStore((s) => s.collapsedGroupKeys);
-  const toggleCollapsedGroup = useLayoutStore((s) => s.toggleCollapsedGroup);
+  const oldToggleCollapsedGroup = useLayoutStore((s) => s.toggleCollapsedGroup);
+  const collapsePreferences = useSidebarPreferences(
+    session.data?.personId,
+    'projects',
+  );
+  const toggleCollapsedGroup = (key: string) => {
+    if (session.data?.personId) {
+      if (collapsePreferences.ready && !collapsePreferences.pending)
+        collapsePreferences.set(
+          `open:project:${encodeURIComponent(key)}`,
+          collapsePreferences.values[
+            `open:project:${encodeURIComponent(key)}`
+          ] === false,
+        );
+    } else oldToggleCollapsedGroup(key);
+  };
+  const setProjectGroups = (keys: string[], collapsed: boolean) => {
+    if (session.data?.personId) {
+      if (collapsePreferences.ready)
+        void collapsePreferences.setMany(
+          keys.map((key) => ({
+            key: `open:project:${encodeURIComponent(key)}`,
+            value: !collapsed,
+          })),
+        );
+    } else useLayoutStore.getState().setGroupsCollapsed(keys, collapsed);
+  };
   // Derive Set<string> for child components that expect it
   const collapsedGroups = useMemo(
-    () => new Set(collapsedGroupKeys),
-    [collapsedGroupKeys],
+    () =>
+      new Set(
+        session.data?.personId
+          ? Object.entries(collapsePreferences.values)
+              .filter(
+                ([key, value]) =>
+                  key.startsWith('open:project:') && value === false,
+              )
+              .flatMap(([key]) => {
+                try {
+                  return [
+                    decodeURIComponent(key.slice('open:project:'.length)),
+                  ];
+                } catch {
+                  return [];
+                }
+              })
+          : collapsedGroupKeys,
+      ),
+    [collapsedGroupKeys, collapsePreferences.values, session.data?.personId],
   );
 
   // ── Local UI state (ephemeral) ─────────────────────────────────────
@@ -963,13 +1008,13 @@ export function ThreadSidebar() {
           setCreateProjectOpen(true);
         }}
         onCollapse={() =>
-          useLayoutStore.getState().setGroupsCollapsed(
+          setProjectGroups(
             workspaceGroups.map((group) => group.cwd),
             true,
           )
         }
         onExpand={() =>
-          useLayoutStore.getState().setGroupsCollapsed(
+          setProjectGroups(
             workspaceGroups.map((group) => group.cwd),
             false,
           )
@@ -981,6 +1026,11 @@ export function ThreadSidebar() {
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="flex h-full min-h-0 flex-col bg-card/80">
+      {collapsePreferences.error && (
+        <p role="alert" className="px-3 py-1 text-xs text-destructive">
+          {tw('sidebarPreferenceError')}
+        </p>
+      )}
       {/* Global actions */}
       <div className="shrink-0 space-y-0.5 px-2 py-2">
         <button
