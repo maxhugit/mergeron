@@ -93,84 +93,125 @@ it('opens the linked deliverable directory without opening its modal', async () 
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-it('opens the exact deliverable and the assigned task in a modal without duplicate tasks', async () => {
-  api.mockResolvedValue({
-    tasks: [{ id: 'task', resourceId: 'tasks', title: 'Write report' }],
-    deliverables: [
-      {
-        id: 'report',
-        title: 'Design report',
-        primaryTaskId: 'task',
-        linkedAgentIds: ['agent'],
-        conversations: [],
-      },
-    ],
-  });
+const boardData = () => ({
+  tasks: [
+    {
+      id: 'parent',
+      resourceId: 'tasks',
+      title: 'Main task',
+      parentTaskId: null,
+      subtaskStatus: 'todo',
+      progress: 0,
+      linkedThreadId: null,
+    },
+    ...Array.from({ length: 8 }, (_, index) => ({
+      id: `sub-${index}`,
+      resourceId: 'tasks',
+      parentTaskId: 'parent',
+      title: `Subtask ${index}`,
+      linkedThreadId: index < 3 ? 'agent' : null,
+      progress: index === 0 || index === 7 ? 100 : index === 1 ? 40 : 0,
+      subtaskStatus:
+        index === 0 || index === 7 ? 'done' : index === 1 ? 'started' : 'todo',
+    })),
+  ],
+  deliverables: [
+    {
+      id: 'report',
+      title: 'Design report',
+      primaryTaskId: 'parent',
+      linkedAgentIds: ['agent'],
+      conversations: [],
+    },
+  ],
+});
+it('opens the exact deliverable, parent or subtask without navigating away', async () => {
+  api.mockResolvedValue(boardData());
   show();
-  expect(
-    await screen.findByRole('button', { name: 'Design report' }),
-  ).toBeInTheDocument();
-  expect(screen.getAllByRole('button')).toHaveLength(2);
-  const originalUrl = window.location.href;
-  fireEvent.click(screen.getByRole('button', { name: 'Design report' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Design report' }));
   expect(
     await screen.findByRole('dialog', { name: 'report' }),
   ).toBeInTheDocument();
-  expect(window.location.href).toBe(originalUrl);
   fireEvent.click(screen.getByText('Close deliverable'));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /Write report/ }));
+  const originalUrl = window.location.href;
+  fireEvent.click(
+    screen.getByRole('button', { name: /2 subtasks completed out of 8/ }),
+  );
+  fireEvent.click(await screen.findByRole('button', { name: /Subtask 1/ }));
   expect(
-    await screen.findByRole('dialog', { name: 'task' }),
+    await screen.findByRole('dialog', { name: 'sub-1' }),
   ).toBeInTheDocument();
+  expect(window.location.href).toBe(originalUrl);
   fireEvent.click(screen.getByText('Close task'));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-});
-it('distinguishes the deliverable task when an agent is linked directly to its deliverable', async () => {
-  api.mockResolvedValue({
-    tasks: [{ id: 'parent', resourceId: 'tasks', title: 'Main task' }],
-    deliverables: [
-      {
-        id: 'report',
-        title: 'Report',
-        primaryTaskId: 'parent',
-        conversations: [{ type: 'agent', id: 'agent' }],
-      },
-    ],
-  });
-  show({ project: { ...project, agentThreads: [] } });
+  fireEvent.click(
+    screen.getByRole('button', { name: /2 subtasks completed out of 8/ }),
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Main task' }));
   expect(
-    await screen.findByRole('button', { name: /Deliverable task: Main task/ }),
+    await screen.findByRole('dialog', { name: 'parent' }),
   ).toBeInTheDocument();
 });
-it('recognizes the parent deliverable of an assigned subtask', async () => {
-  api.mockResolvedValue({
-    tasks: [
-      {
-        id: 'task',
-        resourceId: 'tasks',
-        title: 'Write report',
-        parentTaskId: 'parent',
-      },
-      { id: 'parent', resourceId: 'tasks', title: 'Main task' },
-    ],
-    deliverables: [
-      {
-        id: 'report',
-        title: 'Report',
-        primaryTaskId: 'parent',
-        linkedAgentIds: ['agent'],
-        conversations: [],
-      },
-    ],
+it('counts completion over the entire main task, but lists only this agent’s three subtasks', async () => {
+  api.mockResolvedValue(boardData());
+  show();
+  const trigger = await screen.findByRole('button', {
+    name: '2 subtasks completed out of 8 in the main task; 3 assigned to this agent',
   });
+  fireEvent.click(trigger);
+  expect(
+    await screen.findByRole('button', { name: /Subtask 0/ }),
+  ).toHaveTextContent('Completed');
+  expect(screen.getByRole('button', { name: /Subtask 1/ })).toHaveTextContent(
+    '40 %',
+  );
+  expect(screen.queryByRole('button', { name: /Subtask 7/ })).toBeNull();
+  expect(
+    screen.getByText(
+      '5 other subtasks in this main task, including 1 completed.',
+    ),
+  ).toBeInTheDocument();
+});
+it('does not infer completion from 100 percent or from a cancelled state', async () => {
+  const data = boardData();
+  data.tasks[1].subtaskStatus = 'review';
+  data.tasks[8].subtaskStatus = 'cancelled';
+  api.mockResolvedValue(data);
   show();
   expect(
-    await screen.findByRole('button', { name: 'Report' }),
+    await screen.findByRole('button', {
+      name: /0 subtasks completed out of 8/,
+    }),
   ).toBeInTheDocument();
+});
+it('reports legacy assignments to different main tasks instead of showing misleading totals', async () => {
+  const data = boardData();
+  data.tasks[2].parentTaskId = 'other-parent';
+  api.mockResolvedValue(data);
+  show();
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'different main tasks',
+  );
   expect(
-    screen.getByRole('button', { name: /Deliverable task: Main task/ }),
+    screen.queryByRole('button', { name: /subtasks completed out of/ }),
+  ).toBeNull();
+});
+it('also counts tasks when the project has no deliverable manager', async () => {
+  api.mockResolvedValue({ tasks: boardData().tasks });
+  show({
+    project: {
+      ...project,
+      resources: [{ id: 'tasks', type: 'task_board' }],
+      agentThreads: [
+        { threadId: 'agent', taskId: 'sub-0', taskResourceId: 'tasks' },
+      ],
+    } as ProjectSummary,
+  });
+  expect(
+    await screen.findByRole('button', {
+      name: /2 subtasks completed out of 8/,
+    }),
   ).toBeInTheDocument();
+  expect(api).toHaveBeenCalledWith('/p/resources/tasks');
 });
 it('shows an empty state without fetching a board for a projectless agent', () => {
   show({ project: undefined });

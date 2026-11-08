@@ -784,4 +784,170 @@ describe('project context and business tools', () => {
       ).toHaveLength(0);
     });
   });
+  const currentTask = (id: string) =>
+    database.db
+      .select()
+      .from(projectTasks)
+      .where(eq(projectTasks.id, id))
+      .get()!;
+  const manage = (
+    id: string,
+    changes: Record<string, unknown>,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    tool: 'manage_task',
+    operation: 'update',
+    requestId: 'task-change-1',
+    resourceId: 'tasks',
+    id,
+    expectedUpdatedAt: currentTask(id).updatedAt,
+    userRequest: 'Update the subtask as requested by the human.',
+    changes,
+    ...extra,
+  });
+  const runTask = (
+    input: Record<string, unknown>,
+    writable = true,
+    check = () => {},
+  ) => tools.execute('agent', input, check, 'turn-1', writable);
+  it('updates progress and completion via domain rules, rolls up the parent and records a replay-safe audit', async () =>
+    asPerson('admin', async () => {
+      const main = domain.createTask('p', 'tasks', { title: 'Main' });
+      const child = domain.createTask('p', 'tasks', {
+        title: 'Subtask',
+        parentTaskId: main.id,
+        estimateMinutes: 60,
+      });
+      const request = manage(child.id, {
+        progress: 100,
+        subtaskStatus: 'done',
+        description: 'Finished',
+      });
+      expect(await runTask(request)).toMatchObject({
+        status: 'updated',
+        replayed: false,
+        task: { progress: 100, subtaskStatus: 'done', description: 'Finished' },
+      });
+      const revision = currentTask(child.id).updatedAt;
+      expect(await runTask(request)).toMatchObject({
+        replayed: true,
+        task: { updatedAt: revision },
+      });
+      expect(currentTask(child.id).updatedAt).toBe(revision);
+      expect(currentTask(main.id).progress).toBe(100);
+      expect(
+        database.db
+          .select()
+          .from(projectActivity)
+          .all()
+          .filter((x) => x.action === 'agent_task_managed'),
+      ).toHaveLength(1);
+      await expect(
+        runTask({ ...request, changes: { progress: 70 } }),
+      ).rejects.toThrow('TASK_CONFLICT');
+    }));
+  it('attaches to multiple subtasks of one main task, never replaces another agent, and detaches only itself', async () =>
+    asPerson('admin', async () => {
+      const main = domain.createTask('p', 'tasks', { title: 'Main' });
+      const first = domain.createTask('p', 'tasks', {
+        title: 'A',
+        parentTaskId: main.id,
+      });
+      const second = domain.createTask('p', 'tasks', {
+        title: 'B',
+        parentTaskId: main.id,
+      });
+      const foreignMain = domain.createTask('p', 'tasks', {
+        title: 'Other main',
+      });
+      const foreignChild = domain.createTask('p', 'tasks', {
+        title: 'C',
+        parentTaskId: foreignMain.id,
+      });
+      const assignment = (id: string, operation = 'attach_self') => {
+        const request = manage(
+          id,
+          {},
+          { operation, requestId: operation + '-' + id },
+        );
+        delete (request as Record<string, unknown>).changes;
+        return request;
+      };
+      expect(await runTask(assignment(first.id))).toMatchObject({
+        status: 'attached',
+        task: { linkedThreadId: 'agent' },
+      });
+      expect(await runTask(assignment(second.id))).toMatchObject({
+        status: 'attached',
+      });
+      await expect(runTask(assignment(foreignChild.id))).rejects.toThrow(
+        'TASK_CONFLICT',
+      );
+      await expect(runTask(assignment(main.id))).rejects.toThrow(
+        'TASK_INVALID_REQUEST',
+      );
+      expect(currentTask(foreignChild.id).linkedThreadId).toBeNull();
+      expect(await runTask(assignment(first.id, 'detach_self'))).toMatchObject({
+        status: 'detached',
+      });
+      expect(currentTask(second.id).linkedThreadId).toBe('agent');
+      expect(currentTask(first.id).linkedThreadId).toBeNull();
+    }));
+  it('requires an observed revision, refuses derived progress and preserves all data on failure', async () =>
+    asPerson('admin', async () => {
+      const main = domain.createTask('p', 'tasks', { title: 'Main' });
+      const child = domain.createTask('p', 'tasks', {
+        title: 'A',
+        parentTaskId: main.id,
+      });
+      const stale = manage(child.id, { progress: 40 });
+      await domain.updateTask('p', 'tasks', child.id, {
+        title: 'Human changed it',
+      });
+      await expect(runTask(stale)).rejects.toThrow('TASK_REVISION_CONFLICT');
+      await expect(runTask(manage(main.id, { progress: 100 }))).rejects.toThrow(
+        'TASK_INVALID_REQUEST',
+      );
+      await expect(
+        runTask(manage(child.id, { statusId: 'tasks-todo' })),
+      ).rejects.toThrow('TASK_INVALID_REQUEST');
+      expect(currentTask(child.id).title).toBe('Human changed it');
+      expect(
+        database.db.select().from(projectAgentToolRequests).all(),
+      ).toHaveLength(0);
+    }));
+  it('enforces write authority, current membership, project scope and server-side field validation', async () => {
+    const child = domain.createTask('p', 'tasks', { title: 'A' });
+    await asPerson('admin', async () => {
+      await expect(
+        runTask(manage(child.id, { progress: 30 }), false),
+      ).rejects.toThrow('writable');
+      await expect(
+        runTask(manage(child.id, { progress: 30 }, { resourceId: 'foreign' })),
+      ).rejects.toThrow('this project');
+      for (const changes of [
+        { progress: 101 },
+        { progress: 1.5 },
+        { linkedThreadId: 'other' },
+        { agentState: 'validated' },
+        {},
+      ])
+        await expect(runTask(manage(child.id, changes))).rejects.toThrow();
+      await expect(
+        runTask(manage(child.id, { progress: 30 }, { projectId: 'other' })),
+      ).rejects.toThrow();
+      await expect(
+        runTask(manage(child.id, { progress: 30 }), true, () => {
+          throw Error('TURN_REVOKED');
+        }),
+      ).rejects.toThrow('TURN_REVOKED');
+    });
+    await expect(
+      asPerson('reader', () => runTask(manage(child.id, { progress: 30 }))),
+    ).rejects.toThrow();
+    expect(currentTask(child.id).progress).toBe(0);
+    expect(
+      database.db.select().from(projectAgentToolRequests).all(),
+    ).toHaveLength(0);
+  });
 });

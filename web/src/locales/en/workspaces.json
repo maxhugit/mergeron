@@ -433,5 +433,5 @@
   "taskSelectExistingAgent": "Choose an existing agent",
   "taskNoAgentAssignment": "No agent assigned",
   "taskRemoveAgentAssignment": "Remove assignment",
-  "taskAgentAssignmentHelp": "The assignment is saved with the subtask. It sends no instructions, does not move the agent folder and preserves its history."
+  "taskAgentAssignmentHelp": "An agent may be reused for several subtasks of the same main task, but not another main task while those assignments remain. Assignment sends no instructions and preserves the agent folder and history."
 }

@@ -1665,5 +1665,16 @@
   "markdownRead": "Lecture",
   "markdownSplit": "Vue partagée",
   "markdownContents": "Sommaire",
-  "markdownImage": "Image : {{alt}}"
+  "markdownImage": "Image : {{alt}}",
+  "agentTaskSummary": "{{completed}} sous-tâches terminées sur {{total}} dans la tâche principale ; {{assigned}} affectées à cet agent",
+  "agentTasksCompleted": "terminées",
+  "agentTasksAssigned_one": "Agent : {{count}}",
+  "agentTasksAssigned_other": "Agent : {{count}}",
+  "agentAssignedSubtasks": "Affectées à cet agent",
+  "agentMainTaskCompleted": "{{completed}} terminées sur {{total}} sous-tâches dans la tâche principale",
+  "agentNoAssignedSubtasks": "Aucune sous-tâche affectée à cet agent",
+  "agentOtherSubtasks_one": "{{count}} autre sous-tâche dans cette tâche principale · Terminées : {{completed}}",
+  "agentOtherSubtasks_other": "{{count}} autres sous-tâches dans cette tâche principale · Terminées : {{completed}}",
+  "agentDifferentMainTasks": "Cet agent est affecté à des tâches principales différentes. Vérifiez ses affectations.",
+  "agentSubtaskReview": "En revue"
 }

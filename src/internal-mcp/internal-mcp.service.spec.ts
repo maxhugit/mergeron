@@ -963,6 +963,59 @@ describe('native internal MCP over HTTP', () => {
     ).toBe(true);
   });
 
+  it('updates progress through the native MCP object schema and refuses a read-only lease', async () => {
+    const { client } = await connect();
+    activate();
+    const created = await client.callTool({
+      name: 'project_task_create',
+      arguments: createTask,
+    });
+    const id = (created.structuredContent as { id: string }).id;
+    const read = await client.callTool({
+      name: 'project_task_get',
+      arguments: { id },
+    });
+    const current = read.structuredContent as { updatedAt: number };
+    const args = {
+      operation: 'update',
+      id,
+      resourceId: 'tasks',
+      expectedUpdatedAt: current.updatedAt,
+      requestId: 'task-progress',
+      userRequest: 'Set this task to 40 percent.',
+      changes: { progress: 40 },
+    };
+    const result = await client.callTool({
+      name: 'project_task_manage',
+      arguments: args,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: 'updated',
+      task: { id, progress: 40 },
+      replayed: false,
+    });
+    expect(
+      (await client.callTool({ name: 'project_task_manage', arguments: args }))
+        .structuredContent,
+    ).toMatchObject({ replayed: true });
+    const stale = await client.callTool({
+      name: 'project_task_manage',
+      arguments: { ...args, requestId: 'stale-task-progress' },
+    });
+    expect(stale.isError).toBe(true);
+    expect(JSON.stringify(stale.content)).toContain('TASK_REVISION_CONFLICT');
+    activate('admin', false);
+    expect(
+      (
+        await client.callTool({
+          name: 'project_task_manage',
+          arguments: { ...args, requestId: 'blocked' },
+        })
+      ).isError,
+    ).toBe(true);
+  });
+
   it('negotiates MCP and exposes exactly the schemas displayed by administration', async () => {
     const { client } = await connect();
     expect(client.getServerVersion()?.name).toBe('mergeron_internal');

@@ -264,6 +264,17 @@ const definitions = {
     handler: 'project',
     policy: projectWrite,
   },
+  manage_task: {
+    name: 'project_task_manage',
+    title: 'Tasks — Update or attach this agent',
+    titleFr: 'Tâches — Modifier ou rattacher cet agent',
+    handler: 'project',
+    policy: {
+      ...projectWrite,
+      administratorOnly: true,
+      forbidImpersonation: true,
+    },
+  },
   attach_deliverable: {
     name: 'project_deliverable_agent_manage',
     title: 'Deliverables — Attach this agent',

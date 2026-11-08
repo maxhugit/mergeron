@@ -733,7 +733,14 @@ export class DeliverablesService implements OnModuleInit {
         [threadId],
         item.id,
       );
-      if (task) assertTaskAgent(this.db, projectId, task.id, threadId);
+      if (task)
+        assertTaskAgent(
+          this.db,
+          projectId,
+          task.id,
+          threadId,
+          task.parentTaskId,
+        );
       if (
         !tx
           .update(items)
@@ -886,6 +893,7 @@ export class DeliverablesService implements OnModuleInit {
           parentTaskId: projectTasks.parentTaskId,
           status: projectTaskStatuses.name,
           progress: projectTasks.progress,
+          subtaskStatus: projectTasks.subtaskStatus,
           dueAt: projectTasks.dueAt,
           assigneeId: projectTasks.assigneeId,
           assigneeName: people.name,
@@ -912,6 +920,7 @@ export class DeliverablesService implements OnModuleInit {
           parentTaskId: task.parentTaskId,
           status: task.status,
           progress: task.progress,
+          subtaskStatus: task.subtaskStatus,
           dueAt: task.dueAt,
           assigneeId: task.assigneeId,
           assigneeName: task.assigneeName,

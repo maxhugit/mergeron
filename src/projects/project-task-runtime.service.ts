@@ -118,7 +118,10 @@ export class ProjectTaskRuntimeService
       );
   }
   status(threadId: string, status: { type: string; activeFlags?: string[] }) {
-    for (const task of this.tasks(threadId)) {
+    const tasks = this.tasks(threadId);
+    for (const task of tasks) {
+      // A busy agent does not prove it started every assigned subtask.
+      if (tasks.length > 1 && task.subtaskStatus === 'todo') continue;
       if (status.type === 'active') {
         const waiting = status.activeFlags?.some((flag) =>
           ['waitingOnApproval', 'waitingOnUserInput'].includes(flag),
@@ -132,7 +135,10 @@ export class ProjectTaskRuntimeService
     }
   }
   completed(threadId: string, failed: boolean) {
-    for (const task of this.tasks(threadId))
+    const tasks = this.tasks(threadId);
+    for (const task of tasks.filter(
+      (task) => tasks.length === 1 || task.subtaskStatus !== 'todo',
+    ))
       this.write(
         task,
         failed ? 'error' : 'review',

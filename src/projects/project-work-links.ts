@@ -49,6 +49,7 @@ export function assertTaskAgent(
   projectId: string,
   taskId: string,
   threadId: string,
+  parentTaskId: string | null,
 ) {
   requireThreadAccess(threadId);
   const binding = db
@@ -58,6 +59,8 @@ export function assertTaskAgent(
     .get();
   if (!binding || binding.projectId !== projectId)
     throw new BadRequestException('Agent must belong to this project');
+  if (!parentTaskId)
+    throw new BadRequestException('Only subtasks can be assigned to an agent');
   if (
     db
       .select({ id: projectTasks.id })
@@ -66,11 +69,14 @@ export function assertTaskAgent(
         and(
           eq(projectTasks.linkedThreadId, threadId),
           ne(projectTasks.id, taskId),
+          sql`(${projectTasks.parentTaskId} is null or ${projectTasks.parentTaskId} != ${parentTaskId})`,
         ),
       )
       .get()
   )
-    throw new ConflictException('This agent already belongs to another task');
+    throw new ConflictException(
+      'This agent is assigned to subtasks of another main task',
+    );
 }
 
 /** Explicit dual assignments must share the same main task. */

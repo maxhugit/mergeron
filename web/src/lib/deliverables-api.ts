@@ -154,6 +154,7 @@ export interface DeliverablesBoard {
     parentTaskId: string | null;
     status: string;
     progress: number;
+    subtaskStatus?: 'todo' | 'started' | 'review' | 'done' | 'cancelled';
     dueAt: number | null;
     assigneeId: string | null;
     assigneeName: string | null;

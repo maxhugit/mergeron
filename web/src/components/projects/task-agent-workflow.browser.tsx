@@ -40,6 +40,8 @@ async function setup(
     threadId: string;
     title: string;
     archived?: boolean;
+    taskId?: string | null;
+    taskParentTaskId?: string | null;
   }> = [],
 ) {
   await i18nReady;
@@ -463,4 +465,47 @@ test('submits a plan atomically and reuses the exact request after a lost respon
         String(path).endsWith('/tasks') && init?.method === 'POST',
     ),
   ).toBe(false);
+});
+
+test('reuses a same-parent agent and excludes another main task without launching it', async () => {
+  await page.viewport(1280, 950);
+  const { client, board } = await setup('ready', false, 'sub', false, [
+    {
+      threadId: 'same',
+      title: 'Cadrage',
+      taskId: 'sibling',
+      taskParentTaskId: 'main',
+    },
+    {
+      threadId: 'other',
+      title: 'Other main',
+      taskId: 'elsewhere',
+      taskParentTaskId: 'another-main',
+    },
+  ]);
+  board.tasks.push({
+    ...board.tasks[1],
+    id: 'sibling',
+    linkedThreadId: 'same',
+  });
+  client.setQueryData(['project-resource', 'p', 'r'], { ...board });
+  const selector = screen.getByRole<HTMLSelectElement>('combobox', {
+    name: 'Choisir un agent existant',
+  });
+  await expect
+    .poll(() =>
+      Array.from(selector.options).some((option) => option.value === 'same'),
+    )
+    .toBe(true);
+  expect(
+    Array.from(selector.options).some((option) => option.value === 'other'),
+  ).toBe(false);
+  fireEvent.change(selector, { target: { value: 'same' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await expect
+    .poll(() => api.mock.calls.some(([, init]) => init?.method === 'PATCH'))
+    .toBe(true);
+  expect(api.mock.calls.some(([path]) => String(path).endsWith('/agent'))).toBe(
+    false,
+  );
 });
