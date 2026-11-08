@@ -1,6 +1,9 @@
 /** Server-side branch-collapsed projection for the conversation sidebar. */
-import { Injectable } from '@nestjs/common';
-import { canReadThread } from '../auth/access-context';
+import { Inject, Injectable } from '@nestjs/common';
+import { canReadThread, requireProjectAccess } from '../auth/access-context';
+import { eq } from 'drizzle-orm';
+import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
+import { projectAgentThreads } from '../database/schema';
 import type { v2 } from '../codex/codex-schema';
 import { resolve } from 'node:path';
 import {
@@ -22,6 +25,7 @@ export interface ThreadOverviewParams {
   archived?: boolean;
   searchTerm?: string;
   cwd?: string;
+  projectId?: string;
   sortKey?: 'created_at' | 'updated_at';
 }
 
@@ -41,6 +45,7 @@ export class ThreadsOverviewService {
     private readonly branches: ConversationBranchesService,
     private readonly pendingApprovals: PendingApprovalsService,
     private readonly workspaceOverrides: ThreadWorkspaceOverridesService,
+    @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
   ) {}
 
   /**
@@ -57,6 +62,18 @@ export class ThreadsOverviewService {
     const limit = params.limit ?? 100;
     const offset = this.parseCursor(params.cursor);
     const archived = params.archived ?? false;
+    let projectMembers: Set<string> | null = null;
+    if (params.projectId !== undefined) {
+      requireProjectAccess(params.projectId);
+      projectMembers = new Set(
+        this.db
+          .select({ threadId: projectAgentThreads.threadId })
+          .from(projectAgentThreads)
+          .where(eq(projectAgentThreads.projectId, params.projectId))
+          .all()
+          .map((agent) => agent.threadId),
+      );
+    }
     const { entries: storedEntries, freshness } = await this.metadata.read();
     const effectiveThreads = this.workspaceOverrides.applyToThreads(
       storedEntries.map((entry) => entry.thread),
@@ -78,6 +95,7 @@ export class ThreadsOverviewService {
     const filteredThreads = entries
       .filter((entry) => entry.archived === archived)
       .map((entry) => entry.thread)
+      .filter((thread) => !projectMembers || projectMembers.has(thread.id))
       .filter((thread) => !cwd || thread.cwd === cwd)
       .filter(
         (thread) =>

@@ -35,13 +35,13 @@ function show(value: ProjectSummary | null = project) {
   });
   return { ...view, client };
 }
-it('loads every page of every folder, filters other projects and deduplicates roots', async () => {
+it('loads every project page without a cwd filter and deduplicates roots', async () => {
   vi.mocked(threadsListOverview)
     .mockResolvedValueOnce({
-      data: { data: [row('one'), row('foreign')], nextCursor: 'page-two' },
+      data: { data: [row('one')], nextCursor: 'page-two' },
     } as never)
     .mockResolvedValueOnce({
-      data: { data: [row('two')], nextCursor: null },
+      data: { data: [row('two')], nextCursor: 'page-three' },
     } as never)
     .mockResolvedValueOnce({
       data: { data: [row('two'), row('three')], nextCursor: null },
@@ -57,11 +57,16 @@ it('loads every page of every folder, filters other projects and deduplicates ro
   expect(
     vi
       .mocked(threadsListOverview)
+      .mock.calls.every(([options]) => !('cwd' in options!.query!)),
+  ).toBe(true);
+  expect(
+    vi
+      .mocked(threadsListOverview)
       .mock.calls.map(([options]) => options?.query),
   ).toEqual([
-    expect.objectContaining({ cwd: '/a', cursor: undefined }),
-    expect.objectContaining({ cwd: '/a', cursor: 'page-two' }),
-    expect.objectContaining({ cwd: '/b', cursor: undefined }),
+    expect.objectContaining({ projectId: 'p', cursor: undefined }),
+    expect.objectContaining({ projectId: 'p', cursor: 'page-two' }),
+    expect.objectContaining({ projectId: 'p', cursor: 'page-three' }),
   ]);
   expect(
     view.client

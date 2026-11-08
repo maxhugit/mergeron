@@ -9,6 +9,12 @@ import { ConversationBranchMutationsService } from '../conversation-branches/con
 import { ConversationBranchesService } from '../conversation-branches/conversation-branches.service';
 import { PendingApprovalsService } from '../pending-approvals/pending-approvals.service';
 import { makeThreadFixture } from './threads.testing';
+import {
+  createTestDatabase,
+  type TestDatabase,
+} from '../database/database.testing';
+import { projects, projectAgentThreads } from '../database/schema';
+import { accessContext } from '../auth/access-context';
 
 function entry(
   id: string,
@@ -43,7 +49,10 @@ describe('ThreadsOverviewService', () => {
   const listPending = vi.fn();
   const listActiveMembers = vi.fn();
   let service: ThreadsOverviewService;
+  let database: TestDatabase;
+  afterEach(() => database.sqlite.close());
   beforeEach(() => {
+    database = createTestDatabase();
     entries = [];
     listEdges.mockReturnValue([]);
     listPending.mockReturnValue([]);
@@ -56,7 +65,127 @@ describe('ThreadsOverviewService', () => {
       { listActiveMembers } as unknown as ConversationBranchesService,
       { listPending } as unknown as PendingApprovalsService,
       { applyToThreads: (threads: unknown[]) => threads } as never,
+      database.db,
     );
+  });
+
+  it('focuses by registered membership across folders before folding and pagination', async () => {
+    database.db
+      .insert(projects)
+      .values({
+        id: 'p',
+        name: 'P',
+        workspacePath: '/root',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(projects)
+      .values({
+        id: 'other-project',
+        name: 'Other',
+        workspacePath: '/other-project',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'foreign',
+        projectId: 'other-project',
+        workspacePath: '/root',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(projectAgentThreads)
+      .values(
+        ['agent', 'branch', 'second', 'archived'].map((threadId) => ({
+          threadId,
+          projectId: 'p',
+          workspacePath: '/root',
+          createdAt: 1,
+          updatedAt: 1,
+        })),
+      )
+      .run();
+    entries = [
+      entry('foreign', null, '/root'),
+      entry(
+        'agent',
+        null,
+        '/root/.mergeron-system/livrables/document',
+        false,
+        10,
+      ),
+      entry('branch', 'agent', '/another/reference'),
+      entry('second', null, '/elsewhere'),
+      entry('archived', null, '/root', true),
+    ];
+    const first = await service.listOverview({ projectId: 'p', limit: 1 });
+    expect(first.data).toHaveLength(1);
+    expect(first.data[0].memberThreadIds.sort()).toEqual(['agent', 'branch']);
+    expect(first.nextCursor).toBe('1');
+    const second = await service.listOverview({
+      projectId: 'p',
+      cursor: first.nextCursor!,
+      limit: 1,
+    });
+    expect(second.data[0].thread.id).toBe('second');
+    expect(second.nextCursor).toBeNull();
+    expect(
+      (await service.listOverview({ projectId: 'p', archived: true })).data.map(
+        (row) => row.thread.id,
+      ),
+    ).toEqual(['archived']);
+    expect((await service.listOverview({ projectId: 'missing' })).data).toEqual(
+      [],
+    );
+  });
+
+  it('requires project access and still applies thread visibility in focus', async () => {
+    const requireProject = vi.fn(() => {
+      throw Error('project denied');
+    });
+    const identities = { requireProject, canReadThread: vi.fn(() => true) };
+    await expect(
+      accessContext.run(
+        { identity: {} as never, identities: identities as never },
+        () => service.listOverview({ projectId: 'private' }),
+      ),
+    ).rejects.toThrow('project denied');
+    expect(requireProject).toHaveBeenCalledWith({}, 'private');
+    database.db
+      .insert(projects)
+      .values({
+        id: 'p',
+        name: 'P',
+        workspacePath: '/root',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'hidden',
+        projectId: 'p',
+        workspacePath: '/root',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    entries = [entry('hidden')];
+    identities.requireProject = vi.fn();
+    identities.canReadThread.mockReturnValue(false);
+    const result = await accessContext.run(
+      { identity: {} as never, identities: identities as never },
+      () => service.listOverview({ projectId: 'p' }),
+    );
+    expect(result.data).toEqual([]);
   });
 
   it('collapses before paging and lifts activity from every matching member', async () => {

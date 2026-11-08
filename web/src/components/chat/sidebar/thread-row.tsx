@@ -117,18 +117,14 @@ export function ThreadRow({
     plugins: [Feedback.configure({ feedback: 'clone' })],
   });
 
-  // Status icon priority: approval > userInput > generating > idle
+  // Activity is separate from the permanent agent and task identity icons.
   const statusIcon = pendingApproval ? (
     <ShieldAlert className="h-3 w-3 shrink-0 animate-pulse text-yellow-500" />
   ) : waitingOnUserInput ? (
     <MessageCircleQuestion className="h-3 w-3 shrink-0 animate-pulse text-blue-500" />
   ) : running ? (
     <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-  ) : linkedTask ? (
-    <ClipboardCheck className="h-3 w-3 shrink-0 text-primary" />
-  ) : (
-    <Bot className="h-3 w-3 shrink-0" />
-  );
+  ) : null;
 
   // Badge text: show count only when > 1 (single approval already indicated by icon)
   const badgeText =
@@ -166,6 +162,13 @@ export function ThreadRow({
               : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
         )}
       >
+        <Bot className="h-3 w-3 shrink-0" />
+        {linkedTask && (
+          <ClipboardCheck
+            className="h-3 w-3 shrink-0 text-primary"
+            aria-label={linkedTask.title}
+          />
+        )}
         {statusIcon}
         <span className="truncate">
           {threadLabel(thread, t('newWorkAgent'))}

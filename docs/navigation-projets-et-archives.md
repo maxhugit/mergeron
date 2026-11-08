@@ -26,6 +26,12 @@ ses menus et ses poignées de déplacement. Les emplacements du projet sont tous
 pris en compte ; il ne s’agit pas simplement d’afficher une page de conversations
 d’un seul dossier.
 
+Le focus affiche les agents rattachés au projet, indépendamment de leur dossier
+de travail : un agent situé dans un livrable ou une autre référence reste visible.
+Les droits d’accès et le filtre des archives restent appliqués. L’icône robot
+identifie toujours un agent ; une icône tâche à sa droite signale son affectation
+à une tâche ou une sous-tâche. Les indicateurs d’activité restent distincts.
+
 Le focus active la navigation rapide personnelle pour ce projet. Il n’est ouvert
 qu’après confirmation de l’enregistrement de cette préférence ; une erreur
 conserve l’état précédent. Si elle était déjà active, elle n’est pas désactivée.

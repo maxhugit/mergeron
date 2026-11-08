@@ -10,6 +10,7 @@ describe('ThreadsController rich input validation', () => {
     startTurn: vi.fn(),
     steerTurn: vi.fn(),
     listLoadedThreads: vi.fn(),
+    listOverview: vi.fn(),
     forkThread: vi.fn(),
   };
   const filesService = {
@@ -51,6 +52,27 @@ describe('ThreadsController rich input validation', () => {
     expect(threadsService.listLoadedThreads).toHaveBeenCalledWith({
       cursor: 'cursor-1',
       limit: 20,
+    });
+  });
+
+  it('passes project membership filtering to the overview without requiring a folder', async () => {
+    await controller.listOverview(
+      '100',
+      '100',
+      'false',
+      undefined,
+      undefined,
+      'created_at',
+      'project',
+    );
+    expect(threadsService.listOverview).toHaveBeenCalledWith({
+      cursor: '100',
+      limit: 100,
+      archived: false,
+      searchTerm: undefined,
+      cwd: undefined,
+      sortKey: 'created_at',
+      projectId: 'project',
     });
   });
 
