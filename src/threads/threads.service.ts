@@ -20,6 +20,7 @@ import {
 } from '../auth/access-context';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 import { AgentInstructionsService } from '../settings/agent-instructions.service';
+import { AGENT_CONTEXT_REMINDER } from '../settings/agent-instructions';
 import { ProjectAgentToolsService } from '../project-knowledge/project-agent-tools.service';
 import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { DeliverablesService } from '../deliverables/deliverables.service';
@@ -656,15 +657,6 @@ export class ThreadsService {
           params.threadId,
           effectiveCwd,
         );
-    const sharedKnowledge = await this.knowledge?.contextForConversation(
-      effectiveCwd,
-      params.threadId,
-    );
-    const commonInstructions = this.agentInstructions?.context();
-    const projectContext = await this.projectTools?.context(
-      params.threadId,
-      effectiveCwd,
-    );
     const executionSandbox = projectPolicy?.readOnly
       ? { type: 'readOnly' }
       : (params.sandboxPolicy ??
@@ -689,6 +681,29 @@ export class ThreadsService {
             executionSandbox?.type === 'dangerFullAccess',
         )
       : null;
+    // Keep the legacy path only when this turn has no usable internal MCP lease
+    // (including local runtimes). Publication remains prepared per turn below.
+    let commonInstructions: string | undefined;
+    let sharedKnowledge: string | null | undefined;
+    let projectContext: string | null | undefined;
+    try {
+      commonInstructions = mcpLease
+        ? AGENT_CONTEXT_REMINDER
+        : this.agentInstructions?.context();
+      sharedKnowledge = mcpLease
+        ? null
+        : await this.knowledge?.contextForConversation(
+            effectiveCwd,
+            params.threadId,
+          );
+      projectContext = mcpLease
+        ? null
+        : await this.projectTools?.context(params.threadId, effectiveCwd);
+    } catch (error) {
+      publication?.abort();
+      mcpLease?.abort();
+      throw error;
+    }
     const effectiveParams: v2.TurnStartParams = {
       ...params,
       ...(projectPolicy?.readOnly

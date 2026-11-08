@@ -987,6 +987,47 @@ describe('ThreadsService', () => {
     );
   });
 
+  it('uses a short MCP reminder each turn while preserving publication, user text and attachments', async () => {
+    const common = vi.fn(() => 'Long private common rules');
+    Object.assign(service, {
+      agentInstructions: { context: common },
+      documentPublication: {
+        prepare: vi.fn().mockResolvedValue({
+          context:
+            '<document_publication>\nCurrent draft instructions\n</document_publication>',
+          bind: vi.fn(),
+          abort: vi.fn(),
+        }),
+      },
+    });
+    mockProjectConnections.policyForThread.mockResolvedValue({
+      projectId: 'p',
+      readOnly: false,
+    });
+    mockInternalMcp.prepare.mockImplementation(() => ({
+      bind: vi.fn(),
+      abort: vi.fn(),
+    }));
+    mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
+    const input = [
+      { type: 'text' as const, text: 'My request', text_elements: [] },
+      { type: 'image' as const, url: 'https://example.com/a.png' },
+    ];
+    for (let i = 0; i < 2; i++) {
+      await service.startTurn({ threadId: 't1', input });
+      const params = mockCodex.request.mock.lastCall![1] as {
+        input: typeof input;
+      };
+      const contextText = (params.input[0] as { text: string }).text;
+      expect(contextText).toContain('project_context_read');
+      expect(contextText).toContain('Current draft instructions');
+      expect(params.input.slice(1)).toEqual(input);
+    }
+    expect(common).not.toHaveBeenCalled();
+    expect(mockProjectTools.context).not.toHaveBeenCalled();
+    expect(mockKnowledge.contextForConversation).not.toHaveBeenCalled();
+  });
+
   it('refreshes project identity and catalog on every existing-conversation turn', async () => {
     mockCodex.request.mockResolvedValue({ turn: { id: 'turn1' } });
     mockProjectTools.context

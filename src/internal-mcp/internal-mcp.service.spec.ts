@@ -52,6 +52,8 @@ import type { WorkspaceGitActionsService } from '../projects/workspace-git-actio
 import { AgentMonitorStore } from '../agent-monitors/agent-monitor-store';
 import { AgentMonitorsService } from '../agent-monitors/agent-monitors.service';
 import { AgentMonitorRuntime } from '../agent-monitors/agent-monitor-runtime.service';
+import { AgentInstructionsService } from '../settings/agent-instructions.service';
+import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
 
 describe('native internal MCP over HTTP', () => {
   let database: TestDatabase;
@@ -344,8 +346,17 @@ describe('native internal MCP over HTTP', () => {
       { accessForSchedule: monitorAccess } as unknown as AgentMonitorRuntime,
     );
     tools = new ProjectAgentToolsService(database.db, deliverables, {
-      get: (token: string) =>
-        token === 'INTERNAL_MCP_THREAD_RENAMER'
+      get: (token: unknown) => {
+        if (token === AgentInstructionsService)
+          return { context: () => 'Current administration instructions' };
+        if (token === ProjectKnowledgeService)
+          return {
+            contextForProject: () =>
+              Promise.resolve('Current shared project memory'),
+          };
+        if (token === ActiveFoldersService)
+          return new ActiveFoldersService(database.db);
+        return token === 'INTERNAL_MCP_THREAD_RENAMER'
           ? { setThreadName }
           : token === 'PROJECT_CONNECTION_AGENT_TOOLS'
             ? connections
@@ -353,7 +364,8 @@ describe('native internal MCP over HTTP', () => {
               ? monitorTools
               : token === 'PROJECT_MOCKUP_TOOLS'
                 ? new MockupsService(database.db, deliverables)
-                : domain,
+                : domain;
+      },
     } as unknown as ModuleRef);
     localBrowser = new LocalBrowserService();
     service = new InternalMcpService(
@@ -1032,6 +1044,39 @@ describe('native internal MCP over HTTP', () => {
         expect(advertised.some((tool) => tool.name === alias)).toBe(false);
     }
     expect(JSON.stringify(catalog)).not.toContain('Bearer ');
+  });
+
+  it('reads context through native MCP under a read-only turn and refuses a project argument or revoked lease', async () => {
+    const { client } = await connect();
+    activate('admin', false);
+    const result = await client.callTool({
+      name: 'project_context_read',
+      arguments: {},
+    });
+    expect(result.isError).not.toBe(true);
+    const data = result.structuredContent as {
+      project: { id: string };
+      context: string;
+      revision: string;
+    };
+    expect(data.project.id).toBe('p');
+    expect(data.context).toContain('Current administration instructions');
+    expect(data.context).toContain('Current shared project memory');
+    expect(data.context).toContain('Tests 2');
+    expect(data.revision).toMatch(/^[a-f0-9]{64}$/);
+    expect(
+      (
+        await client.callTool({
+          name: 'project_context_read',
+          arguments: { projectId: 'other' },
+        })
+      ).isError,
+    ).toBe(true);
+    service.revoke('agent');
+    expect(
+      (await client.callTool({ name: 'project_context_read', arguments: {} }))
+        .isError,
+    ).toBe(true);
   });
 
   it('executes native project tools including explicit self-assignment, creates real entities and preserves idempotency', async () => {

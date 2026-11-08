@@ -229,6 +229,13 @@ const definitions = {
     handler: 'project',
     policy: projectRead,
   },
+  get_context: {
+    name: 'project_context_read',
+    title: 'Project — Read current agent context',
+    titleFr: 'Projet — Lire le contexte actuel de l’agent',
+    handler: 'project',
+    policy: projectRead,
+  },
   list_tasks: {
     name: 'project_task_list',
     title: 'Tasks — List project tasks',

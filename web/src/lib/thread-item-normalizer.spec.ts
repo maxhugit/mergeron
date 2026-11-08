@@ -303,6 +303,71 @@ describe('normalizeThreadItem', () => {
       },
     });
   });
+
+  it('hides complete historical and MCP context envelopes in any leading order without resurrecting fallback text', () => {
+    const blocks = [
+      'mergeron_agent_instructions',
+      'mergeron_project_context',
+      'project_shared_knowledge',
+      'document_publication',
+      'mergeron_context_refresh',
+      'mergeron_agent_monitor',
+    ].map((tag) => `<${tag}>\nInternal instructions\n</${tag}>`);
+    for (const completed of [false, true]) {
+      for (const envelopes of [blocks, [...blocks].reverse()]) {
+        const context = envelopes.join('\n\n');
+        expect(
+          normalizeThreadItem(
+            {
+              type: 'userMessage',
+              content: [{ type: 'text', text: context }],
+              text: context,
+            },
+            completed,
+          ),
+        ).toEqual({ kind: 'invalid' });
+        expect(
+          normalizeThreadItem(
+            {
+              type: 'userMessage',
+              content: [
+                { type: 'text', text: context + '\n\nMy request' },
+                { type: 'image', url: 'https://example.com/a.png' },
+              ],
+            },
+            completed,
+          ),
+        ).toMatchObject({
+          kind: 'userMessage',
+          message: {
+            text: 'My request',
+            images: ['https://example.com/a.png'],
+          },
+        });
+        expect(
+          normalizeThreadItem(
+            {
+              type: 'userMessage',
+              text: context.replaceAll('\n', '\r\n') + '\r\nMy request',
+            },
+            completed,
+          ),
+        ).toMatchObject({
+          kind: 'userMessage',
+          message: { text: 'My request' },
+        });
+      }
+    }
+    const quoted =
+      'Explain this example:\n<mergeron_agent_instructions>\nExample\n</mergeron_agent_instructions>';
+    expect(
+      normalizeThreadItem({ type: 'userMessage', text: quoted }, true),
+    ).toMatchObject({ kind: 'userMessage', message: { text: quoted } });
+    const incomplete = '<mergeron_agent_instructions>\nUnfinished user example';
+    expect(
+      normalizeThreadItem({ type: 'userMessage', text: incomplete }, true),
+    ).toMatchObject({ kind: 'userMessage', message: { text: incomplete } });
+  });
   it('hides current and historical project snapshots while preserving user text and attachments', () => {
     const context =
       '<mergeron_project_context>\nCurrent server-provided project snapshot; supersedes earlier snapshots.\n{"tasks":["secret"]}\n</mergeron_project_context>';
