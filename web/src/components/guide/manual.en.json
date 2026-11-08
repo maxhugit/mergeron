@@ -1294,6 +1294,29 @@
           "task-execution",
           "work-relationships"
         ]
+      },
+      {
+        "id": "deliverable-git",
+        "title": "Keep and recognize deliverables in Git",
+        "summary": "Enable optional integration, review transfers and retain versions.",
+        "keywords": ["Git", "livrable.json", "import", "versions", "conflicts"],
+        "sections": [
+          {
+            "title": "Enable after reviewing",
+            "paragraphs": [
+              "In project settings, open Workspaces then Git deliverables. Choose a manager, a shared writable Git copy and a target directory. Enable the switch, preview changes and confirm. Commits and pushes are never automatic.",
+              "Opening a repository recognizes deliverables through livrable.json files. Review Git deliverables opens the import proposal. For repositories without manifests, you can propose converting subdirectories containing direct files."
+            ]
+          },
+          {
+            "title": "Retain versions and resolve conflicts",
+            "paragraphs": [
+              "Each content import creates a Mergeron version. Exports use retained versions. Concurrent changes or deletions block the transfer without deleting the other copy. Recalculate the proposal after resolving conflicts.",
+              "Restricted deliverables are excluded unless explicitly selected. Files over 10 MB and unresolved Git LFS pointers block this transfer; videos remain available in Mergeron. The setting displays synchronization dates and errors. Disabling preserves files and history."
+            ],
+            "warning": "Mergeron permissions do not protect a document after publication to Git. Conflicts require explicit resolution."
+          }
+        ]
       }
     ]
   },

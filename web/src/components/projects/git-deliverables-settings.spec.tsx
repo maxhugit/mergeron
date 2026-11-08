@@ -1,0 +1,135 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { catalogFixture, json } from '../settings/catalog/catalog.testing';
+import { GitDeliverablesSettings } from './git-deliverables-settings';
+import { GitDeliverablesDiscovery } from './git-deliverables-discovery';
+
+let fixture: ReturnType<typeof catalogFixture>;
+let writes: { url: string; body: Record<string, unknown> }[];
+let conflict: boolean;
+beforeEach(() => {
+  fixture = catalogFixture();
+  writes = [];
+  conflict = false;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        writes.push({
+          url,
+          body: JSON.parse(
+            typeof init.body === 'string' ? init.body : '{}',
+          ) as Record<string, unknown>,
+        });
+        return Promise.resolve(
+          json(
+            url.endsWith('/preview')
+              ? {
+                  fingerprint: 'reviewed-plan',
+                  canApply: !conflict,
+                  changes: [
+                    {
+                      deliverable: 'Cadrage',
+                      document: 'notes.md',
+                      action: conflict ? 'conflict' : 'import',
+                      reason: conflict
+                        ? 'document_changed_both'
+                        : 'new_document',
+                    },
+                  ],
+                }
+              : { enabled: true },
+          ),
+        );
+      }
+      return Promise.resolve(
+        json({
+          boards: [
+            {
+              id: 'board',
+              name: 'Deliverables',
+              settings: null,
+              restricted: [{ id: 'secret', title: 'Restricted document' }],
+            },
+          ],
+          copies: [
+            { id: 'copy', name: 'Shared Git', writable: true, owned: false },
+          ],
+          discovered: [{ id: 'remote', title: 'Cadrage', documents: 1 }],
+          discoveryError: null,
+        }),
+      );
+    }),
+  );
+});
+afterEach(() => {
+  fixture.dispose();
+  vi.unstubAllGlobals();
+});
+
+it('requires explicit opt-in and review, excludes restricted content and cancels a stale preview on edits', async () => {
+  const user = userEvent.setup();
+  fixture.render(<GitDeliverablesSettings projectId="p" />);
+  const enabled = await screen.findByRole('switch', {
+    name: 'Enable Git deliverables',
+  });
+  expect(enabled).not.toBeChecked();
+  expect(writes).toEqual([]);
+  await user.click(enabled);
+  await user.click(screen.getByRole('button', { name: 'Preview changes' }));
+  await screen.findByRole('button', { name: 'Confirm and synchronize' });
+  expect(writes[0].body).toMatchObject({
+    restrictedIds: [],
+    adoptFolders: false,
+  });
+  const directory = screen.getByRole('textbox', {
+    name: 'Repository directory',
+  });
+  await user.clear(directory);
+  await user.type(directory, 'documents');
+  expect(
+    screen.queryByRole('button', { name: 'Confirm and synchronize' }),
+  ).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Preview changes' }));
+  await user.click(
+    await screen.findByRole('button', { name: 'Confirm and synchronize' }),
+  );
+  await waitFor(() =>
+    expect(writes.at(-1)).toEqual(
+      expect.objectContaining({
+        body: {
+          options: expect.objectContaining({
+            directory: 'documents',
+            restrictedIds: [],
+          }) as unknown,
+          fingerprint: 'reviewed-plan',
+        },
+      }),
+    ),
+  );
+});
+it('does not allow applying a conflict', async () => {
+  conflict = true;
+  const user = userEvent.setup();
+  fixture.render(<GitDeliverablesSettings projectId="p" />);
+  await user.click(await screen.findByRole('switch'));
+  await user.click(screen.getByRole('button', { name: 'Preview changes' }));
+  expect(
+    await screen.findByRole('button', { name: 'Confirm and synchronize' }),
+  ).toBeDisabled();
+  expect(writes).toHaveLength(1);
+});
+it('recognizes a repository automatically without sending an import until requested', async () => {
+  const user = userEvent.setup();
+  fixture.render(<GitDeliverablesDiscovery projectId="p" copyId="copy" />);
+  expect(
+    await screen.findByText('One deliverable recognized in this repository.'),
+  ).toBeVisible();
+  expect(writes).toEqual([]);
+  await user.click(
+    screen.getByRole('button', { name: 'Review Git deliverables' }),
+  );
+  expect(await screen.findByRole('dialog')).toBeVisible();
+  expect(writes).toEqual([]);
+});

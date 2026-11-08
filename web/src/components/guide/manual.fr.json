@@ -1308,6 +1308,29 @@
           "task-execution",
           "work-relationships"
         ]
+      },
+      {
+        "id": "deliverable-git",
+        "title": "Conserver et reconnaître les livrables dans Git",
+        "summary": "Activer le mode optionnel, examiner les transferts et garder les versions.",
+        "keywords": ["Git", "livrable.json", "import", "versions", "conflits"],
+        "sections": [
+          {
+            "title": "Activer après prévisualisation",
+            "paragraphs": [
+              "Dans les paramètres du projet, ouvrez Espaces de travail puis Livrables Git. Sélectionnez un gestionnaire, une copie Git partagée en écriture et le dossier cible. Activez le commutateur, prévisualisez les changements, puis confirmez. Aucun commit ou push n’est automatique.",
+              "À l’ouverture d’un dépôt, les fichiers livrable.json permettent de reconnaître les livrables. Le bandeau Examiner les livrables Git ouvre la proposition d’import. Pour un dépôt sans manifestes, vous pouvez proposer la conversion des sous-dossiers contenant des fichiers directs."
+            ]
+          },
+          {
+            "title": "Conserver les versions et résoudre les conflits",
+            "paragraphs": [
+              "Chaque import de contenu crée une version Mergeron. Les exports utilisent les versions enregistrées. Un changement concurrent ou une suppression bloque le transfert sans effacer l’autre exemplaire. Recalculez la proposition après résolution.",
+              "Les livrables confidentiels sont exclus sauf inclusion explicite. Les fichiers de plus de 10 Mo et les pointeurs Git LFS non récupérés bloquent ce transfert ; les vidéos restent disponibles dans Mergeron. La date et les erreurs de synchronisation sont affichées dans ce réglage. Désactiver conserve les fichiers et l’historique."
+            ],
+            "warning": "Les droits Mergeron ne protègent plus un document après publication dans Git. Les conflits doivent être résolus explicitement."
+          }
+        ]
       }
     ]
   },
