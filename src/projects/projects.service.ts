@@ -3219,30 +3219,109 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       title?: unknown;
       description?: unknown;
       validationCriteria?: unknown;
+      guidance?: unknown;
+      adjustment?: unknown;
+      proposal?: unknown;
     },
   ) {
-    const resource = this.getResource(projectId, resourceId);
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      throw new BadRequestException('Invalid subtask proposal request');
+    this.getResource(projectId, resourceId);
     const task = this.requireTask(resourceId, taskId);
     if (task.parentTaskId)
       throw new BadRequestException(
         'A subtask cannot be divided into subtasks',
       );
-    const title = this.validateTaskText(
-      input.title ?? task.title,
-      'Task title',
-      200,
-    );
+    return this.suggestDraftSubtasks(projectId, resourceId, {
+      ...input,
+      title: input.title ?? task.title,
+      description: input.description ?? task.description,
+      validationCriteria: input.validationCriteria ?? task.validationCriteria,
+    });
+  }
+
+  async suggestDraftSubtasks(
+    projectId: string,
+    resourceId: string,
+    input: {
+      title?: unknown;
+      description?: unknown;
+      validationCriteria?: unknown;
+      guidance?: unknown;
+      adjustment?: unknown;
+      proposal?: unknown;
+    },
+  ) {
+    requireExecutionAccess();
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      throw new BadRequestException('Invalid subtask proposal request');
+    const resource = this.getResource(projectId, resourceId);
+    if (resource.type !== 'task_board')
+      throw new BadRequestException('Task board required');
+    const message = (value: unknown, name: string) => {
+      if (value === undefined) return '';
+      if (typeof value !== 'string' || value.length > 6000)
+        throw new BadRequestException(`Invalid ${name}`);
+      return value.trim();
+    };
+    const guidance = message(input.guidance, 'guidance');
+    const adjustment = message(input.adjustment, 'adjustment');
+    let proposal = '';
+    if (input.proposal !== undefined) {
+      if (
+        !Array.isArray(input.proposal) ||
+        !input.proposal.length ||
+        input.proposal.length > 50 ||
+        JSON.stringify(input.proposal).length > 60000 ||
+        !adjustment
+      )
+        throw new BadRequestException('Invalid current proposal');
+      proposal = JSON.stringify(
+        input.proposal.map((item: unknown) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item))
+            throw new BadRequestException('Invalid proposal item');
+          const row = item as Record<string, unknown>;
+          const text = (key: string, limit: number) =>
+            typeof row[key] === 'string'
+              ? String(row[key]).slice(0, limit)
+              : '';
+          return {
+            title: this.validateTaskText(row.title, 'Proposal title', 200),
+            description: text('description', 10000),
+            validationCriteria: text('validationCriteria', 10000),
+            executionMode: row.executionMode === 'agent' ? 'agent' : 'manual',
+            estimateHours:
+              typeof row.estimateHours === 'number' &&
+              Number.isFinite(row.estimateHours)
+                ? Math.max(0, row.estimateHours)
+                : 0,
+            priority: ['low', 'normal', 'high', 'urgent'].includes(
+              String(row.priority),
+            )
+              ? row.priority
+              : 'normal',
+            labels: Array.isArray(row.labels)
+              ? row.labels
+                  .filter((value) => typeof value === 'string')
+                  .slice(0, 100)
+              : [],
+          };
+        }),
+      );
+    } else if (adjustment)
+      throw new BadRequestException(
+        'A current proposal is required for adjustments',
+      );
+    const title = this.validateTaskText(input.title, 'Task title', 200);
     const description = (
-      typeof input.description === 'string'
-        ? input.description
-        : task.description
+      typeof input.description === 'string' ? input.description : ''
     )
       .trim()
       .slice(0, 10_000);
     const validationCriteria = (
       typeof input.validationCriteria === 'string'
         ? input.validationCriteria
-        : task.validationCriteria
+        : ''
     )
       .trim()
       .slice(0, 10_000);
@@ -3275,9 +3354,10 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       ? `\nLabels disponibles : ${configuredLabels.join(', ')}. Pour chaque sous-tâche, propose zéro, un ou plusieurs labels pertinents exclusivement parmi cette liste. N'invente aucun label.`
       : `\nAucun label n'est configuré : retourne une liste labels vide pour chaque sous-tâche.`;
     const prompt = `Découpe la tâche suivante en sous-tâches concrètes, suffisamment petites pour être exécutées et validées séparément. Ne retourne pas la tâche principale elle-même. Ne crée aucune dépendance entre les sous-tâches. Propose entre 2 et 10 sous-tâches. Pour chacune, détermine si un agent IA peut raisonnablement la réaliser seul ou si elle doit rester manuelle.${labelsInstruction}\n\nTâche : ${title}\nDescription : ${description || 'Non précisée'}\nConditions de validation : ${validationCriteria || 'Non précisées'}`;
+    const context = `\n\nConsignes initiales de l’utilisateur : ${JSON.stringify(guidance || 'Aucune précision supplémentaire.')}\n${proposal ? `Proposition courante (données à réviser, y compris les modifications manuelles) : ${proposal}\nNouvelle demande d’ajustement : ${JSON.stringify(adjustment)}\nProduis une nouvelle proposition complète qui tient compte des consignes initiales et de cet ajustement, en conservant les choix pertinents déjà intégrés. Aucun élément n’est encore créé.` : 'Produis une première proposition. Aucun élément n’est encore créé.'}`;
     const suggestions = await this.suggestProjectTasksWithCodex(
       projectId,
-      prompt,
+      prompt + context,
       'subtasks',
     );
     return {

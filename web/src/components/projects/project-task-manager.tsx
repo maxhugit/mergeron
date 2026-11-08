@@ -480,6 +480,24 @@ export function ProjectTaskManager({
   >(null);
   const [adviceError, setAdviceError] = useState('');
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [breakdownStage, setBreakdownStage] = useState<
+    'instructions' | 'proposal'
+  >('instructions');
+  const [breakdownGuidance, setBreakdownGuidance] = useState('');
+  const [breakdownFeedback, setBreakdownFeedback] = useState('');
+  const [breakdownApplying, setBreakdownApplying] = useState(false);
+  const breakdownGeneration = useRef(0);
+  const closeBreakdown = () => {
+    if (breakdownApplying) return;
+    breakdownGeneration.current++;
+    setBreakdownOpen(false);
+    setBreakdownLoading(false);
+    setBreakdownSuggestions([]);
+    setBreakdownGuidance('');
+    setBreakdownFeedback('');
+    setBreakdownError('');
+  };
+
   const [breakdownSuggestions, setBreakdownSuggestions] = useState<
     Suggestion[]
   >([]);
@@ -1234,65 +1252,73 @@ export function ProjectTaskManager({
       setAiLoading(false);
     }
   };
-  const proposeSubtasks = async () => {
+  const proposeSubtasks = async (refine = false) => {
     if (
       !draft.title.trim() ||
       draft.parentTaskId ||
-      (editing && childrenFor(editing.id).length > 0)
+      breakdownLoading ||
+      (refine && !breakdownFeedback.trim())
     )
       return;
+    const generation = ++breakdownGeneration.current;
     setBreakdownLoading(true);
     setBreakdownError('');
     try {
-      let parent = editing;
-      if (parent) {
-        const result = await taskApi<{ task: ProjectTaskSummary }>(
-          `/${projectId}/resources/${resourceId}/tasks/${parent.id}`,
-          { method: 'PATCH', body: JSON.stringify(payload()) },
-        );
-        parent = result.task;
-      } else {
-        const result = await taskApi<{ task: ProjectTaskSummary }>(
-          `/${projectId}/resources/${resourceId}/tasks`,
-          { method: 'POST', body: JSON.stringify(payload()) },
-        );
-        parent = result.task;
-        setEditing(parent);
-        setRootTaskId(parent.id);
-        setTaskTab(parent.id);
-      }
       const result = await taskApi<{ tasks: Suggestion[] }>(
-        `/${projectId}/resources/${resourceId}/tasks/${parent.id}/ai-subtasks`,
+        editing
+          ? `/${projectId}/resources/${resourceId}/tasks/${editing.id}/ai-subtasks`
+          : `/${projectId}/resources/${resourceId}/ai-subtasks`,
         {
           method: 'POST',
           body: JSON.stringify({
             title: draft.title,
             description: draft.description,
             validationCriteria: draft.validationCriteria,
+            guidance: breakdownGuidance,
+            ...(refine
+              ? {
+                  adjustment: breakdownFeedback,
+                  proposal: breakdownSuggestions.filter((item) =>
+                    item.title.trim(),
+                  ),
+                }
+              : {}),
           }),
         },
       );
+      if (generation !== breakdownGeneration.current) return;
+      if (!result.tasks.length)
+        throw new Error('L’IA n’a proposé aucune sous-tâche.');
       batchRequests.current.delete('subtasks');
       setBreakdownSuggestions(result.tasks);
-      if (!result.tasks.length)
-        setBreakdownError('L’IA n’a proposé aucune sous-tâche.');
-      await refresh();
-      setBreakdownOpen(true);
+      setBreakdownFeedback('');
+      setBreakdownStage('proposal');
     } catch (error) {
-      setBreakdownError(
-        error instanceof Error ? error.message : 'Découpage impossible.',
-      );
-      setBreakdownOpen(true);
+      if (generation === breakdownGeneration.current)
+        setBreakdownError(
+          error instanceof Error ? error.message : 'Découpage impossible.',
+        );
     } finally {
-      setBreakdownLoading(false);
+      if (generation === breakdownGeneration.current)
+        setBreakdownLoading(false);
     }
   };
   const createProposedSubtasks = async () => {
-    const parentId = rootTaskId ?? editing?.id;
-    if (!parentId || !breakdownSuggestions.length) return;
+    if (!breakdownSuggestions.length || breakdownLoading) return;
+    setBreakdownApplying(true);
     setBreakdownLoading(true);
     setBreakdownError('');
     try {
+      const result = await taskApi<{ task: ProjectTaskSummary }>(
+        editing
+          ? `/${projectId}/resources/${resourceId}/tasks/${editing.id}`
+          : `/${projectId}/resources/${resourceId}/tasks`,
+        { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload()) },
+      );
+      const parentId = result.task.id;
+      setEditing(result.task);
+      setRootTaskId(parentId);
+      setTaskTab(parentId);
       await applyBatch(
         'subtasks',
         breakdownSuggestions
@@ -1301,15 +1327,15 @@ export function ProjectTaskManager({
             type: 'create',
             key: String(index),
             input: {
-            title: suggestion.title,
-            description: suggestion.description,
-            priority: suggestion.priority,
-            estimateMinutes: Math.round(suggestion.estimateHours * 60),
-            validationCriteria: suggestion.validationCriteria,
-            parentTaskId: parentId,
-            executionMode: suggestion.executionMode,
-            labels: suggestion.labels,
-            dependencyIds: [],
+              title: suggestion.title,
+              description: suggestion.description,
+              priority: suggestion.priority,
+              estimateMinutes: Math.round(suggestion.estimateHours * 60),
+              validationCriteria: suggestion.validationCriteria,
+              parentTaskId: parentId,
+              executionMode: suggestion.executionMode,
+              labels: suggestion.labels,
+              dependencyIds: [],
             },
           })),
       );
@@ -1321,6 +1347,7 @@ export function ProjectTaskManager({
         error instanceof Error ? error.message : 'Création impossible.',
       );
     } finally {
+      setBreakdownApplying(false);
       setBreakdownLoading(false);
     }
   };
@@ -2978,7 +3005,14 @@ export function ProjectTaskManager({
                     breakdownLoading ||
                     Boolean(editing && childrenFor(editing.id).length > 0)
                   }
-                  onClick={proposeSubtasks}
+                  onClick={() => {
+                    setBreakdownStage('instructions');
+                    setBreakdownSuggestions([]);
+                    setBreakdownGuidance('');
+                    setBreakdownFeedback('');
+                    setBreakdownError('');
+                    setBreakdownOpen(true);
+                  }}
                 >
                   {breakdownLoading ? (
                     <Loader2 className="animate-spin" />
@@ -3020,185 +3054,277 @@ export function ProjectTaskManager({
             </div>
           </div>
       </TaskDetailSurface>
-      <Dialog open={breakdownOpen} onOpenChange={setBreakdownOpen}>
-        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-3xl">
+      <Dialog
+        open={breakdownOpen}
+        onOpenChange={(open) => {
+          if (!open) closeBreakdown();
+        }}
+      >
+        <DialogContent
+          aria-describedby={undefined}
+          className={`flex max-h-[90dvh] flex-col overflow-hidden p-0 ${breakdownStage === 'instructions' ? 'sm:max-w-xl' : 'sm:max-w-3xl'}`}
+        >
           <DialogHeader className="shrink-0 px-6 pt-6">
-            <DialogTitle>Proposition de sous-tâches</DialogTitle>
+            <DialogTitle>
+              {breakdownStage === 'instructions'
+                ? 'Orienter le découpage avec l’IA'
+                : 'Proposition de sous-tâches'}
+            </DialogTitle>
             <p className="text-sm text-muted-foreground">
-              Ajustez les propositions et leur mode d’exécution avant de les
-              créer.
+              {breakdownStage === 'instructions'
+                ? 'Précisez le nombre approximatif de sous-tâches et les grandes activités envisagées. Rien ne sera enregistré avant votre validation.'
+                : 'Retouchez la proposition ou demandez des ajustements autant que nécessaire, puis validez pour créer les sous-tâches.'}
             </p>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-3">
             {breakdownError && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <div
+                role="alert"
+                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+              >
                 {breakdownError}
               </div>
             )}
-            {breakdownSuggestions.map((suggestion, index) => {
-              const update = (values: Partial<Suggestion>) =>
-                setBreakdownSuggestions((items) =>
-                  items.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, ...values } : item,
-                  ),
-                );
-              return (
-                <section
-                  key={index}
-                  className="space-y-2 rounded-xl border p-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-muted px-2 py-1 text-xs">
-                      Sous-tâche {index + 1}
-                    </span>
-                    <div className="flex-1" />
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      title="Retirer cette proposition"
-                      onClick={() =>
-                        setBreakdownSuggestions((items) =>
-                          items.filter((_, itemIndex) => itemIndex !== index),
-                        )
-                      }
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                  <Input
-                    value={suggestion.title}
-                    placeholder="Titre de la sous-tâche"
-                    onChange={(event) => update({ title: event.target.value })}
-                  />
-                  <Textarea
-                    value={suggestion.description}
-                    placeholder="Description"
-                    onChange={(event) =>
-                      update({ description: event.target.value })
+            {breakdownStage === 'instructions' ? (
+              <label className="block space-y-2 text-sm">
+                <span>Vos consignes (facultatif)</span>
+                <DictatedTextarea
+                  value={breakdownGuidance}
+                    className="max-h-48 overflow-y-auto"
+                  disabled={breakdownLoading}
+                  onChange={(value) =>
+                    setBreakdownGuidance(value.slice(0, 6000))
+                  }
+                  rows={6}
+                  ariaLabel="Consignes du découpage"
+                  placeholder="Par exemple : environ 5 activités, en séparant l’analyse, la comparaison des solutions, le choix, la mise en œuvre et les tests. Rester simple."
+                />
+              </label>
+            ) : (
+              <>
+                <fieldset disabled={breakdownLoading} className="space-y-3">
+                  {breakdownSuggestions.map((suggestion, index) => {
+                    const update = (values: Partial<Suggestion>) =>
+                      setBreakdownSuggestions((items) =>
+                        items.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, ...values } : item,
+                        ),
+                      );
+                    return (
+                      <section
+                        key={index}
+                        className="space-y-2 rounded-xl border p-4"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="rounded bg-muted px-2 py-1 text-xs">
+                            Sous-tâche {index + 1}
+                          </span>
+                          <div className="flex-1" />
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            title="Retirer cette proposition"
+                            onClick={() =>
+                              setBreakdownSuggestions((items) =>
+                                items.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                ),
+                              )
+                            }
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                        <Input
+                          value={suggestion.title}
+                          placeholder="Titre de la sous-tâche"
+                          onChange={(event) =>
+                            update({ title: event.target.value })
+                          }
+                        />
+                        <Textarea
+                          value={suggestion.description}
+                          placeholder="Description"
+                          onChange={(event) =>
+                            update({ description: event.target.value })
+                          }
+                        />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <select
+                            className="h-8 rounded-lg border bg-background px-2 text-sm"
+                            value={suggestion.executionMode}
+                            onChange={(event) =>
+                              update({
+                                executionMode: event.target
+                                  .value as Suggestion['executionMode'],
+                              })
+                            }
+                          >
+                            <option value="manual">Manuelle</option>
+                            <option value="agent">Agent IA</option>
+                          </select>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={suggestion.estimateHours}
+                            placeholder="Charge (heures)"
+                            onChange={(event) =>
+                              update({
+                                estimateHours: Math.max(
+                                  0,
+                                  Number(event.target.value) || 0,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                        <Textarea
+                          value={suggestion.validationCriteria}
+                          placeholder="Conditions de validation"
+                          onChange={(event) =>
+                            update({ validationCriteria: event.target.value })
+                          }
+                        />
+                        {settings.labels.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-sm font-medium">Labels</div>
+                            <div className="flex flex-wrap gap-2">
+                              {settings.labels.map((label) => {
+                                const selected = suggestion.labels.includes(
+                                  label.name,
+                                );
+                                return (
+                                  <label
+                                    key={label.id}
+                                    className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={(event) =>
+                                        update({
+                                          labels: event.target.checked
+                                            ? [...suggestion.labels, label.name]
+                                            : suggestion.labels.filter(
+                                                (name) => name !== label.name,
+                                              ),
+                                        })
+                                      }
+                                    />
+                                    <span
+                                      className="size-2.5 rounded-full"
+                                      style={{
+                                        backgroundColor: palette[label.color],
+                                      }}
+                                    />
+                                    {label.name}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {suggestion.assignmentReason && (
+                          <p className="text-xs text-muted-foreground">
+                            Recommandation IA : {suggestion.assignmentReason}
+                          </p>
+                        )}
+                      </section>
+                    );
+                  })}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() =>
+                      setBreakdownSuggestions((items) => [
+                        ...items,
+                        {
+                          title: '',
+                          description: '',
+                          priority: 'normal',
+                          estimateHours: 0,
+                          validationCriteria: '',
+                          parentTitle: draft.title,
+                          dependsOnTitles: [],
+                          executionMode: 'manual',
+                          assignmentReason: '',
+                          labels: [],
+                        },
+                      ])
                     }
-                  />
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <select
-                      className="h-8 rounded-lg border bg-background px-2 text-sm"
-                      value={suggestion.executionMode}
-                      onChange={(event) =>
-                        update({
-                          executionMode: event.target
-                            .value as Suggestion['executionMode'],
-                        })
-                      }
-                    >
-                      <option value="manual">Manuelle</option>
-                      <option value="agent">Agent IA</option>
-                    </select>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={suggestion.estimateHours}
-                      placeholder="Charge (heures)"
-                      onChange={(event) =>
-                        update({
-                          estimateHours: Math.max(
-                            0,
-                            Number(event.target.value) || 0,
-                          ),
-                        })
-                      }
-                    />
-                  </div>
-                  <Textarea
-                    value={suggestion.validationCriteria}
-                    placeholder="Conditions de validation"
-                    onChange={(event) =>
-                      update({ validationCriteria: event.target.value })
-                    }
-                  />
-                  {settings.labels.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">Labels</div>
-                      <div className="flex flex-wrap gap-2">
-                        {settings.labels.map((label) => {
-                          const selected = suggestion.labels.includes(
-                            label.name,
-                          );
-                          return (
-                            <label
-                              key={label.id}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={(event) =>
-                                  update({
-                                    labels: event.target.checked
-                                      ? [...suggestion.labels, label.name]
-                                      : suggestion.labels.filter(
-                                          (name) => name !== label.name,
-                                        ),
-                                  })
-                                }
-                              />
-                              <span
-                                className="size-2.5 rounded-full"
-                                style={{
-                                  backgroundColor: palette[label.color],
-                                }}
-                              />
-                              {label.name}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {suggestion.assignmentReason && (
-                    <p className="text-xs text-muted-foreground">
-                      Recommandation IA : {suggestion.assignmentReason}
-                    </p>
-                  )}
-                </section>
-              );
-            })}
+                  >
+                    <Plus /> Ajouter une sous-tâche
+                  </Button>
+                </fieldset>
+              </>
+            )}
+          </div>
+          {breakdownStage === 'proposal' && (
+            <div
+              className="shrink-0 space-y-2 border-t px-6 py-3"
+              aria-busy={breakdownLoading}
+            >
+              <label className="block space-y-2 text-sm">
+                <span>Demander des ajustements</span>
+                <DictatedTextarea
+                  value={breakdownFeedback}
+                  className="max-h-28 overflow-y-auto"
+                  disabled={breakdownLoading}
+                  onChange={(value) =>
+                    setBreakdownFeedback(value.slice(0, 6000))
+                  }
+                  rows={3}
+                  ariaLabel="Ajustements du découpage"
+                  placeholder="Par exemple : regroupe les deux premières activités et détaille davantage les tests."
+                />
+              </label>
+              <Button
+                variant="outline"
+                disabled={
+                  breakdownLoading ||
+                  !breakdownFeedback.trim() ||
+                  !breakdownSuggestions.some((item) => item.title.trim())
+                }
+                onClick={() => void proposeSubtasks(true)}
+              >
+                {breakdownLoading ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Sparkles />
+                )}{' '}
+                Refaire une proposition
+              </Button>
+            </div>
+          )}
+          <div className="flex shrink-0 justify-end gap-2 rounded-b-2xl border-t bg-background/95 px-6 py-4">
             <Button
               variant="outline"
-              className="w-full"
-              onClick={() =>
-                setBreakdownSuggestions((items) => [
-                  ...items,
-                  {
-                    title: '',
-                    description: '',
-                    priority: 'normal',
-                    estimateHours: 0,
-                    validationCriteria: '',
-                    parentTitle: draft.title,
-                    dependsOnTitles: [],
-                    executionMode: 'manual',
-                    assignmentReason: '',
-                    labels: [],
-                  },
-                ])
-              }
+              disabled={breakdownApplying}
+              onClick={closeBreakdown}
             >
-              <Plus /> Ajouter une sous-tâche
-            </Button>
-          </div>
-          <div className="flex shrink-0 justify-end gap-2 rounded-b-2xl border-t bg-background/95 px-6 py-4">
-            <Button variant="outline" onClick={() => setBreakdownOpen(false)}>
               Annuler
             </Button>
-            <Button
-              disabled={
-                breakdownLoading ||
-                !breakdownSuggestions.some((item) => item.title.trim())
-              }
-              onClick={createProposedSubtasks}
-            >
-              {breakdownLoading && <Loader2 className="animate-spin" />}
-              Créer les sous-tâches
-            </Button>
+            {breakdownStage === 'instructions' ? (
+              <Button
+                disabled={breakdownLoading}
+                onClick={() => void proposeSubtasks()}
+              >
+                {breakdownLoading && <Loader2 className="animate-spin" />}
+                Proposer un découpage
+              </Button>
+            ) : (
+              <Button
+                disabled={
+                  breakdownLoading ||
+                  !breakdownSuggestions.some((item) => item.title.trim())
+                }
+                onClick={createProposedSubtasks}
+              >
+                {breakdownLoading && <Loader2 className="animate-spin" />}
+                Valider et créer les sous-tâches
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -3855,17 +3981,25 @@ function DictatedTextarea({
   value,
   placeholder,
   rows,
+  ariaLabel,
+  disabled,
+  className,
   onChange,
 }: {
   value: string;
   placeholder: string;
   rows?: number;
+  ariaLabel?: string;
+  disabled?: boolean;
+  className?: string;
   onChange: (value: string) => void;
 }) {
   return (
     <div className="relative">
       <Textarea
-        className="pr-10"
+        className={`pr-10 ${className ?? ''}`}
+        disabled={disabled}
+        aria-label={ariaLabel}
         rows={rows}
         placeholder={placeholder}
         value={value}
@@ -3873,6 +4007,7 @@ function DictatedTextarea({
       />
       <div className="absolute bottom-1.5 right-1.5 rounded-md border bg-background/90 shadow-sm backdrop-blur">
         <VoiceDictationButton
+          disabled={disabled}
           onTranscript={(text) =>
             onChange(`${value}${value.trim() ? ' ' : ''}${text}`)
           }

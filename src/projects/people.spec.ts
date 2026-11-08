@@ -193,6 +193,55 @@ describe('people and task responsibility', () => {
     });
     expect(database.db.select().from(projectTasks).all()).toHaveLength(1);
   });
+
+  it('generates and revises a draft without saving tasks, using guidance and the current manual proposal', async () => {
+    const proposal = [
+      {
+        title: 'Étudier les options',
+        description: 'Comparer',
+        executionMode: 'manual',
+        labels: [],
+      },
+    ];
+    runProjectStructuredPrompt.mockResolvedValue(
+      JSON.stringify({ tasks: proposal }),
+    );
+    const first = await service.suggestDraftSubtasks('p', 'r', {
+      title: 'Préparer',
+      guidance: 'Environ 4 activités, rester simple',
+    });
+    expect(first.tasks).toHaveLength(1);
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+    expect(runProjectStructuredPrompt.mock.calls[0][0].prompt).toContain(
+      'Environ 4 activités',
+    );
+    await service.suggestDraftSubtasks('p', 'r', {
+      title: 'Préparer',
+      guidance: 'Environ 4 activités, rester simple',
+      proposal: [{ ...proposal[0], title: 'Titre corrigé manuellement' }],
+      adjustment: 'Ajouter une activité de test',
+    });
+    expect(runProjectStructuredPrompt.mock.calls[1][0].prompt).toContain(
+      'Titre corrigé manuellement',
+    );
+    expect(runProjectStructuredPrompt.mock.calls[1][0].prompt).toContain(
+      'Ajouter une activité de test',
+    );
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(0);
+  });
+  it('rejects invalid refinement context and oversized instructions before calling the model', async () => {
+    for (const input of [
+      { title: 'Plan', guidance: 'x'.repeat(6001) },
+      { title: 'Plan', adjustment: 'Réviser' },
+      { title: 'Plan', proposal: [{}], adjustment: 'Réviser' },
+      { title: 'Plan', proposal: [], adjustment: 'Réviser' },
+    ]) {
+      await expect(
+        service.suggestDraftSubtasks('p', 'r', input),
+      ).rejects.toThrow();
+    }
+    expect(runProjectStructuredPrompt).not.toHaveBeenCalled();
+  });
   const person = (reference = 'MD-001', name = 'Marie Dupont') => ({
     reference,
     firstName: name.split(' ')[0],

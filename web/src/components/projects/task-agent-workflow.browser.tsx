@@ -1,5 +1,11 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { ProjectTaskManager } from './project-task-manager';
@@ -24,7 +30,22 @@ vi.mock('@tanstack/react-router', async (original) => ({
   useNavigate: () => navigate,
 }));
 vi.mock('@/components/chat/voice-dictation-button', () => ({
-  VoiceDictationButton: () => null,
+  VoiceDictationButton: ({
+    onTranscript,
+    disabled,
+  }: {
+    onTranscript: (text: string) => void;
+    disabled?: boolean;
+  }) => (
+    <button
+      type="button"
+      aria-label="Dicter"
+      disabled={disabled}
+      onClick={() => onTranscript('Environ cinq activités')}
+    >
+      🎙
+    </button>
+  ),
 }));
 afterEach(() => {
   cleanup();
@@ -183,11 +204,14 @@ async function setup(
         resourceId="r"
         initialTaskId={initialTaskId ?? undefined}
         initialCreateParentId={initialCreateParentId}
-        modalOnly={initialTaskId !== null || initialCreateParentId !== undefined}
+        modalOnly={
+          initialTaskId !== null || initialCreateParentId !== undefined
+        }
       />
     </QueryClientProvider>,
   );
-  if (initialTaskId || initialCreateParentId !== undefined) await screen.findByRole('button', { name: 'Enregistrer' });
+  if (initialTaskId || initialCreateParentId !== undefined)
+    await screen.findByRole('button', { name: 'Enregistrer' });
   else await screen.findByRole('button', { name: 'Dossier principal' });
   return { client, board };
 }
@@ -512,10 +536,225 @@ test('reuses a same-parent agent and excludes another main task without launchin
   );
 });
 
-test.each(['', 'main'])('opens the existing task creation form from the sidebar (%s)', async (parentId) => {
-  await page.viewport(390,950);
-  await setup('ready',false,null,false,[],parentId);
-  expect(await screen.findByRole('dialog', {name: parentId ? 'Nouvelle sous-tâche' : 'Nouvelle tâche'})).toBeTruthy();
-  expect(screen.getAllByRole('dialog')).toHaveLength(1);
-  expect(api.mock.calls.some(([,init]) => init?.method === 'POST')).toBe(false);
+test.each(['', 'main'])(
+  'opens the existing task creation form from the sidebar (%s)',
+  async (parentId) => {
+    await page.viewport(390, 950);
+    await setup('ready', false, null, false, [], parentId);
+    expect(
+      await screen.findByRole('dialog', {
+        name: parentId ? 'Nouvelle sous-tâche' : 'Nouvelle tâche',
+      }),
+    ).toBeTruthy();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(api.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(
+      false,
+    );
+  },
+);
+
+test.each([390, 1280])(
+  'guides, revises repeatedly and cancels without writing tasks at %ipx',
+  async (width) => {
+    await page.viewport(width, 950);
+    const { board, client } = await setup('ready', false, 'main');
+    const emptyBoard = {
+      ...board,
+      tasks: board.tasks.filter((task) => !task.parentTaskId),
+    };
+    client.setQueryData(['project-resource', 'p', 'r'], emptyBoard);
+    const original = api.getMockImplementation()!;
+    let count = 0;
+    api.mockImplementation((path, init) =>
+      String(path).endsWith('/ai-subtasks')
+        ? Promise.resolve({
+            tasks: [
+              {
+                title: `Proposition ${++count}`,
+                description: 'Description',
+                priority: 'normal',
+                estimateHours: 1,
+                validationCriteria: 'Validée',
+                parentTitle: 'Dossier principal',
+                dependsOnTitles: [],
+                executionMode: 'manual',
+                assignmentReason: 'Intervention humaine',
+                labels: [],
+              },
+            ],
+          })
+        : path === '/p/resources/r' && !init
+          ? Promise.resolve(emptyBoard)
+          : original(path, init),
+    );
+    await page.getByRole('button', { name: 'Découper avec l’IA' }).click();
+    let dialog = await screen.findByRole('dialog', {
+      name: 'Orienter le découpage avec l’IA',
+    });
+    expect(
+      api.mock.calls.some(([path]) => String(path).endsWith('/ai-subtasks')),
+    ).toBe(false);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dicter' }));
+    expect(screen.getByLabelText('Consignes du découpage')).toHaveValue(
+      'Environ cinq activités',
+    );
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/task-breakdown-guidance-${width}.png`,
+    });
+    await page.getByRole('button', { name: 'Proposer un découpage' }).click();
+    await screen.findByDisplayValue('Proposition 1');
+    for (let iteration = 1; iteration <= 3; iteration++) {
+      fireEvent.change(screen.getByPlaceholderText('Titre de la sous-tâche'), {
+        target: { value: `Titre manuel ${iteration}` },
+      });
+      fireEvent.change(screen.getByLabelText('Ajustements du découpage'), {
+        target: { value: `Ajustement ${iteration}` },
+      });
+      await page
+        .getByRole('button', { name: 'Refaire une proposition' })
+        .click();
+      await screen.findByDisplayValue(`Proposition ${iteration + 1}`);
+      const request = JSON.parse(
+        api.mock.calls
+          .filter(([path]) => String(path).endsWith('/ai-subtasks'))
+          .at(-1)![1].body,
+      );
+      expect(request).toMatchObject({
+        guidance: 'Environ cinq activités',
+        adjustment: `Ajustement ${iteration}`,
+        proposal: [
+          expect.objectContaining({ title: `Titre manuel ${iteration}` }),
+        ],
+      });
+    }
+    expect(
+      api.mock.calls.filter(
+        ([, init]) =>
+          init?.method === 'PATCH' ||
+          (init?.method === 'POST' &&
+            !String(
+              api.mock.calls.find((call) => call[1] === init)?.[0],
+            ).endsWith('/ai-subtasks')),
+      ),
+    ).toHaveLength(0);
+    dialog = screen.getByRole('dialog', { name: 'Proposition de sous-tâches' });
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/task-breakdown-revision-${width}.png`,
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
+    await expect
+      .poll(() =>
+        screen.queryByRole('dialog', { name: 'Proposition de sous-tâches' }),
+      )
+      .toBeNull();
+  },
+);
+
+test('keeps the current proposal on refinement failure and only writes after final validation', async () => {
+  const { board, client } = await setup('ready', false, 'main');
+  const emptyBoard = {
+    ...board,
+    tasks: board.tasks.filter((task) => !task.parentTaskId),
+  };
+  client.setQueryData(['project-resource', 'p', 'r'], emptyBoard);
+  const original = api.getMockImplementation()!;
+  api.mockImplementation((path, init) => {
+    if (String(path).endsWith('/ai-subtasks')) {
+      if (JSON.parse(init.body).adjustment)
+        return Promise.reject(Error('Service temporairement indisponible'));
+      return Promise.resolve({
+        tasks: [
+          {
+            title: 'Comparer les solutions',
+            description: 'Comparaison',
+            priority: 'normal',
+            estimateHours: 2,
+            validationCriteria: 'Critères communs',
+            parentTitle: 'Dossier principal',
+            dependsOnTitles: [],
+            executionMode: 'manual',
+            assignmentReason: 'Validation humaine',
+            labels: [],
+          },
+        ],
+      });
+    }
+    return path === '/p/resources/r' && !init
+      ? Promise.resolve(emptyBoard)
+      : original(path, init);
+  });
+  await page.getByRole('button', { name: 'Découper avec l’IA' }).click();
+  await page.getByRole('button', { name: 'Proposer un découpage' }).click();
+  await screen.findByDisplayValue('Comparer les solutions');
+  fireEvent.change(screen.getByLabelText('Ajustements du découpage'), {
+    target: { value: 'Simplifier' },
+  });
+  await page.getByRole('button', { name: 'Refaire une proposition' }).click();
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Service temporairement indisponible',
+  );
+  expect(screen.getByDisplayValue('Comparer les solutions')).toBeVisible();
+  expect(screen.getByLabelText('Ajustements du découpage')).toHaveValue(
+    'Simplifier',
+  );
+  expect(
+    api.mock.calls.filter(
+      ([path, init]) => init?.method && !String(path).endsWith('/ai-subtasks'),
+    ),
+  ).toHaveLength(0);
+  await page
+    .getByRole('button', { name: 'Valider et créer les sous-tâches' })
+    .click();
+  await expect
+    .poll(() =>
+      api.mock.calls.some(([path]) => String(path).endsWith('/task-batches')),
+    )
+    .toBe(true);
+  const batch = JSON.parse(
+    api.mock.calls.find(([path]) => String(path).endsWith('/task-batches'))![1]
+      .body,
+  );
+  expect(batch.operations[0].input).toMatchObject({
+    title: 'Comparer les solutions',
+    parentTaskId: 'main',
+  });
+});
+
+test('cancels a pending draft proposal without saving a parent or reopening on a late response', async () => {
+  await setup('ready', false, null, false, [], '');
+  const original = api.getMockImplementation()!;
+  let finish!: (value: unknown) => void;
+  api.mockImplementation((path, init) =>
+    String(path).endsWith('/ai-subtasks')
+      ? new Promise((resolve) => {
+          finish = resolve;
+        })
+      : original(path, init),
+  );
+  fireEvent.change(screen.getByPlaceholderText('Titre de la tâche'), {
+    target: { value: 'Tâche encore en brouillon' },
+  });
+  await page.getByRole('button', { name: 'Découper avec l’IA' }).click();
+  await page.getByRole('button', { name: 'Proposer un découpage' }).click();
+  const dialog = screen.getByRole('dialog', {
+    name: 'Orienter le découpage avec l’IA',
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
+  finish({ tasks: [{ title: 'Réponse tardive' }] });
+  await expect
+    .poll(() =>
+      screen.queryByRole('dialog', { name: 'Orienter le découpage avec l’IA' }),
+    )
+    .toBeNull();
+  expect(
+    screen.queryByRole('dialog', { name: 'Proposition de sous-tâches' }),
+  ).toBeNull();
+  expect(
+    api.mock.calls.filter(
+      ([path, init]) => init?.method && !String(path).endsWith('/ai-subtasks'),
+    ),
+  ).toHaveLength(0);
+  expect(
+    api.mock.calls.some(([path]) => path === '/p/resources/r/ai-subtasks'),
+  ).toBe(true);
 });
