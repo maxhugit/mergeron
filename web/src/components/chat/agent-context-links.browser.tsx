@@ -2,7 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { AgentContextLinks } from './agent-context-links';
 import type { ProjectSummary } from '@/lib/projects-api';
 import i18n, { i18nReady } from '@/i18n';
@@ -57,6 +57,7 @@ test.each([390, 1280])(
         resourceId: 'tasks',
         title: 'Cadrer les objectifs et les usages du site du club',
         parentTaskId: null,
+        progress: 30,
       },
       ...Array.from({ length: 8 }, (_, index) => ({
         id: `sub-${index}`,
@@ -89,6 +90,15 @@ test.each([390, 1280])(
           directory: '/work/livrables/report',
           linkedAgentIds: ['agent'],
           conversations: [],
+          documents: [
+            {
+              id: 'doc',
+              name: 'Scenario.md',
+              sourcePath: '/work/scenario.md',
+              deletedAt: null,
+              currentVersionNumber: 3,
+            },
+          ],
         },
       ],
     };
@@ -96,6 +106,10 @@ test.each([390, 1280])(
       if (init?.method === 'PATCH') {
         const task = tasks.find((task) => task.id === path.split('/').at(-1))!;
         Object.assign(task, JSON.parse(String(init.body)));
+        tasks[0].progress = Math.round(
+          tasks.slice(1).reduce((sum, item) => sum + (item.progress ?? 0), 0) /
+            (tasks.length - 1),
+        );
       }
       return Promise.resolve(structuredClone(data));
     });
@@ -135,6 +149,23 @@ test.each([390, 1280])(
     ).toBeLessThan(3);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page
+      .getByRole('button', {
+        name: 'Cadrage du site BBCC — questions, réponses et décisions',
+        exact: true,
+      })
+      .hover();
+    expect(
+      await screen.findByRole('dialog', {
+        name: 'Cadrage du site BBCC — questions, réponses et décisions',
+      }),
+    ).toBeVisible();
+    expect(
+      await screen.findByRole('link', { name: 'Scenario.md' }),
+    ).toHaveAttribute('target', '_blank');
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/agent-deliverable-preview-${width}.png`,
+    });
+    await page
       .getByRole('button', { name: /Ouvrir le dossier du livrable/ })
       .click();
     expect(folder).toHaveBeenCalledWith('/work/livrables/report');
@@ -157,12 +188,24 @@ test.each([390, 1280])(
     expect(
       screen.queryByRole('button', { name: /Autre sous-tâche/ }),
     ).toBeNull();
-    const percentage = screen.getByRole('spinbutton', {
-      name: 'Pourcentage de Formaliser les problèmes à résoudre',
+    const slider = screen.getByRole('slider', {
+      name: 'Avancement de Formaliser les problèmes à résoudre',
     });
-    fireEvent.change(percentage, { target: { value: '65' } });
-    const group = percentage.closest('[role=group]')!;
-    fireEvent.click(group.querySelector('button')!);
+    slider.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect
+      .poll(
+        () =>
+          screen.getByRole('button', { name: /Formaliser les problèmes/ })
+            .textContent,
+      )
+      .toContain('41 %');
+    await expect.poll(() => slider.hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull();
+    expect(screen.getAllByRole('slider')).toHaveLength(3);
+    fireEvent.change(slider, { target: { value: '65' } });
+    fireEvent.pointerUp(slider);
     await expect
       .poll(
         () =>

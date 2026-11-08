@@ -25,6 +25,11 @@ vi.mock('@/lib/platform-session', () => ({
 vi.mock('@/hooks/use-deliverable-directory-aliases', () => ({
   useDeliverableDirectoryAliases: () => ({}),
 }));
+vi.mock('./explorer-tasks', () => ({
+  ExplorerTasks: ({ revealTaskId }: { revealTaskId?: string }) => (
+    <div data-testid="task-inventory">{revealTaskId}</div>
+  ),
+}));
 vi.mock('./explorer-deliverables', () => ({
   ExplorerDeliverables: () => <div>Deliverables inventory</div>,
 }));
@@ -417,4 +422,47 @@ describe('return to the primary agent reference', () => {
       }),
     ).toBeNull();
   });
+});
+
+it('targets the Tasks sidebar only for the current agent without changing its work reference', async () => {
+  const change = vi.fn();
+  render(
+    <WorkspaceTree
+      cwd="/w"
+      project={
+        {
+          id: 'p',
+          resources: [{ id: 'tasks', type: 'task_board' }],
+          workspaces: [],
+        } as unknown as NonNullable<
+          Parameters<typeof WorkspaceTree>[0]['project']
+        >
+      }
+      agentThreadId="agent"
+      desktop
+      mobileOpen={false}
+      onMobileClose={() => {}}
+      onFile={() => {}}
+      onActiveWorkspaceChange={change}
+    />,
+  );
+  act(() =>
+    window.dispatchEvent(
+      new CustomEvent('mergeron:explorer-work', {
+        detail: { threadId: 'other-agent', tab: 'tasks', taskId: 'foreign' },
+      }),
+    ),
+  );
+  expect(screen.queryByTestId('task-inventory')).toBeNull();
+  act(() =>
+    window.dispatchEvent(
+      new CustomEvent('mergeron:explorer-work', {
+        detail: { threadId: 'agent', tab: 'tasks', taskId: 'parent' },
+      }),
+    ),
+  );
+  expect(await screen.findByTestId('task-inventory')).toHaveTextContent(
+    'parent',
+  );
+  expect(change).not.toHaveBeenCalled();
 });

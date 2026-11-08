@@ -167,6 +167,13 @@ for (const width of [390, 1280])
     expect(
       screen.getByRole('button', { name: /^Préparer le site du club/ }),
     ).toHaveAttribute('aria-expanded', 'true');
+    await expect
+      .poll(() =>
+        screen
+          .getByRole('button', { name: /^Un autre chantier/ })
+          .hasAttribute('disabled'),
+      )
+      .toBe(false);
     fireEvent.click(screen.getByRole('button', { name: /^Un autre chantier/ }));
     await screen.findByText('Une sous-tâche incompatible');
     await page
@@ -196,3 +203,46 @@ for (const width of [390, 1280])
       await screen.findByRole('button', { name: /^Préparer le site du club/ }),
     ).toHaveAttribute('aria-expanded', 'false');
   });
+
+test('reveals the exact parent on a sidebar request and can close and reveal it again', async () => {
+  const client = new QueryClient();
+  const content = (request: number) => (
+    <QueryClientProvider client={client}>
+      <ExplorerTasks
+        project={project}
+        agentThreadId="agent"
+        revealTaskId="main"
+        revealRequestId={request}
+      />
+    </QueryClientProvider>
+  );
+  const view = render(content(1));
+  const parent = await screen.findByRole('button', {
+    name: /^Préparer le site du club/,
+  });
+  await expect.poll(() => parent.hasAttribute('disabled')).toBe(false);
+  expect(parent).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(parent);
+  await expect.poll(() => parent.getAttribute('aria-expanded')).toBe('false');
+  view.rerender(content(2));
+  expect(parent).toHaveAttribute('aria-expanded', 'true');
+  expect(
+    screen.getByRole('button', { name: /^Un autre chantier/ }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expect
+    .poll(() =>
+      screen
+        .getByRole('button', { name: /^Un autre chantier/ })
+        .hasAttribute('disabled'),
+    )
+    .toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: /^Un autre chantier/ }));
+  await expect
+    .poll(() =>
+      screen
+        .getByRole('button', { name: /^Un autre chantier/ })
+        .getAttribute('aria-expanded'),
+    )
+    .toBe('true');
+  expect(parent).toHaveAttribute('aria-expanded', 'true');
+});

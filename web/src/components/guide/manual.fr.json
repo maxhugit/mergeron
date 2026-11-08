@@ -988,6 +988,8 @@
           {
             "title": "Statuts et avancement",
             "paragraphs": [
+              "Depuis un agent, les liens Livrable et Tâche utilisent la même logique : aperçu au survol, clic pour le maintenir ouvert et bouton dédié pour ouvrir la sidebar droite sur l’élément concerné. Le titre de l’aperçu ouvre sa fiche.",
+              "Dans l’aperçu des sous-tâches, une seule barre permet de modifier le pourcentage. La sauvegarde se fait au relâchement, au clavier ou à la sortie du champ ; le statut reste inchangé. L’avancement global affiché pour le parent inclut toutes ses sous-tâches.",
               "Les colonnes principales sont personnalisables, sauf Actions non assignées. Supprimer une colonne replace ses tâches dans cette colonne système.",
               "Pour un parent avec enfants, l’estimation est la somme des estimations et l’avancement la moyenne non pondérée des pourcentages. Deux enfants à 100 % et 0 % donnent donc 50 %, même si leurs charges diffèrent."
             ],

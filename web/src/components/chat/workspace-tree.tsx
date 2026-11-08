@@ -83,22 +83,44 @@ export function WorkspaceTree({
   const [view, setView] = useState<
     'folders' | 'deliverables' | 'tasks' | 'sources'
   >('folders');
+  const [revealDeliverable, setRevealDeliverable] = useState<string | null>(
+    null,
+  );
+  const [workReveal, setWorkReveal] = useState<{
+    tasks: number;
+    deliverables: number;
+    taskId?: string;
+  }>({ tasks: 0, deliverables: 0 });
   useEffect(() => {
     const open = (event: Event) => {
       const d = (
         event as CustomEvent<{
           threadId: string;
           tab: 'deliverables' | 'tasks';
+          taskId?: string;
+          directory?: string;
         }>
       ).detail;
       if (
         d?.threadId === agentThreadId &&
+        (d.tab === 'tasks' || d.tab === 'deliverables') &&
         project?.resources.some(
           (r) =>
             r.type === (d.tab === 'tasks' ? 'task_board' : 'deliverable_board'),
         )
       ) {
         setView(d.tab);
+        setWorkReveal((previous) => ({
+          ...previous,
+          [d.tab]: previous[d.tab] + 1,
+          ...(d.tab === 'tasks'
+            ? { taskId: typeof d.taskId === 'string' ? d.taskId : undefined }
+            : {}),
+        }));
+        if (d.tab === 'deliverables')
+          setRevealDeliverable(
+            typeof d.directory === 'string' ? d.directory : null,
+          );
         useLayoutStore.getState().setWorkspaceTreeCollapsed(false);
       }
     };
@@ -106,9 +128,6 @@ export function WorkspaceTree({
     return () => window.removeEventListener('mergeron:explorer-work', open);
   }, [agentThreadId, project]);
   const [sourceStore] = useState(createFilesStore);
-  const [revealDeliverable, setRevealDeliverable] = useState<string | null>(
-    null,
-  );
   const aliases = useDeliverableDirectoryAliases(project);
   const [folderConnectionId, setFolderConnectionId] = useState<string | null>(
     null,
@@ -295,9 +314,15 @@ export function WorkspaceTree({
             onReference={onActiveWorkspaceChange}
             onFile={onFile}
             revealPath={revealDeliverable}
+            revealRequestId={workReveal.deliverables}
           />
         ) : view === 'tasks' ? (
-          <ExplorerTasks project={project} agentThreadId={agentThreadId} />
+          <ExplorerTasks
+            project={project}
+            agentThreadId={agentThreadId}
+            revealTaskId={workReveal.taskId}
+            revealRequestId={workReveal.tasks}
+          />
         ) : view === 'sources' ? (
           <FileBrowserContext.Provider value={sourceStore}>
             <WorkspaceGitPanel

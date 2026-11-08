@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AgentContextLinks } from './agent-context-links';
@@ -21,9 +27,16 @@ vi.mock('@/components/projects/project-deliverables-manager', () => ({
       </div>
     ) : null,
 }));
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: globalThis.__testTranslate }),
-}));
+vi.mock('react-i18next', async (original) => {
+  const actual = await original<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: (ns?: string) =>
+      ns === 'workspaces'
+        ? actual.useTranslation(ns)
+        : { t: globalThis.__testTranslate },
+  };
+});
 vi.mock('@/components/projects/project-task-manager', () => ({
   ProjectTaskManager: ({
     initialTaskId,
@@ -129,6 +142,11 @@ it('opens the exact deliverable, parent or subtask without navigating away', asy
   api.mockResolvedValue(boardData());
   show();
   fireEvent.click(await screen.findByRole('button', { name: 'Design report' }));
+  fireEvent.click(
+    within(
+      await screen.findByRole('dialog', { name: 'Design report' }),
+    ).getByRole('button', { name: 'Design report' }),
+  );
   expect(
     await screen.findByRole('dialog', { name: 'report' }),
   ).toBeInTheDocument();
@@ -228,4 +246,74 @@ it('does not claim no relationships while loading or on access failure', async (
   expect(
     screen.queryByText('No linked deliverable or task'),
   ).not.toBeInTheDocument();
+});
+
+it('shows the server main-task progress, including work outside the current agent', async () => {
+  const data = boardData();
+  data.tasks[0].progress = 75;
+  api.mockResolvedValue(data);
+  show();
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /2 subtasks completed out of 8/,
+    }),
+  );
+  expect(
+    screen.getByRole('progressbar', { name: 'Progress of task Main task' }),
+  ).toHaveAttribute('aria-valuenow', '75');
+});
+it('opens the Tasks sidebar on the exact parent without opening a second editor', async () => {
+  api.mockResolvedValue(boardData());
+  const event = vi.fn();
+  window.addEventListener('mergeron:explorer-work', event);
+  show();
+  try {
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open task in sidebar · Main task',
+      }),
+    );
+    expect(event).toHaveBeenCalledOnce();
+    expect((event.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      threadId: 'agent',
+      tab: 'tasks',
+      taskId: 'parent',
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  } finally {
+    window.removeEventListener('mergeron:explorer-work', event);
+  }
+});
+
+it('previews only active documents with their versions and the standard separate document window', async () => {
+  const data = boardData();
+  Object.assign(data.deliverables[0], {
+    documents: [
+      {
+        id: 'one',
+        name: 'Report.md',
+        sourcePath: '/p/report.md',
+        currentVersionNumber: 2,
+        deletedAt: null,
+      },
+      {
+        id: 'two',
+        name: 'Deleted.md',
+        sourcePath: '/p/deleted.md',
+        currentVersionNumber: 1,
+        deletedAt: 1,
+      },
+    ],
+  });
+  api.mockResolvedValue(data);
+  show();
+  fireEvent.click(await screen.findByRole('button', { name: 'Design report' }));
+  const link = await screen.findByRole('link', { name: 'Report.md' });
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(link.getAttribute('href')).toContain(
+    '/document?path=%2Fp%2Freport.md',
+  );
+  expect(screen.getByText('V2')).toBeVisible();
+  expect(screen.queryByText('Deleted.md')).toBeNull();
 });
