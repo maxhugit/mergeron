@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { page } from 'vitest/browser';
 import { HelpRoute } from './help-route';
+import { guideVersions } from '@/components/guide/guide-content';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 
@@ -32,7 +33,7 @@ test.each([
           : 'Published release timeline',
     });
     const headings = within(timeline).getAllByRole('heading');
-    expect(headings).toHaveLength(15);
+    expect(headings).toHaveLength(guideVersions.length);
     expect(headings[1].getBoundingClientRect().top).toBeGreaterThan(
       headings[0].getBoundingClientRect().top,
     );

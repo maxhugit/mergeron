@@ -25,13 +25,13 @@ it('opens and translates the published version timeline without changing its sta
     name: 'Published release timeline',
   });
   expect(within(timeline).getAllByRole('heading')[0]).toHaveTextContent(
-    'v0.7.1',
+    'v0.7.2',
   );
   expect(
     within(timeline).getByRole('heading', { name: 'v0.1.0' }),
   ).toBeVisible();
   expect(
-    within(timeline).getByRole('link', { name: /Release notes for v0.7.1/ }),
+    within(timeline).getByRole('link', { name: /Release notes for v0.7.2/ }),
   ).toHaveAttribute('rel', 'noopener noreferrer');
   await act(async () => {
     await i18n.changeLanguage('fr');

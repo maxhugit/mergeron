@@ -2686,7 +2686,7 @@
             "title": "Lire cet historique",
             "paragraphs": [
               "Cette frise résume les publications GitHub et leurs dates en UTC. Un tag décrit le contenu publié à cette date ; les corrections fusionnées ensuite ne sont pas attribuées à une ancienne version.",
-              "Le guide suit le code de cette installation. Les nouveautés postérieures au dernier tag, comme le centre de notifications et les livrables Git, peuvent être présentes sur la dev avant une prochaine publication. Consultez Serveur → Version actuelle pour identifier votre build."
+              "Le guide suit le code de cette installation. Des évolutions fusionnées après un tag peuvent être présentes sur la dev avant une prochaine publication. Consultez Serveur → Version actuelle pour identifier votre build."
             ],
             "warning": "La présence d’un tag dans cette frise ne signifie pas qu’il est installé ou qu’une mise à jour est sûre pour votre environnement. Les droits, compétences installées et compatibilités du Manager restent déterminants."
           },

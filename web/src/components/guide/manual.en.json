@@ -2685,7 +2685,7 @@
             "title": "Read this history",
             "paragraphs": [
               "This timeline summarizes GitHub releases and their UTC dates. A tag describes the code published then; later merged changes are not assigned to older releases.",
-              "The guide follows this installation’s code. Features merged after the latest tag, such as the notification center and Git deliverables, can appear in development before the next release. Check Server → Current version for your build."
+              "The guide follows this installation’s code. Changes merged after a tag can appear in development before the next release. Check Server → Current version for your build."
             ],
             "warning": "A tag appearing here does not mean it is installed or safe to deploy in your environment. Permissions, installed capabilities and Manager compatibility still apply."
           },
