@@ -27,7 +27,9 @@ import { usePlatformSession } from '@/lib/platform-session';
 import { useSnackbarStore } from '@/stores/snackbar-store';
 
 export function NotificationBell() {
-  const { t } = useTranslation(['notifications', 'common'], { nsMode: 'fallback' });
+  const { t } = useTranslation(['notifications', 'common'], {
+    nsMode: 'fallback',
+  });
   const { query, enabled } = useInbox();
   const { open, toggle } = useInboxStore();
   const unread =
@@ -57,7 +59,9 @@ export function NotificationBell() {
   );
 }
 export function NotificationCenter() {
-  const { t, i18n } = useTranslation(['notifications', 'common'], { nsMode: 'fallback' });
+  const { t, i18n } = useTranslation(['notifications', 'common'], {
+    nsMode: 'fallback',
+  });
   const { query, id, enabled } = useInbox();
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -332,7 +336,9 @@ export function NotificationCenter() {
   );
 }
 export function NotificationPreferences() {
-  const { t } = useTranslation(['notifications', 'common'], { nsMode: 'fallback' });
+  const { t } = useTranslation(['notifications', 'common'], {
+    nsMode: 'fallback',
+  });
   const session = usePlatformSession();
   const id = session.data?.personId;
   const client = useQueryClient();
