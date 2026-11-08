@@ -778,9 +778,19 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           if (preview.changes.some((c) => c.action === 'export'))
             await this.apply(p, { options, fingerprint: preview.fingerprint });
         } catch (e) {
-          const current = this.settings(p, r);
-          if (current) this.save(p, r, { ...current, lastError: errorCode(e) });
-          if (['GIT_BUSY', 'GIT_AGENT_STATE_UNKNOWN'].includes(errorCode(e))) {
+          let current: Settings | null = null;
+          try {
+            current = this.settings(p, r);
+            if (current)
+              this.save(p, r, { ...current, lastError: errorCode(e) });
+          } catch {
+            // A deleted board or revoked actor must not crash a background job
+            // or cause it to borrow another identity to persist diagnostics.
+          }
+          if (
+            current &&
+            ['GIT_BUSY', 'GIT_AGENT_STATE_UNKNOWN'].includes(errorCode(e))
+          ) {
             this.enqueue(p, r, 5000);
             return;
           }
@@ -789,7 +799,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           );
         }
       };
-      void (access ? accessContext.run(access, run) : run());
+      void (access ? accessContext.run(access, run) : run()).catch(() => {
+        new Logger(GitDeliverablesService.name).warn(
+          'Git deliverable background job could not finish',
+        );
+      });
     }, delay);
     timer.unref();
     this.timers.set(r, timer);

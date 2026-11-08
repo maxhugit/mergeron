@@ -23,6 +23,7 @@ import type { GitMutationGateService } from '../threads/git-mutation-gate.servic
 import type { SettingsService } from '../settings/settings.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
 import { accessContext } from '../auth/access-context';
+import { Logger } from '@nestjs/common';
 import { digest } from '../deliverables/git-deliverables-format';
 
 describe('optional Git deliverables with real retained versions and a real repository', () => {
@@ -423,6 +424,29 @@ describe('optional Git deliverables with real retained versions and a real repos
         .documents('p', 'board', items[0].id)
         .map((d) => d.currentVersionNumber),
     ).toEqual([1, 1]);
+  });
+  it('settles a queued export safely when its board is deleted', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Removed board',
+    });
+    const doc = await upload(item.id, 'retained');
+    await sync();
+    service.onModuleInit();
+    const warning = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      await upload(item.id, 'pending export', doc.id);
+      database.db
+        .delete(schema.projectResources)
+        .where(eq(schema.projectResources.id, 'board'))
+        .run();
+      await vi.waitFor(() => expect(warning).toHaveBeenCalled(), {
+        timeout: 3000,
+      });
+    } finally {
+      warning.mockRestore();
+    }
   });
   it('exports an independently saved version automatically once mode is active', async () => {
     const item = await deliverables.create('p', 'board', {
