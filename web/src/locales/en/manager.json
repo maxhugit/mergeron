@@ -297,5 +297,6 @@
     "disabled": "Disabled",
     "external": "External service"
   },
-  "discoveredInfrastructure": "Additional stack container · role: {{role}}. Observation only; this listing does not add it to update plans or adoption records."
+  "discoveredInfrastructure": "Additional stack container · role: {{role}}. Observation only; this listing does not add it to update plans or adoption records.",
+  "managerHelperCleanupPending": "Manager helper cleanup needs attention. Affected containers are retained; persistent data is not deleted."
 }

@@ -322,3 +322,22 @@ it('renders discovered replica and future-service cards without adding adoption 
     screen.queryByRole('button', { name: 'Adopt this installation' }),
   ).not.toBeInTheDocument();
 });
+
+it('reports deferred helper cleanup without marking a healthy installation as failed', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        json({
+          ...protectedStatus,
+          managerHelperCleanup: { retained: 1, unavailable: false },
+        }),
+      ),
+    ),
+  );
+  fixture.render(<ManagerStatusCard />);
+  expect(
+    await screen.findByText(/Manager helper cleanup needs attention/),
+  ).toBeVisible();
+  expect(screen.getByText('codex-webui')).toBeVisible();
+});

@@ -67,6 +67,7 @@ export type ManagerBackupPolicy =
   | 'legacy-full-v1';
 
 export interface ManagerStatus {
+  managerHelperCleanup?: { retained: number; unavailable: boolean };
   optionalServices?: {
     transcription?: {
       enabled: boolean;

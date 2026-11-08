@@ -297,5 +297,6 @@
     "disabled": "Désactivée",
     "external": "Service externe"
   },
-  "discoveredInfrastructure": "Conteneur supplémentaire de la stack · rôle : {{role}}. Observation uniquement ; cet affichage ne l’ajoute pas au plan de mise à jour ni au registre d’adoption."
+  "discoveredInfrastructure": "Conteneur supplémentaire de la stack · rôle : {{role}}. Observation uniquement ; cet affichage ne l’ajoute pas au plan de mise à jour ni au registre d’adoption.",
+  "managerHelperCleanupPending": "Le nettoyage des auxiliaires du Manager reste à vérifier. Les conteneurs concernés sont conservés ; aucune donnée persistante n’est supprimée."
 }
