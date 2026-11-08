@@ -10,7 +10,7 @@ export const largeGitDocument = 10 * 1024 * 1024;
 const id = z
   .string()
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/)
-  .refine((s) => !['constructor', 'prototype', '__proto__'].includes(s));
+  .refine((s) => !Object.hasOwn(Object.prototype, s) && s !== 'prototype');
 const hasControl = (s: string) =>
   Array.from(s).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
 const name = z
@@ -21,6 +21,7 @@ const name = z
     (s) =>
       !/[\\/]/.test(s) &&
       !hasControl(s) &&
+      Buffer.byteLength(s) <= 255 &&
       !s.startsWith('.') &&
       s !== 'livrable.json',
   );
@@ -30,12 +31,12 @@ export const manifestSchema = z
     format: z.literal('mergeron-deliverable'),
     version: z.literal(1),
     id,
-    title: z.string().trim().min(1).max(300),
-    description: z.string().max(10000),
+    title: z.string().trim().min(1).max(160),
+    description: z.string().max(20000),
     labels: z.array(label).max(50),
     documents: z
       .array(
-        z.object({ id, path: name, labels: z.array(label).max(50) }).strict(),
+        z.object({ id, path: name, labels: z.array(label).max(10) }).strict(),
       )
       .max(500),
   })
