@@ -100,7 +100,17 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     private readonly gate: GitMutationGateService,
   ) {}
   onModuleInit() {
-    this.deliverables.onGitChange = (p, r) => this.enqueue(p, r);
+    this.deliverables.onGitChange = (p, r) => {
+      try {
+        this.enqueue(p, r);
+      } catch {
+        // Git is an optional projection. Scheduling it must never roll back
+        // the domain save, including internal boards that cannot opt into Git.
+        new Logger(GitDeliverablesService.name).warn(
+          'Git deliverable export could not be scheduled',
+        );
+      }
+    };
   }
   private board(p: string, r: string) {
     requireProjectAccess(p);

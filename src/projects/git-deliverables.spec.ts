@@ -425,6 +425,24 @@ describe('optional Git deliverables with real retained versions and a real repos
         .map((d) => d.currentVersionNumber),
     ).toEqual([1, 1]);
   });
+  it('does not fail a domain save when an internal board is ineligible for Git', async () => {
+    database.db
+      .update(schema.projectResources)
+      .set({ config: { internal: true } })
+      .where(eq(schema.projectResources.id, 'board'))
+      .run();
+    service.onModuleInit();
+    const warning = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      await expect(
+        deliverables.create('p', 'board', { title: 'Internal document' }),
+      ).resolves.toHaveProperty('id');
+    } finally {
+      warning.mockRestore();
+    }
+  });
   it('settles a queued export safely when its board is deleted', async () => {
     const item = await deliverables.create('p', 'board', {
       title: 'Removed board',
