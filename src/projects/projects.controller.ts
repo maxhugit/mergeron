@@ -225,10 +225,15 @@ export class ProjectsController {
 
   @Post()
   async create(
-    @Body() body: { name: string; workspacePath?: string },
+    @Body()
+    body: { name: string; workspacePath?: string; description?: unknown },
     @Req() request: IdentityRequest,
   ) {
-    const project = await this.projects.create(body.name, body.workspacePath);
+    const project = await this.projects.create(
+      body.name,
+      body.workspacePath,
+      body.description,
+    );
     this.projects.recordActivity(
       project.id,
       'project_created',
@@ -244,18 +249,22 @@ export class ProjectsController {
   @Patch(':id')
   rename(
     @Param('id') id: string,
-    @Body() body: { name: string },
+    @Body() body: { name?: string; description?: unknown },
     @Req() request: IdentityRequest,
   ) {
     const before = this.projects.get(id);
-    const project = this.projects.rename(id, body.name);
+    const project = this.projects.rename(id, body.name, body.description);
     this.projects.recordActivity(
       id,
-      'project_renamed',
+      before.name === project.name ? 'project_updated' : 'project_renamed',
       'project',
       id,
       project.name,
-      { before: before.name, after: project.name },
+      {
+        before: before.name,
+        after: project.name,
+        descriptionChanged: before.description !== project.description,
+      },
       activityActor(request),
     );
     return { project };

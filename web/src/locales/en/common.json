@@ -1678,5 +1678,7 @@
   "agentOtherSubtasks_other": "{{count}} other subtasks in this main task, including {{completed}} completed.",
   "agentDifferentMainTasks": "This agent has assignments to different main tasks. Review its assignments.",
   "agentSubtaskReview": "In review",
-  "gitDeliverablesTitle": "Git deliverables"
+  "gitDeliverablesTitle": "Git deliverables",
+  "projectShortDescription": "Short description",
+  "projectShortDescriptionHint": "Optional, multiple lines allowed · Maximum 1,000 characters."
 }

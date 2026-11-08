@@ -1357,8 +1357,10 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   async create(
     nameValue: string,
     workspacePathValue?: string,
+    descriptionValue?: unknown,
   ): Promise<Project> {
     const name = this.validateName(nameValue);
+    const description = this.validateDescription(descriptionValue);
     if (workspacePathValue?.trim())
       throw new BadRequestException(
         'The primary workspace path is generated from the project ID. Attach other folders as secondary workspaces.',
@@ -1370,6 +1372,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       id,
       name,
       workspacePath,
+      description,
       workspaceLayoutVersion: WORKSPACE_LAYOUT_VERSION,
       mcpServerIds: [],
       appIds: [],
@@ -3944,16 +3947,30 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     return { ok: true };
   }
 
-  rename(id: string, nameValue: string): Project {
+  private validateDescription(value: unknown): string {
+    if (value === undefined) return '';
+    if (typeof value !== 'string' || value.length > 1000)
+      throw new BadRequestException(
+        'Project description must be text of at most 1000 characters',
+      );
+    return value.replace(/\r\n?/g, '\n').trim();
+  }
+
+  rename(id: string, nameValue?: string, descriptionValue?: unknown): Project {
     const project = this.get(id);
-    const name = this.validateName(nameValue);
+    const name =
+      nameValue === undefined ? project.name : this.validateName(nameValue);
+    const description =
+      descriptionValue === undefined
+        ? project.description
+        : this.validateDescription(descriptionValue);
     const updatedAt = Date.now();
     this.db
       .update(projects)
-      .set({ name, updatedAt })
+      .set({ name, description, updatedAt })
       .where(eq(projects.id, id))
       .run();
-    return { ...project, name, updatedAt };
+    return { ...project, name, description, updatedAt };
   }
 
   async remove(
