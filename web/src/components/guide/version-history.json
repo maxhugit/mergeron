@@ -1,5 +1,23 @@
 [
   {
+    "tag": "v0.7.2",
+    "date": "2026-11-08",
+    "highlights": {
+      "fr": [
+        "Centre de notifications personnel : lecture, filtres, regroupement par projet et conservation réglable.",
+        "Description courte des projets et liens compacts vers les agents.",
+        "Livrables Git synchronisés dans la copie propre à chaque agent, avec contrôles de propriété.",
+        "Guide actualisé et historique bilingue des versions ; fiabilisation du CLI, des réglages Codex et du nettoyage des auxiliaires du Manager."
+      ],
+      "en": [
+        "Personal notification center with read state, filters, project grouping and configurable retention.",
+        "Short project descriptions and compact agent links.",
+        "Git deliverables synchronized through each agent’s own copy, with ownership checks.",
+        "Updated guide and bilingual release timeline; more reliable CLI operations, Codex settings and Manager helper cleanup."
+      ]
+    }
+  },
+  {
     "tag": "v0.7.1",
     "date": "2026-11-08",
     "highlights": {
