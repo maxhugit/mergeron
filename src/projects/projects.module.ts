@@ -33,6 +33,8 @@ import { ProjectLocationsService } from './project-locations.service';
 import { ProjectConnectionsController } from './project-connections.controller';
 import { ProjectLocationTransfersController } from './project-location-transfers.controller';
 import { ProjectConnectionToolsService } from './project-connection-tools.service';
+import { GitDeliverablesController } from './git-deliverables.controller';
+import { GitDeliverablesService } from './git-deliverables.service';
 
 @Module({
   imports: [
@@ -46,6 +48,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     ProjectKnowledgeModule,
   ],
   controllers: [
+    GitDeliverablesController,
     ProjectIntegrityController,
     DocumentOrganizationController,
     ProjectLocationsController,
@@ -59,6 +62,7 @@ import { ProjectConnectionToolsService } from './project-connection-tools.servic
     WorkspaceResourcesController,
   ],
   providers: [
+    GitDeliverablesService,
     ProjectTaskRuntimeService,
     ProjectAgentLaunchService,
 

@@ -1,4 +1,5 @@
 import { GitIntegrateBranch } from './git-integrate-branch';
+import { GitDeliverablesDiscovery } from '../projects/git-deliverables-settings';
 import { GitPullRequestTracker } from './git-pull-request-tracker';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -584,6 +585,13 @@ function RepositoryPanel({
             )}
             {snapshot.error && <GitInspectionError error={snapshot.error} />}
           </div>
+          {copy?.state === 'ready' && (
+            <GitDeliverablesDiscovery
+              projectId={projectId}
+              copyId={copy.id}
+              inspectedAt={snapshot.data?.inspectedAt}
+            />
+          )}
           {resource.enabled && (
             <Tabs
               value={tab}

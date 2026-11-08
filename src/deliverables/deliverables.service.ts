@@ -126,6 +126,7 @@ const MAX_FILE = 100 * 1024 * 1024;
 
 @Injectable()
 export class DeliverablesService implements OnModuleInit {
+  onGitChange?: (projectId: string, resourceId: string) => void;
   async onModuleInit() {
     const logger = new Logger(DeliverablesService.name);
     const result = await migrateDeliverableDocumentRoots(this.db, (message) =>
@@ -1441,6 +1442,7 @@ export class DeliverablesService implements OnModuleInit {
         id,
       ),
     );
+    this.onGitChange?.(projectId, resourceId);
     return created;
   }
   async linkPrimaryTask(
@@ -1585,6 +1587,7 @@ export class DeliverablesService implements OnModuleInit {
             createdAt: now,
           })
           .run();
+      this.onGitChange?.(projectId, resourceId);
       return changed;
     });
   }
@@ -2049,6 +2052,7 @@ export class DeliverablesService implements OnModuleInit {
               createdAt: Date.now(),
             })
             .run();
+        this.onGitChange?.(projectId, resourceId);
         return created;
       });
     } catch (error) {
@@ -2426,6 +2430,7 @@ export class DeliverablesService implements OnModuleInit {
         return { document, version };
       });
       try {
+        this.onGitChange?.(projectId, resourceId);
         this.onDocumentVersion?.(projectId, resourceId, deliverableId, id);
       } catch {
         new Logger(DeliverablesService.name).warn(
@@ -2773,6 +2778,7 @@ export class DeliverablesService implements OnModuleInit {
         } catch {
           previousFileRetained = true;
         }
+        this.onGitChange?.(projectId, resourceId);
         this.onDocumentVersion?.(
           projectId,
           resourceId,

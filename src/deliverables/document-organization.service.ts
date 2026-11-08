@@ -185,6 +185,36 @@ export class DocumentOrganizationService
         })),
     };
   }
+  importGitOrganization(
+    p: string,
+    r: string,
+    id: string,
+    names: string[],
+    assignments: Record<string, string[]>,
+  ) {
+    const c = this.context(p, r, id, true);
+    const labels = names.map(
+      (name) =>
+        c.organization.labels.find((l) => l.name === name) ?? {
+          id: randomUUID(),
+          name,
+        },
+    );
+    const byName = new Map(labels.map((l) => [l.name, l.id]));
+    this.save(
+      p,
+      id,
+      c,
+      labels,
+      Object.fromEntries(
+        Object.entries(assignments).map(([doc, names]) => [
+          doc,
+          names.map((name) => byName.get(name)!),
+        ]),
+      ),
+      'document_labels_imported_from_git',
+    );
+  }
   private revision(actual: number, expected: unknown) {
     if (!Number.isSafeInteger(expected) || actual !== expected)
       throw new ConflictException('DOCUMENT_ORGANIZATION_CHANGED');
@@ -250,6 +280,7 @@ export class DocumentOrganizationService
         })
         .run();
     });
+    this.deliverables.onGitChange?.(p, c.item.resourceId);
   }
   createLabel(
     p: string,

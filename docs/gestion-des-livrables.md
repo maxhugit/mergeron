@@ -156,3 +156,10 @@ de livrables n’est créé automatiquement.
 Sauvegarder ensemble la base SQLite et le workspace principal, y compris
 `/workspaces/.mergeron-system/<id-projet>/history`, pour conserver métadonnées,
 copies et version de référence.
+
+# Intégration Git optionnelle
+
+Les livrables peuvent être projetés dans une copie Git et reconnus depuis leurs
+manifestes `livrable.json`. L’activation, les transferts et les conflits sont
+décrits dans [Livrables dans Git](livrables-git.md). Le mode est désactivé par
+défaut et ne réalise aucun commit ou push automatique.
