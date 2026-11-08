@@ -1,5 +1,13 @@
 import french from './manual.fr.json';
 import english from './manual.en.json';
+import versions from './version-history.json';
+
+export const guideVersions = versions;
+export function guideReleaseUrl(tag: string): string | undefined {
+  return versions.some((version) => version.tag === tag)
+    ? `https://github.com/maxhugit/mergeron/releases/tag/${encodeURIComponent(tag)}`
+    : undefined;
+}
 
 // Fixed destinations: opening help never sends a project URL, account, log or
 // conversation to GitHub. Localized content only chooses one of these targets.
@@ -22,6 +30,7 @@ export interface GuideSection {
   title: string;
   paragraphs?: string[];
   workRelationshipsDiagram?: { alt: string };
+  versionTimeline?: boolean;
   steps?: string[];
   actions?: { label: string; effect: string }[];
   links?: { destination: string; label: string; description?: string }[];
@@ -60,6 +69,7 @@ export function guideArticles(chapters: GuideChapter[]) {
   );
 }
 export function searchGuide(chapters: GuideChapter[], query: string) {
+  const language = chapters === guideManuals.fr ? 'fr' : 'en';
   const terms = normalizeGuideText(query).trim().split(/\s+/).filter(Boolean);
   if (!terms.length) return [];
   return guideArticles(chapters)
@@ -81,6 +91,12 @@ export function searchGuide(chapters: GuideChapter[], query: string) {
             link.description ?? '',
           ]),
           section.warning ?? '',
+          ...(section.versionTimeline
+            ? guideVersions.flatMap((version) => [
+                version.tag,
+                ...version.highlights[language],
+              ])
+            : []),
         ].join(' '),
       );
       const full = normalizeGuideText(

@@ -9,8 +9,36 @@ import {
   guideManuals,
   guideExternalUrl,
   searchGuide,
+  guideVersions,
+  guideReleaseUrl,
 } from './guide-content';
 describe('guide content integrity', () => {
+  it('keeps published tags unique, newest first, localized and searchable', () => {
+    const tags = guideVersions.map((v) => v.tag);
+    expect(new Set(tags).size).toBe(tags.length);
+    expect(tags).toContain('v0.1.0');
+    for (const [index, version] of guideVersions.entries()) {
+      expect(version.tag).toMatch(/^v\d+\.\d+\.\d+$/);
+      expect(new Date(version.date).toISOString().slice(0, 10)).toBe(
+        version.date,
+      );
+      if (index)
+        expect(version.date <= guideVersions[index - 1].date).toBe(true);
+      for (const language of ['fr', 'en'] as const) {
+        expect(version.highlights[language].length).toBeGreaterThan(0);
+        expect(
+          searchGuide(guideManuals[language], version.tag).map(
+            (r) => r.article.id,
+          ),
+        ).toContain('version-history');
+      }
+      expect(guideReleaseUrl(version.tag)).toBe(
+        `https://github.com/maxhugit/mergeron/releases/tag/${version.tag}`,
+      );
+    }
+    expect(guideReleaseUrl('../settings')).toBeUndefined();
+    expect(guideReleaseUrl('v99.0.0')).toBeUndefined();
+  });
   it('has matching stable chapter and article IDs in both languages', () => {
     expect(guideManuals.fr.map((c) => c.id)).toEqual(
       guideManuals.en.map((c) => c.id),

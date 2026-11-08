@@ -77,16 +77,20 @@
         "id": "first-project",
         "title": "Créer son premier projet",
         "summary": "Préparer un projet utilisable avant de confier du travail à un agent.",
-        "keywords": ["création", "démarrer", "nouveau", "configuration"],
+        "keywords": [
+          "création",
+          "démarrer",
+          "nouveau",
+          "configuration"
+        ],
         "sections": [
           {
             "title": "Parcours de démarrage",
             "steps": [
-              "Cliquez sur + à côté de Projets et donnez un nom explicite au projet.",
-              "Ouvrez le projet, complétez ses informations et ajoutez les participants autorisés.",
-              "Dans Emplacements et connexions, vérifiez l’espace de travail principal et ajoutez les dossiers ou connexions nécessaires.",
-              "Renseignez les connaissances utiles et sélectionnez les intégrations adaptées au projet.",
-              "Créez un agent pour poser une question ou réaliser un travail, ou un gestionnaire pour organiser les tâches et les livrables."
+              "Cliquez sur + à côté de Projets, donnez un nom et, si utile, une description courte avec plusieurs lignes.",
+              "Ouvrez les paramètres du projet : Informations générales permet de modifier ensuite son nom et sa description.",
+              "Ajoutez les participants et configurez les dossiers et connexions nécessaires avant de créer un agent.",
+              "Renseignez les connaissances et choisissez les intégrations autorisées. Vérifiez la référence et les permissions avant le premier message."
             ]
           },
           {
@@ -104,7 +108,11 @@
             ]
           }
         ],
-        "related": ["project-people", "locations", "agent-composer"]
+        "related": [
+          "project-people",
+          "locations",
+          "agent-composer"
+        ]
       },
       {
         "id": "desktop",
@@ -125,9 +133,10 @@
           {
             "title": "Se déplacer dans l’application",
             "paragraphs": [
-              "La barre latérale donne accès aux projets et à leurs ressources. Le bouton de réduction libère de la place sans supprimer les éléments. Les onglets d’un agent permettent de passer entre conversation et outils ouverts.",
-              "Le menu du compte contient les préférences personnelles et la déconnexion. Sur mobile et tablette, le menu … regroupe la connexion, le quota du compte Codex, l’actualisation et les paramètres administrateur. Le pourcentage du quota est distinct du contexte de la conversation. La taille du texte se règle de 80 à 150 % et est conservée dans le profil, séparément pour mobile (moins de 640 px), tablette (640 à 1 023 px) et ordinateur (à partir de 1 024 px). Elle reste aussi accessible dans Apparence du compte. L’administration serveur est distincte des paramètres d’un projet.",
-              "Le Guide de la plateforme propose un sommaire par chapitres et une recherche locale dans les articles, sans interroger les données de vos projets. Sur mobile, Sommaire affiche la navigation. Les liens Voir aussi, Précédent et Suivant conservent la lecture dans le guide ; Copier le lien permet de partager directement un article."
+              "Tableau de bord rassemble les projets visibles et les éléments demandant votre attention. La barre latérale donne accès aux ressources de chaque projet.",
+              "Le menu … est identique sur ordinateur, tablette et mobile : état de connexion, quota Codex, actualisation, Paramètres selon les droits, Documentation de Mergeron et formulaires GitHub pour incident ou amélioration. Le commutateur Français / English change rapidement la langue.",
+              "La taille du texte se règle dans ce menu et reste mémorisée par catégorie d’écran dans votre profil. Le menu Compte conserve les préférences personnelles, les notifications push et la déconnexion.",
+              "La cloche à gauche du compte ouvre les notifications. Le guide propose un sommaire, une recherche locale et des liens directs vers chaque article, dont l’Historique des versions."
             ]
           },
           {
@@ -166,12 +175,49 @@
             "steps": [
               "Après connexion, ouvrez Mon compte → Installer l’application, ou le menu Applications d’Edge si le navigateur le propose.",
               "L’application installée conserve la barre de titre native pour déplacer la fenêtre et accéder à réduire, agrandir et fermer.",
-              "Après une mise à jour, l’icône d’actualisation entre Paramètres et Compte nettoie les caches techniques de Mergeron, recherche une mise à jour du service worker et recharge la version du serveur. La connexion, les préférences et les notifications sont conservées. Copiez les brouillons avant de continuer : ils sont en mémoire seulement et une confirmation vous avertit s’il en reste."
+              "Utilisez … → Rafraîchir l’application pour actualiser les caches et recharger l’interface. Copiez vos brouillons auparavant ; une confirmation signale ceux encore en mémoire. Cette action ne met pas à jour le serveur."
             ],
             "warning": "L’installation dépend du navigateur et des règles de votre poste. Ce n’est pas un mode hors ligne pour les API, conversations et fichiers ; un rechargement n’installe pas une mise à jour du serveur."
           }
         ],
-        "related": ["server-update"]
+        "related": [
+          "server-update"
+        ]
+      },
+      {
+        "id": "notifications",
+        "title": "Consulter et gérer les notifications",
+        "summary": "Suivre les agents et erreurs dans un panneau personnel, sans perdre sa conversation.",
+        "keywords": [
+          "cloche",
+          "notifications",
+          "lu",
+          "rétention",
+          "projet"
+        ],
+        "sections": [
+          {
+            "title": "Ouvrir, lire et retrouver un agent",
+            "paragraphs": [
+              "La cloche à gauche du compte ouvre un panneau à droite. Son en-tête reste fixe ; seule la liste défile. Le panneau reste ouvert lorsque vous changez d’agent.",
+              "Les événements comprennent fins de travail, échecs, demandes d’approbation, questions et erreurs de l’interface. Les erreurs sont rouges. Cliquer marque la notification comme lue et ouvre l’agent ou le projet concerné."
+            ]
+          },
+          {
+            "title": "Filtrer, regrouper et conserver",
+            "paragraphs": [
+              "Toutes, Non lues et Lues filtrent la liste. L’enveloppe change l’état de lecture et Tout marquer comme lu traite les événements accessibles. Le compteur de la cloche reste le total non lu.",
+              "Par projet regroupe les événements : le projet ayant l’événement le plus récent vient en premier, puis chaque liste va du plus récent au plus ancien. Charger les plus anciennes complète la liste.",
+              "Le profil permet de conserver les notifications de 1 à 365 jours, avec 7 jours par défaut. Le nettoyage retire uniquement cet historique. Les notifications push par appareil sont indépendantes de ce panneau.",
+              "Seuls les projets et agents que vous pouvez consulter sont visibles, compteurs compris. Les changements de droits sont revérifiés côté serveur ; la liste est relue toutes les dix secondes."
+            ],
+            "warning": "Lire une notification n’autorise aucune action et ne répond pas à une approbation. Les conversations et demandes en attente ne sont pas supprimées avec cet historique."
+          }
+        ],
+        "related": [
+          "desktop",
+          "agent-approvals"
+        ]
       }
     ]
   },
@@ -296,7 +342,11 @@
             "warning": "La demande est publique et son envoi ne garantit ni réalisation ni délai. Retirez les noms, documents, adresses privées et captures confidentielles avant publication."
           }
         ],
-        "related": ["report-bug", "overview", "git-pr"]
+        "related": [
+          "report-bug",
+          "overview",
+          "git-pr"
+        ]
       }
     ]
   },
@@ -339,7 +389,10 @@
             ]
           }
         ],
-        "related": ["admin-people", "impersonation"]
+        "related": [
+          "admin-people",
+          "impersonation"
+        ]
       },
       {
         "id": "locations",
@@ -358,7 +411,7 @@
           {
             "title": "Les types d’emplacements",
             "paragraphs": [
-              "L’espace de travail principal permanent contient les documents, sources et livrables du projet. Les dossiers locaux associés conservent leurs chemins sur le serveur. Une connexion externe Git, SSH/SFTP ou FTP/FTPS décrit une destination distante ; ce n’est pas une copie locale.",
+              "Sous /workspaces/<projet>, Dossiers est réservé à l’organisation libre des utilisateurs. Les livrables, copies Sources et brouillons techniques sont gérés dans les zones internes du projet ; l’explorateur les présente dans leurs vues dédiées. Une connexion Git, SSH/SFTP ou FTP/FTPS décrit une destination ; elle ne constitue pas une copie locale.",
               "L’espace système est séparé et réservé aux administrateurs, en consultation. Il conserve les historiques et données techniques internes. Il ne peut pas devenir le dossier d’un agent ni être modifié par l’explorateur générique."
             ]
           },
@@ -421,7 +474,11 @@
             "warning": "Conserver les fichiers de travail ne permet pas de restaurer le projet complet. La suppression de l’espace système est définitive ; aucun nettoyage rétroactif d’anciens projets supprimés n’est déclenché."
           }
         ],
-        "related": ["locations", "backups", "project-people"]
+        "related": [
+          "locations",
+          "backups",
+          "project-people"
+        ]
       }
     ]
   },
@@ -458,6 +515,13 @@
               "Un nouvel agent peut être associé à une copie Git avant son premier message. Il n’est pas nécessaire de créer un historique pour préparer cette association. Le premier envoi démarre sa conversation ; un changement d’emplacement reste soumis aux contrôles de dossier et de permissions."
             ],
             "warning": "Les commandes d’exécution peuvent être réservées aux administrateurs. L’accès à un projet ou la création d’une fiche ne garantit pas le droit de lancer des outils."
+          },
+          {
+            "title": "Agents locaux Ollama",
+            "paragraphs": [
+              "Si le moteur local est configuré et disponible, choisissez explicitement un modèle Ollama autorisé lors de la création. Ce choix est distinct d’un agent utilisant le compte Codex.",
+              "Une panne du moteur local n’entraîne pas de repli automatique vers le cloud. Les outils disponibles dépendent du moteur et du modèle ; les droits du projet, le dossier de référence et les protections restent applicables."
+            ]
           }
         ],
         "related": [
@@ -516,7 +580,11 @@
             "warning": "Ne choisissez pas un accès complet simplement pour masquer une erreur de dossier. Corrigez d’abord l’emplacement ou les droits concernés."
           }
         ],
-        "related": ["agent-approvals", "agent-history", "integrations"]
+        "related": [
+          "agent-approvals",
+          "agent-history",
+          "integrations"
+        ]
       },
       {
         "id": "response-copy",
@@ -548,7 +616,9 @@
             "warning": "Un refus du presse-papiers est signalé. Ne supposez pas une copie réussie si une erreur apparaît ; vérifiez également les informations sensibles avant de coller ailleurs."
           }
         ],
-        "related": ["agent-history"]
+        "related": [
+          "agent-history"
+        ]
       },
       {
         "id": "agent-approvals",
@@ -581,7 +651,11 @@
             "warning": "Arrêter un agent, retirer un accès ou quitter une session n’annule pas les effets déjà acceptés sur les fichiers ou services externes."
           }
         ],
-        "related": ["agent-composer", "agent-history", "impersonation"]
+        "related": [
+          "agent-composer",
+          "agent-history",
+          "impersonation"
+        ]
       },
       {
         "id": "agent-history",
@@ -628,7 +702,11 @@
             ]
           }
         ],
-        "related": ["response-copy", "git-branches", "task-execution"]
+        "related": [
+          "response-copy",
+          "git-branches",
+          "task-execution"
+        ]
       },
       {
         "id": "agent-goals",
@@ -676,13 +754,23 @@
             "warning": "Mettre l’objectif en pause empêche les continuations futures, mais n’interrompt pas le tour déjà en cours. Utilisez aussi Arrêter si ce tour doit cesser. L’objectif ne dispense pas des approbations nécessaires."
           }
         ],
-        "related": ["agent-composer", "agent-approvals", "task-planning"]
+        "related": [
+          "agent-composer",
+          "agent-approvals",
+          "task-planning"
+        ]
       },
       {
         "id": "voice-dictation",
         "title": "Dicter une demande au microphone",
         "summary": "Dicter une demande avec le compte ChatGPT du CLI, puis relire le texte avant envoi.",
-        "keywords": ["microphone", "voix", "dictée", "audio", "transcription"],
+        "keywords": [
+          "microphone",
+          "voix",
+          "dictée",
+          "audio",
+          "transcription"
+        ],
         "sections": [
           {
             "title": "Dicter dans les écrans compatibles",
@@ -700,9 +788,19 @@
               "La dictée utilise le compte ChatGPT authentifié du CLI et le microphone du navigateur via WebRTC. Sa disponibilité dépend du CLI et du compte. Le texte obtenu reste un brouillon à relire : rien n’est envoyé automatiquement à l’agent."
             ],
             "warning": "Ne dictez pas de secrets ou d’informations sensibles sans tenir compte du service destinataire. Un texte transcrit peut comporter des erreurs : l’ajout au brouillon ne vaut pas validation de son contenu."
+          },
+          {
+            "title": "Transcrire un fichier plutôt que dicter au micro",
+            "paragraphs": [
+              "La transcription locale de fichiers est distincte de la dictée au micro. Installez la compétence Transcription, ouvrez un audio ou une vidéo puis choisissez Extraire l’audio, Transcrire ou Audio + transcription.",
+              "Suivez les étapes jusqu’au résultat prêt. Les sorties peuvent être téléchargées en MP3, TXT, SRT ou JSON selon l’action. Un résultat partiel peut contenir l’audio sans transcription ; ne le confondez pas avec une réussite complète.",
+              "Les repères SPEAKER_00, SPEAKER_01 distinguent acoustiquement les voix sans identifier les personnes. Relisez noms, chiffres et attributions. Les résultats de traitement sont personnels ; publier un document dans un livrable reste une action explicite."
+            ]
           }
         ],
-        "related": ["agent-composer"]
+        "related": [
+          "agent-composer"
+        ]
       },
       {
         "id": "agent-knowledge",
@@ -794,6 +892,13 @@
               "Paramètres → MCP interne présente les méthodes, paramètres, exemples et règles de droits issus du catalogue du serveur. Cette référence n’est pas une console d’exécution et ne donne aucun droit supplémentaire.",
               "Ces outils sont destinés aux agents de travail rattachés."
             ]
+          },
+          {
+            "title": "Modifier les tâches et rattacher cet agent",
+            "paragraphs": [
+              "Sur demande explicite, le MCP interne permet de piloter les tâches et sous-tâches autorisées et de rattacher l’agent courant à un livrable. Les contrôles de projet, de statut, d’affectation et d’exécution s’appliquent.",
+              "Un outil ne contourne ni une validation documentaire ni une approbation d’exécution. Demandez à l’agent de vérifier l’état existant après une réponse incertaine plutôt que de créer un doublon."
+            ]
           }
         ],
         "related": [
@@ -857,7 +962,11 @@
             ]
           }
         ],
-        "related": ["agent-visual-checks", "agent-project-tools", "report-bug"]
+        "related": [
+          "agent-visual-checks",
+          "agent-project-tools",
+          "report-bug"
+        ]
       },
       {
         "id": "agent-visual-checks",
@@ -996,7 +1105,11 @@
             "warning": "Un parent ne peut pas être clôturé tant qu’un enfant n’est ni terminé ni annulé. La clôture des enfants ne déplace pas automatiquement le parent dans une colonne finale."
           }
         ],
-        "related": ["task-planning", "task-execution", "work-relationships"]
+        "related": [
+          "task-planning",
+          "task-execution",
+          "work-relationships"
+        ]
       },
       {
         "id": "task-planning",
@@ -1049,7 +1162,9 @@
             ]
           }
         ],
-        "related": ["task-board"]
+        "related": [
+          "task-board"
+        ]
       },
       {
         "id": "task-execution",
@@ -1076,10 +1191,10 @@
           {
             "title": "Avant de valider ou supprimer",
             "paragraphs": [
-              "Une session devenue inactive passe en revue ; cela ne garantit pas que le travail est juste. Les critères doivent être vérifiés par une personne.",
-              "La validation d’une sous-tâche avec agent peut supprimer sa conversation liée après contrôle et retirer son lien. La suppression d’une tâche concerne aussi ses enfants et leurs agents associés."
+              "Une session devenue inactive passe en revue ; cela ne garantit pas que le résultat est juste. Vérifiez les critères avant de valider.",
+              "Terminer ou supprimer une tâche ne supprime pas automatiquement les agents ni leurs historiques et copies Git. Les liens sont retirés selon l’action ; supprimer un agent reste une opération explicite distincte."
             ],
-            "warning": "Conservez les éléments utiles et consultez la conversation avant de valider. Une conversation d’exécution n’est pas un historique permanent garanti."
+            "warning": "Une fin de travail ou une notification ne vaut pas validation humaine. Vérifiez les documents et les modifications avant de terminer la tâche."
           },
           {
             "title": "Affecter ou retirer un agent existant",
@@ -1089,7 +1204,11 @@
             ]
           }
         ],
-        "related": ["agent-approvals", "deliverable-agent", "task-board"]
+        "related": [
+          "agent-approvals",
+          "deliverable-agent",
+          "task-board"
+        ]
       }
     ]
   },
@@ -1181,7 +1300,11 @@
             ]
           }
         ],
-        "related": ["deliverable-lifecycle", "onlyoffice", "deliverable-agent"]
+        "related": [
+          "deliverable-lifecycle",
+          "onlyoffice",
+          "deliverable-agent"
+        ]
       },
       {
         "id": "document-rename",
@@ -1263,7 +1386,10 @@
             "warning": "Une demande en attente doit être annulée avec un motif avant de désactiver la validation. Une nouvelle version ne doit pas être présentée comme déjà approuvée."
           }
         ],
-        "related": ["deliverable-overview", "deliverable-versions"]
+        "related": [
+          "deliverable-overview",
+          "deliverable-versions"
+        ]
       },
       {
         "id": "deliverable-agent",
@@ -1313,7 +1439,13 @@
         "id": "deliverable-git",
         "title": "Conserver et reconnaître les livrables dans Git",
         "summary": "Activer le mode optionnel, examiner les transferts et garder les versions.",
-        "keywords": ["Git", "livrable.json", "import", "versions", "conflits"],
+        "keywords": [
+          "Git",
+          "livrable.json",
+          "import",
+          "versions",
+          "conflits"
+        ],
         "sections": [
           {
             "title": "Activer après prévisualisation",
@@ -1330,6 +1462,39 @@
             ],
             "warning": "Les droits Mergeron ne protègent plus un document après publication dans Git. Les conflits doivent être résolus explicitement."
           }
+        ]
+      },
+      {
+        "id": "deliverable-git-sync",
+        "title": "Synchroniser les livrables avec Git",
+        "summary": "Prévisualiser les échanges documentaires avec une copie Git partagée avant de les confirmer.",
+        "keywords": [
+          "Git",
+          "livrables",
+          "synchronisation",
+          "manifeste"
+        ],
+        "sections": [
+          {
+            "title": "Préparer et confirmer",
+            "paragraphs": [
+              "Le mode Livrables Git est facultatif et désactivé par défaut. Dans les paramètres du projet, un administrateur choisit le gestionnaire, une copie Git partagée modifiable et un dossier relatif.",
+              "Prévisualiser les changements ne modifie rien. Relisez imports, exports, exclusions et conflits avant Confirmer et synchroniser. À l’ouverture d’une copie, Examiner les livrables Git permet de consulter les manifestes reconnus ; leur import reste explicite."
+            ]
+          },
+          {
+            "title": "Conserver les historiques et protections",
+            "paragraphs": [
+              "L’index .mergeron-deliverables.json, les manifestes livrable.json et les documents doivent être commités pour rendre le dépôt portable. Le dossier peut être personnalisé sans sortir du dépôt.",
+              "Les versions et validations de Mergeron restent distinctes des commits. Les copies réservées à un agent ne sont pas des copies partagées ; une copie déjà liée ne peut pas être remplacée implicitement."
+            ],
+            "warning": "Une synchronisation n’est ni une validation humaine ni un push Git. Examinez les conflits et conservez les sauvegardes nécessaires avant de confirmer les échanges."
+          }
+        ],
+        "related": [
+          "deliverable-versions",
+          "git-local",
+          "file-explorer"
         ]
       }
     ]
@@ -1375,9 +1540,29 @@
               "Pendant le travail d’un agent, Mergeron vérifie les changements de fichiers en arrière-plan. L’absence attendue d’un chemin ou d’un dossier facultatif ne déclenche pas d’alerte « Path not found » ; l’explorateur et les documents ouverts restent synchronisés.",
               "Une ouverture explicite d’un fichier introuvable et les erreurs de droits ou de serveur restent signalées. Les problèmes de connexion et d’authentification conservent leur procédure habituelle de reconnexion. Ne confondez pas une absence attendue avec un échec d’enregistrement."
             ]
+          },
+          {
+            "title": "Les trois vues de l’explorateur",
+            "paragraphs": [
+              "Dossiers affiche l’arborescence utilisateur du projet ; Livrables présente les documents rattachés aux fiches et à leurs versions ; Sources donne accès aux connexions Git et aux copies locales.",
+              "Les zones internes du projet sont protégées et ne sont pas des dossiers utilisateur ordinaires. Déposer un document dans un livrable passe par ses actions documentaires afin de conserver son rattachement et son historique.",
+              "Sans copie locale pour cet agent, Sources indique qu’une copie doit être créée : ce n’est pas une invitation à parcourir la racine du serveur. Utilisez le menu de la ressource Git pour créer la copie autorisée.",
+              "Le menu contextuel d’un dossier, livrable ou source permet de le choisir comme référence de l’agent. Consulter un autre dossier ne change pas cette référence. Principal rétablit la référence du projet."
+            ]
+          },
+          {
+            "title": "Lire le Markdown et les vidéos",
+            "paragraphs": [
+              "Le lecteur Markdown propose un sommaire et une vue partagée. Les liens compacts d’agent permettent de revenir à la conversation concernée sans copier une longue adresse.",
+              "Une vidéo utilise un seul lecteur. Les sous-titres SRT correspondants sont chargés automatiquement ; Charger un fichier SRT permet de choisir un autre nom. La transcription suit la lecture et reste défilable."
+            ]
           }
         ],
-        "related": ["locations", "onlyoffice", "transfers"]
+        "related": [
+          "locations",
+          "onlyoffice",
+          "transfers"
+        ]
       },
       {
         "id": "onlyoffice",
@@ -1409,9 +1594,21 @@
               "L’ouverture d’un document ne donne pas accès au reste de l’espace système. Le projet propriétaire, le mode documentaire et la validation du livrable restent pris en compte."
             ],
             "warning": "N’ignorez pas une erreur d’enregistrement et ne fermez pas la fenêtre en supposant que tout est sauvegardé. Un document finalisé ou archivé peut nécessiter une réouverture autorisée du livrable."
+          },
+          {
+            "title": "Travailler avec un agent dans OnlyOffice",
+            "paragraphs": [
+              "Dans un texte ou une présentation ouvert en modification depuis Mergeron, Avec Mergeron permet de choisir un agent accessible du projet du document. Décrivez le changement puis relisez la proposition.",
+              "Appliquer dans le document confirme l’insertion, le remplacement explicite de la sélection ou une nouvelle diapositive. Le menu contextuel des présentations donne aussi accès à l’assistant. Une sélection ou une diapositive modifiée nécessite une nouvelle proposition.",
+              "L’assistant prépare sa réponse dans une session temporaire en lecture seule ; il n’envoie pas automatiquement un message dans la conversation choisie. L’enregistrement et les droits du document continuent de s’appliquer."
+            ]
           }
         ],
-        "related": ["deliverable-versions", "file-explorer", "admin-operations"]
+        "related": [
+          "deliverable-versions",
+          "file-explorer",
+          "admin-operations"
+        ]
       },
       {
         "id": "transfers",
@@ -1445,7 +1642,11 @@
             "warning": "Un changement d’emplacement actif ne transfère rien. Vérifiez le sens de copie et les éventuels remplacements : une opération externe déjà effectuée n’est pas annulée par la fermeture de la fenêtre."
           }
         ],
-        "related": ["locations", "git-remote", "project-archive"]
+        "related": [
+          "locations",
+          "git-remote",
+          "project-archive"
+        ]
       }
     ]
   },
@@ -1500,7 +1701,11 @@
             "warning": "Retirer du commit conserve le contenu modifié ; Annuler les modifications le remplace. Les nouveaux fichiers encore non versionnés ne sont pas supprimés par cette action. Les agents disposent des opérations MCP restore_files_review puis restore_files sur leur propre copie en écriture, uniquement sur demande humaine explicite et jamais pendant une surveillance. Un aperçu devenu périmé est refusé. Si le résultat est incertain, inspectez la copie et la sauvegarde sans relancer automatiquement."
           }
         ],
-        "related": ["git-branches", "git-remote", "git-pr"]
+        "related": [
+          "git-branches",
+          "git-remote",
+          "git-pr"
+        ]
       },
       {
         "id": "git-branches",
@@ -1543,7 +1748,11 @@
             "warning": "Relisez toujours la branche source et la branche de destination. En cas de conflit ou de contrôle refusé, ne forcez pas une réinitialisation destructive pour continuer. Une branche Git ne restaure pas l’historique du chat."
           }
         ],
-        "related": ["git-local", "git-pr", "agent-history"]
+        "related": [
+          "git-local",
+          "git-pr",
+          "agent-history"
+        ]
       },
       {
         "id": "git-remote",
@@ -1597,7 +1806,11 @@
             "warning": "Une connexion GitHub consultable ne prouve pas que le compte peut écrire dans le dépôt. Un commit local non poussé reste absent du distant ; ne répétez pas aveuglément une opération dont le résultat est annoncé inconnu."
           }
         ],
-        "related": ["git-local", "git-branches", "git-pr"]
+        "related": [
+          "git-local",
+          "git-branches",
+          "git-pr"
+        ]
       },
       {
         "id": "git-pr",
@@ -1650,7 +1863,11 @@
             "warning": "Un accès Actions manquant ou une information incomplète n’est jamais présenté comme une réussite. Si GitHub ne confirme pas la dépendance, l’interface le précise sans la deviner. Pour un dépôt privé, vérifiez l’autorisation Actions en lecture de la connexion."
           }
         ],
-        "related": ["git-remote", "git-branches", "server-update"]
+        "related": [
+          "git-remote",
+          "git-branches",
+          "server-update"
+        ]
       }
     ]
   },
@@ -1748,7 +1965,11 @@
             "warning": "La lecture peut transmettre du texte privé affiché. Les valeurs des champs connus, cookies et passkeys ne sont pas exportés ; cela ne détecte pas tous les secrets. Partagez une page adaptée et vérifiez toute capture avant validation. Les mises à jour de l’extension sont manuelles."
           }
         ],
-        "related": ["browser-live", "browser-annotation", "agent-approvals"]
+        "related": [
+          "browser-live",
+          "browser-annotation",
+          "agent-approvals"
+        ]
       },
       {
         "id": "browser-annotation",
@@ -1792,7 +2013,11 @@
             "warning": "Le masquage des champs et iframes dans la capture locale ne détecte pas tous les secrets. Vérifiez l’image. Après une mise à jour, rechargez Mergeron et la page partagée puis refaites l’association ; si l’ajout n’est pas confirmé, vérifiez le brouillon avant une reprise manuelle."
           }
         ],
-        "related": ["browser-live", "browser-local", "agent-create"]
+        "related": [
+          "browser-live",
+          "browser-local",
+          "agent-create"
+        ]
       }
     ]
   },
@@ -1841,7 +2066,11 @@
             "warning": "Une automatisation peut attendre une approbation comme un agent manuel. Une erreur ne garantit pas l’annulation des opérations précédentes. Les automatisations importées sont désactivées par sécurité."
           }
         ],
-        "related": ["agent-approvals", "project-archive", "agent-monitors"]
+        "related": [
+          "agent-approvals",
+          "project-archive",
+          "agent-monitors"
+        ]
       },
       {
         "id": "agent-monitors",
@@ -1948,7 +2177,10 @@
             "warning": "Ne donnez pas un rôle administrateur pour résoudre une simple absence de participation à un projet. Vérifiez d’abord l’association du compte et les participants."
           }
         ],
-        "related": ["project-people", "impersonation"]
+        "related": [
+          "project-people",
+          "impersonation"
+        ]
       },
       {
         "id": "impersonation",
@@ -1980,7 +2212,10 @@
             "warning": "Ce n’est pas un bac à sable. Finir le test n’annule pas les modifications déjà acceptées ou les travaux en arrière-plan. L’expiration ne rétablit pas silencieusement les droits administrateur dans une ancienne vue."
           }
         ],
-        "related": ["admin-people", "project-people"]
+        "related": [
+          "admin-people",
+          "project-people"
+        ]
       },
       {
         "id": "server-update",
@@ -1999,20 +2234,20 @@
           {
             "title": "Avant et pendant la mise à jour",
             "steps": [
-              "Dans Paramètres → Serveur → Version actuelle, consultez le tableau des composants : application, Manager, navigateur Mergeron et composants fournisseurs NGINX et Squid selon l’installation.",
-              "Actualiser la détection recherche les versions sans les installer. Chaque ligne distingue version installée, version fournisseur lorsqu’elle est connue et état de mise à jour. Une valeur inconnue ou une erreur ne signifie pas « à jour ». Les actions disponibles dépendent du composant et du Manager installé.",
-              "Relisez Sauvegarde avant cette mise à jour : Complète, Minimale — base et configuration, ou Aucune sauvegarde. Enregistrer le choix de sauvegarde mémorise ce réglage pour cette installation, sans lancer l’opération ; une sélection non enregistrée ne vaut que pour cette mise à jour.",
-              "Choisissez Mettre à jour sur le composant voulu, ou Remplacer par l’image publiée si la migration d’un navigateur local connu est proposée. Relisez le composant et l’empreinte exacte du plan, puis confirmez.",
-              "Même si seule l’image choisie est mise à niveau, la pile est arrêtée et recréée dans la transaction. La sauvegarde éventuelle et les possibilités de retour arrière dépendent du périmètre confirmé. Le suivi est préparé avant l’arrêt du serveur ; gardez-le ouvert pendant l’opération.",
-              "Après réussite, rechargez l’interface et contrôlez les fonctions importantes. Voir le suivi et les logs permet de rouvrir le résultat ; si un ancien suivi est signalé comme dépassé, ouvrez le dernier suivi."
+              "Dans Paramètres → Serveur → Version actuelle, consultez les composants installés et leur canal. Actualiser la détection recherche les images sans les installer.",
+              "Choisissez une sauvegarde Complète, Minimale — base et configuration, ou Aucune. Enregistrer le choix de sauvegarde mémorise la préférence pour cette installation ; vérifiez toujours le périmètre avant confirmation.",
+              "Utilisez Mettre à jour Mergeron. L’application détermine les composants concernés et leur ordre ; il n’y a plus de sélection manuelle conteneur par conteneur. Les compétences non installées ne sont pas ajoutées.",
+              "Relisez le plan, la sauvegarde et les avertissements, puis confirmez. Le suivi indépendant est préparé avant les remplacements, y compris celui du Manager lorsque l’installation est compatible.",
+              "Gardez le suivi ouvert. Les relais web permanents maintiennent son accès pendant le redémarrage applicatif. Si l’écran de reconnexion détecte une opération, il affiche le suivi ; une installation sans relais fonctionnels peut rester indisponible.",
+              "Après réussite, contrôlez les fonctions importantes. Voir le suivi et les logs rouvre le résultat. Les anciens conteneurs de remplacement sont nettoyés après succès ; les relais permanents et sauvegardes conservées ne doivent pas être supprimés."
             ]
           },
           {
             "title": "Retour arrière et compatibilité du Manager",
             "paragraphs": [
               "Le périmètre du plan confirmé détermine les données restaurables : complète, minimale ou aucune sauvegarde. Sans sauvegarde, le retour arrière peut remettre les images, mais n’annule ni migration ni modification des données. Une défaillance ou un état exigeant une récupération doit être relu dans le suivi.",
-              "Si l’interface demande une mise à jour préalable du Manager, faites-la effectuer depuis l’hôte avant de relancer les composants. Dev et production restent des installations distinctes : relisez toujours le plan et son périmètre.",
-              "Ces fonctions nécessitent une application et un Manager compatibles. Les images non sélectionnées restent inchangées. Un navigateur déjà présent peut être géré en Dev ou en production après configuration explicite de l’opérateur ; le Manager lui-même se met à jour depuis l’hôte."
+              "Une application et un Manager compatibles sont nécessaires. Le remplacement du Manager utilise un auxiliaire indépendant avec contrôle de santé et retour de secours ; un ancien Manager incompatible peut encore nécessiter une intervention depuis l’hôte.",
+              "Le plan global choisit les images à remplacer ; une révision différente entre composants n’est pas à elle seule une anomalie. Dev et production restent distinctes : vérifiez le canal, la sauvegarde et le périmètre."
             ],
             "warning": "Ne lancez pas deux opérations simultanées. Actualiser l’application, mettre à jour le CLI Codex et mettre à jour l’image serveur sont trois actions différentes."
           },
@@ -2036,7 +2271,12 @@
             ]
           }
         ],
-        "related": ["backups", "infrastructure", "admin-codex", "desktop"]
+        "related": [
+          "backups",
+          "infrastructure",
+          "admin-codex",
+          "desktop"
+        ]
       },
       {
         "id": "backups",
@@ -2077,7 +2317,11 @@
             "warning": "La suppression est définitive et retire le retour arrière reposant sur cette copie. Une sauvegarde de mise à jour et un export ZIP de projet n’ont pas le même périmètre. Préservez aussi les données externes qui ne sont pas couvertes par le Manager."
           }
         ],
-        "related": ["server-update", "project-archive", "admin-operations"]
+        "related": [
+          "server-update",
+          "project-archive",
+          "admin-operations"
+        ]
       },
       {
         "id": "infrastructure",
@@ -2105,14 +2349,18 @@
           {
             "title": "Navigateur géré par le Manager",
             "paragraphs": [
-              "Un navigateur déjà présent peut apparaître dans l’inventaire et participer aux transactions du Manager lorsque l’opérateur a explicitement activé sa gestion. Cela exige un Manager compatible et la topologie protégée attendue. Ce n’est pas une activation automatique sur les installations existantes.",
-              "Serveur → Version actuelle peut détecter et mettre à jour séparément son image publiée, comme celles de NGINX et Squid, avec confirmation et transaction sur toute la pile. L’image du navigateur doit rester compatible avec l’application. Un navigateur construit localement sans empreinte publiée peut nécessiter Remplacer par l’image publiée ; un état inconnu n’est pas une preuve de mise à jour.",
-              "Infrastructure sert à consulter l’état et la configuration ; les actions de mise à jour sont dans Version actuelle. Le Manager lui-même reste administré depuis l’hôte."
+              "Le Manager découvre les conteneurs gérés depuis l’inventaire de l’installation : les relais permanents et compétences installées apparaissent avec leur état. Une erreur de découverte n’est pas un état sain.",
+              "Les mises à jour se déclenchent globalement dans Serveur → Version actuelle. Le plan orchestre les composants compatibles, y compris le remplacement du Manager par un auxiliaire indépendant.",
+              "Les relais d’accès web restent nécessaires en fonctionnement normal. Ne les supprimez pas en les confondant avec les anciens conteneurs temporaires de mise à jour."
             ],
             "warning": "Ne désactivez pas le sandbox et n’exposez pas le port de contrôle pour résoudre une erreur. La configuration de production doit utiliser une image officielle stable compatible et être validée par l’opérateur ; un réglage Dev n’y est jamais appliqué implicitement."
           }
         ],
-        "related": ["browser-live", "server-update", "backups"]
+        "related": [
+          "browser-live",
+          "server-update",
+          "backups"
+        ]
       },
       {
         "id": "admin-codex",
@@ -2156,6 +2404,13 @@
               "Si une variante Mergeron protégée du CLI est installée, son canal et sa provenance sont distincts d’une version officielle. Les mises à jour officielles ou retours non validés peuvent être bloqués pour conserver les protections du sandbox. Ne contournez pas ce blocage par une installation manuelle : consultez l’administrateur."
             ],
             "warning": "Sauvegardez les données Codex avant une mise à jour : revenir à l’ancien exécutable ne restaure pas automatiquement les données éventuellement migrées."
+          },
+          {
+            "title": "Compte déconnecté et opérations du CLI",
+            "paragraphs": [
+              "Sans compte Codex connecté, seul Codex CLI reste accessible pour préparer le moteur et se connecter. Les autres onglets de configuration sont désactivés ; une erreur de lecture du compte ne doit pas être prise pour une connexion réussie.",
+              "Les dialogues d’installation, de mise à jour et de retour à une version précédente affichent le déroulement de leur opération. Les réglages du modèle et de l’effort restent réservés aux administrateurs."
+            ]
           }
         ],
         "related": [
@@ -2195,7 +2450,11 @@
             "warning": "Ne placez aucun secret dans ce texte transmis à tous les agents de travail. Il ne modifie ni AGENTS.md, ni les consignes du projet, ni les permissions. Une instruction textuelle ne garantit pas l’exécution d’un contrôle et ne permet pas de contourner les protections."
           }
         ],
-        "related": ["admin-codex", "agent-knowledge", "agent-visual-checks"]
+        "related": [
+          "admin-codex",
+          "agent-knowledge",
+          "agent-visual-checks"
+        ]
       },
       {
         "id": "integrations",
@@ -2243,7 +2502,11 @@
             ]
           }
         ],
-        "related": ["agent-composer", "agent-knowledge", "project-people"]
+        "related": [
+          "agent-composer",
+          "agent-knowledge",
+          "project-people"
+        ]
       },
       {
         "id": "admin-operations",
@@ -2363,6 +2626,78 @@
           "deliverable-versions",
           "backups",
           "admin-operations"
+        ]
+      },
+      {
+        "id": "server-capabilities",
+        "title": "Installer les compétences du serveur",
+        "summary": "Activer les services optionnels sans confondre installation, utilisation et droits.",
+        "keywords": [
+          "compétences",
+          "transcription",
+          "browser",
+          "installation"
+        ],
+        "sections": [
+          {
+            "title": "Installer ou désinstaller",
+            "steps": [
+              "Ouvrez Paramètres → Serveur → Compétences avec un compte administrateur.",
+              "Choisissez Navigation web ou Transcription, relisez l’action puis confirmez Installer. Le Manager prépare l’image et affiche l’avancement.",
+              "Attendez l’état prêt. Installée — démarrage à la demande peut signifier que le service attend son prochain usage, sans être en panne.",
+              "Pour retirer une compétence, choisissez Désinstaller et confirmez. Un service en cours d’utilisation ne peut pas être retiré."
+            ]
+          },
+          {
+            "title": "Effets sur les écrans et données",
+            "paragraphs": [
+              "Aucune compétence n’est installée par défaut sur une installation neuve. Les services existants sont conservés à la migration. Les écrans désactivent les traitements absents ; les résultats déjà enregistrés restent consultables.",
+              "Le navigateur local par extension reste indépendant du navigateur isolé du serveur. Les compétences installées participent au plan global de mise à jour. Installer un service ne donne aucun droit supplémentaire à l’agent."
+            ],
+            "warning": "La désinstallation conserve les documents et résultats. Les protections de sandbox et d’approbation restent actives ; ne remplacez pas cette action par la suppression manuelle des conteneurs de la stack."
+          }
+        ],
+        "related": [
+          "server-update",
+          "infrastructure",
+          "browser-live",
+          "voice-dictation"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "versions",
+    "title": "Historique des versions",
+    "articles": [
+      {
+        "id": "version-history",
+        "title": "Historique des versions",
+        "summary": "Les tags publiés, du plus récent au plus ancien, avec les principales améliorations de chaque version.",
+        "keywords": [
+          "version",
+          "tag",
+          "release",
+          "historique",
+          "nouveautés"
+        ],
+        "sections": [
+          {
+            "title": "Lire cet historique",
+            "paragraphs": [
+              "Cette frise résume les publications GitHub et leurs dates en UTC. Un tag décrit le contenu publié à cette date ; les corrections fusionnées ensuite ne sont pas attribuées à une ancienne version.",
+              "Le guide suit le code de cette installation. Les nouveautés postérieures au dernier tag, comme le centre de notifications et les livrables Git, peuvent être présentes sur la dev avant une prochaine publication. Consultez Serveur → Version actuelle pour identifier votre build."
+            ],
+            "warning": "La présence d’un tag dans cette frise ne signifie pas qu’il est installé ou qu’une mise à jour est sûre pour votre environnement. Les droits, compétences installées et compatibilités du Manager restent déterminants."
+          },
+          {
+            "title": "Versions publiées",
+            "versionTimeline": true
+          }
+        ],
+        "related": [
+          "server-update",
+          "desktop"
         ]
       }
     ]

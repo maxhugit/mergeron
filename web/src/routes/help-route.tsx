@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { withBasePath } from '@/base-path';
+import { VersionTimeline } from '@/components/guide/version-timeline';
 import {
   articleFromHash,
   guideArticles,
@@ -411,6 +412,7 @@ export function HelpRoute() {
                     {paragraph}
                   </p>
                 ))}
+                {section.versionTimeline && <VersionTimeline />}
                 {section.steps && (
                   <ol className="list-decimal space-y-3 pl-6 text-sm leading-7">
                     {section.steps.map((step) => (

@@ -88,5 +88,7 @@
   "administrationButton2": "Rétention des logs → Enregistrer",
   "administrationEffect2": "Les règles se règlent dans Logs. Après enregistrement, les archives trop anciennes ou trop nombreuses peuvent être supprimées automatiquement ; le fichier actif reste protégé.",
   "administrationButton3": "Restaurer la version précédente / supprimer une sauvegarde",
-  "administrationEffect3": "Le retour arrière restaure les images et uniquement les données comprises dans le périmètre confirmé : complète, minimale ou aucune sauvegarde. Sans sauvegarde, les migrations restent appliquées. Une ancienne sauvegarde garde son périmètre d’origine. Supprimer une copie est définitif et retire le retour arrière associé."
+  "administrationEffect3": "Le retour arrière restaure les images et uniquement les données comprises dans le périmètre confirmé : complète, minimale ou aucune sauvegarde. Sans sauvegarde, les migrations restent appliquées. Une ancienne sauvegarde garde son périmètre d’origine. Supprimer une copie est définitif et retire le retour arrière associé.",
+  "versionTimeline": "Frise des versions publiées",
+  "versionReleaseNotes": "Notes de version {{tag}}"
 }

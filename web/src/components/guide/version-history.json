@@ -1,0 +1,230 @@
+[
+  {
+    "tag": "v0.7.1",
+    "date": "2026-11-08",
+    "highlights": {
+      "fr": [
+        "Lecture Markdown avec sommaire et vue partagée.",
+        "Pilotage des tâches par MCP, sous-tâches partagées et rattachement de l’agent à un livrable.",
+        "Reprise après redémarrage Codex et fiabilisation des intégrations et permissions."
+      ],
+      "en": [
+        "Markdown reader with contents and split view.",
+        "MCP task management, shared subtasks and attaching the current agent to a deliverable.",
+        "Codex restart recovery and more reliable integrations and permissions."
+      ]
+    }
+  },
+  {
+    "tag": "v0.7.0",
+    "date": "2026-11-07",
+    "highlights": {
+      "fr": [
+        "Explorateur Dossiers, Livrables et Sources ; diagnostic et corrections de cohérence.",
+        "Mise à jour globale orchestrée, suivi indépendant et remplacement du Manager.",
+        "Compétences optionnelles, agents locaux Ollama et menu global avec choix de langue."
+      ],
+      "en": [
+        "Folders, Deliverables and Sources explorer, with consistency diagnostics and repairs.",
+        "Orchestrated global updates, independent progress tracking and Manager replacement.",
+        "Optional server capabilities, local Ollama agents and a unified menu with language switching."
+      ]
+    }
+  },
+  {
+    "tag": "v0.6.5",
+    "date": "2026-11-04",
+    "highlights": {
+      "fr": [
+        "Extraction audio et transcription locale, identification acoustique des intervenants et exports horodatés.",
+        "Lecteur vidéo unique avec sous-titres SRT synchronisés.",
+        "Étiquettes documentaires et organisation assistée des livrables."
+      ],
+      "en": [
+        "Local audio extraction and transcription, acoustic speaker identification and timestamped exports.",
+        "Single video player with synchronized SRT subtitles.",
+        "Document labels and assisted deliverable organization."
+      ]
+    }
+  },
+  {
+    "tag": "v0.6.4",
+    "date": "2026-11-03",
+    "highlights": {
+      "fr": [
+        "Assistant OnlyOffice limité aux agents du projet et actions contextuelles sur les présentations.",
+        "Navigateur démarré à la demande et inventaire Byparr.",
+        "Corrections de la dictée CLI et de la fenêtre PWA."
+      ],
+      "en": [
+        "OnlyOffice assistant scoped to project agents and contextual presentation actions.",
+        "On-demand browser and Byparr inventory.",
+        "CLI dictation and PWA window corrections."
+      ]
+    }
+  },
+  {
+    "tag": "v0.6.3",
+    "date": "2026-11-01",
+    "highlights": {
+      "fr": [
+        "Intégrations Codex regroupées : plugins distants et catalogues chargés à la demande.",
+        "Catalogue quotidien via Byparr géré par le Manager.",
+        "Reprise MCP et défilement des paramètres fiabilisés."
+      ],
+      "en": [
+        "Unified Codex integrations with remote plugins and on-demand catalog loading.",
+        "Daily catalog through Manager-managed Byparr.",
+        "More reliable MCP recovery and settings scrolling."
+      ]
+    }
+  },
+  {
+    "tag": "v0.6.2",
+    "date": "2026-11-01",
+    "highlights": {
+      "fr": [
+        "Serveur réorganisé autour de la version installée, du journal des mises à jour et de la restauration."
+      ],
+      "en": [
+        "Server settings organized around installed versions, update history and restoration."
+      ]
+    }
+  },
+  {
+    "tag": "v0.6.1",
+    "date": "2026-11-01",
+    "highlights": {
+      "fr": [
+        "Focus projet, navigation rapide et page dédiée aux conversations archivées.",
+        "Dictée CLI, commandes des agents et statut MCP améliorés.",
+        "Navigation documentaire rétablie depuis le README GitHub."
+      ],
+      "en": [
+        "Project focus, fast navigation and a dedicated archived conversations page.",
+        "Improved CLI dictation, agent controls and MCP status.",
+        "Documentation navigation restored from the GitHub README."
+      ]
+    }
+  },
+  {
+    "tag": "v0.6.0",
+    "date": "2026-11-01",
+    "highlights": {
+      "fr": [
+        "Environnements de test isolés par agent : aperçu, stockage et console des conteneurs.",
+        "Sauvegarde complète, minimale ou aucune ; notifications push et surveillances persistantes.",
+        "Installation sécurisée du premier administrateur et reprise de session sans rechargement."
+      ],
+      "en": [
+        "Isolated per-agent test environments with previews, storage and container consoles.",
+        "Full, minimal or no backup; push notifications and persistent monitors.",
+        "Secure first-administrator setup and session recovery without a page reload."
+      ]
+    }
+  },
+  {
+    "tag": "v0.5.1",
+    "date": "2026-10-29",
+    "highlights": {
+      "fr": [
+        "Navigateur isolé pris en charge par le Manager en production."
+      ],
+      "en": [
+        "Manager support for the isolated browser in production."
+      ]
+    }
+  },
+  {
+    "tag": "v0.5.0",
+    "date": "2026-10-28",
+    "highlights": {
+      "fr": [
+        "Navigateur en direct, annotations et extension de navigateur.",
+        "MCP interne natif : contexte du projet, tâches, livrables et renommage de l’agent.",
+        "Guide par chapitres avec recherche, dictée CLI expérimentale et vérification visuelle des agents."
+      ],
+      "en": [
+        "Live browser, annotations and browser extension.",
+        "Native internal MCP for project context, tasks, deliverables and agent renaming.",
+        "Searchable chapter-based guide, experimental CLI dictation and agent visual checks."
+      ]
+    }
+  },
+  {
+    "tag": "v0.4.0",
+    "date": "2026-10-28",
+    "highlights": {
+      "fr": [
+        "Connexions séparées des emplacements et contrôle du dossier d’exécution des agents.",
+        "Branches Git, graphe, différences, pull requests et récupération des branches distantes.",
+        "Navigateur latéral et test des droits par identité simulée."
+      ],
+      "en": [
+        "Connections separated from locations and explicit agent execution folders.",
+        "Git branches, graph, diffs, pull requests and remote branch checkout.",
+        "Side browser and audited identity-based permission testing."
+      ]
+    }
+  },
+  {
+    "tag": "v0.3.0",
+    "date": "2026-10-26",
+    "highlights": {
+      "fr": [
+        "Tableau et cycle de vie des livrables, historique des documents et versions protégées.",
+        "Copies Git isolées et opérations Git confirmées.",
+        "Infrastructure séparée du serveur, gestion des sauvegardes et rétention des journaux."
+      ],
+      "en": [
+        "Deliverable table and lifecycle, document history and protected versions.",
+        "Isolated Git copies and confirmed Git operations.",
+        "Separate Infrastructure settings, backup management and log retention."
+      ]
+    }
+  },
+  {
+    "tag": "v0.2.1",
+    "date": "2026-10-25",
+    "highlights": {
+      "fr": [
+        "Archives de projets autonomes et compatibilité des échanges entre production et développement."
+      ],
+      "en": [
+        "Self-contained project archives and production/development exchange compatibility."
+      ]
+    }
+  },
+  {
+    "tag": "v0.2.0",
+    "date": "2026-10-25",
+    "highlights": {
+      "fr": [
+        "Import et export ZIP des projets avec sélection des ensembles et dépendances.",
+        "Détection des canaux edge/latest et suivi des mises à jour.",
+        "Installation Docker portable et détails techniques repliables par agent."
+      ],
+      "en": [
+        "Project ZIP import/export with selectable sets and dependencies.",
+        "edge/latest channel detection and update progress tracking.",
+        "Portable Docker installation and collapsible per-agent technical details."
+      ]
+    }
+  },
+  {
+    "tag": "v0.1.0",
+    "date": "2026-10-24",
+    "highlights": {
+      "fr": [
+        "Premier socle publié : projets, tâches, agents et connaissances partagées.",
+        "Livrables, versions documentaires, validation et édition OnlyOffice.",
+        "Authentification locale et OIDC, profils personnels et Manager avec sauvegarde et retour arrière."
+      ],
+      "en": [
+        "First published foundation: projects, tasks, agents and shared knowledge.",
+        "Deliverables, document versions, validation and OnlyOffice editing.",
+        "Local and OIDC authentication, personal profiles and Manager backup/rollback."
+      ]
+    }
+  }
+]
