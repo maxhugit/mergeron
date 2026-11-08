@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
-import { catalogFixture, json } from './catalog/catalog.testing';
+import { catalogFixture, deferred, json } from './catalog/catalog.testing';
 import { CodexCliSettings } from './codex-cli-settings';
 
 let fixture: ReturnType<typeof catalogFixture>;
@@ -20,6 +20,56 @@ const available = {
   canRollback: false,
   busy: false,
 };
+
+it.each([true, false])(
+  'keeps the operation popup open until installation settles (success: %s)',
+  async (success) => {
+    const response = deferred<Response>();
+    fetchMock.mockImplementation((_url: string, options?: RequestInit) =>
+      options?.method === 'POST'
+        ? response.promise
+        : Promise.resolve(
+            json({
+              ...available,
+              installedVersion: null,
+              installationState: 'missing',
+              updateAvailable: false,
+            }),
+          ),
+    );
+    const user = userEvent.setup();
+    fixture.render(<CodexCliSettings />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Install Codex CLI' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    const popup = await screen.findByRole('alertdialog', {
+      name: 'Installing or changing the CLI…',
+    });
+    await user.keyboard('{Escape}');
+    expect(popup).toBeVisible();
+    expect(
+      fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST'),
+    ).toHaveLength(1);
+    response.resolve(
+      json(
+        success ? { success: true } : { message: 'Installation failed' },
+        success ? 200 : 409,
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('alertdialog', {
+          name: 'Installing or changing the CLI…',
+        }),
+      ).toBeNull(),
+    );
+    if (!success)
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Installation failed',
+      );
+  },
+);
 beforeEach(() => {
   fixture = catalogFixture();
   fetchMock = vi.fn((url: string, options?: RequestInit) =>

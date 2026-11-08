@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -437,6 +438,25 @@ export function CodexCliSettings() {
               {t('confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={mutation.isPending}>
+        <AlertDialogContent
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          aria-busy="true"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Loader2
+                aria-hidden="true"
+                className="size-5 shrink-0 animate-spin"
+              />
+              {t('cliOperationInProgressTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription role="status">
+              {t('cliOperationInProgressDoNotStartNewWork')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
         </AlertDialogContent>
       </AlertDialog>
     </div>

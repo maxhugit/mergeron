@@ -55,6 +55,7 @@
   "updateCodexCli": "Update Codex CLI",
   "restorePreviousCli": "Restore previous CLI",
   "cliOperationInProgressDoNotStartNewWork": "CLI operation in progress. Do not start new work.",
+  "cliOperationInProgressTitle": "Installing or changing the CLI…",
   "thisCliInstallationIsManagedExternally": "This CLI installation is managed externally",
   "cliUpdatesAreInstalledInPersistentStorageWithoutChangingTheContainerImageCodexM8b37678d": "CLI updates are installed in persistent storage without changing the container image. Codex must be idle. A failed activation restores the previous selection. A newer CLI may require a WebUI update for full compatibility.",
   "thisRestartsTheManagedCodexAppServerTheOperationIsRefusedWhileWorkIsActiveConve1489cd27": "This restarts the managed Codex app-server. The operation is refused while work is active. Conversations and configuration are preserved.",
