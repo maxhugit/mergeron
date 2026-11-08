@@ -51,6 +51,7 @@ opérations explicites et bornées. Le champ `operation` garde ses valeurs actue
 | `get_project`              | `project_get`                      |
 | `list_tasks`               | `project_task_list`                |
 | `get_task`                 | `project_task_get`                 |
+| `manage_task`              | `project_task_manage`              |
 | `create_task`              | `project_task_create`              |
 | `list_deliverables`        | `project_deliverable_list`         |
 | `get_deliverable`          | `project_deliverable_get`          |
@@ -590,3 +591,51 @@ avant de proposer le téléchargement. La publication du MP3 dans un livrable
 existant suit le mécanisme de versions et requiert une demande humaine explicite,
 un tour administrateur avec écriture et un `requestId` stable. Une publication
 incertaine ne doit jamais être rejouée avec une autre clé.
+
+
+## Pilotage des tâches et sous-tâches par l’agent (MCP 1.12.0)
+
+Sur demande explicite de l’utilisateur, `project_task_manage` peut modifier le titre,
+la description, les critères, l’avancement, le statut, les dates, la charge estimée,
+les labels et les dépendances. `project_task_get` expose désormais `updatedAt`,
+`progress`, `subtaskStatus`, `statusId`, les dépendances, les priorités et statuts
+disponibles, ainsi que `progressIsDerived` pour les valeurs calculées depuis les sous-tâches.
+L’agent doit lire la tâche avant écriture et fournir cette révision dans
+`expectedUpdatedAt`, ainsi qu’un `requestId` stable et `userRequest`.
+
+- `operation: update` exige un objet `changes` non vide. Une sous-tâche utilise
+  `subtaskStatus` (`todo`, `started`, `review`, `done`, `cancelled`) ; sa priorité et
+  la colonne du gestionnaire restent héritées du parent. Une tâche principale
+  utilise `statusId`. La progression et la charge d’un parent ayant des sous-tâches
+  restent calculées par le domaine. `progress: 100` seul ne termine pas une tâche.
+- `attach_self` / `detach_self` rattachent ou détachent uniquement la conversation
+  appelante d’une sous-tâche. Un agent peut être réutilisé dans plusieurs sous-tâches
+  **d’une seule tâche principale**. Aucune affectation à un autre agent n’est
+  remplacée et un autre parent est refusé, y compris lors d’un déplacement de tâche.
+- Le sélecteur de l’IHM et les propositions de récupération d’un lancement respectent
+  la même règle. Un agent encore affecté à une autre tâche principale n’est pas proposé.
+- L’outil exige un tour actif avec écriture, une identité administrateur active, sans
+  simulation de personne. Le projet et la conversation sont déterminés par le serveur.
+  Aucun lancement de tour, suppression, droit sur les fichiers ou validation de
+  livrable n’est accordé par ces opérations.
+
+L’écriture passe par le domaine du gestionnaire avec ses contrôles et son historique.
+Modification, audit `agent_task_managed` et reçu d’idempotence sont atomiques. Un
+rejeu identique renvoie `replayed: true` sans nouvelle écriture ; ce résultat est le
+reçu de la modification passée, pas une lecture fraîche. Relire la tâche avant
+une nouvelle modification ou pour annoncer son état actuel. Les erreurs sûres sont
+`TASK_REVISION_CONFLICT`, `TASK_CONFLICT`, `TASK_INVALID_REQUEST` ; un conflit ne
+permet jamais d’écraser une modification concurrente.
+
+La barre « Lié à » reste sur une ligne : livrable et dossier regroupés dans le badge
+bleu, puis `terminées/total · Agent : affectées`. Le numérateur compte seulement les
+sous-tâches au statut `done` de **toute la tâche principale**, indépendamment de
+l’affectation et du pourcentage. Les annulées restent dans le total, sans être
+comptées comme terminées. Le menu affiche les sous-tâches de cet agent, leur état
+et leur pourcentage, puis rappelle les autres sous-tâches. Un clic ouvre la fiche
+correspondante ; le dossier du livrable ouvre l’explorateur droit existant.
+
+Pour un agent affecté à plusieurs sous-tâches, les événements du moteur ne déclarent
+pas toutes les sous-tâches « À faire » commencées ou en revue. L’agent explicite
+la sous-tâche sur laquelle il travaille via l’outil ; l’avancement reste une donnée
+métier et la validation du livrable reste distincte.

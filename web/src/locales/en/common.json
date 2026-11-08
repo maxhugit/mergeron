@@ -1665,5 +1665,16 @@
   "markdownRead": "Read",
   "markdownSplit": "Split view",
   "markdownContents": "Contents",
-  "markdownImage": "Image: {{alt}}"
+  "markdownImage": "Image: {{alt}}",
+  "agentTaskSummary": "{{completed}} subtasks completed out of {{total}} in the main task; {{assigned}} assigned to this agent",
+  "agentTasksCompleted": "completed",
+  "agentTasksAssigned_one": "Agent: {{count}}",
+  "agentTasksAssigned_other": "Agent: {{count}}",
+  "agentAssignedSubtasks": "Assigned to this agent",
+  "agentMainTaskCompleted": "{{completed}} completed out of {{total}} subtasks in the main task",
+  "agentNoAssignedSubtasks": "No subtasks assigned to this agent",
+  "agentOtherSubtasks_one": "{{count}} other subtask in this main task, including {{completed}} completed.",
+  "agentOtherSubtasks_other": "{{count}} other subtasks in this main task, including {{completed}} completed.",
+  "agentDifferentMainTasks": "This agent has assignments to different main tasks. Review its assignments.",
+  "agentSubtaskReview": "In review"
 }

@@ -246,17 +246,29 @@ it('enforces the same primary-task uniqueness through create, generic edit and a
       main.id,
     );
   }));
-it('rejects missing, foreign and already assigned agents', async () =>
+it('rejects missing and foreign agents but permits same-parent assignments', async () =>
   asAdmin(async () => {
     const main = parent(),
       a = child(main.id),
       b = child(main.id);
     await domain.updateTask('p', 'tasks', a.id, { linkedThreadId: 'agent' });
-    for (const linkedThreadId of ['missing', 'foreign', 'agent'])
+    for (const linkedThreadId of ['missing', 'foreign'])
       await expect(
         domain.updateTask('p', 'tasks', b.id, { linkedThreadId }),
       ).rejects.toThrow();
     expect(task(b.id).linkedThreadId).toBeNull();
+    await domain.updateTask('p', 'tasks', b.id, { linkedThreadId: 'agent' });
+    expect(task(b.id).linkedThreadId).toBe('agent');
+    const other = child(parent().id);
+    await expect(
+      domain.updateTask('p', 'tasks', other.id, { linkedThreadId: 'agent' }),
+    ).rejects.toThrow('another main task');
+    await expect(
+      domain.updateTask('p', 'tasks', b.id, {
+        parentTaskId: other.parentTaskId,
+      }),
+    ).rejects.toThrow('another main task');
+    expect(task(b.id).parentTaskId).toBe(main.id);
   }));
 it('blocks a third task level and stale revisions without overwriting data', async () =>
   asAdmin(async () => {
@@ -923,7 +935,7 @@ it('acknowledges a checked uncertain send without starting another turn', async 
 it('refuses stale inventory, busy, archived, foreign and already assigned candidates', async () =>
   asAdmin(async () => {
     const sub = child(parent().id),
-      other = child(sub.parentTaskId!);
+      other = child(parent().id);
     await domain.updateTask('p', 'tasks', other.id, {
       linkedThreadId: 'agent',
     });
@@ -2006,4 +2018,29 @@ it('rolls back every task and its journal when a batch fails mid-way', () =>
       }),
     ).toThrow('changed');
     expect(task(main.id)).toEqual(before);
+  }));
+
+it('does not start every assigned subtask merely because their shared agent is active', async () =>
+  asAdmin(async () => {
+    const main = parent(),
+      first = child(main.id),
+      second = child(main.id);
+    await domain.updateTask('p', 'tasks', first.id, {
+      linkedThreadId: 'agent',
+      subtaskStatus: 'started',
+    });
+    await domain.updateTask('p', 'tasks', second.id, {
+      linkedThreadId: 'agent',
+    });
+    const runtime = new ProjectTaskRuntimeService(
+      database.db,
+      new EventEmitter() as unknown as CodexProcessManager,
+      {} as ThreadMetadataService,
+    );
+    runtime.status('agent', { type: 'active', activeFlags: [] });
+    expect(task(first.id).agentState).toBe('running');
+    expect(task(second.id).subtaskStatus).toBe('todo');
+    runtime.completed('agent', false);
+    expect(task(first.id).subtaskStatus).toBe('review');
+    expect(task(second.id).subtaskStatus).toBe('todo');
   }));

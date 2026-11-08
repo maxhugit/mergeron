@@ -740,7 +740,9 @@ export function ProjectTaskManager({
     setTaskOpen(true);
   };
   const assignableAgents = (projects.data?.projects.find(project=>project.id===projectId)?.agentThreads ?? []).filter(agent =>
-    !agent.archived && !board.tasks.some(task=>task.id!==editing?.id && task.linkedThreadId===agent.threadId) &&
+    !agent.archived &&
+    (!agent.taskId || (agent.taskParentTaskId ?? board.tasks.find(task => task.id===agent.taskId)?.parentTaskId) === draft.parentTaskId) &&
+    !board.tasks.some(task=>task.id!==editing?.id && task.linkedThreadId===agent.threadId && task.parentTaskId!==draft.parentTaskId) &&
     !deliverables.data?.deliverables.some(item=>item.primaryTaskId!==draft.parentTaskId && (item.linkedAgentIds ?? (item.conversations??[]).filter(link=>link.type==='agent').map(link=>link.id)).includes(agent.threadId)));
   const payload = () => ({
     ...(editing ? { expectedUpdatedAt: editing.updatedAt } : {}),

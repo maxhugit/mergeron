@@ -433,5 +433,5 @@
   "taskSelectExistingAgent": "Choisir un agent existant",
   "taskNoAgentAssignment": "Aucun agent affecté",
   "taskRemoveAgentAssignment": "Retirer l’affectation",
-  "taskAgentAssignmentHelp": "L’affectation est enregistrée avec la sous-tâche. Elle ne lance aucune instruction, ne déplace pas le dossier de l’agent et ne supprime pas son historique."
+  "taskAgentAssignmentHelp": "Un agent peut être réutilisé pour plusieurs sous-tâches de cette même tâche principale, jamais pour une autre tâche principale tant que ses affectations restent en place. L’affectation ne lance aucune instruction et conserve le dossier et l’historique de l’agent."
 }

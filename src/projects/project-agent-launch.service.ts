@@ -30,7 +30,10 @@ import { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import { ThreadsService } from '../threads/threads.service';
 import { ThreadMetadataService } from '../threads/thread-metadata.service';
 import { ProjectsService } from './projects.service';
-import { assertTaskDeliverableLinks } from './project-work-links';
+import {
+  assertTaskAgent,
+  assertTaskDeliverableLinks,
+} from './project-work-links';
 
 type Receipt = typeof launches.$inferSelect;
 export type DeliverableAgentInput = {
@@ -639,6 +642,7 @@ export class ProjectAgentLaunchService {
                 and(
                   eq(projectTasks.linkedThreadId, threadId),
                   sql`${projectTasks.id} != ${receipt.context.taskId}`,
+                  sql`(${projectTasks.parentTaskId} is null or ${projectTasks.parentTaskId} != ${item.primaryTaskId})`,
                 ),
               )
               .get())
@@ -649,15 +653,14 @@ export class ProjectAgentLaunchService {
         receipt.resourceId,
         receipt.context.targetId,
       );
-      if (
-        this.db
-          .select()
-          .from(projectTasks)
-          .where(eq(projectTasks.linkedThreadId, threadId))
-          .get()
-      )
-        return false;
       try {
+        assertTaskAgent(
+          this.db,
+          receipt.projectId,
+          target.id,
+          threadId,
+          target.parentTaskId,
+        );
         assertTaskDeliverableLinks(this.db, threadId, target.parentTaskId);
         return true;
       } catch (error) {

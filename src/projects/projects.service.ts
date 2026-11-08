@@ -1017,6 +1017,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
           taskId: string | null;
           taskResourceId: string | null;
           taskTitle: string | null;
+          taskParentTaskId: string | null;
           isSubtask: boolean;
         }>;
       }
@@ -1121,6 +1122,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
                 taskId: task?.id ?? null,
                 taskResourceId: task?.resourceId ?? null,
                 taskTitle: task?.title ?? null,
+                taskParentTaskId: task?.parentTaskId ?? null,
                 isSubtask: Boolean(task?.parentTaskId),
               };
             },
@@ -2270,8 +2272,6 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException(
         'A task with subtasks cannot become a subtask',
       );
-    if (input.linkedThreadId && input.linkedThreadId !== task.linkedThreadId)
-      assertTaskAgent(this.db, projectId, task.id, input.linkedThreadId);
     const effectiveParentId =
       input.parentTaskId !== undefined ? input.parentTaskId : task.parentTaskId;
     if (
@@ -2498,12 +2498,20 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       for (const child of children)
         this.validateTaskDateRange(child.startAt, child.dueAt, updated);
     }
-    if (updated.linkedThreadId)
+    if (updated.linkedThreadId) {
+      assertTaskAgent(
+        this.db,
+        projectId,
+        task.id,
+        updated.linkedThreadId,
+        updated.parentTaskId,
+      );
       assertTaskDeliverableLinks(
         this.db,
         updated.linkedThreadId,
         updated.parentTaskId,
       );
+    }
     const requestedFolder =
       input.workReference?.type === 'folder'
         ? input.workReference.path
@@ -2518,6 +2526,22 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     // Completion is a business decision, never permission to destroy a conversation
     // or its managed Git copy. Keep the link and evidence until explicit deletion.
     this.db.transaction((tx) => {
+      // Recheck assignment under the write transaction as well: another writer
+      // must not bind this agent to a different main task between validation and save.
+      if (updated.linkedThreadId) {
+        assertTaskAgent(
+          this.db,
+          projectId,
+          task.id,
+          updated.linkedThreadId,
+          updated.parentTaskId,
+        );
+        assertTaskDeliverableLinks(
+          this.db,
+          updated.linkedThreadId,
+          updated.parentTaskId,
+        );
+      }
       if (
         !tx
           .update(projectTasks)
@@ -2887,6 +2911,11 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       allowedSubtaskStatuses.has(value),
     );
     return { taskStatusIds, subtaskStatuses };
+  }
+
+  taskManagementOptions(projectId: string, resourceId: string) {
+    this.getResource(projectId, resourceId);
+    return { priorities: [...this.getTaskPriorities(resourceId)] };
   }
 
   private getTaskPriorities(resourceId: string): Set<string> {

@@ -1,3 +1,4 @@
+import { taskManageInput } from './project-task-tools.schema';
 import type { MockupsService } from '../mockups/mockups.service';
 import type { ProjectMediaToolsService } from '../transcriptions/project-media-tools.service';
 import {
@@ -22,6 +23,7 @@ import {
   projectResources,
   projectTasks,
   projectTaskStatuses,
+  projectTaskDependencies,
   projectAgentToolRequests,
 } from '../database/schema';
 import { DeliverablesService } from '../deliverables/deliverables.service';
@@ -89,6 +91,273 @@ export class ProjectAgentToolsService {
       throw new ForbiddenException('Project changed');
   }
 
+  private taskStatuses(resourceId: string) {
+    return this.db
+      .select({
+        id: projectTaskStatuses.id,
+        name: projectTaskStatuses.name,
+        kind: projectTaskStatuses.kind,
+      })
+      .from(projectTaskStatuses)
+      .where(eq(projectTaskStatuses.resourceId, resourceId))
+      .orderBy(asc(projectTaskStatuses.position))
+      .all();
+  }
+
+  private taskDetails<T extends { id: string; resourceId: string }>(
+    scope: ReturnType<ProjectAgentToolsService['scope']>,
+    task: T,
+  ) {
+    const service = this.modules.get<ProjectsService>(
+      'PROJECT_AGENT_DOMAIN_SERVICE',
+      { strict: false },
+    );
+    return {
+      ...task,
+      availableStatuses: this.taskStatuses(task.resourceId),
+      availablePriorities: service.taskManagementOptions(
+        scope.project.id,
+        task.resourceId,
+      ).priorities,
+      dependencyIds: this.db
+        .select({ id: projectTaskDependencies.dependsOnTaskId })
+        .from(projectTaskDependencies)
+        .where(eq(projectTaskDependencies.taskId, task.id))
+        .all()
+        .map((item) => item.id),
+      progressIsDerived: !!this.db
+        .select({ id: projectTasks.id })
+        .from(projectTasks)
+        .where(eq(projectTasks.parentTaskId, task.id))
+        .limit(1)
+        .get(),
+    };
+  }
+
+  private manageTask(
+    threadId: string,
+    input: Record<string, unknown>,
+    assertActive: () => void,
+    canWrite: boolean,
+  ) {
+    const args = { ...input };
+    delete args.tool;
+    const parsed = taskManageInput.safeParse(args);
+    if (!parsed.success)
+      throw new BadRequestException('Invalid task management fields');
+    const request = parsed.data;
+    if (!canWrite) throw new ForbiddenException('A writable turn is required');
+    const scope = this.scope(threadId);
+    scope.access.identities.requireAdministrator(scope.access.identity);
+    if (scope.access.identity.impersonation)
+      throw new ForbiddenException('Impersonation is not allowed');
+    if (
+      !scope.boards.some(
+        (b) => b.id === request.resourceId && b.type === 'task_board',
+      )
+    )
+      throw new BadRequestException('Select a task manager in this project');
+    const service = this.modules.get<ProjectsService>(
+      'PROJECT_AGENT_DOMAIN_SERVICE',
+      { strict: false },
+    );
+    const digest = createHash('sha256')
+      .update(JSON.stringify(request))
+      .digest('hex');
+    const key = and(
+      eq(projectAgentToolRequests.projectId, scope.project.id),
+      eq(projectAgentToolRequests.threadId, threadId),
+      eq(projectAgentToolRequests.requestId, request.requestId),
+    );
+    try {
+      return this.db.transaction(() => {
+        assertActive();
+        const fresh = this.scope(threadId);
+        fresh.access.identities.requireAdministrator(fresh.access.identity);
+        this.assertProject(threadId, scope.project.id);
+        if (
+          !fresh.boards.some(
+            (b) => b.id === request.resourceId && b.type === 'task_board',
+          )
+        )
+          throw new ForbiddenException('Task manager unavailable');
+        if (fresh.access.identity.impersonation)
+          throw new ForbiddenException('Impersonation is not allowed');
+        const task = this.db
+          .select()
+          .from(projectTasks)
+          .where(
+            and(
+              eq(projectTasks.id, request.id),
+              eq(projectTasks.resourceId, request.resourceId),
+            ),
+          )
+          .get();
+        if (!task) throw new BadRequestException('Task unavailable');
+        const previous = this.db
+          .select()
+          .from(projectAgentToolRequests)
+          .where(key)
+          .get();
+        if (previous) {
+          if (
+            previous.digest !== digest ||
+            previous.personId !== fresh.access.identity.personId ||
+            !previous.result
+          )
+            throw new ConflictException(
+              'Request id already used or unconfirmed',
+            );
+          return { ...previous.result, replayed: true };
+        }
+        if (task.updatedAt !== request.expectedUpdatedAt)
+          throw new ConflictException('TASK_REVISION_CONFLICT');
+        let changes: Parameters<ProjectsService['updateTask']>[3];
+        let status:
+          | 'updated'
+          | 'attached'
+          | 'detached'
+          | 'already_attached'
+          | 'already_detached' = 'updated';
+        if (request.operation === 'update') {
+          changes = request.changes!;
+          const hasChildren = this.db
+            .select({ id: projectTasks.id })
+            .from(projectTasks)
+            .where(eq(projectTasks.parentTaskId, task.id))
+            .limit(1)
+            .get();
+          if (
+            hasChildren &&
+            (changes.progress !== undefined ||
+              changes.estimateMinutes !== undefined)
+          )
+            throw new BadRequestException(
+              'Main task progress and estimates are calculated from subtasks',
+            );
+          if (
+            task.parentTaskId &&
+            (changes.statusId !== undefined || changes.priority !== undefined)
+          )
+            throw new BadRequestException(
+              'Subtasks inherit board status and priority; use subtaskStatus',
+            );
+          if (!task.parentTaskId && changes.subtaskStatus !== undefined)
+            throw new BadRequestException('Use statusId for main tasks');
+          const nextStatus = changes.subtaskStatus ?? task.subtaskStatus;
+          if (
+            task.parentTaskId &&
+            ['done', 'cancelled'].includes(nextStatus) &&
+            changes.progress !== undefined &&
+            changes.progress !== 100
+          )
+            throw new BadRequestException(
+              'Reopen the subtask before reducing its progress',
+            );
+        } else {
+          if (!task.parentTaskId)
+            throw new BadRequestException(
+              'Only subtasks can be assigned to an agent',
+            );
+          if (task.linkedThreadId && task.linkedThreadId !== threadId)
+            throw new ConflictException(
+              'This subtask is assigned to another agent',
+            );
+          const attaching = request.operation === 'attach_self';
+          status = attaching
+            ? task.linkedThreadId
+              ? 'already_attached'
+              : 'attached'
+            : task.linkedThreadId
+              ? 'detached'
+              : 'already_detached';
+          changes = attaching
+            ? { linkedThreadId: threadId, executionMode: 'agent' }
+            : { linkedThreadId: null, executionMode: 'manual' };
+        }
+        const actor = {
+          personId: fresh.access.identity.personId,
+          name: `Agent ${threadId} — ${fresh.access.identity.name ?? 'Service'}`,
+        };
+        if (!status.startsWith('already_')) {
+          const batchKey =
+            'mcp-' +
+            createHash('sha256')
+              .update(
+                JSON.stringify([scope.project.id, threadId, request.requestId]),
+              )
+              .digest('hex');
+          service.applyTaskBatch(
+            scope.project.id,
+            request.resourceId,
+            {
+              requestId: batchKey,
+              operations: [
+                {
+                  type: 'update',
+                  taskId: task.id,
+                  input: {
+                    ...changes,
+                    expectedUpdatedAt: request.expectedUpdatedAt,
+                  },
+                },
+              ],
+            },
+            actor,
+          );
+          service.recordActivity(
+            scope.project.id,
+            'agent_task_managed',
+            'task',
+            task.id,
+            task.title,
+            {
+              threadId,
+              requestId: request.requestId,
+              operation: request.operation,
+              userRequest: request.userRequest,
+              changedFields: Object.keys(changes),
+              expectedUpdatedAt: request.expectedUpdatedAt,
+            },
+            actor,
+          );
+        }
+        const current = this.tasks(fresh).find(
+          (t) => t.id === task.id && t.resourceId === request.resourceId,
+        )!;
+        const result = {
+          status,
+          replayed: false,
+          task: this.taskDetails(fresh, current),
+          url: `/projects/${scope.project.id}/resources/${request.resourceId}`,
+        };
+        this.db
+          .insert(projectAgentToolRequests)
+          .values({
+            projectId: scope.project.id,
+            threadId,
+            requestId: request.requestId,
+            digest,
+            personId: actor.personId,
+            result,
+            createdAt: Date.now(),
+          })
+          .run();
+        return result;
+      });
+    } catch (error) {
+      if (error instanceof ConflictException)
+        throw new ConflictException(
+          error.message === 'TASK_REVISION_CONFLICT'
+            ? error.message
+            : 'TASK_CONFLICT',
+        );
+      if (error instanceof BadRequestException)
+        throw new BadRequestException('TASK_INVALID_REQUEST');
+      throw error;
+    }
+  }
+
   private tasks(
     scope: ReturnType<ProjectAgentToolsService['scope']>,
     linkedThreadId?: string,
@@ -111,6 +380,15 @@ export class ProjectAgentToolsService {
           title: projectTasks.title,
           description: projectTasks.description,
           status: projectTaskStatuses.name,
+          statusId: projectTasks.statusId,
+          progress: projectTasks.progress,
+          subtaskStatus: projectTasks.subtaskStatus,
+          updatedAt: projectTasks.updatedAt,
+          priority: projectTasks.priority,
+          estimateMinutes: projectTasks.estimateMinutes,
+          startAt: projectTasks.startAt,
+          dueAt: projectTasks.dueAt,
+          labels: projectTasks.labels,
           parentTaskId: projectTasks.parentTaskId,
           linkedThreadId: projectTasks.linkedThreadId,
           validationCriteria: projectTasks.validationCriteria,
@@ -185,15 +463,20 @@ export class ProjectAgentToolsService {
         },
         activeDirectory: cwd ?? null,
         previewEnvironment,
-        linkedTasks: tasks
-          .slice(0, 10)
-          .map((t) => ({ id: t.id, title: t.title.slice(0, 200) })),
+        linkedTasks: tasks.slice(0, 10).map((t) => ({
+          id: t.id,
+          resourceId: t.resourceId,
+          title: t.title.slice(0, 200),
+          progress: t.progress,
+          subtaskStatus: t.subtaskStatus,
+          updatedAt: t.updatedAt,
+        })),
         linkedDeliverables: deliverables
           .filter((d) => d.linkedToThisConversation)
           .slice(0, 10)
           .map((d) => ({ id: d.id, title: d.title.slice(0, 200) })),
       }) +
-      '\nUse MCP project_get, project_task_list, project_deliverable_list and detail tools on demand. Use the names actually advertised in this conversation’s MCP inventory; cached legacy names remain compatible with identical arguments and permissions. previewEnvironment is a configuration snapshot, not authorization by itself or a guarantee that a launch succeeds. Recheck project_preview_read with operation=status. A null preview means no instance, not that the service is available. If preparation.projectAuthorized is true, the administrator granted standing preview authorization within the assigned project task. Inspect the project, ask the human about missing requirements, prepare an agent-owned recipe with project_preview_prepare using observed revisions and allowed runtimes, then use project_preview_manage start/sync/refresh/stop. To change an active preview duration without restarting it, use operation=lifetime, a stable requestId and lifetimeMinutes=60,180,300,600,1440 or null (never). The new duration begins when applied; access-session expiry is separate. Otherwise require an explicit human request for the approved manual recipe. Stop removes the owned Docker containers, private networks and ephemeral volumes; confirm removal only when preview.cleanup.runtimeResourcesRemoved is true. Source files, launch configuration and history are preserved. A stopped history entry is not a retained Docker environment. A writable administrator turn remains required. Never enable the project yourself, raise its CPU, memory or storage limits, copy production data or secrets, or bypass a refusal with terminal Docker commands. Lifetime is selectable through the authorized lifetime operation. Announce readiness and share the returned public URL only when preview.ready is true. Mergeron authorizes browser access on opening that URL; it is not an access grant. Discover configured project connections with project_connection_list; use project_git_read for authenticated GitHub consultation and your own local copy. If you need a copy for authorized project work, use project_git_copy_create: Mergeron creates and registers it for THIS conversation, without choosing an owner or path. Never clone manually, inspect or edit another agent’s copy. A created copy becomes writable after native permissions refresh on the next turn; do not bypass that boundary. On explicit human request, project_git_publish can push an observed commit, create a PR after push or change an existing PR base with operation=retarget_pull_request (number, base, expectedBase, expectedPullRequestHead from pull_requests and the usual observed local copy state), without exposing credentials. Re-read pull_requests and checks after changing a PR base. Other protocols are inventory-only, not shell access. Connection capabilities never authorize an action by themselves. Creating a managed Git copy for authorized project work needs no separate confirmation. Creating tasks or deliverables, renaming, or publishing still requires an explicit human request. To attach THIS conversation to a deliverable on explicit human request, read project_deliverable_get then call project_deliverable_agent_manage with operation=attach_self, observed expectedVersion and a stable requestId. It cannot assign another agent or replace a conflicting assignment. Linked deliverable context appears next turn; the existing working reference and current-turn filesystem permissions are preserved. For file audio processing, use project_media_read status/documents, then project_media_manage start on an observed immutable document version, with extract, transcribe or both. Poll this conversation’s job and publish its audio into an existing deliverable only on explicit human request. Never run shell ffmpeg or use a URL to bypass a refusal. Retained documents require versioned publication.\n</mergeron_project_context>'
+      '\nUse MCP project_get, project_task_list, project_deliverable_list and detail tools on demand. Use the names actually advertised in this conversation’s MCP inventory; cached legacy names remain compatible with identical arguments and permissions. previewEnvironment is a configuration snapshot, not authorization by itself or a guarantee that a launch succeeds. Recheck project_preview_read with operation=status. A null preview means no instance, not that the service is available. If preparation.projectAuthorized is true, the administrator granted standing preview authorization within the assigned project task. Inspect the project, ask the human about missing requirements, prepare an agent-owned recipe with project_preview_prepare using observed revisions and allowed runtimes, then use project_preview_manage start/sync/refresh/stop. To change an active preview duration without restarting it, use operation=lifetime, a stable requestId and lifetimeMinutes=60,180,300,600,1440 or null (never). The new duration begins when applied; access-session expiry is separate. Otherwise require an explicit human request for the approved manual recipe. Stop removes the owned Docker containers, private networks and ephemeral volumes; confirm removal only when preview.cleanup.runtimeResourcesRemoved is true. Source files, launch configuration and history are preserved. A stopped history entry is not a retained Docker environment. A writable administrator turn remains required. Never enable the project yourself, raise its CPU, memory or storage limits, copy production data or secrets, or bypass a refusal with terminal Docker commands. Lifetime is selectable through the authorized lifetime operation. Announce readiness and share the returned public URL only when preview.ready is true. Mergeron authorizes browser access on opening that URL; it is not an access grant. Discover configured project connections with project_connection_list; use project_git_read for authenticated GitHub consultation and your own local copy. If you need a copy for authorized project work, use project_git_copy_create: Mergeron creates and registers it for THIS conversation, without choosing an owner or path. Never clone manually, inspect or edit another agent’s copy. A created copy becomes writable after native permissions refresh on the next turn; do not bypass that boundary. On explicit human request, project_git_publish can push an observed commit, create a PR after push or change an existing PR base with operation=retarget_pull_request (number, base, expectedBase, expectedPullRequestHead from pull_requests and the usual observed local copy state), without exposing credentials. Re-read pull_requests and checks after changing a PR base. Other protocols are inventory-only, not shell access. Connection capabilities never authorize an action by themselves. Creating a managed Git copy for authorized project work needs no separate confirmation. Creating tasks or deliverables, renaming, or publishing still requires an explicit human request. To attach THIS conversation to a deliverable on explicit human request, read project_deliverable_get then call project_deliverable_agent_manage with operation=attach_self, observed expectedVersion and a stable requestId. It cannot assign another agent or replace a conflicting assignment. Linked deliverable context appears next turn; the existing working reference and current-turn filesystem permissions are preserved. For file audio processing, use project_media_read status/documents, then project_media_manage start on an observed immutable document version, with extract, transcribe or both. Poll this conversation’s job and publish its audio into an existing deliverable only on explicit human request. Never run shell ffmpeg or use a URL to bypass a refusal. On explicit human request, read project_task_get and call project_task_manage with the observed updatedAt as expectedUpdatedAt and a stable requestId to update progress/status or attach/detach yourself to subtasks. Never infer completion from progress 100 alone, validate a deliverable, assign another agent or launch an agent. Re-read after a replay for the current state. Assignment context and filesystem rights are refreshed only on the next turn. Retained documents require versioned publication.\n</mergeron_project_context>'
     );
   }
 
@@ -274,6 +557,8 @@ export class ProjectAgentToolsService {
         turnId,
       );
     }
+    if (input.tool === 'manage_task')
+      return this.manageTask(threadId, input, assertActive, canWrite);
     const names = [
       'requestId',
       'tool',
@@ -583,7 +868,8 @@ export class ProjectAgentToolsService {
       if (tool.startsWith('get_')) {
         if (!id || filtered.length !== 1)
           throw new BadRequestException('Element unavailable');
-        return filtered[0];
+        const item = filtered[0];
+        return tool === 'get_task' ? this.taskDetails(scope, item) : item;
       }
       return {
         items: filtered
@@ -594,7 +880,13 @@ export class ProjectAgentToolsService {
             title: item.title,
             status: item.status,
             ...('parentTaskId' in item
-              ? { parentTaskId: item.parentTaskId }
+              ? {
+                  parentTaskId: item.parentTaskId,
+                  progress: item.progress,
+                  subtaskStatus: item.subtaskStatus,
+                  linkedThreadId: item.linkedThreadId,
+                  updatedAt: item.updatedAt,
+                }
               : {}),
           })),
         total: filtered.length,

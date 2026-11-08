@@ -14,6 +14,7 @@ export interface ProjectAgentThreadSummary {
   taskId: string | null;
   taskResourceId: string | null;
   taskTitle: string | null;
+  taskParentTaskId?: string | null;
   isSubtask: boolean;
 }
 
