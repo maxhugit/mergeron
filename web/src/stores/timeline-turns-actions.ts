@@ -1,3 +1,4 @@
+import { reportInboxError } from '@/lib/inbox-errors';
 /** Conversation timeline turns actions. */
 import { type TurnPlanState } from '../types/timeline';
 import { nextObservationSeq } from '../lib/turn-item-merge';
@@ -305,6 +306,7 @@ export function createTimelineTurnsActions({
     },
 
     addSystemErrorForThread: (threadId, message) => {
+      reportInboxError({ threadId, message });
       applyThreadUpdate(threadId, (runtime) => ({
         ...runtime,
         timeline: [

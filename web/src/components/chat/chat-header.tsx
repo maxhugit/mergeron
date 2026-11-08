@@ -1,3 +1,7 @@
+import {
+  NotificationBell,
+  NotificationPreferences,
+} from '@/components/notifications/notification-center';
 import { CompactHeaderControls } from './compact-header-controls';
 import { translationKey } from '@/locales/translation-key';
 import { BrandIcon } from '@/components/brand-icon';
@@ -305,6 +309,7 @@ export function ChatHeader() {
           isAdministrator={isAdministrator}
           onSettings={() => void navigate({ to: '/settings' })}
         />
+        <NotificationBell />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -364,6 +369,7 @@ export function ChatHeader() {
             </div>
           </dl>
           <ProfileAppearance />
+          <NotificationPreferences />
           <PushNotificationSettings />
           <PwaInstall />
           <DialogFooter className="sm:justify-between">

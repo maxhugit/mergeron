@@ -1,3 +1,4 @@
+import { NotificationsModule } from './notifications/notifications.module';
 import { MockupsModule } from './mockups/mockups.module';
 import { TranscriptionsModule } from './transcriptions/transcriptions.module';
 import { Module } from '@nestjs/common';
@@ -171,6 +172,7 @@ const PINO_REDACT = {
     ProjectsModule,
     PreviewsModule,
     PushModule,
+    NotificationsModule,
     OnlyOfficeModule,
     TurnDiffModule,
     TurnErrorsModule,
