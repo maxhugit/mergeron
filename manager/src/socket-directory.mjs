@@ -13,6 +13,7 @@ export async function prepareSocketDirectory(
   const info = await operations.lstat(directory);
   if (!info.isDirectory() || info.isSymbolicLink())
     throw new Error('Invalid Manager socket directory');
-  await operations.chown(directory, 0, group);
+  if (info.uid !== 0 || info.gid !== group)
+    await operations.chown(directory, 0, group);
   await operations.chmod(directory, 0o750);
 }
