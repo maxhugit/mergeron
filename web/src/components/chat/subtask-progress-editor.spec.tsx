@@ -117,3 +117,51 @@ it('discards a cancelled pointer gesture without submitting', async () => {
   expect(state.api).not.toHaveBeenCalled();
   expect(screen.getByText('40 %')).toBeVisible();
 });
+
+it('keeps keyboard focus during a save and uses the confirmed revision on the next adjustment', async () => {
+  let finish!: (value: unknown) => void;
+  state.api.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  fixture();
+  const slider = screen.getByRole('slider');
+  slider.focus();
+  fireEvent.change(slider, { target: { value: '65' } });
+  fireEvent.keyUp(slider, { key: 'ArrowRight' });
+  await waitFor(() => expect(slider).toHaveAttribute('aria-disabled', 'true'));
+  expect(slider).toHaveFocus();
+  fireEvent.change(slider, { target: { value: '66' } });
+  fireEvent.keyUp(slider, { key: 'ArrowRight' });
+  expect(state.api).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ task: { progress: 65, updatedAt: 9 } }));
+  await waitFor(() => expect(slider).toHaveAttribute('aria-disabled', 'false'));
+  expect(slider).toHaveFocus();
+  fireEvent.change(slider, { target: { value: '66' } });
+  fireEvent.keyUp(slider, { key: 'ArrowRight' });
+  await waitFor(() => expect(state.api).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(state.api.mock.calls[1][1].body)).toEqual({
+    progress: 66,
+    expectedUpdatedAt: 9,
+  });
+});
+
+it('clears a gesture returning to the saved value so later refreshes remain visible', () => {
+  const view = fixture();
+  const slider = screen.getByRole('slider');
+  fireEvent.change(slider, { target: { value: '50' } });
+  fireEvent.change(slider, { target: { value: '40' } });
+  fireEvent.pointerUp(slider);
+  expect(state.api).not.toHaveBeenCalled();
+  view.rerender(
+    <SubtaskProgressEditor
+      projectId="p"
+      task={{ ...task, progress: 55, updatedAt: 8 }}
+    >
+      {(value) => <output>{value} %</output>}
+    </SubtaskProgressEditor>,
+  );
+  expect(screen.getByText('55 %')).toBeVisible();
+});

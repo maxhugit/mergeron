@@ -67,8 +67,12 @@ export function SubtaskProgressEditor({
   const editable = session.isAdministrator && !locked && !unavailable;
   const commit = () => {
     const change = draftRef.current;
-    if (!editable || saving.current || !change || change.value === saved.value)
+    if (!editable || saving.current || !change) return;
+    if (change.value === saved.value) {
+      draftRef.current = null;
+      setDraft(null);
       return;
+    }
     saving.current = true;
     mutation.mutate(change);
   };
@@ -95,7 +99,8 @@ export function SubtaskProgressEditor({
             max={100}
             step={1}
             value={value}
-            disabled={!editable || mutation.isPending}
+            disabled={!editable}
+            aria-disabled={!editable || mutation.isPending}
             aria-label={t('sidebarProgressFor', { title: task.title })}
             title={
               locked
@@ -104,7 +109,7 @@ export function SubtaskProgressEditor({
                   ? t('sidebarProgressUnavailable')
                   : t('sidebarProgressFor', { title: task.title })
             }
-            className="agent-subtask-progress w-full"
+            className="agent-subtask-progress w-full focus-visible:outline-2 focus-visible:outline-ring"
             style={{ '--task-progress': `${value}%` } as CSSProperties}
             onChange={(event) => change(event.target.value)}
             onPointerUp={commit}

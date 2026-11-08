@@ -200,7 +200,8 @@ test.each([390, 1280])(
             .textContent,
       )
       .toContain('41 %');
-    await expect.poll(() => slider.hasAttribute('disabled')).toBe(false);
+    await expect.poll(() => slider.getAttribute('aria-disabled')).toBe('false');
+    expect(slider).toHaveFocus();
     expect(screen.queryByRole('spinbutton')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull();
     expect(screen.getAllByRole('slider')).toHaveLength(3);
