@@ -136,3 +136,5 @@ avant de supposer qu’une ancienne version stable possède toutes ces fonctions
 - [Cohérence des projets : diagnostic et corrections](coherence-projets.md)
 
 - [Suivi HTTP indépendant des mises à jour](continuous-updates.md)
+
+- [Centre de notifications : fonctionnement, droits et conservation](notifications.md)

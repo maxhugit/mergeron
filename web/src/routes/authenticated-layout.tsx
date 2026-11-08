@@ -1,3 +1,4 @@
+import { NotificationCenter } from '@/components/notifications/notification-center';
 import { ProfileTextSizeApplier } from '@/components/account/profile-text-size';
 /**
  * Authenticated layout: sidebar + header + main content outlet.
@@ -91,8 +92,8 @@ function AuthenticatedContent() {
     session.error instanceof AuthIdentityChangedError ||
     Boolean(
       verified &&
-      retained &&
-      sessionOwner(retained) !== sessionOwner(session.data!),
+        retained &&
+        sessionOwner(retained) !== sessionOwner(session.data!),
     );
   if (verified && !changed && session.data !== retained)
     setRetained(session.data!);
@@ -539,6 +540,7 @@ function AuthenticatedWorkspace({
         </div>
       </div>
       <TerminalHost />
+      <NotificationCenter />
       <SnackbarContainer />
     </TooltipProvider>
   );

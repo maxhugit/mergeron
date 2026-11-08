@@ -2026,3 +2026,39 @@ export const conversationMockupRevisions = sqliteTable(
     uniqueIndex('uidx_mockup_revision_number').on(table.mockupId, table.number),
   ],
 );
+
+/** Personal inbox: authorization is rechecked on every read and mutation. */
+export const inboxNotifications = sqliteTable(
+  'inbox_notifications',
+  {
+    id: text('id').primaryKey(),
+    personId: text('person_id')
+      .notNull()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').references(() => projects.id, {
+      onDelete: 'cascade',
+    }),
+    threadId: text('thread_id'),
+    kind: text('kind').notNull(),
+    message: text('message').notNull(),
+    eventKey: text('event_key').notNull(),
+    readAt: integer('read_at'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('inbox_person_event').on(t.personId, t.eventKey),
+    index('inbox_person_date').on(t.personId, t.createdAt),
+  ],
+);
+export const inboxPreferences = sqliteTable(
+  'inbox_preferences',
+  {
+    personId: text('person_id')
+      .primaryKey()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    retentionDays: integer('retention_days').notNull().default(7),
+  },
+  (t) => [
+    check('inbox_retention_range', sql`${t.retentionDays} between 1 and 365`),
+  ],
+);
