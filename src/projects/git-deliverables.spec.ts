@@ -129,6 +129,7 @@ describe('optional Git deliverables with real retained versions and a real repos
         localPath: repo,
         accessMode: 'read_write',
         ownerThreadIds: ['agent'],
+        ownerAgentIds: ['agent'],
       },
     ] as ReturnType<WorkspaceCopiesService['list']>;
     const copies = {
@@ -556,6 +557,7 @@ describe('optional Git deliverables with real retained versions and a real repos
     expect(status.boards[0].settings).not.toHaveProperty('copyId');
     await expect(fs.stat(path.join(repo, 'livrables'))).rejects.toThrow();
     copyViews[0].ownerThreadIds = [];
+    copyViews[0].ownerAgentIds = [];
     expect(() =>
       service.configure('p', {
         boardId: 'board',
@@ -573,9 +575,9 @@ describe('optional Git deliverables with real retained versions and a real repos
   });
   it('requires an agent-owned copy and refuses a shared, foreign, read-only or unavailable copy', async () => {
     for (const change of [
-      { ownerThreadIds: [] },
-      { ownerThreadIds: ['someone-else'] },
-      { ownerThreadIds: ['agent', 'other'] },
+      { ownerThreadIds: [], ownerAgentIds: [] },
+      { ownerThreadIds: ['someone-else'], ownerAgentIds: ['someone-else'] },
+      { ownerThreadIds: ['agent', 'other'], ownerAgentIds: ['agent', 'other'] },
       { accessMode: 'read_only' },
       { state: 'missing' },
       { sourceEnabled: false },
@@ -654,6 +656,7 @@ describe('optional Git deliverables with real retained versions and a real repos
       id: 'copy2',
       localPath: repo2,
       ownerThreadIds: ['agent2'],
+      ownerAgentIds: ['agent2'],
     });
     const item = await deliverables.create('p', 'board', {
       title: 'Both agents',
@@ -716,6 +719,7 @@ describe('optional Git deliverables with real retained versions and a real repos
       .where(eq(schema.projectResources.id, 'board'))
       .run();
     copyViews[0].ownerThreadIds = [];
+    copyViews[0].ownerAgentIds = [];
     const repo2 = path.join(root, 'agent-repo');
     await fs.mkdir(repo2);
     execFileSync('git', ['init', '--quiet', repo2]);
@@ -724,6 +728,7 @@ describe('optional Git deliverables with real retained versions and a real repos
       id: 'copy2',
       localPath: repo2,
       ownerThreadIds: ['agent2'],
+      ownerAgentIds: ['agent2'],
     });
     service.configure('p', {
       boardId: 'board',
@@ -788,6 +793,7 @@ describe('optional Git deliverables with real retained versions and a real repos
       id: 'copy2',
       localPath: repo2,
       ownerThreadIds: ['agent2'],
+      ownerAgentIds: ['agent2'],
     });
     const item = await deliverables.create('p', 'board', { title: 'Queued' });
     const doc = await upload(item.id, 'base');
@@ -808,5 +814,25 @@ describe('optional Git deliverables with real retained versions and a real repos
         .sort(),
     ).toEqual(['copy', 'copy2']);
     preview.mockRestore();
+  });
+  it('accepts edited-message conversation versions of one work agent without treating them as competing owners', async () => {
+    copyViews[0].ownerThreadIds = ['agent', 'edited-version'];
+    copyViews[0].ownerAgentIds = ['agent'];
+    expect((await service.status('p')).copies[0].eligible).toBe(true);
+    const plan = await asAgent('edited-version', () =>
+      service.preview('p', options),
+    );
+    expect(plan.copyId).toBe('copy');
+    await asAgent('edited-version', () =>
+      service.apply('p', { options, fingerprint: plan.fingerprint }),
+    );
+    expect(scopedMutation).toHaveBeenCalledWith(
+      'edited-version',
+      expect.any(Function),
+      { copyPath: repo },
+    );
+    await expect(
+      asAgent('unrelated-agent', () => service.preview('p', options)),
+    ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
   });
 });

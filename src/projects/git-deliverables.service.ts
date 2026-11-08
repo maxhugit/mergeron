@@ -209,7 +209,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           c.sourceEnabled &&
           c.state === 'ready' &&
           c.accessMode === 'read_write' &&
-          c.ownerThreadIds.length === 1 &&
+          c.ownerAgentIds.length === 1 &&
           (!actor || c.ownerThreadIds.includes(actor)) &&
           this.cloneExists(c.localPath),
       );
