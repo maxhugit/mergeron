@@ -39,7 +39,7 @@ it('creates an optional multiline description without submitting on a line break
   fireEvent.keyDown(field, { key: 'Enter' });
   expect(save).not.toHaveBeenCalled();
   expect(field).toHaveAttribute('maxlength', '1000');
-  fireEvent.click(screen.getByRole('button', { name: 'Create', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: /^Create$/ }));
   expect(save).toHaveBeenCalledWith('First line\nSecond line');
 });
 it('loads the description in project settings and saves an edited or empty value', async () => {
@@ -55,7 +55,7 @@ it('loads the description in project settings and saves an edited or empty value
   const field = screen.getByLabelText('Short description');
   expect(field).toHaveValue('Saved\nText');
   fireEvent.change(field, { target: { value: '' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/p', {
       method: 'PATCH',
