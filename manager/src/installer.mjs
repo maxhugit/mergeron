@@ -449,7 +449,7 @@ async function preparePersistentState(configuration, creatingApplication) {
       await chown(
         path,
         applicationOwned ? 11002 : 0,
-        applicationOwned ? 11002 : 0,
+        applicationOwned || directory === 'manager-run' ? 11002 : 0,
       );
     }
   }
