@@ -8,7 +8,7 @@
     "build": "node scripts/package-browser-extension.mjs && tsc -b && vite build",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
-    "test:browser": "rm -rf .vitest-screenshots && vitest run --project browser",
+    "test:browser": "node scripts/run-browser-tests.mjs",
     "test:browser:install": "node scripts/install-test-browsers.mjs chromium webkit",
     "check:i18n": "node scripts/check-i18n-catalogs.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
