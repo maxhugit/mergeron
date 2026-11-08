@@ -18,7 +18,7 @@ Dans le profil, la conservation est réglable de 1 à 365 jours, avec 7 jours pa
 
 Le module `NotificationsModule` écoute `turn/completed` du gestionnaire Codex et le flux des demandes persistantes. Les événements sont dédupliqués par personne et clé d’événement. Les erreurs répétées de l’interface sont regroupées par personne, cible et message dans une fenêtre de cinq minutes. Les événements éphémères ne sont pas conservés. Les nouvelles sources d’événements doivent utiliser les mêmes vérifications et ne doivent pas enregistrer le contenu des conversations ou des secrets.
 
-La migration `0080_notification_center` ajoute `inbox_notifications` et `inbox_preferences`. Le panneau est monté dans `AuthenticatedLayout`, hors de la route d’un agent, et utilise un état global d’ouverture. Le cache React Query est séparé par personne et filtre. Le scroll est porté par un enfant `min-h-0 flex-1 overflow-y-auto overscroll-contain` d’un panneau contraint à la hauteur visible ; l’en-tête est `shrink-0`.
+La migration `0077_notification_center` ajoute `inbox_notifications` et `inbox_preferences`. Le panneau est monté dans `AuthenticatedLayout`, hors de la route d’un agent, et utilise un état global d’ouverture. Le cache React Query est séparé par personne et filtre. Le scroll est porté par un enfant `min-h-0 flex-1 overflow-y-auto overscroll-contain` d’un panneau contraint à la hauteur visible ; l’en-tête est `shrink-0`.
 
 API authentifiée :
 

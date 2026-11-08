@@ -19,6 +19,31 @@ interface InboxPage {
   unread: number;
   nextCursor: string | null;
 }
+export function parseInboxPage(value: unknown): InboxPage {
+  if (!value || typeof value !== 'object')
+    throw new Error('notificationsUnavailable');
+  const page = value as InboxPage;
+  if (
+    !Array.isArray(page.items) ||
+    !Number.isInteger(page.unread) ||
+    page.unread < 0 ||
+    !(page.nextCursor === null || typeof page.nextCursor === 'string') ||
+    !page.items.every(
+      (item) =>
+        item &&
+        typeof item.id === 'string' &&
+        typeof item.kind === 'string' &&
+        typeof item.message === 'string' &&
+        Number.isFinite(item.createdAt) &&
+        (item.readAt === null || Number.isFinite(item.readAt)) &&
+        [item.projectId, item.projectName, item.threadId].every(
+          (v) => v === null || typeof v === 'string',
+        ),
+    )
+  )
+    throw new Error('notificationsUnavailable');
+  return page;
+}
 export async function inboxApi<T>(
   path = '',
   body?: unknown,
@@ -74,11 +99,13 @@ export function useInbox() {
   const query = useInfiniteQuery({
     queryKey: [...key(id), filter],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) =>
-      inboxApi<InboxPage>(
-        '?filter=' +
-          filter +
-          (pageParam ? '&cursor=' + encodeURIComponent(pageParam) : ''),
+    queryFn: async ({ pageParam }) =>
+      parseInboxPage(
+        await inboxApi<unknown>(
+          '?filter=' +
+            filter +
+            (pageParam ? '&cursor=' + encodeURIComponent(pageParam) : ''),
+        ),
       ),
     getNextPageParam: (p) => p.nextCursor,
     enabled,
