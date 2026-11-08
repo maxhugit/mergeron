@@ -1677,5 +1677,7 @@
   "agentOtherSubtasks_one": "{{count}} other subtask in this main task, including {{completed}} completed.",
   "agentOtherSubtasks_other": "{{count}} other subtasks in this main task, including {{completed}} completed.",
   "agentDifferentMainTasks": "This agent has assignments to different main tasks. Review its assignments.",
-  "agentSubtaskReview": "In review"
+  "agentSubtaskReview": "In review",
+  "projectShortDescription": "Short description",
+  "projectShortDescriptionHint": "Optional, multiple lines allowed · Maximum 1,000 characters."
 }

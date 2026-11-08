@@ -735,7 +735,32 @@ describe('legacy permanent project workspace migration (v1–v3)', () => {
       null as never,
       database.db,
     );
-    const project = await service.create('Renamable project');
+    const project = await service.create(
+      'Renamable project',
+      undefined,
+      'First line\r\nSecond line',
+    );
+    expect(project.description).toBe('First line\nSecond line');
+    expect(
+      database.db
+        .select()
+        .from(projects)
+        .all()
+        .find((p) => p.id === project.id)?.description,
+    ).toBe('First line\nSecond line');
+    expect(
+      service.rename(project.id, undefined, 'Updated\nDescription').description,
+    ).toBe('Updated\nDescription');
+    expect(service.rename(project.id, 'Renamed').description).toBe(
+      'Updated\nDescription',
+    );
+    expect(() =>
+      service.rename(project.id, undefined, 'x'.repeat(1001)),
+    ).toThrow('1000');
+    expect(service.rename(project.id, undefined, '').description).toBe('');
+    await expect(service.create('Invalid', undefined, 12)).rejects.toThrow(
+      '1000',
+    );
     expect(project.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(project.workspacePath).toBe(path.join(root, project.id));
     expect(project.workspaceLayoutVersion).toBe(4);

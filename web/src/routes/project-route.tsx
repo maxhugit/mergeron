@@ -1,3 +1,4 @@
+import { ProjectDescription } from '@/components/projects/project-description';
 import { translationKey } from '@/locales/translation-key';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -162,6 +163,7 @@ export function ProjectRoute() {
                 </>
               }
             >
+              <ProjectDescription key={project.id} project={project} />
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <SummaryCard
                   icon={FolderOpen}

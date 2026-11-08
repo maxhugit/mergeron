@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "2299f54a-8551-4dcb-b6a9-0810a76f7416",
-  "prevId": "9a042744-37da-4150-80c1-c004a8ad9427",
+  "prevId": "b5860583-29e8-451d-b2f8-19ffbbf839e3",
   "tables": {
     "agent_monitor_runs": {
       "name": "agent_monitor_runs",
@@ -6603,6 +6603,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
         }
       },
       "indexes": {
