@@ -6,7 +6,7 @@ import { BrowserLifecycle } from './browser-lifecycle.mjs';
 import { ManagedTranscription } from './transcription.mjs';
 import http from 'node:http';
 import net from 'node:net';
-import { chmod, chown, mkdir, readFile, rm } from 'node:fs/promises';
+import { chmod, chown, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AppCatalogRunner } from './app-catalog/runner.mjs';
@@ -17,6 +17,7 @@ import { environmentBackupPolicy } from './backup-policy.mjs';
 import { PreviewManager } from './previews.mjs';
 import { ManagedCodexCli } from './codex-cli.mjs';
 import { startHealthDiagnostics } from './health-diagnostics.mjs';
+import { prepareSocketDirectory } from './socket-directory.mjs';
 import {
   confirmAdoption,
   recordCapabilityChange,
@@ -873,7 +874,7 @@ const server = http.createServer(async (request, response) => {
   json(response, 404, { error: 'notFound' });
 });
 
-await mkdir(dirname(socketPath), { recursive: true, mode: 0o750 });
+await prepareSocketDirectory(dirname(socketPath), socketGroup);
 // Do not unlink a live Manager's socket: this also serializes all stack writers.
 await new Promise((resolve, reject) => {
   const probe = net.createConnection(socketPath);

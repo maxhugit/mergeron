@@ -13,7 +13,7 @@ for environment in development production; do
 prefix=mergeron
 if [[ "$environment" == development ]]; then prefix=mergeron-dev; fi
 # Disposable fixture: no Docker socket, host mounts or network access.
-container_id=$(docker run -d --read-only --network none --cap-drop ALL \
+container_id=$(docker run -d --read-only --network none --cap-drop ALL --cap-add CHOWN \
   --security-opt no-new-privileges:true \
   --tmpfs /run/mergeron-manager:rw,nosuid,nodev,size=1m \
   --tmpfs /var/lib/mergeron-manager:rw,nosuid,nodev,size=8m \
@@ -31,6 +31,17 @@ for attempt in $(seq 1 20); do
   sleep 1
 done
 [[ "$healthy" == true ]] || exit 1
+# Exercise the application identity: health as root alone misses an
+# inaccessible socket parent on a genuinely fresh installation.
+docker exec --user 11002:11002 "$container_id" /nodejs/bin/node --input-type=module -e '
+import http from "node:http";
+const request = http.get({socketPath:"/run/mergeron-manager/manager.sock",path:"/v1/codex-cli"}, response => {
+  response.resume();
+  if (response.statusCode !== 200) process.exitCode = 1;
+});
+request.setTimeout(5000, () => request.destroy(new Error("Manager socket timeout")));
+request.on("error", error => { console.error(error.message); process.exitCode = 1; });
+'
 cleanup
 container_id=
 done

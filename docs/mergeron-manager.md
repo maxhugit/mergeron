@@ -256,6 +256,12 @@ Manager ; aucun montage de la racine de l'hôte n'est ajouté.
 
 La définition de lancement du Manager monte le socket dans
 `STATE_ROOT/manager-run`. Ce dossier ne contient aucune donnée métier. Le
+Manager rétablit à chaque démarrage ses droits `0750` et son propriétaire
+`root:MERGERON_MANAGER_SOCKET_GID` (groupe `11002` par défaut). Le socket reste
+en `0660` avec le même groupe : l'application peut ainsi traverser le dossier
+et installer le CLI validé, même avant la connexion à un compte Codex. Cette
+correction ne modifie ni les parents ni le contenu du dossier.
+Le
 Manager fonctionne sans réseau Docker (`network_mode: none`). `STATE_ROOT` est
 également monté dans `/host-state` afin de créer les éléments manquants par des
 ouvertures exclusives. L'enregistrement d'adoption reste séparé dans
