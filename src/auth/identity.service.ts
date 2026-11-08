@@ -81,6 +81,82 @@ export class IdentityService {
     @Optional() private readonly localAuth?: LocalAuthService,
   ) {}
 
+  sidebarPreferences(
+    identity: PlatformIdentity | undefined,
+    scope: string,
+    change?: { key?: unknown; value?: unknown },
+  ) {
+    if (!identity?.personId || identity.kind !== 'person')
+      throw new ForbiddenException('A person is required');
+    this.requireActive(identity);
+    if (scope !== 'projects') {
+      this.requireThread(identity, scope);
+      if (
+        !this.db
+          .select()
+          .from(projectAgentThreads)
+          .where(eq(projectAgentThreads.threadId, scope))
+          .get()
+      )
+        throw new BadRequestException('Unknown agent');
+    }
+    const category = `sidebar:${identity.personId}:${scope}`;
+    if (change) {
+      const { key, value } = change;
+      if (
+        typeof key !== 'string' ||
+        key.length > 240 ||
+        !/^(open|mode):[^\s]{1,230}$/.test(key) ||
+        (scope === 'projects'
+          ? !key.startsWith('open:project:')
+          : key.startsWith('open:project:')) ||
+        (key.startsWith('open:')
+          ? typeof value !== 'boolean'
+          : !['plain', 'labels'].includes(String(value)))
+      )
+        throw new BadRequestException('Invalid sidebar preference');
+      this.db
+        .insert(settings)
+        .values({
+          key: `${category}:${key}`,
+          value: JSON.stringify(value),
+          type: 'string',
+          category,
+          description: 'Personal sidebar presentation',
+          defaultValue: '',
+          constraints: '{}',
+          updatedAt: Date.now(),
+        })
+        .onConflictDoUpdate({
+          target: settings.key,
+          set: { value: JSON.stringify(value), updatedAt: Date.now() },
+        })
+        .run();
+    }
+    return {
+      personId: identity.personId,
+      values: Object.fromEntries(
+        this.db
+          .select()
+          .from(settings)
+          .where(eq(settings.category, category))
+          .all()
+          .flatMap((row) => {
+            try {
+              const value: unknown = JSON.parse(row.value ?? 'null');
+              return typeof value === 'boolean' ||
+                value === 'plain' ||
+                value === 'labels'
+                ? [[row.key.slice(category.length + 1), value]]
+                : [];
+            } catch {
+              return [];
+            }
+          }),
+      ),
+    };
+  }
+
   documentExplorerView(
     identity: PlatformIdentity | undefined,
     threadId: string,

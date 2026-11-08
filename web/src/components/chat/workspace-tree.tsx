@@ -1,3 +1,4 @@
+import { ExplorerTasks } from './explorer-tasks';
 import { ExplorerDeliverables } from './explorer-deliverables';
 /** Right-hand explorer with a divider preview: dragging never reflows the transcript. */
 import {
@@ -15,6 +16,7 @@ import {
   MapPin,
   Package,
   GitBranch,
+  ListChecks,
   Undo2,
 } from 'lucide-react';
 import { FileTree } from '@/components/files/file-tree';
@@ -78,9 +80,31 @@ export function WorkspaceTree({
   const browserStore = useFileBrowserStoreApi();
   const { t: tw } = useTranslation('workspaces');
   const session = usePlatformSession();
-  const [view, setView] = useState<'folders' | 'deliverables' | 'sources'>(
-    'folders',
-  );
+  const [view, setView] = useState<
+    'folders' | 'deliverables' | 'tasks' | 'sources'
+  >('folders');
+  useEffect(() => {
+    const open = (event: Event) => {
+      const d = (
+        event as CustomEvent<{
+          threadId: string;
+          tab: 'deliverables' | 'tasks';
+        }>
+      ).detail;
+      if (
+        d?.threadId === agentThreadId &&
+        project?.resources.some(
+          (r) =>
+            r.type === (d.tab === 'tasks' ? 'task_board' : 'deliverable_board'),
+        )
+      ) {
+        setView(d.tab);
+        useLayoutStore.getState().setWorkspaceTreeCollapsed(false);
+      }
+    };
+    window.addEventListener('mergeron:explorer-work', open);
+    return () => window.removeEventListener('mergeron:explorer-work', open);
+  }, [agentThreadId, project]);
   const [sourceStore] = useState(createFilesStore);
   const [revealDeliverable, setRevealDeliverable] = useState<string | null>(
     null,
@@ -212,13 +236,24 @@ export function WorkspaceTree({
             role="tablist"
             aria-label={t('explorer')}
           >
-            {(['folders', 'deliverables', 'sources'] as const).map((kind) => {
+            {(
+              [
+                'folders',
+                'deliverables',
+                ...(project?.resources.some((r) => r.type === 'task_board')
+                  ? ['tasks' as const]
+                  : []),
+                'sources',
+              ] as const
+            ).map((kind) => {
               const Icon =
                 kind === 'folders'
                   ? Folder
                   : kind === 'deliverables'
                     ? Package
-                    : GitBranch;
+                    : kind === 'tasks'
+                      ? ListChecks
+                      : GitBranch;
               return (
                 <button
                   key={kind}
@@ -233,13 +268,15 @@ export function WorkspaceTree({
                   }}
                 >
                   <Icon className="h-3.5 w-3.5" />
-                  {tw(
-                    kind === 'folders'
-                      ? 'explorerFolders'
-                      : kind === 'deliverables'
-                        ? 'explorerDeliverables'
-                        : 'explorerSources',
-                  )}
+                  {kind === 'tasks'
+                    ? tw('sidebarTasks')
+                    : tw(
+                        kind === 'folders'
+                          ? 'explorerFolders'
+                          : kind === 'deliverables'
+                            ? 'explorerDeliverables'
+                            : 'explorerSources',
+                      )}
                 </button>
               );
             })}
@@ -259,6 +296,8 @@ export function WorkspaceTree({
             onFile={onFile}
             revealPath={revealDeliverable}
           />
+        ) : view === 'tasks' ? (
+          <ExplorerTasks project={project} agentThreadId={agentThreadId} />
         ) : view === 'sources' ? (
           <FileBrowserContext.Provider value={sourceStore}>
             <WorkspaceGitPanel

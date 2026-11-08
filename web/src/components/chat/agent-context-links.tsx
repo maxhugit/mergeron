@@ -365,7 +365,39 @@ export function AgentContextLinks({
         )}
         {!pending && !error && !deliverables.length && !parent && (
           <span className="truncate text-muted-foreground">
-            {t('agentNoLinks')}
+            {project?.resources
+              .filter(
+                (r) =>
+                  r.type === 'deliverable_board' || r.type === 'task_board',
+              )
+              .map((r) => (
+                <button
+                  type="button"
+                  key={r.id}
+                  className="mr-2 rounded border px-2 py-1 text-primary"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent('mergeron:explorer-work', {
+                        detail: {
+                          threadId,
+                          tab:
+                            r.type === 'task_board' ? 'tasks' : 'deliverables',
+                        },
+                      }),
+                    )
+                  }
+                >
+                  {t(
+                    r.type === 'task_board'
+                      ? 'sidebarLinkTasks'
+                      : 'sidebarLinkDeliverable',
+                    { ns: 'workspaces' },
+                  )}
+                </button>
+              ))}
+            {!project?.resources.some(
+              (r) => r.type === 'deliverable_board' || r.type === 'task_board',
+            ) && t('agentNoLinks')}
           </span>
         )}
       </div>

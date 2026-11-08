@@ -211,6 +211,15 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
   });
   const desktop = useBreakpoint() === 'desktop';
   const [mobileTree, setMobileTree] = useState(false);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{ threadId: string }>).detail;
+      if (detail?.threadId === threadId && !desktop) setMobileTree(true);
+    };
+    window.addEventListener('mergeron:explorer-work', open);
+    return () => window.removeEventListener('mergeron:explorer-work', open);
+  }, [threadId, desktop]);
+
   const explorerRef = useRef<WorkspaceTreeHandle>(null);
   const browserDocked = workspace.browserDocked ?? false;
   const lastBrowserId = workspace.lastBrowserId;

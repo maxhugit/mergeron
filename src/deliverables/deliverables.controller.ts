@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -21,7 +22,10 @@ import {
 } from '../projects/project-agent-launch.service';
 import { ThreadMetadataService } from '../threads/thread-metadata.service';
 import { GitMutationGateService } from '../threads/git-mutation-gate.service';
-import { requireExecutionAccess } from '../auth/access-context';
+import {
+  requireExecutionAccess,
+  requireThreadAccess,
+} from '../auth/access-context';
 import {
   DeliverablesService,
   type DeliverableInput,
@@ -98,6 +102,44 @@ export class DeliverablesController {
         })),
     };
   }
+  @Post(':id/assignment')
+  assignExistingAgent(
+    @Param('projectId') p: string,
+    @Param('resourceId') r: string,
+    @Param('id') id: string,
+    @Body() body: { threadId: string; version: number },
+  ) {
+    requireExecutionAccess();
+    if (
+      !body ||
+      typeof body.threadId !== 'string' ||
+      !body.threadId.trim() ||
+      body.threadId.length > 100 ||
+      !Number.isSafeInteger(body.version) ||
+      body.version < 1
+    )
+      throw new BadRequestException('Invalid agent assignment');
+    requireThreadAccess(body.threadId);
+    return this.mutations.mutate(() => {
+      const item = this.service.get(p, r, id);
+      if (
+        !item.conversations.some(
+          (link) => link.type === 'agent' && link.id === body.threadId,
+        )
+      )
+        this.service.registerAgent(
+          p,
+          r,
+          id,
+          body.version,
+          body.threadId,
+          undefined,
+          true,
+        );
+      return Promise.resolve(this.service.get(p, r, id));
+    });
+  }
+
   @Post(':id/agent')
   agent(
     @Param('projectId') p: string,

@@ -1607,3 +1607,23 @@ it('keeps an unnamed assigned agent reachable through a fallback label', async (
     'Open agent',
   );
 });
+
+it('opens creation directly from the sidebar and closes without a background manager dialog', async () => {
+  const close = vi.fn();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProjectDeliverablesManager
+        projectId="p"
+        resourceId="r"
+        initialCreate
+        modalOnly
+        onModalClose={close}
+      />
+    </QueryClientProvider>,
+  );
+  const dialog = await screen.findByRole('dialog', { name: 'New deliverable' });
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(within(dialog).getByRole('textbox')).toBeVisible();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(close).toHaveBeenCalledOnce();
+});

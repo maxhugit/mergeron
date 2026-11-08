@@ -116,6 +116,7 @@ export function ProjectDeliverablesManager({
   resourceId,
   initialDeliverableId,
   initialTab = 'overview',
+  initialCreate = false,
   onBackToList,
   modalOnly = false,
   onModalClose,
@@ -123,6 +124,7 @@ export function ProjectDeliverablesManager({
   projectId: string;
   resourceId: string;
   initialDeliverableId?: string;
+  initialCreate?: boolean;
   initialTab?: DetailTab;
   onBackToList?: () => void;
   modalOnly?: boolean;
@@ -141,7 +143,7 @@ export function ProjectDeliverablesManager({
     refetchInterval: 5_000,
   });
   const [title, setTitle] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(initialCreate);
   const [selectedTab, setSelectedTab] = useState<DetailTab>(initialTab);
   const [selected, setSelected] = useState<string | null>(
     initialDeliverableId ?? null,
@@ -236,6 +238,66 @@ export function ProjectDeliverablesManager({
     setConfidentiality('all');
     setTaskAssociation('all');
   };
+  const creationDialog = (
+    <Dialog
+      open={createOpen}
+      onOpenChange={(open) => {
+        if (create.isPending) return;
+        setCreateOpen(open);
+        setTitle('');
+        create.reset();
+        if (!open && modalOnly && initialCreate) onModalClose?.();
+      }}
+    >
+      <DialogContent aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>{t('newDeliverable')}</DialogTitle>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (title.trim() && !create.isPending) create.mutate();
+          }}
+        >
+          <label className="block space-y-2">
+            <span className="text-sm font-medium">{t('title')}</span>
+            <Input
+              autoFocus
+              value={title}
+              maxLength={160}
+              disabled={create.isPending}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={t('newDeliverableTitle')}
+            />
+          </label>
+          {create.error && (
+            <p role="alert" className="text-sm text-destructive">
+              {t('unableToSaveDeliverable')}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={create.isPending}
+              onClick={() => {
+                setCreateOpen(false);
+                setTitle('');
+                create.reset();
+                if (modalOnly && initialCreate) onModalClose?.();
+              }}
+            >
+              {t('cancel')}
+            </Button>
+            <Button type="submit" disabled={!title.trim() || create.isPending}>
+              {t('create')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
   if (!board)
     return wrap(
       <main className="p-6" role={query.error ? 'alert' : 'status'}>
@@ -270,6 +332,7 @@ export function ProjectDeliverablesManager({
         embedded={modalOnly}
       />,
     );
+  if (modalOnly && initialCreate && !selected) return creationDialog;
   if (modalOnly)
     return wrap(
       <p role="alert" className="p-6">
@@ -440,65 +503,7 @@ export function ProjectDeliverablesManager({
           )}
         </div>
       </div>
-      <Dialog
-        open={createOpen}
-        onOpenChange={(open) => {
-          if (create.isPending) return;
-          setCreateOpen(open);
-          setTitle('');
-          create.reset();
-        }}
-      >
-        <DialogContent aria-describedby={undefined}>
-          <DialogHeader>
-            <DialogTitle>{t('newDeliverable')}</DialogTitle>
-          </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (title.trim() && !create.isPending) create.mutate();
-            }}
-          >
-            <label className="block space-y-2">
-              <span className="text-sm font-medium">{t('title')}</span>
-              <Input
-                autoFocus
-                value={title}
-                maxLength={160}
-                disabled={create.isPending}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder={t('newDeliverableTitle')}
-              />
-            </label>
-            {create.error && (
-              <p role="alert" className="text-sm text-destructive">
-                {t('unableToSaveDeliverable')}
-              </p>
-            )}
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={create.isPending}
-                onClick={() => {
-                  setCreateOpen(false);
-                  setTitle('');
-                  create.reset();
-                }}
-              >
-                {t('cancel')}
-              </Button>
-              <Button
-                type="submit"
-                disabled={!title.trim() || create.isPending}
-              >
-                {t('create')}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {creationDialog}
     </main>
   );
 }
@@ -799,10 +804,14 @@ export function DeliverableRowActions({
   onTask,
   onDelete,
   onReference,
+  onAssign,
+  assignmentLabel,
   isAdministrator = false,
 }: {
   onDelete?: () => void;
   onReference?: () => void;
+  onAssign?: () => void;
+  assignmentLabel?: string;
   isAdministrator?: boolean;
   item: Deliverable;
   onSelect: (id: string, tab?: DetailTab) => void;
@@ -859,6 +868,19 @@ export function DeliverableRowActions({
         >
           {t('primaryTask')}
         </Button>
+        {onAssign && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full justify-start"
+            onClick={() => {
+              setOpen(false);
+              onAssign();
+            }}
+          >
+            {assignmentLabel ?? t('assignCurrentAgent', { ns: 'workspaces' })}
+          </Button>
+        )}
         {onReference && (
           <>
             <div className="my-1 border-t" />

@@ -1,3 +1,4 @@
+import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
 import { useState } from 'react';
 import {
   ChevronDown,
@@ -22,7 +23,9 @@ export function ExplorerDeliverableDocuments({
   agentThreadId,
   onFile,
   refresh,
+  hideDisplayControl = false,
 }: {
+  hideDisplayControl?: boolean;
   item: Deliverable;
   base: string;
   personId?: string | null;
@@ -40,6 +43,11 @@ export function ExplorerDeliverableDocuments({
     item.version,
   );
   const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const disclosure = useSidebarPreferences(personId, agentThreadId);
+  const isOpened = (id: string) =>
+    personId && agentThreadId
+      ? disclosure.values[`open:label:${item.id}:${id}`] === true
+      : !!opened[id];
   const documents = item.documents.filter(
     (document) => document.deletedAt === null,
   );
@@ -84,13 +92,20 @@ export function ExplorerDeliverableDocuments({
     <section key={id}>
       <button
         type="button"
-        aria-expanded={!!opened[id]}
-        className="flex w-full items-center gap-2 px-2 py-2 text-left text-xs hover:bg-muted"
-        onClick={() =>
-          setOpened((previous) => ({ ...previous, [id]: !previous[id] }))
+        aria-expanded={isOpened(id)}
+        disabled={
+          !!personId &&
+          !!agentThreadId &&
+          (!disclosure.ready || disclosure.pending)
         }
+        className="flex w-full items-center gap-2 px-2 py-2 text-left text-xs hover:bg-muted"
+        onClick={() => {
+          if (personId && agentThreadId)
+            disclosure.set(`open:label:${item.id}:${id}`, !isOpened(id));
+          else setOpened((previous) => ({ ...previous, [id]: !previous[id] }));
+        }}
       >
-        {opened[id] ? (
+        {isOpened(id) ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0" />
         ) : (
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
@@ -99,7 +114,7 @@ export function ExplorerDeliverableDocuments({
         <span className="min-w-0 flex-1 truncate">{name}</span>
         <span className="text-muted-foreground">{members.length}</span>
       </button>
-      {opened[id] && (
+      {isOpened(id) && (
         <div className="ml-3 border-l">
           {members.length ? (
             members.map(row)
@@ -114,7 +129,7 @@ export function ExplorerDeliverableDocuments({
   );
   return (
     <div className="min-w-0 p-1">
-      {preference.available && (
+      {preference.available && !hideDisplayControl && (
         <div className="border-b px-2 py-2">
           <label className="flex flex-wrap items-center justify-between gap-2 text-xs">
             {t('labelsExplorerDisplay')}

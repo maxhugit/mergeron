@@ -1,3 +1,6 @@
+import { useAgentDocumentView } from '@/hooks/use-agent-document-view';
+import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
+import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { Package, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,6 +47,17 @@ export function ExplorerDeliverables({
   const client = useQueryClient();
   const { t } = useTranslation('deliverables');
   const { t: common } = useTranslation();
+  const { t: work } = useTranslation('workspaces');
+  const preference = useAgentDocumentView(
+    session.data?.personId,
+    agentThreadId,
+  );
+  const disclosure = useSidebarPreferences(
+    session.data?.personId,
+    agentThreadId,
+  );
+  const [creating, setCreating] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
   const [opened, setOpened] = useState<{
     id: string | null;
     revealPath?: string | null;
@@ -70,127 +84,246 @@ export function ExplorerDeliverables({
         revealPath?.startsWith(item.directory + '/'),
     );
   const revealedId = revealedItem?.id;
-  const openedId =
-    opened.revealPath !== revealPath && revealedId ? revealedId : opened.id;
+  const isOpened = (id: string) =>
+    (opened.revealPath !== revealPath && revealedId === id) ||
+    disclosure.values[`open:deliverable:${id}`] === true ||
+    (!(session.data?.personId && agentThreadId) && opened.id === id);
   return (
-    <div className="min-h-0 flex-1 overflow-auto p-2">
-      {boards.some((q) => q.isLoading) && (
-        <Loader2
-          className="m-3 h-4 w-4 animate-spin"
-          aria-label={t('explorerLoading')}
-        />
-      )}
-      {boards.some((q) => q.isError) && (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b p-2 text-xs">
+        {session.isAdministrator && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!boards.some((b) => b.data)}
+            onClick={() =>
+              setCreating(boards.find((b) => b.data)?.data?.resource.id ?? null)
+            }
+          >
+            {work('sidebarNewDeliverable')}
+          </Button>
+        )}
+        <select
+          aria-label={t('labelsExplorerDisplay')}
+          className="min-w-0 flex-1 rounded border bg-background p-1"
+          value={preference.mode}
+          disabled={!preference.available || preference.loading}
+          onChange={(e) =>
+            preference.setMode(e.target.value as 'plain' | 'labels')
+          }
+        >
+          <option value="plain">{t('labelsExplorerPlain')}</option>
+          <option value="labels">{t('labelsExplorerVirtual')}</option>
+        </select>
+      </div>
+      {(disclosure.error || preference.error) && (
         <p role="alert" className="p-2 text-xs text-destructive">
-          {t('explorerLoadFailed')}
+          {work('sidebarPreferenceError')}
         </p>
       )}
-      {boards.every((q) => !q.isLoading && !q.isError) &&
-        !boards.some((q) => q.data?.deliverables.length) && (
-          <p className="p-2 text-xs text-muted-foreground">
-            {t('explorerEmpty')}
+      <div className="min-h-0 flex-1 overflow-auto p-2">
+        {boards.some((q) => q.isLoading) && (
+          <Loader2
+            className="m-3 h-4 w-4 animate-spin"
+            aria-label={t('explorerLoading')}
+          />
+        )}
+        {boards.some((q) => q.isError) && (
+          <p role="alert" className="p-2 text-xs text-destructive">
+            {t('explorerLoadFailed')}
           </p>
         )}
-      {boards.flatMap((board) =>
-        (board.data?.deliverables ?? []).map((item) => (
-          <section key={item.id} className="mb-2 rounded-lg border">
-            <div
-              className="flex items-center gap-2 p-2"
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.currentTarget
-                  .querySelector<HTMLButtonElement>(
-                    '[data-deliverable-actions] button',
-                  )
-                  ?.click();
-              }}
-            >
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs"
-                aria-expanded={openedId === item.id}
-                onClick={() => {
-                  setOpened({
-                    id: openedId === item.id ? null : item.id,
-                    revealPath,
-                  });
+        {boards.every((q) => !q.isLoading && !q.isError) &&
+          !boards.some((q) => q.data?.deliverables.length) && (
+            <p className="p-2 text-xs text-muted-foreground">
+              {t('explorerEmpty')}
+            </p>
+          )}
+        {boards.flatMap((board) =>
+          (board.data?.deliverables ?? []).map((item) => (
+            <section key={item.id} className="mb-2 rounded-lg border">
+              <div
+                className="flex items-center gap-2 p-2"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.currentTarget
+                    .querySelector<HTMLButtonElement>(
+                      '[data-deliverable-actions] button',
+                    )
+                    ?.click();
                 }}
               >
-                <Package className="h-4 w-4 shrink-0 text-primary" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">
-                    {item.title}
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs"
+                  aria-expanded={isOpened(item.id)}
+                  disabled={
+                    !!session.data?.personId &&
+                    !!agentThreadId &&
+                    (!disclosure.ready || disclosure.pending)
+                  }
+                  onClick={() => {
+                    if (disclosure.ready && !disclosure.pending)
+                      disclosure.set(
+                        `open:deliverable:${item.id}`,
+                        !isOpened(item.id),
+                      );
+                    setOpened({
+                      id: isOpened(item.id) ? null : item.id,
+                      revealPath,
+                    });
+                  }}
+                >
+                  <Package className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">
+                      {item.title}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {
+                        item.documents.filter((d) => d.deletedAt === null)
+                          .length
+                      }{' '}
+                      {t('explorerDocuments')}
+                    </span>
                   </span>
-                  <span className="text-muted-foreground">
-                    {item.documents.filter((d) => d.deletedAt === null).length}{' '}
-                    {t('explorerDocuments')}
-                  </span>
+                  {isOpened(item.id) ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                </button>
+                <span data-deliverable-actions>
+                  <DeliverableRowActions
+                    item={item}
+                    isAdministrator={session.isAdministrator}
+                    assignmentLabel={work(
+                      item.conversations?.some(
+                        (link) =>
+                          link.type === 'agent' && link.id === agentThreadId,
+                      )
+                        ? 'sidebarUnassign'
+                        : 'assignCurrentAgent',
+                    )}
+                    onAssign={
+                      agentThreadId && session.isAdministrator && !assigning
+                        ? async () => {
+                            setAssigning(true);
+                            try {
+                              const linked = item.conversations?.some(
+                                (link) =>
+                                  link.type === 'agent' &&
+                                  link.id === agentThreadId,
+                              );
+                              await projectsApi(
+                                `/${project.id}/resources/${board.data!.resource.id}/deliverables/${item.id}${linked ? '' : '/assignment'}`,
+                                {
+                                  method: linked ? 'PATCH' : 'POST',
+                                  body: JSON.stringify(
+                                    linked
+                                      ? {
+                                          version: item.version,
+                                          conversations:
+                                            item.conversations.filter(
+                                              (link) =>
+                                                !(
+                                                  link.type === 'agent' &&
+                                                  link.id === agentThreadId
+                                                ),
+                                            ),
+                                        }
+                                      : {
+                                          threadId: agentThreadId,
+                                          version: item.version,
+                                        },
+                                  ),
+                                },
+                              );
+                              await Promise.all([
+                                client.invalidateQueries({
+                                  queryKey: ['project-deliverables'],
+                                }),
+                                client.invalidateQueries({
+                                  queryKey: ['projects'],
+                                }),
+                              ]);
+                            } catch {
+                              showSnackbar(
+                                work('sidebarAssignmentError'),
+                                'error',
+                              );
+                            } finally {
+                              setAssigning(false);
+                            }
+                          }
+                        : undefined
+                    }
+                    onSelect={(_, tab) =>
+                      setDetails({
+                        id: item.id,
+                        resourceId: board.data!.resource.id,
+                        tab,
+                      })
+                    }
+                    onReference={
+                      onReference && !pending
+                        ? () => onReference(item.directory)
+                        : undefined
+                    }
+                    onTask={
+                      board.data?.tasks.find(
+                        (task) => task.id === item.primaryTaskId,
+                      )
+                        ? () => {
+                            const task = board.data!.tasks.find(
+                              (task) => task.id === item.primaryTaskId,
+                            )!;
+                            setTask({
+                              id: task.id,
+                              resourceId: task.resourceId,
+                            });
+                          }
+                        : undefined
+                    }
+                    onDelete={() =>
+                      setDeleting({
+                        id: item.id,
+                        resourceId: board.data!.resource.id,
+                        title: item.title,
+                      })
+                    }
+                  />
                 </span>
-                {openedId === item.id ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-              </button>
-              <span data-deliverable-actions>
-                <DeliverableRowActions
-                  item={item}
-                  isAdministrator={session.isAdministrator}
-                  onSelect={(_, tab) =>
-                    setDetails({
-                      id: item.id,
-                      resourceId: board.data!.resource.id,
-                      tab,
-                    })
-                  }
-                  onReference={
-                    onReference && !pending
-                      ? () => onReference(item.directory)
-                      : undefined
-                  }
-                  onTask={
-                    board.data?.tasks.find(
-                      (task) => task.id === item.primaryTaskId,
-                    )
-                      ? () => {
-                          const task = board.data!.tasks.find(
-                            (task) => task.id === item.primaryTaskId,
-                          )!;
-                          setTask({
-                            id: task.id,
-                            resourceId: task.resourceId,
-                          });
-                        }
-                      : undefined
-                  }
-                  onDelete={() =>
-                    setDeleting({
-                      id: item.id,
-                      resourceId: board.data!.resource.id,
-                      title: item.title,
-                    })
-                  }
-                />
-              </span>
-            </div>
-            {openedId === item.id && (
-              <div className="min-w-0 border-t">
-                <ExplorerDeliverableDocuments
-                  item={item}
-                  base={`/${project.id}/resources/${board.data!.resource.id}/deliverables`}
-                  agentThreadId={agentThreadId}
-                  personId={session.data?.personId}
-                  onFile={onFile}
-                  refresh={() =>
-                    client.invalidateQueries({
-                      queryKey: ['project-deliverables'],
-                    })
-                  }
-                />
               </div>
-            )}
-          </section>
-        )),
+              {isOpened(item.id) && (
+                <div className="min-w-0 border-t">
+                  <ExplorerDeliverableDocuments
+                    hideDisplayControl
+                    item={item}
+                    base={`/${project.id}/resources/${board.data!.resource.id}/deliverables`}
+                    agentThreadId={agentThreadId}
+                    personId={session.data?.personId}
+                    onFile={onFile}
+                    refresh={() =>
+                      client.invalidateQueries({
+                        queryKey: ['project-deliverables'],
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </section>
+          )),
+        )}
+      </div>
+      {creating && (
+        <ProjectDeliverablesManager
+          projectId={project.id}
+          resourceId={creating}
+          initialCreate
+          modalOnly
+          onModalClose={() => setCreating(null)}
+        />
       )}
       <AlertDialog
         open={!!deleting}

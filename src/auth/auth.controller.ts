@@ -71,6 +71,28 @@ export class AuthController {
     private readonly oidcAuth: OidcAuthService,
   ) {}
 
+  @Get('me/sidebar/:scope')
+  sidebarPreferences(
+    @Param('scope') scope: string,
+    @Req() request: IdentityRequest,
+  ) {
+    return this.identities.sidebarPreferences(request.platformIdentity, scope);
+  }
+  @Patch('me/sidebar/:scope')
+  setSidebarPreferences(
+    @Param('scope') scope: string,
+    @Req() request: IdentityRequest,
+    @Body() body: { personId?: unknown; key?: unknown; value?: unknown },
+  ) {
+    if (!body || body.personId !== request.platformIdentity?.personId)
+      throw new ForbiddenException('Identity changed');
+    return this.identities.sidebarPreferences(
+      request.platformIdentity,
+      scope,
+      body,
+    );
+  }
+
   @Get('me/document-explorer/:threadId')
   documentExplorer(
     @Param('threadId') id: string,
@@ -84,7 +106,7 @@ export class AuthController {
     @Req() request: IdentityRequest,
     @Body() body: { mode?: unknown; personId?: unknown },
   ) {
-    if (body.personId !== request.platformIdentity?.personId)
+    if (!body || body.personId !== request.platformIdentity?.personId)
       throw new ForbiddenException('Identity changed');
     if (body.mode === undefined) body.mode = null;
     return this.identities.documentExplorerView(

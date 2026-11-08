@@ -43,6 +43,7 @@ async function setup(
     taskId?: string | null;
     taskParentTaskId?: string | null;
   }> = [],
+  initialCreateParentId?: string,
 ) {
   await i18nReady;
   await i18n.changeLanguage('fr');
@@ -181,11 +182,12 @@ async function setup(
         projectId="p"
         resourceId="r"
         initialTaskId={initialTaskId ?? undefined}
-        modalOnly={initialTaskId !== null}
+        initialCreateParentId={initialCreateParentId}
+        modalOnly={initialTaskId !== null || initialCreateParentId !== undefined}
       />
     </QueryClientProvider>,
   );
-  if (initialTaskId) await screen.findByRole('button', { name: 'Enregistrer' });
+  if (initialTaskId || initialCreateParentId !== undefined) await screen.findByRole('button', { name: 'Enregistrer' });
   else await screen.findByRole('button', { name: 'Dossier principal' });
   return { client, board };
 }
@@ -508,4 +510,12 @@ test('reuses a same-parent agent and excludes another main task without launchin
   expect(api.mock.calls.some(([path]) => String(path).endsWith('/agent'))).toBe(
     false,
   );
+});
+
+test.each(['', 'main'])('opens the existing task creation form from the sidebar (%s)', async (parentId) => {
+  await page.viewport(390,950);
+  await setup('ready',false,null,false,[],parentId);
+  expect(await screen.findByRole('dialog', {name: parentId ? 'Nouvelle sous-tâche' : 'Nouvelle tâche'})).toBeTruthy();
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(api.mock.calls.some(([,init]) => init?.method === 'POST')).toBe(false);
 });

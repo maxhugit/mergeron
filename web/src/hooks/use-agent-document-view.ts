@@ -22,16 +22,25 @@ export function useAgentDocumentView(
     retry: false,
   });
   const mutation = useMutation({
-    mutationFn: (mode: 'plain' | 'labels') =>
+    mutationFn: (change: {
+      mode: 'plain' | 'labels';
+      personId: string;
+      threadId: string;
+    }) =>
       updateAuthResource<{ mode: 'plain' | 'labels' }>(
-        `me/document-explorer/${encodeURIComponent(threadId!)}`,
-        { mode, personId },
+        `me/document-explorer/${encodeURIComponent(change.threadId)}`,
+        { mode: change.mode, personId: change.personId },
       ),
-    onSuccess: (value) => client.setQueryData(key, value),
+    onSuccess: (value, change) =>
+      client.setQueryData(
+        ['agent-document-view', change.personId, change.threadId],
+        value,
+      ),
   });
   return {
     mode: query.data?.mode ?? 'plain',
-    setMode: mutation.mutate,
+    setMode: (mode: 'plain' | 'labels') =>
+      personId && threadId && mutation.mutate({ mode, personId, threadId }),
     loading: query.isFetching || mutation.isPending,
     error: query.isError || mutation.isError,
     available: !!personId && !!threadId,
