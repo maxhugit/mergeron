@@ -240,6 +240,7 @@ export function AgentContextLinks({
                 cancelHover();
               }}
               onPointerLeave={leaveMenu}
+              style={{ background: 'var(--popover)' }}
               aria-label={t('agentAssignedSubtasks')}
             >
               <div className="space-y-1 border-b p-3">
