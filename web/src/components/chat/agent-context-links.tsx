@@ -1,21 +1,11 @@
+import { AgentLinkPreview } from './agent-link-preview';
+import { FileText } from 'lucide-react';
+import { withBasePath } from '@/base-path';
 import { SubtaskProgressEditor } from './subtask-progress-editor';
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import {
-  CircleCheck,
-  Circle,
-  CircleDot,
-  Ban,
-  ChevronDown,
-  Package,
-  FolderOpen,
-} from 'lucide-react';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { CircleCheck, Circle, CircleDot, Ban, Package } from 'lucide-react';
 import {
   projectsApi,
   type ProjectSummary,
@@ -48,6 +38,7 @@ export function AgentContextLinks({
   onOpenDirectory?: (path: string) => void;
 }) {
   const { t } = useTranslation();
+  const { t: work } = useTranslation('workspaces');
   const resource = project?.resources.find(
     (item) => item.type === 'deliverable_board',
   );
@@ -121,22 +112,20 @@ export function AgentContextLinks({
   const error =
     failed ||
     (resource ? query.isError : !!fallbackResource && taskQuery.isError);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const pinned = useRef(false);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  useEffect(() => () => clearTimeout(hoverTimer.current), []);
-  const cancelHover = () => clearTimeout(hoverTimer.current);
-  const closeMenu = () => {
-    cancelHover();
-    pinned.current = false;
-    setMenuOpen(false);
-  };
-  const leaveMenu = () => {
-    cancelHover();
-    if (!pinned.current)
-      hoverTimer.current = setTimeout(() => setMenuOpen(false), 180);
+  const [preview, setPreview] = useState<string | null>(null);
+  const closeMenu = () => setPreview(null);
+  const previewChange = (key: string, open: boolean) =>
+    setPreview((current) => (open ? key : current === key ? null : current));
+  const openSidebar = (
+    tab: 'tasks' | 'deliverables',
+    details: Record<string, string>,
+  ) => {
+    closeMenu();
+    window.dispatchEvent(
+      new CustomEvent('mergeron:explorer-work', {
+        detail: { threadId, tab, ...details },
+      }),
+    );
   };
   const summary = t('agentTaskSummary', {
     completed,
@@ -153,100 +142,108 @@ export function AgentContextLinks({
           {t('agentLinkedTo')}
         </span>
         {deliverables.map((item) => (
-          <div
+          <AgentLinkPreview
             key={item.id}
-            role="group"
-            aria-label={item.title}
-            className="inline-flex min-w-0 flex-1 items-stretch overflow-hidden rounded-md border border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+            kind="deliverable"
+            label={item.title}
+            sidebarLabel={`${t('openDeliverableFolder')} · ${item.title}`}
+            open={preview === item.id}
+            onOpenChange={(open) => previewChange(item.id, open)}
+            onSidebar={() => {
+              onOpenDirectory?.(item.directory);
+              openSidebar('deliverables', {
+                directory: item.directory,
+                deliverableId: item.id,
+              });
+            }}
+            trigger={
+              <>
+                <Package className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{item.title}</span>
+              </>
+            }
           >
-            <button
-              type="button"
-              className="inline-flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 px-2 py-1 text-left hover:underline"
-              title={item.title}
-              onClick={() => {
-                closeMenu();
-                setOpenedDeliverable(item.id);
-              }}
-            >
-              <Package className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{item.title}</span>
-            </button>
-            {item.directory && onOpenDirectory && (
+            <div className="space-y-1 border-b p-3">
+              <p className="text-xs text-muted-foreground">
+                {work('sidebarDeliverable')}
+              </p>
               <button
                 type="button"
-                className="shrink-0 cursor-pointer border-l border-blue-500/20 px-2 hover:bg-blue-500/10"
-                title={t('openDeliverableFolder')}
-                aria-label={`${t('openDeliverableFolder')} · ${item.title}`}
+                className="cursor-pointer text-left text-sm font-medium hover:underline"
                 onClick={() => {
                   closeMenu();
-                  onOpenDirectory(item.directory);
+                  setOpenedDeliverable(item.id);
                 }}
               >
-                <FolderOpen className="size-3.5" aria-hidden="true" />
+                {item.title}
               </button>
+              <p className="text-xs text-muted-foreground">
+                {work('sidebarDocumentCount', {
+                  count:
+                    item.documents?.filter((doc) => doc.deletedAt === null)
+                      .length ?? 0,
+                })}
+              </p>
+            </div>
+            <ul className="max-h-[min(22rem,50vh)] divide-y overflow-y-auto">
+              {(item.documents ?? [])
+                .filter((doc) => doc.deletedAt === null)
+                .map((doc) => (
+                  <li
+                    key={doc.id}
+                    className="flex items-center gap-2 p-3 text-sm"
+                  >
+                    <FileText
+                      className="size-4 shrink-0 text-primary"
+                      aria-hidden="true"
+                    />
+                    <a
+                      className="min-w-0 flex-1 truncate hover:underline"
+                      title={doc.name}
+                      href={withBasePath(
+                        `/document?path=${encodeURIComponent(doc.sourcePath)}`,
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {doc.name}
+                    </a>
+                    <span className="shrink-0 rounded bg-muted px-1.5 text-xs tabular-nums">
+                      V{doc.currentVersionNumber}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+            {!item.documents?.some((doc) => doc.deletedAt === null) && (
+              <p className="p-3 text-xs text-muted-foreground">
+                {work('sidebarNoDocuments')}
+              </p>
             )}
-          </div>
+          </AgentLinkPreview>
         ))}
         {parent && !pending && !error && !incompatible && (
-          <Popover
-            open={menuOpen}
-            onOpenChange={(value) => {
-              if (!value) pinned.current = false;
-              setMenuOpen(value);
-            }}
+          <AgentLinkPreview
+            kind="task"
+            label={summary}
+            sidebarLabel={work('sidebarOpenTask', { title: parent.title })}
+            open={preview === 'tasks'}
+            onOpenChange={(open) => previewChange('tasks', open)}
+            onSidebar={() => openSidebar('tasks', { taskId: parent.id })}
+            trigger={
+              <>
+                <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate tabular-nums">
+                  {completed}/{children.length} {t('agentTasksCompleted')} ·{' '}
+                  {t('agentTasksAssigned', { count: mine.length })}
+                </span>
+              </>
+            }
           >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-violet-700 dark:text-violet-300"
-                aria-label={summary}
-                title={summary}
-                onPointerEnter={(event) => {
-                  if (event.pointerType === 'mouse') {
-                    cancelHover();
-                    setMenuOpen(true);
-                  }
-                }}
-                onPointerLeave={leaveMenu}
-                onClick={(event) => {
-                  event.preventDefault();
-                  cancelHover();
-                  if (menuOpen && !pinned.current) pinned.current = true;
-                  else {
-                    pinned.current = !menuOpen;
-                    setMenuOpen(!menuOpen);
-                  }
-                }}
-              >
-                <CircleCheck className="size-3.5" aria-hidden="true" />
-                <span className="tabular-nums">
-                  {completed}/{children.length}
-                </span>
-                <span className="hidden sm:inline">
-                  {t('agentTasksCompleted')}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>{t('agentTasksAssigned', { count: mine.length })}</span>
-                <ChevronDown className="size-3.5" aria-hidden="true" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              className="w-[min(29rem,calc(100vw-1rem))] overflow-hidden p-0"
-              onOpenAutoFocus={(event) => event.preventDefault()}
-              onPointerEnter={cancelHover}
-              onFocusCapture={() => {
-                pinned.current = true;
-                cancelHover();
-              }}
-              onPointerLeave={leaveMenu}
-              style={{ background: 'var(--popover)' }}
-              aria-label={t('agentAssignedSubtasks')}
-            >
-              <div className="space-y-1 border-b p-3">
-                <p className="text-xs text-muted-foreground">
-                  {t('primaryTask')}
-                </p>
+            <div className="space-y-1 border-b p-3">
+              <p className="text-xs text-muted-foreground">
+                {t('primaryTask')}
+              </p>
+              <div className="flex items-start justify-between gap-2">
                 <button
                   type="button"
                   className="cursor-pointer text-left text-sm font-medium hover:underline"
@@ -257,102 +254,107 @@ export function AgentContextLinks({
                 >
                   {parent.title}
                 </button>
-                <p className="text-xs text-muted-foreground">
-                  {t('agentMainTaskCompleted', {
-                    completed,
-                    total: children.length,
-                  })}
-                </p>
+                <span className="shrink-0 text-sm tabular-nums">
+                  {parent.progress ?? 0} %
+                </span>
               </div>
-              <p className="bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                {t('agentAssignedSubtasks')} · {mine.length}
-              </p>
-              <div className="max-h-[min(22rem,50vh)] overflow-y-auto divide-y">
-                {mine.map((task) => {
-                  const state = task.subtaskStatus ?? 'todo';
-                  const Icon =
-                    state === 'done'
-                      ? CircleCheck
-                      : state === 'cancelled'
-                        ? Ban
-                        : ['started', 'review'].includes(state)
-                          ? CircleDot
-                          : Circle;
-                  const label = {
-                    todo: t('toDo'),
-                    started: t('inProgress'),
-                    review: t('agentSubtaskReview'),
-                    done: t('transferStatusSuccess'),
-                    cancelled: t('cancelled'),
-                  }[state];
-                  return (
-                    <div key={task.id}>
-                      <button
-                        type="button"
-                        className="block w-full cursor-pointer space-y-2 p-3 text-left hover:bg-accent"
-                        onClick={() => {
-                          closeMenu();
-                          setOpenedTask(task);
-                        }}
-                      >
-                        <div className="flex items-start gap-2 text-sm">
-                          <Icon
-                            className={`mt-0.5 size-4 shrink-0 ${state === 'done' ? 'text-green-700 dark:text-green-300' : state === 'started' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
-                            aria-hidden="true"
-                          />
-                          <span className="min-w-0 flex-1 break-words">
-                            {task.title}
-                          </span>
-                          <span className="shrink-0 tabular-nums">
-                            {task.progress} %
-                          </span>
-                        </div>
-                        <p className="pl-6 text-xs text-muted-foreground">
-                          {label}
-                        </p>
-                        <div
-                          className="ml-6 h-1 overflow-hidden rounded-full bg-muted"
-                          aria-hidden="true"
-                        >
-                          <div
-                            className={
-                              state === 'done'
-                                ? 'h-full bg-green-600 dark:bg-green-400'
-                                : 'h-full bg-violet-500'
-                            }
-                            style={{
-                              width: `${Math.max(0, Math.min(100, task.progress))}%`,
-                            }}
-                          />
-                        </div>
-                      </button>
-                      {project && (
-                        <SubtaskProgressEditor
-                          projectId={project.id}
-                          task={task}
-                        />
-                      )}
-                    </div>
-                  );
+              <p className="text-xs text-muted-foreground">
+                {t('agentMainTaskCompleted', {
+                  completed,
+                  total: children.length,
                 })}
-                {!mine.length && (
-                  <p className="p-3 text-sm text-muted-foreground">
-                    {t('agentNoAssignedSubtasks')}
-                  </p>
-                )}
+              </p>
+              <div
+                className="h-1 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label={work('sidebarTaskProgress', {
+                  title: parent.title,
+                })}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={parent.progress ?? 0}
+              >
+                <div
+                  className="h-full bg-blue-500"
+                  style={{ width: `${parent.progress ?? 0}%` }}
+                />
               </div>
-              {others.length > 0 && (
-                <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-                  {t('agentOtherSubtasks', {
-                    count: others.length,
-                    completed: others.filter(
-                      (task) => task.subtaskStatus === 'done',
-                    ).length,
-                  })}
+            </div>
+            <p className="bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              {t('agentAssignedSubtasks')} · {mine.length}
+            </p>
+            <div className="max-h-[min(22rem,50vh)] overflow-y-auto divide-y">
+              {mine.map((task) => {
+                const state = task.subtaskStatus ?? 'todo';
+                const Icon =
+                  state === 'done'
+                    ? CircleCheck
+                    : state === 'cancelled'
+                      ? Ban
+                      : ['started', 'review'].includes(state)
+                        ? CircleDot
+                        : Circle;
+                const label = {
+                  todo: t('toDo'),
+                  started: t('inProgress'),
+                  review: t('agentSubtaskReview'),
+                  done: t('transferStatusSuccess'),
+                  cancelled: t('cancelled'),
+                }[state];
+                return (
+                  <SubtaskProgressEditor
+                    key={task.id}
+                    projectId={project!.id}
+                    task={task}
+                  >
+                    {(value) => (
+                      <>
+                        <button
+                          type="button"
+                          className="block w-full cursor-pointer space-y-2 p-3 text-left hover:bg-accent"
+                          onClick={() => {
+                            closeMenu();
+                            setOpenedTask(task);
+                          }}
+                        >
+                          <div className="flex items-start gap-2 text-sm">
+                            <Icon
+                              className={`mt-0.5 size-4 shrink-0 ${state === 'done' ? 'text-green-700 dark:text-green-300' : state === 'started' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
+                              aria-hidden="true"
+                            />
+                            <span className="min-w-0 flex-1 break-words">
+                              {task.title}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {value} %
+                            </span>
+                          </div>
+                          <p className="pl-6 text-xs text-muted-foreground">
+                            {label}
+                          </p>
+                        </button>
+                      </>
+                    )}
+                  </SubtaskProgressEditor>
+                );
+              })}
+              {!mine.length && (
+                <p className="p-3 text-sm text-muted-foreground">
+                  {t('agentNoAssignedSubtasks')}
                 </p>
               )}
-            </PopoverContent>
-          </Popover>
+            </div>
+            {others.length > 0 && (
+              <p className="border-t px-3 py-2 text-xs text-muted-foreground">
+                {t('agentOtherSubtasks', {
+                  count: others.length,
+                  completed: others.filter(
+                    (task) => task.subtaskStatus === 'done',
+                  ).length,
+                })}
+              </p>
+            )}
+          </AgentLinkPreview>
         )}
         {pending && (
           <span role="status" className="truncate text-muted-foreground">

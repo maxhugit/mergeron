@@ -1,5 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SubtaskProgressEditor } from './subtask-progress-editor';
 import type { ProjectTaskSummary } from '@/lib/projects-api';
@@ -18,56 +25,143 @@ const task = {
 } as ProjectTaskSummary;
 function fixture(value = task) {
   const client = new QueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
   return render(
-    <QueryClientProvider client={client}>
-      <SubtaskProgressEditor projectId="p" task={value} />
-    </QueryClientProvider>,
+    <SubtaskProgressEditor projectId="p" task={value}>
+      {(progress) => <output>{progress} %</output>}
+    </SubtaskProgressEditor>,
+    { wrapper },
   );
 }
 beforeEach(() => {
   state.admin = true;
-  state.api.mockReset().mockResolvedValue({});
+  state.api
+    .mockReset()
+    .mockResolvedValue({ task: { progress: 65, updatedAt: 9 } });
 });
-it('saves only progress with the observed revision, even if the task refreshes while editing', async () => {
-  const view = fixture();
-  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '65' } });
-  view.rerender(
-    <QueryClientProvider client={new QueryClient()}>
-      <SubtaskProgressEditor projectId="p" task={{ ...task, updatedAt: 8 }} />
-    </QueryClientProvider>,
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-  await waitFor(() =>
-    expect(state.api).toHaveBeenCalledWith('/p/resources/tasks/tasks/sub', {
-      method: 'PATCH',
-      body: JSON.stringify({ progress: 65, expectedUpdatedAt: 7 }),
-    }),
-  );
-});
-it('does not mark a subtask completed at 100 percent', async () => {
+it('shows one slider, no number field or save button, and commits only once on release', async () => {
   fixture();
-  fireEvent.change(screen.getByRole('slider'), { target: { value: '100' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const slider = screen.getByRole('slider');
+  expect(screen.queryByRole('spinbutton')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  for (const value of [45, 50, 65])
+    fireEvent.change(slider, { target: { value: String(value) } });
+  expect(state.api).not.toHaveBeenCalled();
+  expect(screen.getByText('65 %')).toBeVisible();
+  fireEvent.pointerUp(slider);
+  fireEvent.blur(slider);
+  await waitFor(() => expect(state.api).toHaveBeenCalledTimes(1));
+  expect(state.api).toHaveBeenCalledWith('/p/resources/tasks/tasks/sub', {
+    method: 'PATCH',
+    body: JSON.stringify({ progress: 65, expectedUpdatedAt: 7 }),
+  });
+  await waitFor(() => expect(slider).not.toBeDisabled());
+  expect(screen.getByText('65 %')).toBeVisible();
+});
+it('uses the revision observed at the start of editing if a refresh arrives before release', async () => {
+  const view = fixture();
+  fireEvent.change(screen.getByRole('slider'), { target: { value: '65' } });
+  view.rerender(
+    <SubtaskProgressEditor projectId="p" task={{ ...task, updatedAt: 8 }} />,
+  );
+  fireEvent.pointerUp(screen.getByRole('slider'));
+  await waitFor(() => expect(state.api).toHaveBeenCalled());
+  expect(JSON.parse(state.api.mock.calls[0][1].body).expectedUpdatedAt).toBe(7);
+});
+it('saves keyboard changes without marking a subtask completed and uses the server confirmed value', async () => {
+  state.api.mockResolvedValue({ task: { progress: 100, updatedAt: 10 } });
+  fixture();
+  const slider = screen.getByRole('slider');
+  fireEvent.change(slider, { target: { value: '100' } });
+  fireEvent.keyUp(slider, { key: 'End' });
   await waitFor(() => expect(state.api).toHaveBeenCalled());
   expect(JSON.parse(state.api.mock.calls[0][1].body)).toEqual({
     progress: 100,
     expectedUpdatedAt: 7,
   });
+  await waitFor(() => expect(screen.getByText('100 %')).toBeVisible());
 });
-it('shows save failures and retains the draft without claiming a saved result', async () => {
-  state.api.mockRejectedValue(Error('Conflict'));
+it('retains unsaved input after failure and supports retry without silently changing its revision', async () => {
+  state.api.mockRejectedValueOnce(Error('Conflict'));
   fixture();
-  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '60' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const slider = screen.getByRole('slider');
+  fireEvent.change(slider, { target: { value: '60' } });
+  fireEvent.pointerUp(slider);
   expect(await screen.findByRole('alert')).toBeVisible();
-  expect(screen.getByRole('spinbutton')).toHaveValue(60);
+  expect(slider).toHaveValue('60');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(state.api).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(state.api.mock.calls[1][1].body)).toEqual({
+    progress: 60,
+    expectedUpdatedAt: 7,
+  });
 });
-it('keeps completed tasks locked and hides editing from readers', () => {
+it('keeps completed tasks locked and renders a single read-only track for readers', () => {
   const view = fixture({ ...task, progress: 100, subtaskStatus: 'done' });
   expect(screen.getByRole('slider')).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   view.unmount();
   state.admin = false;
   fixture();
   expect(screen.queryByRole('slider')).toBeNull();
+  expect(screen.getAllByRole('progressbar')).toHaveLength(1);
+});
+it('discards a cancelled pointer gesture without submitting', async () => {
+  fixture();
+  const slider = screen.getByRole('slider');
+  fireEvent.change(slider, { target: { value: '80' } });
+  fireEvent.pointerCancel(slider);
+  fireEvent.blur(slider);
+  await act(async () => Promise.resolve());
+  expect(state.api).not.toHaveBeenCalled();
+  expect(screen.getByText('40 %')).toBeVisible();
+});
+
+it('keeps keyboard focus during a save and uses the confirmed revision on the next adjustment', async () => {
+  let finish!: (value: unknown) => void;
+  state.api.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  fixture();
+  const slider = screen.getByRole('slider');
+  slider.focus();
+  fireEvent.change(slider, { target: { value: '65' } });
+  fireEvent.keyUp(slider, { key: 'ArrowRight' });
+  await waitFor(() => expect(slider).toHaveAttribute('aria-disabled', 'true'));
+  expect(slider).toHaveFocus();
+  fireEvent.change(slider, { target: { value: '66' } });
+  fireEvent.keyUp(slider, { key: 'ArrowRight' });
+  expect(state.api).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ task: { progress: 65, updatedAt: 9 } }));
+  await waitFor(() => expect(slider).toHaveAttribute('aria-disabled', 'false'));
+  expect(slider).toHaveFocus();
+  fireEvent.change(slider, { target: { value: '66' } });
+  fireEvent.keyUp(slider, { key: 'ArrowRight' });
+  await waitFor(() => expect(state.api).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(state.api.mock.calls[1][1].body)).toEqual({
+    progress: 66,
+    expectedUpdatedAt: 9,
+  });
+});
+
+it('clears a gesture returning to the saved value so later refreshes remain visible', () => {
+  const view = fixture();
+  const slider = screen.getByRole('slider');
+  fireEvent.change(slider, { target: { value: '50' } });
+  fireEvent.change(slider, { target: { value: '40' } });
+  fireEvent.pointerUp(slider);
+  expect(state.api).not.toHaveBeenCalled();
+  view.rerender(
+    <SubtaskProgressEditor
+      projectId="p"
+      task={{ ...task, progress: 55, updatedAt: 8 }}
+    >
+      {(value) => <output>{value} %</output>}
+    </SubtaskProgressEditor>,
+  );
+  expect(screen.getByText('55 %')).toBeVisible();
 });

@@ -974,6 +974,8 @@
           {
             "title": "Statuses and progress",
             "paragraphs": [
+              "From an agent, the Deliverable and Task links share the same behavior: hover for a preview, click to keep it open, and use the dedicated button to open the right sidebar on that item. The preview title opens its editor.",
+              "In the subtask preview, a single slider changes the percentage. It saves on release, keyboard adjustment or leaving the field; the status stays unchanged. The displayed parent progress includes all its subtasks.",
               "Main-task columns are customizable except Unassigned actions. Deleting a column moves its tasks to that system column.",
               "For a parent with children, effort is the sum of estimates and progress is the unweighted average of percentages. Children at 100% and 0% yield 50%, even with different estimates."
             ],

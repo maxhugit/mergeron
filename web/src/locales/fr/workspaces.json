@@ -455,12 +455,17 @@
   "sidebarTaskActions": "Actions : {{title}}",
   "sidebarLinkTasks": "+ Sous-tâches",
   "sidebarLinkDeliverable": "+ Livrable",
-  "sidebarProgress": "Avancement",
   "sidebarProgressFor": "Avancement de {{title}}",
-  "sidebarProgressPercent": "Pourcentage de {{title}}",
-  "sidebarSaveProgress": "Enregistrer",
   "sidebarProgressLocked": "Rouvrez la sous-tâche pour modifier son avancement.",
-  "sidebarProgressStatusNote": "Le statut reste inchangé.",
   "sidebarProgressError": "Enregistrement impossible. Actualisez la tâche et vérifiez sa dernière version avant de réessayer.",
-  "sidebarProgressUnavailable": "Actualisez le contexte pour charger la version de cette tâche."
+  "sidebarProgressUnavailable": "Actualisez le contexte pour charger la version de cette tâche.",
+  "sidebarProgressSaving": "Enregistrement…",
+  "sidebarProgressRetry": "Réessayer",
+  "sidebarProgressReload": "Actualiser",
+  "sidebarTaskProgress": "Avancement de la tâche {{title}}",
+  "sidebarDeliverable": "Livrable",
+  "sidebarDocumentCount_one": "{{count}} document",
+  "sidebarDocumentCount_other": "{{count}} documents",
+  "sidebarNoDocuments": "Aucun document pour le moment.",
+  "sidebarOpenTask": "Ouvrir la tâche dans la sidebar · {{title}}"
 }

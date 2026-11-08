@@ -29,9 +29,13 @@ import { showSnackbar } from '@/stores/snackbar-store';
 export function ExplorerTasks({
   project,
   agentThreadId,
+  revealTaskId,
+  revealRequestId = 0,
 }: {
   project: ProjectSummary;
   agentThreadId?: string;
+  revealTaskId?: string;
+  revealRequestId?: number;
 }) {
   const { t } = useTranslation('workspaces');
   const session = usePlatformSession();
@@ -55,6 +59,7 @@ export function ExplorerTasks({
     parentId?: string;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dismissedReveal, setDismissedReveal] = useState<number | null>(null);
   const roots = new Set(
     boards.flatMap(
       (b) =>
@@ -201,7 +206,10 @@ export function ExplorerTasks({
               const children = b.data!.tasks.filter(
                 (task) => task.parentTaskId === parent.id,
               );
-              const open = preference.values[`open:task:${parent.id}`] === true;
+              const open =
+                preference.values[`open:task:${parent.id}`] === true ||
+                (parent.id === revealTaskId &&
+                  dismissedReveal !== revealRequestId);
               const definitions = (
                 b.data!.resource.config.taskBoardSettings as
                   | { labels?: Array<{ id: string; name: string }> }
@@ -232,9 +240,11 @@ export function ExplorerTasks({
                         disabled={!preference.ready || preference.pending}
                         aria-expanded={open}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs"
-                        onClick={() =>
-                          preference.set(`open:task:${parent.id}`, !open)
-                        }
+                        onClick={() => {
+                          if (parent.id === revealTaskId)
+                            setDismissedReveal(revealRequestId);
+                          preference.set(`open:task:${parent.id}`, !open);
+                        }}
                       >
                         {open ? (
                           <ChevronDown className="h-3.5 w-3.5" />
@@ -254,6 +264,14 @@ export function ExplorerTasks({
                             }
                             /{children.length} · {t('sidebarCompleted')}
                           </small>
+                        </span>
+                        <span
+                          className="shrink-0 tabular-nums"
+                          aria-label={t('sidebarTaskProgress', {
+                            title: parent.title,
+                          })}
+                        >
+                          {parent.progress ?? 0} %
                         </span>
                       </button>
                     </FileActionsMenu>

@@ -34,7 +34,9 @@ export function ExplorerDeliverables({
   onReference,
   pending,
   revealPath,
+  revealRequestId = 0,
 }: {
+  revealRequestId?: number;
   revealPath?: string | null;
   project: ProjectSummary;
   agentThreadId?: string;
@@ -61,6 +63,7 @@ export function ExplorerDeliverables({
   const [opened, setOpened] = useState<{
     id: string | null;
     revealPath?: string | null;
+    revealRequestId?: number;
   }>({ id: null });
   const [details, setDetails] = useState<{
     id: string;
@@ -85,7 +88,9 @@ export function ExplorerDeliverables({
     );
   const revealedId = revealedItem?.id;
   const isOpened = (id: string) =>
-    (opened.revealPath !== revealPath && revealedId === id) ||
+    ((opened.revealPath !== revealPath ||
+      opened.revealRequestId !== revealRequestId) &&
+      revealedId === id) ||
     disclosure.values[`open:deliverable:${id}`] === true ||
     (!(session.data?.personId && agentThreadId) && opened.id === id);
   return (
@@ -170,7 +175,12 @@ export function ExplorerDeliverables({
                       );
                     setOpened({
                       id: isOpened(item.id) ? null : item.id,
-                      revealPath,
+                      revealPath:
+                        item.id === revealedId ? revealPath : opened.revealPath,
+                      revealRequestId:
+                        item.id === revealedId
+                          ? revealRequestId
+                          : opened.revealRequestId,
                     });
                   }}
                 >

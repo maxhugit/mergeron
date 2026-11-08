@@ -370,9 +370,19 @@ lecture ou d’enregistrement des préférences est affichée, sans confirmer un
 sauvegarde qui aurait échoué.
 
 La fenêtre ouverte depuis le compteur des sous-tâches permet également de régler
-l’avancement de chaque sous-tâche affectée à l’agent, par curseur ou saisie de
-0 à 100 %, puis Enregistrer. Le pourcentage ne modifie pas le statut : 100 % ne
+l’avancement de chaque sous-tâche affectée à l’agent avec une seule barre de
+0 à 100 %. Le curseur enregistre au relâchement, au clavier ou à la sortie du champ. Le pourcentage ne modifie pas le statut : 100 % ne
 valide pas automatiquement une sous-tâche. Les tâches terminées ou annulées
 restent verrouillées jusqu’à leur réouverture dans le formulaire de tâche.
 L’enregistrement utilise la version observée au début de la saisie pour refuser
 l’écrasement d’une modification concurrente ; les erreurs restent visibles.
+
+Les liens Livrable et Tâche de la barre « Lié à » partagent les mêmes interactions :
+aperçu au survol de la souris, clic pour le maintenir ouvert et bouton dédié pour
+ouvrir le bon onglet de la sidebar droite sur l’élément concerné. Le livrable
+présente ses documents actifs et leurs versions ; un document s’ouvre dans la
+fenêtre de consultation habituelle. Le titre de chaque aperçu ouvre sa fiche.
+L’aperçu des tâches et la sidebar affichent l’avancement global du parent fourni
+par le serveur, qui inclut toutes ses sous-tâches, pas seulement celles de l’agent.
+Un échec de sauvegarde conserve la valeur non enregistrée et propose de réessayer
+ou d’actualiser ; aucune modification concurrente n’est écrasée silencieusement.
