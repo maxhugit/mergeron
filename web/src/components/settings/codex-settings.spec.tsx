@@ -30,23 +30,16 @@ async function renderModel() {
   await waitFor(() => expect(tab).toBeEnabled());
   fireEvent.click(tab);
 }
-it('configures Ollama without an OpenAI account', async () => {
+it('configures Ollama with a connected Codex account', async () => {
   vi.stubGlobal('fetch', (input: string | URL, init?: RequestInit) =>
     fixture.fetch(new Request(new URL(input, 'http://localhost'), init)),
   );
-  const disconnected = {
-    ...useAccountStore.getState().account!,
-    account: null,
-  };
-  fixture.server.overrides.set('GET /api/account', () => json(disconnected));
   fixture.server.overrides.set('GET /api/local-agents/configuration', () =>
     json({ enabled: false, url: '', models: '', context: 16384 }),
   );
   fixture.server.overrides.set('GET /api/local-agents/models', () =>
     json({ available: false, error: null, data: [] }),
   );
-  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), disconnected);
-  useAccountStore.getState().setAccount(disconnected);
   fixture.render(<CodexSettings />);
   const local = screen.getByRole('tab', { name: 'Local agents · Ollama' });
   expect(local).toBeEnabled();
@@ -59,7 +52,7 @@ it('configures Ollama without an OpenAI account', async () => {
   ).toBeVisible();
 });
 
-it('puts Account first, disables other tabs without a connection and responds to login/logout without reloading', async () => {
+it('only enables CLI while disconnected and responds to login/logout without reloading', async () => {
   const connected = useAccountStore.getState().account!;
   const disconnected = { ...connected, account: null };
   fixture.server.overrides.set('GET /api/account', () => json(disconnected));
@@ -68,18 +61,14 @@ it('puts Account first, disables other tabs without a connection and responds to
   fixture.render(<CodexSettings />);
   const tabs = screen.getAllByRole('tab');
   expect(tabs[0]).toHaveTextContent('Account');
-  expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+  expect(tabs[0]).toBeDisabled();
+  expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
   expect(tabs[1]).toHaveTextContent('Codex CLI');
   expect(tabs[1]).toBeEnabled();
-  for (const tab of tabs.slice(2)) {
-    if (
-      ['Instructions', 'Integrations', 'Local agents · Ollama'].includes(
-        tab.textContent ?? '',
-      )
-    )
-      expect(tab).toBeEnabled();
-    else expect(tab).toBeDisabled();
-  }
+  for (const tab of tabs.slice(2)) expect(tab).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Sign in with ChatGPT' }),
+  ).toBeEnabled();
   expect(
     screen.queryByRole('heading', { name: 'Model catalog' }),
   ).not.toBeInTheDocument();
@@ -101,22 +90,40 @@ it('puts Account first, disables other tabs without a connection and responds to
       .getState()
       .setAccountUpdated({ authMode: null, planType: null }),
   );
-  expect(screen.getByRole('tab', { name: 'Account' })).toHaveAttribute(
+  expect(screen.getByRole('tab', { name: 'Codex CLI' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  for (const tab of screen.getAllByRole('tab').slice(2)) {
-    if (
-      ['Instructions', 'Integrations', 'Local agents · Ollama'].includes(
-        tab.textContent ?? '',
-      )
-    )
-      expect(tab).toBeEnabled();
+  for (const tab of screen.getAllByRole('tab')) {
+    if (tab.textContent === 'Codex CLI') expect(tab).toBeEnabled();
     else expect(tab).toBeDisabled();
   }
 });
+it('does not expose integration settings through a deep link when the account read fails', async () => {
+  fixture.server.overrides.set('GET /api/account', () =>
+    json({ message: 'Unavailable' }, 503),
+  );
+  fixture.queryClient.removeQueries({ queryKey: accountReadAccountQueryKey() });
+  useAccountStore.getState().setAccount(null);
+  fixture.render(<CodexSettings initialTab="integrations" />);
+  await waitFor(() =>
+    expect(screen.getByRole('tab', { name: 'Integrations' })).toBeDisabled(),
+  );
+  expect(screen.getByRole('tab', { name: 'Codex CLI' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(
+    screen.queryByRole('tab', { name: 'Model catalog' }),
+  ).not.toBeInTheDocument();
+});
+
 it('can open CLI management even before an account is connected', async () => {
-  const disconnected = { account: null, requiresOpenaiAuth: true };
+  const disconnected = {
+    ...useAccountStore.getState().account!,
+    account: null,
+    requiresOpenaiAuth: true,
+  };
   fixture.queryClient.setQueryData(accountReadAccountQueryKey(), disconnected);
   fixture.server.overrides.set('GET /api/account', () => json(disconnected));
   useAccountStore.getState().setAccount(null);
@@ -157,16 +164,11 @@ afterEach(() => {
   useAccountStore.getState().setAccount(null);
 });
 
-it('keeps common instructions editable without a Codex account or config and preserves drafts across tabs', async () => {
-  const disconnected = {
-    ...useAccountStore.getState().account,
-    account: null,
-    requiresOpenaiAuth: true,
-  };
-  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), disconnected);
-  fixture.server.overrides.set('GET /api/account', () => json(disconnected));
-  useAccountStore.getState().setAccount(null);
+it('preserves connected common instruction drafts across tabs', async () => {
   fixture.render(<CodexSettings />);
+  await waitFor(() =>
+    expect(screen.getByRole('tab', { name: 'Instructions' })).toBeEnabled(),
+  );
   fireEvent.click(screen.getByRole('tab', { name: 'Instructions' }));
   const editor = await screen.findByRole('textbox', {
     name: 'Common instructions text',
