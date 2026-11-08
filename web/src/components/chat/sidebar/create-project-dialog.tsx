@@ -4,6 +4,7 @@ import { usePlatformSession } from '@/lib/platform-session';
 import { ProjectArchiveImportForm } from '@/components/projects/project-archive-transfer';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -20,7 +21,7 @@ interface CreateProjectDialogProps {
   pending: boolean;
   name: string;
   onNameChange: (value: string) => void;
-  onSave: () => void;
+  onSave: (description: string) => void;
   onClose: () => void;
 }
 
@@ -39,6 +40,7 @@ export function CreateProjectDialog({
   });
   const session = usePlatformSession();
   const [mode, setMode] = useState<'new' | 'import'>(initialMode);
+  const [description, setDescription] = useState('');
   const [importBusy, setImportBusy] = useState(false);
   const close = () => {
     setMode('new');
@@ -57,7 +59,7 @@ export function CreateProjectDialog({
       }}
     >
       {open && (
-        <DialogContent className="max-h-[85dvh] max-w-xl overflow-y-auto">
+        <DialogContent className="max-h-[85dvh] sm:max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('createAProject')}</DialogTitle>
             <DialogDescription>
@@ -129,13 +131,35 @@ export function CreateProjectDialog({
                     autoFocus
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="new-project-description"
+                    className="text-sm font-medium"
+                  >
+                    {t('projectShortDescription')}
+                  </label>
+                  <Textarea
+                    id="new-project-description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    maxLength={1000}
+                    rows={4}
+                    disabled={pending}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('projectShortDescriptionHint')}
+                  </p>
+                </div>
               </div>
 
               <DialogFooter>
                 <Button variant="outline" disabled={pending} onClick={close}>
                   {t('cancel')}
                 </Button>
-                <Button disabled={!canSave || pending} onClick={onSave}>
+                <Button
+                  disabled={!canSave || pending}
+                  onClick={() => onSave(description)}
+                >
                   {pending && (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   )}

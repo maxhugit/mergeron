@@ -533,6 +533,13 @@
       "when": 1794057778088,
       "tag": "0075_retire_simple_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1794167131657,
+      "tag": "0076_project_short_description",
+      "breakpoints": true
     }
   ]
 }
