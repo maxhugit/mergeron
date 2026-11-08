@@ -182,14 +182,7 @@ export function CodexSettings({
     Boolean(accountQuery.data?.account) &&
     !accountQuery.isError &&
     Boolean(authMode);
-  const activeTab =
-    connected ||
-    requestedTab === 'cli' ||
-    requestedTab === 'local' ||
-    requestedTab === 'instructions' ||
-    requestedTab === 'integrations'
-      ? requestedTab
-      : 'account';
+  const activeTab = connected ? requestedTab : 'cli';
 
   // ---- Queries ----
   const configQuery = useQuery({
@@ -582,14 +575,7 @@ export function CodexSettings({
               key={id}
               type="button"
               role="tab"
-              disabled={
-                id !== 'account' &&
-                id !== 'cli' &&
-                id !== 'local' &&
-                id !== 'instructions' &&
-                id !== 'integrations' &&
-                !connected
-              }
+              disabled={id !== 'cli' && !connected}
               aria-selected={activeTab === id}
               id={`${topPanelId}-${id}`}
               aria-controls={topPanelId}
@@ -674,6 +660,7 @@ export function CodexSettings({
             {activeTab === 'cli' && (
               <div>
                 <CodexCliSettings />
+                {!connected && <AccountSettings />}
               </div>
             )}
             {activeTab === 'account' && (

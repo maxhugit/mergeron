@@ -10,6 +10,7 @@ import {
 } from '@testing-library/react';
 import { page } from 'vitest/browser';
 import { PluginsTab } from './plugins-tab';
+import { useAccountStore } from '@/stores/account-store';
 import { CodexSettings } from '../settings/codex-settings';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { client } from '@/generated/api/client.gen';
@@ -21,6 +22,7 @@ afterEach(() => {
   cleanup();
   query?.clear();
   vi.restoreAllMocks();
+  useAccountStore.getState().setAccount(null);
   document.documentElement.classList.remove('dark');
 });
 const plugin = {
@@ -142,7 +144,20 @@ test.each([390, 1280])(
           },
         } as never;
       if (options.url === '/api/account')
-        return { data: { account: null } } as never;
+        return {
+          data: {
+            account: { type: 'apiKey' },
+            requiresOpenaiAuth: true,
+            provider: {
+              ok: true,
+              id: 'openai',
+              name: 'OpenAI',
+              baseUrlMasked: null,
+              envKey: null,
+              envPresent: null,
+            },
+          },
+        } as never;
       if (options.url === '/api/settings/{key}')
         return { data: { value: '' } } as never;
       if (options.url === '/api/codex/config')
@@ -246,15 +261,13 @@ test.each([390, 1280])(
     fireEvent.click(screen.getByRole('tab', { name: 'Serveurs MCP' }));
     await screen.findByText('server-0');
     expect(await screen.findByText('Processus local Mergeron')).toBeVisible();
-    expect(screen.getByText('Connexion vérifiée par le runtime')).toBeVisible();
+    expect(await screen.findByText('Connexion vérifiée par le runtime')).toBeVisible();
     expect(
       screen.getAllByText('Connexion non vérifiée').length,
     ).toBeGreaterThan(0);
-    await page
-      .getByRole('main')
-      .screenshot({
-        path: `../../../.vitest-screenshots/integrations-local-priority-${engine}-${width}.png`,
-      });
+    await page.getByRole('main').screenshot({
+      path: `../../../.vitest-screenshots/integrations-local-priority-${engine}-${width}.png`,
+    });
     expect(screen.getByText('Mergeron (interne)')).toBeVisible();
     expect(screen.getByText('Par conversation')).toBeVisible();
     await assertInnerScroll('mcps');

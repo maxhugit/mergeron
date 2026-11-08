@@ -252,3 +252,68 @@ for (const width of [320, 390, 1100])
       fixture.dispose();
     }
   });
+
+test('only CLI remains accessible before account connection on desktop and mobile', async () => {
+  await i18nReady;
+  const fixture = catalogFixture();
+  await i18n.changeLanguage('fr');
+  const account = {
+    account: null,
+    requiresOpenaiAuth: true,
+    provider: {
+      ok: false,
+      id: null,
+      name: null,
+      baseUrlMasked: null,
+      envKey: null,
+      envPresent: null,
+    },
+  };
+  fixture.queryClient.setQueryData(accountReadAccountQueryKey(), account);
+  fixture.server.overrides.set('GET /api/account', () => json(account));
+  useAccountStore.getState().setAccount(account);
+  vi.stubGlobal('fetch', (input: string | URL, init?: RequestInit) => {
+    if (String(input) === '/api/codex/cli')
+      return Promise.resolve(
+        json({
+          installedVersion: '0.164.0',
+          selectedVersion: '0.164.0',
+          latestVersion: '0.164.0',
+          installationState: 'managed',
+          updateAvailable: false,
+          canManage: true,
+          canRollback: false,
+          busy: false,
+          installedError: null,
+          checkError: null,
+          checkedAt: null,
+        }),
+      );
+    return fixture.fetch(new Request(new URL(input, 'http://localhost'), init));
+  });
+  try {
+    for (const width of [390, 1100]) {
+      await page.viewport(width, 900);
+      fixture.render(<CodexSettings initialTab="integrations" />);
+      for (const tab of screen.getAllByRole('tab')) {
+        expect(tab.hasAttribute('disabled')).toBe(
+          tab.textContent !== 'Codex CLI',
+        );
+      }
+      expect(
+        screen
+          .getByRole('tab', { name: 'Codex CLI' })
+          .getAttribute('aria-selected'),
+      ).toBe('true');
+      expect(
+        screen.getByRole('button', { name: 'Se connecter avec ChatGPT' }),
+      ).toBeTruthy();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/codex-disconnected-${width}.png`,
+      });
+      cleanup();
+    }
+  } finally {
+    fixture.dispose();
+  }
+});
