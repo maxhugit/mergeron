@@ -1,3 +1,4 @@
+import { SubtaskProgressEditor } from './subtask-progress-editor';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -234,6 +235,10 @@ export function AgentContextLinks({
               className="w-[min(29rem,calc(100vw-1rem))] overflow-hidden p-0"
               onOpenAutoFocus={(event) => event.preventDefault()}
               onPointerEnter={cancelHover}
+              onFocusCapture={() => {
+                pinned.current = true;
+                cancelHover();
+              }}
               onPointerLeave={leaveMenu}
               aria-label={t('agentAssignedSubtasks')}
             >
@@ -280,46 +285,53 @@ export function AgentContextLinks({
                     cancelled: t('cancelled'),
                   }[state];
                   return (
-                    <button
-                      key={task.id}
-                      type="button"
-                      className="block w-full cursor-pointer space-y-2 p-3 text-left hover:bg-accent"
-                      onClick={() => {
-                        closeMenu();
-                        setOpenedTask(task);
-                      }}
-                    >
-                      <div className="flex items-start gap-2 text-sm">
-                        <Icon
-                          className={`mt-0.5 size-4 shrink-0 ${state === 'done' ? 'text-green-700 dark:text-green-300' : state === 'started' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 flex-1 break-words">
-                          {task.title}
-                        </span>
-                        <span className="shrink-0 tabular-nums">
-                          {task.progress} %
-                        </span>
-                      </div>
-                      <p className="pl-6 text-xs text-muted-foreground">
-                        {label}
-                      </p>
-                      <div
-                        className="ml-6 h-1 overflow-hidden rounded-full bg-muted"
-                        aria-hidden="true"
+                    <div key={task.id}>
+                      <button
+                        type="button"
+                        className="block w-full cursor-pointer space-y-2 p-3 text-left hover:bg-accent"
+                        onClick={() => {
+                          closeMenu();
+                          setOpenedTask(task);
+                        }}
                       >
+                        <div className="flex items-start gap-2 text-sm">
+                          <Icon
+                            className={`mt-0.5 size-4 shrink-0 ${state === 'done' ? 'text-green-700 dark:text-green-300' : state === 'started' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 flex-1 break-words">
+                            {task.title}
+                          </span>
+                          <span className="shrink-0 tabular-nums">
+                            {task.progress} %
+                          </span>
+                        </div>
+                        <p className="pl-6 text-xs text-muted-foreground">
+                          {label}
+                        </p>
                         <div
-                          className={
-                            state === 'done'
-                              ? 'h-full bg-green-600 dark:bg-green-400'
-                              : 'h-full bg-violet-500'
-                          }
-                          style={{
-                            width: `${Math.max(0, Math.min(100, task.progress))}%`,
-                          }}
+                          className="ml-6 h-1 overflow-hidden rounded-full bg-muted"
+                          aria-hidden="true"
+                        >
+                          <div
+                            className={
+                              state === 'done'
+                                ? 'h-full bg-green-600 dark:bg-green-400'
+                                : 'h-full bg-violet-500'
+                            }
+                            style={{
+                              width: `${Math.max(0, Math.min(100, task.progress))}%`,
+                            }}
+                          />
+                        </div>
+                      </button>
+                      {project && (
+                        <SubtaskProgressEditor
+                          projectId={project.id}
+                          task={task}
                         />
-                      </div>
-                    </button>
+                      )}
+                    </div>
                   );
                 })}
                 {!mine.length && (

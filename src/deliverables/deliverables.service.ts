@@ -888,6 +888,7 @@ export class DeliverablesService implements OnModuleInit {
       tasks: this.db
         .select({
           id: projectTasks.id,
+          updatedAt: projectTasks.updatedAt,
           title: projectTasks.title,
           resourceId: projectTasks.resourceId,
           parentTaskId: projectTasks.parentTaskId,
@@ -915,6 +916,7 @@ export class DeliverablesService implements OnModuleInit {
         .filter((task) => task.resourceConfig.internal !== true)
         .map((task) => ({
           id: task.id,
+          updatedAt: task.updatedAt,
           title: task.title,
           resourceId: task.resourceId,
           parentTaskId: task.parentTaskId,

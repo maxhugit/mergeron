@@ -454,5 +454,13 @@
   "sidebarLoading": "Loading…",
   "sidebarTaskActions": "Actions: {{title}}",
   "sidebarLinkTasks": "+ Subtasks",
-  "sidebarLinkDeliverable": "+ Deliverable"
+  "sidebarLinkDeliverable": "+ Deliverable",
+  "sidebarProgress": "Progress",
+  "sidebarProgressFor": "Progress of {{title}}",
+  "sidebarProgressPercent": "Percentage of {{title}}",
+  "sidebarSaveProgress": "Save",
+  "sidebarProgressLocked": "Reopen this subtask to change its progress.",
+  "sidebarProgressStatusNote": "The status stays unchanged.",
+  "sidebarProgressError": "Unable to save. Refresh the task and check its latest revision before retrying.",
+  "sidebarProgressUnavailable": "Refresh the context to load this task revision."
 }

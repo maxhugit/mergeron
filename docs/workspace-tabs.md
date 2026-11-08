@@ -368,3 +368,11 @@ sur le serveur par personne et par agent. L’ouverture des projets dans la side
 gauche est enregistrée par personne, indépendamment de l’agent. Une erreur de
 lecture ou d’enregistrement des préférences est affichée, sans confirmer une
 sauvegarde qui aurait échoué.
+
+La fenêtre ouverte depuis le compteur des sous-tâches permet également de régler
+l’avancement de chaque sous-tâche affectée à l’agent, par curseur ou saisie de
+0 à 100 %, puis Enregistrer. Le pourcentage ne modifie pas le statut : 100 % ne
+valide pas automatiquement une sous-tâche. Les tâches terminées ou annulées
+restent verrouillées jusqu’à leur réouverture dans le formulaire de tâche.
+L’enregistrement utilise la version observée au début de la saisie pour refuser
+l’écrasement d’une modification concurrente ; les erreurs restent visibles.

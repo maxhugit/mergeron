@@ -2118,3 +2118,19 @@ it('sidebar agent assignment uses the same cardinality and optimistic version gu
     );
     expect(repeated.version).toBe(linked.version);
   }));
+
+it('exposes the observed task revision in deliverable context and refreshes progress without completing the subtask', async () =>
+  asAdmin(async () => {
+    const sub = child(parent().id);
+    const before = deliverables
+      .board('p', 'deliverables')
+      .tasks.find((item) => item.id === sub.id)!;
+    expect(before.updatedAt).toBe(task(sub.id).updatedAt);
+    await domain.updateTask('p', 'tasks', sub.id, { progress: 65 });
+    const after = deliverables
+      .board('p', 'deliverables')
+      .tasks.find((item) => item.id === sub.id)!;
+    expect(after.progress).toBe(65);
+    expect(after.updatedAt).toBeGreaterThan(before.updatedAt);
+    expect(after.subtaskStatus).toBe('todo');
+  }));
