@@ -3,65 +3,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { projectsApi, projectsQueryKey } from '@/lib/projects-api';
 import { translationKey } from '@/locales/translation-key';
 
-type Options = {
-  boardId: string;
-  copyId: string;
-  directory: string;
-  restrictedIds: string[];
-};
-type Settings = Omit<Options, 'boardId'> & {
-  enabled: boolean;
-  lastError: string | null;
-  lastSyncAt: number | null;
-};
-interface Status {
-  boards: {
-    id: string;
-    name: string;
-    restricted: { id: string; title: string }[];
-    settings: Settings | null;
-  }[];
-  copies: {
-    id: string;
-    name: string;
-    writable: boolean;
-    owned: boolean;
-    directory?: string;
-  }[];
-  discovered: { id: string; title: string; documents: number }[];
-  discoveryError: string | null;
-}
-type Preview = {
-  fingerprint: string;
-  canApply: boolean;
-  changes: {
-    deliverable: string;
-    document?: string;
-    action: string;
-    reason: string;
-  }[];
-};
-const url = (p: string) => `/${encodeURIComponent(p)}/git-deliverables`;
-const key = (p: string) => ['git-deliverables', p];
-const suffix = (value: string) =>
-  value
-    .split('_')
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join('');
-const post = <T,>(p: string, suffix: string, body: unknown) =>
-  projectsApi<T>(url(p) + suffix, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+import {
+  key,
+  url,
+  post,
+  suffix,
+  type Preview,
+  type Status,
+} from '@/lib/git-deliverables-api';
 
 export function GitDeliverablesSettings({
   projectId,
@@ -70,7 +22,9 @@ export function GitDeliverablesSettings({
   projectId: string;
   preferredCopyId?: string;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['workspaces', 'common'], {
+    nsMode: 'fallback',
+  });
   const [selected, setSelected] = useState('');
   const query = useQuery({
     queryKey: key(projectId),
@@ -132,7 +86,9 @@ function GitDeliverablesConfiguration({
   copies: Status['copies'];
   preferredCopyId?: string;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['workspaces', 'common'], {
+    nsMode: 'fallback',
+  });
   const client = useQueryClient();
   const [enabled, setEnabled] = useState(board.settings?.enabled ?? false);
   const [copyId, setCopy] = useState(
@@ -373,62 +329,5 @@ function GitDeliverablesConfiguration({
         )}
       </div>
     </div>
-  );
-}
-
-/** Read-only recognition when a repository is opened; imports stay explicit. */
-export function GitDeliverablesDiscovery({
-  projectId,
-  copyId,
-  inspectedAt,
-}: {
-  projectId: string;
-  copyId: string;
-  inspectedAt?: number;
-}) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const query = useQuery({
-    queryKey: [...key(projectId), 'discovery', copyId, inspectedAt],
-    queryFn: () =>
-      projectsApi<Status>(
-        url(projectId) + `?copyId=${encodeURIComponent(copyId)}`,
-      ),
-    staleTime: 30_000,
-    gcTime: 60_000,
-    retry: false,
-  });
-  const active = query.data?.boards?.some(
-    (b) => b.settings?.enabled && b.settings.copyId === copyId,
-  );
-  if (!active && !query.data?.discovered?.length && !query.data?.discoveryError)
-    return null;
-  return (
-    <section className="shrink-0 space-y-2 border-b p-2 text-xs">
-      <p>
-        {active
-          ? t('gitDeliverablesActive')
-          : t('gitDeliverablesDetected', {
-              count: query.data?.discovered?.length ?? 0,
-            })}
-      </p>
-      {query.data?.discoveryError && (
-        <p role="alert">{t('gitDeliverablesUnavailable')}</p>
-      )}
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        {t('gitDeliverablesReview')}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90dvh] min-w-0 overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{t('gitDeliverablesTitle')}</DialogTitle>
-          </DialogHeader>
-          <GitDeliverablesSettings
-            projectId={projectId}
-            preferredCopyId={copyId}
-          />
-        </DialogContent>
-      </Dialog>
-    </section>
   );
 }

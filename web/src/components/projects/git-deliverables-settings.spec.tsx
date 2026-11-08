@@ -2,10 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { catalogFixture, json } from '../settings/catalog/catalog.testing';
-import {
-  GitDeliverablesSettings,
-  GitDeliverablesDiscovery,
-} from './git-deliverables-settings';
+import { GitDeliverablesSettings } from './git-deliverables-settings';
+import { GitDeliverablesDiscovery } from './git-deliverables-discovery';
 
 let fixture: ReturnType<typeof catalogFixture>;
 let writes: { url: string; body: Record<string, unknown> }[];

@@ -1,6 +1,10 @@
 import { useId, useMemo, useState } from 'react';
 import { ProjectLocationsIntro } from './project-locations-intro';
-import { GitDeliverablesSettings } from './git-deliverables-settings';
+const GitDeliverablesSettings = lazy(() =>
+  import('./git-deliverables-settings').then((m) => ({
+    default: m.GitDeliverablesSettings,
+  })),
+);
 import { ProjectBrowserSettings } from './project-browser-settings';
 import { lazy, Suspense } from 'react';
 const ProjectPreviewSettings = lazy(() =>
@@ -390,7 +394,9 @@ export function ProjectSettingsPanel({
         {section === 'workspaces' && (
           <section className="space-y-3">
             {workspaceTab === 'git-deliverables' && (
-              <GitDeliverablesSettings projectId={project.id} />
+              <Suspense fallback={<p>{t('loading')}</p>}>
+                <GitDeliverablesSettings projectId={project.id} />
+              </Suspense>
             )}
             <div hidden={workspaceTab !== 'local'} className="space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-3">

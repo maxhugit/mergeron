@@ -1,5 +1,5 @@
 import { GitIntegrateBranch } from './git-integrate-branch';
-import { GitDeliverablesDiscovery } from '../projects/git-deliverables-settings';
+import { GitDeliverablesDiscovery } from '../projects/git-deliverables-discovery';
 import { GitPullRequestTracker } from './git-pull-request-tracker';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
