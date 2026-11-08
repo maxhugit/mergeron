@@ -168,6 +168,7 @@ export class ThreadsController {
 
   @Get('overview')
   @ApiOperation({ summary: 'List branch-collapsed thread overview rows' })
+  @ApiQuery({ name: 'projectId', required: false })
   @ApiQuery({ name: 'cursor', required: false })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'archived', required: false, type: Boolean })
@@ -187,6 +188,7 @@ export class ThreadsController {
     @Query('searchTerm') searchTerm?: string,
     @Query('cwd') cwd?: string,
     @Query('sortKey') sortKey?: string,
+    @Query('projectId') projectId?: string,
   ) {
     const parsedLimit = this.parsePositiveLimit(limit);
     const parsedSortKey = this.parseSortKey(sortKey);
@@ -197,6 +199,7 @@ export class ThreadsController {
       searchTerm,
       cwd,
       sortKey: parsedSortKey,
+      projectId,
     });
   }
 

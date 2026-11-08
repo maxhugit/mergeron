@@ -134,6 +134,11 @@ export function Fixture() {
                   onFork={vi.fn()}
                   onDelete={vi.fn()}
                   draggable
+                  linkedTask={
+                    thread.id === 'agent-0'
+                      ? { title: 'Assigned subtask', isSubtask: true }
+                      : undefined
+                  }
                   projectId={group.projectId}
                 />
               </div>
@@ -205,6 +210,22 @@ test('keeps draggable compact rows in focus and opens the archives as a central 
   ).not.toBeInTheDocument();
   expect(sidebar.querySelectorAll('[data-testid^="agent-"]')).toHaveLength(8);
   expect(useAgentViewCacheStore.getState().projectId).toBe(focusProject.id);
+  const agent = screen.getByTestId('agent-0');
+  expect(agent.querySelector('.lucide-bot')?.nextElementSibling).toHaveClass(
+    'lucide-clipboard-check',
+  );
+  await page.screenshot({
+    path: '../../../../.vitest-screenshots/project-focus-agent-task.png',
+  });
+  await page.viewport(390, 844);
+  expect(agent.querySelector('.lucide-bot')?.nextElementSibling).toHaveClass(
+    'lucide-clipboard-check',
+  );
+  expect(sidebar.scrollWidth).toBeLessThanOrEqual(sidebar.clientWidth);
+  await page.screenshot({
+    path: '../../../../.vitest-screenshots/project-focus-agent-task-mobile.png',
+  });
+  await page.viewport(1180, 800);
   await commands.sidebarProjectDrag('agent-1', 'agent-3');
   await settleSidebarDrag(sidebar, 'Agent 1');
   await waitFor(() =>

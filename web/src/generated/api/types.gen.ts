@@ -3201,6 +3201,7 @@ export type ThreadsListOverviewData = {
         archived?: boolean;
         searchTerm?: string;
         cwd?: string;
+        projectId?: string;
         sortKey?: 'created_at' | 'updated_at';
     };
     url: '/api/threads/overview';
