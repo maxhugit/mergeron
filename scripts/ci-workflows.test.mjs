@@ -77,7 +77,8 @@ const requireBrowserCoverage = (...files) => {
     /pnpm --dir web test:browser --shard=\$\{\{ matrix\.shard \}\}\/2\s*\n/,
   );
   const command = JSON.parse(read('web/package.json')).scripts['test:browser'];
-  assert.match(command, /vitest run --project browser$/);
+  assert.equal(command, 'node scripts/run-browser-tests.mjs');
+  assert.ok(read('web/scripts/run-browser-tests.mjs').includes("['chromium', 'webkit']"));
   const config = read('web/vitest.config.ts');
   assert.ok(config.includes("include: ['src/**/*.browser.{ts,tsx}']"));
   assert.ok(config.includes("{ browser: 'chromium' }"));

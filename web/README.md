@@ -49,3 +49,19 @@ captures temporaires. Voir [Contribuer](../CONTRIBUTING.md).
 La CI exécute l’ensemble du catalogue navigateur, indépendamment des tests
 unitaires et de la compilation. Voir les
 [mesures de performance](../docs/performance-et-stabilite.md).
+
+
+### Exécution isolée des navigateurs
+
+`pnpm test:browser` exécute Chromium puis WebKit dans deux processus Vitest
+successifs. Chaque moteur garde son parallélisme existant (Chromium : deux pages,
+WebKit : une seule) et reçoit les mêmes filtres de fichiers et `--shard=n/2`.
+Les deux shards CI restent exécutés sur des runners indépendants. Le test de
+couverture vérifie la découverte réelle de toutes les spécifications, pour
+chaque moteur et chaque shard. Aucun test ni moteur n’est retiré.
+
+Un échec du premier moteur n’empêche pas le second de tourner ; le résultat global
+reste en erreur. Les captures sont nettoyées une fois avant le premier moteur,
+puis conservées pour les deux. Aucun retry automatique ni masque d’erreur n’est
+ajouté. Les arguments qui changent la sélection des moteurs sont réservés ; pour
+un diagnostic ciblé sur un seul moteur, utiliser directement Vitest.
