@@ -32,6 +32,9 @@ import type { ProjectConnectionToolsService } from '../projects/project-connecti
 import { projectConnectionTools } from '../projects/project-connection-tools.schema';
 import type { ProjectPreviewsService } from '../previews/project-previews.service';
 import type { AgentMonitorsService } from '../agent-monitors/agent-monitors.service';
+import { AgentInstructionsService } from '../settings/agent-instructions.service';
+import { ProjectKnowledgeService } from './project-knowledge.service';
+import { ActiveFoldersService } from '../active-folders/active-folders.service';
 
 // Stay below SQLite's variable limit, including builds with a 999-variable cap.
 const TASK_BOARD_BATCH_SIZE = 500;
@@ -78,7 +81,7 @@ export class ProjectAgentToolsService {
           !r.config.internal &&
           ['task_board', 'deliverable_board'].includes(r.type),
       );
-    return { access, project, boards };
+    return { access, project, boards, binding };
   }
 
   assertProject(threadId: string, projectId: string) {
@@ -594,6 +597,7 @@ export class ProjectAgentToolsService {
       ],
       rename_agent: ['title', 'userRequest'],
       get_project: [],
+      get_context: [],
       list_tasks: ['resourceId', 'query', 'offset'],
       list_deliverables: ['resourceId', 'query', 'offset'],
       get_task: ['resourceId', 'id'],
@@ -842,6 +846,40 @@ export class ProjectAgentToolsService {
     }
     if (!Number.isSafeInteger(offset) || Number(offset) < 0)
       throw new BadRequestException('Invalid offset');
+    if (tool === 'get_context') {
+      const instructions = this.modules
+        .get(AgentInstructionsService, { strict: false })
+        .context();
+      const knowledge = await this.modules
+        .get(ProjectKnowledgeService, { strict: false })
+        .contextForProject(scope.project.id);
+      assertActive();
+      this.assertProject(threadId, scope.project.id);
+      const task = this.db
+        .select({ id: projectTasks.id })
+        .from(projectTasks)
+        .where(eq(projectTasks.linkedThreadId, threadId))
+        .get();
+      const folder = this.modules
+        .get(ActiveFoldersService, { strict: false })
+        .get(task ? 'task' : 'agent', task?.id ?? threadId);
+      const cwd = folder?.effectivePath ?? scope.binding.workspacePath;
+      const project = await this.context(threadId, cwd);
+      assertActive();
+      this.assertProject(threadId, scope.project.id);
+      const context = [instructions, project, knowledge]
+        .filter(Boolean)
+        .join('\n\n');
+      return {
+        project: {
+          id: scope.project.id,
+          name: this.scope(threadId).project.name,
+        },
+        revision: createHash('sha256').update(context).digest('hex'),
+        refreshedAt: new Date().toISOString(),
+        context,
+      };
+    }
     if (tool === 'get_project')
       return {
         project: { id: scope.project.id, name: scope.project.name },

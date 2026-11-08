@@ -30,6 +30,8 @@ import { ProjectsService } from '../projects/projects.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
 import type { SettingsService } from '../settings/settings.service';
 import { ProjectAgentToolsService } from './project-agent-tools.service';
+import { AgentInstructionsService } from '../settings/agent-instructions.service';
+import { ProjectKnowledgeService } from './project-knowledge.service';
 
 describe('project context and business tools', () => {
   let database: TestDatabase;
@@ -228,6 +230,80 @@ describe('project context and business tools', () => {
     database.sqlite.close();
     await fs.rm(root, { recursive: true, force: true });
     vi.restoreAllMocks();
+  });
+
+  it('reads only the bound project context, refreshes revisions and refuses scope changes or stale turns', async () => {
+    let common = 'Current common policy';
+    let shared = 'Current knowledge, decisions and memory revision';
+    const knowledge = {
+      contextForProject: vi.fn(() => Promise.resolve(shared)),
+    };
+    const activeFolders = {
+      get: vi.fn(() => ({ effectivePath: root + '/deliverable' })),
+    };
+    const reader = new ProjectAgentToolsService(database.db, deliverables, {
+      get: (key: unknown) => {
+        if (key === AgentInstructionsService) return { context: () => common };
+        if (key === ProjectKnowledgeService) return knowledge;
+        if (key === ActiveFoldersService) return activeFolders;
+        throw Error('Optional provider unavailable');
+      },
+    } as unknown as ModuleRef);
+    const read = () =>
+      asPerson('admin', () => reader.execute('agent', { tool: 'get_context' }));
+    const before = database.db
+      .select()
+      .from(projectAgentToolRequests)
+      .all().length;
+    const first = (await read()) as {
+      context: string;
+      revision: string;
+      project: { id: string };
+    };
+    expect(first.project.id).toBe('p');
+    expect(first.context).toContain(common);
+    expect(first.context).toContain(shared);
+    expect(first.context).toContain(root + '/deliverable');
+    expect(first.context).not.toContain('Foreign');
+    expect(knowledge.contextForProject).toHaveBeenCalledWith('p');
+    expect(((await read()) as typeof first).revision).toBe(first.revision);
+    common = 'Updated administration policy';
+    shared = '';
+    const second = (await read()) as typeof first;
+    expect(second.context).toContain(common);
+    expect(second.context).not.toContain('Current knowledge');
+    expect(second.revision).not.toBe(first.revision);
+    expect(
+      database.db.select().from(projectAgentToolRequests).all(),
+    ).toHaveLength(before);
+    await expect(
+      asPerson('admin', () =>
+        reader.execute('agent', { tool: 'get_context', projectId: 'other' }),
+      ),
+    ).rejects.toThrow('Unknown tool field');
+    await expect(
+      reader.execute('agent', { tool: 'get_context' }),
+    ).rejects.toThrow('authenticated turn');
+    const active = vi
+      .fn()
+      .mockImplementationOnce(() => {})
+      .mockImplementation(() => {
+        throw Error('turn revoked');
+      });
+    await expect(
+      asPerson('admin', () =>
+        reader.execute('agent', { tool: 'get_context' }, active),
+      ),
+    ).rejects.toThrow('turn revoked');
+    knowledge.contextForProject.mockImplementationOnce(() => {
+      database.db
+        .update(projectAgentThreads)
+        .set({ projectId: 'other' })
+        .where(eq(projectAgentThreads.threadId, 'agent'))
+        .run();
+      return Promise.resolve('Do not leak the previous project');
+    });
+    await expect(read()).rejects.toThrow('Project changed');
   });
 
   it('refreshes context for an existing conversation and uses its binding, never cwd', async () => {

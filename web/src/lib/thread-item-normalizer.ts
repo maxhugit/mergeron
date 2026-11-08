@@ -133,6 +133,16 @@ function safeMediaUrl(value: unknown, media: 'image' | 'audio'): string {
   return prefix.test(value) ? value : '';
 }
 
+/** Strip only complete, leading platform envelopes; never a quoted example or
+ * a marker embedded in the person's own message. Supports historical ordering. */
+function withoutInternalContext(text: string): string {
+  const envelope =
+    /^(?:\r?\n)*<(mergeron_agent_instructions|mergeron_context_refresh|mergeron_agent_monitor|mergeron_project_context|project_shared_knowledge|project_deliverable_context|document_publication)>\r?\n[\s\S]*?\r?\n<\/\1>(?:\r?\n)*/;
+  let match: RegExpExecArray | null;
+  while ((match = envelope.exec(text))) text = text.slice(match[0].length);
+  return text;
+}
+
 function normalizeUserMessage(
   item: Record<string, unknown>,
   itemId: string,
@@ -145,27 +155,7 @@ function normalizeUserMessage(
       if (!block) continue;
       if (block.type === 'text' && typeof block.text === 'string') {
         // This server-supplied context is separate from the user's editable message.
-        const message = block.text
-          .replace(
-            /^<mergeron_agent_monitor>\n[\s\S]*?\n<\/mergeron_agent_monitor>\n*/,
-            '',
-          )
-          .replace(
-            /^<mergeron_project_context>\n[\s\S]*?\n<\/mergeron_project_context>\n*/,
-            '',
-          )
-          .replace(
-            /^<project_shared_knowledge>\nCurrent shared project context\.[\s\S]*?\n<\/project_shared_knowledge>\n*/,
-            '',
-          )
-          .replace(
-            /^<project_deliverable_context>\n[\s\S]*?\n<\/project_deliverable_context>\n*/,
-            '',
-          )
-          .replace(
-            /^<document_publication>\n[\s\S]*?\n<\/document_publication>\n*/,
-            '',
-          );
+        const message = withoutInternalContext(block.text);
         if (message) text.push(message);
       } else if (
         block.type === 'localImage' &&
@@ -179,7 +169,7 @@ function normalizeUserMessage(
   }
   return {
     itemId,
-    text: text.join('\n') || stringValue(item.text),
+    text: text.join('\n') || withoutInternalContext(stringValue(item.text)),
     images,
   };
 }

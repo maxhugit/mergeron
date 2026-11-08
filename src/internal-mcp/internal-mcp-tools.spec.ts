@@ -11,11 +11,11 @@ import {
 
 describe('internal MCP public names and stable execution identities', () => {
   it('gives every schema exactly one canonical definition and localized title', () => {
-    expect(INTERNAL_MCP_TOOLS).toHaveLength(32);
+    expect(INTERNAL_MCP_TOOLS).toHaveLength(33);
     expect(INTERNAL_MCP_TOOLS.map((t) => t.operation)).toEqual(
       INTERNAL_MCP_IDENTITIES.map((t) => t.operation),
     );
-    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(32);
+    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(33);
     for (const tool of INTERNAL_MCP_TOOLS) {
       expect(tool.titleFr).toContain(' — ');
       expect(tool.title).toContain(' — ');

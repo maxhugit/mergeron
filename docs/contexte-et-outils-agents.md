@@ -12,14 +12,28 @@ Une erreur d’envoi reste signalée dans la conversation concernée ; une entr�
 locale non confirmée est retirée. Les contrôles de modification de la question
 initiale ne sont pas proposés sur une instruction complémentaire du même tour.
 
-À chaque échange, un agent de travail reçoit le nom et l’identifiant de son
-projet, le dossier actif et uniquement les identifiants/titres des éléments liés
-à sa conversation (10 maximum de chaque type). Les listes, compteurs, descriptions
-et critères sont consultés via MCP à la demande. Le contexte technique reste
-invisible dans le chat, y compris pour les anciens échanges, sans supprimer le
-message ou les pièces jointes de l’utilisateur.
-Le rattachement explicite détermine le projet, jamais
-le chemin Git. Les conversations existantes en bénéficient au prochain échange.
+À chaque échange disposant du MCP interne, un rappel court demande à l’agent
+d’appeler `project_context_read` avant de répondre ou d’agir. Cet outil en lecture
+seule relit les consignes communes de l’administration, l’identité du projet,
+le dossier de référence, les affectations (10 résumés maximum par type), les
+connaissances et décisions partagées et leurs règles de proposition de mémoire.
+Il renvoie une empreinte de contenu et la date de lecture. Une relecture est
+demandée après compaction, changement de tâche/référence ou doute sur la fraîcheur.
+Les listes et détails complémentaires restent accessibles par les outils dédiés.
+
+Le serveur choisit le projet et la personne d’après le tour authentifié : aucun
+chemin ni identifiant de projet n’est accepté par cet outil. Il ne modifie ni les
+permissions, ni la mémoire, ni les affectations. Un changement de rattachement
+ou une révocation pendant la lecture fait échouer la réponse. Les règles et le
+brouillon de publication versionnée restent préparés séparément à chaque tour.
+Si aucun accès MCP interne n’est disponible, le contexte explicite reste injecté
+pour conserver le fonctionnement des runtimes concernés.
+
+Le contexte technique reste invisible dans le chat, y compris dans les anciens
+échanges, sans supprimer l’historique ni le message ou les pièces jointes de
+l’utilisateur. Les appels MCP restent consultables dans les détails techniques.
+Le rappel ne garantit pas qu’un modèle obéira : les protections d’exécution et
+contrôles d’accès restent appliqués par le serveur, indépendamment de sa réponse.
 
 Dans **Capacités → Serveurs MCP**, l’inventaire est celui de la conversation
 affichée (`GET /api/mcp-servers?threadId=…`), pas celui du catalogue global.
