@@ -425,6 +425,43 @@ describe('optional Git deliverables with real retained versions and a real repos
         .map((d) => d.currentVersionNumber),
     ).toEqual([1, 1]);
   });
+  it('recognizes a custom directory on a new installation through the portable root index', async () => {
+    const { folder } = await external();
+    await fs.mkdir(path.join(repo, 'documents'));
+    await fs.rename(
+      path.join(repo, 'livrables'),
+      path.join(repo, 'documents', 'retained'),
+    );
+    await fs.writeFile(
+      path.join(repo, '.mergeron-deliverables.json'),
+      JSON.stringify({
+        format: 'mergeron-deliverables-index',
+        version: 1,
+        directory: 'documents/retained',
+      }),
+    );
+    const status = await service.status('p', 'copy');
+    expect(status.discovered).toHaveLength(1);
+    expect(status.copies[0].directory).toBe('documents/retained');
+    const custom = { ...options, directory: 'documents/retained' };
+    const plan = await service.preview('p', custom);
+    await service.apply('p', {
+      options: custom,
+      fingerprint: plan.fingerprint,
+    });
+    expect(
+      await fs.readFile(
+        path.join(
+          repo,
+          'documents',
+          'retained',
+          path.basename(folder),
+          'notes.md',
+        ),
+        'utf8',
+      ),
+    ).toBe('first');
+  });
   it('does not fail a domain save when an internal board is ineligible for Git', async () => {
     database.db
       .update(schema.projectResources)

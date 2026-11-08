@@ -30,7 +30,13 @@ interface Status {
     restricted: { id: string; title: string }[];
     settings: Settings | null;
   }[];
-  copies: { id: string; name: string; writable: boolean; owned: boolean }[];
+  copies: {
+    id: string;
+    name: string;
+    writable: boolean;
+    owned: boolean;
+    directory?: string;
+  }[];
   discovered: { id: string; title: string; documents: number }[];
   discoveryError: string | null;
 }
@@ -136,7 +142,9 @@ function GitDeliverablesConfiguration({
       '',
   );
   const [directory, setDirectory] = useState(
-    board.settings?.directory ?? 'livrables',
+    board.settings?.directory ??
+      copies.find((c) => c.id === copyId)?.directory ??
+      'livrables',
   );
   const [restrictedIds, setRestricted] = useState(
     board.settings?.restrictedIds ?? [],
@@ -203,6 +211,10 @@ function GitDeliverablesConfiguration({
             value={copyId}
             onChange={(e) => {
               setCopy(e.target.value);
+              setDirectory(
+                copies.find((c) => c.id === e.target.value)?.directory ??
+                  'livrables',
+              );
               dirty();
             }}
           >

@@ -21,6 +21,11 @@ automatiquement les manifestes et signale les livrables reconnus. **Examiner les
 livrables Git** ouvre la même interface. L’import reste explicite. Le changement
 d’état de la copie après une synchronisation Git déclenche une nouvelle lecture.
 
+L’index `.mergeron-deliverables.json`, à la racine du dépôt, indique le dossier
+choisi. Il permet de retrouver aussi un emplacement personnalisé lors du chargement
+sur une autre installation. Il faut le committer avec les manifestes et documents.
+Un index inconnu, invalide ou pointant hors du dépôt est refusé.
+
 Pour un dépôt sans métadonnées, cocher la conversion des sous-dossiers sans
 `livrable.json`. Chaque sous-dossier contenant des fichiers directs devient une
 proposition de livrable. Les dossiers imbriqués, fichiers cachés et liens
@@ -30,6 +35,7 @@ après confirmation. L’utilisateur choisit ainsi le périmètre par le dossier
 ## Format portable
 
 ```text
+.mergeron-deliverables.json
 livrables/
   cadrage/
     livrable.json

@@ -7,6 +7,24 @@ import { z } from 'zod';
 
 export const gitDocumentLimit = 100 * 1024 * 1024;
 export const largeGitDocument = 10 * 1024 * 1024;
+export const gitDeliverablesIndex = '.mergeron-deliverables.json';
+export async function readGitDeliverablesIndex(root: string) {
+  const raw = await readGitFile(root, gitDeliverablesIndex, 2048);
+  if (!raw) return null;
+  try {
+    const data = z
+      .object({
+        format: z.literal('mergeron-deliverables-index'),
+        version: z.literal(1),
+        directory: z.string().transform(relativeGitDirectory),
+      })
+      .strict()
+      .parse(JSON.parse(raw.toString('utf8')));
+    return { directory: data.directory, hash: digest(raw) };
+  } catch {
+    throw new BadRequestException('GIT_DELIVERABLES_INVALID_INDEX');
+  }
+}
 const id = z
   .string()
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/)

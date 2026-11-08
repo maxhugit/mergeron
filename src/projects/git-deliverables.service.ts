@@ -26,6 +26,8 @@ import {
   digest,
   discoverGitDeliverables,
   gitChild,
+  gitDeliverablesIndex,
+  readGitDeliverablesIndex,
   largeGitDocument,
   manifestSchema,
   readGitFile,
@@ -179,25 +181,36 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             : null,
         };
       });
-    const copies = this.copies
-      .list(p)
-      .filter(
-        (c) => c.sourceType === 'git' && c.state === 'ready' && c.sourceEnabled,
-      )
-      .map((c) => ({
-        id: c.id,
-        name: c.name,
-        writable: c.accessMode === 'read_write',
-        owned: c.ownerThreadIds.length > 0,
-      }));
+    const copies = await Promise.all(
+      this.copies
+        .list(p)
+        .filter(
+          (c) =>
+            c.sourceType === 'git' && c.state === 'ready' && c.sourceEnabled,
+        )
+        .map(async (c) => ({
+          id: c.id,
+          name: c.name,
+          writable: c.accessMode === 'read_write',
+          owned: c.ownerThreadIds.length > 0,
+          directory: await this.git
+            .directory(p, c.id)
+            .then((root) => readGitDeliverablesIndex(root))
+            .then((index) => index?.directory ?? 'livrables')
+            .catch(() => 'livrables'),
+        })),
+    );
     let discovered: { id: string; title: string; documents: number }[] = [];
     let discoveryError: string | null = null;
     if (copyId) {
       try {
+        const root = await this.git.directory(p, copyId);
+        const declared = await readGitDeliverablesIndex(root);
         const directory =
           boards.find((b) => b.settings?.copyId === copyId)?.settings
-            ?.directory ?? 'livrables';
-        const root = await this.git.directory(p, copyId);
+            ?.directory ??
+          declared?.directory ??
+          'livrables';
         discovered = (await discoverGitDeliverables(root, directory)).map(
           (d) => ({
             id: d.manifest.id,
@@ -306,6 +319,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         'GIT_DELIVERABLES_SHARED_WRITABLE_COPY_REQUIRED',
       );
     const root = await this.git.directory(p, options.copyId);
+    const index = await readGitDeliverablesIndex(root);
+    if (index && index.directory !== options.directory)
+      throw new ConflictException('GIT_DELIVERABLES_TARGET_ALREADY_BOUND');
     const previous = this.settings(p, options.boardId);
     if (
       previous &&
@@ -321,7 +337,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       options.adoptFolders,
     );
     const changes: Change[] = [];
-    const evidence: unknown[] = [options, previous];
+    const evidence: unknown[] = [options, previous, index];
     const files = new Map<
       string,
       { bytes: Buffer | null; hash: string | null }
@@ -488,6 +504,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           ...l.manifest.documents.map((d) => `${folder}/${d.path}`),
         ];
       });
+    targets.push(gitDeliverablesIndex);
     if (targets.length) {
       const ignored = await this.git.git(
         root,
@@ -511,6 +528,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       local,
       remotes,
       root,
+      index,
       changes,
       files,
       fingerprint: digest(JSON.stringify(evidence)),
@@ -725,6 +743,22 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             settings.bindings[id] = binding;
             this.save(p, options.boardId, settings);
           }
+          await writeGitFile(
+            plan.root,
+            gitDeliverablesIndex,
+            Buffer.from(
+              JSON.stringify(
+                {
+                  format: 'mergeron-deliverables-index',
+                  version: 1,
+                  directory: options.directory,
+                },
+                null,
+                2,
+              ) + '\n',
+            ),
+            plan.index?.hash ?? null,
+          );
           settings.lastSyncAt = Date.now();
           this.save(p, options.boardId, settings);
           const actor = currentAccess()?.identity;
