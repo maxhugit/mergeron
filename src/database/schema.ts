@@ -333,6 +333,7 @@ export const projects = sqliteTable(
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
+    description: text('description').notNull().default(''),
     workspacePath: text('workspace_path').notNull(),
     workspaceLayoutVersion: integer('workspace_layout_version')
       .notNull()

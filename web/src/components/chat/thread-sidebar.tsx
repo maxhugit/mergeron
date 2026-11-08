@@ -689,10 +689,16 @@ export function ThreadSidebar() {
   });
 
   const createProject = useMutation({
-    mutationFn: ({ name }: { name: string }) =>
+    mutationFn: ({
+      name,
+      description,
+    }: {
+      name: string;
+      description: string;
+    }) =>
       projectsApi<{ project: ProjectSummary }>('', {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, description }),
       }),
     onSuccess: () => {
       setCreateProjectOpen(false);
@@ -1260,10 +1266,11 @@ export function ThreadSidebar() {
         pending={createProject.isPending}
         name={createProjectValue}
         onNameChange={setCreateProjectValue}
-        onSave={() => {
+        onSave={(description) => {
           if (createProjectValue.trim())
             createProject.mutate({
               name: createProjectValue.trim(),
+              description,
             });
         }}
         onClose={() => {

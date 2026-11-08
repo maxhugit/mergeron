@@ -26,6 +26,7 @@ export interface ProjectSummary {
   };
   id: string;
   name: string;
+  description?: string;
   workspacePath: string;
   systemWorkspacePath?: string;
   createdAt: number;
