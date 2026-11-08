@@ -28,6 +28,12 @@ it('upgrades an existing installation without changing projects, people, convers
     const before = tables.map((table) =>
       sqlite.prepare(`SELECT * FROM ${table}`).all(),
     );
+    // The later project-description migration adds an empty description;
+    // every pre-existing project field must still remain unchanged.
+    before[0] = before[0].map((row) => ({
+      ...(row as Record<string, unknown>),
+      description: '',
+    }));
     // The later archival migration adds nullable metadata without rewriting
     // any existing conversation data or attributing old archives to a person.
     before[2] = before[2].map((row) => ({

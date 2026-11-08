@@ -55,6 +55,7 @@
   "updateCodexCli": "Mettre à jour Codex CLI",
   "restorePreviousCli": "Rétablir le CLI précédent",
   "cliOperationInProgressDoNotStartNewWork": "Opération en cours sur le CLI. Ne démarrez pas de nouveau travail.",
+  "cliOperationInProgressTitle": "Installation ou modification du CLI en cours…",
   "thisCliInstallationIsManagedExternally": "Cette installation du CLI est gérée en dehors du WebUI",
   "cliUpdatesAreInstalledInPersistentStorageWithoutChangingTheContainerImageCodexM8b37678d": "Les mises à jour du CLI sont installées dans le stockage persistant, sans modifier l’image du conteneur. Codex doit être inactif. En cas d’échec de l’activation, la sélection précédente est restaurée. Un CLI plus récent peut nécessiter une mise à jour du WebUI pour garantir une compatibilité complète.",
   "thisRestartsTheManagedCodexAppServerTheOperationIsRefusedWhileWorkIsActiveConve1489cd27": "Cette opération redémarre le serveur Codex géré par le WebUI. Elle est refusée si du travail est en cours. Les conversations et la configuration sont conservées.",
