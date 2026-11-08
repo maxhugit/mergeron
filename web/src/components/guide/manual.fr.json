@@ -1031,6 +1031,9 @@
             "title": "Planifier avec l’IA",
             "steps": [
               "Décrivez le résultat attendu pour générer un plan de tâches principales, ou sélectionnez une tâche à découper.",
+              "Pour découper une tâche, donnez d’abord vos consignes dans la popup : nombre approximatif d’activités, grandes étapes et niveau de détail. Le micro permet de dicter ce texte.",
+              "Après la proposition, retouchez les sous-tâches ou envoyez un message d’ajustement. Vous pouvez demander une nouvelle proposition autant de fois que nécessaire.",
+              "Validez pour enregistrer le découpage, ou annulez pour abandonner les propositions. Les demandes de proposition seules ne créent ni ne modifient les tâches.",
               "Relisez titres, charges, modes d’exécution et critères proposés avant application.",
               "Pour une replanification, examinez les tâches retenues, dates et dépendances puis appliquez seulement les propositions utiles."
             ],

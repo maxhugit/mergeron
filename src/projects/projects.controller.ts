@@ -507,6 +507,15 @@ export class ProjectsController {
     );
   }
 
+  @Post(':id/resources/:resourceId/ai-subtasks')
+  suggestDraftSubtasks(
+    @Param('id') id: string,
+    @Param('resourceId') resourceId: string,
+    @Body() body: Parameters<ProjectsService['suggestDraftSubtasks']>[2],
+  ) {
+    return this.projects.suggestDraftSubtasks(id, resourceId, body);
+  }
+
   @Post(':id/resources/:resourceId/tasks/:taskId/ai-subtasks')
   suggestSubtasks(
     @Param('id') id: string,
@@ -517,6 +526,9 @@ export class ProjectsController {
       title?: unknown;
       description?: unknown;
       validationCriteria?: unknown;
+      guidance?: unknown;
+      adjustment?: unknown;
+      proposal?: unknown;
     },
   ) {
     return this.projects.suggestSubtasks(id, resourceId, taskId, body);

@@ -1017,6 +1017,9 @@
             "title": "Plan with AI",
             "steps": [
               "Describe an outcome to generate main-task proposals, or select a task to break down.",
+              "When splitting a task, first enter guidance in the popup: approximate activity count, major stages and desired detail. Use the microphone to dictate it.",
+              "After the proposal, edit the subtasks or send an adjustment message. You can request a revised proposal as many times as needed.",
+              "Confirm to save the breakdown, or cancel to discard the proposals. Requesting proposals alone never creates or changes tasks.",
               "Review titles, estimates, execution modes and criteria before applying.",
               "For replanning, inspect selected tasks, dates and dependencies and apply only useful proposals."
             ],

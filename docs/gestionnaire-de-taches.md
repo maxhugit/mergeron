@@ -141,6 +141,24 @@ Les propositions de création et de replanification sont présentées avant
 application. L’utilisateur peut les examiner ; les tâches à replanifier peuvent
 être sélectionnées. Les conseils n’exécutent pas les tâches.
 
+Le bouton **Découper avec l’IA** ouvre d’abord une popup de consignes : indiquez
+le nombre approximatif d’activités, les grandes étapes envisagées et le niveau
+de détail souhaité. Le micro en bas à droite de la zone permet de dicter ce texte.
+La saisie est facultative ; sans précision, l’IA propose un découpage adapté à la tâche.
+
+Après la première proposition, vous pouvez la retoucher manuellement ou envoyer
+un message d’ajustement, également dictable. Chaque demande génère une nouvelle
+proposition complète à partir des consignes initiales, de la proposition courante
+et du nouveau message. Cette boucle peut être répétée jusqu’à satisfaction.
+En cas d’erreur, la proposition courante et le message sont conservés.
+
+**Valider et créer les sous-tâches** enregistre la tâche principale puis applique
+le groupe de sous-tâches. Avant cette validation, les demandes de proposition ne
+créent ni ne modifient les tâches en base, même pour un parent encore en brouillon.
+**Annuler** abandonne le découpage, y compris si une génération est en cours ; une
+réponse tardive ne réouvre pas la popup. Si la création du groupe échoue après
+l’enregistrement du parent, celui-ci reste enregistré et l’erreur est affichée.
+
 Le découpage limite les labels proposés à ceux configurés dans le tableau et
 ne crée pas de dépendances entre sous-tâches. Pour un parent déjà découpé, la
 replanification conserve la charge calculée depuis ses enfants.
@@ -265,6 +283,7 @@ Les routes du tableau partagent le préfixe
 | `POST /ai-plan`                                      | Proposer un plan                                  |
 | `POST /ai-replan`                                    | Proposer une replanification                      |
 | `POST /ai-advice`                                    | Obtenir analyse ou sélection de travail           |
+| `POST /ai-subtasks`                                | Proposer un découpage pour une tâche en brouillon |
 | `POST /tasks/:taskId/ai-subtasks`                    | Proposer un découpage                             |
 | `PATCH /`                                            | Modifier la ressource et ses paramètres           |
 
