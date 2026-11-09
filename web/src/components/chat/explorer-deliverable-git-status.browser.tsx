@@ -228,9 +228,7 @@ test('disabling the project mode discards the previously verified detail', async
     screen.getByRole('button', { name: 'Vérifier la synchronisation locale' }),
   );
   await waitFor(() =>
-    expect(
-      screen.getByText(i18n.t('workspaces:deliverableGitStateOff')),
-    ).toBeVisible(),
+    expect(screen.getByText('Mode Git désactivé')).toBeVisible(),
   );
   expect(screen.queryByText('À jour localement')).toBeNull();
   client.clear();

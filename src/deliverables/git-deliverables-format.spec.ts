@@ -9,7 +9,7 @@ it.each([
   ['Cadrage du site', 'cadrage-du-site'],
   ['Étude / devis : été !', 'etude-devis-ete'],
   ['../...', 'livrable'],
-  ['你好 文档', '你好-文档'],
+  ['Δοκιμή εγγράφου', 'δοκιμη-εγγραφου'],
 ])('creates a readable safe folder for %s', (title, expected) =>
   expect(readableDeliverableFolder(title)).toBe(expected),
 );
@@ -33,7 +33,7 @@ it('keeps portable IDs stable, scoped and separate from local IDs', () => {
     }).id,
   ).toBe(id);
   expect(
-    Buffer.byteLength(readableDeliverableFolder('你好'.repeat(100))),
+    Buffer.byteLength(readableDeliverableFolder('Δοκιμή'.repeat(100))),
   ).toBeLessThan(255);
 });
 
