@@ -203,11 +203,14 @@ n’est exécuté pour interpréter un manifeste.
 
 ## Indicateurs dans la barre latérale Livrables
 
-Le bandeau fixe **Git local** indique la copie sélectionnée et sa branche réelle
+La barre compacte fixe des livrables indique la branche réelle de la copie Git
 (ou la révision en HEAD détachée). Seules les copies de l'agent courant sont
-proposées ; plusieurs copies demandent une sélection explicite. Choisir une copie
+proposées ; une copie unique est sélectionnée automatiquement. Le choix entre
+plusieurs copies reste dans la fenêtre de détails. Choisir une copie
 pour consulter son état ne change ni la référence ni le dossier de travail de
-l'agent. Le bouton de vérification relit l'état ; les changements de fichiers et
+l'agent. Cliquer sur l'indicateur Git ouvre les détails et le bouton de vérification.
+Les icônes de création et de vue fichiers/étiquettes partagent cette même barre ;
+l'indicateur Git disparaît lorsque le mode n'est pas activé. Les changements de fichiers et
 les fins d'exécution déclenchent une actualisation regroupée. La surveillance
 est libérée en quittant la vue. Une attente d'export peut être relue pendant que
 la vue est active, sans interrogation continue en arrière-plan.
@@ -222,7 +225,9 @@ quand les titres sont identiques.
 Le vert exige une comparaison de contenu réussie sur la copie, la branche et le
 HEAD affichés. Une date ancienne de synchronisation ne suffit pas. Pendant une
 nouvelle lecture, lors d'un changement de contexte ou après une erreur, le vert
-précédent est remplacé par l'état de vérification ou d'erreur. Cliquer sur l'icône
+précédent est remplacé par l'état de vérification ou d'erreur dans un emplacement
+de taille fixe. Une simple date de rafraîchissement ne relance pas la comparaison
+si les références métier sont identiques. Cliquer sur l'icône
 ou **Examiner les livrables Git** ouvre le détail en modal ; les personnes sans
 droit d'administration consultent les informations sans actions de mutation.
 

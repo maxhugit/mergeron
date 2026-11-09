@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { suffix } from '@/lib/git-deliverables-api';
 import { translationKey } from '@/locales/translation-key';
 import { useTranslation } from 'react-i18next';
@@ -69,6 +69,7 @@ export function DeliverableGitBadge({
   const { t } = useTranslation('workspaces');
   const state = sync.state(itemId),
     Icon = icons[state];
+  if (!sync.data?.boards.some((board) => board.settings?.enabled)) return null;
   return (
     <button
       type="button"
@@ -90,13 +91,16 @@ export function DeliverableGitBanner({
   sync,
   projectId,
   canManage,
+  children,
 }: {
   sync: Sync;
   projectId: string;
   canManage: boolean;
+  children?: ReactNode;
 }) {
   const { t } = useTranslation('workspaces');
-  const open = sync.reviewOpen;
+  const enabled = sync.data?.boards.some((board) => board.settings?.enabled);
+  const open = sync.reviewOpen && enabled;
   const state = sync.state(),
     Icon = icons[state];
   const branch =
@@ -107,15 +111,50 @@ export function DeliverableGitBanner({
   return (
     <>
       <section
-        className="shrink-0 space-y-1 border-b bg-muted/30 p-2 text-xs"
+        className="flex h-12 shrink-0 min-w-0 items-center gap-1 border-b px-2 text-xs"
         aria-label={t('deliverableGitStatus')}
       >
-        <div className="flex min-w-0 items-center gap-2">
-          <GitBranch className="h-3.5 w-3.5 shrink-0" />
-          <span className="shrink-0">{t('deliverableGitLocal')}</span>
-          {sync.copies.length > 0 && (
+        {sync.data?.boards.some((board) => board.settings?.enabled) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 min-w-0 max-w-[50%] gap-1.5 px-1.5"
+            onClick={() => sync.openReview()}
+            aria-label={`${t('gitDeliverablesReview')} · ${branch} · ${t(translationKey(labels[state]))}`}
+            title={`${sync.copy?.name ?? t('deliverableGitChooseCopy')} · ${branch} · ${t(translationKey(labels[state]))}`}
+          >
+            <GitBranch className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate font-mono">
+              {sync.selectedId ? branch : t('deliverableGitChooseCopy')}
+            </span>
+            <span
+              role="status"
+              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center ${colors(state)}`}
+              aria-label={t(translationKey(labels[state]))}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+          </Button>
+        )}
+        <span className="flex-1" />
+        {children}
+      </section>
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          if (!value) sync.closeReview();
+        }}
+      >
+        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{t('gitDeliverablesReview')}</DialogTitle>
+            <DialogDescription className="text-xs">
+              {t('deliverableGitLocalHelp')}
+            </DialogDescription>
+          </DialogHeader>
+          {sync.copies.length > 1 && (
             <select
-              className="min-w-0 flex-1 rounded border bg-background p-1"
+              className="min-w-0 rounded border bg-background p-1"
               aria-label={t('deliverableGitCopy')}
               value={sync.selectedId ?? ''}
               onChange={(event) => sync.select(event.target.value)}
@@ -131,60 +170,21 @@ export function DeliverableGitBanner({
             </select>
           )}
           <Button
-            size="icon"
+            size="sm"
             variant="ghost"
-            className="h-7 w-7 shrink-0"
+            className="shrink-0 self-start"
             aria-label={t('deliverableGitRefresh')}
             onClick={sync.refresh}
             disabled={sync.checking}
           >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${sync.checking ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className="mr-1 h-3.5 w-3.5" />
+            {t('deliverableGitRefresh')}
           </Button>
-        </div>
-        {sync.selectedId && (
-          <p className="truncate font-mono" title={branch}>
-            {branch}
-          </p>
-        )}
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <span
-            role="status"
-            className={`inline-flex min-w-0 items-center gap-1 ${colors(state)}`}
-          >
-            <Icon
-              className={`h-3.5 w-3.5 shrink-0 ${['checking', 'syncing'].includes(state) ? 'animate-spin' : ''}`}
-            />
-            <span>{t(translationKey(labels[state]))}</span>
-          </span>
-          {sync.selectedId && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 shrink-0 px-2 text-xs"
-              onClick={() => sync.openReview()}
-            >
-              {t('gitDeliverablesReview')}
-            </Button>
-          )}
-        </div>
-      </section>
-      <Dialog
-        open={open}
-        onOpenChange={(value) => {
-          if (!value) sync.closeReview();
-        }}
-      >
-        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{t('gitDeliverablesReview')}</DialogTitle>
-            <DialogDescription className="text-xs">
-              {t('deliverableGitLocalHelp')}
-            </DialogDescription>
-          </DialogHeader>
           <p
             role="status"
+            aria-label={t(
+              translationKey(labels[sync.state(sync.reviewItemId)]),
+            )}
             className={`text-xs ${colors(sync.state(sync.reviewItemId))}`}
           >
             {t(translationKey(labels[sync.state(sync.reviewItemId)]))}

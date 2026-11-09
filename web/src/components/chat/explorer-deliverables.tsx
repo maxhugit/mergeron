@@ -7,7 +7,15 @@ import { useAgentDocumentView } from '@/hooks/use-agent-document-view';
 import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
-import { Package, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Package,
+  PackagePlus,
+  List,
+  Tags,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useDeliverableBoards } from '@/hooks/use-deliverable-directory-aliases';
@@ -64,9 +72,9 @@ export function ExplorerDeliverables({
             item.version,
             item.title,
             item.description,
-            board.dataUpdatedAt,
             item.documents.map((doc) => [
               doc.id,
+              doc.name,
               doc.currentVersionNumber,
               doc.deletedAt,
             ]),
@@ -128,33 +136,52 @@ export function ExplorerDeliverables({
         sync={sync}
         projectId={project.id}
         canManage={session.isAdministrator}
-      />
-      <div className="flex shrink-0 items-center gap-2 border-b p-2 text-xs">
+      >
         {session.isAdministrator && (
           <Button
-            size="sm"
+            size="icon"
             variant="ghost"
+            className="h-8 w-8 shrink-0"
+            aria-label={work('sidebarNewDeliverable')}
+            title={work('sidebarNewDeliverable')}
             disabled={!boards.some((b) => b.data)}
             onClick={() =>
               setCreating(boards.find((b) => b.data)?.data?.resource.id ?? null)
             }
           >
-            {work('sidebarNewDeliverable')}
+            <PackagePlus className="h-4 w-4" />
           </Button>
         )}
-        <select
+        <div
+          className="flex shrink-0 items-center border-l pl-1"
+          role="group"
           aria-label={t('labelsExplorerDisplay')}
-          className="min-w-0 flex-1 rounded border bg-background p-1"
-          value={preference.mode}
-          disabled={!preference.available || preference.loading}
-          onChange={(e) =>
-            preference.setMode(e.target.value as 'plain' | 'labels')
-          }
         >
-          <option value="plain">{t('labelsExplorerPlain')}</option>
-          <option value="labels">{t('labelsExplorerVirtual')}</option>
-        </select>
-      </div>
+          {(['plain', 'labels'] as const).map((value) => {
+            const Icon = value === 'plain' ? List : Tags;
+            const label = t(
+              value === 'plain'
+                ? 'labelsExplorerPlain'
+                : 'labelsExplorerVirtual',
+            );
+            return (
+              <Button
+                key={value}
+                size="icon"
+                variant={preference.mode === value ? 'secondary' : 'ghost'}
+                className="h-8 w-8"
+                aria-label={label}
+                title={label}
+                aria-pressed={preference.mode === value}
+                disabled={!preference.available || preference.loading}
+                onClick={() => preference.setMode(value)}
+              >
+                <Icon className="h-4 w-4" />
+              </Button>
+            );
+          })}
+        </div>
+      </DeliverableGitBanner>
       {(disclosure.error || preference.error) && (
         <p role="alert" className="p-2 text-xs text-destructive">
           {work('sidebarPreferenceError')}

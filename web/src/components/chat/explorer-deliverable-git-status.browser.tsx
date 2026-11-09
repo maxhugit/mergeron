@@ -17,6 +17,8 @@ import { projectsApi } from '@/lib/projects-api';
 import type { Status } from '@/lib/git-deliverables-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+import { Button } from '@/components/ui/button';
+import { PackagePlus, List, Tags } from 'lucide-react';
 vi.mock('@/hooks/use-git-copy-live-updates', () => ({
   useGitCopyLiveUpdates: () => {},
 }));
@@ -32,7 +34,40 @@ export function Panel() {
   const sync = useDeliverableGitStatus('p', 'agent', 'source', 'revision');
   return (
     <div className="flex h-[700px] flex-col overflow-hidden rounded border bg-background text-foreground">
-      <DeliverableGitBanner sync={sync} projectId="p" canManage={false} />
+      <DeliverableGitBanner sync={sync} projectId="p" canManage={false}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 shrink-0"
+          aria-label="Nouveau livrable"
+        >
+          <PackagePlus className="h-4 w-4" />
+        </Button>
+        <div
+          className="flex shrink-0 items-center border-l pl-1"
+          role="group"
+          aria-label="Présentation"
+        >
+          <Button
+            size="icon"
+            variant="secondary"
+            className="h-8 w-8"
+            aria-label="Liste des fichiers"
+            aria-pressed="true"
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            aria-label="Vue par étiquettes"
+            aria-pressed="false"
+          >
+            <Tags className="h-4 w-4" />
+          </Button>
+        </div>
+      </DeliverableGitBanner>
       <div
         role="region"
         aria-label="Synthetic deliverable list"
@@ -125,9 +160,14 @@ test.each([390, 1100])(
     );
     await waitFor(() => expect(screen.getByText('main')).toBeVisible());
     expect(
+      screen.queryByRole('combobox', { name: 'Copie Git des livrables' }),
+    ).toBeNull();
+    expect(
       screen.queryByRole('option', { name: 'Copie autre agent' }),
     ).toBeNull();
-    await waitFor(() => expect(screen.getByText('À examiner')).toBeVisible());
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: 'À examiner' })).toBeVisible(),
+    );
     expect(screen.getAllByTitle('À jour localement').length).toBe(23);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     const banner = screen.getByRole('region', {
@@ -146,7 +186,7 @@ test.each([390, 1100])(
       path: `../../../.vitest-screenshots/deliverables-git-status-${width}.png`,
     });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Examiner les livrables Git' }),
+      screen.getByRole('button', { name: /^Examiner les livrables Git/ }),
     );
     expect(
       await screen.findByText(/ne signifie pas commité ni publié/),
@@ -183,22 +223,41 @@ test('clears the old green state during refresh and shows a read failure without
     </QueryClientProvider>,
   );
   await waitFor(() =>
-    expect(screen.getByText('À jour localement')).toBeVisible(),
+    expect(
+      screen.getByRole('status', { name: 'À jour localement' }),
+    ).toBeVisible(),
+  );
+  const banner = screen.getByRole('region', {
+    name: 'Synchronisation des livrables avec Git local',
+  });
+  const height = banner.getBoundingClientRect().height;
+  expect(height).toBe(48);
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Examiner les livrables Git/ }),
   );
   failing = true;
   fireEvent.click(
     screen.getByRole('button', { name: 'Vérifier la synchronisation locale' }),
   );
   await waitFor(() =>
-    expect(screen.getByText('Vérification en cours')).toBeVisible(),
+    expect(
+      screen.getByRole('status', { name: 'Vérification en cours' }),
+    ).toBeVisible(),
   );
-  expect(screen.queryByText('À jour localement')).toBeNull();
+  expect(
+    screen.queryByRole('status', { name: 'À jour localement' }),
+  ).toBeNull();
   await waitFor(() => expect(rejections.length).toBeGreaterThanOrEqual(2));
   rejections.forEach((reject) => reject(new Error('Synthetic read failure')));
   await waitFor(() =>
-    expect(screen.getByText('Synchronisation indisponible')).toBeVisible(),
+    expect(
+      screen.getByRole('status', { name: 'Synchronisation indisponible' }),
+    ).toBeVisible(),
   );
-  expect(screen.queryByText('À jour localement')).toBeNull();
+  expect(
+    screen.queryByRole('status', { name: 'À jour localement' }),
+  ).toBeNull();
+  expect(banner.getBoundingClientRect().height).toBe(height);
   client.clear();
 });
 
@@ -221,16 +280,25 @@ test('disabling the project mode discards the previously verified detail', async
     </QueryClientProvider>,
   );
   await waitFor(() =>
-    expect(screen.getByText('À jour localement')).toBeVisible(),
+    expect(
+      screen.getByRole('status', { name: 'À jour localement' }),
+    ).toBeVisible(),
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Examiner les livrables Git/ }),
   );
   enabled = false;
   fireEvent.click(
     screen.getByRole('button', { name: 'Vérifier la synchronisation locale' }),
   );
   await waitFor(() =>
-    expect(screen.getByText('Mode Git désactivé')).toBeVisible(),
+    expect(
+      screen.queryByRole('button', { name: /^Examiner les livrables Git/ }),
+    ).toBeNull(),
   );
-  expect(screen.queryByText('À jour localement')).toBeNull();
+  expect(
+    screen.queryByRole('status', { name: 'À jour localement' }),
+  ).toBeNull();
   client.clear();
 });
 
@@ -262,6 +330,9 @@ test('switches owned copies without reusing the previous branch or another agent
     </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.getByText('main')).toBeVisible());
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Examiner les livrables Git/ }),
+  );
   fireEvent.change(
     screen.getByRole('combobox', { name: 'Copie Git des livrables' }),
     { target: { value: 'second' } },
@@ -270,7 +341,9 @@ test('switches owned copies without reusing the previous branch or another agent
     expect(screen.getByText('feature/documents')).toBeVisible(),
   );
   await waitFor(() =>
-    expect(screen.getByText('À jour localement')).toBeVisible(),
+    expect(
+      screen.getByRole('status', { name: 'À jour localement' }),
+    ).toBeVisible(),
   );
   expect(screen.queryByText('main')).toBeNull();
   expect(requests.some((request) => request.includes('copyId=second'))).toBe(

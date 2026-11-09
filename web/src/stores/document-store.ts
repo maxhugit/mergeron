@@ -26,6 +26,8 @@ export type TextModel = ReturnType<Monaco['editor']['createModel']>;
 export type DocumentId = string;
 
 export interface DocumentRecord {
+  editableDeliverable?: boolean;
+  sha256?: string;
   id: DocumentId;
   path: string | null;
   lastPath: string;
@@ -245,6 +247,8 @@ export function reloadDocument(pathOrId: string): Promise<void> {
       updateDocument(id, {
         model,
         savedContent: data.content,
+        sha256: data.sha256,
+        editableDeliverable: data.editableDeliverable,
         revision: data.mtime,
         dirty: false,
         loading: false,
@@ -300,7 +304,12 @@ export async function saveDocument(pathOrId: string): Promise<boolean> {
   beginFileMutation();
   try {
     const { data } = await filesWriteFile({
-      body: { path, content, expectedMtime: current.revision },
+      body: {
+        path,
+        content,
+        expectedMtime: current.revision,
+        ...(current.sha256 ? { expectedSha256: current.sha256 } : {}),
+      },
       throwOnError: true,
     });
     const latest = useDocumentStore.getState().documents[id];
@@ -310,11 +319,14 @@ export async function saveDocument(pathOrId: string): Promise<boolean> {
     )
       updateDocument(id, {
         savedContent: content,
+        sha256: data.sha256,
         revision: data.mtime,
         saving: false,
         dirty: current.model.getValue() !== content,
         conflict: false,
       });
+    if (latest?.locationVersion === current.locationVersion)
+      emitFileChange({ source: 'local', kind: 'invalidate', paths: [path] });
     return latest?.locationVersion === current.locationVersion;
   } catch (error) {
     if (
@@ -387,6 +399,8 @@ export async function saveDocumentAs(
             locationVersion: latest.locationVersion + 1,
             saving: false,
             savedContent: content,
+            sha256: undefined,
+            editableDeliverable: false,
             revision: data.mtime,
             dirty: latest.model?.getValue() !== content,
             error: null,

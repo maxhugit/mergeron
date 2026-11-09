@@ -20,6 +20,11 @@ export class FileEntryDto {
 
 /** Text-file read response. */
 export class FileReadResponseDto {
+  @ApiPropertyOptional()
+  editableDeliverable?: boolean;
+
+  @ApiPropertyOptional()
+  sha256?: string;
   @ApiProperty()
   content!: string;
 
@@ -39,6 +44,8 @@ export class FileReadResponseDto {
 
 /** File write request body. */
 export class WriteFileRequestDto {
+  @ApiPropertyOptional()
+  expectedSha256?: string;
   @ApiProperty()
   path!: string;
 
@@ -51,6 +58,8 @@ export class WriteFileRequestDto {
 
 /** File write response containing the new modification time. */
 export class WriteFileResponseDto {
+  @ApiPropertyOptional()
+  sha256?: string;
   @ApiProperty()
   mtime!: number;
 }

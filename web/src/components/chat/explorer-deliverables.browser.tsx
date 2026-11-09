@@ -185,9 +185,8 @@ test.each([390, 1180])(
       }),
     ).toBeNull();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
-    fireEvent.change(
-      screen.getByRole('combobox', { name: 'Affichage des documents' }),
-      { target: { value: 'labels' } },
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Dossiers d’étiquettes' }),
     );
     fireEvent.click(await screen.findByRole('button', { name: /Sources/ }));
     fireEvent.click(await screen.findByRole('button', { name: /Synthèse/ }));

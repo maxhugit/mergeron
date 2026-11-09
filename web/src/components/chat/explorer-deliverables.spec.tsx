@@ -5,14 +5,18 @@ import { ExplorerDeliverables } from './explorer-deliverables';
 import { useFilesStore } from '@/stores/files-store';
 import type { ProjectSummary } from '@/lib/projects-api';
 import { localExecutionSelection } from '@/lib/project-execution-location';
+const syncProbe = vi.hoisted(() => ({ calls: vi.fn(), updatedAt: 1 }));
 vi.mock('@/hooks/use-deliverable-git-status', () => ({
-  useDeliverableGitStatus: () => ({
-    copies: [],
-    checking: false,
-    state: () => 'off',
-    refresh: () => {},
-    select: () => {},
-  }),
+  useDeliverableGitStatus: (...args: unknown[]) => {
+    syncProbe.calls(...args);
+    return {
+      copies: [],
+      checking: false,
+      state: () => 'off',
+      refresh: () => {},
+      select: () => {},
+    };
+  },
 }));
 vi.mock('@/hooks/use-file-watch', () => ({ useFileWatch: () => {} }));
 vi.mock('@/lib/platform-session', async (importOriginal) => ({
@@ -25,6 +29,7 @@ vi.mock('@/lib/platform-session', async (importOriginal) => ({
 vi.mock('@/hooks/use-deliverable-directory-aliases', () => ({
   useDeliverableBoards: () => [
     {
+      dataUpdatedAt: syncProbe.updatedAt,
       isLoading: false,
       isError: false,
       data: {
@@ -158,4 +163,23 @@ describe('deliverable explorer', () => {
       screen.queryByRole('menuitem', { name: /new folder|move|copy to/i }),
     ).toBeNull();
   });
+});
+
+it('does not schedule another comparison when only the board read timestamp changes', () => {
+  syncProbe.calls.mockClear();
+  syncProbe.updatedAt = 1;
+  const view = fixture();
+  const first = syncProbe.calls.mock.lastCall?.[3];
+  expect(first).toContain('Choix.docx');
+  syncProbe.updatedAt = 999;
+  view.rerender(
+    <QueryClientProvider client={new QueryClient()}>
+      <ExplorerDeliverables
+        project={project}
+        onFile={vi.fn()}
+        pending={false}
+      />
+    </QueryClientProvider>,
+  );
+  expect(syncProbe.calls.mock.lastCall?.[3]).toBe(first);
 });

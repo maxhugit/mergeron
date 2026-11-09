@@ -34,7 +34,9 @@ export function useDeliverableGitStatus(
       ? choice.id
       : preferred.length === 1
         ? preferred[0].id
-        : undefined;
+        : copies.length === 1
+          ? copies[0].id
+          : undefined;
   const copy = copies.find((entry) => entry.id === selectedId);
   useGitCopyLiveUpdates(
     projectId,

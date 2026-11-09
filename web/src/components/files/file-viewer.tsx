@@ -34,16 +34,17 @@ export function FileViewer({
 }) {
   const { t } = useTranslation();
   const selectedFile = filePath;
-  readOnly =
-    readOnly ||
-    /\/\.mergeron-system\//.test(filePath) ||
-    /\/(?:\.mergeron|\.webui)\/(?!imported-(?:workspaces|attachments)(?:\/|$))/.test(
-      filePath,
-    );
   const document = useDocumentStore((state) => {
     const id = documentId ?? state.pathIndex[filePath];
     return id ? state.documents[id] : undefined;
   });
+  readOnly =
+    readOnly ||
+    (document?.editableDeliverable !== true &&
+      (/\/\.mergeron-system\//.test(filePath) ||
+        /\/(?:\.mergeron|\.webui)\/(?!imported-(?:workspaces|attachments)(?:\/|$))/.test(
+          filePath,
+        )));
   useEffect(() => {
     const id = documentId ?? ensureDocumentIdentity(filePath);
     const owner = `viewer:${viewId}`;
