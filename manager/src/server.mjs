@@ -548,6 +548,7 @@ const server = http.createServer(async (request, response) => {
         backupManagement: true,
         backupRetention: true,
         backupSelection: true,
+        essentialBackup: true,
         updateHistory: true,
         backupRestore: true,
         imageUpdates: true,
@@ -698,14 +699,21 @@ const server = http.createServer(async (request, response) => {
         throw new Error('managerOperationInProgress');
       const body = await readJsonBody(request);
       if (request.url === '/v1/update/checkpoint-plan')
-        json(response, 200, await updater.planCheckpoint('full'));
+        json(
+          response,
+          200,
+          await updater.planCheckpoint(
+            body.backupMode === undefined ? 'full' : body.backupMode,
+          ),
+        );
       else if (request.url === '/v1/update/checkpoint')
         json(
           response,
           200,
           await updater.begin({
             checkpoint: true,
-            backupMode: 'full',
+            backupMode:
+              body.backupMode === undefined ? 'full' : body.backupMode,
             confirmation: body.confirmation,
             expectedFingerprint: body.expectedFingerprint,
             actor: body.actor,

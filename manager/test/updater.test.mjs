@@ -436,7 +436,7 @@ async function legacyBackup(t, updater) {
 }
 
 for (const environment of ['production', 'development']) {
-  for (const backupMode of ['full', 'minimal', 'none']) {
+  for (const backupMode of ['full', 'essential', 'minimal', 'none']) {
     test(`${environment} explicitly selects ${backupMode}, recovers after restart and preserves excluded data`, async (t) => {
       const { updater, root, options } = await fixture(t, environment);
       const files = {
@@ -446,6 +446,14 @@ for (const environment of ['production', 'development']) {
         'home/.codex/sessions/conversation.jsonl': 'conversation-before',
         'workspace/project/livrables/document.docx': 'document-before',
         'workspace/project/node_modules/cache': 'cache-before',
+        'home/.codex/cache/remote_plugin_catalog/catalog.json':
+          'catalog-before',
+        'home/.codex/cache/codex_apps_tools/tools.json': 'tools-before',
+        'home/.codex/plugins/cache/custom/plugin.txt': 'custom-before',
+        'home/.codex/.tmp/plugins/personal.txt': 'unknown-temporary-before',
+        'home/.codex/webui/cli/releases/test/codex': 'cli-before',
+        'home/.local/bin/mise': 'runtime-before',
+        'logs/app.log': 'log-before',
       };
       for (const [name, value] of Object.entries(files)) {
         await mkdir(join(root, name, '..'), { recursive: true });
@@ -516,12 +524,18 @@ for (const environment of ['production', 'development']) {
       for (const [name, value] of Object.entries(files)) {
         const included =
           backupMode === 'full' ||
+          (backupMode === 'essential' &&
+            !name.startsWith('logs/') &&
+            !name.startsWith('home/.codex/cache/')) ||
           (backupMode === 'minimal' && /sqlite|config.toml/.test(name));
-        assert.equal(
-          await readFile(join(root, name), 'utf8'),
-          included ? value : 'after',
-          name,
-        );
+        if (backupMode === 'essential' && name.startsWith('home/.codex/cache/'))
+          await assert.rejects(lstat(join(root, name)), { code: 'ENOENT' });
+        else
+          assert.equal(
+            await readFile(join(root, name), 'utf8'),
+            included ? value : 'after',
+            name,
+          );
       }
       if (backupMode !== 'none')
         await assert.rejects(
@@ -2020,4 +2034,70 @@ test('blocked full rollback permissions prevent update acceptance before any ser
     }),
   );
   assert(!docker.calls.some(([action]) => action === 'stop'));
+});
+
+test('essential manual checkpoint restores retained data through the historical restore path', async (t) => {
+  const { updater, root } = await fixture(t);
+  const kept = 'home/.codex/sessions/retained.jsonl';
+  const cache = 'home/.codex/cache/remote_plugin_catalog/catalog.json';
+  for (const name of [kept, cache]) {
+    await mkdir(join(root, name, '..'), { recursive: true });
+    await writeFile(join(root, name), 'before');
+  }
+  const plan = await updater.planCheckpoint('essential');
+  assert.equal(plan.backupPolicy, 'essential-v1');
+  assert.ok(plan.excludedFromDataRollback.includes('logs'));
+  await updater.begin({
+    checkpoint: true,
+    backupMode: 'essential',
+    confirmation: 'CREATE_BACKUP',
+    expectedFingerprint: plan.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'succeeded');
+  const id = updater.current.id;
+  for (const name of [kept, cache]) await writeFile(join(root, name), 'after');
+  const restore = await updater.planRestore(id);
+  assert.equal(restore.restorePolicy, 'essential-v1');
+  await updater.begin({
+    restoreSource: id,
+    images: restore.images,
+    confirmation: restore.confirmation,
+    expectedFingerprint: restore.fingerprint,
+  });
+  await updater.task;
+  assert.equal(updater.current.status, 'succeeded');
+  assert.equal(await readFile(join(root, kept), 'utf8'), 'before');
+  await assert.rejects(lstat(join(root, cache)), { code: 'ENOENT' });
+});
+
+test('essential preflight refuses a relocated profile or database under an excluded root before stopping services', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const app = docker.values.get('original-application');
+  const original = app.Config.Env;
+  for (const override of [
+    'CODEX_HOME=/home/codex/.codex/cache/remote_plugin_catalog/profile',
+    'WEBUI_DB_PATH=/home/codex/.codex/cache/codex_apps_tools/../codex_apps_tools/state.db',
+    'WEBUI_DB_PATH=/app/logs/database.sqlite',
+  ]) {
+    app.Config.Env = [...original, override];
+    const plan = await updater.plan(images, 'standard', 'essential');
+    assert.equal(plan.applicable, false);
+    assert.ok(plan.blockers.includes('updateEssentialBackupPathUnsupported'));
+    await assert.rejects(
+      updater.begin({
+        images,
+        backupMode: 'essential',
+        confirmation: plan.confirmation,
+        expectedFingerprint: plan.fingerprint,
+      }),
+      /updateBlocked/,
+    );
+    assert.ok(!docker.calls.some(([action]) => action === 'stop'));
+  }
+  app.Config.Env = [...original, 'CODEX_HOME=/home/codex/custom-profile'];
+  assert.equal(
+    (await updater.plan(images, 'standard', 'essential')).applicable,
+    true,
+  );
 });

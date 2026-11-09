@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 test.each([1000, 390])(
-  'shows all three backup scopes without overflow at %ipx',
+  'shows all four backup scopes without overflow at %ipx',
   async (width) => {
     await page.viewport(width, 900);
     await i18nReady;
@@ -75,7 +75,7 @@ test.each([1000, 390])(
       dockerConnected: true,
       components: [],
       dataSafety: { status: 'protected', blockers: [], protectedMounts: [] },
-      capabilities: { backupSelection: true },
+      capabilities: { backupSelection: true, essentialBackup: true },
       update: { busy: false, operation: null },
     };
     render(
@@ -90,8 +90,17 @@ test.each([1000, 390])(
         name: 'Stratégie de sauvegarde',
       });
       expect(select).toHaveValue('full');
-      expect(screen.getAllByRole('option')).toHaveLength(3);
+      expect(screen.getAllByRole('option')).toHaveLength(4);
       await waitFor(() => expect(select).toBeEnabled());
+      fireEvent.change(select, { target: { value: 'essential' } });
+      expect(
+        await screen.findByText(
+          /Documents, conversations, configuration et outils conservés/,
+        ),
+      ).toBeVisible();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/essential-backup-${width}.png`,
+      });
       fireEvent.change(select, { target: { value: 'minimal' } });
       expect(
         await screen.findByText(/Base et configuration uniquement/),

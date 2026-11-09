@@ -7,6 +7,8 @@ export function backupDescription(policy?: ManagerBackupPolicy) {
   switch (policy) {
     case 'full-v1':
       return 'managerFullBackupHelp';
+    case 'essential-v1':
+      return 'managerEssentialBackupHelp';
     case 'minimal-v1':
       return 'managerMinimalBackupHelp';
     case 'none-v1':
@@ -22,6 +24,7 @@ export function backupDescription(policy?: ManagerBackupPolicy) {
 
 export function backupLabel(policy?: ManagerBackupPolicy) {
   if (withoutDataBackup(policy)) return 'managerNoBackup';
+  if (policy === 'essential-v1') return 'managerEssentialBackup';
   if (policy === 'minimal-v1') return 'managerMinimalBackup';
   if (policy === 'full-v1') return 'managerFullBackup';
   return policy === 'production-essential-v1'

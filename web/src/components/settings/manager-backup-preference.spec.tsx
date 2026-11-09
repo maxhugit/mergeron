@@ -1,8 +1,11 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { catalogFixture, json } from './catalog/catalog.testing';
+import { ManagerBackups } from './manager-backups';
+import { ManagerRestoreBackup } from './manager-restore-backup';
 import { ManagerUpdateControls } from './manager-update-controls';
 import type { ManagerStatus } from './manager-status-api';
 import {
@@ -42,7 +45,7 @@ const status: ManagerStatus = {
   mode: 'observe',
   dockerConnected: true,
   components: [],
-  capabilities: { backupSelection: true },
+  capabilities: { backupSelection: true, essentialBackup: true },
   dataSafety: { status: 'protected', blockers: [], protectedMounts: [] },
   update: { busy: false, operation: null },
 };
@@ -64,9 +67,11 @@ afterEach(() => {
 
 it.each([
   ['full', 'Mettre à jour'],
+  ['essential', 'Mettre à jour'],
   ['minimal', 'Mettre à jour'],
   ['none', 'Mettre à jour'],
   ['full', 'Test ingress update'],
+  ['essential', 'Test ingress update'],
   ['minimal', 'Test ingress update'],
   ['none', 'Test ingress update'],
 ] as const)(
@@ -134,11 +139,13 @@ it.each([
     await user.click(screen.getByRole('button', { name: trigger }));
     const confirmation = await screen.findByRole('alertdialog');
     expect(confirmation).toHaveTextContent(
-      value === 'minimal'
-        ? /La base entière et la configuration/
-        : value === 'none'
-          ? /Aucune donnée ne sera sauvegardée/
-          : /indisponibles pendant la sauvegarde/,
+      value === 'essential'
+        ? /Les outils, documents et historiques sont inclus/
+        : value === 'minimal'
+          ? /La base entière et la configuration/
+          : value === 'none'
+            ? /Aucune donnée ne sera sauvegardée/
+            : /indisponibles pendant la sauvegarde/,
     );
     // A later server preference must not change the scope already reviewed.
     if (value === 'minimal') {
@@ -216,4 +223,134 @@ it('keeps an unsuccessful save as a draft and does not claim it was persisted', 
   expect(fixture.queryClient.getQueryData(updateBackupModeQueryKey)).toBe(
     'full',
   );
+});
+
+it('blocks a persisted essential choice on an older Manager instead of silently changing its scope', async () => {
+  fixture.server.overrides.set(`GET ${preferencePath}`, () =>
+    json({ key: updateBackupModeKey, value: 'essential' }),
+  );
+  fixture.render(
+    <ManagerUpdateControls
+      status={{ ...status, capabilities: { backupSelection: true } }}
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('combobox')).toHaveValue('essential'),
+  );
+  expect(
+    screen.getByRole('option', { name: 'Données essentielles' }),
+  ).toBeDisabled();
+  expect(
+    await screen.findByText(/Ce Manager ne prend pas encore en charge/),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Test ingress update' }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: /^Mettre à jour$/ }),
+  ).toBeDisabled();
+  expect(fixture.server.writes).toHaveLength(0);
+});
+
+it('a manual essential backup executes the reviewed scope even if the parent choice changes', async () => {
+  const user = userEvent.setup();
+  const calls: { path: string; body: Record<string, unknown> }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input).endsWith('/checkpoint-plan')
+        ? 'plan'
+        : 'execute';
+      calls.push({ path, body: JSON.parse(String(init?.body)) });
+      return json(
+        path === 'plan'
+          ? {
+              applicable: true,
+              fingerprint: 'essential-reviewed',
+              images: {},
+              blockers: [],
+              backupMode: 'essential',
+              backupPolicy: 'essential-v1',
+            }
+          : { busy: true, operation: null },
+      );
+    }),
+  );
+  const close = vi.fn();
+  const view = fixture.render(
+    <ManagerRestoreBackup
+      backup={null}
+      backupMode="essential"
+      onClose={close}
+    />,
+  );
+  expect(
+    screen.getByText(/Conserve la base, la configuration, les secrets/),
+  ).toBeVisible();
+  await user.click(
+    screen.getByRole('button', { name: 'Vérifier la sauvegarde' }),
+  );
+  await user.click(await screen.findByRole('checkbox'));
+  view.rerender(
+    <QueryClientProvider client={fixture.queryClient}>
+      <ManagerRestoreBackup backup={null} backupMode="full" onClose={close} />
+    </QueryClientProvider>,
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Créer une sauvegarde' }),
+  );
+  await waitFor(() => expect(calls).toHaveLength(2));
+  expect(calls[0]).toEqual({ path: 'plan', body: { backupMode: 'essential' } });
+  expect(calls[1].body).toMatchObject({
+    backupMode: 'essential',
+    confirmation: 'CREATE_BACKUP',
+    expectedFingerprint: 'essential-reviewed',
+  });
+});
+
+it('keeps historical restoration available when the current creation preference is none', async () => {
+  fixture.server.overrides.set(`GET ${preferencePath}`, () =>
+    json({ key: updateBackupModeKey, value: 'none' }),
+  );
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      json(
+        String(input).endsWith('/retention')
+          ? { maxBackups: 10 }
+          : {
+              backups: [
+                {
+                  id: 'saved',
+                  createdAt: '2026-11-09T00:00:00Z',
+                  backupPolicy: 'full-v1',
+                  restorable: true,
+                  canDelete: false,
+                  sizeBytes: 100,
+                },
+              ],
+              totalSizeBytes: 100,
+            },
+      ),
+    ),
+  );
+  fixture.render(
+    <ManagerBackups
+      status={{
+        ...status,
+        capabilities: {
+          backupSelection: true,
+          backupManagement: true,
+          backupRestore: true,
+        },
+      }}
+    />,
+  );
+  await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('none'));
+  expect(
+    screen.getByRole('button', { name: 'Créer une sauvegarde' }),
+  ).toBeDisabled();
+  expect(
+    await screen.findByRole('button', { name: /^Restaurer$/ }),
+  ).toBeEnabled();
 });

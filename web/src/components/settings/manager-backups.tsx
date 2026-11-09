@@ -1,3 +1,4 @@
+import { useUpdateBackupMode } from './use-update-backup-mode';
 import { useState } from 'react';
 import { backupLabel, withoutDataBackup } from './manager-backup-policy';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -127,6 +128,12 @@ export function ManagerBackups({
   status: ManagerStatus;
   showPreference?: boolean;
 }) {
+  const preference = useUpdateBackupMode(
+    status.capabilities?.backupSelection === true,
+  );
+  const creationMode = status.capabilities?.backupSelection
+    ? preference.value
+    : 'full';
   const { t, i18n } = useTranslation('manager');
   const client = useQueryClient();
   const [selected, setSelected] = useState<ManagerBackup | null>(null);
@@ -188,6 +195,11 @@ export function ManagerBackups({
             disabled={
               busy ||
               !status.capabilities?.backupRestore ||
+              !preference.ready ||
+              preference.saving ||
+              creationMode === 'none' ||
+              (creationMode === 'essential' &&
+                !status.capabilities?.essentialBackup) ||
               status.update?.operation?.status === 'recoveryRequired'
             }
             onClick={() => setCreating(true)}
@@ -200,7 +212,11 @@ export function ManagerBackups({
       <div className="grid shrink-0 items-start gap-3 md:grid-cols-2">
         {status.capabilities?.backupSelection ? (
           showPreference ? (
-            <UpdateBackupPreference status={status} busy={busy} />
+            <UpdateBackupPreference
+              preference={preference}
+              status={status}
+              busy={busy}
+            />
           ) : null
         ) : (
           status.backupPolicy && (
@@ -437,6 +453,7 @@ export function ManagerBackups({
       {creating && (
         <ManagerRestoreBackup
           backup={null}
+          backupMode={creationMode === 'none' ? 'full' : creationMode}
           onClose={() => setCreating(false)}
         />
       )}

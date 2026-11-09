@@ -52,6 +52,8 @@ import {
   LEGACY_FULL,
   withoutDataBackup,
   minimalHomeEntries,
+  essentialPathsSupported,
+  ESSENTIAL,
 } from './backup-policy.mjs';
 import {
   assertCliPolicyImage,
@@ -654,7 +656,7 @@ export class TransactionalUpdater {
   }
 
   async planCheckpoint(backupMode = 'full') {
-    if (!['full', 'minimal'].includes(backupMode))
+    if (!['full', 'essential', 'minimal'].includes(backupMode))
       throw Error('updateConfirmationRequired');
     const inventory = await collectInventory(this.manifest, this.docker);
     const application = inventory.components.find(
@@ -1233,6 +1235,15 @@ export class TransactionalUpdater {
         else throw error;
       }
     }
+    if (backupPolicy === ESSENTIAL) {
+      const application = containers.find(
+        (item) => item.component === 'application',
+      );
+      if (!application) throw new Error('updateBlocked');
+      const inspect = await this.docker.inspectContainer(application.id);
+      if (!essentialPathsSupported(inspect.Config.Env))
+        blockers.push('updateEssentialBackupPathUnsupported');
+    }
     let backupScope = backupEntries(backupPolicy);
     if (backupPolicy === MINIMAL) {
       const application = containers.find(
@@ -1289,9 +1300,16 @@ export class TransactionalUpdater {
               'logs',
               'other-home-files',
             ]
-          : backupPolicy === LEGACY_FULL || backupPolicy === 'full-v1'
-            ? ['/appdata']
-            : ['/appdata', 'logs', 'regenerable-caches-and-dependencies'],
+          : backupPolicy === ESSENTIAL
+            ? [
+                '/appdata',
+                'logs',
+                'home/.codex/cache/remote_plugin_catalog',
+                'home/.codex/cache/codex_apps_tools',
+              ]
+            : backupPolicy === LEGACY_FULL || backupPolicy === 'full-v1'
+              ? ['/appdata']
+              : ['/appdata', 'logs', 'regenerable-caches-and-dependencies'],
       confirmation: updateConfirmation(backupPolicy),
       busy: this.busy,
     };

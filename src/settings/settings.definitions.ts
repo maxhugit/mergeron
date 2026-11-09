@@ -137,7 +137,7 @@ export const SETTINGS_DEFINITIONS = [
     description:
       'Saved backup scope for updates of this installation. Each update still requires its own reviewed plan and confirmation.',
     defaultValue: 'full',
-    constraints: { enum: ['full', 'minimal', 'none'] },
+    constraints: { enum: ['full', 'essential', 'minimal', 'none'] },
   },
   {
     key: SECURITY_SETTING_KEYS.projectAgentTestProfile,

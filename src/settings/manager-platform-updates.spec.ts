@@ -170,3 +170,32 @@ it('does not let an HTTP caller restore per-container selection by disabling aut
     expect.objectContaining({ automatic: true, backupMode: 'minimal' }),
   );
 });
+
+it('forwards the reviewed manual backup mode through the controller without replacing it by full', async () => {
+  const updateOperation = vi.fn().mockResolvedValue({ applicable: true });
+  const controller = new SettingsController(
+    {} as ConstructorParameters<typeof SettingsController>[0],
+    { updateOperation } as unknown as ManagerStatusService,
+    {} as ConstructorParameters<typeof SettingsController>[2],
+  );
+  await controller.managerCheckpointPlan({ backupMode: 'essential' });
+  expect(updateOperation).toHaveBeenLastCalledWith('checkpoint-plan', {
+    backupMode: 'essential',
+  });
+  await controller.managerCheckpoint(
+    {
+      backupMode: 'essential',
+      confirmation: 'CREATE_BACKUP',
+      expectedFingerprint: 'reviewed',
+    },
+    {} as Parameters<typeof controller.managerCheckpoint>[1],
+  );
+  expect(updateOperation).toHaveBeenLastCalledWith(
+    'checkpoint',
+    expect.objectContaining({
+      backupMode: 'essential',
+      confirmation: 'CREATE_BACKUP',
+      expectedFingerprint: 'reviewed',
+    }),
+  );
+});

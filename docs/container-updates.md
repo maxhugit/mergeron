@@ -82,7 +82,7 @@ des différences : aucun historique de sécurité ou d’améliorations n’est 
 L’interface prépare le plan existant avec
 `images: { [componentId]: "repository@sha256:…" }`, puis transmet le fingerprint
 vérifié et la confirmation du plan : `UPDATE_WITHOUT_DATA_BACKUP` sans sauvegarde de données,
-`UPDATE_WITH_ROLLBACK` avec sauvegarde complète ou minimale. Le choix enregistré
+`UPDATE_WITH_ROLLBACK` avec sauvegarde Complète, Données essentielles ou Base et configuration. Le choix enregistré
 de sauvegarde est utilisé par le processus, indépendamment du canal dev ou prod. Une modification d’état entre
 préparation et application invalide le plan. La détection ne crée pas de nouvelle
 voie d’exécution et ne modifie pas les règles d’autorisation du Manager.
