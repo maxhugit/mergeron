@@ -1450,7 +1450,7 @@
           {
             "title": "Activer après prévisualisation",
             "paragraphs": [
-              "Dans les paramètres du projet, ouvrez Emplacements et connexions puis Livrables Git. Le gestionnaire unique est utilisé automatiquement. Activez le mode du projet et enregistrez le dossier cible. Chaque agent qui modifie un livrable doit avoir sa propre copie Git disponible en écriture. Examinez les imports depuis la copie concernée avant de les confirmer. Aucun commit ou push n’est automatique.",
+              "Dans les paramètres du projet, ouvrez Emplacements et connexions puis Livrables Git. Le gestionnaire unique est utilisé automatiquement. Activez le mode du projet et enregistrez le dossier cible. Le mode peut être enregistré sans copie Git. Les modifications restent enregistrées dans Mergeron ; leur export attend une copie propre à l’agent, prête en écriture. Examinez les imports depuis la copie concernée avant de les confirmer. Aucun commit ou push n’est automatique.",
               "À l’ouverture d’un dépôt, les fichiers livrable.json permettent de reconnaître les livrables. Le bandeau Examiner les livrables Git ouvre la proposition d’import. Pour un dépôt sans manifestes, vous pouvez proposer la conversion des sous-dossiers contenant des fichiers directs."
             ]
           },
@@ -1478,7 +1478,7 @@
           {
             "title": "Préparer et confirmer",
             "paragraphs": [
-              "Le mode Livrables Git est facultatif et désactivé par défaut. Un administrateur active ce mode pour le projet et définit un dossier relatif. Le gestionnaire unique est utilisé automatiquement ; chaque agent qui modifie un livrable doit disposer de sa propre copie Git prête en écriture. Sans copie, la modification est refusée avec un message explicite.",
+              "Le mode Livrables Git est facultatif et désactivé par défaut. Un administrateur active ce mode pour le projet et définit un dossier relatif. Le gestionnaire unique est utilisé automatiquement ; Mergeron conserve les modifications même sans copie locale. L’export attend une copie Git propre à l’agent, prête en écriture.",
               "Prévisualiser les changements ne modifie rien. Relisez imports, exports, exclusions et conflits avant Confirmer et synchroniser. À l’ouverture d’une copie, Examiner les livrables Git permet de consulter les manifestes reconnus ; leur import reste explicite."
             ]
           },
@@ -1487,7 +1487,7 @@
             "paragraphs": [
               "L’index .mergeron-deliverables.json, les manifestes livrable.json et les documents doivent être commités pour rendre le dépôt portable. Le dossier peut être personnalisé sans sortir du dépôt.",
               "Les versions et validations de Mergeron restent distinctes des commits. Chaque copie d’agent conserve ses propres bases de comparaison. Une ancienne copie partagée reste intacte mais n’est plus utilisée pour les écritures automatiques.",
-              "La confirmation est liée à la branche et au commit examinés. Le tableau des copies conserve les erreurs et les exports en attente séparément. Une copie en conflit ne bloque pas les autres. Après un redémarrage, utilisez Examiner les livrables Git pour reprendre avec vos droits actuels. Une modification refusée pendant une synchronisation peut être réessayée ensuite."
+              "La confirmation est liée à la branche et au commit examinés. Le tableau des copies conserve les erreurs et les exports en attente séparément. Une copie en conflit ne bloque pas les autres. Après un redémarrage, utilisez Examiner les livrables Git pour reprendre avec vos droits actuels. Une modification refusée pendant une synchronisation peut être réessayée ensuite. Un ancien contenu Git reconnu dans les versions conservées est réexporté depuis Mergeron ; un contenu Git inconnu reste à examiner et les changements des deux côtés provoquent un conflit. La comparaison repose sur le contenu, jamais sur la date du fichier."
             ],
             "warning": "Une synchronisation n’est ni une validation humaine ni un push Git. Examinez les conflits et conservez les sauvegardes nécessaires avant de confirmer les échanges."
           }

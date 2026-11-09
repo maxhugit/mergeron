@@ -32,6 +32,7 @@ export interface Status {
   }[];
   discovered: { id: string; title: string; documents: number }[];
   discoveryError: string | null;
+  proposal?: Preview | null;
 }
 export type Preview = {
   fingerprint: string;

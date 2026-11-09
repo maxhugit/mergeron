@@ -55,6 +55,7 @@ export interface WorkspaceCopyView extends ProjectWorkspaceCopy {
 /** Creates isolated, explicit local copies of resources for project activities. */
 @Injectable()
 export class WorkspaceCopiesService {
+  onCopyReady?: (projectId: string) => void;
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     private readonly resources: WorkspaceResourcesService,
@@ -211,6 +212,7 @@ export class WorkspaceCopiesService {
         });
         if (agentId) claimAgentCopy(tx, projectId, agentId, id);
       });
+      this.onCopyReady?.(projectId);
       return this.view(
         this.db
           .select()

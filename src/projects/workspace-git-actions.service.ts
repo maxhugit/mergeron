@@ -1572,7 +1572,12 @@ export class WorkspaceGitActionsService {
     operation: () => Promise<T>,
   ) {
     const { projectId, copyId } = copy;
-    if (!preparer) return this.gate.mutate(operation);
+    const observedOperation = async () => {
+      const result = await operation();
+      this.git.onWorkingCopyChanged?.(projectId, copyId);
+      return result;
+    };
+    if (!preparer) return this.gate.mutate(observedOperation);
     if (body.agentThreadId !== preparer.threadId)
       throw new ForbiddenException('GIT_COPY_OWNED');
     requireThreadAccess(preparer.threadId);
@@ -1585,7 +1590,7 @@ export class WorkspaceGitActionsService {
       preparer.threadId,
       async () => {
         preparer.assertActive();
-        return operation();
+        return observedOperation();
       },
       scope,
     );

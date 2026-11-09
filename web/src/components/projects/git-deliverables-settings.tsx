@@ -409,7 +409,8 @@ function GitDeliverablesConfiguration({
         )}
         <Button
           disabled={
-            mutation.isPending || (enabled && (!available || !directory))
+            mutation.isPending ||
+            (enabled && (!directory || (!!copyId && !available)))
           }
           onClick={() =>
             mutation.mutate(

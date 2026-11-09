@@ -564,7 +564,7 @@ describe('optional Git deliverables with real retained versions and a real repos
         enabled: true,
         directory: 'livrables',
       }),
-    ).toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+    ).not.toThrow();
     expect(
       service.configure('p', {
         boardId: 'board',
@@ -606,45 +606,49 @@ describe('optional Git deliverables with real retained versions and a real repos
       copyPath: repo,
     });
   });
-  it('rejects agent modifications before changing versions or metadata if their copy is absent', async () => {
+  it('retains agent edits without a copy and never borrows another agent copy', async () => {
     const item = await deliverables.create('p', 'board', {
       title: 'Preserved',
     });
     const doc = await upload(item.id, 'original');
     await sync();
     service.onModuleInit();
-    await expect(
-      asAgent('missing-agent', () =>
-        deliverables.create('p', 'board', { title: 'Must not exist' }),
-      ),
-    ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
-    expect(() =>
-      asAgent('missing-agent', () =>
-        deliverables.update('p', 'board', item.id, {
-          title: 'Must not change',
-          version: item.version,
-        }),
-      ),
-    ).toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
-    await expect(
-      asAgent('missing-agent', () => upload(item.id, 'must not save', doc.id)),
-    ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
-    expect(() =>
-      asAgent('missing-agent', () =>
-        organization.createLabel('p', 'board', item.id, {
-          name: 'No label',
-          expectedRevision: 0,
-        }),
-      ),
-    ).toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
-    expect(deliverables.board('p', 'board').deliverables).toHaveLength(1);
-    expect(deliverables.get('p', 'board', item.id).title).toBe('Preserved');
+    await asAgent('missing-agent', () =>
+      deliverables.create('p', 'board', { title: 'Without Git' }),
+    );
+    asAgent('missing-agent', () =>
+      deliverables.update('p', 'board', item.id, {
+        title: 'New title',
+        version: deliverables.get('p', 'board', item.id).version,
+      }),
+    );
+    await asAgent('missing-agent', () =>
+      upload(item.id, 'saved without Git', doc.id),
+    );
+    asAgent('missing-agent', () =>
+      organization.createLabel('p', 'board', item.id, {
+        name: 'Retained label',
+        expectedRevision: 0,
+      }),
+    );
+    expect(deliverables.board('p', 'board').deliverables).toHaveLength(2);
+    expect(deliverables.get('p', 'board', item.id).title).toBe('New title');
     expect(
       deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
-    ).toBe(1);
+    ).toBe(2);
+    expect(
+      await fs.readFile(
+        path.join(repo, 'livrables', item.id, 'notes.md'),
+        'utf8',
+      ),
+    ).toBe('original');
     await fs.rename(repo, repo + '-moved');
+    await asAgent('agent', () => upload(item.id, 'clone unavailable', doc.id));
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
+    ).toBe(3);
     await expect(
-      asAgent('agent', () => upload(item.id, 'lost clone', doc.id)),
+      asAgent('missing-agent', () => service.preview('p', options)),
     ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
   });
   it('keeps independent comparison baselines for two agent clones without writing the other copy', async () => {

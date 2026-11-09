@@ -1164,7 +1164,10 @@ describe('remote branch retrieval', () => {
     const index = await readFile(path.join(cwd, '.git/index'));
     const head = (await git(['rev-parse', 'HEAD'])).stdout;
     const calls = fixtureTransport();
+    const changed = vi.fn();
+    service.onWorkingCopyChanged = changed;
     await actions.retrieveBranch('p', copyId, body);
+    expect(changed).toHaveBeenCalledExactlyOnceWith('p', copyId);
     expect(calls()).toBe(1);
     expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(body.revision);
     expect((await git(['show', 'dev:remote-only.txt'])).stdout).toBe(

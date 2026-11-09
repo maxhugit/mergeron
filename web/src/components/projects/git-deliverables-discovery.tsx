@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { projectsApi } from '@/lib/projects-api';
-import { key, url, type Status } from '@/lib/git-deliverables-api';
+import { key, url, post, type Status } from '@/lib/git-deliverables-api';
 const GitDeliverablesSettings = lazy(() =>
   import('./git-deliverables-settings').then((m) => ({
     default: m.GitDeliverablesSettings,
@@ -40,6 +40,14 @@ export function GitDeliverablesDiscovery({
     gcTime: 60_000,
     retry: false,
   });
+  useEffect(() => {
+    // Reconcile inspected copies, including changes made through a native CLI.
+    // The server retains the caller's identity and never imports automatically.
+    void post(projectId, '/reconcile', {}).catch(() => undefined);
+  }, [projectId, copyId, inspectedAt]);
+  const needsReview = query.data?.proposal?.changes.some(
+    (change) => change.action === 'import' || change.action === 'conflict',
+  );
   const active = query.data?.boards?.some(
     (b) =>
       b.settings?.enabled &&
@@ -56,6 +64,7 @@ export function GitDeliverablesDiscovery({
               count: query.data?.discovered?.length ?? 0,
             })}
       </p>
+      {needsReview && <p role="status">{t('gitDeliverablesIncomingReview')}</p>}
       {query.data?.discoveryError && (
         <p role="alert">{t('gitDeliverablesUnavailable')}</p>
       )}
