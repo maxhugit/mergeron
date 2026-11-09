@@ -95,6 +95,8 @@ export function ManagerUpdateControls({
   const backupSelection = status.capabilities?.backupSelection === true;
   const backupPreference = useUpdateBackupMode(backupSelection);
   const backupMode = backupPreference.value;
+  const unsupportedBackup =
+    backupMode === 'essential' && !status.capabilities?.essentialBackup;
   const backupInput = backupSelection ? { backupMode } : {};
   const image =
     imageOverride ?? defaultManagerUpdateImage(status, release.data);
@@ -208,6 +210,7 @@ export function ManagerUpdateControls({
           !status.available ||
           !status.capabilities?.backupSelection ||
           !backupPreference.ready ||
+          unsupportedBackup ||
           backupPreference.saving,
         ),
         onUpdate: () =>
@@ -250,6 +253,7 @@ export function ManagerUpdateControls({
             !status.available ||
             blocked ||
             !backupPreference.ready ||
+            unsupportedBackup ||
             backupPreference.saving
           }
           onUpdate={(images) => {
@@ -328,6 +332,7 @@ export function ManagerUpdateControls({
                 !status.available ||
                 blocked ||
                 !backupPreference.ready ||
+                unsupportedBackup ||
                 backupPreference.saving ||
                 !image.trim() ||
                 (!manualSelection &&
@@ -448,18 +453,22 @@ export function ManagerUpdateControls({
                 confirm === 'rollback'
                   ? withoutDataBackup(operation?.backupPolicy)
                     ? 'managerRollbackImagesOnlyWarning'
-                    : operation?.backupPolicy === 'minimal-v1'
-                      ? 'managerMinimalRollbackWarning'
-                      : 'managerRollbackDataWarning'
+                    : operation?.backupPolicy === 'essential-v1'
+                      ? 'managerEssentialRollbackWarning'
+                      : operation?.backupPolicy === 'minimal-v1'
+                        ? 'managerMinimalRollbackWarning'
+                        : 'managerRollbackDataWarning'
                   : plan?.backupPolicy === 'none-v1'
                     ? 'managerNoBackupHelp'
-                    : plan?.backupPolicy === 'minimal-v1'
-                      ? 'managerMinimalUpdateWarning'
-                      : plan?.backupPolicy === 'development-none-v1'
-                        ? 'managerUpdateNoBackupWarning'
-                        : plan?.backupPolicy === 'production-essential-v1'
-                          ? 'managerUpdateEssentialWarning'
-                          : 'managerUpdateDowntimeWarning',
+                    : plan?.backupPolicy === 'essential-v1'
+                      ? 'managerEssentialUpdateWarning'
+                      : plan?.backupPolicy === 'minimal-v1'
+                        ? 'managerMinimalUpdateWarning'
+                        : plan?.backupPolicy === 'development-none-v1'
+                          ? 'managerUpdateNoBackupWarning'
+                          : plan?.backupPolicy === 'production-essential-v1'
+                            ? 'managerUpdateEssentialWarning'
+                            : 'managerUpdateDowntimeWarning',
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -8,9 +8,15 @@ import {
 
 export const updateBackupModeKey = 'general.updateBackupMode';
 export const updateBackupModeQueryKey = ['administration', updateBackupModeKey];
-type BackupMode = 'full' | 'minimal' | 'none';
+type BackupMode = 'full' | 'essential' | 'minimal' | 'none';
 function mode(value: unknown): BackupMode {
-  if (value === 'full' || value === 'minimal' || value === 'none') return value;
+  if (
+    value === 'full' ||
+    value === 'essential' ||
+    value === 'minimal' ||
+    value === 'none'
+  )
+    return value;
   throw new Error('Invalid saved backup mode');
 }
 

@@ -39,8 +39,8 @@
   "managerBackupPreferenceSaveError": "The choice could not be saved. Your selection is retained; try saving again.",
   "managerFastSelectedBackupHelp": "Reuse local images verified by digest. This setting does not change the backup choice above or health checks.",
   "managerFullBackup": "Full",
-  "managerMinimalBackup": "Minimal — database and configuration",
-  "managerNoBackup": "No backup",
+  "managerMinimalBackup": "Database and configuration",
+  "managerNoBackup": "No data backup",
   "managerBackupSelectionHelp": "Choose a full backup, minimal backup or no backup before each update. Save the choice under Update for this installation; every operation still requires confirmation.",
   "managerFullBackupHelp": "Copy all persistent data for this environment: database, configuration, secrets, conversation histories, project files, deliverables, versions, drafts, logs and caches. External /appdata mounts require a separate backup.",
   "managerMinimalBackupHelp": "Copy the entire SQLite database and configuration: Codex settings, authentication, global instructions, model catalog, Git configuration, SSH and stack secrets. No project files, deliverable documents/versions or on-disk Codex histories are copied. Project metadata and messages already stored in the database remain included.",
@@ -51,7 +51,7 @@
   "updateMinimalDatabaseMissing": "The SQLite database was not found. Minimal backup is blocked.",
   "updateRestoreParentNotWritable": "The Manager cannot create its temporary restore directory in the installation parent. Correct that parent’s permissions on the host before updating; do not recursively change the data.",
   "updateUnsafePath": "A backup or recovery path is missing, ambiguous or contains a disallowed symbolic link.",
-  "managerBackupEssentialLabel": "Essential data",
+  "managerBackupEssentialLabel": "Essential data (legacy production mode)",
   "managerBackupFullLabel": "Historical full backup",
   "managerDevelopmentNoBackup": "Dev: no data backup before updating. Rollback restores images only; data and any migrations are not undone. Existing backups are not deleted.",
   "managerProductionEssentialBackup": "Production: back up the database, conversations, documents and versions, unpublished Git work, configuration and secrets. Identifiable logs, caches and dependencies are excluded. Ambiguous build/dist directories are retained.",
@@ -235,7 +235,7 @@
   "restoreBackupConfirm": "Confirm restore",
   "managerUpdateRestoring": "Restoring saved data",
   "createBackupTitle": "Create backup",
-  "createBackupWarning": "A full backup will be created without changing installed images. Services will stop and restart to ensure a consistent copy.",
+  "createBackupWarning": "A backup of the selected scope will be created without changing installed images. Services will stop and restart to ensure a consistent copy.",
   "createBackupAcknowledgement": "I confirm creating the backup and temporarily interrupting services.",
   "historyCancelled": "Operation cancelled without a version change",
   "managerCheckpointSucceeded": "Backup created",
@@ -298,5 +298,11 @@
     "external": "External service"
   },
   "discoveredInfrastructure": "Additional stack container · role: {{role}}. Observation only; this listing does not add it to update plans or adoption records.",
-  "managerHelperCleanupPending": "Manager helper cleanup needs attention. Affected containers are retained; persistent data is not deleted."
+  "managerHelperCleanupPending": "Manager helper cleanup needs attention. Affected containers are retained; persistent data is not deleted.",
+  "managerEssentialBackup": "Essential data",
+  "managerEssentialBackupSummary": "Documents, conversations, configuration and tools retained; application logs and Codex catalog caches excluded.",
+  "managerEssentialBackupHelp": "Retains the database, configuration, secrets, conversations, memories, projects, deliverables, versions, drafts and complete Git repositories. Also retains Codex, installed tools and custom plugins. Excludes application logs and only the remote_plugin_catalog and codex_apps_tools caches in the standard Codex profile. Other caches and temporary files remain included. External /appdata mounts require a separate backup.",
+  "managerEssentialBackupUnsupported": "This Manager does not support Essential data yet. Update it using another backup mode.",
+  "managerEssentialUpdateWarning": "Services will stop to back up essential data and verify their health. Tools, documents and histories are included. Application logs and the two Codex catalog caches are excluded; these caches may be downloaded again. External /appdata files are outside the backup.",
+  "managerEssentialRollbackWarning": "Previous images and the backed-up essential data will be restored. Excluded caches may be downloaded again; application logs will not be restored. Replaced data remains in quarantine."
 }

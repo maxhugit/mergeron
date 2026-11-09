@@ -26,7 +26,7 @@ describe('SettingsService', () => {
         value: 'full',
         source: 'default',
       });
-      for (const value of ['minimal', 'none', 'full']) {
+      for (const value of ['essential', 'minimal', 'none', 'full']) {
         expect(service.updateSetting(key, value)).toMatchObject({
           value,
           source: 'db',
@@ -37,7 +37,7 @@ describe('SettingsService', () => {
           source: 'db',
         });
       }
-      for (const value of ['essential', '', 0, false, {}, ['minimal']]) {
+      for (const value of ['unknown', '', 0, false, {}, ['minimal']]) {
         expect(() => service.updateSetting(key, value)).toThrow(
           BusinessException,
         );

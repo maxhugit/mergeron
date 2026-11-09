@@ -654,7 +654,7 @@ export class TransactionalUpdater {
   }
 
   async planCheckpoint(backupMode = 'full') {
-    if (!['full', 'minimal'].includes(backupMode))
+    if (!['full', 'essential', 'minimal'].includes(backupMode))
       throw Error('updateConfirmationRequired');
     const inventory = await collectInventory(this.manifest, this.docker);
     const application = inventory.components.find(
@@ -1289,9 +1289,16 @@ export class TransactionalUpdater {
               'logs',
               'other-home-files',
             ]
-          : backupPolicy === LEGACY_FULL || backupPolicy === 'full-v1'
-            ? ['/appdata']
-            : ['/appdata', 'logs', 'regenerable-caches-and-dependencies'],
+          : backupPolicy === 'essential-v1'
+            ? [
+                '/appdata',
+                'logs',
+                'home/.codex/cache/remote_plugin_catalog',
+                'home/.codex/cache/codex_apps_tools',
+              ]
+            : backupPolicy === LEGACY_FULL || backupPolicy === 'full-v1'
+              ? ['/appdata']
+              : ['/appdata', 'logs', 'regenerable-caches-and-dependencies'],
       confirmation: updateConfirmation(backupPolicy),
       busy: this.busy,
     };

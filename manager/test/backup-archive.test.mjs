@@ -276,3 +276,42 @@ for (const entries of [
       }),
     );
   });
+
+test('essential archive preserves custom work, runtimes and cache-named documents; only known caches are omitted', async (t) => {
+  const f = await fixture(t);
+  const kept = [
+    'home/.codex/auth.json',
+    'home/.codex/sessions/thread.jsonl',
+    'home/.codex/memories/memory.md',
+    'home/.codex/webui/cli/codex',
+    'home/.local/bin/node',
+    'home/.codex/plugins/cache/custom/plugin.txt',
+    'home/.codex/.tmp/plugins/work.txt',
+    'workspace/project/.git/objects/local-commit',
+    'workspace/project/.mergeron-system/livrables/cache/document.txt',
+  ];
+  const excluded = [
+    'home/.codex/cache/remote_plugin_catalog/catalog.json',
+    'home/.codex/cache/codex_apps_tools/tools.json',
+  ];
+  for (const name of [...kept, ...excluded]) {
+    await mkdir(join(f.source, name, '..'), { recursive: true });
+    await writeFile(join(f.source, name), name);
+  }
+  const descriptor = await createBackupArchive({
+    root: f.source,
+    path: f.path,
+    roots: ['home', 'workspace'],
+    policy: 'essential-v1',
+  });
+  await extractBackupArchive({
+    path: f.path,
+    destination: f.destination,
+    descriptor,
+    roots: ['home', 'workspace'],
+  });
+  for (const name of kept)
+    assert.equal(await readFile(join(f.destination, name), 'utf8'), name);
+  for (const name of excluded)
+    await assert.rejects(lstat(join(f.destination, name)), { code: 'ENOENT' });
+});

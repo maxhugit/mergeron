@@ -8,6 +8,7 @@ import {
   DEV_NO_BACKUP,
   PRODUCTION_ESSENTIAL,
   LEGACY_FULL,
+  ESSENTIAL,
   minimalHomeEntries,
   withoutDataBackup,
 } from '../src/backup-policy.mjs';
@@ -60,9 +61,9 @@ test('historical records retain full recovery and unknown policies fail closed',
   );
 });
 
-test('all three explicit modes work in either environment and keep legacy journals unchanged', () => {
+test('all four explicit modes work in either environment and keep legacy journals unchanged', () => {
   for (const environment of ['production', 'development']) {
-    for (const mode of ['full', 'minimal', 'none']) {
+    for (const mode of ['full', 'essential', 'minimal', 'none']) {
       const policy = environmentBackupPolicy({ environment }, mode);
       assert.equal(policy, `${mode}-v1`);
       assert.equal(
@@ -72,7 +73,7 @@ test('all three explicit modes work in either environment and keep legacy journa
       assert.equal(withoutDataBackup(policy), mode === 'none');
       assert.equal(
         backupEntries(policy).includes('workspace'),
-        mode === 'full',
+        mode === 'full' || mode === 'essential',
       );
     }
   }
@@ -162,4 +163,33 @@ test('embedded project data survives cache-looking directory names in a full bac
     ),
     true,
   );
+});
+
+test('essential-v1 excludes only two known catalog caches and the logs root, preserving all user and runtime data', () => {
+  assert.ok(!backupEntries(ESSENTIAL).includes('logs'));
+  assert.ok(backupEntries(ESSENTIAL).includes('home'));
+  assert.ok(backupEntries(ESSENTIAL).includes('workspace'));
+  for (const path of [
+    'home/.codex/cache/remote_plugin_catalog',
+    'home/.codex/cache/codex_apps_tools',
+  ]) {
+    assert.equal(excludesBackupDirectory(ESSENTIAL, path), true);
+    assert.equal(excludesBackupDirectory('full-v1', path), false);
+  }
+  for (const path of [
+    'home/.codex/plugins/cache',
+    'home/.codex/.tmp/plugins',
+    'home/.codex/sessions',
+    'home/.codex/archived_sessions',
+    'home/.codex/memories',
+    'home/.codex/skills',
+    'home/.codex/webui/cli',
+    'home/.local',
+    'home/.codex/cache/custom',
+    'home/other-profile/cache/remote_plugin_catalog',
+    'workspace/project/node_modules',
+    'workspace/project/.git',
+    'workspace/project/.mergeron-system/history/remote_plugin_catalog',
+  ])
+    assert.equal(excludesBackupDirectory(ESSENTIAL, path), false, path);
 });

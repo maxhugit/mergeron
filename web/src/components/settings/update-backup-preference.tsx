@@ -48,6 +48,12 @@ export function UpdateBackupPreference({
             }}
           >
             <option value="full">{t('managerFullBackup')}</option>
+            <option
+              value="essential"
+              disabled={!status.capabilities?.essentialBackup}
+            >
+              {t('managerEssentialBackup')}
+            </option>
             <option value="minimal">{t('managerMinimalBackup')}</option>
             <option value="none">{t('managerNoBackup')}</option>
           </select>
@@ -62,11 +68,19 @@ export function UpdateBackupPreference({
             {t(
               backupMode === 'none'
                 ? 'managerNoBackupSummary'
-                : backupMode === 'minimal'
-                  ? 'managerMinimalBackupSummary'
-                  : 'managerFullBackupSummary',
+                : backupMode === 'essential'
+                  ? 'managerEssentialBackupSummary'
+                  : backupMode === 'minimal'
+                    ? 'managerMinimalBackupSummary'
+                    : 'managerFullBackupSummary',
             )}
           </p>
+          {backupMode === 'essential' &&
+            !status.capabilities?.essentialBackup && (
+              <p role="alert" className="text-sm text-destructive">
+                {t('managerEssentialBackupUnsupported')}
+              </p>
+            )}
           <p className="text-xs text-muted-foreground">
             {t('managerBackupPreferenceSummary')}
           </p>

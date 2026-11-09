@@ -191,16 +191,24 @@ export class SettingsController {
   }
 
   @Post('manager/update/checkpoint-plan')
-  managerCheckpointPlan() {
-    return this.managerStatus.updateOperation('checkpoint-plan', {});
+  managerCheckpointPlan(@Body() body: { backupMode?: unknown } = {}) {
+    return this.managerStatus.updateOperation('checkpoint-plan', {
+      backupMode: body.backupMode,
+    });
   }
 
   @Post('manager/update/checkpoint')
   managerCheckpoint(
-    @Body() body: { confirmation?: unknown; expectedFingerprint?: unknown },
+    @Body()
+    body: {
+      backupMode?: unknown;
+      confirmation?: unknown;
+      expectedFingerprint?: unknown;
+    },
     @Req() request: IdentityRequest,
   ) {
     return this.managerStatus.updateOperation('checkpoint', {
+      backupMode: body.backupMode,
       confirmation: body.confirmation,
       expectedFingerprint: body.expectedFingerprint,
       actor: updateActor(request),

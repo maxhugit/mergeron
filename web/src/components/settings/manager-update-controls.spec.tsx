@@ -189,7 +189,7 @@ it.each(['production', 'development'] as const)(
       name: 'Stratégie de sauvegarde',
     });
     expect(select).toHaveValue('full');
-    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.getAllByRole('option')).toHaveLength(4);
     await waitFor(() => expect(select).toBeEnabled());
     await user.selectOptions(select, 'minimal');
     expect(screen.getByText(/Base et configuration uniquement/)).toBeVisible();

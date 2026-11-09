@@ -26,9 +26,11 @@ import {
 
 export function ManagerRestoreBackup({
   backup,
+  backupMode = 'full',
   onClose,
 }: {
   backup: ManagerBackup | null;
+  backupMode?: 'full' | 'essential' | 'minimal';
   onClose: () => void;
 }) {
   const { t, i18n } = useTranslation('manager');
@@ -90,7 +92,11 @@ export function ManagerRestoreBackup({
             <p>
               {t(
                 translationKey(
-                  backupDescription(backup?.backupPolicy ?? 'full-v1'),
+                  backupDescription(
+                    backup?.backupPolicy ??
+                      plan?.backupPolicy ??
+                      `${backupMode}-v1`,
+                  ),
                 ),
               )}
             </p>
@@ -144,7 +150,10 @@ export function ManagerRestoreBackup({
                 onClick={() =>
                   mutation.mutate({
                     action: backup ? 'restore-plan' : 'checkpoint-plan',
-                    input: { operationId: backup?.id },
+                    input: {
+                      operationId: backup?.id,
+                      ...(!backup ? { backupMode } : {}),
+                    },
                   })
                 }
               >
@@ -166,6 +175,7 @@ export function ManagerRestoreBackup({
                     action: backup ? 'restore' : 'checkpoint',
                     input: {
                       operationId: backup?.id,
+                      ...(!backup ? { backupMode: plan.backupMode } : {}),
                       confirmation: backup
                         ? 'RESTORE_SAVED_STATE'
                         : 'CREATE_BACKUP',

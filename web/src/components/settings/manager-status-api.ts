@@ -60,6 +60,7 @@ export interface ManagerComponent {
 
 export type ManagerBackupPolicy =
   | 'full-v1'
+  | 'essential-v1'
   | 'minimal-v1'
   | 'none-v1'
   | 'development-none-v1'
@@ -86,6 +87,7 @@ export interface ManagerStatus {
     backupManagement?: boolean;
     backupRetention?: boolean;
     backupSelection?: boolean;
+    essentialBackup?: boolean;
   };
   available: boolean;
   schemaVersion?: number;
@@ -139,7 +141,7 @@ export interface ManagerStatus {
 
 export interface ManagerUpdatePlan {
   backupFormat?: 'tar-gzip-v1' | null;
-  backupMode?: 'full' | 'minimal' | 'none';
+  backupMode?: 'full' | 'essential' | 'minimal' | 'none';
   backupPolicy?: ManagerBackupPolicy;
   backupScope?: string[];
   excludedFromDataRollback?: string[];

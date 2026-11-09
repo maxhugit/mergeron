@@ -37,7 +37,7 @@ Une base restaurée sans ces fichiers peut référencer des documents inexistant
 Lorsqu’une mise à jour inclut une sauvegarde, le Manager crée désormais une
 archive standard **tar + gzip** :
 `STATE_ROOT/manager-state/updates/<transaction>/backup/backup.tar.gz`.
-Le choix du périmètre ci-dessous ne change pas. **Aucune sauvegarde** ne crée
+Le choix du périmètre ci-dessous ne change pas. **Sans sauvegarde des données** ne crée
 toujours ni archive ni inventaire récursif des données.
 
 La compression utilise le niveau rapide de gzip et fonctionne en flux : aucun
@@ -86,10 +86,10 @@ une nouvelle archive, y compris lors d’un retour à une ancienne application.
 
 ### Choix du périmètre
 
-Dans **Serveur → Mise à jour**, le champ **Sauvegarde avant cette mise à jour**
-propose trois options en Dev comme en production. Le choix concerne la pile
-ouverte, jamais l’autre environnement. Il s’applique aussi à une mise à jour
-individuelle de conteneur. Sans préférence enregistrée, l’interface sélectionne
+Dans **Serveur → Restauration**, le champ **Stratégie de sauvegarde**
+propose quatre options en Dev comme en production. Le choix concerne la pile
+ouverte, jamais l’autre environnement. Il s’applique aux mises à jour et à la
+création manuelle de sauvegardes. Sans préférence enregistrée, l’interface sélectionne
 **Complète**. Le bouton **Enregistrer le choix de sauvegarde** conserve le choix
 en base SQLite pour cette installation, partagé entre ses administrateurs et
 indépendant de l’autre environnement. Enregistrer ne lance aucune mise à jour.
@@ -104,18 +104,56 @@ L’exécution renvoie exactement le mode du plan confirmé, même si la préfé
 est modifiée entre-temps. Le choix est figé dans l’empreinte du plan puis
 enregistré dans la transaction ; les confirmations et la récupération restent
 inchangées. Le réglage n’est pas stocké dans le navigateur ni dans le formulaire
-Socket. L’API de paramétrage n’accepte que `full`, `minimal` et `none`.
+Socket. L’API de paramétrage n’accepte que `full`, `essential`, `minimal` et `none`.
 
-| Option                                              | Copié avant la mise à jour                                                                                                                                                                                       | Retour arrière                                                                                                                          |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Complète** (`full-v1`)                            | Toutes les racines persistantes gérées : `home`, `workspace`, `logs`, `ssh`, `config` et secrets, y compris fichiers de projets, conversations, livrables, versions, brouillons et caches.                       | Anciennes images et toutes ces racines.                                                                                                 |
-| **Minimale — base et configuration** (`minimal-v1`) | Base SQLite entière et fichiers `-wal`, `-shm`, `-journal` présents ; configuration et authentification Codex, instructions globales, catalogue de modèles, `.gitconfig`, `ssh`, `config` et secrets de la pile. | Anciennes images et uniquement les éléments sauvegardés. Les fichiers exclus restent dans leur état courant.                            |
-| **Aucune sauvegarde** (`none-v1`)                   | Aucune copie ni inventaire récursif préalable des données.                                                                                                                                                       | Images uniquement. Les migrations et modifications de données restent appliquées, sans garantie de compatibilité avec l’ancienne image. |
+| Option                                      | Copié avant la mise à jour                                                                                                                                                                                       | Retour arrière                                                                                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Complète** (`full-v1`)                    | Toutes les racines persistantes gérées : `home`, `workspace`, `logs`, `ssh`, `config` et secrets, y compris fichiers de projets, conversations, livrables, versions, brouillons et caches.                       | Anciennes images et toutes ces racines.                                                                                                 |
+| **Données essentielles** (`essential-v1`)   | Toutes les données utilisateur, outils et plugins ; seuls les journaux applicatifs et deux caches de catalogue Codex connus sont exclus (voir ci-dessous).                                                       | Anciennes images et racines sauvegardées ; les caches exclus peuvent être retéléchargés.                                                |
+| **Base et configuration** (`minimal-v1`)    | Base SQLite entière et fichiers `-wal`, `-shm`, `-journal` présents ; configuration et authentification Codex, instructions globales, catalogue de modèles, `.gitconfig`, `ssh`, `config` et secrets de la pile. | Anciennes images et uniquement les éléments sauvegardés. Les fichiers exclus restent dans leur état courant.                            |
+| **Sans sauvegarde des données** (`none-v1`) | Aucune copie ni inventaire récursif préalable des données.                                                                                                                                                       | Images uniquement. Les migrations et modifications de données restent appliquées, sans garantie de compatibilité avec l’ancienne image. |
 
 Les contrôles de santé et d’identité des conteneurs restent obligatoires dans
-les trois modes. Le mode rapide Dev ne change pas le périmètre de sauvegarde.
+les quatre modes. Le mode rapide Dev ne change pas le périmètre de sauvegarde.
 Le mode sans sauvegarde exige la confirmation explicite affichée avant l’arrêt.
 Les montages externes `/appdata` restent hors périmètre dans tous les modes.
+
+### Données essentielles : périmètre prudent (`essential-v1`)
+
+Ce nouveau mode conserve les mêmes données utilisateur que **Complète** : base,
+configuration, secrets, authentification, conversations et mémoires, fichiers de
+projets, livrables, versions, brouillons, dépôts Git et travail non publié.
+Les exécutables Codex et les outils installés (mise, Node, Python, uv), les
+compétences et les plugins installés ou personnalisés restent inclus.
+
+Il exclut uniquement la racine `logs` des journaux applicatifs et ces deux
+répertoires de recherche distante dans le profil standard :
+
+- `home/.codex/cache/remote_plugin_catalog` ;
+- `home/.codex/cache/codex_apps_tools`.
+
+Ces caches peuvent être retéléchargés après restauration ; un accès au service
+externe peut alors être nécessaire. Les profils Codex déplacés, les caches
+inconnus, `plugins/cache`, `.tmp/plugins` et les bases de diagnostic Codex restent
+conservés par prudence. Aucun nom générique de cache dans un projet n'est exclu.
+Ce périmètre volontairement plus étroit ne promet pas le gain théorique obtenu
+en retirant tous les temporaires et plugins. La taille compressée dépend des données.
+
+Le choix est disponible pour les mises à jour et la création manuelle d'une
+sauvegarde. Le plan confirmé fixe le mode : un changement ultérieur du réglage ne
+le modifie pas. Une restauration historique crée toujours d'abord une sauvegarde
+complète de sécurité. Le Manager applique la politique enregistrée dans chaque
+archive, pas le réglage du jour. Les journaux applicatifs actuels restent en place
+lors du retour arrière ; les caches absents d'un dossier restauré peuvent être
+régénérés. Les données remplacées sont conservées en quarantaine.
+
+Le Manager doit annoncer `essentialBackup`. Un ancien Manager ne propose pas ce
+choix ; une préférence déjà enregistrée exige de sélectionner un autre mode avant
+sa mise à jour. Les identifiants `full`, `minimal`, `none` et les anciennes
+politiques restent inchangés. L'ancien `production-essential-v1`, affiché
+**Données essentielles (ancien mode production)**, garde son propre périmètre et
+n'est pas assimilé à `essential-v1`. Le défaut reste **Complète** ; aucune
+installation ni sauvegarde existante n'est convertie automatiquement.
 
 ### Périmètre et limites du mode minimal
 

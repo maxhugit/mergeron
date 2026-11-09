@@ -2236,7 +2236,7 @@
             "title": "Before and during an update",
             "steps": [
               "Open Settings → Server → Current version to review installed components and their channels. Refresh detection finds images without installing them.",
-              "Choose Full, Minimal — database and configuration, or No backup. Save backup choice stores the installation preference; always review the scope before confirmation.",
+              "Choose Full, Essential data, Database and configuration, or No data backup. Save backup choice stores the installation preference; always review the scope before confirmation.",
               "Use Update Mergeron. The application chooses affected components and their order; individual container selection is no longer offered. Absent optional capabilities are not installed.",
               "Review the plan, backup and warnings, then confirm. Independent progress tracking is prepared before replacements, including Manager replacement on compatible installations.",
               "Keep progress open. Permanent web relays keep it accessible during application restarts. Reconnection discovers active updates and opens tracking; an installation without working relays can remain unavailable.",
@@ -2246,7 +2246,7 @@
           {
             "title": "Rollback and Manager compatibility",
             "paragraphs": [
-              "The confirmed plan scope determines which data can be restored: full, minimal or no backup. Without a backup, rollback may restore images but does not undo migrations or data changes. Inspect failures or states requiring recovery in the operation tracking.",
+              "The confirmed plan scope determines which data can be restored: full, essential data, database and configuration, or no data backup. Without a backup, rollback may restore images but does not undo migrations or data changes. Inspect failures or states requiring recovery in the operation tracking.",
               "Compatible application and Manager versions are required. Manager replacement uses an independent helper with health checks and fallback; an old incompatible Manager can still require host intervention.",
               "The global plan chooses images to replace; differing component revisions are not automatically an error. Dev and production remain separate: check channel, backup and scope."
             ],
@@ -2303,10 +2303,10 @@
           {
             "title": "Understand scope and compression",
             "paragraphs": [
-              "Full preserves managed persistent roots. Minimal — database and configuration preserves the database, settings and credentials required by the stack, but not all project files, documents, versions or Git work. No backup copies no data before the update.",
+              "Full preserves all managed persistent roots. Essential data also preserves tools, installed plugins, conversations, documents, versions and Git work, but excludes application logs and only the remote_plugin_catalog and codex_apps_tools caches in the standard Codex profile; other caches and temporary files remain included. Database and configuration preserves the database, settings and credentials required by the stack, but not all project files, documents, versions or Git work. No data backup copies no data before the update.",
               "New backups are compressed as tar + gzip. The displayed size is the compressed archive size; older directory backups remain usable without automatic conversion. Compression does not encrypt data: keep these archives in private storage."
             ],
-            "warning": "The database alone does not contain documents and their historical versions. A minimal backup cannot restore an entire project. With No backup, returning to previous images does not guarantee compatibility with data already migrated."
+            "warning": "The database alone does not contain documents and their historical versions. A Database and configuration backup cannot restore an entire project. With No data backup, returning to previous images does not guarantee compatibility with data already migrated."
           },
           {
             "title": "Choose restoration or removal",

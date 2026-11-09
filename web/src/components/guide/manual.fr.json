@@ -2236,7 +2236,7 @@
             "title": "Avant et pendant la mise à jour",
             "steps": [
               "Dans Paramètres → Serveur → Version actuelle, consultez les composants installés et leur canal. Actualiser la détection recherche les images sans les installer.",
-              "Choisissez une sauvegarde Complète, Minimale — base et configuration, ou Aucune. Enregistrer le choix de sauvegarde mémorise la préférence pour cette installation ; vérifiez toujours le périmètre avant confirmation.",
+              "Choisissez Complète, Données essentielles, Base et configuration ou Sans sauvegarde des données. Enregistrer le choix de sauvegarde mémorise la préférence pour cette installation ; vérifiez toujours le périmètre avant confirmation.",
               "Utilisez Mettre à jour Mergeron. L’application détermine les composants concernés et leur ordre ; il n’y a plus de sélection manuelle conteneur par conteneur. Les compétences non installées ne sont pas ajoutées.",
               "Relisez le plan, la sauvegarde et les avertissements, puis confirmez. Le suivi indépendant est préparé avant les remplacements, y compris celui du Manager lorsque l’installation est compatible.",
               "Gardez le suivi ouvert. Les relais web permanents maintiennent son accès pendant le redémarrage applicatif. Si l’écran de reconnexion détecte une opération, il affiche le suivi ; une installation sans relais fonctionnels peut rester indisponible.",
@@ -2246,7 +2246,7 @@
           {
             "title": "Retour arrière et compatibilité du Manager",
             "paragraphs": [
-              "Le périmètre du plan confirmé détermine les données restaurables : complète, minimale ou aucune sauvegarde. Sans sauvegarde, le retour arrière peut remettre les images, mais n’annule ni migration ni modification des données. Une défaillance ou un état exigeant une récupération doit être relu dans le suivi.",
+              "Le périmètre du plan confirmé détermine les données restaurables : complète, données essentielles, base et configuration ou sans sauvegarde des données. Sans sauvegarde, le retour arrière peut remettre les images, mais n’annule ni migration ni modification des données. Une défaillance ou un état exigeant une récupération doit être relu dans le suivi.",
               "Une application et un Manager compatibles sont nécessaires. Le remplacement du Manager utilise un auxiliaire indépendant avec contrôle de santé et retour de secours ; un ancien Manager incompatible peut encore nécessiter une intervention depuis l’hôte.",
               "Le plan global choisit les images à remplacer ; une révision différente entre composants n’est pas à elle seule une anomalie. Dev et production restent distinctes : vérifiez le canal, la sauvegarde et le périmètre."
             ],
@@ -2303,10 +2303,10 @@
           {
             "title": "Comprendre le périmètre et la compression",
             "paragraphs": [
-              "Complète conserve les racines persistantes gérées. Minimale — base et configuration conserve la base, les réglages et les identifiants nécessaires à la pile, mais pas tous les fichiers de projet, documents, versions ou travaux Git. Aucune sauvegarde ne copie aucune donnée avant la mise à jour.",
+              "Complète conserve toutes les racines persistantes gérées. Données essentielles conserve aussi les outils, plugins installés, conversations, documents, versions et travail Git, mais exclut les journaux applicatifs et uniquement les caches remote_plugin_catalog et codex_apps_tools du profil Codex standard ; les autres caches et temporaires sont conservés. Base et configuration conserve la base, les réglages et les identifiants nécessaires à la pile, mais pas tous les fichiers de projet, documents, versions ou travaux Git. Sans sauvegarde des données ne copie aucune donnée avant la mise à jour.",
               "Les nouvelles sauvegardes sont compressées en tar + gzip. La taille affichée est celle de l’archive compressée ; les anciennes sauvegardes en répertoires restent utilisables sans conversion automatique. La compression ne chiffre pas les données : conservez ces archives dans un emplacement privé."
             ],
-            "warning": "La base seule ne contient pas les documents et leurs versions historiques. Une sauvegarde minimale ne permet pas de restaurer tout un projet. Avec Aucune sauvegarde, le retour aux images précédentes ne garantit pas la compatibilité des données déjà migrées."
+            "warning": "La base seule ne contient pas les documents et leurs versions historiques. Une sauvegarde Base et configuration ne permet pas de restaurer tout un projet. Avec Sans sauvegarde des données, le retour aux images précédentes ne garantit pas la compatibilité des données déjà migrées."
           },
           {
             "title": "Décider une restauration ou un retrait",

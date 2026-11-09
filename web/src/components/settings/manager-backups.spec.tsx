@@ -81,10 +81,11 @@ it('keeps old backups manageable but does not offer a retention setting when Dev
 });
 
 it.each([
-  ['production-essential-v1', 'Essential data'],
+  ['production-essential-v1', 'Essential data (legacy production mode)'],
   ['legacy-full-v1', 'Historical full backup'],
   ['full-v1', 'Full'],
-  ['minimal-v1', 'Minimal — database and configuration'],
+  ['essential-v1', 'Essential data'],
+  ['minimal-v1', 'Database and configuration'],
 ])(
   'shows the recorded %s scope for an individual backup',
   async (backupPolicy, label) => {
