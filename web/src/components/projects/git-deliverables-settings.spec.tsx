@@ -261,19 +261,16 @@ it('recognizes a repository automatically without sending an import until reques
   expect(
     await screen.findByText('One deliverable recognized in this repository.'),
   ).toBeVisible();
-  expect(writes).toEqual([
-    { url: '/api/projects/p/git-deliverables/reconcile', body: {} },
-  ]);
+  expect(writes).toEqual([]);
   await user.click(
     screen.getByRole('button', { name: 'Review Git deliverables' }),
   );
   expect(await screen.findByRole('dialog')).toBeVisible();
-  expect(writes).toEqual([
-    { url: '/api/projects/p/git-deliverables/reconcile', body: {} },
-  ]);
+  expect(writes).toEqual([]);
 });
 
 it('shows an explicit review notice for incoming Git changes without applying them', async () => {
+  let head = 'base';
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
@@ -303,6 +300,7 @@ it('shows an explicit review notice for incoming Git changes without applying th
           discoveryError: null,
           proposal: {
             fingerprint: 'incoming',
+            context: { branch: 'refs/heads/main', head },
             canApply: true,
             changes: [
               {
@@ -326,4 +324,14 @@ it('shows an explicit review notice for incoming Git changes without applying th
   expect(writes).toEqual([
     { url: '/api/projects/p/git-deliverables/reconcile', body: {} },
   ]);
+  await fixture.queryClient.invalidateQueries({
+    queryKey: ['git-deliverables', 'p'],
+  });
+  expect(writes).toHaveLength(1);
+  head = 'pulled-commit';
+  await fixture.queryClient.invalidateQueries({
+    queryKey: ['git-deliverables', 'p'],
+  });
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(writes.every((write) => write.url.endsWith('/reconcile'))).toBe(true);
 });

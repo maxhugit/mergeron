@@ -40,11 +40,13 @@ export function GitDeliverablesDiscovery({
     gcTime: 60_000,
     retry: false,
   });
+  const context = query.data?.proposal?.context;
   useEffect(() => {
-    // Reconcile inspected copies, including changes made through a native CLI.
-    // The server retains the caller's identity and never imports automatically.
+    if (context?.branch === undefined && context?.head === undefined) return;
+    // Reconcile initial inspection and branch/HEAD changes, including native CLI
+    // pulls. The 15-second inspection poll must not schedule exports repeatedly.
     void post(projectId, '/reconcile', {}).catch(() => undefined);
-  }, [projectId, copyId, inspectedAt]);
+  }, [projectId, copyId, context?.branch, context?.head]);
   const needsReview = query.data?.proposal?.changes.some(
     (change) => change.action === 'import' || change.action === 'conflict',
   );
