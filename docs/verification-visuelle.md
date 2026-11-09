@@ -122,12 +122,12 @@ interdit échoue explicitement, sans repli moins sécurisé. La commande est pr�
 pour les sites de travail de confiance : pour visiter des pages non fiables,
 utiliser le service Browser isolé, qui reste distinct.
 
-Sur une pile DEV existante, déployer d’abord le Manager de cette version : lors
+Sur une pile DEV ou PROD existante, déployer d’abord le Manager de cette version : lors
 de la mise à jour vers une image portant le label `io.mergeron.agent-visual-testing=1`,
 il ajoute seulement l’autorisation seccomp `chroot` nécessaire au sandbox. Il
 préserve les autres restrictions, refuse un profil incompatible et garde le
 profil initial pour le retour arrière. Cette migration automatique ne s’applique
-ni à la production, ni aux autres conteneurs, ni aux anciennes images. Pour une
+ni aux autres conteneurs, ni aux anciennes images. Pour une
 nouvelle installation Compose, le profil fourni contient déjà cette autorisation.
 
 Validation de l’image avec les protections Docker et sans accès réseau externe :
