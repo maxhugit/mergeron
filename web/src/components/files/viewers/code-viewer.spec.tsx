@@ -221,3 +221,17 @@ it('does not offer saving a read-only Markdown document', async () => {
   expect(screen.getByRole('button', { name: 'Save (Ctrl+S)' })).toBeDisabled();
   expect(io.write).not.toHaveBeenCalled();
 });
+
+
+it('sends the fingerprint paired with the loaded content and retains it after a rejected save', async () => {
+  io.read.mockResolvedValue({ data: {content: 'Initial', mtime: 10, sha256: 'a'.repeat(64), editableDeliverable: true} });
+  const document = await load('/managed.md', 'managed');
+  document.model!.setValue('Draft');
+  io.write.mockRejectedValueOnce({error: {code: 'files.modified_since_read', message: 'Changed'}});
+  expect(await saveDocument(document.id)).toBe(false);
+  expect(io.write).toHaveBeenLastCalledWith(expect.objectContaining({body: {path: '/managed.md', content: 'Draft', expectedMtime: 10, expectedSha256: 'a'.repeat(64)}}));
+  expect(getDocumentForPath('/managed.md')).toMatchObject({dirty: true, sha256: 'a'.repeat(64), savedContent: 'Initial'});
+  io.write.mockResolvedValueOnce({data: {mtime: 11, sha256: 'b'.repeat(64)}});
+  expect(await saveDocument(document.id)).toBe(true);
+  expect(getDocumentForPath('/managed.md')).toMatchObject({dirty: false, sha256: 'b'.repeat(64), savedContent: 'Draft'});
+});

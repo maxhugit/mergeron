@@ -7,6 +7,7 @@ import {
   Loader2,
   RotateCcw,
   Save,
+  Check,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -49,7 +50,12 @@ export function CodeViewer({
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const documentId = useRef<string | null>(null);
   const markdown = /\.(?:md|markdown|mdown)$/i.test(document?.path ?? filePath);
-  const mode = view.reveal ? 'edit' : (view.markdownMode ?? 'read');
+  const mode =
+    readOnly && markdown
+      ? 'read'
+      : view.reveal
+        ? 'edit'
+        : (view.markdownMode ?? 'read');
   const showEditor = !markdown || mode !== 'read';
   const showPreview = markdown && mode !== 'edit';
 
@@ -163,6 +169,7 @@ export function CodeViewer({
                 size="sm"
                 variant={mode === value ? 'secondary' : 'ghost'}
                 aria-pressed={mode === value}
+                disabled={readOnly && value !== 'read'}
                 onClick={() =>
                   useWorkspaceStore.getState().setMarkdownMode(viewId, value)
                 }
@@ -178,13 +185,23 @@ export function CodeViewer({
             ))}
           </div>
         )}
-        <span className="order-last w-full min-w-0 truncate text-muted-foreground md:order-none md:w-auto md:flex-1">
+        <span
+          className="order-last w-full min-w-0 truncate text-muted-foreground md:order-none md:w-auto md:flex-1"
+          role="status"
+        >
           {document.error ??
-            (document.conflict
-              ? t('fileChangedOnDiskYourUnsavedChangesAreRetained')
-              : document.dirty
-                ? t('unsavedChanges')
-                : t('saved'))}
+            (document.conflict ? (
+              t('fileChangedOnDiskYourUnsavedChangesAreRetained')
+            ) : document.dirty ? (
+              t('unsavedChanges')
+            ) : readOnly ? (
+              t('readOnly')
+            ) : (
+              <span className="inline-flex items-center" title={t('saved')}>
+                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">{t('saved')}</span>
+              </span>
+            ))}
         </span>
         <Button
           size="icon"

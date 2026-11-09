@@ -33,7 +33,7 @@ import {
   SECURITY_SETTING_KEYS,
 } from '../settings/settings.definitions';
 import { SettingsService } from '../settings/settings.service';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as os from 'node:os';
@@ -110,6 +110,7 @@ interface ResolveTargetOptions {
 }
 
 export interface ProjectDocumentMutation {
+  expectedSha256?: string;
   beforeCommit?: () => void;
   operation:
     | 'create'
@@ -138,6 +139,7 @@ interface ExistingAncestor {
 
 @Injectable()
 export class FilesService implements OnModuleDestroy {
+  projectDocumentEditable?: (path: string) => boolean;
   /** Installed by the deliverable owner without a circular module dependency. */
   projectDocumentMutation?: (
     request: ProjectDocumentMutation,
@@ -500,9 +502,13 @@ export class FilesService implements OnModuleDestroy {
    * @returns The file content as UTF-8 string
    * @throws BusinessException if file exceeds MAX_READ_SIZE
    */
-  async readFile(
-    filePath: string,
-  ): Promise<{ content: string; size: number; mtime: number }> {
+  async readFile(filePath: string): Promise<{
+    content: string;
+    size: number;
+    mtime: number;
+    sha256: string;
+    editableDeliverable?: boolean;
+  }> {
     const resolved = await this.resolveSafePath(filePath);
 
     const stat = await fs.stat(resolved);
@@ -529,7 +535,13 @@ export class FilesService implements OnModuleDestroy {
     // Captured before the read rather than after, which errs toward rejecting
     // a save: a file changed mid-read yields a time older than the content,
     // and the write is refused instead of silently winning.
-    return { content, size: stat.size, mtime: stat.mtimeMs };
+    return {
+      content,
+      size: stat.size,
+      mtime: stat.mtimeMs,
+      sha256: createHash('sha256').update(content).digest('hex'),
+      editableDeliverable: this.projectDocumentEditable?.(resolved) ?? false,
+    };
   }
 
   /**
@@ -630,14 +642,29 @@ export class FilesService implements OnModuleDestroy {
     filePath: string,
     content: string,
     expectedMtime?: number,
-  ): Promise<{ mtime: number }> {
+    expectedSha256?: string,
+  ): Promise<{ mtime: number; sha256?: string }> {
+    if (
+      expectedSha256 !== undefined &&
+      (typeof expectedSha256 !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(expectedSha256))
+    )
+      throw BusinessException.badRequest(
+        ErrorCode.files.contentRequired,
+        'Invalid content revision',
+      );
     const managed = await this.projectDocumentMutation?.({
       operation: 'write',
       path: filePath,
       content,
       expectedMtime,
+      expectedSha256,
     });
-    if (managed) return managed.result as { mtime: number };
+    if (managed)
+      return {
+        ...(managed.result as { mtime: number }),
+        sha256: createHash('sha256').update(content).digest('hex'),
+      };
     const resolved = await this.resolveSafePath(
       path.dirname(path.resolve(filePath)),
     );
@@ -676,10 +703,23 @@ export class FilesService implements OnModuleDestroy {
       }
     }
 
+    if (
+      expectedSha256 !== undefined &&
+      createHash('sha256')
+        .update(await fs.readFile(targetPath))
+        .digest('hex') !== expectedSha256
+    )
+      throw BusinessException.conflict(
+        ErrorCode.files.modifiedSinceRead,
+        'File was modified since last read. Refresh and retry.',
+      );
     this.assertProjectPathMutable(targetPath);
     await fs.writeFile(targetPath, content, 'utf-8');
     const newStat = await fs.stat(targetPath);
-    return { mtime: newStat.mtimeMs };
+    return {
+      mtime: newStat.mtimeMs,
+      sha256: createHash('sha256').update(content).digest('hex'),
+    };
   }
 
   /**

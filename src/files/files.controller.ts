@@ -165,6 +165,7 @@ export class FilesController {
       body.path,
       body.content,
       body.expectedMtime,
+      body.expectedSha256,
     );
   }
 

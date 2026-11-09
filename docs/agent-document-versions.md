@@ -99,3 +99,20 @@ protégé ; l'original est conservé et aucun numéro de version n'est modifié.
 onglets Office ouverts sur l'ancien emplacement doivent être rouverts. L'ancien
 endpoint de soumission de fichiers est refusé en mode protégé : enregistrer les
 versions des documents, puis utiliser le circuit de validation du livrable.
+
+## Édition de texte depuis les onglets de fichiers
+
+Le backend confirme à la lecture si le chemin correspond à un document conservé,
+non supprimé, modifiable dans son état actuel et accessible en écriture à la
+personne connectée. Ce signal autorise l'édition dans l'onglet ; il ne rend pas
+les autres fichiers de l'espace système modifiables. Le mode Modifier reste
+désactivé pour les lectures seules. L'état « Enregistré » est un indicateur discret ;
+la disquette et Ctrl/Cmd+S sont les actions d'enregistrement.
+
+L'enregistrement réutilise le propriétaire métier des documents : écriture
+sérialisée, création d'une version conservée et programmation de la synchronisation
+Git. L'empreinte SHA-256 accompagnant le contenu lu est envoyée comme précondition ;
+un autre enregistrement ou changement du fichier provoque un conflit, même si
+son horodatage est identique. Le brouillon de l'utilisateur reste dans l'éditeur.
+Les historiques, fichiers privés non enregistrés et documents supprimés restent
+protégés ; aucun accès en écriture générique à l'espace système n'est ajouté.

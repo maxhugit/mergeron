@@ -58,6 +58,8 @@ export type FileEntryDto = {
 };
 
 export type FileReadResponseDto = {
+    editableDeliverable?: boolean;
+    sha256?: string;
     content: string;
     size: number;
     mtime: number;
@@ -87,12 +89,14 @@ export type CreateDirectoryResponseDto = {
 };
 
 export type WriteFileRequestDto = {
+    expectedSha256?: string;
     path: string;
     content: string;
     expectedMtime?: number;
 };
 
 export type WriteFileResponseDto = {
+    sha256?: string;
     mtime: number;
 };
 

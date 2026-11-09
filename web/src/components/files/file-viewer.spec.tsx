@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
         ],
   ),
   content: vi.fn(),
+  editable: false,
 }));
 vi.mock('@/generated/api/@tanstack/react-query.gen', () => ({
   filesGetMetadataOptions: ({ query }: { query: { path: string } }) => ({
@@ -35,20 +36,37 @@ vi.mock('@/stores/document-store', () => ({
   useDocumentStore: (
     select: (state: {
       pathIndex: Record<string, string>;
-      documents: Record<string, never>;
+      documents: Record<string, { editableDeliverable?: boolean }>;
     }) => unknown,
-  ) => select({ pathIndex: {}, documents: {} }),
+  ) =>
+    select({
+      pathIndex: {
+        '/project/.mergeron-system/livrables/d/report.txt': 'managed',
+      },
+      documents: { managed: { editableDeliverable: api.editable } },
+    }),
 }));
 vi.mock('@/hooks/use-file-watch', () => ({ useFileWatch: vi.fn() }));
 vi.mock('./viewers', () => ({
-  FileContentViewer: ({ filePath }: { filePath: string }) => {
+  FileContentViewer: ({
+    filePath,
+    readOnly,
+  }: {
+    filePath: string;
+    readOnly?: boolean;
+  }) => {
     api.content(filePath);
-    return <div data-testid="file-content">{filePath}</div>;
+    return (
+      <div data-testid="file-content" data-read-only={String(readOnly)}>
+        {filePath}
+      </div>
+    );
   },
 }));
 beforeEach(async () => {
   cleanup();
   vi.clearAllMocks();
+  api.editable = false;
   await i18nReady;
   await i18n.changeLanguage('fr');
 });
@@ -133,4 +151,20 @@ it('uses the host tab opener for a listed file when provided', async () => {
   expect(
     screen.getByRole('region', { name: 'Contenu du dossier' }),
   ).toBeVisible();
+});
+
+it('enables a retained document only after the content read confirms that it is editable', async () => {
+  api.editable = true;
+  show('/project/.mergeron-system/livrables/d/report.txt');
+  expect(await screen.findByTestId('file-content')).toHaveAttribute(
+    'data-read-only',
+    'false',
+  );
+});
+it('keeps unconfirmed system files read-only', async () => {
+  show('/project/.mergeron-system/livrables/d/report.txt');
+  expect(await screen.findByTestId('file-content')).toHaveAttribute(
+    'data-read-only',
+    'true',
+  );
 });

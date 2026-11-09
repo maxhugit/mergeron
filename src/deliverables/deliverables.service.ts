@@ -1,4 +1,6 @@
 import { canAccessDeliverable } from './deliverable-access';
+import { BusinessException } from '../common/business.exception';
+import { ErrorCode } from '../common/error-codes';
 import {
   normalizeDeliverableTaskReference,
   assertDeliverableWorkReference,
@@ -183,6 +185,26 @@ export class DeliverablesService implements OnModuleInit {
     private readonly identities: IdentityService,
     private readonly activeFolders: ActiveFoldersService,
   ) {
+    this.files.projectDocumentEditable = (sourcePath) => {
+      const document = this.db
+        .select()
+        .from(documents)
+        .where(eq(documents.sourcePath, sourcePath))
+        .get();
+      if (!document || document.deletedAt !== null) return false;
+      const item = this.db
+        .select()
+        .from(items)
+        .where(eq(items.id, document.deliverableId))
+        .get();
+      const identity = currentAccess()?.identity;
+      return Boolean(
+        item &&
+        (!identity || identity.role === 'administrator') &&
+        ['draft', 'in_constitution'].includes(item.lifecycleStatus) &&
+        !this.blockingOnlyOfficeSession(item.id),
+      );
+    };
     this.files.projectDocumentMutation = (request) =>
       this.explorerMutation(request);
   }
@@ -426,6 +448,16 @@ export class DeliverablesService implements OnModuleInit {
             throw new ConflictException('Symbolic links are not supported');
         }
         if (fresh) await regularPath(root, fresh.sourcePath);
+        if (
+          request.expectedSha256 !== undefined &&
+          (!fresh ||
+            (await this.hash(fresh.sourcePath)).sha256 !==
+              request.expectedSha256)
+        )
+          throw BusinessException.conflict(
+            ErrorCode.files.modifiedSinceRead,
+            'File was modified since last read. Refresh and retry.',
+          );
         const stage = await fs.mkdtemp(
           path.join(
             await this.directory(row.project.id, [

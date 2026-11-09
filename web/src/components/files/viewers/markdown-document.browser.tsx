@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { page } from 'vitest/browser';
 import { CodeViewer } from './code-viewer';
+import { FileViewer } from '../file-viewer';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getDocumentForPath, useDocumentStore } from '@/stores/document-store';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import i18n, { i18nReady } from '@/i18n';
@@ -20,6 +22,8 @@ vi.mock('@/generated/api/sdk.gen', async (importOriginal) => ({
   filesReadFile: io.read,
   filesWriteFile: io.write,
   filesCreateFile: io.create,
+  filesGetMetadata: async () => ({ data: { type: 'file' } }),
+  settingsListSettings: async () => ({ data: { settings: [] } }),
 }));
 vi.mock('@monaco-editor/react', async () => {
   const { useEffect } = await import('react');
@@ -71,8 +75,10 @@ vi.mock('@monaco-editor/react', async () => {
   function Editor({
     path,
     onMount,
+    options,
   }: {
     path: string;
+    options?: { readOnly?: boolean };
     onMount: (value: unknown) => void;
   }) {
     useEffect(() => {
@@ -93,6 +99,7 @@ vi.mock('@monaco-editor/react', async () => {
     return (
       <textarea
         aria-label="Markdown source"
+        readOnly={options?.readOnly}
         style={{
           width: '100%',
           height: '100%',
@@ -189,3 +196,56 @@ test.each([390, 1280])(
     );
   },
 );
+
+test('edits an authorized retained Markdown projection and saves through its content fingerprint', async () => {
+  await page.viewport(1100, 850);
+  const path =
+    '/synthetic/project/.mergeron-system/livrables/cadrage/Cadrage-BBCC.md';
+  io.read.mockResolvedValue({
+    data: {
+      content: '# Original',
+      mtime: 10,
+      sha256: 'a'.repeat(64),
+      editableDeliverable: true,
+    },
+  });
+  io.write.mockResolvedValue({ data: { mtime: 11, sha256: 'b'.repeat(64) } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <div style={{ height: 700 }}>
+        <FileViewer filePath={path} viewId="retained" />
+      </div>
+    </QueryClientProvider>,
+  );
+  await screen.findByRole('heading', { name: 'Original' });
+  const edit = await screen.findByRole('button', {
+    name: 'Modifier',
+  });
+  await waitFor(() => expect(edit).toBeEnabled());
+  await page.getByRole('button', { name: 'Modifier', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Markdown source' })
+    .fill('# Révision enregistrée');
+  await page.getByRole('button', { name: 'Enregistrer (Ctrl+S)' }).click();
+  await waitFor(() =>
+    expect(io.write).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: {
+          path,
+          content: '# Révision enregistrée',
+          expectedMtime: 10,
+          expectedSha256: 'a'.repeat(64),
+        },
+      }),
+    ),
+  );
+  expect(getDocumentForPath(path)).toMatchObject({
+    dirty: false,
+    savedContent: '# Révision enregistrée',
+  });
+  expect(screen.queryByRole('button', { name: 'Enregistré' })).toBeNull();
+  client.clear();
+});

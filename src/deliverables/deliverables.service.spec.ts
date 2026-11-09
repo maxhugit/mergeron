@@ -189,6 +189,82 @@ describe.each([1, 4])('project deliverables (layout %i)', (layoutVersion) => {
       }
     },
   );
+  it('edits registered projections through versioned writes and rejects concurrent saves even with an unchanged mtime', async () => {
+    const item = await service.create('p', 'r', { title: 'Editor' });
+    const source = path.join(
+      root,
+      ...(layoutVersion >= 4 ? ['.mergeron-system'] : []),
+      'livrables',
+      item.id,
+      'cadrage.md',
+    );
+    await files.createFile(source, '# Initial');
+    const baseline = await files.readFile(source);
+    expect(baseline.editableDeliverable).toBe(true);
+    expect(
+      accessContext.run(
+        {
+          identity: {
+            kind: 'person',
+            personId: 'reader',
+            name: 'Reader',
+            role: 'standard',
+            active: true,
+          },
+          identities: new IdentityService(database.db),
+        },
+        () => files.projectDocumentEditable?.(source),
+      ),
+    ).toBe(false);
+    expect(baseline.sha256).toMatch(/^[a-f0-9]{64}$/);
+    const before = service.documents('p', 'r', item.id)[0];
+    expect(
+      (await files.readFile(before.versions[0].snapshotPath))
+        .editableDeliverable,
+    ).toBe(false);
+    await fs.writeFile(source, '# External');
+    await fs.utimes(source, baseline.mtime / 1000, baseline.mtime / 1000);
+    await expect(
+      files.writeFile(source, '# Stale', baseline.mtime, baseline.sha256),
+    ).rejects.toMatchObject({ errorCode: 'files.modified_since_read' });
+    expect(await fs.readFile(source, 'utf8')).toBe('# External');
+    expect(service.documents('p', 'r', item.id)[0].currentVersionNumber).toBe(
+      1,
+    );
+    await fs.writeFile(source, '# Initial');
+    const read = await files.readFile(source);
+    const results = await Promise.allSettled([
+      files.writeFile(source, '# First editor', read.mtime, read.sha256),
+      files.writeFile(source, '# Second editor', read.mtime, read.sha256),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
+    const saved = service.documents('p', 'r', item.id)[0];
+    expect(saved.currentVersionNumber).toBe(2);
+    expect(await fs.readFile(saved.versions[1].snapshotPath, 'utf8')).toBe(
+      '# Initial',
+    );
+    const winner = results.findIndex((result) => result.status === 'fulfilled');
+    expect(await fs.readFile(source, 'utf8')).toBe(
+      winner === 0 ? '# First editor' : '# Second editor',
+    );
+    expect(await fs.readFile(saved.versions[0].snapshotPath, 'utf8')).toBe(
+      await fs.readFile(source, 'utf8'),
+    );
+    service.setDocumentDeleted('p', 'r', item.id, saved.id, 2, true);
+    expect(files.projectDocumentEditable?.(source)).toBe(false);
+    await expect(
+      files.writeFile(
+        source,
+        '# Deleted',
+        (await fs.stat(source)).mtimeMs,
+        (await files.readFile(source)).sha256,
+      ),
+    ).rejects.toThrow();
+  });
+
   it('guards explorer mutations and uploads before touching retained files', async () => {
     const item = await service.create('p', 'r', { title: 'Explorer guards' });
     const directory = path.join(
