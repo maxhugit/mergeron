@@ -1,5 +1,21 @@
 [
   {
+    "tag": "v0.7.4",
+    "date": "2026-11-09",
+    "highlights": {
+      "fr": [
+        "Nouveau mode de sauvegarde « Données essentielles » : conservation des données utiles à la reprise, sans les journaux applicatifs ni certains caches de catalogue recréables.",
+        "Livrables Git : dossiers lisibles, titres et identités portables, avec renommage des anciens dossiers sur prévisualisation et confirmation.",
+        "La barre latérale Livrables affiche la copie Git, sa branche et l’état de synchronisation locale ; les erreurs et changements de contexte invalident les anciens indicateurs."
+      ],
+      "en": [
+        "New “Essential data” backup mode keeps recovery data while excluding application logs and selected rebuildable catalog caches.",
+        "Git deliverables use readable folders and portable titles and identities, with preview and confirmation before renaming existing folders.",
+        "The Deliverables sidebar shows the Git copy, branch and local synchronization state; errors and context changes invalidate previous status indicators."
+      ]
+    }
+  },
+  {
     "tag": "v0.7.3",
     "date": "2026-11-09",
     "highlights": {
