@@ -1457,7 +1457,7 @@
           {
             "title": "Retain versions and resolve conflicts",
             "paragraphs": [
-              "Each content import creates a Mergeron version. Exports use retained versions. Concurrent changes or deletions block the transfer without deleting the other copy. Recalculate the proposal after resolving conflicts.",
+              "Each content import creates a Mergeron version. Exports use retained versions. Concurrent changes block the transfer without deleting the other copy. Explicitly deleting a document in Mergeron removes its unchanged Git file and manifest entry; retained versions and a private recovery copy are preserved. This becomes a Git change to commit and push. A file changed only in Git remains a conflict. Recalculate the proposal after resolving conflicts.",
               "Restricted deliverables are excluded unless explicitly selected. Files over 10 MB and unresolved Git LFS pointers block this transfer; videos remain available in Mergeron. The setting displays synchronization dates and errors. Disabling preserves files and history."
             ],
             "warning": "Mergeron permissions do not protect a document after publication to Git. Conflicts require explicit resolution."

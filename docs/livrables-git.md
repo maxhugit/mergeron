@@ -98,8 +98,19 @@ si elles avaient été réalisées sur cette installation.
   Chaque écriture vérifie aussi son fichier cible. Un fichier non reconnu n’est
   pas écrasé. Les imports interrompus conservent leurs correspondances pour être
   repris sans dupliquer les documents déjà enregistrés.
-- Une suppression dans Git ou dans Mergeron constitue un conflit nécessitant
-  une décision explicite ; elle ne supprime pas l’autre exemplaire. Un livrable
+- La suppression explicite d’un document dans Mergeron retire son fichier de la
+  copie Git et son entrée du manifeste si son contenu correspond encore à la base
+  synchronisée. La modification reste non préparée : vous choisissez le commit
+  et le push. Les versions Mergeron sont conservées et une restauration du document
+  peut réexporter son contenu. Une modification propre à Git bloque le retrait.
+- Le fichier retiré est déplacé atomiquement dans le dossier privé
+  `.git/mergeron-deliverable-recovery/`, avec un relevé de son chemin d’origine.
+  Ces copies de récupération ne sont ni commitables ni purgées automatiquement.
+  Une modification tardive ou un changement de branche provoque une restauration
+  sans remplacer un nouveau fichier apparu au même chemin ; si cette restauration
+  est impossible, les deux contenus restent conservés et une intervention est signalée.
+- Une disparition non reconnue, une suppression dans Git ou celle d’un livrable
+  entier reste un conflit : elle ne supprime pas les données Mergeron. Un livrable
   finalisé ou archivé ne reçoit pas de modification entrante.
 
 Les dernières erreurs et la date de synchronisation sont affichées dans le

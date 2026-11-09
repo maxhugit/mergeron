@@ -461,6 +461,97 @@ describe('Mergeron-first Git projection policy', () => {
       'new Mergeron work',
     );
   });
+  it('exports an HTML deletion as an unstaged Git removal and can restore it from Mergeron', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'HTML cleanup',
+    });
+    async function* data() {
+      await Promise.resolve();
+      yield { filename: 'page.html', stream: Readable.from('<p>retained</p>') };
+    }
+    await deliverables.uploadDocuments('p', 'board', item.id, data(), {});
+    const doc = deliverables.documents('p', 'board', item.id)[0];
+    await sync();
+    const run = (args: string[]) =>
+      execFileSync('git', ['-C', repo, ...args]).toString();
+    run(['add', '.']);
+    run([
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'commit',
+      '-qm',
+      'Exported HTML',
+    ]);
+    const head = run(['rev-parse', 'HEAD']);
+    service.onModuleInit();
+    deliverables.setDocumentDeleted('p', 'board', item.id, doc.id, 1, true);
+    const relative = `livrables/${item.id}/page.html`;
+    await vi.waitFor(
+      async () => {
+        expect((await service.status('p')).copies[0]).toMatchObject({
+          pending: false,
+          lastError: null,
+        });
+        await expect(fs.stat(path.join(repo, relative))).rejects.toThrow();
+      },
+      { timeout: 4000 },
+    );
+    expect(run(['diff', '--name-status'])).toContain('D\t' + relative);
+    expect(run(['diff', '--cached', '--name-only'])).toBe('');
+    expect(run(['rev-parse', 'HEAD'])).toBe(head);
+    const manifest = JSON.parse(
+      await fs.readFile(
+        path.join(repo, 'livrables', item.id, 'livrable.json'),
+        'utf8',
+      ),
+    ) as { documents: unknown[] };
+    expect(manifest.documents).toEqual([]);
+    expect(await fs.readFile(doc.sourcePath, 'utf8')).toBe('<p>retained</p>');
+    deliverables.setDocumentDeleted('p', 'board', item.id, doc.id, 1, false);
+    await vi.waitFor(
+      async () => {
+        expect((await service.status('p')).copies[0]).toMatchObject({
+          pending: false,
+          lastError: null,
+        });
+        expect(await fs.readFile(path.join(repo, relative), 'utf8')).toBe(
+          '<p>retained</p>',
+        );
+      },
+      { timeout: 4000 },
+    );
+    expect(run(['status', '--porcelain'])).toBe('');
+  });
+  it('does not remove or reimport Git-only edits after an explicit Mergeron deletion', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Deletion conflict',
+    });
+    const doc = await upload(item.id, 'common');
+    await sync();
+    const file = path.join(repo, 'livrables', item.id, 'notes.md');
+    await fs.writeFile(file, 'precious Git work');
+    deliverables.setDocumentDeleted('p', 'board', item.id, doc.id, 1, true);
+    const preview = await service.preview('p', options);
+    expect(preview.canApply).toBe(false);
+    expect(preview.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'conflict',
+        reason: 'deleted_document_changed_in_git',
+      }),
+    );
+    await expect(
+      service.apply('p', { options, fingerprint: preview.fingerprint }),
+    ).rejects.toThrow('GIT_DELIVERABLES_CONFLICTS');
+    expect(await fs.readFile(file, 'utf8')).toBe('precious Git work');
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].deletedAt,
+    ).not.toBeNull();
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].versions,
+    ).toHaveLength(1);
+  });
   it('saves the mode before any copy and exports retained work when a copy becomes ready', async () => {
     copyViews = [];
     service.onModuleInit();

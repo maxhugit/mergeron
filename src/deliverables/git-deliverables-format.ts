@@ -193,6 +193,72 @@ export async function writeGitFile(
   }
 }
 
+/** Remove only the reviewed bytes, retaining an atomic, private recovery copy.
+ * A late edit or branch change restores the moved file without replacing a new target.
+ */
+export async function removeGitFile(
+  root: string,
+  relative: string,
+  expected: string,
+  assertContext: () => Promise<void>,
+): Promise<string | null> {
+  const target = await gitChild(root, relative);
+  const current = await readGitFile(root, relative);
+  if (!current) return null;
+  if (digest(current) !== expected)
+    throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+  const git = path.join(root, '.git');
+  const gitEntry = await fs.lstat(git);
+  if (!gitEntry.isDirectory() || gitEntry.isSymbolicLink())
+    throw new BadRequestException('GIT_DELIVERABLES_UNSAFE_PATH');
+  const recovery = path.join(git, 'mergeron-deliverable-recovery');
+  await fs
+    .mkdir(recovery, { mode: 0o700 })
+    .catch((e: NodeJS.ErrnoException) => {
+      if (e.code !== 'EEXIST') throw e;
+    });
+  const directory = await fs.lstat(recovery);
+  if (
+    !directory.isDirectory() ||
+    directory.isSymbolicLink() ||
+    directory.mode & 0o077
+  )
+    throw new BadRequestException('GIT_DELIVERABLES_UNSAFE_PATH');
+  const name = randomUUID();
+  const backup = path.join(recovery, name);
+  await fs.writeFile(
+    backup + '.json',
+    JSON.stringify({ source: relative, reviewedSha256: expected }),
+    { flag: 'wx', mode: 0o600 },
+  );
+  let moved = false;
+  try {
+    await assertContext();
+    await gitChild(root, relative);
+    await fs.rename(target, backup);
+    moved = true;
+    const captured = await readGitFile(recovery, name);
+    if (!captured || digest(captured) !== expected)
+      throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+    await assertContext();
+    return '.git/mergeron-deliverable-recovery/' + name;
+  } catch (error) {
+    if (moved) {
+      try {
+        await gitChild(root, relative);
+        // Exclusive restoration: a newly created working file wins its path.
+        await fs.link(backup, target);
+        await fs.unlink(backup);
+      } catch {
+        throw new ConflictException(
+          'GIT_DELIVERABLES_DELETE_RECOVERY_REQUIRED',
+        );
+      }
+    }
+    throw error;
+  }
+}
+
 export async function discoverGitDeliverables(
   root: string,
   directory: string,
