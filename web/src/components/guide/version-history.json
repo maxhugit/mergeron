@@ -1,5 +1,21 @@
 [
   {
+    "tag": "v0.7.3",
+    "date": "2026-11-09",
+    "highlights": {
+      "fr": [
+        "Livrables Git : enregistrement du mode sans copie locale et export initial dès son activation.",
+        "Les versions conservées dans Mergeron restent prioritaires ; les changements Git inconnus sont proposés à la validation, avec protection contre les conflits entre agents et les changements de branche.",
+        "La suppression explicite d’un document est répercutée dans la copie Git, avec récupération privée du fichier et sans commit ni push automatique."
+      ],
+      "en": [
+        "Git deliverables: save the mode without a local copy and start the initial export when it is enabled.",
+        "Versions retained in Mergeron remain authoritative; unknown Git changes require approval, with protection against concurrent agents and branch changes.",
+        "Explicit document deletion is reflected in the Git copy, with private file recovery and no automatic commit or push."
+      ]
+    }
+  },
+  {
     "tag": "v0.7.2",
     "date": "2026-11-08",
     "highlights": {
@@ -145,12 +161,8 @@
     "tag": "v0.5.1",
     "date": "2026-10-29",
     "highlights": {
-      "fr": [
-        "Navigateur isolé pris en charge par le Manager en production."
-      ],
-      "en": [
-        "Manager support for the isolated browser in production."
-      ]
+      "fr": ["Navigateur isolé pris en charge par le Manager en production."],
+      "en": ["Manager support for the isolated browser in production."]
     }
   },
   {
