@@ -52,6 +52,8 @@ import {
   LEGACY_FULL,
   withoutDataBackup,
   minimalHomeEntries,
+  essentialPathsSupported,
+  ESSENTIAL,
 } from './backup-policy.mjs';
 import {
   assertCliPolicyImage,
@@ -1233,6 +1235,15 @@ export class TransactionalUpdater {
         else throw error;
       }
     }
+    if (backupPolicy === ESSENTIAL) {
+      const application = containers.find(
+        (item) => item.component === 'application',
+      );
+      if (!application) throw new Error('updateBlocked');
+      const inspect = await this.docker.inspectContainer(application.id);
+      if (!essentialPathsSupported(inspect.Config.Env))
+        blockers.push('updateEssentialBackupPathUnsupported');
+    }
     let backupScope = backupEntries(backupPolicy);
     if (backupPolicy === MINIMAL) {
       const application = containers.find(
@@ -1289,7 +1300,7 @@ export class TransactionalUpdater {
               'logs',
               'other-home-files',
             ]
-          : backupPolicy === 'essential-v1'
+          : backupPolicy === ESSENTIAL
             ? [
                 '/appdata',
                 'logs',

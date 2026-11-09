@@ -1,3 +1,5 @@
+import { posix } from 'node:path';
+
 /** Versioned policies: recovery uses the recorded policy, never today's defaults. */
 export const persistentEntries = [
   'home',
@@ -184,4 +186,29 @@ export function excludesBackupDirectory(policy, relativePath) {
     '.ruff_cache',
     '__pycache__',
   ].includes(name);
+}
+
+/** A custom profile/database must never be placed inside an excluded cache/log root. */
+export function essentialPathsSupported(environment = []) {
+  const env = Object.fromEntries(
+    environment.map((entry) => {
+      const index = entry.indexOf('=');
+      return [entry.slice(0, index), entry.slice(index + 1)];
+    }),
+  );
+  const home = env.CODEX_HOME || '/home/codex/.codex';
+  const paths = [home, env.WEBUI_DB_PATH || `${home}/codex-webui.sqlite`];
+  const excluded = [
+    '/app/logs',
+    '/home/codex/.codex/cache/remote_plugin_catalog',
+    '/home/codex/.codex/cache/codex_apps_tools',
+  ];
+  return paths.every(
+    (path) =>
+      posix.isAbsolute(path) &&
+      !excluded.some((root) => {
+        const normalized = posix.normalize(path);
+        return normalized === root || normalized.startsWith(root + '/');
+      }),
+  );
 }

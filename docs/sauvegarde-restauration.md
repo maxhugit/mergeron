@@ -136,6 +136,8 @@ Ces caches peuvent être retéléchargés après restauration ; un accès au ser
 externe peut alors être nécessaire. Les profils Codex déplacés, les caches
 inconnus, `plugins/cache`, `.tmp/plugins` et les bases de diagnostic Codex restent
 conservés par prudence. Aucun nom générique de cache dans un projet n'est exclu.
+Si le profil Codex ou la base SQLite a été déplacé dans un cache exclu ou les
+journaux applicatifs, le plan est bloqué avant tout arrêt : choisir Complète.
 Ce périmètre volontairement plus étroit ne promet pas le gain théorique obtenu
 en retirant tous les temporaires et plugins. La taille compressée dépend des données.
 

@@ -304,5 +304,6 @@
   "managerEssentialBackupHelp": "Retains the database, configuration, secrets, conversations, memories, projects, deliverables, versions, drafts and complete Git repositories. Also retains Codex, installed tools and custom plugins. Excludes application logs and only the remote_plugin_catalog and codex_apps_tools caches in the standard Codex profile. Other caches and temporary files remain included. External /appdata mounts require a separate backup.",
   "managerEssentialBackupUnsupported": "This Manager does not support Essential data yet. Update it using another backup mode.",
   "managerEssentialUpdateWarning": "Services will stop to back up essential data and verify their health. Tools, documents and histories are included. Application logs and the two Codex catalog caches are excluded; these caches may be downloaded again. External /appdata files are outside the backup.",
-  "managerEssentialRollbackWarning": "Previous images and the backed-up essential data will be restored. Excluded caches may be downloaded again; application logs will not be restored. Replaced data remains in quarantine."
+  "managerEssentialRollbackWarning": "Previous images and the backed-up essential data will be restored. Excluded caches may be downloaded again; application logs will not be restored. Replaced data remains in quarantine.",
+  "updateEssentialBackupPathUnsupported": "The Codex profile or database is inside an excluded directory. Choose Full to preserve this data."
 }

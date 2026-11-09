@@ -2070,3 +2070,34 @@ test('essential manual checkpoint restores retained data through the historical 
   assert.equal(await readFile(join(root, kept), 'utf8'), 'before');
   await assert.rejects(lstat(join(root, cache)), { code: 'ENOENT' });
 });
+
+test('essential preflight refuses a relocated profile or database under an excluded root before stopping services', async (t) => {
+  const { updater, docker } = await fixture(t);
+  const app = docker.values.get('original-application');
+  const original = app.Config.Env;
+  for (const override of [
+    'CODEX_HOME=/home/codex/.codex/cache/remote_plugin_catalog/profile',
+    'WEBUI_DB_PATH=/home/codex/.codex/cache/codex_apps_tools/../codex_apps_tools/state.db',
+    'WEBUI_DB_PATH=/app/logs/database.sqlite',
+  ]) {
+    app.Config.Env = [...original, override];
+    const plan = await updater.plan(images, 'standard', 'essential');
+    assert.equal(plan.applicable, false);
+    assert.ok(plan.blockers.includes('updateEssentialBackupPathUnsupported'));
+    await assert.rejects(
+      updater.begin({
+        images,
+        backupMode: 'essential',
+        confirmation: plan.confirmation,
+        expectedFingerprint: plan.fingerprint,
+      }),
+      /updateBlocked/,
+    );
+    assert.ok(!docker.calls.some(([action]) => action === 'stop'));
+  }
+  app.Config.Env = [...original, 'CODEX_HOME=/home/codex/custom-profile'];
+  assert.equal(
+    (await updater.plan(images, 'standard', 'essential')).applicable,
+    true,
+  );
+});
