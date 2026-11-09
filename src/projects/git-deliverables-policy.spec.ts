@@ -1,3 +1,4 @@
+import { readableDeliverableFolder } from '../deliverables/git-deliverables-format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -181,7 +182,12 @@ describe('Mergeron-first Git projection policy', () => {
     await service.apply('p', { options, fingerprint: plan.fingerprint });
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('Mergeron v2');
@@ -209,7 +215,12 @@ describe('Mergeron-first Git projection policy', () => {
     run(repo, ['remote', 'add', 'origin', remote]);
     execFileSync('git', ['clone', '--quiet', remote, publisher]);
     await fs.writeFile(
-      path.join(publisher, 'livrables', item.id, 'notes.md'),
+      path.join(
+        publisher,
+        'livrables',
+        readableDeliverableFolder(item.title),
+        'notes.md',
+      ),
       'New work from Git server',
     );
     run(publisher, [
@@ -256,7 +267,12 @@ describe('Mergeron-first Git projection policy', () => {
     const doc = await upload(item.id, 'common v1');
     await sync();
     await upload(item.id, 'new Mergeron work', doc.id);
-    const file = path.join(repo, 'livrables', item.id, 'notes.md');
+    const file = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+      'notes.md',
+    );
     await fs.writeFile(file, 'new Git work');
     const plan = await service.preview('p', options);
     expect(plan.canApply).toBe(false);
@@ -332,7 +348,12 @@ describe('Mergeron-first Git projection policy', () => {
     await service.apply('p', { options, fingerprint: switched.fingerprint });
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('current Mergeron v2');
@@ -417,7 +438,12 @@ describe('Mergeron-first Git projection policy', () => {
       async () => {
         expect(
           await fs.readFile(
-            path.join(repo, 'livrables', item.id, 'notes.md'),
+            path.join(
+              repo,
+              'livrables',
+              readableDeliverableFolder(item.title),
+              'notes.md',
+            ),
             'utf8',
           ),
         ).toBe('retained before activation');
@@ -438,7 +464,12 @@ describe('Mergeron-first Git projection policy', () => {
     await sync();
     service.disable('p', 'board');
     await upload(item.id, 'new Mergeron work', doc.id);
-    const file = path.join(repo, 'livrables', item.id, 'notes.md');
+    const file = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+      'notes.md',
+    );
     await fs.writeFile(file, 'new Git work');
     service.onModuleInit();
     service.configure('p', {
@@ -487,7 +518,7 @@ describe('Mergeron-first Git projection policy', () => {
     const head = run(['rev-parse', 'HEAD']);
     service.onModuleInit();
     deliverables.setDocumentDeleted('p', 'board', item.id, doc.id, 1, true);
-    const relative = `livrables/${item.id}/page.html`;
+    const relative = `livrables/${readableDeliverableFolder(item.title)}/page.html`;
     await vi.waitFor(
       async () => {
         expect((await service.status('p')).copies[0]).toMatchObject({
@@ -503,7 +534,12 @@ describe('Mergeron-first Git projection policy', () => {
     expect(run(['rev-parse', 'HEAD'])).toBe(head);
     const manifest = JSON.parse(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'livrable.json'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'livrable.json',
+        ),
         'utf8',
       ),
     ) as { documents: unknown[] };
@@ -530,7 +566,12 @@ describe('Mergeron-first Git projection policy', () => {
     });
     const doc = await upload(item.id, 'common');
     await sync();
-    const file = path.join(repo, 'livrables', item.id, 'notes.md');
+    const file = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+      'notes.md',
+    );
     await fs.writeFile(file, 'precious Git work');
     deliverables.setDocumentDeleted('p', 'board', item.id, doc.id, 1, true);
     const preview = await service.preview('p', options);
@@ -584,7 +625,12 @@ describe('Mergeron-first Git projection policy', () => {
       async () => {
         expect(
           await fs.readFile(
-            path.join(repo, 'livrables', item.id, 'notes.md'),
+            path.join(
+              repo,
+              'livrables',
+              readableDeliverableFolder(item.title),
+              'notes.md',
+            ),
             'utf8',
           ),
         ).toBe('retained while waiting');

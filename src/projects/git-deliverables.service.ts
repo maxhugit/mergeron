@@ -8,7 +8,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
-import { lstat, readFile } from 'node:fs/promises';
+import { lstat, readFile, rename } from 'node:fs/promises';
 import {
   lstatSync,
   realpathSync,
@@ -35,6 +35,9 @@ import { DeliverablesService } from '../deliverables/deliverables.service';
 import { DocumentOrganizationService } from '../deliverables/document-organization.service';
 import {
   digest,
+  portableDeliverableId,
+  portableDocumentId,
+  readableDeliverableFolder,
   discoverGitDeliverables,
   gitChild,
   gitDeliverablesIndex,
@@ -58,6 +61,7 @@ const optionsSchema = z
     directory: z.string().transform(relativeGitDirectory),
     restrictedIds: z.array(z.string().max(100)).max(100).default([]),
     adoptFolders: z.boolean().default(false),
+    renameFolders: z.boolean().optional(),
   })
   .strict();
 type Options = z.infer<typeof optionsSchema>;
@@ -93,8 +97,9 @@ type Settings = Options & {
 };
 type Change = {
   deliverable: string;
+  deliverableId?: string;
   document?: string;
-  action: 'import' | 'export' | 'conflict' | 'excluded';
+  action: 'import' | 'export' | 'conflict' | 'excluded' | 'rename';
   reason: string;
 };
 type Local = {
@@ -463,6 +468,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           gitDeliverables: {
             ...settings,
             copyId: undefined,
+            renameFolders: undefined,
             bindings: {},
             copies: states,
           },
@@ -475,7 +481,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
   configure(p: string, input: unknown) {
     requireExecutionAccess();
     const schema = optionsSchema
-      .omit({ copyId: true, adoptFolders: true })
+      .omit({ copyId: true, adoptFolders: true, renameFolders: true })
       .extend({ enabled: z.boolean() });
     const parsed = schema.safeParse(input);
     if (!parsed.success)
@@ -577,6 +583,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           pending: saved?.pending ?? false,
           pendingBranch: saved?.pendingBranch ?? null,
           id: c.id,
+          sourceResourceId: c.sourceResourceId,
+          ownerThreadIds: c.ownerThreadIds,
+          localPath: c.localPath,
           name: c.name,
           writable: c.accessMode === 'read_write',
           owned: c.ownerThreadIds.length > 0,
@@ -624,7 +633,17 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         discoveryError = errorCode(e);
       }
     }
-    return { boards, copies, discovered, discoveryError, proposal };
+    return {
+      boards,
+      copies,
+      discovered,
+      discoveryError,
+      proposal,
+      active: Boolean(
+        board && (this.busy.has(board.id) || this.planning.has(board.id)),
+      ),
+      verifiedAt: proposal ? Date.now() : null,
+    };
   }
   disable(p: string, r: string) {
     requireExecutionAccess();
@@ -639,16 +658,27 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('GIT_DELIVERABLES_INVALID_SETTINGS');
     return result.data;
   }
-  private local(p: string, r: string, settings: Settings | null) {
+  private local(
+    p: string,
+    r: string,
+    settings: Pick<Settings, 'bindings'> | null,
+    presentIds = new Set<string>(),
+  ) {
     const rows = this.deliverables.board(p, r).deliverables;
     if (rows.length > 100)
       throw new BadRequestException('GIT_DELIVERABLES_LIMIT');
     const result = new Map<string, Local>();
     for (const row of rows) {
+      const candidates = Object.entries(settings?.bindings ?? {}).filter(
+        ([, binding]) => binding.localId === row.id,
+      );
+      const present = candidates.filter(([id]) => presentIds.has(id));
+      if (present.length > 1)
+        throw new ConflictException('GIT_DELIVERABLES_DUPLICATE_ID');
       const remoteId =
-        Object.entries(settings?.bindings ?? {}).find(
-          ([, b]) => b.localId === row.id,
-        )?.[0] ?? row.id;
+        present[0]?.[0] ??
+        candidates[0]?.[0] ??
+        portableDeliverableId(p, r, row.id);
       const allDocuments = this.deliverables.documents(p, r, row.id);
       const documents = allDocuments.filter((d) => d.deletedAt === null);
       const labels = this.organization.read(p, r, row.id);
@@ -669,7 +699,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             id:
               Object.entries(
                 settings?.bindings[remoteId]?.documents ?? {},
-              ).find(([, v]) => v.localId === d.id)?.[0] ?? d.id,
+              ).find(([, v]) => v.localId === d.id)?.[0] ??
+              (remoteId === portableDeliverableId(p, r, row.id)
+                ? portableDocumentId(remoteId, d.id)
+                : d.id),
             path: d.name,
             labels: labelNames(labels.assignments[d.id] ?? []),
           }))
@@ -684,6 +717,14 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       });
     }
     return result;
+  }
+  private localDocumentId(local: Local | undefined, portableId: string) {
+    const name = local?.manifest.documents.find(
+      (entry) => entry.id === portableId,
+    )?.path;
+    return name
+      ? local?.documents.find((document) => document.name === name)?.id
+      : undefined;
   }
   private async build(p: string, options: Options) {
     if (this.planning.size >= 2 || this.planning.has(options.boardId))
@@ -747,19 +788,92 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       for (const branch of Object.values(state.branches ?? {}))
         Object.assign(identities, branch.bindings);
     }
-    const local = this.local(
-      p,
-      options.boardId,
-      identitySettings ? { ...identitySettings, bindings: identities } : null,
-    );
     const remote = await discoverGitDeliverables(
       root,
       options.directory,
       options.adoptFolders,
     );
+    for (const entry of remote) {
+      if (!identities[entry.manifest.id])
+        identities[entry.manifest.id] = {
+          localId: entry.manifest.id,
+          folder: entry.folder,
+          metadata: '',
+          documents: {},
+        };
+    }
+    const local = this.local(
+      p,
+      options.boardId,
+      { bindings: identities },
+      new Set(remote.map((entry) => entry.manifest.id)),
+    );
+    const folders = new Map<string, string>();
+    const occupied = new Set(
+      remote.map((entry) => entry.folder.normalize('NFKC').toLocaleLowerCase()),
+    );
+    for (const [id, value] of [...local.entries()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      const known =
+        remote.find((entry) => entry.manifest.id === id)?.folder ??
+        previous?.bindings[id]?.folder ??
+        identities[id]?.folder;
+      let folder =
+        (options.renameFolders ? undefined : known) ??
+        `${options.directory}/${readableDeliverableFolder(value.manifest.title)}`;
+      if (
+        (!known || options.renameFolders) &&
+        folder !== known &&
+        occupied.has(folder.normalize('NFKC').toLocaleLowerCase())
+      )
+        folder += `-${digest(id).slice(0, 8)}`;
+      if (
+        (!known || options.renameFolders) &&
+        folder !== known &&
+        occupied.has(folder.normalize('NFKC').toLocaleLowerCase())
+      )
+        throw new ConflictException('GIT_DELIVERABLES_FOLDER_COLLISION');
+      occupied.add(folder.normalize('NFKC').toLocaleLowerCase());
+      folders.set(id, folder);
+    }
+    const folderMoves: {
+      id: string;
+      from: string;
+      to: string;
+      hash: string;
+    }[] = [];
     const changes: Change[] = [];
+    for (const [id, value] of local) {
+      const from = remote.find((entry) => entry.manifest.id === id);
+      const to = folders.get(id)!;
+      if (
+        !from?.hash ||
+        from.folder === to ||
+        (value.item.confidentiality === 'restricted' &&
+          !options.restrictedIds.includes(value.item.id))
+      )
+        continue;
+      const existing = await lstat(await gitChild(root, to)).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null;
+          throw error;
+        },
+      );
+      changes.push({
+        deliverable: value.manifest.title,
+        deliverableId: value.item.id,
+        action: existing ? 'conflict' : 'rename',
+        reason: existing ? 'folder_collision' : 'readable_folder',
+        document: `${from.folder} → ${to}`,
+      });
+      folderMoves.push({ id, from: from.folder, to, hash: from.hash });
+    }
+
     const documentActions = new Map<string, 'import' | 'export' | 'delete'>();
     const evidence: unknown[] = [
+      [...folders],
+      folderMoves,
       options,
       previous
         ? {
@@ -829,7 +943,14 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         action: Change['action'],
         reason: string,
         document?: string,
-      ) => changes.push({ deliverable: title, document, action, reason });
+      ) =>
+        changes.push({
+          deliverable: title,
+          deliverableId: l?.item.id,
+          document,
+          action,
+          reason,
+        });
       if (
         l?.item.confidentiality === 'restricted' &&
         !options.restrictedIds.includes(l.item.id)
@@ -849,7 +970,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           );
           if (!latest || latest.size > largeGitDocument)
             add('conflict', 'large_file_requires_lfs', doc.name);
-          const existing = await read(`${options.directory}/${id}/${doc.name}`);
+          const existing = await read(`${folders.get(id)!}/${doc.name}`);
           if (existing.hash && existing.hash !== latest?.sha256)
             add('conflict', 'untracked_file_collision', doc.name);
         }
@@ -882,7 +1003,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         const d = l?.documents.find(
           (d) =>
             d.id ===
-            (bd?.localId ?? identities[id]?.documents[docId]?.localId ?? docId),
+            (bd?.localId ??
+              identities[id]?.documents[docId]?.localId ??
+              this.localDocumentId(l, docId) ??
+              docId),
         );
         const latest = d?.versions.find(
           (v) => v.number === d.currentVersionNumber,
@@ -977,7 +1101,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       if (
         l &&
         ['finalized', 'archived'].includes(l.item.lifecycleStatus) &&
-        changes.some((c) => c.deliverable === title && c.action === 'import')
+        changes.some(
+          (c) => c.deliverableId === l.item.id && c.action === 'import',
+        )
       )
         add('conflict', 'read_only_deliverable');
     }
@@ -988,7 +1114,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           options.restrictedIds.includes(l.item.id),
       )
       .flatMap(([id, l]) => {
-        const folder = remotes.get(id)?.folder ?? `${options.directory}/${id}`;
+        const folder = folders.get(id)!;
         return [
           `${folder}/livrable.json`,
           ...l.manifest.documents.map((d) => `${folder}/${d.path}`),
@@ -1029,8 +1155,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       changes,
       files,
       identities,
+      folders,
+      folderMoves,
       documentActions,
-      fingerprint: digest(JSON.stringify(evidence)),
+      fingerprint: digest(JSON.stringify([evidence, changes])),
     };
   }
   private assertLocal(p: string, r: string, expected: Local) {
@@ -1062,6 +1190,12 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     return {
       fingerprint: plan.fingerprint,
       changes: plan.changes,
+      locations: [...plan.local.entries()].map(([id, value]) => ({
+        deliverableId: value.item.id,
+        portableId: id,
+        title: value.manifest.title,
+        folder: plan.folders.get(id)!,
+      })),
       copyId: plan.options.copyId,
       context: plan.context,
       canApply: !plan.changes.some((c) => c.action === 'conflict'),
@@ -1099,6 +1233,38 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         this.save(p, options.boardId, settings);
         const recoveries: { document: string; path: string }[] = [];
         try {
+          for (const move of plan.folderMoves) {
+            await this.assertGitContext(plan.root, plan.context);
+            const from = await gitChild(plan.root, move.from);
+            const to = await gitChild(plan.root, move.to);
+            const info = await lstat(from);
+            if (!info.isDirectory() || info.isSymbolicLink())
+              throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+            const occupied = await lstat(to).catch(
+              (error: NodeJS.ErrnoException) => {
+                if (error.code === 'ENOENT') return null;
+                throw error;
+              },
+            );
+            const bytes = await readGitFile(
+              plan.root,
+              `${move.from}/livrable.json`,
+              256 * 1024,
+            );
+            if (occupied || !bytes || digest(bytes) !== move.hash)
+              throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+            await rename(from, to);
+            // An interrupted migration is discoverable by the same portable ID.
+            // Never copy/delete its children or overwrite a new directory after a branch switch.
+            await this.assertGitContext(plan.root, plan.context);
+            const remote = plan.remotes.get(move.id)!;
+            remote.folder = move.to;
+            for (const [path, value] of [...plan.files])
+              if (path.startsWith(move.from + '/')) {
+                plan.files.delete(path);
+                plan.files.set(move.to + path.slice(move.from.length), value);
+              }
+          }
           for (const id of new Set([
             ...plan.local.keys(),
             ...plan.remotes.keys(),
@@ -1150,7 +1316,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             const manifest = structuredClone(
               remotePreferred ? r.manifest : l.manifest,
             );
-            const folder = r?.folder ?? `${options.directory}/${id}`;
+            const folder = r?.folder ?? plan.folders.get(id)!;
             const binding = settings.bindings[id] ?? {
               localId: l.item.id,
               folder,
@@ -1226,6 +1392,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                     d.id ===
                     (binding.documents[entry.id]?.localId ??
                       plan.identities[id]?.documents[entry.id]?.localId ??
+                      this.localDocumentId(l, entry.id) ??
                       entry.id),
                 );
               const remoteEntry = r?.manifest.documents.find(
@@ -1241,6 +1408,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                     d.id ===
                     (binding.documents[entry.id]?.localId ??
                       plan.identities[id]?.documents[entry.id]?.localId ??
+                      this.localDocumentId(l, entry.id) ??
                       entry.id),
                 );
               if (
@@ -1360,6 +1528,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                   removed: true,
                 };
             }
+            binding.folder = folder;
             binding.metadata = metadataHash(manifest);
             binding.pendingImport = false;
             binding.pendingExport = false;

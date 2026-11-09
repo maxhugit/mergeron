@@ -194,6 +194,7 @@ function GitDeliverablesConfiguration({
   );
   const [preview, setPreview] = useState<Preview | null>(null);
   const [adoptFolders, setAdoptFolders] = useState(false);
+  const [renameFolders, setRenameFolders] = useState(false);
   const [success, setSuccess] = useState(false);
   const options = {
     boardId: board.id,
@@ -201,6 +202,7 @@ function GitDeliverablesConfiguration({
     directory,
     restrictedIds,
     adoptFolders,
+    renameFolders,
   };
   const mutation = useMutation({
     mutationFn: async (
@@ -223,6 +225,7 @@ function GitDeliverablesConfiguration({
           options,
           fingerprint: preview.fingerprint,
         });
+        setRenameFolders(false);
       } else if (action === 'disable')
         await post(projectId, `/${encodeURIComponent(board.id)}/disable`, {});
       setPreview(null);
@@ -323,6 +326,20 @@ function GitDeliverablesConfiguration({
             }}
           />
           <span>{t('gitDeliverablesAdoptFolders')}</span>
+        </label>
+      )}
+      {copyId && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={renameFolders}
+            disabled={!enabled || mutation.isPending}
+            onChange={(event) => {
+              setRenameFolders(event.target.checked);
+              dirty();
+            }}
+          />
+          <span>{t('gitDeliverablesRenameFolders')}</span>
         </label>
       )}
       <p className="text-sm text-muted-foreground">

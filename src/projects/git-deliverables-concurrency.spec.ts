@@ -1,3 +1,4 @@
+import { readableDeliverableFolder } from '../deliverables/git-deliverables-format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -196,7 +197,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     });
     const doc = await upload(item.id, 'initial');
     await sync();
-    const file = path.join(repo, 'livrables', item.id, 'notes.md');
+    const file = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+      'notes.md',
+    );
     await fs.writeFile(file, 'incoming Git work');
     const plan = await service.preview('p', options);
     service.onModuleInit();
@@ -265,7 +271,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     ).toBe(2);
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('base');
@@ -365,7 +376,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     ).rejects.toThrow('GIT_DELIVERABLES_CHANGED');
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('base');
@@ -415,7 +431,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     );
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('version two');
@@ -456,14 +477,26 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     await service.apply('p', { options, fingerprint: retry.fingerprint });
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('retained');
     expect(
       deliverables.documents('p', 'board', item.id)[0].versions,
     ).toHaveLength(1);
-    await fs.rm(path.join(repo, 'livrables', item.id, 'livrable.json'));
+    await fs.rm(
+      path.join(
+        repo,
+        'livrables',
+        readableDeliverableFolder(item.title),
+        'livrable.json',
+      ),
+    );
     expect((await service.preview('p', options)).changes).toContainEqual(
       expect.objectContaining({ action: 'conflict', reason: 'removed_in_git' }),
     );
@@ -489,7 +522,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
       fingerprint: initial.fingerprint,
     });
     await fs.writeFile(
-      path.join(repo, 'livrables', item.id, 'notes.md'),
+      path.join(
+        repo,
+        'livrables',
+        readableDeliverableFolder(item.title),
+        'notes.md',
+      ),
       'diverged in first copy',
     );
     service.onModuleInit();
@@ -516,7 +554,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     await finished;
     expect(
       await fs.readFile(
-        path.join(repo2, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo2,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('new common version');
@@ -554,7 +597,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
       async () => {
         expect(
           await fs.readFile(
-            path.join(repo, 'livrables', item.id, 'notes.md'),
+            path.join(
+              repo,
+              'livrables',
+              readableDeliverableFolder(item.title),
+              'notes.md',
+            ),
             'utf8',
           ),
         ).toBe('current Mergeron version');
@@ -616,7 +664,12 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     await service.apply('p', { options, fingerprint: plan.fingerprint });
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('next');
@@ -646,14 +699,26 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     ).rejects.toThrow('Interrupted manifest save');
     expect(interrupted).toBe(true);
     await expect(
-      fs.stat(path.join(repo, 'livrables', item.id, 'notes.md')),
+      fs.stat(
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
+      ),
     ).rejects.toThrow();
     const retry = await service.preview('p', options);
     expect(retry.canApply).toBe(true);
     await service.apply('p', { options, fingerprint: retry.fingerprint });
     const manifest = JSON.parse(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'livrable.json'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'livrable.json',
+        ),
         'utf8',
       ),
     ) as { documents: unknown[] };

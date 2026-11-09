@@ -1,3 +1,8 @@
+import { useDeliverableGitStatus } from '@/hooks/use-deliverable-git-status';
+import {
+  DeliverableGitBanner,
+  DeliverableGitBadge,
+} from './explorer-deliverable-git-status';
 import { useAgentDocumentView } from '@/hooks/use-agent-document-view';
 import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
 import { Button } from '@/components/ui/button';
@@ -30,6 +35,7 @@ import { showSnackbar } from '@/stores/snackbar-store';
 export function ExplorerDeliverables({
   project,
   agentThreadId,
+  preferredGitResourceId,
   onFile,
   onReference,
   pending,
@@ -40,11 +46,34 @@ export function ExplorerDeliverables({
   revealPath?: string | null;
   project: ProjectSummary;
   agentThreadId?: string;
+  preferredGitResourceId?: string | null;
   onFile: (path: string) => void;
   onReference?: (path: string) => void;
   pending: boolean;
 }) {
   const boards = useDeliverableBoards(project);
+  const sync = useDeliverableGitStatus(
+    project.id,
+    agentThreadId,
+    preferredGitResourceId,
+    JSON.stringify(
+      boards.flatMap(
+        (board) =>
+          board.data?.deliverables.map((item) => [
+            item.id,
+            item.version,
+            item.title,
+            item.description,
+            board.dataUpdatedAt,
+            item.documents.map((doc) => [
+              doc.id,
+              doc.currentVersionNumber,
+              doc.deletedAt,
+            ]),
+          ]) ?? [],
+      ),
+    ),
+  );
   const session = usePlatformSession();
   const client = useQueryClient();
   const { t } = useTranslation('deliverables');
@@ -95,6 +124,11 @@ export function ExplorerDeliverables({
     (!(session.data?.personId && agentThreadId) && opened.id === id);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <DeliverableGitBanner
+        sync={sync}
+        projectId={project.id}
+        canManage={session.isAdministrator}
+      />
       <div className="flex shrink-0 items-center gap-2 border-b p-2 text-xs">
         {session.isAdministrator && (
           <Button
@@ -203,6 +237,7 @@ export function ExplorerDeliverables({
                     <ChevronRight className="h-3 w-3" />
                   )}
                 </button>
+                <DeliverableGitBadge sync={sync} itemId={item.id} />
                 <span data-deliverable-actions>
                   <DeliverableRowActions
                     item={item}

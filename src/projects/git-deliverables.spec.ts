@@ -1,3 +1,5 @@
+import * as gitFormat from '../deliverables/git-deliverables-format';
+import { readableDeliverableFolder } from '../deliverables/git-deliverables-format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -212,7 +214,11 @@ describe('optional Git deliverables with real retained versions and a real repos
     );
     await expect(fs.stat(path.join(repo, 'livrables'))).rejects.toThrow();
     await service.apply('p', { options, fingerprint: preview.fingerprint });
-    const folder = path.join(repo, 'livrables', item.id);
+    const folder = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+    );
     expect(await fs.readFile(path.join(folder, 'notes.md'), 'utf8')).toBe(
       '# retained',
     );
@@ -220,7 +226,7 @@ describe('optional Git deliverables with real retained versions and a real repos
     expect(raw).not.toContain(root);
     expect(
       (JSON.parse(raw) as { documents: { id: string }[] }).documents[0].id,
-    ).toBe(doc.id);
+    ).not.toBe(doc.id);
     expect(
       execFileSync('git', [
         '-C',
@@ -259,7 +265,12 @@ describe('optional Git deliverables with real retained versions and a real repos
     await sync();
     const plan = await service.preview('p', options);
     await fs.writeFile(
-      path.join(repo, 'livrables', item.id, 'notes.md'),
+      path.join(
+        repo,
+        'livrables',
+        readableDeliverableFolder(item.title),
+        'notes.md',
+      ),
       'remote',
     );
     await expect(
@@ -274,7 +285,12 @@ describe('optional Git deliverables with real retained versions and a real repos
     expect(await fs.readFile(doc.sourcePath, 'utf8')).toBe('local');
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('remote');
@@ -310,7 +326,9 @@ describe('optional Git deliverables with real retained versions and a real repos
     expect(preview.changes[0].action).toBe('excluded');
     await service.apply('p', { options, fingerprint: preview.fingerprint });
     await expect(
-      fs.stat(path.join(repo, 'livrables', item.id)),
+      fs.stat(
+        path.join(repo, 'livrables', readableDeliverableFolder(item.title)),
+      ),
     ).rejects.toThrow();
     const opted = { ...options, restrictedIds: [item.id] };
     const plan = await service.preview('p', opted);
@@ -318,7 +336,12 @@ describe('optional Git deliverables with real retained versions and a real repos
     service.disable('p', 'board');
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('secret');
@@ -365,7 +388,11 @@ describe('optional Git deliverables with real retained versions and a real repos
   it('can explicitly convert plain folders and does not overwrite unrecognized files', async () => {
     const item = await deliverables.create('p', 'board', { title: 'Existing' });
     await upload(item.id, 'retained');
-    const collision = path.join(repo, 'livrables', item.id);
+    const collision = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+    );
     await fs.mkdir(collision, { recursive: true });
     await fs.writeFile(path.join(collision, 'notes.md'), 'unrelated');
     expect((await service.preview('p', options)).changes).toContainEqual(
@@ -535,7 +562,12 @@ describe('optional Git deliverables with real retained versions and a real repos
       async () => {
         expect(
           await fs.readFile(
-            path.join(repo, 'livrables', item.id, 'notes.md'),
+            path.join(
+              repo,
+              'livrables',
+              readableDeliverableFolder(item.title),
+              'notes.md',
+            ),
             'utf8',
           ),
         ).toBe('new retained version');
@@ -642,7 +674,12 @@ describe('optional Git deliverables with real retained versions and a real repos
     ).toBe(2);
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('original');
@@ -681,7 +718,12 @@ describe('optional Git deliverables with real retained versions and a real repos
     await sync();
     expect(
       await fs.readFile(
-        path.join(repo2, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo2,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('base');
@@ -695,7 +737,12 @@ describe('optional Git deliverables with real retained versions and a real repos
     });
     expect(
       await fs.readFile(
-        path.join(repo2, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo2,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('next');
@@ -762,13 +809,23 @@ describe('optional Git deliverables with real retained versions and a real repos
     });
     expect(
       await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('retained');
     expect(
       await fs.readFile(
-        path.join(repo2, 'livrables', item.id, 'notes.md'),
+        path.join(
+          repo2,
+          'livrables',
+          readableDeliverableFolder(item.title),
+          'notes.md',
+        ),
         'utf8',
       ),
     ).toBe('retained');
@@ -842,5 +899,291 @@ describe('optional Git deliverables with real retained versions and a real repos
     await expect(
       asAgent('unrelated-agent', () => service.preview('p', options)),
     ).rejects.toThrow('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+  });
+  it('uses readable, collision-safe names and public identities without exposing local database keys', async () => {
+    const a = await deliverables.create('p', 'board', { title: 'Cadrage été' });
+    const b = await deliverables.create('p', 'board', { title: 'Cadrage ete' });
+    await upload(a.id, 'one');
+    await upload(b.id, 'two');
+    const preview = await sync();
+    expect(preview.locations).toHaveLength(2);
+    const paths = preview.locations.map((location) => location.folder);
+    expect(new Set(paths).size).toBe(2);
+    expect(
+      paths.every((folder) =>
+        /^livrables\/cadrage-ete(?:-[a-f0-9]{8})?$/.test(folder),
+      ),
+    ).toBe(true);
+    for (const [item, content] of [
+      [a, 'one'],
+      [b, 'two'],
+    ] as const) {
+      const location = preview.locations.find(
+        (entry) => entry.deliverableId === item.id,
+      )!;
+      const raw = await fs.readFile(
+        path.join(repo, location.folder, 'livrable.json'),
+        'utf8',
+      );
+      const manifest = gitFormat.manifestSchema.parse(JSON.parse(raw));
+      expect(manifest.title).toBe(item.title);
+      expect(manifest.id).not.toBe(item.id);
+      expect(raw).not.toContain(item.id);
+      expect(raw).not.toContain(root);
+      expect(
+        await fs.readFile(path.join(repo, location.folder, 'notes.md'), 'utf8'),
+      ).toBe(content);
+    }
+    const before = (await service.preview('p', options)).locations;
+    deliverables.update('p', 'board', a.id, {
+      title: 'Nouveau titre',
+      version: deliverables.get('p', 'board', a.id).version,
+    });
+    await sync();
+    const after = (await service.preview('p', options)).locations;
+    expect(after.find((entry) => entry.deliverableId === a.id)?.folder).toBe(
+      before.find((entry) => entry.deliverableId === a.id)?.folder,
+    );
+  });
+
+  async function legacyExport() {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Ancien cadrage',
+    });
+    const doc = await upload(item.id, 'legacy retained');
+    const folder = path.join(repo, 'livrables', item.id);
+    await fs.mkdir(folder, { recursive: true });
+    await fs.writeFile(
+      path.join(folder, 'livrable.json'),
+      JSON.stringify({
+        format: 'mergeron-deliverable',
+        version: 1,
+        id: item.id,
+        title: item.title,
+        description: '',
+        labels: [],
+        documents: [{ id: doc.id, path: 'notes.md', labels: [] }],
+      }),
+    );
+    await fs.writeFile(path.join(folder, 'notes.md'), 'legacy retained');
+    await sync();
+    return { item, doc, folder };
+  }
+  it('keeps old UUID folders by default and previews an explicit atomic migration preserving unknown files', async () => {
+    const { item, folder } = await legacyExport();
+    expect((await service.preview('p', options)).locations[0].folder).toBe(
+      'livrables/' + item.id,
+    );
+    await fs.writeFile(
+      path.join(folder, 'not-in-manifest.bin'),
+      'untracked personal data',
+    );
+    const moveOptions = { ...options, renameFolders: true };
+    const preview = await service.preview('p', moveOptions);
+    expect(preview.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'rename',
+        reason: 'readable_folder',
+        deliverableId: item.id,
+      }),
+    );
+    expect(await fs.readFile(path.join(folder, 'notes.md'), 'utf8')).toBe(
+      'legacy retained',
+    );
+    await service.apply('p', {
+      options: moveOptions,
+      fingerprint: preview.fingerprint,
+    });
+    const target = path.join(repo, 'livrables', 'ancien-cadrage');
+    expect(
+      await fs.readFile(path.join(target, 'not-in-manifest.bin'), 'utf8'),
+    ).toBe('untracked personal data');
+    expect(
+      gitFormat.manifestSchema.parse(
+        JSON.parse(
+          await fs.readFile(path.join(target, 'livrable.json'), 'utf8'),
+        ),
+      ).id,
+    ).toBe(item.id);
+    await expect(fs.stat(folder)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
+    ).toBe(1);
+    expect(
+      execFileSync('git', [
+        '-C',
+        repo,
+        'diff',
+        '--cached',
+        '--name-only',
+      ]).toString(),
+    ).toBe('');
+    expect((await service.preview('p', options)).changes).toEqual([]);
+    const config = database.db
+      .select()
+      .from(schema.projectResources)
+      .where(eq(schema.projectResources.id, 'board'))
+      .get()!.config;
+    expect(
+      (config.gitDeliverables as { renameFolders?: boolean }).renameFolders,
+    ).toBeUndefined();
+  });
+  it('refuses a late folder collision without replacing either directory', async () => {
+    const { folder } = await legacyExport();
+    const moveOptions = { ...options, renameFolders: true };
+    const preview = await service.preview('p', moveOptions);
+    const target = path.join(repo, 'livrables', 'ancien-cadrage');
+    await fs.mkdir(target);
+    await fs.writeFile(path.join(target, 'personal.txt'), 'keep destination');
+    await expect(
+      service.apply('p', {
+        options: moveOptions,
+        fingerprint: preview.fingerprint,
+      }),
+    ).rejects.toThrow(/GIT_DELIVERABLES_CHANGED|GIT_DELIVERABLES_CONFLICTS/);
+    expect(await fs.readFile(path.join(folder, 'notes.md'), 'utf8')).toBe(
+      'legacy retained',
+    );
+    expect(await fs.readFile(path.join(target, 'personal.txt'), 'utf8')).toBe(
+      'keep destination',
+    );
+  });
+  it('recovers a migration interrupted after the atomic move using the same portable identity', async () => {
+    const { item, folder } = await legacyExport();
+    const moveOptions = { ...options, renameFolders: true };
+    const preview = await service.preview('p', moveOptions);
+    const write = vi
+      .spyOn(gitFormat, 'writeGitFile')
+      .mockRejectedValueOnce(new Error('Synthetic migration interruption'));
+    await expect(
+      service.apply('p', {
+        options: moveOptions,
+        fingerprint: preview.fingerprint,
+      }),
+    ).rejects.toThrow('Synthetic migration interruption');
+    write.mockRestore();
+    await expect(fs.stat(folder)).rejects.toMatchObject({ code: 'ENOENT' });
+    const next = await sync();
+    expect(next.locations[0].folder).toBe('livrables/ancien-cadrage');
+    expect(deliverables.board('p', 'board').deliverables).toHaveLength(1);
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
+    ).toBe(1);
+    expect(
+      await fs.readFile(
+        path.join(repo, 'livrables', 'ancien-cadrage', 'notes.md'),
+        'utf8',
+      ),
+    ).toBe('legacy retained');
+  });
+  it('reads a title from the portable manifest, independently of the folder name and installation identity', async () => {
+    const { folder, manifest } = await external();
+    manifest.title = 'Nom public du livrable';
+    manifest.id = 'public-identity-from-another-installation';
+    await fs.writeFile(
+      path.join(folder, 'livrable.json'),
+      JSON.stringify(manifest),
+    );
+    const preview = await sync();
+    const item = deliverables.board('p', 'board').deliverables[0];
+    expect(item.title).toBe('Nom public du livrable');
+    expect(item.id).not.toBe(manifest.id);
+    expect((await service.preview('p', options)).locations[0].portableId).toBe(
+      manifest.id,
+    );
+    expect(preview.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'import',
+        deliverable: manifest.title,
+      }),
+    );
+  });
+  it('returns current branch evidence and per-deliverable changes instead of trusting last synchronization time', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Status report',
+    });
+    await upload(item.id, 'retained');
+    await sync();
+    const before = await service.status('p', 'copy');
+    expect(before.proposal?.changes).toEqual([]);
+    expect(before.copies[0].ownerThreadIds).toContain('agent');
+    await fs.writeFile(
+      path.join(repo, 'livrables/status-report/notes.md'),
+      'new unknown Git contents',
+    );
+    const after = await service.status('p', 'copy');
+    expect(after.proposal?.changes).toContainEqual(
+      expect.objectContaining({ action: 'import', deliverableId: item.id }),
+    );
+    expect(after.proposal?.context).toEqual(after.copies[0].context);
+    expect(after.verifiedAt).toBeGreaterThanOrEqual(before.verifiedAt);
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
+    ).toBe(1);
+  });
+  it('refuses a migration reviewed on another branch without moving files', async () => {
+    const { folder } = await legacyExport();
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', [
+      '-C',
+      repo,
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'commit',
+      '-qm',
+      'Legacy export',
+    ]);
+    const moveOptions = { ...options, renameFolders: true };
+    const preview = await service.preview('p', moveOptions);
+    execFileSync('git', ['-C', repo, 'checkout', '-qb', 'other-review']);
+    await expect(
+      service.apply('p', {
+        options: moveOptions,
+        fingerprint: preview.fingerprint,
+      }),
+    ).rejects.toThrow('GIT_DELIVERABLES_CHANGED');
+    expect(await fs.readFile(path.join(folder, 'notes.md'), 'utf8')).toBe(
+      'legacy retained',
+    );
+    await expect(
+      fs.stat(path.join(repo, 'livrables/ancien-cadrage')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('recognizes legacy identities on an unbound branch even after another branch exported the new portable identity', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Mixed history',
+    });
+    const doc = await upload(item.id, 'same retained contents');
+    const first = await sync();
+    const exported = first.locations[0];
+    expect(exported.portableId).not.toBe(item.id);
+    execFileSync('git', [
+      '-C',
+      repo,
+      'symbolic-ref',
+      'HEAD',
+      'refs/heads/legacy-import',
+    ]);
+    const legacy = path.join(repo, 'livrables', item.id);
+    await fs.rename(path.join(repo, exported.folder), legacy);
+    const manifest = gitFormat.manifestSchema.parse(
+      JSON.parse(await fs.readFile(path.join(legacy, 'livrable.json'), 'utf8')),
+    );
+    manifest.id = item.id;
+    manifest.documents[0].id = doc.id;
+    await fs.writeFile(
+      path.join(legacy, 'livrable.json'),
+      JSON.stringify(manifest),
+    );
+    const next = await sync();
+    expect(next.locations).toHaveLength(1);
+    expect(next.locations[0].portableId).toBe(item.id);
+    expect(next.changes).toEqual([]);
+    expect(deliverables.board('p', 'board').deliverables).toHaveLength(1);
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
+    ).toBe(1);
   });
 });

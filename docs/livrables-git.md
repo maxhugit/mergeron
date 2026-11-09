@@ -73,6 +73,26 @@ livrables/
 }
 ```
 
+Les nouveaux exports utilisent un nom lisible dérivé du titre (`cadrage-du-site`),
+avec un suffixe stable si deux titres produisent le même nom. Le titre exact,
+accents compris, reste dans `livrable.json`. Les nouvelles identités de livrables
+et documents sont des identités publiques opaques, distinctes des clés locales.
+L'import n'a pas besoin de la base d'origine : il lit le titre du manifeste et
+crée ses propres identifiants locaux. Sans manifeste, la conversion proposée
+utilise le nom du dossier comme titre.
+
+Un changement de titre ne déplace pas automatiquement un dossier déjà associé.
+Les anciens dossiers UUID restent reconnus et conservent leur identité. Depuis
+**Examiner les livrables Git**, cocher **Proposer des noms de dossiers lisibles**
+puis prévisualiser : chaque déplacement apparaît avec son ancien et son nouveau
+chemin. La confirmation est liée à la copie, à la branche, au commit et aux
+contenus examinés. Une destination occupée, un lien ambigu ou un conflit bloque
+l'opération. Le déplacement conserve tout le dossier, y compris les fichiers
+inconnus du manifeste, sans ajout à l'index Git ni commit/push. Si l'écriture du
+manifeste est interrompue après le déplacement, la même identité portable permet
+la reprise sans recréer le livrable. Ce choix de renommage n'est pas enregistré
+comme une règle automatique pour les prochaines synchronisations.
+
 Les identifiants portables restent stables en cas de renommage. Sur une autre
 installation, ils sont rattachés à de nouveaux identifiants locaux sans collision
 avec d’autres projets. Le manifeste ne contient aucun chemin absolu, compte,
@@ -180,3 +200,31 @@ par manifeste, 100 Mio par lecture et 64 Mio cumulés par plan. Le format est
 strict ; chemins sortants, doublons d’identité, liens symboliques, liens physiques
 de fichiers et versions de format inconnues sont refusés. Aucun script du dépôt
 n’est exécuté pour interpréter un manifeste.
+
+## Indicateurs dans la barre latérale Livrables
+
+Le bandeau fixe **Git local** indique la copie sélectionnée et sa branche réelle
+(ou la révision en HEAD détachée). Seules les copies de l'agent courant sont
+proposées ; plusieurs copies demandent une sélection explicite. Choisir une copie
+pour consulter son état ne change ni la référence ni le dossier de travail de
+l'agent. Le bouton de vérification relit l'état ; les changements de fichiers et
+les fins d'exécution déclenchent une actualisation regroupée. La surveillance
+est libérée en quittant la vue. Une attente d'export peut être relue pendant que
+la vue est active, sans interrogation continue en arrière-plan.
+
+Chaque livrable porte un indicateur : **À jour localement**, **Export en attente**,
+**Synchronisation en cours**, **À examiner**, **Synchronisation indisponible**,
+**Copie en lecture seule** ou **Sans copie Git sélectionnée**. Un import proposé
+et un conflit demandent une revue. Une exclusion de confidentialité n'est jamais
+présentée comme une réussite. Les identités locales distinguent les lignes même
+quand les titres sont identiques.
+
+Le vert exige une comparaison de contenu réussie sur la copie, la branche et le
+HEAD affichés. Une date ancienne de synchronisation ne suffit pas. Pendant une
+nouvelle lecture, lors d'un changement de contexte ou après une erreur, le vert
+précédent est remplacé par l'état de vérification ou d'erreur. Cliquer sur l'icône
+ou **Examiner les livrables Git** ouvre le détail en modal ; les personnes sans
+droit d'administration consultent les informations sans actions de mutation.
+
+**À jour localement ne veut dire ni commité ni publié sur GitHub.** L'index, les
+commits, les push et les protections de branche gardent leurs parcours existants.
