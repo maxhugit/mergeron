@@ -12,17 +12,18 @@
       <label
         >Adresse de l’instance HTTPS<input
           id="origin"
+          disabled
           type="url"
           required
           placeholder="https://mergeron-dev.hugotlab.fr" /></label
-      ><button>Autoriser cette instance</button>
+      ><button id="authorize" disabled>Autoriser cette instance</button>
     </form>
     <p id="status" role="status"></p>
     <p>
       Après configuration, rechargez l’onglet Mergeron. Les autres sites ne sont
       accessibles qu’après un partage explicite via l’icône de l’extension.
     </p>
-    <button id="disconnect">Déconnecter et retirer l’autorisation</button>
+    <button id="disconnect" disabled>Déconnecter et retirer l’autorisation</button>
   </main>
   <script type="module" src="options.js"></script>
 </html>

@@ -29,6 +29,71 @@ const event = () => ({
   },
 });
 
+test('options wait for stored configuration before accepting input or submission', async () => {
+  const html = await readFile(new URL('options.html', extensionRoot), 'utf8');
+  for (const id of ['origin', 'authorize', 'disconnect'])
+    assert.match(
+      html,
+      new RegExp(`<[^>]+(?=[^>]*id="${id}")(?=[^>]*disabled)[^>]*>`),
+    );
+  const nodes = Object.fromEntries(
+    ['origin', 'authorize', 'disconnect', 'status', 'settings'].map((id) => [
+      id,
+      {
+        disabled: true,
+        value: '',
+        textContent: '',
+        listeners: {},
+        addEventListener(name, callback) {
+          this.listeners[name] = callback;
+        },
+      },
+    ]),
+  );
+  let release;
+  const stored = new Promise((resolve) => {
+    release = resolve;
+  });
+  const writes = [];
+  const extension = {
+    storage: { local: { get: () => stored } },
+    permissions: { request: async () => true },
+    runtime: {
+      sendMessage: async (value) => {
+        writes.push(value);
+        return { ok: true };
+      },
+    },
+  };
+  const source = await readFile(new URL('options.js', extensionRoot), 'utf8');
+  const context = vm.createContext({
+    extension,
+    instanceOrigin,
+    CHANNEL,
+    document: {
+      querySelector(selector) {
+        return nodes[selector.slice(1)];
+      },
+    },
+  });
+  const initialized = vm.runInContext(
+    `(async()=>{${source.replace(/^import .*;\n/gm, '')}})()`,
+    context,
+  );
+  assert.equal(nodes.origin.disabled, true);
+  assert.equal(nodes.authorize.disabled, true);
+  assert.equal(writes.length, 0);
+  release({ origin: 'https://mergeron.fixture.test' });
+  await initialized;
+  assert.equal(nodes.origin.value, 'https://mergeron.fixture.test');
+  for (const id of ['origin', 'authorize', 'disconnect'])
+    assert.equal(nodes[id].disabled, false);
+  await nodes.settings.listeners.submit({ preventDefault() {} });
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].action, 'configure');
+  assert.match(nodes.status.textContent, /Instance autorisée/);
+});
+
 function fixture() {
   let session = {},
     local = {},

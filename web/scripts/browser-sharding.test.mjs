@@ -3,6 +3,66 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { BaseSequencer, createVitest } from 'vitest/node';
 import { browserRunPlan, runBrowserTests } from './run-browser-tests.mjs';
+import { retryableWebkitDisconnect } from './run-browser-tests.mjs';
+
+const disconnected =
+  '[vitest] Browser connection was closed while running tests. Was the page closed unexpectedly?';
+test('only a pure runner disconnect is eligible for a fresh full WebKit attempt', () => {
+  assert.equal(
+    retryableWebkitDisconnect({ status: 1, stderr: disconnected }),
+    true,
+  );
+  for (const failure of [
+    'AssertionError: wrong value',
+    'FAIL browser test',
+    'Tests  1 failed | 4 passed',
+    'Test Files 2 failed',
+    'Test timed out',
+  ])
+    assert.equal(
+      retryableWebkitDisconnect({
+        status: 1,
+        stderr: disconnected + '\n' + failure,
+      }),
+      false,
+    );
+  assert.equal(
+    retryableWebkitDisconnect({
+      status: null,
+      signal: 'SIGTERM',
+      stderr: disconnected,
+    }),
+    false,
+  );
+});
+test('runner retries the complete WebKit shard once, retains evidence and never hides a repeated failure', () => {
+  for (const lastStatus of [0, 1]) {
+    const calls = [],
+      evidence = [];
+    const status = runBrowserTests({
+      args: ['--shard=1/2'],
+      remove() {},
+      log() {},
+      preserveEvidence() {
+        evidence.push('save');
+        return () => evidence.push('restore');
+      },
+      execute(_node, args) {
+        calls.push(args);
+        return calls.length === 1
+          ? { status: 0 }
+          : calls.length === 2
+            ? { status: 1, stderr: disconnected }
+            : { status: lastStatus, stderr: lastStatus ? disconnected : '' };
+      },
+    });
+    assert.equal(calls.length, 3);
+    assert.deepEqual(calls[1], calls[2]);
+    assert.ok(calls[2].includes('--shard=1/2'));
+    assert.deepEqual(evidence, ['save', 'restore']);
+    assert.equal(status, lastStatus);
+  }
+});
 
 // Use the installed Vitest sequencer and actual fixture discovery, without
 // starting a browser. Static YAML checks alone cannot prove shard coverage.
