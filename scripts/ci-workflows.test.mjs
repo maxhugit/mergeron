@@ -78,7 +78,11 @@ const requireBrowserCoverage = (...files) => {
   );
   const command = JSON.parse(read('web/package.json')).scripts['test:browser'];
   assert.equal(command, 'node scripts/run-browser-tests.mjs');
-  assert.ok(read('web/scripts/run-browser-tests.mjs').includes("['chromium', 'webkit']"));
+  assert.ok(
+    read('web/scripts/run-browser-tests.mjs').includes(
+      "['chromium', 'webkit']",
+    ),
+  );
   const config = read('web/vitest.config.ts');
   assert.match(
     config,
