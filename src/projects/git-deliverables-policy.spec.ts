@@ -588,6 +588,9 @@ describe('Mergeron-first Git projection policy', () => {
             'utf8',
           ),
         ).toBe('retained while waiting');
+        const state = (await service.status('p')).copies[0];
+        expect(state).toMatchObject({ pending: false, lastError: null });
+        expect(state.lastSyncAt).toBeTypeOf('number');
       },
       { timeout: 4000 },
     );

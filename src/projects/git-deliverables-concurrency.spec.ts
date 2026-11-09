@@ -558,6 +558,9 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
             'utf8',
           ),
         ).toBe('current Mergeron version');
+        const state = (await service.status('p')).copies[0];
+        expect(state).toMatchObject({ pending: false, lastError: null });
+        expect(state.lastSyncAt).toBeTypeOf('number');
       },
       { timeout: 4000 },
     );
