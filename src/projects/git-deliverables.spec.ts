@@ -532,13 +532,17 @@ describe('optional Git deliverables with real retained versions and a real repos
     service.onModuleInit();
     await upload(item.id, 'new retained version', doc.id);
     await vi.waitFor(
-      async () =>
+      async () => {
         expect(
           await fs.readFile(
             path.join(repo, 'livrables', item.id, 'notes.md'),
             'utf8',
           ),
-        ).toBe('new retained version'),
+        ).toBe('new retained version');
+        const state = (await service.status('p')).copies[0];
+        expect(state).toMatchObject({ pending: false, lastError: null });
+        expect(state.lastSyncAt).toBeTypeOf('number');
+      },
       { timeout: 4000 },
     );
   });
