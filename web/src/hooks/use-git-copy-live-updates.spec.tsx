@@ -121,3 +121,28 @@ it('never watches or refreshes an absent copy', () => {
   expect(invalidate).not.toHaveBeenCalled();
   view.unmount();
 });
+
+it('coalesces deliverable refreshes and invalidates their shared status without cancelling an ongoing comparison', async () => {
+  const view = renderHook(
+    () => useGitCopyLiveUpdates('p', copy, 'agent', true),
+    { wrapper },
+  );
+  act(() => {
+    for (let index = 0; index < 10; index++)
+      emitFileChange({
+        source: 'external',
+        kind: 'invalidate',
+        paths: ['/project/copy/.git/HEAD'],
+      });
+  });
+  await act(() => vi.advanceTimersByTimeAsync(1499));
+  expect(invalidate).not.toHaveBeenCalled();
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  expect(invalidate).toHaveBeenCalledTimes(6);
+  expect(invalidate).toHaveBeenCalledWith(
+    { queryKey: ['git-deliverables', 'p'] },
+    { cancelRefetch: false },
+  );
+  view.unmount();
+  expect(wire.release).toHaveBeenCalledOnce();
+});

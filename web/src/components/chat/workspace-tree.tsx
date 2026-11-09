@@ -308,6 +308,7 @@ export function WorkspaceTree({
       {project ? (
         view === 'deliverables' ? (
           <ExplorerDeliverables
+            preferredGitResourceId={gitResourceId}
             project={project}
             agentThreadId={agentThreadId}
             pending={activeWorkspacePending}

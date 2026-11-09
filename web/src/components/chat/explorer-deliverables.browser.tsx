@@ -13,6 +13,15 @@ import type { ProjectSummary } from '@/lib/projects-api';
 import type { Deliverable } from '@/lib/deliverables-api';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+vi.mock('@/hooks/use-deliverable-git-status', () => ({
+  useDeliverableGitStatus: () => ({
+    copies: [],
+    checking: false,
+    state: () => 'off',
+    refresh: () => {},
+    select: () => {},
+  }),
+}));
 vi.mock('@/hooks/use-file-watch', () => ({ useFileWatch: () => {} }));
 vi.mock('@/lib/platform-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/platform-session')>()),

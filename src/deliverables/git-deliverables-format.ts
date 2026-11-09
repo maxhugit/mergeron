@@ -77,6 +77,29 @@ export type GitDeliverableManifest = z.infer<typeof manifestSchema>;
 export const digest = (data: string | Buffer) =>
   createHash('sha256').update(data).digest('hex');
 
+/** Public identity is portable; no local database key or workspace path is exported. */
+export const portableDeliverableId = (
+  project: string,
+  board: string,
+  local: string,
+) =>
+  `deliverable-${digest(JSON.stringify(['deliverable', project, board, local])).slice(0, 32)}`;
+export const portableDocumentId = (deliverable: string, local: string) =>
+  `document-${digest(JSON.stringify(['document', deliverable, local])).slice(0, 32)}`;
+export function readableDeliverableFolder(title: string) {
+  const characters = Array.from(
+    title
+      .normalize('NFKD')
+      .replace(/\p{M}/gu, '')
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-+|-+$/g, ''),
+  ).slice(0, 64);
+  // Leave room for the collision suffix even for four-byte Unicode letters.
+  while (Buffer.byteLength(characters.join('')) > 200) characters.pop();
+  return characters.join('').replace(/-+$/g, '') || 'livrable';
+}
+
 export function relativeGitDirectory(value: unknown): string {
   if (
     typeof value !== 'string' ||

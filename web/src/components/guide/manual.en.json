@@ -1451,7 +1451,7 @@
             "title": "Enable after reviewing",
             "paragraphs": [
               "In project settings, open Locations and connections then Git deliverables. The single manager is selected automatically. Enable the project mode and save its target directory: existing documents are queued for export without waiting for another edit. The mode can be saved without a Git copy. Changes remain saved in Mergeron; export waits for the agent’s own ready, writable copy. Review imports from the relevant copy before confirming. Commits and pushes are never automatic.",
-              "Opening a repository recognizes deliverables through livrable.json files. Review Git deliverables opens the import proposal. For repositories without manifests, you can propose converting subdirectories containing direct files."
+              "Opening a repository recognizes deliverables through livrable.json files. Review Git deliverables opens the import proposal. For repositories without manifests, you can propose converting subdirectories containing direct files. New folders use readable names; the manifest preserves the exact title and a portable identity separate from local keys. Existing folders remain recognized. Propose readable folder names previews their moves before confirmation."
             ]
           },
           {
@@ -1487,7 +1487,7 @@
             "paragraphs": [
               "Commit .mergeron-deliverables.json, livrable.json manifests and documents to make the repository portable. The folder can be customized but must remain inside the repository.",
               "Mergeron versions and approvals remain distinct from commits. Each agent copy retains its own comparison baselines. Existing shared copies remain intact but are no longer used for automatic writes.",
-              "Confirmation is bound to the reviewed branch and commit. The copy table tracks errors and pending exports separately. One conflicted copy does not block the others. After a restart, use Review Git deliverables to resume with your current permissions. A change refused during synchronization can be retried afterwards. Old Git content recognized in retained versions is updated from Mergeron; unknown Git content requires review and changes on both sides cause a conflict. Comparison uses content, never file dates."
+              "Confirmation is bound to the reviewed branch and commit. The copy table tracks errors and pending exports separately. One conflicted copy does not block the others. After a restart, use Review Git deliverables to resume with your current permissions. A change refused during synchronization can be retried afterwards. Old Git content recognized in retained versions is updated from Mergeron; unknown Git content requires review and changes on both sides cause a conflict. Comparison uses content, never file dates. In the Deliverables sidebar, Local Git shows the copy, branch and per-deliverable state. Click to inspect details. Up to date locally does not mean committed or published to GitHub; refreshing or a read failure clears the previous green state."
             ],
             "warning": "Synchronization is neither human validation nor a Git push. Review conflicts and retain necessary backups before confirming exchanges."
           }

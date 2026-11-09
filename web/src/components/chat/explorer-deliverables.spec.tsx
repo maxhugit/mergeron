@@ -5,6 +5,15 @@ import { ExplorerDeliverables } from './explorer-deliverables';
 import { useFilesStore } from '@/stores/files-store';
 import type { ProjectSummary } from '@/lib/projects-api';
 import { localExecutionSelection } from '@/lib/project-execution-location';
+vi.mock('@/hooks/use-deliverable-git-status', () => ({
+  useDeliverableGitStatus: () => ({
+    copies: [],
+    checking: false,
+    state: () => 'off',
+    refresh: () => {},
+    select: () => {},
+  }),
+}));
 vi.mock('@/hooks/use-file-watch', () => ({ useFileWatch: () => {} }));
 vi.mock('@/lib/platform-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/platform-session')>()),

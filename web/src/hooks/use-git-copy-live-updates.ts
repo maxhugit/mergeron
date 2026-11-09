@@ -13,8 +13,9 @@ import type { ProjectWorkspaceCopySummary } from '@/lib/projects-api';
 
 export function useGitCopyLiveUpdates(
   projectId: string,
-  copy?: ProjectWorkspaceCopySummary,
+  copy?: Pick<ProjectWorkspaceCopySummary, 'id' | 'localPath'>,
   threadId?: string,
+  deliverables = false,
 ) {
   const client = useQueryClient();
   const copyId = copy?.id,
@@ -25,19 +26,27 @@ export function useGitCopyLiveUpdates(
     const refresh = () => {
       if (timer) return;
       // Coalesce file storms; do not starve refresh until an agent stops writing.
-      timer = setTimeout(() => {
-        timer = undefined;
-        for (const family of [
-          'workspace-git',
-          'workspace-git-staged',
-          'workspace-git-diff',
-          'workspace-git-commits',
-          'workspace-git-graph',
-        ])
-          void client.invalidateQueries({
-            queryKey: [family, projectId, copyId],
-          });
-      }, 400);
+      timer = setTimeout(
+        () => {
+          timer = undefined;
+          for (const family of [
+            'workspace-git',
+            'workspace-git-staged',
+            'workspace-git-diff',
+            'workspace-git-commits',
+            'workspace-git-graph',
+          ])
+            void client.invalidateQueries({
+              queryKey: [family, projectId, copyId],
+            });
+          if (deliverables)
+            void client.invalidateQueries(
+              { queryKey: ['git-deliverables', projectId] },
+              { cancelRefetch: false },
+            );
+        },
+        deliverables ? 1500 : 400,
+      );
     };
     const touches = (paths: string[]) =>
       paths.some(
@@ -89,5 +98,5 @@ export function useGitCopyLiveUpdates(
       socket.off('connect', refresh);
       if (timer) clearTimeout(timer);
     };
-  }, [client, projectId, copyId, root, threadId]);
+  }, [client, projectId, copyId, root, threadId, deliverables]);
 }

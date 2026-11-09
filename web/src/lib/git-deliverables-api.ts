@@ -5,6 +5,7 @@ export type Options = {
   copyId?: string;
   directory: string;
   restrictedIds: string[];
+  renameFolders?: boolean;
 };
 export type Settings = Omit<Options, 'boardId'> & {
   enabled: boolean;
@@ -21,6 +22,9 @@ export interface Status {
   copies: {
     id: string;
     name: string;
+    sourceResourceId?: string;
+    ownerThreadIds?: string[];
+    localPath?: string | null;
     writable: boolean;
     owned: boolean;
     eligible?: boolean;
@@ -33,13 +37,22 @@ export interface Status {
   discovered: { id: string; title: string; documents: number }[];
   discoveryError: string | null;
   proposal?: Preview | null;
+  active?: boolean;
+  verifiedAt?: number | null;
 }
 export type Preview = {
   fingerprint: string;
   context?: { branch: string | null; head: string | null };
   canApply: boolean;
+  locations?: {
+    deliverableId: string;
+    portableId: string;
+    title: string;
+    folder: string;
+  }[];
   changes: {
     deliverable: string;
+    deliverableId?: string;
     document?: string;
     action: string;
     reason: string;

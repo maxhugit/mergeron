@@ -1,0 +1,56 @@
+import type { Status } from './git-deliverables-api';
+export type DeliverableGitState =
+  | 'off'
+  | 'noCopy'
+  | 'checking'
+  | 'syncing'
+  | 'pending'
+  | 'review'
+  | 'error'
+  | 'ready'
+  | 'readOnly'
+  | 'excluded';
+/** A previous successful timestamp is never evidence for the current branch. */
+export function deliverableGitState(
+  data: Status | undefined,
+  copyId: string | undefined,
+  itemId?: string,
+  checking = false,
+  failed = false,
+): DeliverableGitState {
+  if (failed) return 'error';
+  if (!data) return 'checking';
+  if (!data.boards.some((board) => board.settings?.enabled)) return 'off';
+  const copy = data.copies.find((entry) => entry.id === copyId);
+  if (!copy) return 'noCopy';
+  if (checking) return 'checking';
+  if (!copy.writable) return 'readOnly';
+  if (!copy.eligible) return 'error';
+  if (data.active || data.discoveryError === 'GIT_DELIVERABLES_BUSY')
+    return 'syncing';
+  if (data.discoveryError === 'GIT_DELIVERABLES_CHANGED') return 'checking';
+  if (data.discoveryError || copy.lastError) return 'error';
+  if (copy.pending) return 'pending';
+  const proposal = data.proposal;
+  if (
+    !proposal ||
+    !copy.context ||
+    !proposal.context ||
+    copy.context.branch !== proposal.context.branch ||
+    copy.context.head !== proposal.context.head
+  )
+    return 'checking';
+  const changes = proposal.changes.filter(
+    (change) =>
+      !itemId || !change.deliverableId || change.deliverableId === itemId,
+  );
+  if (
+    changes.some((change) =>
+      ['conflict', 'import', 'rename'].includes(change.action),
+    )
+  )
+    return 'review';
+  if (changes.some((change) => change.action === 'export')) return 'pending';
+  if (changes.some((change) => change.action === 'excluded')) return 'excluded';
+  return 'ready';
+}
