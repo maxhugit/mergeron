@@ -209,6 +209,16 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
         await expect(
           upload(item.id, 'concurrent local work', doc.id),
         ).rejects.toThrow('GIT_DELIVERABLES_BUSY');
+        expect(() =>
+          deliverables.setDocumentDeleted(
+            'p',
+            'board',
+            item.id,
+            doc.id,
+            1,
+            true,
+          ),
+        ).toThrow('GIT_DELIVERABLES_BUSY');
       }
       return output;
     });
@@ -610,5 +620,84 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     expect((await service.status('p')).boards[0].settings?.lastError).toBe(
       'GIT_DELIVERABLES_REVIEW_REQUIRED',
     );
+  });
+  it('resumes removal after the file moved but before its manifest was saved', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Interrupted removal',
+    });
+    const doc = await upload(item.id, 'retained bytes');
+    await sync();
+    deliverables.setDocumentDeleted('p', 'board', item.id, doc.id, 1, true);
+    const plan = await service.preview('p', options);
+    const original = gitFormat.writeGitFile;
+    let interrupted = false;
+    vi.spyOn(gitFormat, 'writeGitFile').mockImplementation(async (...args) => {
+      if (!interrupted && args[1].endsWith('/livrable.json')) {
+        interrupted = true;
+        throw new Error('Interrupted manifest save');
+      }
+      return original(...args);
+    });
+    await expect(
+      service.apply('p', { options, fingerprint: plan.fingerprint }),
+    ).rejects.toThrow('Interrupted manifest save');
+    expect(interrupted).toBe(true);
+    await expect(
+      fs.stat(path.join(repo, 'livrables', item.id, 'notes.md')),
+    ).rejects.toThrow();
+    const retry = await service.preview('p', options);
+    expect(retry.canApply).toBe(true);
+    await service.apply('p', { options, fingerprint: retry.fingerprint });
+    const manifest = JSON.parse(
+      await fs.readFile(
+        path.join(repo, 'livrables', item.id, 'livrable.json'),
+        'utf8',
+      ),
+    ) as { documents: unknown[] };
+    expect(manifest.documents).toEqual([]);
+    const backups = (
+      await fs.readdir(path.join(repo, '.git', 'mergeron-deliverable-recovery'))
+    ).filter((f) => !f.endsWith('.json'));
+    expect(backups).toHaveLength(1);
+    expect(
+      await fs.readFile(
+        path.join(repo, '.git', 'mergeron-deliverable-recovery', backups[0]),
+        'utf8',
+      ),
+    ).toBe('retained bytes');
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].deletedAt,
+    ).not.toBeNull();
+  });
+  it('keeps portable document identity through deletion and restoration without repeated exports', async () => {
+    const { folder } = await external();
+    await sync();
+    const item = deliverables.board('p', 'board').deliverables[0];
+    const document = deliverables.documents('p', 'board', item.id)[0];
+    deliverables.setDocumentDeleted(
+      'p',
+      'board',
+      item.id,
+      document.id,
+      1,
+      true,
+    );
+    await sync();
+    expect((await service.preview('p', options)).changes).toEqual([]);
+    deliverables.setDocumentDeleted(
+      'p',
+      'board',
+      item.id,
+      document.id,
+      1,
+      false,
+    );
+    await sync();
+    const manifest = JSON.parse(
+      await fs.readFile(path.join(folder, 'livrable.json'), 'utf8'),
+    ) as { documents: { id: string }[] };
+    expect(manifest.documents.map((entry) => entry.id)).toEqual(['text']);
+    expect(deliverables.documents('p', 'board', item.id)).toHaveLength(1);
+    expect((await service.preview('p', options)).changes).toEqual([]);
   });
 });

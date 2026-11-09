@@ -1457,7 +1457,7 @@
           {
             "title": "Conserver les versions et résoudre les conflits",
             "paragraphs": [
-              "Chaque import de contenu crée une version Mergeron. Les exports utilisent les versions enregistrées. Un changement concurrent ou une suppression bloque le transfert sans effacer l’autre exemplaire. Recalculez la proposition après résolution.",
+              "Chaque import de contenu crée une version Mergeron. Les exports utilisent les versions enregistrées. Un changement concurrent bloque le transfert sans effacer l’autre exemplaire. Supprimer explicitement un document dans Mergeron retire le fichier Git inchangé et son entrée du manifeste ; les versions et une copie privée de récupération sont conservées. La suppression devient une modification Git à committer puis pousser. Un fichier modifié uniquement dans Git reste en conflit. Recalculez la proposition après résolution.",
               "Les livrables confidentiels sont exclus sauf inclusion explicite. Les fichiers de plus de 10 Mo et les pointeurs Git LFS non récupérés bloquent ce transfert ; les vidéos restent disponibles dans Mergeron. La date et les erreurs de synchronisation sont affichées dans ce réglage. Désactiver conserve les fichiers et l’historique."
             ],
             "warning": "Les droits Mergeron ne protègent plus un document après publication dans Git. Les conflits doivent être résolus explicitement."

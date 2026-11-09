@@ -45,6 +45,12 @@ test.each([
                   reason: 'document_changed_both',
                 },
                 {
+                  deliverable: 'Ancien document HTML',
+                  document: 'ancienne-page.html',
+                  action: 'export',
+                  reason: 'deleted_document',
+                },
+                {
                   deliverable: 'Budget confidentiel',
                   action: 'excluded',
                   reason: 'restricted',
@@ -106,6 +112,11 @@ test.each([
             name: 'Confirmer et synchroniser',
           }),
         ).toBeDisabled();
+        const deletion = await screen.findByText(
+          'Document supprimé dans Mergeron : retrait de la copie Git, puis commit et push à votre initiative.',
+        );
+        deletion.scrollIntoView({ block: 'center' });
+        expect(deletion).toBeVisible();
       } else {
         await user.click(
           screen.getByRole('button', {

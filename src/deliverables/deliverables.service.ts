@@ -2847,6 +2847,7 @@ export class DeliverablesService implements OnModuleInit {
     if (document.currentVersionNumber !== expectedVersion)
       throw new ConflictException('Document changed. Reload before saving.');
     if ((document.deletedAt !== null) === deleted) return { ok: true };
+    this.beforeGitChange?.(projectId, resourceId);
     const now = Date.now();
     const actor = this.actor();
     this.db.transaction((tx) => {

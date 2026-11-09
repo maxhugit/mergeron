@@ -44,6 +44,7 @@ import {
   readGitFile,
   relativeGitDirectory,
   writeGitFile,
+  removeGitFile,
   type GitDeliverableManifest,
 } from '../deliverables/git-deliverables-format';
 import { WorkspaceGitService } from './workspace-git.service';
@@ -66,7 +67,10 @@ type Binding = {
   localId: string;
   folder: string;
   metadata: string;
-  documents: Record<string, { localId: string; hash: string }>;
+  documents: Record<
+    string,
+    { localId: string; hash: string; removed?: boolean }
+  >;
 };
 type GitContext = { branch: string | null; head: string | null };
 type SyncState = {
@@ -98,6 +102,7 @@ type Local = {
   manifest: GitDeliverableManifest;
   documents: ReturnType<DeliverablesService['documents']>;
   organizationRevision: number;
+  deletedDocuments: ReturnType<DeliverablesService['documents']>;
 };
 const metadataHash = (m: GitDeliverableManifest) => digest(JSON.stringify(m));
 const errorCode = (e: unknown) =>
@@ -644,9 +649,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         Object.entries(settings?.bindings ?? {}).find(
           ([, b]) => b.localId === row.id,
         )?.[0] ?? row.id;
-      const documents = this.deliverables
-        .documents(p, r, row.id)
-        .filter((d) => d.deletedAt === null);
+      const allDocuments = this.deliverables.documents(p, r, row.id);
+      const documents = allDocuments.filter((d) => d.deletedAt === null);
       const labels = this.organization.read(p, r, row.id);
       const labelNames = (ids: string[]) =>
         ids
@@ -675,6 +679,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         item: this.deliverables.get(p, r, row.id),
         manifest,
         documents,
+        deletedDocuments: allDocuments.filter((d) => d.deletedAt !== null),
         organizationRevision: labels.revision,
       });
     }
@@ -753,7 +758,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       options.adoptFolders,
     );
     const changes: Change[] = [];
-    const documentActions = new Map<string, 'import' | 'export'>();
+    const documentActions = new Map<string, 'import' | 'export' | 'delete'>();
     const evidence: unknown[] = [
       options,
       previous
@@ -813,6 +818,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         l?.item.confidentiality,
         l?.organizationRevision,
         l?.documents.map((d) => [d.id, d.currentVersionNumber]),
+        l?.deletedDocuments.map((d) => [
+          d.id,
+          d.currentVersionNumber,
+          d.deletedAt,
+        ]),
         r?.hash,
       ]);
       const add = (
@@ -879,7 +889,29 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         );
         const remoteFile = rd ? await read(`${r.folder}/${rd.path}`) : null;
         const label = rd?.path ?? ld?.path ?? docId;
-        if (bd && (!rd || !d)) {
+        const retainedBinding = bd ?? identities[id]?.documents[docId];
+        const deleted = l?.deletedDocuments.find(
+          (doc) =>
+            doc.id === (retainedBinding?.localId ?? docId) ||
+            (!retainedBinding && !d && doc.name === rd?.path),
+        );
+        if (deleted) {
+          if (
+            rd &&
+            retainedBinding &&
+            (remoteFile?.hash === null ||
+              remoteFile?.hash === retainedBinding.hash)
+          ) {
+            add('export', 'deleted_document', label);
+            documentActions.set(JSON.stringify([id, docId]), 'delete');
+          } else if (!rd && retainedBinding) {
+            // Both sides already removed the document; remember its identity without resurrection.
+            if (!bd?.removed) add('export', 'deleted_document', label);
+            documentActions.set(JSON.stringify([id, docId]), 'delete');
+          } else add('conflict', 'deleted_document_changed_in_git', label);
+          continue;
+        }
+        if (bd && (!rd || !d) && !(bd.removed && d && !rd)) {
           add(
             'conflict',
             !rd ? 'removed_in_git' : 'removed_in_mergeron',
@@ -1065,6 +1097,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           lastSyncAt: plan.previous?.lastSyncAt ?? null,
         };
         this.save(p, options.boardId, settings);
+        const recoveries: { document: string; path: string }[] = [];
         try {
           for (const id of new Set([
             ...plan.local.keys(),
@@ -1097,6 +1130,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 item,
                 manifest: r.manifest,
                 documents: [],
+                deletedDocuments: [],
                 organizationRevision: this.organization.read(
                   p,
                   options.boardId,
@@ -1142,9 +1176,44 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 }),
               );
             }
+            const deletedIds = new Set(
+              [...plan.documentActions.entries()]
+                .filter(
+                  ([key, action]) =>
+                    (JSON.parse(key) as [string, string])[0] === id &&
+                    action === 'delete',
+                )
+                .map(([key]) => (JSON.parse(key) as [string, string])[1]),
+            );
+            for (const docId of deletedIds) {
+              const remoteEntry = r?.manifest.documents.find(
+                (d) => d.id === docId,
+              );
+              if (!remoteEntry) continue;
+              this.assertLocal(p, options.boardId, l);
+              const path = `${folder}/${remoteEntry.path}`;
+              const expected = plan.files.get(path)?.hash;
+              if (expected) {
+                const recovery = await removeGitFile(
+                  plan.root,
+                  path,
+                  expected,
+                  () => this.assertGitContext(plan.root, plan.context),
+                );
+                if (recovery)
+                  recoveries.push({ document: path, path: recovery });
+              } else if (await readGitFile(plan.root, path))
+                throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+            }
+            manifest.documents = manifest.documents.filter(
+              (d) => !deletedIds.has(d.id),
+            );
             // Merge document additions independently from metadata direction.
             for (const d of r?.manifest.documents ?? [])
-              if (!manifest.documents.some((m) => m.id === d.id))
+              if (
+                !deletedIds.has(d.id) &&
+                !manifest.documents.some((m) => m.id === d.id)
+              )
                 manifest.documents.push(d);
             for (const d of l.manifest.documents)
               if (!manifest.documents.some((m) => m.id === d.id))
@@ -1281,6 +1350,16 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               raw,
               r?.hash ?? null,
             );
+            for (const docId of deletedIds) {
+              const previousDocument =
+                binding.documents[docId] ??
+                plan.identities[id]?.documents[docId];
+              if (previousDocument)
+                binding.documents[docId] = {
+                  ...previousDocument,
+                  removed: true,
+                };
+            }
             binding.metadata = metadataHash(manifest);
             binding.pendingImport = false;
             binding.pendingExport = false;
@@ -1318,7 +1397,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               entityId: options.boardId,
               action: 'git_deliverables_synced',
               label: options.directory,
-              details: { copyId: options.copyId, changes: plan.changes },
+              details: {
+                copyId: options.copyId,
+                changes: plan.changes,
+                recoveries,
+              },
               actorPersonId: actor?.personId ?? null,
               actorName: actor?.name ?? 'Mergeron',
               createdAt: Date.now(),
