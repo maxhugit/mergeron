@@ -2,6 +2,8 @@
   "title": "Maquette interactive",
   "preview": "Aperçu",
   "source": "Code source",
+  "archiveFiles": "Fichiers de l’archive",
+  "archivePreview": "Retour à la maquette",
   "open": "Ouvrir la maquette",
   "revision": "Révision",
   "desktop": "Ordinateur",

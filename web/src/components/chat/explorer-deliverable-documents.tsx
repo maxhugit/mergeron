@@ -76,7 +76,8 @@ export function ExplorerDeliverableDocuments({
         onClick={() => onFile(document.sourcePath)}
         title={document.name}
       >
-        {/\.html?$/i.test(document.name) ? (
+        {/\.html?$/i.test(document.name) ||
+        /^mockup-.*\.zip$/i.test(document.name) ? (
           <PanelsTopLeft className="h-4 w-4 shrink-0 text-primary" />
         ) : (
           <FileText className="h-4 w-4 shrink-0 text-primary" />
