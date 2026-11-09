@@ -11,7 +11,8 @@ Les livrables et leurs historiques Mergeron continuent de fonctionner sans Git.
 
 1. Activer le commutateur, choisir le dossier relatif commun (par défaut
    `livrables`) et **Enregistrer le mode Livrables Git**. Ce réglage s’applique
-   au projet ; il n’importe aucun document et n’écrit dans aucune copie.
+   au projet ; il programme l’export des documents déjà conservés vers les copies
+   admissibles. Aucun document n’est importé automatiquement.
 2. Les modifications et versions sont enregistrées dans Mergeron, même sans copie
    disponible. L’export attend une copie Git propre à l’agent, prête en écriture.
    Aucun repli vers une copie partagée ou celle d’un autre agent n’est effectué.

@@ -1450,7 +1450,7 @@
           {
             "title": "Enable after reviewing",
             "paragraphs": [
-              "In project settings, open Locations and connections then Git deliverables. The single manager is selected automatically. Enable the project mode and save its target directory. The mode can be saved without a Git copy. Changes remain saved in Mergeron; export waits for the agent’s own ready, writable copy. Review imports from the relevant copy before confirming. Commits and pushes are never automatic.",
+              "In project settings, open Locations and connections then Git deliverables. The single manager is selected automatically. Enable the project mode and save its target directory: existing documents are queued for export without waiting for another edit. The mode can be saved without a Git copy. Changes remain saved in Mergeron; export waits for the agent’s own ready, writable copy. Review imports from the relevant copy before confirming. Commits and pushes are never automatic.",
               "Opening a repository recognizes deliverables through livrable.json files. Review Git deliverables opens the import proposal. For repositories without manifests, you can propose converting subdirectories containing direct files."
             ]
           },

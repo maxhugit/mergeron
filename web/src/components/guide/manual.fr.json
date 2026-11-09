@@ -1450,7 +1450,7 @@
           {
             "title": "Activer après prévisualisation",
             "paragraphs": [
-              "Dans les paramètres du projet, ouvrez Emplacements et connexions puis Livrables Git. Le gestionnaire unique est utilisé automatiquement. Activez le mode du projet et enregistrez le dossier cible. Le mode peut être enregistré sans copie Git. Les modifications restent enregistrées dans Mergeron ; leur export attend une copie propre à l’agent, prête en écriture. Examinez les imports depuis la copie concernée avant de les confirmer. Aucun commit ou push n’est automatique.",
+              "Dans les paramètres du projet, ouvrez Emplacements et connexions puis Livrables Git. Le gestionnaire unique est utilisé automatiquement. Activez le mode du projet et enregistrez le dossier cible : l’export des documents déjà présents est alors programmé, sans attendre une nouvelle modification. Le mode peut être enregistré sans copie Git. Les modifications restent enregistrées dans Mergeron ; leur export attend une copie propre à l’agent, prête en écriture. Examinez les imports depuis la copie concernée avant de les confirmer. Aucun commit ou push n’est automatique.",
               "À l’ouverture d’un dépôt, les fichiers livrable.json permettent de reconnaître les livrables. Le bandeau Examiner les livrables Git ouvre la proposition d’import. Pour un dépôt sans manifestes, vous pouvez proposer la conversion des sous-dossiers contenant des fichiers directs."
             ]
           },

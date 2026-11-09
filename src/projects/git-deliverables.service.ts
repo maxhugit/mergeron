@@ -495,6 +495,18 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       lastError: previous?.lastError ?? null,
       lastSyncAt: previous?.lastSyncAt ?? null,
     });
+    if (options.enabled) {
+      try {
+        // Retained documents may predate activation. Reuse the guarded export
+        // queue; saving this preference must not depend on Git availability.
+        this.markPending(p, options.boardId);
+        this.enqueue(p, options.boardId);
+      } catch {
+        new Logger(GitDeliverablesService.name).warn(
+          'Initial Git deliverable export could not be scheduled',
+        );
+      }
+    }
     return { enabled: options.enabled };
   }
   async status(p: string, copyId?: string) {

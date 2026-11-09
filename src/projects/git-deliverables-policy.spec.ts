@@ -398,6 +398,69 @@ describe('Mergeron-first Git projection policy', () => {
     expect(documents).toHaveLength(1);
     expect(documents[0]).toMatchObject({ id: doc.id, currentVersionNumber: 2 });
   });
+  it('exports existing documents after enabling the mode without another edit or manual synchronization', async () => {
+    service.onModuleInit();
+    const item = await deliverables.create('p', 'board', {
+      title: 'Predates Git mode',
+    });
+    const doc = await upload(item.id, 'retained before activation');
+    await expect(fs.stat(path.join(repo, 'livrables'))).rejects.toThrow();
+    expect(
+      service.configure('p', {
+        boardId: 'board',
+        directory: 'livrables',
+        enabled: true,
+      }),
+    ).toEqual({ enabled: true });
+    expect((await service.status('p')).copies[0].pending).toBe(true);
+    await vi.waitFor(
+      async () => {
+        expect(
+          await fs.readFile(
+            path.join(repo, 'livrables', item.id, 'notes.md'),
+            'utf8',
+          ),
+        ).toBe('retained before activation');
+        expect((await service.status('p')).copies[0]).toMatchObject({
+          pending: false,
+          lastError: null,
+        });
+      },
+      { timeout: 4000 },
+    );
+    expect(deliverables.documents('p', 'board', item.id)).toEqual([doc]);
+  });
+  it('keeps both contents when enabling the mode encounters a concurrent Git edit', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Conflict at activation',
+    });
+    const doc = await upload(item.id, 'common version');
+    await sync();
+    service.disable('p', 'board');
+    await upload(item.id, 'new Mergeron work', doc.id);
+    const file = path.join(repo, 'livrables', item.id, 'notes.md');
+    await fs.writeFile(file, 'new Git work');
+    service.onModuleInit();
+    service.configure('p', {
+      boardId: 'board',
+      directory: 'livrables',
+      enabled: true,
+    });
+    await vi.waitFor(
+      async () => {
+        expect((await service.status('p')).copies[0].lastError).toBe(
+          'GIT_DELIVERABLES_REVIEW_REQUIRED',
+        );
+      },
+      { timeout: 4000 },
+    );
+    expect(await fs.readFile(file, 'utf8')).toBe('new Git work');
+    const retained = deliverables.documents('p', 'board', item.id)[0];
+    expect(retained.currentVersionNumber).toBe(2);
+    expect(await fs.readFile(retained.sourcePath, 'utf8')).toBe(
+      'new Mergeron work',
+    );
+  });
   it('saves the mode before any copy and exports retained work when a copy becomes ready', async () => {
     copyViews = [];
     service.onModuleInit();
