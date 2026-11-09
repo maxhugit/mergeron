@@ -1,5 +1,21 @@
 [
   {
+    "tag": "v0.7.5",
+    "date": "2026-11-09",
+    "highlights": {
+      "fr": [
+        "Édition des documents de livrables rétablie avec création de versions et protection contre les sauvegardes concurrentes ; les brouillons sont conservés en cas de conflit.",
+        "Barre Livrables compacte : branche et statut Git, création et vues fichiers/étiquettes réunis sur une ligne, avec sélection automatique de la copie unique.",
+        "Actualisations Git stabilisées et statut « Enregistré » plus discret dans l’éditeur."
+      ],
+      "en": [
+        "Deliverable document editing restored with version creation and protection against concurrent saves; drafts are retained when a conflict occurs.",
+        "Compact Deliverables toolbar combines Git branch and status, creation and file/label views on one line, automatically selecting a single copy.",
+        "More stable Git refreshes and a quieter saved indicator in the editor."
+      ]
+    }
+  },
+  {
     "tag": "v0.7.4",
     "date": "2026-11-09",
     "highlights": {
