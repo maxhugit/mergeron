@@ -373,7 +373,13 @@ export default mergeConfig(
           extends: true,
           // Browser rendering discovers this React entry after fixture startup.
           // Prebundle it up front so optimization cannot reload an active test.
-          optimizeDeps: { include: ['react-dom/client'] },
+          optimizeDeps: {
+            include: ['react-dom/client'],
+            // A fresh isolated child must scan the same complete dependency
+            // graph as the full suite. Scanning only its assigned fixture lets
+            // lazy imports rebuild React chunks while a test is already running.
+            entries: ['src/**/*.browser.{ts,tsx}'],
+          },
           test: {
             name: 'browser',
             // Bound pages on small runners; machine-level parallelism comes
