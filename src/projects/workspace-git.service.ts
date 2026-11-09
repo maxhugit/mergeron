@@ -40,6 +40,7 @@ export interface GitChange {
 /** Inspection of registered copies; the command runner is server-only, never a route. */
 @Injectable()
 export class WorkspaceGitService {
+  onWorkingCopyChanged?: (projectId: string, copyId: string) => void;
   private readonly githubReads = new GitHubReadScheduler();
   private readonly prChecks = new Map<
     string,

@@ -122,6 +122,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     this.stopped = true;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    this.git.onWorkingCopyChanged = undefined;
+    this.copies.onCopyReady = undefined;
     this.deliverables.onGitChange = undefined;
     this.deliverables.beforeGitChange = undefined;
   }
@@ -134,6 +136,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     private readonly gate: GitMutationGateService,
   ) {}
   onModuleInit() {
+    this.git.onWorkingCopyChanged = (p) => this.scheduleProject(p);
+    this.copies.onCopyReady = (p) => this.scheduleProject(p);
     this.deliverables.beforeGitChange = (p, r) => this.assertCanModify(p, r);
     this.deliverables.onGitChange = (p, r) => {
       try {
@@ -148,6 +152,37 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         );
       }
     };
+  }
+  private scheduleProject(p: string) {
+    try {
+      requireProjectAccess(p);
+      for (const board of this.db
+        .select()
+        .from(projectResources)
+        .where(
+          and(
+            eq(projectResources.projectId, p),
+            eq(projectResources.type, 'deliverable_board'),
+          ),
+        )
+        .all()) {
+        if (
+          !board.config.internal &&
+          (board.config.gitDeliverables as Settings | undefined)?.enabled
+        )
+          this.enqueue(p, board.id);
+      }
+    } catch {
+      new Logger(GitDeliverablesService.name).warn(
+        'Git deliverable reconciliation could not be scheduled',
+      );
+    }
+  }
+  reconcile(p: string) {
+    requireExecutionAccess();
+    requireProjectAccess(p);
+    this.scheduleProject(p);
+    return { scheduled: true };
   }
   private board(p: string, r: string) {
     requireProjectAccess(p);
@@ -386,25 +421,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
     return copy;
   }
-  /** Precondition before domain writes. No fallback to a shared or another agent's copy. */
-  assertCanModify(p: string, r: string) {
+  /** Domain saves remain available without Git; an active transfer still owns its snapshot. */
+  assertCanModify(_p: string, r: string) {
     if (this.busy.has(r) && !this.isImporting(r))
       throw new ConflictException('GIT_DELIVERABLES_BUSY');
-    const row = this.db
-      .select()
-      .from(projectResources)
-      .where(and(eq(projectResources.id, r), eq(projectResources.projectId, p)))
-      .get();
-    if (
-      !row ||
-      row.config.internal ||
-      !(row.config.gitDeliverables as Settings | undefined)?.enabled
-    )
-      return;
-    const actor = currentAccess()?.localAgentThreadId;
-    const candidates = actor ? [this.target(p)] : this.eligible(p);
-    if (!candidates.length)
-      throw new ConflictException('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
   }
   private save(p: string, r: string, settings: Settings) {
     const board = this.board(p, r);
@@ -468,8 +488,6 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       previous.directory !== options.directory
     )
       throw new ConflictException('GIT_DELIVERABLES_TARGET_ALREADY_BOUND');
-    if (options.enabled && !this.eligible(p).length)
-      throw new ConflictException('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
     this.save(p, options.boardId, {
       ...options,
       adoptFolders: false,
@@ -573,7 +591,23 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         discoveryError = errorCode(e);
       }
     }
-    return { boards, copies, discovered, discoveryError };
+    let proposal: Awaited<
+      ReturnType<GitDeliverablesService['preview']>
+    > | null = null;
+    const board = boards[0];
+    if (copyId && board?.settings?.enabled && eligibleIds.has(copyId)) {
+      try {
+        proposal = await this.comparison(p, {
+          boardId: board.id,
+          copyId,
+          directory: board.settings.directory,
+          restrictedIds: board.settings.restrictedIds,
+        });
+      } catch (e) {
+        discoveryError = errorCode(e);
+      }
+    }
+    return { boards, copies, discovered, discoveryError, proposal };
   }
   disable(p: string, r: string) {
     requireExecutionAccess();
@@ -707,6 +741,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       options.adoptFolders,
     );
     const changes: Change[] = [];
+    const documentActions = new Map<string, 'import' | 'export'>();
     const evidence: unknown[] = [
       options,
       previous
@@ -822,7 +857,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         const rd = remoteDocs.get(docId),
           ld = localDocs.get(docId),
           bd = base?.documents[docId];
-        const d = l?.documents.find((d) => d.id === (bd?.localId ?? docId));
+        const d = l?.documents.find(
+          (d) =>
+            d.id ===
+            (bd?.localId ?? identities[id]?.documents[docId]?.localId ?? docId),
+        );
         const latest = d?.versions.find(
           (v) => v.number === d.currentVersionNumber,
         );
@@ -862,12 +901,34 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         }
         const localHash = latest?.sha256;
         if (remoteFile?.hash === localHash && localHash) continue;
-        if (!d && rd) add('import', 'new_document', label);
-        else if (!rd && d) add('export', 'new_document', label);
-        else if (bd && remoteFile?.hash === bd.hash)
-          add('export', 'document', label);
-        else if (bd && localHash === bd.hash) add('import', 'document', label);
-        else add('conflict', 'document_changed_both', label);
+        const knownOlder = d?.versions.some(
+          (v) =>
+            v.number < d.currentVersionNumber && v.sha256 === remoteFile?.hash,
+        );
+        let action: 'import' | 'export' | 'conflict';
+        let reason: string;
+        if (!d && rd) {
+          action = 'import';
+          reason = 'new_document';
+        } else if (!rd && d) {
+          action = 'export';
+          reason = 'new_document';
+        } else if (bd && remoteFile?.hash === bd.hash) {
+          action = 'export';
+          reason = 'document';
+        } else if (knownOlder) {
+          action = 'export';
+          reason = 'known_older_document';
+        } else if (bd && localHash === bd.hash) {
+          action = 'import';
+          reason = 'document';
+        } else {
+          action = 'conflict';
+          reason = 'document_changed_both';
+        }
+        add(action, reason, label);
+        if (action !== 'conflict')
+          documentActions.set(JSON.stringify([id, docId]), action);
       }
       if (
         l &&
@@ -923,6 +984,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       index,
       changes,
       files,
+      identities,
+      documentActions,
       fingerprint: digest(JSON.stringify(evidence)),
     };
   }
@@ -948,6 +1011,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
   }
   async preview(p: string, input: unknown) {
     requireExecutionAccess();
+    return this.comparison(p, input);
+  }
+  private async comparison(p: string, input: unknown) {
     const plan = await this.build(p, this.options(input));
     return {
       fingerprint: plan.fingerprint,
@@ -1076,7 +1142,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 .documents(p, options.boardId, l.item.id)
                 .find(
                   (d) =>
-                    d.id === (binding.documents[entry.id]?.localId ?? entry.id),
+                    d.id ===
+                    (binding.documents[entry.id]?.localId ??
+                      plan.identities[id]?.documents[entry.id]?.localId ??
+                      entry.id),
                 );
               const remoteEntry = r?.manifest.documents.find(
                 (d) => d.id === entry.id,
@@ -1088,11 +1157,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 .get(id)
                 ?.documents.find(
                   (d) =>
-                    d.id === (binding.documents[entry.id]?.localId ?? entry.id),
+                    d.id ===
+                    (binding.documents[entry.id]?.localId ??
+                      plan.identities[id]?.documents[entry.id]?.localId ??
+                      entry.id),
                 );
-              const plannedVersion = plannedDocument?.versions.find(
-                (v) => v.number === plannedDocument.currentVersionNumber,
-              );
               if (
                 plannedDocument &&
                 (!doc ||
@@ -1103,10 +1172,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 throw new ConflictException('GIT_DELIVERABLES_CHANGED');
               const importing =
                 remoteFile?.bytes &&
-                (!plannedDocument ||
-                  (plannedVersion?.sha256 !== remoteFile.hash &&
-                    binding.documents[entry.id]?.hash ===
-                      plannedVersion?.sha256));
+                plan.documentActions.get(JSON.stringify([id, entry.id])) ===
+                  'import';
               if (doc && doc.name !== entry.path) {
                 await this.importMutation(options.boardId, () =>
                   this.deliverables.renameDocument(
@@ -1297,13 +1364,6 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               const generation =
                 this.copyStates(this.settings(p, r))[copy.id]?.generation ?? 0;
               const preview = await this.preview(p, options);
-              const pending = this.copyStates(this.settings(p, r))[copy.id];
-              if (
-                pending?.pending &&
-                pending.pendingBranch &&
-                pending.pendingBranch !== this.branchKey(preview.context)
-              )
-                throw new ConflictException('GIT_DELIVERABLES_BRANCH_CHANGED');
               // Never import in the background, commit, pull or push automatically.
               if (
                 !preview.canApply ||

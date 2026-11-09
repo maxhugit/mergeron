@@ -125,3 +125,58 @@ test.each([
     }
   },
 );
+
+test.each([390, 1280])(
+  'saves project Git mode without a copy at %i px',
+  async (width) => {
+    const fixture = catalogFixture();
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    await page.viewport(width, 1000);
+    const writes: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          writes.push(url);
+          return Promise.resolve(json({ enabled: true }));
+        }
+        return Promise.resolve(
+          json({
+            boards: [
+              {
+                id: 'board',
+                name: 'Gestion des livrables',
+                restricted: [],
+                settings: null,
+              },
+            ],
+            copies: [],
+            discovered: [],
+            discoveryError: null,
+          }),
+        );
+      }),
+    );
+    fixture.render(<GitDeliverablesSettings projectId="p" />);
+    const user = userEvent.setup();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Le mode peut être enregistré',
+    );
+    await user.click(await screen.findByRole('switch'));
+    const save = screen.getByRole('button', {
+      name: 'Enregistrer le mode Livrables Git',
+    });
+    expect(save).toBeEnabled();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/git-deliverables-no-copy-${width}.png`,
+    });
+    await user.click(save);
+    await vi.waitFor(() =>
+      expect(writes).toEqual(['/api/projects/p/git-deliverables/configure']),
+    );
+  },
+);

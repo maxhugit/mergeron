@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { projectsApi } from '@/lib/projects-api';
-import { key, url, type Status } from '@/lib/git-deliverables-api';
+import { key, url, post, type Status } from '@/lib/git-deliverables-api';
 const GitDeliverablesSettings = lazy(() =>
   import('./git-deliverables-settings').then((m) => ({
     default: m.GitDeliverablesSettings,
@@ -40,6 +40,16 @@ export function GitDeliverablesDiscovery({
     gcTime: 60_000,
     retry: false,
   });
+  const context = query.data?.proposal?.context;
+  useEffect(() => {
+    if (context?.branch === undefined && context?.head === undefined) return;
+    // Reconcile initial inspection and branch/HEAD changes, including native CLI
+    // pulls. The 15-second inspection poll must not schedule exports repeatedly.
+    void post(projectId, '/reconcile', {}).catch(() => undefined);
+  }, [projectId, copyId, context?.branch, context?.head]);
+  const needsReview = query.data?.proposal?.changes.some(
+    (change) => change.action === 'import' || change.action === 'conflict',
+  );
   const active = query.data?.boards?.some(
     (b) =>
       b.settings?.enabled &&
@@ -56,6 +66,7 @@ export function GitDeliverablesDiscovery({
               count: query.data?.discovered?.length ?? 0,
             })}
       </p>
+      {needsReview && <p role="status">{t('gitDeliverablesIncomingReview')}</p>}
       {query.data?.discoveryError && (
         <p role="alert">{t('gitDeliverablesUnavailable')}</p>
       )}

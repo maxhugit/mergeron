@@ -92,7 +92,7 @@ it('configures the project without a manager selector or copy selector', async (
     restrictedIds: [],
   });
 });
-it('warns about missing agent copies and refuses enabling the mode', async () => {
+it('allows saving the mode without an agent copy and explains deferred export', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(() =>
@@ -121,8 +121,16 @@ it('warns about missing agent copies and refuses enabling the mode', async () =>
   await user.click(await screen.findByRole('switch'));
   expect(
     screen.getByRole('button', { name: 'Save Git deliverables mode' }),
-  ).toBeDisabled();
-  expect(writes).toEqual([]);
+  ).toBeEnabled();
+  await user.click(
+    screen.getByRole('button', { name: 'Save Git deliverables mode' }),
+  );
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/configure'),
+      expect.objectContaining({ method: 'POST' }),
+    ),
+  );
 });
 
 it('keeps each copy error visible and opens review in its own branch context', async () => {
@@ -259,4 +267,71 @@ it('recognizes a repository automatically without sending an import until reques
   );
   expect(await screen.findByRole('dialog')).toBeVisible();
   expect(writes).toEqual([]);
+});
+
+it('shows an explicit review notice for incoming Git changes without applying them', async () => {
+  let head = 'base';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        writes.push({
+          url,
+          body: JSON.parse(String(init.body)) as Record<string, unknown>,
+        });
+        return Promise.resolve(json({ scheduled: true }));
+      }
+      return Promise.resolve(
+        json({
+          boards: [
+            {
+              id: 'board',
+              name: 'Deliverables',
+              restricted: [],
+              settings: {
+                enabled: true,
+                directory: 'livrables',
+                restrictedIds: [],
+              },
+            },
+          ],
+          copies: [{ id: 'copy', eligible: true }],
+          discovered: [],
+          discoveryError: null,
+          proposal: {
+            fingerprint: 'incoming',
+            context: { branch: 'refs/heads/main', head },
+            canApply: true,
+            changes: [
+              {
+                deliverable: 'Report',
+                document: 'report.md',
+                action: 'import',
+                reason: 'document',
+              },
+            ],
+          },
+        }),
+      );
+    }),
+  );
+  fixture.render(
+    <GitDeliverablesDiscovery projectId="p" copyId="copy" inspectedAt={1} />,
+  );
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Git changes require your review',
+  );
+  expect(writes).toEqual([
+    { url: '/api/projects/p/git-deliverables/reconcile', body: {} },
+  ]);
+  await fixture.queryClient.invalidateQueries({
+    queryKey: ['git-deliverables', 'p'],
+  });
+  expect(writes).toHaveLength(1);
+  head = 'pulled-commit';
+  await fixture.queryClient.invalidateQueries({
+    queryKey: ['git-deliverables', 'p'],
+  });
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(writes.every((write) => write.url.endsWith('/reconcile'))).toBe(true);
 });

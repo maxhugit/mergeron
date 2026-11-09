@@ -518,7 +518,7 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
       'GIT_DELIVERABLES_REVIEW_REQUIRED',
     );
   });
-  it('does not redirect a delayed automatic export to a branch selected after the save', async () => {
+  it('replans a delayed export on the selected branch when its bytes are a known older version', async () => {
     const item = await deliverables.create('p', 'board', {
       title: 'Delayed branch',
     });
@@ -538,26 +538,23 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     ]);
     execFileSync('git', ['-C', repo, 'branch', 'elsewhere']);
     service.onModuleInit();
-    let notified!: () => void;
-    const warning = new Promise<void>((resolve) => {
-      notified = resolve;
-    });
-    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {
-      notified();
-    });
-    await upload(item.id, 'pending for original branch', doc.id);
+    await upload(item.id, 'current Mergeron version', doc.id);
     execFileSync('git', ['-C', repo, 'checkout', '-q', 'elsewhere']);
-    await warning;
-    expect(
-      await fs.readFile(
-        path.join(repo, 'livrables', item.id, 'notes.md'),
-        'utf8',
-      ),
-    ).toBe('base');
-    expect((await service.status('p')).copies[0].lastError).toBe(
-      'GIT_DELIVERABLES_BRANCH_CHANGED',
+    await vi.waitFor(
+      async () => {
+        expect(
+          await fs.readFile(
+            path.join(repo, 'livrables', item.id, 'notes.md'),
+            'utf8',
+          ),
+        ).toBe('current Mergeron version');
+      },
+      { timeout: 4000 },
     );
-    expect((await service.status('p')).copies[0].pending).toBe(true);
+    expect((await service.status('p')).copies[0].lastError).toBeNull();
+    expect(
+      deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
+    ).toBe(2);
   });
   it('does not invalidate an approved plan when another copy only updates its error status', async () => {
     const item = await deliverables.create('p', 'board', {

@@ -1,8 +1,8 @@
 # Livrables dans Git
 
 Le mode **Livrables Git** est optionnel et désactivé par défaut. Un administrateur
-peut l’activer dans **Projet → Espaces de travail → Livrables Git**, après avoir
-créé au moins une copie Git propre à un agent, disponible et accessible en écriture.
+peut l’activer dans **Projet → Emplacements et connexions → Livrables Git**,
+même sans copie Git locale.
 Le projet possède un seul gestionnaire de livrables : il est utilisé automatiquement,
 sans liste de sélection. Le réglage ne désigne aucune copie partagée.
 Les livrables et leurs historiques Mergeron continuent de fonctionner sans Git.
@@ -12,12 +12,11 @@ Les livrables et leurs historiques Mergeron continuent de fonctionner sans Git.
 1. Activer le commutateur, choisir le dossier relatif commun (par défaut
    `livrables`) et **Enregistrer le mode Livrables Git**. Ce réglage s’applique
    au projet ; il n’importe aucun document et n’écrit dans aucune copie.
-2. Chaque agent qui modifie un livrable doit posséder sa propre copie Git prête
-   en écriture. Sans copie, ou si elle est indisponible, l’enregistrement est
-   refusé avant de changer le document ou ses métadonnées. Aucun repli vers une
-   copie partagée ou celle d’un autre agent n’est effectué. L’interface signale
-   l’absence de copie disponible ; créer ou affecter une copie dans les emplacements
-   du projet avant d’activer le mode. Sans gestionnaire, en créer un d’abord.
+2. Les modifications et versions sont enregistrées dans Mergeron, même sans copie
+   disponible. L’export attend une copie Git propre à l’agent, prête en écriture.
+   Aucun repli vers une copie partagée ou celle d’un autre agent n’est effectué.
+   Créer ou affecter une copie permet de reprendre les exports. Sans gestionnaire,
+   en créer un d’abord.
 3. Dans l’explorateur de la copie concernée, **Examiner les livrables Git** puis
    **Prévisualiser les changements**. Examiner imports, exports, exclusions et
    conflits avant **Confirmer et synchroniser**. La copie est celle de l’explorateur,
@@ -119,9 +118,21 @@ parce qu'une nouvelle version a été enregistrée pendant sa préparation.
 
 La prévisualisation est liée à la branche et au commit HEAD examinés. Un changement
 de branche ou de commit invalide la confirmation. Chaque copie conserve des bases
-de comparaison distinctes par branche. Un export automatique différé reste lié à
-la branche sur laquelle la modification a été signalée ; il ne suit pas un
-changement de branche intervenu ensuite.
+de comparaison distinctes par branche. Après changement de branche, le transfert
+est recalculé sur la branche courante : les octets reconnus dans une ancienne
+version conservée de Mergeron peuvent être remplacés par la version actuelle.
+Un plan accepté avant le changement reste invalide.
+
+La comparaison repose sur les empreintes du contenu, pas sur les dates des fichiers.
+Une modification Git inconnue est proposée à l’import si Mergeron correspond
+encore à la base commune ; si les deux ont changé, le transfert est bloqué en
+conflit. Sans base commune, un contenu différent reste à examiner. Les titres et
+étiquettes sans historique comparable restent également protégés par un conflit.
+Aucun import n’est automatique et aucune ancienne version Mergeron n’est effacée.
+La création d’une copie, les actions Git locales et l’inspection de la copie dans
+l’interface relancent la comparaison et les exports sûrs. Les changements réalisés
+par une commande Git externe sont détectés à la prochaine inspection, pas par une
+surveillance permanente du disque.
 
 Le tableau des copies affiche la branche, le commit, la dernière synchronisation,
 les erreurs et les exports en attente. Un conflit sur une copie n'empêche pas

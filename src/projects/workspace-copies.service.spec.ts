@@ -130,14 +130,18 @@ describe('WorkspaceCopiesService', () => {
         updatedAt: 1,
       })
       .run();
+    const ready = vi.fn();
+    copies.onCopyReady = ready;
     const copy = await copies.create('project', 'git-source', {
       agentThreadId: 'work-agent',
     });
+    expect(ready).toHaveBeenCalledExactlyOnceWith('project');
     expect(copy.ownerAgentIds).toEqual(['work-agent']);
     await expect(
       copies.create('project', 'git-source', { agentThreadId: 'work-agent' }),
     ).rejects.toThrow('GIT_AGENT_COPY_EXISTS');
     expect(copies.list('project')).toHaveLength(1);
+    expect(ready).toHaveBeenCalledTimes(1);
     expect(
       await readFile(path.join(copy.localPath!, 'README.md'), 'utf8'),
     ).toBe('source repository\n');
