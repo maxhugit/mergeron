@@ -657,7 +657,11 @@ export class WorkspaceGitActionsService {
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
     const name = body.name;
-    const copy = { projectId, copyId };
+    const copy = {
+      projectId,
+      copyId,
+      workingCopyChanged: body.checkout === true,
+    };
     return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state } = await this.copyState(
@@ -962,7 +966,11 @@ export class WorkspaceGitActionsService {
       (remoteMerge && body.action !== 'merge')
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
-    const copy = { projectId, copyId };
+    const copy = {
+      projectId,
+      copyId,
+      workingCopyChanged: body.action !== 'delete',
+    };
     return this.localPreparation(copy, preparer, body, async () => {
       this.assertCopyAgent(projectId, copyId, body);
       const { cwd, state, source } = await this.copyState(
@@ -1208,7 +1216,7 @@ export class WorkspaceGitActionsService {
     )
       throw new BadRequestException('GIT_INVALID_INPUT');
     return this.localPreparation(
-      { projectId, copyId },
+      { projectId, copyId, workingCopyChanged: true },
       preparer,
       body,
       async () => {
@@ -1362,7 +1370,7 @@ export class WorkspaceGitActionsService {
   ) {
     this.body(body);
     return this.localPreparation(
-      { projectId, copyId },
+      { projectId, copyId, workingCopyChanged: true },
       preparer,
       body,
       async () => {
@@ -1566,7 +1574,7 @@ export class WorkspaceGitActionsService {
   }
 
   private async localPreparation<T>(
-    copy: { projectId: string; copyId: string },
+    copy: { projectId: string; copyId: string; workingCopyChanged?: boolean },
     preparer: AgentGitPreparer | undefined,
     body: Record<string, unknown>,
     operation: () => Promise<T>,
@@ -1574,7 +1582,9 @@ export class WorkspaceGitActionsService {
     const { projectId, copyId } = copy;
     const observedOperation = async () => {
       const result = await operation();
-      this.git.onWorkingCopyChanged?.(projectId, copyId);
+      // Reviews, staging and fetches do not change working files.
+      if (copy.workingCopyChanged)
+        this.git.onWorkingCopyChanged?.(projectId, copyId);
       return result;
     };
     if (!preparer) return this.gate.mutate(observedOperation);

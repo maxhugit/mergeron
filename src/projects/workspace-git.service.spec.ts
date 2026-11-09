@@ -1167,7 +1167,7 @@ describe('remote branch retrieval', () => {
     const changed = vi.fn();
     service.onWorkingCopyChanged = changed;
     await actions.retrieveBranch('p', copyId, body);
-    expect(changed).toHaveBeenCalledExactlyOnceWith('p', copyId);
+    expect(changed).not.toHaveBeenCalled();
     expect(calls()).toBe(1);
     expect((await git(['rev-parse', 'dev'])).stdout.trim()).toBe(body.revision);
     expect((await git(['show', 'dev:remote-only.txt'])).stdout).toBe(
@@ -1717,6 +1717,8 @@ describe('confirmed actions', () => {
   it('switches existing local branches without publishing', async () => {
     writable();
     await git(['branch', 'feature']);
+    const changed = vi.fn();
+    service.onWorkingCopyChanged = changed;
     await branchAction('switch', 'feature');
     expect((await git(['branch', '--show-current'])).stdout.trim()).toBe(
       'feature',
@@ -1724,6 +1726,7 @@ describe('confirmed actions', () => {
     expect((await git(['branch', '-r'])).stdout).not.toContain(
       'origin/feature',
     );
+    expect(changed).toHaveBeenCalledExactlyOnceWith('p', copyId);
   });
   it.each(['feature', 'feature=local'])(
     'deletes only the merged local branch %s without touching files, index or remote refs',
