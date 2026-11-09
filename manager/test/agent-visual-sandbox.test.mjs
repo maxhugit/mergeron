@@ -34,10 +34,19 @@ test('DEV opt-in adds only namespace-local chroot without mutating rollback conf
   assert.equal(agentVisualSandbox(migrated, options), migrated);
 });
 
-test('production, other components and old images remain strictly unchanged', () => {
+test('production receives the same restricted, idempotent migration as development', () => {
+  const original = host();
+  const production = { ...options, environment: 'production' };
+  const migrated = agentVisualSandbox(original, production);
+  assert.deepEqual(migrated, agentVisualSandbox(original, options));
+  assert.deepEqual({ ...migrated, SecurityOpt: original.SecurityOpt }, original);
+  assert.equal(agentVisualSandbox(migrated, production), migrated);
+});
+
+test('unknown environments, other components and old images remain strictly unchanged', () => {
   const original = host();
   for (const override of [
-    { environment: 'production' },
+    { environment: 'unknown' },
     { component: 'browser' },
     { labels: {} },
   ]) {

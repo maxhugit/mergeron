@@ -1,12 +1,12 @@
 /**
- * Opt-in DEV migration for images shipping local visual tests. Chromium needs
+ * Opt-in migration for images shipping local visual tests. Chromium needs
  * chroot after entering its own user namespace. Docker's capability-gated rule
  * is absent with CapDrop=ALL, even though the child has namespace-local caps.
- * Preserve every other restriction and never enable this on production stacks.
+ * Preserve every other restriction on both development and production stacks.
  */
 export function agentVisualSandbox(host, { environment, component, labels }) {
   if (
-    environment !== 'development' ||
+    !['development', 'production'].includes(environment) ||
     component !== 'application' ||
     labels?.['io.mergeron.agent-visual-testing'] !== '1'
   )
