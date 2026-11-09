@@ -29,8 +29,11 @@ export function deliverableGitState(
   if (data.active || data.discoveryError === 'GIT_DELIVERABLES_BUSY')
     return 'syncing';
   if (data.discoveryError === 'GIT_DELIVERABLES_CHANGED') return 'checking';
-  if (data.discoveryError || copy.lastError) return 'error';
-  if (copy.pending) return 'pending';
+  if (data.discoveryError) return 'error';
+  // A successful comparison requiring review is not a transport/storage failure.
+  // Keep real failures blocking even when a previous proposal remains cached.
+  if (copy.lastError && copy.lastError !== 'GIT_DELIVERABLES_REVIEW_REQUIRED')
+    return 'error';
   const proposal = data.proposal;
   if (
     !proposal ||
@@ -39,7 +42,7 @@ export function deliverableGitState(
     copy.context.branch !== proposal.context.branch ||
     copy.context.head !== proposal.context.head
   )
-    return 'checking';
+    return copy.pending ? 'pending' : 'checking';
   const changes = proposal.changes.filter(
     (change) =>
       !itemId || !change.deliverableId || change.deliverableId === itemId,
@@ -50,7 +53,8 @@ export function deliverableGitState(
     )
   )
     return 'review';
-  if (changes.some((change) => change.action === 'export')) return 'pending';
+  if (copy.pending || changes.some((change) => change.action === 'export'))
+    return 'pending';
   if (changes.some((change) => change.action === 'excluded')) return 'excluded';
   return 'ready';
 }

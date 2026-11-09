@@ -71,6 +71,7 @@ type Binding = {
   localId: string;
   folder: string;
   metadata: string;
+  metadataHistory?: string[];
   documents: Record<
     string,
     { localId: string; hash: string; removed?: boolean }
@@ -783,10 +784,26 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('GIT_DELIVERABLES_TARGET_ALREADY_BOUND');
     const identitySettings = this.settings(p, options.boardId);
     const identities: Record<string, Binding> = {};
+    // Branch-local baselines must stay independent. A manifest already exported
+    // or explicitly imported for this same identity is nevertheless known old
+    // metadata on another branch/copy, just like a retained document version.
+    const knownMetadata = new Map<string, Set<string>>();
     for (const state of Object.values(this.copyStates(identitySettings))) {
       Object.assign(identities, state.bindings);
       for (const branch of Object.values(state.branches ?? {}))
         Object.assign(identities, branch.bindings);
+      for (const snapshot of [state, ...Object.values(state.branches ?? {})]) {
+        for (const [id, binding] of Object.entries(snapshot.bindings)) {
+          const key = JSON.stringify([id, binding.localId]);
+          const hashes = knownMetadata.get(key) ?? new Set<string>();
+          for (const hash of [
+            binding.metadata,
+            ...(binding.metadataHistory ?? []),
+          ])
+            if (/^[a-f0-9]{64}$/.test(hash)) hashes.add(hash);
+          knownMetadata.set(key, hashes);
+        }
+      }
     }
     const remote = await discoverGitDeliverables(
       root,
@@ -872,6 +889,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
 
     const documentActions = new Map<string, 'import' | 'export' | 'delete'>();
     const evidence: unknown[] = [
+      [...knownMetadata].map(([id, hashes]) => [id, [...hashes].sort()]).sort(),
       [...folders],
       folderMoves,
       options,
@@ -984,9 +1002,15 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         rh = metadataHash(r.manifest);
       if (!l) add('import', 'new_deliverable');
       else if (lh !== rh && !base?.pendingImport) {
-        if (base && lh === base.metadata) add('import', 'metadata');
-        else if (base && rh === base.metadata) add('export', 'metadata');
-        else add('conflict', 'metadata_changed_both');
+        if (base && rh === base.metadata) add('export', 'metadata');
+        else if (knownMetadata.get(JSON.stringify([id, l.item.id]))?.has(rh))
+          add('export', 'known_older_metadata');
+        else if (base && lh === base.metadata) add('import', 'metadata');
+        else
+          add(
+            'conflict',
+            base ? 'metadata_changed_both' : 'metadata_baseline_missing',
+          );
       }
       const remoteDocs = new Map(r.manifest.documents.map((d) => [d.id, d]));
       const localDocs = new Map(
@@ -1282,9 +1306,12 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               r &&
               (!l ||
                 settings.bindings[id]?.pendingImport ||
-                (metadataHash(l.manifest) !== metadataHash(r.manifest) &&
-                  settings.bindings[id]?.metadata ===
-                    metadataHash(l.manifest)));
+                plan.changes.some(
+                  (change) =>
+                    change.deliverableId === l?.item.id &&
+                    change.action === 'import' &&
+                    change.reason === 'metadata',
+                ));
             if (!l && r) {
               const item = await this.importMutation(options.boardId, () =>
                 this.deliverables.create(p, options.boardId, {
@@ -1529,7 +1556,18 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 };
             }
             binding.folder = folder;
-            binding.metadata = metadataHash(manifest);
+            const metadata = metadataHash(manifest);
+            binding.metadataHistory = [
+              ...new Set([
+                ...(binding.metadataHistory ?? []),
+                binding.metadata,
+              ]),
+            ]
+              .filter(
+                (hash) => /^[a-f0-9]{64}$/.test(hash) && hash !== metadata,
+              )
+              .slice(-32);
+            binding.metadata = metadata;
             binding.pendingImport = false;
             binding.pendingExport = false;
             settings.bindings[id] = binding;
