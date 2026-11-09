@@ -22,6 +22,14 @@ Aucun environnement de test, conteneur, processus applicatif ou port n’est cr�
    ses fichiers et ses versions. Le fichier autonome porte le nom
    `mockup-<identifiant>.html`. Pour une version suivante du même document, fournir
    sa `revision` de maquette, son `documentId` et son `expectedVersion` observés dans le livrable.
+6. Dans le livrable, cliquer sur le document HTML pour ouvrir son **Aperçu**
+   interactif. **Code source** donne accès au fichier enregistré. L’aperçu utilise
+   les octets du document publié, pas la dernière révision de la conversation.
+   Les exports déjà enregistrés restent compatibles, même après renommage.
+   Le rendu reprend la sandbox des maquettes : ni accès à Mergeron, ni requêtes
+   réseau, ni chargement de scripts ou d’images externes. Les ressources doivent
+   actuellement être intégrées au HTML ; la publication ne constitue pas une
+   archive de fichiers dépendants.
 
 Les annotations visuelles restent pour une livraison ultérieure. Sans activation
 explicite de **Conserver les choix sur cet appareil**, une réouverture repart de

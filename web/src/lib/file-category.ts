@@ -3,6 +3,7 @@
 export type FileCategory =
   | 'image'
   | 'code'
+  | 'html'
   | 'pdf'
   | 'video'
   | 'audio'
@@ -60,6 +61,7 @@ export function getFileCategory(filePath: string): FileCategory {
   if (ext === 'docx') return 'docx';
   if (ext === 'xlsx') return 'xlsx';
   if (ext === 'pptx') return 'pptx';
+  if (ext === 'html' || ext === 'htm') return 'html';
   if (!ext || CODE_EXTENSIONS.has(ext)) return 'code';
   return 'binary';
 }

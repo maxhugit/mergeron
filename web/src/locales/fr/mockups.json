@@ -1,5 +1,7 @@
 {
   "title": "Maquette interactive",
+  "preview": "Aperçu",
+  "source": "Code source",
   "open": "Ouvrir la maquette",
   "revision": "Révision",
   "desktop": "Ordinateur",
