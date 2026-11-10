@@ -370,83 +370,87 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
   if (!hasContent) return null;
 
   return (
-    <div className="mb-6 flex gap-3">
-      <Avatar className="mt-1 h-8 w-8 shrink-0">
-        <AvatarFallback className="glass-1 bg-transparent">
-          <Bot className="h-4 w-4" />
-        </AvatarFallback>
-      </Avatar>
+    <div className="mb-6 min-w-0 space-y-2">
+      <TurnElapsed entry={entry} running={isRunning} />
+      <div className="flex min-w-0 gap-3" data-agent-response>
+        <Avatar className="mt-1 h-8 w-8 shrink-0">
+          <AvatarFallback className="glass-1 bg-transparent">
+            <Bot className="h-4 w-4" />
+          </AvatarFallback>
+        </Avatar>
 
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <TurnElapsed entry={entry} running={isRunning} />
-        <div className="glass-1 min-w-0 space-y-2 rounded-2xl px-4 py-3">
-          {planVisible && entry.plan && (
-            <PlanPanel plan={entry.plan} completed={entry.completed} />
-          )}
+        <div className="min-w-0 flex-1">
+          <div className="glass-1 min-w-0 space-y-2 rounded-2xl px-4 py-3">
+            {planVisible && entry.plan && (
+              <PlanPanel plan={entry.plan} completed={entry.completed} />
+            )}
 
-          {displayGroups.map((group) => {
-            const content = group.items.map((item) => (
-              <ItemWithRequests
-                key={item.itemId}
-                item={item}
-                threadId={threadId}
-                turnId={entry.turnId}
-                approvals={approvalsByItemId.get(item.itemId) ?? []}
+            {displayGroups.map((group) => {
+              const content = group.items.map((item) => (
+                <ItemWithRequests
+                  key={item.itemId}
+                  item={item}
+                  threadId={threadId}
+                  turnId={entry.turnId}
+                  approvals={approvalsByItemId.get(item.itemId) ?? []}
+                />
+              ));
+              return group.technical ? (
+                <TechnicalDetails
+                  key={`${grouped}:${displayMode}:${group.items[0].itemId}`}
+                  expanded={!grouped && displayMode === 'expanded'}
+                  label={
+                    (grouped
+                      ? t('technicalActivityGroup', {
+                          count: group.items.length,
+                        })
+                      : group.items[0].type === 'commandExecution'
+                        ? t('terminal')
+                        : group.items[0].type === 'reasoning'
+                          ? t('thinking')
+                          : t('technicalDetails')) +
+                    (group.items.some((item) => !item.completed)
+                      ? ` · ${t('running')}`
+                      : '')
+                  }
+                >
+                  {content}
+                </TechnicalDetails>
+              ) : (
+                <div key={group.items[0].itemId}>{content}</div>
+              );
+            })}
+
+            {unattachedApprovals.map((approval) => (
+              <ApprovalItem
+                key={pendingRequestKey(approval)}
+                approval={approval}
               />
-            ));
-            return group.technical ? (
+            ))}
+
+            {unattachedInputs.map((req) => (
+              <UserInputCard key={pendingRequestKey(req)} request={req} />
+            ))}
+
+            {diffVisible && entry.diff && (
               <TechnicalDetails
-                key={`${grouped}:${displayMode}:${group.items[0].itemId}`}
-                expanded={!grouped && displayMode === 'expanded'}
-                label={
-                  (grouped
-                    ? t('technicalActivityGroup', { count: group.items.length })
-                    : group.items[0].type === 'commandExecution'
-                      ? t('terminal')
-                      : group.items[0].type === 'reasoning'
-                        ? t('thinking')
-                        : t('technicalDetails')) +
-                  (group.items.some((item) => !item.completed)
-                    ? ` · ${t('running')}`
-                    : '')
-                }
+                key={`diff:${displayMode}`}
+                label={t('technicalDetails')}
+                expanded={displayMode === 'expanded'}
               >
-                {content}
+                <DiffViewer diff={entry.diff} />
               </TechnicalDetails>
-            ) : (
-              <div key={group.items[0].itemId}>{content}</div>
-            );
-          })}
+            )}
 
-          {unattachedApprovals.map((approval) => (
-            <ApprovalItem
-              key={pendingRequestKey(approval)}
-              approval={approval}
-            />
-          ))}
+            {entry.completed && <TurnTokenFooter turnId={entry.turnId} />}
 
-          {unattachedInputs.map((req) => (
-            <UserInputCard key={pendingRequestKey(req)} request={req} />
-          ))}
-
-          {diffVisible && entry.diff && (
-            <TechnicalDetails
-              key={`diff:${displayMode}`}
-              label={t('technicalDetails')}
-              expanded={displayMode === 'expanded'}
-            >
-              <DiffViewer diff={entry.diff} />
-            </TechnicalDetails>
-          )}
-
-          {entry.completed && <TurnTokenFooter turnId={entry.turnId} />}
-
-          {showPlaceholder && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('thinkinga7311e3e')}
-            </div>
-          )}
+            {showPlaceholder && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('thinkinga7311e3e')}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

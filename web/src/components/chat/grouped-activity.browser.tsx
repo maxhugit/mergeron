@@ -63,7 +63,13 @@ test.each([390, 1100])(
         </main>
       </TooltipProvider>,
     );
-    expect(screen.getByText('Terminé · 2 min 34 s')).toBeVisible();
+    const clock = screen.getByText('Terminé · 2 min 34 s');
+    expect(clock).toBeVisible();
+    const response = document.querySelector('[data-agent-response]')!;
+    expect(clock.closest('[data-agent-response]')).toBeNull();
+    expect(clock.getBoundingClientRect().bottom).toBeLessThan(
+      response.getBoundingClientRect().top,
+    );
     const first = screen.getByText('Activités techniques · 2 opérations');
     const panel = first.closest('details')!;
     expect(panel.open).toBe(false);
