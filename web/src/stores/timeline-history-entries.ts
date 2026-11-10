@@ -110,6 +110,10 @@ export function turnsToTimeline(turns: TurnDto[]): TimelineEntry[] {
       entries.push({
         kind: 'turn',
         turnId: turn.id,
+        startedAt: turn.startedAt,
+        completedAt: turn.completedAt,
+        durationMs: turn.durationMs,
+        status: turn.status,
         plan,
         items: turnItems,
         completed: turn.status !== 'inProgress',

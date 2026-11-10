@@ -16,7 +16,8 @@ import { useTimelineStore } from '@/stores/timeline-store';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 
-vi.mock('@/lib/platform-session', () => ({
+vi.mock('@/lib/platform-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/platform-session')>()),
   usePlatformSession: () => ({ isAdministrator: true }),
 }));
 vi.mock('@/hooks/use-thread-execution-preferences', () => ({

@@ -89,7 +89,7 @@ export class IdentityService {
     if (!identity?.personId || identity.kind !== 'person')
       throw new ForbiddenException('A person is required');
     this.requireActive(identity);
-    if (scope !== 'projects') {
+    if (scope !== 'projects' && scope !== 'conversation') {
       this.requireThread(identity, scope);
       if (
         !this.db
@@ -107,6 +107,7 @@ export class IdentityService {
         typeof key !== 'string' ||
         key.length > 240 ||
         !/^(open|mode):[^\s]{1,230}$/.test(key) ||
+        (scope === 'conversation' && key !== 'open:group-technical') ||
         (scope === 'projects'
           ? !key.startsWith('open:project:')
           : key.startsWith('open:project:')) ||

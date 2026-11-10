@@ -189,7 +189,14 @@ export interface TimelineState {
     updater: (
       items: TurnItem[],
       completed: boolean,
-    ) => { items: TurnItem[]; completed: boolean },
+    ) => {
+      items: TurnItem[];
+      completed: boolean;
+      startedAt?: number | null;
+      completedAt?: number | null;
+      durationMs?: number | null;
+      status?: 'inProgress' | 'completed' | 'failed' | 'interrupted';
+    },
   ) => void;
   updateTurnItem: (
     turnId: string,
@@ -261,7 +268,14 @@ export interface TimelineState {
     updater: (
       items: TurnItem[],
       completed: boolean,
-    ) => { items: TurnItem[]; completed: boolean },
+    ) => {
+      items: TurnItem[];
+      completed: boolean;
+      startedAt?: number | null;
+      completedAt?: number | null;
+      durationMs?: number | null;
+      status?: 'inProgress' | 'completed' | 'failed' | 'interrupted';
+    },
   ) => void;
   updateTurnItemForThread: (
     threadId: string,
@@ -296,7 +310,10 @@ export interface TimelineState {
    */
   settleTurnLifecycleForThread: (
     threadId: string,
-    turns: Array<{ id: string; status: TurnDto['status'] }>,
+    turns: Array<
+      Pick<TurnDto, 'id' | 'status'> &
+        Partial<Pick<TurnDto, 'startedAt' | 'completedAt' | 'durationMs'>>
+    >,
   ) => void;
   updateTurnDiffForThread: (
     threadId: string,

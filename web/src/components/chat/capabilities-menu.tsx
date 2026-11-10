@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { useGroupTechnical } from '@/hooks/use-group-technical';
 import { McpStatusBadge } from './mcp-status-badge';
 import { ServiceTierSelector } from './service-tier-selector';
 import { ResponseDetailSelector } from './response-detail-selector';
@@ -26,6 +27,7 @@ export function CapabilitiesMenu({
   onSelectSkill,
 }: Props) {
   const { t } = useTranslation();
+  const grouping = useGroupTechnical();
 
   return (
     <Popover>
@@ -57,6 +59,22 @@ export function CapabilitiesMenu({
         />
         <ServiceTierSelector menuItem />
         <ResponseDetailSelector disabled={disabled} />
+        <Button
+          variant="ghost"
+          size="sm"
+          role="switch"
+          aria-checked={grouping.grouped}
+          disabled={!grouping.ready || grouping.pending}
+          onClick={grouping.toggle}
+          className="h-auto w-full justify-start whitespace-normal px-2 py-1 text-left text-xs"
+        >
+          {t('groupTechnicalActivities')}
+        </Button>
+        {grouping.error && (
+          <p role="alert" className="text-xs text-destructive">
+            {t('unableToSave')}
+          </p>
+        )}
       </PopoverContent>
     </Popover>
   );

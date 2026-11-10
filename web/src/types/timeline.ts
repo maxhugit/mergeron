@@ -302,6 +302,10 @@ export type TimelineEntry =
       /** Presentation-only fragment; never written back into runtime history. */
       presentation?: { key: string; last: boolean };
       turnId: string;
+      startedAt?: number | null;
+      completedAt?: number | null;
+      durationMs?: number | null;
+      status?: 'inProgress' | 'completed' | 'failed' | 'interrupted';
       items: TurnItem[];
       completed: boolean;
       /** Turn-level unified diff across all file changes. */

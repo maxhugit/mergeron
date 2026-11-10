@@ -56,6 +56,12 @@ function selectEntry(page: TimelineEntry, live: TimelineEntry): TimelineEntry {
     // Turn lifecycle only moves forward. Either side reporting completion is
     // enough; neither side reverts the other to running.
     completed: page.completed || live.completed,
+    startedAt: page.startedAt ?? live.startedAt,
+    completedAt: page.completedAt ?? live.completedAt,
+    durationMs: page.durationMs ?? live.durationMs,
+    status: live.completed
+      ? (live.status ?? page.status)
+      : (page.status ?? live.status),
     plan: live.plan ?? page.plan,
     diff: live.diff ?? page.diff,
     itemsView: liveRank >= pageRank ? live.itemsView : page.itemsView,

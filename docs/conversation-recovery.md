@@ -370,6 +370,21 @@ recovery after every browser's Socket.IO rooms have been removed, including
 blocked work, active goals, retained owners, terminal ordering and writer refusal.
 The pure branch DTO and group-cleanup helpers retain the existing behavior tests.
 
+## Grouped activity and elapsed time
+
+The Capabilities menu offers optional grouping of consecutive technical activity.
+The personal preference is stored in the authenticated person's `conversation`
+presentation scope, shared across their agents. Prose, media, failures and
+interactive requests keep their position and break groups. Hidden/collapsed/
+expanded detail controls remain available; grouping does not modify execution.
+
+Each response with known timing shows elapsed time above its content. Native
+`startedAt` and `completedAt` are Unix seconds; `durationMs` is milliseconds.
+The clock ticks only for the active turn, then freezes with its terminal status.
+History and recovery retain native timing. For a live start without a native
+start timestamp, receipt time is used; old turns without timing show no invented
+duration. Elapsed time includes waiting and does not predict time remaining.
+
 ## Human interventions inside an assistant turn
 
 The browser retains one canonical entry per protocol turn. Rendering projects

@@ -1680,5 +1680,10 @@
   "agentSubtaskReview": "En revue",
   "gitDeliverablesTitle": "Livrables Git",
   "projectShortDescription": "Description courte",
-  "projectShortDescriptionHint": "Facultative, sur plusieurs lignes · 1 000 caractères maximum."
+  "projectShortDescriptionHint": "Facultative, sur plusieurs lignes · 1 000 caractères maximum.",
+  "groupTechnicalActivities": "Regrouper les activités techniques",
+  "agentElapsedInterrupted": "Interrompu",
+  "agentElapsedFailed": "En erreur",
+  "technicalActivityGroup_one": "Activités techniques · {{count}} opération",
+  "technicalActivityGroup_other": "Activités techniques · {{count}} opérations"
 }

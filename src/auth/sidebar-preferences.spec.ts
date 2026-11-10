@@ -85,3 +85,22 @@ it('rejects unknown agents, invalid values and project keys in an agent scope', 
     ).toThrow();
   expect(() => service.sidebarPreferences(undefined, 'projects')).toThrow();
 });
+
+it('persists technical grouping per person across conversations with a strict key', () => {
+  const alice = service.resolvePerson('alice'),
+    bob = service.resolvePerson('bob');
+  service.sidebarPreferences(alice, 'conversation', {
+    key: 'open:group-technical',
+    value: true,
+  });
+  expect(service.sidebarPreferences(alice, 'conversation').values).toEqual({
+    'open:group-technical': true,
+  });
+  expect(service.sidebarPreferences(bob, 'conversation').values).toEqual({});
+  expect(() =>
+    service.sidebarPreferences(alice, 'conversation', {
+      key: 'open:project:p',
+      value: true,
+    }),
+  ).toThrow();
+});

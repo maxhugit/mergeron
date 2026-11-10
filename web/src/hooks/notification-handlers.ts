@@ -310,7 +310,9 @@ const handleThreadDeleted: Handler = (params, ctx) => {
 
 const handleTurnStarted: Handler = (params, ctx) => {
   const threadId = params.threadId as string | undefined;
-  const turn = params.turn as { id?: string } | undefined;
+  const turn = params.turn as
+    | { id?: string; startedAt?: number | null }
+    | undefined;
   const turnId = turn?.id;
   if (!turnId || ctx.threadId !== threadId) return;
   // Preserve whatever this turn already holds. A repeated or late `turn/started`
@@ -321,6 +323,7 @@ const handleTurnStarted: Handler = (params, ctx) => {
   ctx.updateCurrentTurn(turnId, (items, completed) => ({
     items,
     completed,
+    startedAt: turn?.startedAt ?? Date.now() / 1000,
   }));
   // Guarding the entry alone was not enough: a replayed `turn/started` for a
   // turn already known to have finished left the entry correct and still put

@@ -86,7 +86,14 @@ export function updateRuntimeCurrentTurn(
   updater: (
     items: TurnItem[],
     completed: boolean,
-  ) => { items: TurnItem[]; completed: boolean },
+  ) => {
+    items: TurnItem[];
+    completed: boolean;
+    startedAt?: number | null;
+    completedAt?: number | null;
+    durationMs?: number | null;
+    status?: 'inProgress' | 'completed' | 'failed' | 'interrupted';
+  },
 ): ThreadRuntimeState {
   const idx = runtime.timeline.findIndex(
     (entry) => entry.kind === 'turn' && entry.turnId === turnId,
@@ -99,8 +106,10 @@ export function updateRuntimeCurrentTurn(
     const timeline = [...runtime.timeline];
     timeline[idx] = {
       ...entry,
-      items: result.items,
-      completed: result.completed,
+      ...result,
+      startedAt: entry.startedAt ?? result.startedAt,
+      completedAt: entry.completedAt ?? result.completedAt,
+      durationMs: entry.durationMs ?? result.durationMs,
     };
     return { ...runtime, timeline };
   }

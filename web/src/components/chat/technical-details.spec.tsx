@@ -1,4 +1,10 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAgentDisplayStore } from '@/stores/agent-display-store';
 import { useTimelineStore } from '@/stores/timeline-store';
@@ -186,6 +192,37 @@ it('keeps a retired question visible when its technical item would be hidden', (
   );
   expect(screen.getByRole('button', { name: 'Answer question' })).toBeVisible();
   expect(document.querySelectorAll('details')).toHaveLength(0);
+});
+
+it('groups consecutive technical activity, preserves prose boundaries and leaves failures visible', async () => {
+  const { useTechnicalGrouping } = await import('@/hooks/use-group-technical');
+  useTechnicalGrouping.setState({ grouped: true });
+  const entry = {
+    kind: 'turn' as const,
+    turnId: 'grouped',
+    completed: true,
+    items: [
+      command,
+      { ...command, itemId: 'cmd2' },
+      message,
+      { ...command, itemId: 'cmd3' },
+      { ...command, itemId: 'failed', exitCode: 1 },
+    ],
+  };
+  const { container } = render(<TurnBlock entry={entry} />);
+  const groups = Array.from(container.querySelectorAll('details')).filter((d) =>
+    d.querySelector('summary')?.textContent?.includes('Technical activity'),
+  );
+  expect(groups).toHaveLength(2);
+  groups[0].open = true;
+  fireEvent(groups[0], new Event('toggle'));
+  expect(groups[0].querySelectorAll('[data-transcript-item]')).toHaveLength(2);
+  expect(
+    groups.every(
+      (group) => !group.querySelector('[data-transcript-item="failed"]'),
+    ),
+  ).toBe(true);
+  useTechnicalGrouping.setState({ grouped: false });
 });
 
 it('does not repeat a command authorization in the continuation fragment', () => {
