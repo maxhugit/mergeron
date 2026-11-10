@@ -77,6 +77,23 @@ export function upsertTimelineUserMessage(
     (entry) => entry.kind === 'turn' && entry.turnId === turnId,
   );
   if (!steering && turnIndex >= 0) next.splice(turnIndex, 0, incoming);
-  else next.push({ ...incoming, ...(steering && { steering: true }) });
+  else {
+    // Recovery may discover a steering message after later turns were already
+    // rendered. Keep it inside its own turn rather than appending it after an
+    // unrelated conversation exchange.
+    const lastTurnIndex = next.findLastIndex(
+      (entry) => entry.kind !== 'system' && entry.turnId === turnId,
+    );
+    const failureIndex = next.findIndex(
+      (entry) => entry.kind === 'turnFailure' && entry.turnId === turnId,
+    );
+    const index =
+      failureIndex >= 0
+        ? failureIndex
+        : lastTurnIndex >= 0
+          ? lastTurnIndex + 1
+          : next.length;
+    next.splice(index, 0, { ...incoming, ...(steering && { steering: true }) });
+  }
   return next;
 }
