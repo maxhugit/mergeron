@@ -153,7 +153,7 @@ export function NotificationCenter() {
         if (event.key === 'Escape') state.close();
       }}
       aria-label={t('inboxTitle')}
-      className="fixed bottom-0 right-0 top-14 z-40 flex min-h-0 w-full max-w-[420px] flex-col overflow-hidden border-l bg-background shadow-xl sm:top-14"
+      className="fixed inset-y-0 right-0 z-50 flex min-h-0 w-full max-w-[420px] flex-col overflow-hidden border-l bg-background shadow-xl"
     >
       <header className="shrink-0 space-y-3 border-b bg-background p-4">
         <div className="flex items-center gap-2">
