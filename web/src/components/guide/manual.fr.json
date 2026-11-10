@@ -991,6 +991,18 @@
               "Les prérequis manquants sont indiqués dans les paramètres du projet et dans l’onglet de test. Une commande de démarrage ou un runtime non autorisé peut également bloquer la recette. Corrigez le prérequis indiqué au lieu de désactiver les protections.",
               "Tant que ces prérequis ne sont pas vérifiés, Démarrer reste indisponible. Une erreur de lecture du contrôle n’est pas assimilée à une autorisation. L’arrêt d’une instance existante conserve son propre parcours."
             ]
+          },
+          {
+            "title": "Procédure complète avant le premier lancement",
+            "steps": [
+              "L’administrateur de l’hôte active MERGERON_PREVIEWS_ENABLED et configure le même MERGERON_PREVIEW_DOMAIN dans l’application et le Manager, avec MERGERON_PUBLIC_URL en HTTPS. Ces variables doivent être réellement appliquées aux conteneurs.",
+              "Il configure le DNS wildcard, le certificat HTTPS et le routage des aperçus, puis le catalogue MERGERON_PREVIEW_IMAGES du Manager. Les images autorisées sont épinglées par digest et présentes localement ; l’agent ne reçoit pas le socket Docker.",
+              "Dans Paramètres du projet → Environnement de test → Exécution, autorisez le test et, pour le mode délégué, laissez les agents préparer et gérer leur environnement. Sélectionnez au moins une technologie proposée par le Manager, ajustez les ressources et la durée, puis enregistrez.",
+              "Vérifiez le dossier de référence de l’agent et ses droits : il doit contenir les sources et être autorisé. Dans une session administrateur en écriture, demandez à l’agent de préparer puis démarrer le test.",
+              "L’agent utilise project_preview_read (status) pour lire les prérequis, project_preview_prepare pour enregistrer sa recette, puis project_preview_manage (start) pour lancer. La recette indique les commandes, le port HTTP et la page de contrôle ; le serveur écoute sur 0.0.0.0 dans le runtime.",
+              "Consultez les logs et attendez l’état prêt avec une URL disponible. Ouvrir l’aperçu vérifie vos droits. Une fusion de PR n’est pas nécessaire à ce lancement ; la durée choisie ou un arrêt explicite termine ensuite le test."
+            ],
+            "warning": "Cocher l’autorisation du projet ne configure ni le Manager, ni le DNS, ni HTTPS. « Manager non configuré » peut désigner uniquement son service d’aperçus désactivé. En cas de prérequis manquant, corrigez le réglage indiqué sans désactiver TLS, le proxy ou la sandbox."
           }
         ],
         "related": [

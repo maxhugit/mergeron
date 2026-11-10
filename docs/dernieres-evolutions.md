@@ -63,7 +63,7 @@ le démarrage : activation globale, Manager, domaine d’aperçu, accès de cons
 recette et runtimes autorisés. L’autorisation du projet seule ne configure pas
 ces services. Une lecture de prérequis en échec ne débloque pas le démarrage.
 
-Référence : [prévisualisations des agents](previsualisations-agents.md).
+Référence : [procédure de mise en service, prérequis et diagnostic](previsualisations-agents.md#procédure-de-mise-en-service--du-serveur-au-premier-aperçu).
 Correction : [#471](https://github.com/maxhugit/mergeron/pull/471).
 
 ## Notifications : priorité aux interventions utiles

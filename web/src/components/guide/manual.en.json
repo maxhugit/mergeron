@@ -991,6 +991,18 @@
               "Missing prerequisites are shown in project settings and in the test environment tab. A missing start command or a runtime outside the allowlist can also block a recipe. Correct the reported prerequisite instead of disabling protections.",
               "Start remains unavailable until these prerequisites have been verified. A failed prerequisite read is not treated as authorization. Stopping an existing instance keeps its own workflow."
             ]
+          },
+          {
+            "title": "Complete procedure before the first launch",
+            "steps": [
+              "The host administrator enables MERGERON_PREVIEWS_ENABLED and configures the same MERGERON_PREVIEW_DOMAIN in the application and Manager, with an HTTPS MERGERON_PUBLIC_URL. These variables must actually be applied to the containers.",
+              "They configure wildcard DNS, the HTTPS certificate and preview routing, followed by the Manager’s MERGERON_PREVIEW_IMAGES catalog. Allowed images are pinned by digest and available locally; the agent never receives the Docker socket.",
+              "In Project settings → Test environment → Execution, allow testing and, for delegated mode, let agents prepare and manage their environment. Select at least one technology offered by the Manager, adjust resources and duration, then save.",
+              "Check the agent’s reference directory and permissions: it must contain the sources and be authorized. From an administrator session with write permissions, ask the agent to prepare and start the test.",
+              "The agent uses project_preview_read (status) to read prerequisites, project_preview_prepare to save its recipe, and project_preview_manage (start) to launch. The recipe specifies commands, the HTTP port and readiness page; the server listens on 0.0.0.0 inside the runtime.",
+              "Inspect logs and wait for a ready state with an available URL. Open preview checks your access. Merging a PR is not required to launch; the selected duration or an explicit stop ends the test."
+            ],
+            "warning": "Enabling the project permission does not configure the Manager, DNS or HTTPS. “Manager not configured” can mean that only its preview service is disabled. Correct the reported prerequisite without disabling TLS, the proxy or the sandbox."
           }
         ],
         "related": [
