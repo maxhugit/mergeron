@@ -18,6 +18,12 @@ export class PreviewsController {
   ) {
     return this.previews.status(p, t);
   }
+  @Get('agents/:threadId/preview/prerequisites') prerequisites(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+  ) {
+    return this.previews.discovery(p, t);
+  }
   @Get('agents/:threadId/preview/logs') logs(
     @Param('projectId') p: string,
     @Param('threadId') t: string,

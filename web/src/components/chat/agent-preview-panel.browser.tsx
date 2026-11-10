@@ -21,6 +21,9 @@ const api = vi.hoisted(() => ({
   running: true,
   admin: true,
   startupTimeout: false,
+  missing: [] as string[],
+  prerequisitesFailed: false,
+  recipeRequired: false,
 }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: api.admin }),
@@ -39,6 +42,14 @@ vi.mock('@/lib/projects-api', () => ({
   projectsApi: async (path: string, init?: RequestInit) => {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     api.calls.push({ path, body });
+    if (path.endsWith('/prerequisites')) {
+      if (api.prerequisitesFailed) throw new Error('unavailable');
+      return {
+        available: api.missing.length === 0,
+        missingConfiguration: api.missing,
+        preparation: { required: api.recipeRequired },
+      };
+    }
     if (path.endsWith('/start')) api.running = true;
     if (path.endsWith('/stop')) api.running = false;
     if (path.endsWith('/containers')) return { containers: items };
@@ -111,6 +122,9 @@ beforeEach(async () => {
   api.running = true;
   api.admin = true;
   api.startupTimeout = false;
+  api.missing = [];
+  api.prerequisitesFailed = false;
+  api.recipeRequired = false;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -119,6 +133,7 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup();
   client.clear();
+  vi.restoreAllMocks();
 });
 function mount(active = true) {
   return render(
@@ -261,6 +276,57 @@ test('not started is a useful empty state and inactive panels do not poll', asyn
   api.calls = [];
   mount(false);
   expect(api.calls).toHaveLength(0);
+});
+test('missing server prerequisites explain the block without allowing a start', async () => {
+  await page.viewport(390, 800);
+  api.running = false;
+  api.missing = [
+    'server_disabled',
+    'preview_domain_missing',
+    'agent_runtimes_missing',
+  ];
+  mount();
+  const notice = await screen.findByRole('status', {
+    name: 'Prérequis de l’environnement de test',
+  });
+  await waitFor(() =>
+    expect(notice).toHaveTextContent('MERGERON_PREVIEWS_ENABLED'),
+  );
+  expect(notice).toHaveTextContent('MERGERON_PREVIEW_DOMAIN');
+  expect(notice).toHaveTextContent('sélectionner au moins une technologie');
+  const start = screen.getByRole('button', { name: 'Démarrer' });
+  expect(start).toBeDisabled();
+  fireEvent.click(start);
+  expect(api.calls.some((c) => c.path.endsWith('/start'))).toBe(false);
+  await page.screenshot({
+    path: '../../../.vitest-screenshots/preview-prerequisites-mobile.png',
+  });
+});
+test('a failed prerequisite check blocks start but preserves stopping an existing instance', async () => {
+  api.prerequisitesFailed = true;
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  mount();
+  expect(
+    await screen.findByRole('alert', {
+      name: 'Prérequis de l’environnement de test',
+    }),
+  ).toHaveTextContent('Impossible de vérifier');
+  const stop = screen.getByRole('button', { name: 'Arrêter' });
+  expect(stop).toBeEnabled();
+  fireEvent.click(stop);
+  await waitFor(() =>
+    expect(api.calls.some((c) => c.path.endsWith('/stop'))).toBe(true),
+  );
+  expect(
+    await screen.findByRole('button', { name: 'Démarrer' }),
+  ).toBeDisabled();
+});
+test('delegated preparation remains distinct from missing server configuration', async () => {
+  api.running = false;
+  api.recipeRequired = true;
+  mount();
+  await screen.findByText(/l’agent doit encore préparer sa recette/);
+  expect(screen.getByRole('button', { name: 'Démarrer' })).toBeDisabled();
 });
 test('read-only viewers have no execution or terminal controls', async () => {
   api.admin = false;
