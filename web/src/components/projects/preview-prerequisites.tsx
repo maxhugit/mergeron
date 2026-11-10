@@ -2,6 +2,16 @@ import { useTranslation } from 'react-i18next';
 import { translationKey } from '@/locales/translation-key';
 
 const messages = {
+  docker_version_unsupported: 'prerequisiteDockerVersion',
+  manager_docker_unavailable: 'prerequisiteManagerDocker',
+  application_identity_invalid: 'prerequisiteApplicationIdentity',
+  workspace_mount_invalid: 'prerequisiteWorkspaceMount',
+  manager_identity_invalid: 'prerequisiteManagerIdentity',
+  manager_helper_volumes_unsupported: 'prerequisiteManagerVolumes',
+  runtime_image_unsupported: 'prerequisiteRuntimeImageUnsupported',
+  runtime_image_missing: 'prerequisiteRuntimeImageMissing',
+  manager_preflight_failed: 'prerequisiteManagerPreflight',
+
   server_disabled: 'prerequisiteServerDisabled',
   preview_domain_missing: 'prerequisiteDomainMissing',
   viewer_not_ready: 'prerequisiteViewerNotReady',

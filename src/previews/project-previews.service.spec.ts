@@ -11,6 +11,9 @@ import {
   projectPreviewProfiles,
   agentPreviews,
   agentPreviewRecipes,
+  projectWorkspaceCopies,
+  projectWorkspaces,
+  projectGitCopyOwners,
 } from '../database/schema';
 import type { ActiveFoldersService } from '../active-folders/active-folders.service';
 import type {
@@ -1202,5 +1205,83 @@ describe('deleted-agent preview cleanup', () => {
     expect(f.request).not.toHaveBeenCalled();
     expect(f.rows.has(agentPreviews)).toBe(true);
     expect(f.rows.has(agentPreviewRecipes)).toBe(true);
+  });
+});
+
+describe('preview sources in the managed project layout', () => {
+  const root = '/workspaces/p/.mergeron-system/sources/git/copies/copy';
+  function selected(owner = 't', state = 'ready', source = root) {
+    const f = setup();
+    f.rows.set(projectWorkspaceCopies, {
+      id: 'copy',
+      projectId: 'p',
+      state,
+      sourceResourceId: 'git',
+      localWorkspaceId: 'workspace',
+    });
+    f.rows.set(projectWorkspaces, {
+      id: 'workspace',
+      projectId: 'p',
+      path: root,
+    });
+    f.rows.set(projectGitCopyOwners, {
+      copyId: 'copy',
+      projectId: 'p',
+      agentThreadId: owner,
+    });
+    f.rows.set(projectAgentThreads, {
+      projectId: 'p',
+      threadId: 't',
+      workspacePath: source,
+    });
+    return f;
+  }
+  it('refuses a launch before copying sources when the Manager reports a deployment blocker', async () => {
+    const f = setup();
+    f.run(() =>
+      f.service.saveSettings('p', {
+        expectedRevision: null,
+        profile: { enabled: true, runtime: 'node', start: 'node server.js' },
+      }),
+    );
+    Object.assign(f.service, { gateway: { server: { listening: true } } });
+    f.request.mockResolvedValue({
+      enabled: true,
+      domain: 'preview.example.org',
+      runtimes: [{ id: 'node' }],
+      prerequisites: ['manager_identity_invalid'],
+    });
+    await expect(
+      f.run(() => f.service.start('p', 't', 'new-run')),
+    ).rejects.toThrow('PREVIEW_DEPLOYMENT_NOT_READY');
+    expect(
+      f.request.mock.calls.every(([operation]) => operation === 'capabilities'),
+    ).toBe(true);
+  });
+
+  it('accepts the selected ready copy reserved to this agent, including a normal subfolder', async () => {
+    for (const source of [root, root + '/app']) {
+      const f = selected('t', 'ready', source);
+      const result = await f.run(() => f.service.discovery('p', 't'));
+      expect(result.missingConfiguration).not.toContain(
+        'working_directory_protected',
+      );
+    }
+  });
+  it('keeps other agents, revoked copies, sibling paths and internal folders protected', async () => {
+    for (const [owner, state, source] of [
+      ['other', 'ready', root],
+      ['t', 'revoked', root],
+      ['t', 'ready', root + '-other'],
+      ['t', 'ready', root + '/.git'],
+      ['t', 'ready', root + '/.mergeron-system'],
+      ['t', 'ready', '/workspaces/p/.mergeron-system/livrables'],
+    ]) {
+      const f = selected(owner, state, source);
+      const result = await f.run(() => f.service.discovery('p', 't'));
+      expect(result.missingConfiguration).toContain(
+        'working_directory_protected',
+      );
+    }
   });
 });

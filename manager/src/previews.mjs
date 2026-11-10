@@ -68,7 +68,7 @@ export class PreviewManager {
     manifest,
     configuration,
     env = process.env,
-    self = process.env.HOSTNAME,
+    self = `${manifest.stack}-manager`,
   }) {
     Object.assign(this, { docker, manifest, configuration, env, self });
     this.catalog = previewCatalog(env);
@@ -117,6 +117,67 @@ export class PreviewManager {
       data: 'ephemeral',
       storage: previewStorage,
     };
+  }
+  /** Read-only deployment checks; do not create Docker objects or copy sources. */
+  async prerequisites() {
+    if (!this.capabilities().enabled) return [];
+    const reasons = [];
+    try {
+      const version = await this.docker.request('/version');
+      if (
+        !/^\d+\./.test(version.Version) ||
+        Number(version.Version.split('.')[0]) < 28
+      )
+        reasons.push('docker_version_unsupported');
+    } catch {
+      reasons.push('manager_docker_unavailable');
+    }
+    try {
+      const name = this.manifest.components.find(
+        (c) => c.id === 'application',
+      )?.canonicalName;
+      const app = await this.docker.inspectContainer(name);
+      if (
+        app.Config?.Labels?.['io.mergeron.managed'] !== 'true' ||
+        app.Config?.Labels?.['io.mergeron.stack'] !== this.manifest.stack ||
+        app.Config?.Labels?.['io.mergeron.component'] !== 'application'
+      )
+        reasons.push('application_identity_invalid');
+      const mount = app.Mounts?.find((m) => m.Destination === '/workspaces');
+      if (
+        mount?.Type !== 'bind' ||
+        mount.Source !== this.configuration.stateRoot + '/workspace'
+      )
+        reasons.push('workspace_mount_invalid');
+    } catch {
+      reasons.push('application_identity_invalid');
+    }
+    try {
+      const own = await this.docker.inspectContainer(this.self);
+      if (
+        !/^sha256:[a-f0-9]{64}$/.test(own.Image) ||
+        own.Config?.Labels?.['io.mergeron.component'] !== 'manager' ||
+        own.Config?.Labels?.['io.mergeron.stack'] !== this.manifest.stack
+      )
+        reasons.push('manager_identity_invalid');
+      if (
+        Object.keys(own.Config?.Volumes ?? {}).some(
+          (p) => !Object.hasOwn(this.base('none').Tmpfs, p),
+        )
+      )
+        reasons.push('manager_helper_volumes_unsupported');
+    } catch {
+      reasons.push('manager_identity_invalid');
+    }
+    for (const approved of Object.values(this.catalog)) {
+      try {
+        const image = await this.docker.inspectImage(approved.image);
+        if (image.Os !== 'linux') reasons.push('runtime_image_unsupported');
+      } catch {
+        reasons.push('runtime_image_missing');
+      }
+    }
+    return [...new Set(reasons)];
   }
   async recover() {
     fs.mkdirSync(this.location, { recursive: true, mode: 0o700 });

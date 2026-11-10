@@ -373,3 +373,15 @@ for (const change of ['running', 'name', 'labels', 'specification', 'active']) {
     assert(!f.docker.calls.some((c) => c[0] === 'remove' && c[1] === 'old'));
   });
 }
+
+test('replacement resets the old generated hostname and never carries an explicit HOSTNAME into the new Manager', async (t) => {
+  const f = await fixture(t);
+  const old = f.docker.values.get('old');
+  old.Config.Hostname = 'aaaaaaaaaaaa';
+  old.Config.Env.push('HOSTNAME=aaaaaaaaaaaa');
+  const plan = await f.manager.plan(target);
+  assert.equal(plan.original.Hostname, '');
+  assert.deepEqual(plan.original.Env, ['SECRET=private']);
+  assert.deepEqual(plan.original.HostConfig, old.HostConfig);
+  assert.deepEqual(plan.original.Labels, old.Config.Labels);
+});

@@ -27,6 +27,9 @@ import {
   projectPreviewProfiles,
   agentPreviews,
   agentPreviewRecipes,
+  projectWorkspaceCopies,
+  projectWorkspaces,
+  projectGitCopyOwners,
 } from '../database/schema';
 import {
   currentAccess,
@@ -41,7 +44,10 @@ import contract, {
   type PreviewProfile,
 } from '../../runtime/preview-profile.cjs';
 import { PreviewManagerClient } from './preview-manager-client';
-import { previewConfigurationPrerequisites } from './preview-prerequisites';
+import {
+  previewManagerPrerequisites,
+  previewConfigurationPrerequisites,
+} from './preview-prerequisites';
 import storage from '../../runtime/preview-storage.cjs';
 import { previewSnapshot, previewSourceFingerprint } from './preview-snapshot';
 import { IdentityService } from '../auth/identity.service';
@@ -724,6 +730,90 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       },
     };
   }
+  /** Only a registered, ready Git copy reserved to this work agent can cross
+   * the project-internal directory boundary. General system paths stay denied. */
+  private previewSourceAllowed(
+    projectId: string,
+    threadId: string,
+    source: string,
+  ): boolean {
+    const target = path.resolve(source);
+    if (
+      target
+        .split(path.sep)
+        .some((p) =>
+          [
+            '.git',
+            '.ssh',
+            '.codex',
+            '.aws',
+            '.docker',
+            '.kube',
+            '.secrets',
+          ].includes(p),
+        )
+    )
+      return false;
+    if (!target.split(path.sep).some((p) => p.startsWith('.mergeron')))
+      return true;
+    const agentId = workAgentId(this.db, threadId);
+    return this.db
+      .select()
+      .from(projectWorkspaceCopies)
+      .where(
+        and(
+          eq(projectWorkspaceCopies.projectId, projectId),
+          eq(projectWorkspaceCopies.state, 'ready'),
+        ),
+      )
+      .all()
+      .some((copy) => {
+        if (
+          copy.projectId !== projectId ||
+          copy.state !== 'ready' ||
+          !contract.ID.test(copy.id) ||
+          !contract.ID.test(copy.sourceResourceId)
+        )
+          return false;
+        const workspace = this.db
+          .select()
+          .from(projectWorkspaces)
+          .where(eq(projectWorkspaces.id, copy.localWorkspaceId))
+          .get();
+        const owner = this.db
+          .select()
+          .from(projectGitCopyOwners)
+          .where(eq(projectGitCopyOwners.copyId, copy.id))
+          .get();
+        if (
+          !workspace ||
+          workspace.projectId !== projectId ||
+          !owner ||
+          owner.projectId !== projectId ||
+          owner.copyId !== copy.id ||
+          workAgentId(this.db, owner.agentThreadId) !== agentId
+        )
+          return false;
+        const root = path.resolve(workspace.path);
+        const suffix = path.join(
+          '.mergeron-system',
+          'sources',
+          copy.sourceResourceId,
+          'copies',
+          copy.id,
+        );
+        if (
+          !root.endsWith(path.sep + suffix) ||
+          (target !== root && !target.startsWith(root + path.sep))
+        )
+          return false;
+        return !path
+          .relative(root, target)
+          .split(path.sep)
+          .some((p) => p.startsWith('.mergeron'));
+      });
+  }
+
   /** Read-only discovery; no recipe, environment values, credentials or grant. */
   async discovery(projectId: string, threadId: string) {
     this.scope(projectId, threadId);
@@ -757,12 +847,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     const source =
       this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
     if (!source) reasons.push('working_directory_missing');
-    else if (
-      path
-        .resolve(source)
-        .split(path.sep)
-        .some((p) => p.startsWith('.mergeron'))
-    )
+    else if (!this.previewSourceAllowed(projectId, threadId, source))
       reasons.push('working_directory_protected');
     else {
       try {
@@ -975,6 +1060,8 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
           this.config.get<string>('MERGERON_PREVIEW_DOMAIN')
       )
         throw new ConflictException('PREVIEW_NOT_CONFIGURED');
+      if (previewManagerPrerequisites(capabilities).length)
+        throw new ConflictException('PREVIEW_DEPLOYMENT_NOT_READY');
       const existing = this.row(scope.agentId);
       if (existing && existing.projectId !== projectId)
         throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
@@ -1001,13 +1088,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       check();
       const source =
         this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
-      if (
-        !source ||
-        path
-          .resolve(source)
-          .split(path.sep)
-          .some((p) => p.startsWith('.mergeron'))
-      )
+      if (!source || !this.previewSourceAllowed(projectId, threadId, source))
         throw new ConflictException('PREVIEW_SOURCE_REQUIRED');
       this.identities.requireWorkspacePath(source, false, identity);
       const runId = randomUUID(),

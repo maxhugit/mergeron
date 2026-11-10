@@ -131,5 +131,14 @@
   "prerequisiteWorkingDirectoryAccessDenied": "Agent : l’accès à son dossier de travail est refusé ; vérifier sa référence et ses droits.",
   "prerequisiteRecipeRequired": "Agent : la délégation est active, mais l’agent doit encore préparer sa recette avec les technologies autorisées avant le premier démarrage.",
   "prerequisiteNoRuntimes": "Aucune technologie disponible. L’administrateur doit d’abord déclarer les images autorisées dans le Manager.",
-  "prerequisiteUnknown": "Un prérequis empêche le lancement. Consultez l’administrateur du projet."
+  "prerequisiteUnknown": "Un prérequis empêche le lancement. Consultez l’administrateur du projet.",
+  "prerequisiteDockerVersion": "Le moteur Docker doit être en version 28 ou ultérieure pour les environnements de test.",
+  "prerequisiteManagerDocker": "Le Manager ne peut pas vérifier son moteur Docker. Vérifiez son accès et ses journaux.",
+  "prerequisiteApplicationIdentity": "Le conteneur Mergeron ne possède pas l’identité gérée attendue. Faites vérifier ses labels par l’administrateur de l’installation.",
+  "prerequisiteWorkspaceMount": "Le montage des sources ne correspond pas au dossier déclaré au Manager. Faites vérifier les montages sans déplacer les données.",
+  "prerequisiteManagerIdentity": "Le Manager ne retrouve pas un conteneur portant son identité attendue. Vérifiez son nom et ses labels.",
+  "prerequisiteManagerVolumes": "L’image du Manager déclare des volumes incompatibles avec les services techniques de test. Utilisez une image Manager compatible.",
+  "prerequisiteRuntimeImageUnsupported": "Une image de test autorisée n’est pas une image Linux compatible. Vérifiez le catalogue du Manager.",
+  "prerequisiteRuntimeImageMissing": "Une image de test approuvée n’est pas disponible localement. L’administrateur doit charger le digest autorisé.",
+  "prerequisiteManagerPreflight": "Le contrôle préalable du Manager n’a pas fourni un résultat valide. Vérifiez sa version et ses journaux."
 }
