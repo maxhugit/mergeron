@@ -1,3 +1,4 @@
+import { ActivityButton } from '@/components/activity/activity-bar';
 import {
   NotificationBell,
   NotificationPreferences,
@@ -309,6 +310,7 @@ export function ChatHeader() {
           isAdministrator={isAdministrator}
           onSettings={() => void navigate({ to: '/settings' })}
         />
+        <ActivityButton />
         <NotificationBell />
         <Tooltip>
           <TooltipTrigger asChild>

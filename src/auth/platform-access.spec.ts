@@ -337,6 +337,16 @@ it('blocks creating or editing people for standard users and rechecks changed ro
   expect(guard.canActivate(http('/auth/client-config').context)).toBe(true);
 });
 
+it('allows personal activity reads only while the identity remains active', () => {
+  expect(guard.canActivate(http('/activity').context)).toBe(true);
+  database.db
+    .update(people)
+    .set({ active: false })
+    .where(eq(people.id, 'standard'))
+    .run();
+  expect(() => guard.canActivate(http('/activity').context)).toThrow();
+});
+
 it('refuses global terminal operations including attach/input on existing sessions', () => {
   for (const event of [
     'terminal.open',
