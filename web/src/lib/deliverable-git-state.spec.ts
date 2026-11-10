@@ -74,6 +74,43 @@ it('keeps per-deliverable states independent even for duplicate titles', () => {
   expect(deliverableGitState(value, 'copy', 'c')).toBe('ready');
   expect(deliverableGitState(value, 'copy')).toBe('review');
 });
+it('shows required review from a current comparison without disguising real failures', () => {
+  const value = data();
+  value.copies[0].lastError = 'GIT_DELIVERABLES_REVIEW_REQUIRED';
+  value.copies[0].pending = true;
+  value.proposal!.canApply = false;
+  value.proposal!.changes = [
+    {
+      deliverable: 'Cadrage',
+      deliverableId: 'a',
+      action: 'conflict',
+      reason: 'metadata_baseline_missing',
+    },
+    {
+      deliverable: 'Maquette',
+      deliverableId: 'b',
+      action: 'export',
+      reason: 'new_deliverable',
+    },
+  ];
+  expect(deliverableGitState(value, 'copy')).toBe('review');
+  expect(deliverableGitState(value, 'copy', 'a')).toBe('review');
+  expect(deliverableGitState(value, 'copy', 'b')).toBe('pending');
+  value.copies[0].pending = false;
+  expect(deliverableGitState(value, 'copy', 'unaffected')).toBe('ready');
+  value.copies[0].lastError = 'GIT_DELIVERABLES_SYNC_FAILED';
+  expect(deliverableGitState(value, 'copy')).toBe('error');
+  value.copies[0].lastError = 'GIT_DELIVERABLES_REVIEW_REQUIRED';
+  value.discoveryError = 'GIT_UNAVAILABLE';
+  expect(deliverableGitState(value, 'copy')).toBe('error');
+  value.discoveryError = null;
+  value.proposal = null;
+  expect(deliverableGitState(value, 'copy')).toBe('checking');
+  value.proposal = data().proposal;
+  expect(deliverableGitState(value, 'copy')).toBe('ready');
+  value.proposal!.context!.head = 'stale';
+  expect(deliverableGitState(value, 'copy')).toBe('checking');
+});
 it.each([
   ['noCopy', 'missing'],
   ['readOnly', 'readonly'],

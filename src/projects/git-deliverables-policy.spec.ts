@@ -1,4 +1,7 @@
-import { readableDeliverableFolder } from '../deliverables/git-deliverables-format';
+import {
+  manifestSchema,
+  readableDeliverableFolder,
+} from '../deliverables/git-deliverables-format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -643,5 +646,243 @@ describe('Mergeron-first Git projection policy', () => {
     expect(
       deliverables.documents('p', 'board', item.id)[0].currentVersionNumber,
     ).toBe(1);
+  });
+  it('exports local-only document additions on a fresh branch using a verified manifest from the same identity', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Cadrage' });
+    await upload(item.id, 'retained base');
+    await sync();
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', [
+      '-C',
+      repo,
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'commit',
+      '-qm',
+      'Baseline',
+    ]);
+    const folder = path.join(repo, 'livrables', 'cadrage');
+    const before = await fs.readFile(
+      path.join(folder, 'livrable.json'),
+      'utf8',
+    );
+    async function* addition() {
+      await Promise.resolve();
+      yield {
+        filename: 'new-document.md',
+        stream: Readable.from('only added in Mergeron'),
+      };
+    }
+    await deliverables.uploadDocuments('p', 'board', item.id, addition(), {});
+    expect((await service.preview('p', options)).canApply).toBe(true);
+    execFileSync('git', [
+      '-C',
+      repo,
+      'checkout',
+      '-q',
+      '-b',
+      'another-agent-branch',
+    ]);
+    const plan = await service.preview('p', options);
+    expect(await fs.readFile(path.join(folder, 'livrable.json'), 'utf8')).toBe(
+      before,
+    );
+    expect(
+      execFileSync('git', ['-C', repo, 'status', '--porcelain']).toString(),
+    ).toBe('');
+    expect(plan.canApply).toBe(true);
+    expect(plan.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'export',
+        reason: 'known_older_metadata',
+      }),
+    );
+    expect(
+      plan.changes.some(
+        (change) => change.action === 'import' || change.action === 'conflict',
+      ),
+    ).toBe(false);
+    await service.apply('p', { options, fingerprint: plan.fingerprint });
+    expect(
+      await fs.readFile(path.join(folder, 'new-document.md'), 'utf8'),
+    ).toBe('only added in Mergeron');
+    expect(deliverables.documents('p', 'board', item.id)).toHaveLength(2);
+    expect(
+      deliverables
+        .documents('p', 'board', item.id)
+        .every((document) => document.currentVersionNumber === 1),
+    ).toBe(true);
+    expect((await service.preview('p', options)).changes).toEqual([]);
+    expect(
+      execFileSync('git', [
+        '-C',
+        repo,
+        'diff',
+        '--cached',
+        '--name-only',
+      ]).toString(),
+    ).toBe('');
+    expect(
+      execFileSync('git', ['-C', repo, 'log', '--format=%s']).toString().trim(),
+    ).toBe('Baseline');
+  });
+  it('restores known older metadata from retained synchronized history rather than importing it', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Cadrage' });
+    await upload(item.id, 'retained');
+    await sync();
+    const file = path.join(repo, 'livrables', 'cadrage', 'livrable.json');
+    const older = await fs.readFile(file, 'utf8');
+    const current = deliverables.get('p', 'board', item.id);
+    deliverables.update('p', 'board', item.id, {
+      description: 'current organization',
+      version: current.version,
+    });
+    await sync();
+    await fs.writeFile(file, older);
+    const plan = await service.preview('p', options);
+    expect(plan.canApply).toBe(true);
+    expect(plan.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'export',
+        reason: 'known_older_metadata',
+      }),
+    );
+    const version = deliverables.get('p', 'board', item.id).version;
+    await service.apply('p', { options, fingerprint: plan.fingerprint });
+    expect(
+      manifestSchema.parse(JSON.parse(await fs.readFile(file, 'utf8')))
+        .description,
+    ).toBe('current organization');
+    expect(deliverables.get('p', 'board', item.id)).toMatchObject({
+      version,
+      description: 'current organization',
+    });
+    expect((await service.preview('p', options)).changes).toEqual([]);
+  });
+  it('preserves unknown Git metadata when the new branch has no common baseline', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Cadrage' });
+    await upload(item.id, 'retained');
+    await sync();
+    execFileSync('git', ['-C', repo, 'checkout', '-q', '-b', 'unknown-branch']);
+    const file = path.join(repo, 'livrables', 'cadrage', 'livrable.json');
+    const external = manifestSchema.parse(
+      JSON.parse(await fs.readFile(file, 'utf8')),
+    );
+    external.description = 'unknown Git work';
+    const bytes = JSON.stringify(external);
+    await fs.writeFile(file, bytes);
+    const plan = await service.preview('p', options);
+    expect(plan.canApply).toBe(false);
+    expect(plan.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'conflict',
+        reason: 'metadata_baseline_missing',
+      }),
+    );
+    await expect(
+      service.apply('p', { options, fingerprint: plan.fingerprint }),
+    ).rejects.toThrow('GIT_DELIVERABLES_CONFLICTS');
+    expect(await fs.readFile(file, 'utf8')).toBe(bytes);
+    expect(deliverables.get('p', 'board', item.id).description).toBe('');
+  });
+  it('still proposes an unknown Git-only metadata update and refuses concurrent metadata edits', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Cadrage' });
+    await upload(item.id, 'retained');
+    await sync();
+    const file = path.join(repo, 'livrables', 'cadrage', 'livrable.json');
+    const external = manifestSchema.parse(
+      JSON.parse(await fs.readFile(file, 'utf8')),
+    );
+    external.description = 'unknown Git work';
+    const bytes = JSON.stringify(external);
+    await fs.writeFile(file, bytes);
+    const proposed = await service.preview('p', options);
+    expect(proposed.canApply).toBe(true);
+    expect(proposed.changes).toContainEqual(
+      expect.objectContaining({ action: 'import', reason: 'metadata' }),
+    );
+    expect(deliverables.get('p', 'board', item.id).description).toBe('');
+    const current = deliverables.get('p', 'board', item.id);
+    deliverables.update('p', 'board', item.id, {
+      description: 'new Mergeron work',
+      version: current.version,
+    });
+    const conflict = await service.preview('p', options);
+    expect(conflict.canApply).toBe(false);
+    expect(conflict.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'conflict',
+        reason: 'metadata_changed_both',
+      }),
+    );
+    await expect(
+      service.apply('p', { options, fingerprint: conflict.fingerprint }),
+    ).rejects.toThrow('GIT_DELIVERABLES_CONFLICTS');
+    expect(await fs.readFile(file, 'utf8')).toBe(bytes);
+    expect(deliverables.get('p', 'board', item.id).description).toBe(
+      'new Mergeron work',
+    );
+  });
+  it('recognizes synchronized metadata in a second agent clone without modifying the first clone', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Cadrage' });
+    await upload(item.id, 'retained base');
+    await sync();
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', [
+      '-C',
+      repo,
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'commit',
+      '-qm',
+      'Baseline',
+    ]);
+    const second = path.join(root, 'second-agent');
+    execFileSync('git', ['clone', '--quiet', '--no-hardlinks', repo, second]);
+    const file = path.join('livrables', 'cadrage', 'livrable.json');
+    const original = await fs.readFile(path.join(repo, file), 'utf8');
+    async function* addition() {
+      await Promise.resolve();
+      yield {
+        filename: 'new-document.md',
+        stream: Readable.from('retained new document'),
+      };
+    }
+    await deliverables.uploadDocuments('p', 'board', item.id, addition(), {});
+    copyViews.push({
+      ...copyViews[0],
+      id: 'second-copy',
+      localPath: second,
+      ownerThreadIds: ['second-agent'],
+      ownerAgentIds: ['second-agent'],
+    });
+    const secondOptions = { ...options, copyId: 'second-copy' };
+    const plan = await service.preview('p', secondOptions);
+    expect(plan.canApply).toBe(true);
+    expect(plan.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'export',
+        reason: 'known_older_metadata',
+      }),
+    );
+    await service.apply('p', {
+      options: secondOptions,
+      fingerprint: plan.fingerprint,
+    });
+    expect(await fs.readFile(path.join(repo, file), 'utf8')).toBe(original);
+    expect(
+      execFileSync('git', ['-C', repo, 'status', '--porcelain']).toString(),
+    ).toBe('');
+    expect(
+      await fs.readFile(
+        path.join(second, 'livrables', 'cadrage', 'new-document.md'),
+        'utf8',
+      ),
+    ).toBe('retained new document');
+    expect((await service.preview('p', secondOptions)).changes).toEqual([]);
   });
 });
