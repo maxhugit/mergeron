@@ -168,7 +168,14 @@ export const handleItemCompleted: Handler = (params, ctx) => {
 /** turn/completed payload is { threadId, turn: { id, status, error } }. */
 export const handleTurnCompleted: Handler = (params, ctx) => {
   const turn = params.turn as
-    | { id?: string; status?: string; error?: Record<string, unknown> | null }
+    | {
+        id?: string;
+        status?: 'inProgress' | 'completed' | 'failed' | 'interrupted';
+        startedAt?: number | null;
+        completedAt?: number | null;
+        durationMs?: number | null;
+        error?: Record<string, unknown> | null;
+      }
     | undefined;
   const turnId = turn?.id;
   if (!turnId) return;
@@ -178,7 +185,14 @@ export const handleTurnCompleted: Handler = (params, ctx) => {
   }
 
   const alreadyTerminal = ctx.isTurnTerminal(turnId);
-  ctx.updateCurrentTurn(turnId, (items) => ({ items, completed: true }));
+  ctx.updateCurrentTurn(turnId, (items) => ({
+    items,
+    completed: true,
+    startedAt: turn?.startedAt,
+    completedAt: turn?.completedAt ?? Date.now() / 1000,
+    durationMs: turn?.durationMs,
+    status: turn?.status,
+  }));
   // Only the turn that is actually running may stop the composer. A replayed or
   // late `turn/completed` naming an earlier turn used to clear the pointer
   // regardless, which released Send and hid the spinner while a different turn

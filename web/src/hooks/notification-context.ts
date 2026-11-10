@@ -35,7 +35,14 @@ export interface NotificationContext {
     updater: (
       items: TurnItem[],
       completed: boolean,
-    ) => { items: TurnItem[]; completed: boolean },
+    ) => {
+      items: TurnItem[];
+      completed: boolean;
+      startedAt?: number | null;
+      completedAt?: number | null;
+      durationMs?: number | null;
+      status?: 'inProgress' | 'completed' | 'failed' | 'interrupted';
+    },
   ) => void;
   updateTurnItem: (
     turnId: string,

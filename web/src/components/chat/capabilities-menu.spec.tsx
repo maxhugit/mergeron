@@ -2,6 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CapabilitiesMenu } from './capabilities-menu';
 
+vi.mock('@/hooks/use-group-technical', () => ({
+  useGroupTechnical: () => ({ grouped: false, ready: true, toggle: vi.fn() }),
+}));
+
 vi.mock('./mcp-status-badge', () => ({
   McpStatusBadge: () => <button>Connectors</button>,
 }));

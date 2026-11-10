@@ -292,6 +292,10 @@ export type TimelineEntry =
   | {
       kind: 'turn';
       turnId: string;
+      startedAt?: number | null;
+      completedAt?: number | null;
+      durationMs?: number | null;
+      status?: 'inProgress' | 'completed' | 'failed' | 'interrupted';
       items: TurnItem[];
       completed: boolean;
       /** Turn-level unified diff across all file changes. */

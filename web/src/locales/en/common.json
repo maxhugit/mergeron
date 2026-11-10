@@ -1680,5 +1680,12 @@
   "agentSubtaskReview": "In review",
   "gitDeliverablesTitle": "Git deliverables",
   "projectShortDescription": "Short description",
-  "projectShortDescriptionHint": "Optional, multiple lines allowed · Maximum 1,000 characters."
+  "projectShortDescriptionHint": "Optional, multiple lines allowed · Maximum 1,000 characters.",
+  "groupTechnicalActivities": "Group technical activities",
+  "agentElapsedRunning": "In progress",
+  "agentElapsedCompleted": "Completed",
+  "agentElapsedInterrupted": "Interrupted",
+  "agentElapsedFailed": "Failed",
+  "technicalActivityGroup_one": "Technical activity · {{count}} operation",
+  "technicalActivityGroup_other": "Technical activity · {{count}} operations"
 }

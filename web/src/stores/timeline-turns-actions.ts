@@ -216,8 +216,27 @@ export function createTimelineTurnsActions({
     settleTurnLifecycleForThread: (threadId, turns) => {
       applyThreadUpdate(threadId, (runtime) => {
         const statusById = new Map(turns.map((turn) => [turn.id, turn.status]));
+        const metadataById = new Map(turns.map((turn) => [turn.id, turn]));
         const timeline = runtime.timeline.map((entry) => {
           if (entry.kind !== 'turn') return entry;
+          const observed = metadataById.get(entry.turnId);
+          const timing = observed
+            ? {
+                startedAt: observed.startedAt ?? entry.startedAt,
+                completedAt: observed.completedAt ?? entry.completedAt,
+                durationMs: observed.durationMs ?? entry.durationMs,
+                status: entry.completed
+                  ? (entry.status ?? observed.status)
+                  : observed.status,
+              }
+            : null;
+          if (
+            timing &&
+            Object.entries(timing).some(
+              ([key, value]) => value !== entry[key as keyof typeof entry],
+            )
+          )
+            entry = { ...entry, ...timing };
           const status = statusById.get(entry.turnId);
           // A turn the headers do not mention is not evidence of anything: the
           // read is bounded, so an older turn is simply out of range.
