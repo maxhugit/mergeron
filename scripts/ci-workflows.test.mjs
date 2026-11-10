@@ -78,9 +78,17 @@ const requireBrowserCoverage = (...files) => {
   );
   const command = JSON.parse(read('web/package.json')).scripts['test:browser'];
   assert.equal(command, 'node scripts/run-browser-tests.mjs');
-  assert.ok(read('web/scripts/run-browser-tests.mjs').includes("['chromium', 'webkit']"));
+  assert.ok(
+    read('web/scripts/run-browser-tests.mjs').includes(
+      "['chromium', 'webkit']",
+    ),
+  );
   const config = read('web/vitest.config.ts');
-  assert.ok(config.includes("include: ['src/**/*.browser.{ts,tsx}']"));
+  assert.match(
+    config,
+    /include:\s*isolatedRelative\s*\?\s*\[isolatedRelative\]\s*:\s*\['src\/\*\*\/\*\.browser\.\{ts,tsx\}'\]/,
+    'Keep the complete default discovery and restrict an isolated child to its one assigned file',
+  );
   assert.ok(config.includes("{ browser: 'chromium' }"));
   assert.ok(config.includes("{ browser: 'webkit', fileParallelism: false }"));
   for (const file of files)

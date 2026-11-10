@@ -160,6 +160,14 @@ Une modification Git inconnue est proposée à l’import si Mergeron correspond
 encore à la base commune ; si les deux ont changé, le transfert est bloqué en
 conflit. Sans base commune, un contenu différent reste à examiner. Les titres et
 étiquettes sans historique comparable restent également protégés par un conflit.
+Une organisation Git déjà synchronisée pour le même livrable, dans une autre
+branche ou copie du projet, est reconnue comme une ancienne version connue et
+peut être remplacée par l'organisation actuelle de Mergeron. Les empreintes des
+32 organisations précédemment synchronisées sont conservées par affectation,
+en plus de l'empreinte courante ; les anciens réglages restent lisibles sans
+migration. Une organisation Git inconnue n'est jamais écrasée sur cette seule
+présomption. En l'absence de base commune, le détail indique qu'une comparaison
+manuelle est nécessaire, sans affirmer que les deux côtés ont été modifiés.
 Aucun import n’est automatique et aucune ancienne version Mergeron n’est effacée.
 La création d’une copie, les actions Git locales et l’inspection de la copie dans
 l’interface relancent la comparaison et les exports sûrs. Les changements réalisés
@@ -221,6 +229,9 @@ Chaque livrable porte un indicateur : **À jour localement**, **Export en attent
 et un conflit demandent une revue. Une exclusion de confidentialité n'est jamais
 présentée comme une réussite. Les identités locales distinguent les lignes même
 quand les titres sont identiques.
+Un export automatique suspendu pour revue apparaît comme **À examiner**, et non
+comme une panne de synchronisation. Les erreurs de lecture ou d'accès restent
+des erreurs ; une ancienne proposition ne masque pas une vérification échouée.
 
 Le vert exige une comparaison de contenu réussie sur la copie, la branche et le
 HEAD affichés. Une date ancienne de synchronisation ne suffit pas. Pendant une

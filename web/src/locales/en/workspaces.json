@@ -503,6 +503,8 @@
   "gitDeliverablesReasonRemovedInGit": "Missing from Git: retained in Mergeron. An explicit decision is required.",
   "gitDeliverablesReasonRemovedInMergeron": "Missing from Mergeron: retained in Git. No automatic recreation.",
   "gitDeliverablesReasonMetadataChangedBoth": "Organization changed on both sides: reconcile changes before retrying.",
+  "gitDeliverablesReasonKnownOlderMetadata": "Git organization matches an older synchronized version: update from Mergeron.",
+  "gitDeliverablesReasonMetadataBaselineMissing": "Organization differs without a verified common baseline: manual comparison required, no automatic overwrite.",
   "gitDeliverablesReasonDocumentChangedBoth": "Content changed on both sides: choose which content to retain; no automatic overwrite.",
   "gitDeliverablesReasonMissingFile": "The manifest references a missing file.",
   "gitDeliverablesReasonLargeFileRequiresLfs": "Large file: configure LFS handling before this transfer.",

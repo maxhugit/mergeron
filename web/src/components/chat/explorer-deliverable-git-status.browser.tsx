@@ -113,6 +113,7 @@ function status(): Status {
         owned: true,
         eligible: true,
         context: { branch: 'refs/heads/main', head: 'a' },
+        lastError: 'GIT_DELIVERABLES_REVIEW_REQUIRED',
       },
       {
         id: 'foreign',

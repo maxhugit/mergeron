@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { BaseSequencer, createVitest } from 'vitest/node';
-import { browserRunPlan, runBrowserTests } from './run-browser-tests.mjs';
-import { retryableWebkitDisconnect } from './run-browser-tests.mjs';
+import {
+  browserRunPlan,
+  runBrowserTests,
+  webkitSpecifications,
+  withoutShard,
+  retryableWebkitDisconnect,
+} from './run-browser-tests.mjs';
 
 const disconnected =
   '[vitest] Browser connection was closed while running tests. Was the page closed unexpectedly?';
@@ -35,30 +40,35 @@ test('only a pure runner disconnect is eligible for a fresh full WebKit attempt'
     false,
   );
 });
-test('runner retries the complete WebKit shard once, retains evidence and never hides a repeated failure', () => {
+test('retries only the disconnected isolated specification once and preserves failures and evidence', async () => {
   for (const lastStatus of [0, 1]) {
     const calls = [],
       evidence = [];
-    const status = runBrowserTests({
+    const status = await runBrowserTests({
       args: ['--shard=1/2'],
+      discover: async () => ['/web/one.browser.tsx', '/web/two.browser.tsx'],
       remove() {},
       log() {},
       preserveEvidence() {
         evidence.push('save');
         return () => evidence.push('restore');
       },
-      execute(_node, args) {
-        calls.push(args);
-        return calls.length === 1
-          ? { status: 0 }
-          : calls.length === 2
-            ? { status: 1, stderr: disconnected }
-            : { status: lastStatus, stderr: lastStatus ? disconnected : '' };
+      execute(_node, args, options) {
+        calls.push({ args, file: options.env.MERGERON_WEBKIT_SPEC });
+        if (calls.length === 2) return { status: 1, stderr: disconnected };
+        if (calls.length === 3)
+          return { status: lastStatus, stderr: lastStatus ? disconnected : '' };
+        return { status: 0 };
       },
     });
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 4);
     assert.deepEqual(calls[1], calls[2]);
-    assert.ok(calls[2].includes('--shard=1/2'));
+    assert.equal(calls[2].file, '/web/one.browser.tsx');
+    assert.equal(calls[3].file, '/web/two.browser.tsx');
+    assert.equal(
+      calls[1].args.some((arg) => arg.startsWith('--shard')),
+      false,
+    );
     assert.deepEqual(evidence, ['save', 'restore']);
     assert.equal(status, lastStatus);
   }
@@ -103,6 +113,14 @@ test(
           }).shard(specs);
           assert.ok(shard.length > 0);
           actual.push(...shard.map(key));
+          if (run.project.includes('webkit')) {
+            const files = await webkitSpecifications([`--shard=${index}/2`]);
+            assert.deepEqual(
+              files,
+              shard.map((spec) => spec.moduleId).sort(),
+              'Isolated runner must use exactly the native shard',
+            );
+          }
         }
       } finally {
         await ctx.close();
@@ -121,27 +139,45 @@ test(
   },
 );
 
-test('runner retains both engines, shard arguments, evidence and a failing exit code', () => {
+test('runner retains every specification, evidence and a failing exit code without retry', async () => {
   for (const statuses of [
-    [0, 0],
-    [1, 0],
-    [0, 1],
+    [0, 0, 0],
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
   ]) {
     const calls = [],
       removed = [];
-    const status = runBrowserTests({
-      args: ['--shard=2/2'],
+    const status = await runBrowserTests({
+      args: ['--shard=2/2', '--testNamePattern', 'example'],
+      discover: async () => [
+        '/web/src/one.browser.tsx',
+        '/web/src/two.browser.tsx',
+      ],
       remove: (...args) => removed.push(args),
       log() {},
-      execute: (node, args) => {
-        calls.push(args);
+      execute: (node, args, options) => {
+        calls.push({ args, options });
         return { status: statuses[calls.length - 1] };
       },
     });
-    assert.equal(calls.length, 2);
-    assert.ok(calls[0].includes('browser (chromium)'));
-    assert.ok(calls[1].includes('browser (webkit)'));
-    for (const call of calls) assert.ok(call.includes('--shard=2/2'));
+    assert.equal(calls.length, 3);
+    assert.ok(calls[0].args.includes('browser (chromium)'));
+    assert.ok(calls[0].args.includes('--shard=2/2'));
+    assert.deepEqual(
+      calls.slice(1).map((call) => call.options.env.MERGERON_WEBKIT_SPEC),
+      ['/web/src/one.browser.tsx', '/web/src/two.browser.tsx'],
+    );
+    for (const call of calls.slice(1)) {
+      assert.ok(call.args.includes('browser (webkit)'));
+      assert.equal(
+        call.args.some((value) => value.startsWith('--shard')),
+        false,
+        'Shard is applied once during discovery',
+      );
+      assert.ok(call.args.includes('--testNamePattern'));
+      assert.ok(call.args.includes('example'));
+    }
     assert.equal(
       removed.length,
       1,
@@ -154,11 +190,62 @@ test('runner retains both engines, shard arguments, evidence and a failing exit 
     /Engine selection/,
   );
   assert.equal(
-    runBrowserTests({
+    await runBrowserTests({
       remove() {},
       log() {},
       execute: () => ({ signal: 'SIGTERM', status: null }),
     }),
     1,
   );
+});
+
+test('empty or duplicate discovery fails closed without running an incomplete WebKit suite', async () => {
+  for (const files of [
+    [],
+    ['/web/src/a.browser.tsx', '/web/src/a.browser.tsx'],
+  ]) {
+    const calls = [];
+    assert.equal(
+      await runBrowserTests({
+        discover: async () => files,
+        remove() {},
+        log() {},
+        execute: (_node, args) => {
+          calls.push(args);
+          return { status: 0 };
+        },
+      }),
+      1,
+    );
+    assert.equal(calls.length, 1); // Chromium ran, WebKit discovery did not authorize a partial pass.
+  }
+  assert.deepEqual(
+    withoutShard(['--shard', '1/2', '--testNamePattern', 'same']),
+    ['--testNamePattern', 'same'],
+  );
+});
+
+test('an isolated child can discover only its assigned file', async () => {
+  const files = await webkitSpecifications(['--shard=1/2']);
+  const previous = process.env.MERGERON_WEBKIT_SPEC;
+  process.env.MERGERON_WEBKIT_SPEC = files[0];
+  const root = fileURLToPath(new URL('../', import.meta.url));
+  let ctx;
+  try {
+    ctx = await createVitest('test', {
+      root,
+      project: ['browser (webkit)'],
+      watch: false,
+      api: false,
+    });
+    const specs = await ctx.globTestSpecifications();
+    assert.deepEqual(
+      specs.map((s) => s.moduleId),
+      [files[0]],
+    );
+  } finally {
+    if (ctx) await ctx.close();
+    if (previous === undefined) delete process.env.MERGERON_WEBKIT_SPEC;
+    else process.env.MERGERON_WEBKIT_SPEC = previous;
+  }
 });

@@ -11,6 +11,7 @@ import { playwright } from '@vitest/browser-playwright';
 import type { BrowserCommand } from 'vitest/node';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { relative, resolve, sep } from 'node:path';
 import { sessionStackFixtures } from './test/session-stack';
 import { createSilentRenewalFixture } from './test/silent-renewal';
 
@@ -85,6 +86,24 @@ const mockupPreview: BrowserCommand<
 };
 
 const sessionStack = sessionStackFixtures();
+// The browser runner has already applied Vitest's native shard. Constrain the
+// child to exactly that one file so positional filters cannot broaden discovery.
+const isolatedSpec = process.env.MERGERON_WEBKIT_SPEC;
+const isolatedRelative = isolatedSpec
+  ? relative(
+      fileURLToPath(new URL('.', import.meta.url)),
+      resolve(isolatedSpec),
+    )
+      .split(sep)
+      .join('/')
+  : null;
+if (
+  isolatedRelative &&
+  (!isolatedRelative.startsWith('src/') ||
+    !/\.browser\.(?:ts|tsx)$/.test(isolatedRelative) ||
+    isolatedRelative.split('/').includes('..'))
+)
+  throw new Error('Invalid isolated browser specification');
 const sessionStackControl: BrowserCommand<
   [
     action:
@@ -354,13 +373,21 @@ export default mergeConfig(
           extends: true,
           // Browser rendering discovers this React entry after fixture startup.
           // Prebundle it up front so optimization cannot reload an active test.
-          optimizeDeps: { include: ['react-dom/client'] },
+          optimizeDeps: {
+            include: ['react-dom/client'],
+            // A fresh isolated child must scan the same complete dependency
+            // graph as the full suite. Scanning only its assigned fixture lets
+            // lazy imports rebuild React chunks while a test is already running.
+            entries: ['src/**/*.browser.{ts,tsx}'],
+          },
           test: {
             name: 'browser',
             // Bound pages on small runners; machine-level parallelism comes
             // from CI shards, not an unbounded browser page burst.
             maxWorkers: 2,
-            include: ['src/**/*.browser.{ts,tsx}'],
+            include: isolatedRelative
+              ? [isolatedRelative]
+              : ['src/**/*.browser.{ts,tsx}'],
             // Failure annotations copy screenshots too; keep those copies
             // under the same ignored and per-run-cleared directory.
             attachmentsDir: '.vitest-screenshots/attachments',

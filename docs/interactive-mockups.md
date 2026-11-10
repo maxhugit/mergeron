@@ -19,9 +19,23 @@ Aucun environnement de test, conteneur, processus applicatif ou port n’est cr�
    rechargement depuis l’historique de la conversation.
 5. Sur demande explicite, enregistrer la révision dans un livrable existant.
    `project_mockup_publish` utilise **le service documentaire existant**, ses droits,
-   ses fichiers et ses versions. Le fichier autonome porte le nom
-   `mockup-<identifiant>.html`. Pour une version suivante du même document, fournir
+   ses fichiers et ses versions. Chaque publication produit **toujours une archive
+   ZIP**, même si la maquette tient dans un seul HTML : `mockup-<identifiant>.zip`.
+   Elle contient `index.html` et `mergeron-mockup.json` (format, page d’entrée,
+   référence de révision et empreinte SHA-256 du HTML). Pour une version suivante du même document ZIP, fournir
    sa `revision` de maquette, son `documentId` et son `expectedVersion` observés dans le livrable.
+6. Dans le livrable, cliquer sur l’archive pour ouvrir directement son **Aperçu**
+   interactif. **Code source** donne accès au fichier enregistré. L’aperçu utilise
+   les octets du document publié, pas la dernière révision de la conversation.
+   **Fichiers de l’archive** permet de consulter son contenu. La reconnaissance
+   repose sur son manifeste, même après renommage du ZIP. Les anciens exports HTML
+   restent consultables ; pour les republier en ZIP, créer un nouveau document
+   sans écraser leur historique HTML (`MOCKUP_ARCHIVE_NEW_DOCUMENT_REQUIRED`).
+   Le rendu reprend la sandbox des maquettes : ni accès à Mergeron, ni requêtes
+   réseau, ni chargement de scripts ou d’images externes. Les ressources doivent
+   actuellement être intégrées au HTML : le ZIP conserve systématiquement cette
+   source autonome, mais la publication ne collecte pas de fichiers arbitraires
+   du disque ou du réseau.
 
 Les annotations visuelles restent pour une livraison ultérieure. Sans activation
 explicite de **Conserver les choix sur cet appareil**, une réouverture repart de
@@ -55,7 +69,7 @@ le modèle : le serveur impose le contexte de la conversation et de son tour act
 | `project_mockup_manage` | Ajouter une révision avec `baseRevision` et `requestId` |
 | `project_mockup_list` | Lister les références de la conversation |
 | `project_mockup_report` | Présenter la carte d’ouverture, sans URL permanente |
-| `project_mockup_publish` | Enregistrer un document/version dans un livrable sur demande humaine |
+| `project_mockup_publish` | Enregistrer systématiquement une archive ZIP/version dans un livrable sur demande humaine |
 
 Une écriture exige un tour autorisé en écriture. Une lecture utilise les droits
 actuels du projet **et** de la conversation. Une révision obsolète produit un
