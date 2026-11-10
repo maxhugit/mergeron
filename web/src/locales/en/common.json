@@ -1696,7 +1696,7 @@
   "activityStale": "Last known state: agent data is being verified.",
   "activityStaleShort": "State to verify",
   "activityNoAgents": "No active or waiting agents.",
-  "activityStateWaiting": "Your response is needed",
+  "activityStateWaiting": "Response required",
   "activityRunning_one": "{{count}} active agent",
   "activityRunning_other": "{{count}} active agents",
   "activityWaiting_one": "{{count}} intervention",

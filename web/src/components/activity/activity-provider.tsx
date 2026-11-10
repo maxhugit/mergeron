@@ -52,7 +52,7 @@ function ActivityScope({
     queryFn: async ({ signal }): Promise<ActivitySnapshot> => {
       const auth = getAuthorizationHeader();
       const response = await fetch(withBasePath('/api/activity'), {
-        signal,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]),
         credentials: 'same-origin',
         redirect: 'error',
         cache: 'no-store',
