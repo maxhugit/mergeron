@@ -171,3 +171,15 @@ retirés, ainsi que leurs liens et le paramétrage de fournisseur associé. L’
 `response-copy` conserve son identifiant et rejoint les agents. La dictée est
 décrite avec le CLI authentifié, sans choix de moteur API. Les anciens liens vers
 un article retiré reviennent à l’accueil du guide.
+
+## Mise à jour du 10 novembre 2026
+
+Les deux manuels décrivent désormais la continuation des réponses sous les
+interventions humaines, les corrections Git par document, l’aperçu des maquettes
+ZIP et les prérequis bloquant les environnements de test. Le parcours Notifications
+précise la hauteur du panneau et l’exclusion des fins de travail réussies.
+
+Le [récapitulatif des évolutions fusionnées](dernieres-evolutions.md) renvoie aux
+guides techniques et PR concernés. Les résumés de tags restent limités à ce qui
+était publié dans ces tags : aucune nouvelle version n’est créée par cette mise
+à jour de documentation.

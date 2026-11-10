@@ -61,6 +61,101 @@ démarrer dans une image Linux autorisée, avec un port HTTP principal. Le profi
 du projet définit ses commandes et ses services ; aucun lancement n’est codé
 spécialement pour le dépôt Mergeron.
 
+## Procédure de mise en service : du serveur au premier aperçu
+
+Cette procédure permet à l’agent de lancer le serveur web de test avec les
+outils **MCP**. Elle ne nécessite pas de fusionner une pull request. L’instance
+part des fichiers de travail de l’agent ; elle ne publie pas le projet en production.
+
+### 1. Préparer l’installation — administrateur de l’hôte
+
+- Rendre le Manager opérationnel et accessible à l’application via son intégration
+  existante. Un Manager simplement présent dans Docker n’est pas une preuve que
+  le service d’aperçus est activé.
+- Définir `MERGERON_PREVIEWS_ENABLED=true` et le même
+  `MERGERON_PREVIEW_DOMAIN=preview.example.com` dans **l’application et le Manager**.
+  Définir aussi l’URL HTTPS canonique de l’application dans `MERGERON_PUBLIC_URL`.
+  Appliquer ces variables aux conteneurs ; enregistrer un profil de projet seul
+  ne les applique pas.
+- Configurer le DNS wildcard, le certificat couvrant `*.preview.example.com` et
+  le reverse proxy vers l’ingress. Conserver `Host` et les WebSocket ; garder le
+  port interne de consultation 8173 privé. Suivre la section réseau ci-dessous.
+- Configurer `MERGERON_PREVIEW_IMAGES` dans le Manager : identifiants de runtimes
+  autorisés, images épinglées par digest et présentes localement. Vérifier leur
+  compatibilité avec un utilisateur non root et une racine en lecture seule.
+  Ne pas transmettre le socket Docker ou un secret d’hôte à l’agent.
+
+### 2. Autoriser le projet — administrateur du projet
+
+1. Dans **Paramètres du projet → Environnement de test → Exécution**, activer
+   **Autoriser les environnements de test pour ce projet**.
+2. Pour un lancement géré par l’agent, activer **Laisser les agents préparer et
+   gérer leur environnement de test** et sélectionner au moins une technologie
+   disponible dans le catalogue du Manager. Pour le mode manuel, renseigner le
+   runtime et la commande de démarrage, ainsi que les services nécessaires.
+3. Dans **Ressources et durée**, définir les plafonds adaptés au projet et
+   enregistrer le profil. Vérifier les prérequis affichés après l’enregistrement.
+4. Choisir un dossier de référence existant et autorisé pour l’agent, contenant
+   les sources à tester. Le dossier doit être utilisable avec les permissions
+   de cet agent ; un dossier système ou protégé ne devient pas autorisé par
+   l’activation des aperçus.
+
+### 3. Préparer puis lancer — agent avec les droits requis
+
+1. Dans une session administrateur disposant des droits d’écriture requis,
+   demander par exemple : « Prépare et démarre un environnement de test pour ce
+   projet, puis vérifie la page d’accueil. » La délégation du projet et les
+   droits d’exécution restent vérifiés ; l’agent ne peut pas les activer lui-même.
+2. L’agent lit `project_preview_read` avec l’opération `status`. Corriger les
+   prérequis signalés avant de lancer ; si le contrôle est indisponible, ne pas
+   considérer le projet comme prêt.
+3. En mode délégué, il prépare sa recette avec `project_preview_prepare` :
+   runtime autorisé, installation/compilation nécessaires, commande du serveur,
+   port HTTP principal et page de contrôle. Le serveur doit écouter sur
+   `0.0.0.0` dans son conteneur. Préparer la recette ne démarre rien.
+4. Il lance `project_preview_manage` avec l’opération `start`, puis consulte
+   `status` jusqu’à `preview.ready: true` et une URL non nulle. Si installation,
+   compilation ou contrôle HTTP échoue, examiner les logs de cette étape.
+5. Ouvrir **Environnement de test → Ouvrir l’aperçu**. L’ouverture vérifie les
+   droits du navigateur ; partager seulement l’URL ne donne pas ces droits.
+   Après l’essai, arrêter l’instance ou contrôler sa durée d’arrêt automatique.
+
+### Diagnostic : quel prérequis corriger ?
+
+| Code signalé                                                      | Vérification ou correction                                                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `server_disabled`                                                 | Activer le service global dans l’application.                                                                 |
+| `preview_domain_missing`                                          | Renseigner le domaine d’aperçu côté application.                                                              |
+| `viewer_not_ready`                                                | Vérifier l’écoute de la passerelle interne de consultation, les variables et les logs de l’application.       |
+| `manager_unavailable`                                             | Vérifier la liaison application–Manager et la santé du Manager.                                               |
+| `manager_not_configured`                                          | Activer les aperçus côté Manager ; ce message ne signifie pas forcément que le conteneur Manager est absent.  |
+| `preview_domain_mismatch`                                         | Aligner le domaine déclaré par l’application et celui du Manager.                                             |
+| `project_profile_missing` / `project_profile_unreadable`          | Enregistrer un profil valide ou corriger sa lecture dans les paramètres du projet.                            |
+| `project_disabled`                                                | Activer l’autorisation de test du projet, puis enregistrer.                                                   |
+| `agent_runtimes_missing`                                          | Sélectionner au moins une technologie déléguée réellement disponible dans le catalogue du Manager.            |
+| `start_command_missing`                                           | Compléter la commande de démarrage du profil manuel.                                                          |
+| `runtime_not_allowed` / `service_runtime_not_allowed`             | Choisir des runtimes autorisés pour l’application et les services de test.                                    |
+| `working_directory_missing`                                       | Choisir un dossier de référence existant contenant les sources.                                               |
+| `working_directory_protected` / `working_directory_access_denied` | Choisir une référence autorisée ou corriger les droits via l’administration, sans contourner les protections. |
+
+Un contrôle de configuration réussi ne prouve pas que le site démarre : les images
+locales, les dépendances, les ressources disponibles, le DNS et le certificat
+HTTPS doivent aussi fonctionner. L’état prêt est confirmé par le contrôle HTTP,
+pas par la seule présence d’un conteneur en cours d’exécution.
+
+## Comprendre les prérequis de démarrage
+
+Les paramètres du projet et l’onglet Environnement de test affichent les
+prérequis manquants. Le contrôle distingue l’autorisation du projet de
+l’activation du service global, de la disponibilité/configuration du Manager,
+du domaine d’aperçu, de l’accès de consultation et des runtimes autorisés. Une
+commande de démarrage ou un profil manquant doit aussi être corrigé.
+
+Démarrer reste indisponible si le contrôle ne peut pas être lu ou si un
+prérequis manque. L’arrêt d’une instance déjà existante reste une action
+distincte. Corriger la configuration indiquée ne nécessite pas de désactiver
+TLS, le proxy ou la sandbox.
+
 ## Configurer le domaine et le proxy une seule fois
 
 Dans la zone DNS active de `example.com`, créer un CNAME dont le sous-domaine est

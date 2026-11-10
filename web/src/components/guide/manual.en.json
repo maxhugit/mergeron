@@ -63,6 +63,13 @@
               }
             ],
             "warning": "An AI answer, a completed task and an approved document are not equivalent. A person must review the result."
+          },
+          {
+            "title": "Recent improvements and the installed version",
+            "paragraphs": [
+              "Recent guide updates cover response continuity around steering and questions, document-specific Git correction, archived mockups and explicit test-environment prerequisites.",
+              "Check Server → Current version to identify the code actually installed. Version history describes published tags; fixes merged after the latest tag are not part of that tag yet. A merge does not automatically update your installation."
+            ]
           }
         ],
         "related": [
@@ -200,7 +207,8 @@
             "title": "Open, read and return to an agent",
             "paragraphs": [
               "The bell left of Account opens a right panel. Its header stays fixed while only the list scrolls. The panel remains open when changing agents.",
-              "Events include failures, approval requests, questions and interface errors. Successful work completion does not appear in the notification center. Errors are red. Clicking marks the event read and opens its agent or project."
+              "Events include agent failures, approval requests, questions and interface errors. Successful completions are excluded from this notification center and its unread counter, including earlier completion notifications. Clicking a notification marks it as read and opens the relevant agent or project.",
+              "The panel starts at the top of the viewport and uses its available height; its header remains fixed while the list scrolls independently."
             ]
           },
           {
@@ -649,6 +657,13 @@
               "Technical details may be collapsed, but known errors and pending decisions stay visible. Waiting for confirmation is not necessarily a failure."
             ],
             "warning": "Stopping an agent, revoking access or leaving a session does not undo actions already accepted on files or external services."
+          },
+          {
+            "title": "Questions and resuming work",
+            "paragraphs": [
+              "Agent questions and MCP requests remain at the point where they interrupted the response. Answering lets the conversation continue below the intervention instead of moving the card beneath the entire response.",
+              "A handled card remains a reading reference. If its request has expired, use the available action to prepare an ordinary reply in the draft, then send it explicitly. Preparing a reply does not reactivate the previous authorization."
+            ]
           }
         ],
         "related": [
@@ -675,7 +690,7 @@
             "actions": [
               {
                 "label": "No technical details",
-                "effect": "Group technical activity behind an expandable line without removing responses."
+                "effect": "Hides routine technical activity while retaining responses, errors and requests that need your attention."
               },
               {
                 "label": "Collapsed details",
@@ -699,6 +714,14 @@
             "title": "Read a conversation in compact view",
             "paragraphs": [
               "Long questions and answers stay within the available screen width. Text wraps; a table or code block may retain its own horizontal scrolling without widening the entire conversation. This lets you review long instructions on a phone."
+            ]
+          },
+          {
+            "title": "Keep the conversation readable during an intervention",
+            "paragraphs": [
+              "When you send an instruction while the agent is writing, the existing response remains above your message and its continuation appears below. Question cards follow the same rule: after your answer, the continuation is displayed below the card, which stays in place.",
+              "This is a presentation split, not a new execution turn or conversation branch. Several interventions can interrupt the same agent message. Tools and authorizations are not copied into every fragment.",
+              "Observed boundaries survive reconnection and agent switching. A rejected steering message is removed and the response fragments rejoin. Fresh history uses the native positions available; an old question’s exact position cannot be recovered when its tool is missing from history and this browser never received it."
             ]
           }
         ],
@@ -960,6 +983,26 @@
               "Under Test environment, Execution contains activation and the manual recipe or agent management. Resources and lifetime contains lifetime, memory, CPUs and storage information. Advanced configuration contains the manual profile’s JSON variables and services.",
               "Edits remain across sub-tabs. Save profile and Cancel stay at the bottom of the panel. A saved profile applies when recreating an environment; allowed technologies and existing masked values are preserved."
             ]
+          },
+          {
+            "title": "Understand why starting is unavailable",
+            "paragraphs": [
+              "Allowing test environments in a project does not activate their infrastructure. Mergeron also checks the global service, Manager, preview domain, viewer access and allowed runtimes.",
+              "Missing prerequisites are shown in project settings and in the test environment tab. A missing start command or a runtime outside the allowlist can also block a recipe. Correct the reported prerequisite instead of disabling protections.",
+              "Start remains unavailable until these prerequisites have been verified. A failed prerequisite read is not treated as authorization. Stopping an existing instance keeps its own workflow."
+            ]
+          },
+          {
+            "title": "Complete procedure before the first launch",
+            "steps": [
+              "The host administrator enables MERGERON_PREVIEWS_ENABLED and configures the same MERGERON_PREVIEW_DOMAIN in the application and Manager, with an HTTPS MERGERON_PUBLIC_URL. These variables must actually be applied to the containers.",
+              "They configure wildcard DNS, the HTTPS certificate and preview routing, followed by the Manager’s MERGERON_PREVIEW_IMAGES catalog. Allowed images are pinned by digest and available locally; the agent never receives the Docker socket.",
+              "In Project settings → Test environment → Execution, allow testing and, for delegated mode, let agents prepare and manage their environment. Select at least one technology offered by the Manager, adjust resources and duration, then save.",
+              "Check the agent’s reference directory and permissions: it must contain the sources and be authorized. From an administrator session with write permissions, ask the agent to prepare and start the test.",
+              "The agent uses project_preview_read (status) to read prerequisites, project_preview_prepare to save its recipe, and project_preview_manage (start) to launch. The recipe specifies commands, the HTTP port and readiness page; the server listens on 0.0.0.0 inside the runtime.",
+              "Inspect logs and wait for a ready state with an available URL. Open preview checks your access. Merging a PR is not required to launch; the selected duration or an explicit stop ends the test."
+            ],
+            "warning": "Enabling the project permission does not configure the Manager, DNS or HTTPS. “Manager not configured” can mean that only its preview service is disabled. Correct the reported prerequisite without disabling TLS, the proxy or the sandbox."
           }
         ],
         "related": [
@@ -1298,6 +1341,14 @@
               "Check the conversation and attachment in its draft, complete your request and explicitly send the message.",
               "Menus group document, file and Git actions according to context; attaching a document changes neither its version nor its approval."
             ]
+          },
+          {
+            "title": "Retain and reopen an interactive mockup",
+            "paragraphs": [
+              "On your request, the agent can publish a mockup revision into a deliverable. Publication always creates a ZIP archive, even for a single HTML file. It contains index.html and a manifest identifying the published revision.",
+              "Clicking a recognized archive opens its interactive preview. Source code and archive file views let you inspect what was saved. The preview corresponds to this document version, not a later conversation revision.",
+              "Images, styles and scripts currently need to be embedded in the self-contained HTML. Publication does not automatically collect neighbouring JS files or images from disk. The sandbox still blocks external resources and access to Mergeron. Older HTML exports remain readable; a new ZIP publication creates a separate document when the historical format requires it."
+            ]
           }
         ],
         "related": [
@@ -1490,6 +1541,17 @@
               "Confirmation is bound to the reviewed branch and commit. The copy table tracks errors and pending exports separately. One conflicted copy does not block the others. After a restart, use Review Git deliverables to resume with your current permissions. A change refused during synchronization can be retried afterwards. Old Git content recognized in retained versions is updated from Mergeron; unknown Git content requires review and changes on both sides cause a conflict. Comparison uses content, never file dates. In the Deliverables sidebar, Local Git shows the copy, branch and per-deliverable state. Click to inspect details. Up to date locally does not mean committed or published to GitHub; refreshing or a read failure clears the previous green state."
             ],
             "warning": "Synchronization is neither human validation nor a Git push. Review conflicts and retain necessary backups before confirming exchanges."
+          },
+          {
+            "title": "Resolve one document without blocking the others",
+            "paragraphs": [
+              "Synchronization operates independently per document, within this agent’s copy and branch. One conflicted document can remain under review while other verified exports continue. Unknown metadata and files are not replaced to force a transfer.",
+              "In Deliverables, version badges have an orange background for a pending export, import or review and a red background for a conflict or blocking error. A neutral background alone does not prove that a document has been committed or published.",
+              "Click an orange or red version badge to open the document-specific dialog: compare versions and files, choose to retain the Mergeron version in Git or import the Git version, then confirm the correction you reviewed. Available choices depend on your rights and file protections.",
+              "The server checks the confirmation again. If the branch, content or version changes, review the comparison again. Replacing a Git file retains its previous bytes in private recovery storage; importing creates a new Mergeron version without deleting earlier versions. Neighbouring documents remain unchanged.",
+              "When the overall comparison offers it, Apply documents without conflicts processes safe operations and keeps remaining differences visible. A partial application does not mean that the entire copy is synchronized."
+            ],
+            "warning": "An orange badge never authorizes an overwrite. Protected, ignored, out-of-scope and oversized files are not forced. Manage deliverable synchronization in Deliverables; Sources remains dedicated to Git operations."
           }
         ],
         "related": [
