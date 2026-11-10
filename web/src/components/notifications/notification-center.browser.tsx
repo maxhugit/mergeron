@@ -49,6 +49,8 @@ test.each([390, 1100])(
     const panel = screen.getByRole('region', { name: 'Notifications' }),
       list = screen.getByLabelText('Liste des notifications'),
       header = panel.querySelector('header')!;
+    expect(panel.getBoundingClientRect().top).toBe(0);
+    expect(panel.getBoundingClientRect().bottom).toBe(window.innerHeight);
     const top = header.getBoundingClientRect().top;
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     list.scrollTop = 600;

@@ -1,5 +1,8 @@
 /** Conversation timeline interactions actions. */
-import { ensureInteractionEntry } from '@/lib/interaction-timeline';
+import {
+  ensureUserInputEntry,
+  ensureInteractionEntry,
+} from '@/lib/interaction-timeline';
 import { type UserInputRequest } from '../types/approval';
 import { samePendingRequest } from '../lib/pending-request-identity';
 import {
@@ -52,7 +55,11 @@ export function createTimelineInteractionsActions({
           ...runtime,
           timeline:
             approval.kind === 'permissions' || approval.kind === 'elicitation'
-              ? ensureInteractionEntry(runtime.timeline, approval)
+              ? ensureInteractionEntry(
+                  runtime.timeline,
+                  approval,
+                  runtime.activeTurnId,
+                )
               : approval.turnId
                 ? ensureTurnEntry(runtime.timeline, approval.turnId)
                 : runtime.timeline,
@@ -89,7 +96,10 @@ export function createTimelineInteractionsActions({
           pendingResolvedRequestIds.delete(request.instanceId ?? requestKey);
         return {
           ...runtime,
-          timeline: ensureTurnEntry(runtime.timeline, request.turnId),
+          timeline: ensureUserInputEntry(
+            ensureTurnEntry(runtime.timeline, request.turnId),
+            finalRequest,
+          ),
           approvals: Object.fromEntries(
             Object.entries(runtime.approvals).filter(
               ([id]) => id !== requestKey,

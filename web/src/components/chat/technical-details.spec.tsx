@@ -224,3 +224,50 @@ it('groups consecutive technical activity, preserves prose boundaries and leaves
   ).toBe(true);
   useTechnicalGrouping.setState({ grouped: false });
 });
+
+it('does not repeat a command authorization in the continuation fragment', () => {
+  const canonical: Extract<TimelineEntry, { kind: 'turn' }> = {
+    kind: 'turn',
+    turnId: 'turn',
+    completed: false,
+    items: [command, message],
+  };
+  useTimelineStore.setState({
+    timeline: [canonical],
+    approvals: {
+      request: {
+        requestId: 'request',
+        kind: 'command',
+        threadId: 'a',
+        turnId: 'turn',
+        itemId: 'cmd',
+        status: 'pending',
+        command: 'echo private-details',
+      },
+    },
+  });
+  render(
+    <>
+      <TurnBlock
+        entry={{
+          ...canonical,
+          items: [command],
+          presentation: { key: 'start', last: false },
+        }}
+      />
+      <TurnBlock
+        entry={{
+          ...canonical,
+          items: [message],
+          presentation: { key: 'after:user', last: true },
+        }}
+      />
+    </>,
+  );
+  expect(screen.getAllByText('technical log output')).toHaveLength(1);
+  // A request owned by the earlier command is not an unanchored approval of
+  // the final fragment. The generic fallback button must not be rendered.
+  expect(
+    screen.queryByRole('button', { name: 'Approve operation' }),
+  ).toBeNull();
+});

@@ -1,3 +1,4 @@
+import { responseBoundary } from '@/lib/conversation-segments';
 /** Conversation timeline history entries. */
 import { type TimelineEntry, type TurnPlanState } from '../types/timeline';
 import { type TurnDto } from '../generated/api';
@@ -70,19 +71,29 @@ export function turnsToTimeline(turns: TurnDto[]): TimelineEntry[] {
       ): item is Extract<ThreadItemNormalization, { kind: 'userMessage' }> =>
         item.kind === 'userMessage',
     );
+    const userEntries: TimelineEntry[] = [];
     for (const [index, userMsg] of userMessages.entries()) {
-      entries.push({
+      const preceding = normalized
+        .slice(0, normalized.indexOf(userMsg))
+        .flatMap((item) =>
+          item.kind === 'render' || item.kind === 'unknown' ? [item.item] : [],
+        );
+      userEntries.push({
         kind: 'user',
         content: userMsg.message.text,
         turnId: turn.id,
         itemId: userMsg.message.itemId,
-        ...(index > 0 && { steering: true }),
+        ...(index > 0 && {
+          steering: true,
+          responseBoundary: responseBoundary(preceding),
+        }),
         ...(userMsg.message.images.length > 0 && {
           images: userMsg.message.images,
         }),
       });
     }
 
+    if (userEntries[0]) entries.push(userEntries[0]);
     const plan = normalizedPlan(normalized);
     const turnItems = normalized.flatMap((item) =>
       item.kind === 'render' || item.kind === 'unknown' ? [item.item] : [],
@@ -109,6 +120,8 @@ export function turnsToTimeline(turns: TurnDto[]): TimelineEntry[] {
         ...(itemsView && { itemsView }),
       });
     }
+
+    entries.push(...userEntries.slice(1));
 
     if (turn.status === 'failed' && turn.error) {
       entries.push({

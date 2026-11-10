@@ -1,3 +1,4 @@
+import { projectConversationTimeline } from '@/lib/conversation-segments';
 /** Real composer mutation and message rows; no account, agent or external request. */
 import { cleanup, render, screen, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -67,7 +68,7 @@ export function Conversation() {
         className="min-h-0 flex-1 overflow-auto p-3"
         aria-label="Fil de discussion"
       >
-        {timeline.map((entry, index) => (
+        {projectConversationTimeline(timeline).map((entry, index) => (
           <TimelineEntryRow
             key={index}
             entry={entry}
@@ -102,13 +103,11 @@ test.each([390, 1180])(
     await i18n.changeLanguage('fr');
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response('{}', {
-            headers: { 'Content-Type': 'application/json' },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response('{}', {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
     );
     useTimelineStore.setState(initial, true);
     const store = useTimelineStore.getState();
@@ -184,6 +183,66 @@ test.each([390, 1180])(
     expect(
       screen.getAllByRole('button', { name: 'editThisMessage' }),
     ).toHaveLength(1);
+    act(() => {
+      store.updateTurnItemForThread('a', 'turn', 'thinking', (held) => ({
+        ...held!,
+        type: 'agentMessage',
+        itemId: 'thinking',
+        questions: [],
+        completed: false,
+        content: 'Je travaille sur le document… Suite après la relance.',
+      }));
+    });
+    const before = screen.getByText('Je travaille sur le document…');
+    const steer = screen.getByText('Ajoute une synthèse en français');
+    const after = screen.getByText('Suite après la relance.');
+    expect(before.getBoundingClientRect().top).toBeLessThan(
+      steer.getBoundingClientRect().top,
+    );
+    expect(steer.getBoundingClientRect().top).toBeLessThan(
+      after.getBoundingClientRect().top,
+    );
+    act(() => {
+      store.addUserInputRequestForThread('a', {
+        kind: 'userInput',
+        requestId: 'question',
+        instanceId: 'question-instance',
+        threadId: 'a',
+        turnId: 'turn',
+        itemId: 'question-tool',
+        status: 'pending',
+        questions: [
+          {
+            id: 'q',
+            header: 'Version',
+            question: 'Quelle version conserver ?',
+            isOther: false,
+            isSecret: false,
+            options: [
+              {
+                label: 'La nouvelle',
+                description: 'Conserver les changements',
+              },
+            ],
+          },
+        ],
+      });
+      store.resolveUserInputRequestForThread('a', 'question');
+      store.updateTurnItemForThread('a', 'turn', 'thinking', () => ({
+        type: 'agentMessage',
+        itemId: 'thinking',
+        questions: [],
+        completed: false,
+        content:
+          'Je travaille sur le document… Suite après la relance. Suite après la question.',
+      }));
+    });
+    const question = screen.getByText('Quelle version conserver ?');
+    const continuation = screen.getByText('Suite après la question.');
+    expect(screen.getAllByText('Quelle version conserver ?')).toHaveLength(1);
+    expect(question.getBoundingClientRect().top).toBeLessThan(
+      continuation.getBoundingClientRect().top,
+    );
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
