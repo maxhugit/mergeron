@@ -1,3 +1,4 @@
+import { captureResponseBoundary } from '@/lib/conversation-segments';
 /** Conversation timeline store. */
 import { create } from 'zustand';
 import { type ThreadRuntimeState, type TimelineState } from './timeline-state';
@@ -109,6 +110,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
             turnId,
             localId,
             steering: true,
+            responseBoundary: captureResponseBoundary(runtime.timeline, turnId),
             content: text,
             ...(images.length && { images }),
           },

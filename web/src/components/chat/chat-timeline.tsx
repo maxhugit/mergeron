@@ -1,3 +1,4 @@
+import { projectConversationTimeline } from '@/lib/conversation-segments';
 import { translationKey } from '@/locales/translation-key';
 /**
  * Virtualized scrollable message timeline.
@@ -69,6 +70,8 @@ function deriveEntryKeys(timeline: TimelineEntry[]): string[] {
   const counts = new Map<string, number>();
   return timeline.map((entry) => {
     if (entry.kind === 'interaction') return `interaction:${entry.instanceId}`;
+    if (entry.kind === 'turn' && entry.presentation)
+      return `turn:${entry.turnId}:${entry.presentation.key === 'start' ? '0' : entry.presentation.key}`;
     const turnId = 'turnId' in entry ? entry.turnId : undefined;
     const group = `${entry.kind}:${turnId ?? 'pending'}`;
     const ordinal = counts.get(group) ?? 0;
@@ -139,7 +142,7 @@ export function ChatTimeline({
   const requests = runtime?.userInputRequests ?? EMPTY_REQUESTS;
   const timeline = useMemo(
     () =>
-      retainedTimeline.filter(
+      projectConversationTimeline(retainedTimeline).filter(
         (entry) =>
           entry.kind !== 'turn' ||
           entry.turnId === activeTurnId ||

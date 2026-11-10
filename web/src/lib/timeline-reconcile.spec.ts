@@ -89,6 +89,101 @@ describe('reconcileTimeline', () => {
     ]);
   });
 
+  it('preserves steering and intervening notices on repeated recovery', () => {
+    const prompt: TimelineEntry = {
+      kind: 'user',
+      turnId: 'T1',
+      itemId: 'u1',
+      content: 'Start',
+    };
+    const steering: TimelineEntry = {
+      kind: 'user',
+      turnId: 'T1',
+      itemId: 'u2',
+      content: 'Adjust',
+      steering: true,
+    };
+    const notice: TimelineEntry = { kind: 'system', content: 'Reconnecting' };
+    const interaction: TimelineEntry = {
+      kind: 'interaction',
+      requestId: 'r',
+      instanceId: 'i',
+      turnId: 'T1',
+    };
+    const live = [
+      prompt,
+      turn('T1'),
+      notice,
+      interaction,
+      steering,
+      turn('T2'),
+    ];
+    const page = [prompt, steering, turn('T1'), turn('T2')];
+    const merged = reconcileTimeline(page, live);
+    expect(merged.map((row) => row.kind)).toEqual([
+      'user',
+      'turn',
+      'system',
+      'interaction',
+      'user',
+      'turn',
+    ]);
+    expect(reconcileTimeline(page, merged)).toEqual(merged);
+  });
+
+  it('places a missing steering message before its next known user message', () => {
+    const prompt: TimelineEntry = {
+      kind: 'user',
+      turnId: 'T1',
+      itemId: 'u1',
+      content: 'Start',
+    };
+    const first: TimelineEntry = {
+      kind: 'user',
+      turnId: 'T1',
+      itemId: 'u2',
+      content: 'First adjustment',
+      steering: true,
+    };
+    const second: TimelineEntry = {
+      kind: 'user',
+      turnId: 'T1',
+      itemId: 'u3',
+      content: 'Second adjustment',
+      steering: true,
+    };
+    const result = reconcileTimeline(
+      [prompt, first, second, turn('T1')],
+      [prompt, turn('T1'), second],
+    );
+    expect(
+      result.map((row) => (row.kind === 'user' ? row.content : row.kind)),
+    ).toEqual(['Start', 'turn', 'First adjustment', 'Second adjustment']);
+  });
+
+  it('restores a missing response after the prompt and before steering', () => {
+    const prompt: TimelineEntry = {
+      kind: 'user',
+      turnId: 'T1',
+      itemId: 'u1',
+      content: 'Start',
+    };
+    const steering: TimelineEntry = {
+      kind: 'user',
+      turnId: 'T1',
+      itemId: 'u2',
+      content: 'Adjust',
+      steering: true,
+    };
+    const merged = reconcileTimeline(
+      [prompt, steering, turn('T1')],
+      [prompt, steering],
+    );
+    expect(
+      merged.map((row) => (row.kind === 'user' ? row.content : row.kind)),
+    ).toEqual(['Start', 'turn', 'Adjust']);
+  });
+
   it('returns the other side untouched when either is empty', () => {
     const live = [turn('T1')];
     const page = [turn('T2')];

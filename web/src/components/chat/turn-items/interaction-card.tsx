@@ -1,3 +1,5 @@
+import { pendingRequestKey } from '@/lib/pending-request-identity';
+import { UserInputCard } from './user-input-card';
 import { translationKey } from '@/locales/translation-key';
 /** Permission and MCP cards; none of their actions use the command decision contract. */
 import { useState } from 'react';
@@ -6,7 +8,7 @@ import { ExternalLink, Shield, MessageCircleQuestion } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ElicitationFieldDto } from '@/generated/api';
-import type { ApprovalRequest } from '@/types/approval';
+import type { ApprovalRequest, UserInputRequest } from '@/types/approval';
 import { useRequestResponse } from '@/hooks/use-request-response';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { ApprovalStatusBadge } from './approval-controls';
@@ -357,8 +359,14 @@ export function StoredInteractionCard({
   requestId: string;
   instanceId: string;
 }) {
-  const request = useTimelineStore((state) => state.approvals[requestId]);
-  return request?.instanceId === instanceId ? (
+  const request = useTimelineStore(
+    (state): ApprovalRequest | UserInputRequest | undefined =>
+      state.approvals[requestId] ?? state.userInputRequests[requestId],
+  );
+  if (!request || pendingRequestKey(request) !== instanceId) return null;
+  return request.kind === 'userInput' ? (
+    <UserInputCard key={instanceId} request={request} />
+  ) : (
     <InteractionCard key={instanceId} request={request} />
-  ) : null;
+  );
 }

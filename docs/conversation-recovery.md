@@ -369,3 +369,33 @@ authenticated invalidations and committed pending transitions; and execution
 recovery after every browser's Socket.IO rooms have been removed, including
 blocked work, active goals, retained owners, terminal ordering and writer refusal.
 The pure branch DTO and group-cleanup helpers retain the existing behavior tests.
+
+## Human interventions inside an assistant turn
+
+The browser retains one canonical entry per protocol turn. Rendering projects
+that entry into presentation fragments around steering messages and human-input
+or MCP interaction cards. New prose appears below the intervention instead of
+being appended to the original bubble above it.
+
+At an intervention the runtime records item identities and the character offset
+already displayed for assistant prose and reasoning. This also handles further
+deltas of the same native message: every character is rendered once, on its side
+of the boundary. Technical items are not duplicated. These boundaries contain no
+copied document content or answers and do not alter permissions or execution.
+
+Optimistic steering retains its boundary and presentation key when its native
+echo arrives. A rejected optimistic steer removes the boundary and rejoins the
+response. Switching agents and reconciliation preserve observed boundaries.
+A fresh history page derives boundaries from native user-item positions; it does
+not invent timestamps for concurrent tools. Input cards use immutable request
+identity and remain in place after resolution. Requests with no protocol turn
+can anchor to the active turn for presentation without rewriting their RPC scope.
+When a recovered request names an existing tool, that tool anchors the card.
+Where upstream history omits a request's tool and the browser never observed its
+arrival, the precise original split cannot be reconstructed from that history.
+
+Only the final presentation fragment owns turn-level plan/diff, running
+placeholder, unanchored command approvals and token footer. Question cards are
+rendered once as standalone interventions; the item renderer retains a fallback
+for legacy requests with no standalone row. None of the fragments are persisted
+as additional turns or submitted back to the agent.

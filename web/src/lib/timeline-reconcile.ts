@@ -72,11 +72,12 @@ function selectEntry(page: TimelineEntry, live: TimelineEntry): TimelineEntry {
  *
  * @param pageRows - That turn's rows from the fetched page, in page order
  * @param liveRows - That turn's rows already rendered, in live order
- * @returns The turn's rows in presentation order: prompt, response, then failure
+ * @returns Repaired rows preserving the observed position of user steering
  */
 function reconcileTurnRows(
   pageRows: TimelineEntry[],
   liveRows: TimelineEntry[],
+  survivors: Map<TimelineEntry, TimelineEntry>,
 ): TimelineEntry[] {
   const pageByKind = new Map<string, TimelineEntry>();
   for (const row of pageRows)
@@ -104,31 +105,64 @@ function reconcileTurnRows(
         ...row,
         ...(counterpart.itemId && { itemId: counterpart.itemId }),
         ...(counterpart.steering && { steering: true }),
+        ...(!row.responseBoundary &&
+          counterpart.responseBoundary && {
+            responseBoundary: counterpart.responseBoundary,
+          }),
       };
     }
     const counterpart = pageByKind.get(row.kind);
     return counterpart ? selectEntry(counterpart, row) : row;
   });
 
-  // Unlike overlapping command items, these rows have a known presentation
-  // order. A recovered prompt belongs before its response even if the prompt
-  // notification was missed. This does not change item order inside the turn.
-  const extras = [
-    ...remainingUsers,
-    ...pageRows.filter(
-      (row) => row.kind !== 'user' && !liveKinds.has(row.kind),
-    ),
-  ];
-  const rowRank: Record<TimelineEntry['kind'], number> = {
-    user: 0,
-    turn: 1,
-    turnFailure: 2,
-    system: 3,
-    interaction: 3,
-  };
-  return [...merged, ...extras].sort(
-    (a, b) => rowRank[a.kind] - rowRank[b.kind],
+  liveRows.forEach((row, index) => survivors.set(row, merged[index]));
+
+  // Keep the observed position of steering messages. Sorting every user row
+  // ahead of the response rewrites the conversation on every history refresh.
+  // Recovered users are inserted relative to the next known user in the page;
+  // the original prompt alone has a guaranteed position before the response.
+  const result = [...merged];
+  const userIdentity = (a: UserEntry, b: UserEntry) =>
+    a.itemId && b.itemId ? a.itemId === b.itemId : sameUserMessage(a, b);
+  const pageUsers = pageRows.filter(
+    (row): row is UserEntry => row.kind === 'user',
   );
+  for (const user of remainingUsers) {
+    const pageIndex = pageUsers.indexOf(user);
+    const following = pageUsers.slice(pageIndex + 1);
+    let index = result.findIndex(
+      (row) =>
+        row.kind === 'user' &&
+        following.some((candidate) => userIdentity(row, candidate)),
+    );
+    if (!user.steering) {
+      const responseIndex = result.findIndex((row) => row.kind === 'turn');
+      if (responseIndex >= 0 && (index < 0 || responseIndex < index))
+        index = responseIndex;
+    }
+    if (index < 0) {
+      const failureIndex = result.findIndex(
+        (row) => row.kind === 'turnFailure',
+      );
+      index = failureIndex >= 0 ? failureIndex : result.length;
+    }
+    result.splice(index, 0, user);
+  }
+  for (const row of pageRows) {
+    if (row.kind === 'user' || liveKinds.has(row.kind)) continue;
+    // A recovered response follows the initial prompt, while a failure follows
+    // all response content. Never move a known steering row to repair it.
+    const index =
+      row.kind === 'turn'
+        ? result.findIndex(
+            (entry) =>
+              entry.kind === 'turnFailure' ||
+              (entry.kind === 'user' && entry.steering),
+          )
+        : -1;
+    result.splice(index < 0 ? result.length : index, 0, row);
+  }
+  return result;
 }
 
 /**
@@ -149,9 +183,9 @@ export function reconcileTimeline(
   if (page.length === 0) return live;
   if (live.length === 0) return page;
 
-  // Live rows grouped by turn, in first-appearance order. The group is emitted
-  // once, at the position of its first row, so a turn cannot be split apart or
-  // repeated by reconciliation.
+  // Group for identity matching, but retain each live row's position. System
+  // notices and approval interactions may sit between a response and steering;
+  // collapsing the whole turn at its first row would move them out of order.
   const liveGroups = new Map<string, TimelineEntry[]>();
   const liveOrder: Array<{ turnId: string | null; entry: TimelineEntry }> = [];
   for (const entry of live) {
@@ -161,12 +195,9 @@ export function reconcileTimeline(
       continue;
     }
     const group = liveGroups.get(turnId);
-    if (group) {
-      group.push(entry);
-    } else {
-      liveGroups.set(turnId, [entry]);
-      liveOrder.push({ turnId, entry });
-    }
+    if (group) group.push(entry);
+    else liveGroups.set(turnId, [entry]);
+    liveOrder.push({ turnId, entry });
   }
 
   // Page rows grouped the same way, plus the anchor each unknown turn follows.
@@ -201,18 +232,33 @@ export function reconcileTimeline(
   };
 
   const merged: TimelineEntry[] = [];
+  const survivors = new Map<TimelineEntry, TimelineEntry>();
+  const queues = new Map<string, TimelineEntry[]>();
+  for (const [turnId, liveRows] of liveGroups) {
+    const pageRows = pageGroups.get(turnId);
+    queues.set(
+      turnId,
+      pageRows
+        ? reconcileTurnRows(pageRows, liveRows, survivors)
+        : [...liveRows],
+    );
+    if (!pageRows) liveRows.forEach((row) => survivors.set(row, row));
+  }
   emitPageTurns(trailing.get(null), merged);
   for (const { turnId, entry } of liveOrder) {
     if (turnId === null) {
       merged.push(entry);
       continue;
     }
-    const pageRows = pageGroups.get(turnId);
-    const liveRows = liveGroups.get(turnId) ?? [entry];
-    merged.push(
-      ...(pageRows ? reconcileTurnRows(pageRows, liveRows) : liveRows),
-    );
-    emitPageTurns(trailing.get(turnId), merged);
+    const queue = queues.get(turnId)!;
+    const survivor = survivors.get(entry);
+    const index = queue.indexOf(survivor!);
+    if (index >= 0) merged.push(...queue.splice(0, index + 1));
+    const liveRows = liveGroups.get(turnId)!;
+    if (entry === liveRows[liveRows.length - 1]) {
+      merged.push(...queue);
+      emitPageTurns(trailing.get(turnId), merged);
+    }
   }
   return merged;
 }
