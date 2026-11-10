@@ -12,11 +12,14 @@ export const teamFixture = (): AgentTeamDetail => ({
   requests: [],
   attention: [],
   controlsLimited: false,
+  summary: null,
+  deliverableId: null,
   objective: 'Dossier de conception',
   createdAt: 1,
   assignments: [
     {
       id: 'sources',
+      taskId: null,
       role: 'Sources',
       instructions: 'Recenser les documents existants.',
       dependencies: [],
@@ -27,6 +30,7 @@ export const teamFixture = (): AgentTeamDetail => ({
     },
     {
       id: 'requirements',
+      taskId: null,
       role: 'Exigences',
       instructions: 'Analyser les besoins.',
       dependencies: [],
@@ -37,6 +41,7 @@ export const teamFixture = (): AgentTeamDetail => ({
     },
     {
       id: 'review',
+      taskId: null,
       role: 'Vérification',
       instructions: 'Contrôler le dossier rédigé par le coordinateur.',
       dependencies: ['sources', 'requirements'],

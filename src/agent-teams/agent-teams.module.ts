@@ -1,3 +1,7 @@
+import { AgentTeamBusinessService } from './agent-team-business.service';
+import { AgentTeamVisibilityService } from './agent-team-visibility.service';
+import { ProjectsModule } from '../projects/projects.module';
+import { DeliverablesModule } from '../deliverables/deliverables.module';
 import { AgentTeamLaunchService } from './agent-team-launch.service';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
@@ -13,6 +17,8 @@ import { AgentTeamControlsService } from './agent-team-controls.service';
 
 @Module({
   imports: [
+    ProjectsModule,
+    DeliverablesModule,
     DatabaseModule,
     AuthModule,
     CodexModule,
@@ -20,6 +26,8 @@ import { AgentTeamControlsService } from './agent-team-controls.service';
     PendingApprovalsModule,
   ],
   providers: [
+    AgentTeamVisibilityService,
+    AgentTeamBusinessService,
     AgentTeamStore,
     AgentTeamObserver,
     AgentTeamsService,

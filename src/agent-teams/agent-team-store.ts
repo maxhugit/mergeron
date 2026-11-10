@@ -60,10 +60,15 @@ export class AgentTeamStore {
       (team.coordinatorStatus === 'failed' ||
         team.coordinatorStatus === 'interrupted') &&
       team.assignments.every((a) =>
-        ['completed', 'failed', 'cancelled'].includes(a.status),
+        ['planned', 'completed', 'failed', 'cancelled'].includes(a.status),
       )
     )
       this.state(projectId, id, 'failed');
+    else if (
+      team.coordinatorStatus === 'failed' ||
+      team.coordinatorStatus === 'interrupted'
+    )
+      this.state(projectId, id, 'needs_attention', 'TEAM_COORDINATOR_FAILED');
   }
 
   attention(projectId: string, id: string, generation: number) {
@@ -77,6 +82,7 @@ export class AgentTeamStore {
     return this.db
       .select({
         threadId: pendingServerRequests.threadId,
+        turnId: pendingServerRequests.turnId,
         status: pendingServerRequests.status,
         method: pendingServerRequests.method,
       })
@@ -89,6 +95,19 @@ export class AgentTeamStore {
         ),
       )
       .all()
+      .filter((row) => {
+        if (row.threadId === team.coordinatorThreadId)
+          return !!team.nativeTurnId && row.turnId === team.nativeTurnId;
+        const assignment = team.assignments.find(
+          (a) => a.nativeThreadId === row.threadId,
+        );
+        return (
+          !!assignment &&
+          (!assignment.nativeTurnId ||
+            !row.turnId ||
+            assignment.nativeTurnId === row.turnId)
+        );
+      })
       .map((row) => ({
         threadId: row.threadId,
         status: row.status,
@@ -142,17 +161,27 @@ export class AgentTeamStore {
     if (!turnId) return;
     const owner = this.child(childId);
     if (!owner) return;
-    const assignment = this.read(
-      owner.projectId,
-      owner.teamId,
-    ).assignments.find((a) => a.nativeThreadId === childId)!;
-    if (!assignment.nativeTurnId)
+    const team = this.read(owner.projectId, owner.teamId);
+    const assignment = team.assignments.find(
+      (a) => a.nativeThreadId === childId,
+    )!;
+    if (assignment.nativeTurnId === turnId) return;
+    const followup =
+      !!assignment.nativeTurnId &&
+      team.coordinatorStatus === 'inProgress' &&
+      !['stopping', 'stopped'].includes(team.state);
+    if (!assignment.nativeTurnId || followup)
       this.db
         .update(agentTeamAssignments)
-        .set({ nativeTurnId: turnId })
+        .set({
+          nativeTurnId: turnId,
+          ...(followup ? { status: 'running' as const } : {}),
+          updatedAt: Date.now(),
+        })
         .where(eq(agentTeamAssignments.id, assignment.id))
         .run();
   }
+
   parentObservation(
     threadId: string,
     turnId: string,
@@ -198,6 +227,7 @@ export class AgentTeamStore {
         state: agentTeams.state,
         lastError: agentTeams.lastError,
         objective: agentTeams.objective,
+        deliverableId: agentTeams.deliverableId,
         createdAt: agentTeams.createdAt,
       })
       .from(agentTeams)
@@ -216,6 +246,7 @@ export class AgentTeamStore {
         id: agentTeamAssignments.id,
         teamId: agentTeamAssignments.teamId,
         role: agentTeamAssignments.role,
+        taskId: agentTeamAssignments.taskId,
         dependencies: agentTeamAssignments.dependencies,
         nativeThreadId: agentTeamAssignments.nativeThreadId,
         status: agentTeamAssignments.status,
@@ -257,6 +288,7 @@ export class AgentTeamStore {
         projectId: agentTeams.projectId,
         teamId: agentTeams.id,
         coordinatorThreadId: agentTeams.coordinatorThreadId,
+        nativeTurnId: agentTeamAssignments.nativeTurnId,
       })
       .from(agentTeamAssignments)
       .innerJoin(agentTeams, eq(agentTeams.id, agentTeamAssignments.teamId))
@@ -350,6 +382,8 @@ export class AgentTeamStore {
             coordinatorThreadId: parentId,
             nativeTurnId: turnId,
             origin: 'observed',
+            coordinatorStatus: 'inProgress',
+            state: 'running',
             requestId,
             fingerprint: requestId,
             objective: 'Travail délégué par le coordinateur',

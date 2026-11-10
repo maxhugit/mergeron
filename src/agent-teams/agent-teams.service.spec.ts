@@ -1,3 +1,4 @@
+import { AgentTeamVisibilityService } from './agent-team-visibility.service';
 import { describe, expect, it, vi } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import {
@@ -25,6 +26,10 @@ describe('team read authorization', () => {
           throw new ForbiddenException();
         },
       } as unknown as IdentityService,
+      {
+        assert() {},
+        canRead: () => true,
+      } as unknown as AgentTeamVisibilityService,
     );
     expect(() => service.read(actor, 'private', 'team')).toThrow(
       ForbiddenException,
@@ -43,6 +48,10 @@ describe('team read authorization', () => {
           throw new ForbiddenException();
         },
       } as unknown as IdentityService,
+      {
+        assert() {},
+        canRead: () => true,
+      } as unknown as AgentTeamVisibilityService,
     );
     expect(() => service.read(actor, 'p', 'team')).toThrow(ForbiddenException);
   });
@@ -51,6 +60,10 @@ describe('team read authorization', () => {
     const service = new AgentTeamsService(
       { list } as unknown as AgentTeamStore,
       {} as IdentityService,
+      {
+        assert() {},
+        canRead: () => true,
+      } as unknown as AgentTeamVisibilityService,
     );
     expect(() => service.list(actor, 'p', '')).toThrow(
       'TEAM_INVALID_COORDINATOR',

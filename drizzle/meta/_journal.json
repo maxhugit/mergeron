@@ -484,6 +484,13 @@
       "when": 1793696400000,
       "tag": "0068_agent_team_launch",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1793700000000,
+      "tag": "0069_agent_team_contributions",
+      "breakpoints": true
     }
   ]
 }

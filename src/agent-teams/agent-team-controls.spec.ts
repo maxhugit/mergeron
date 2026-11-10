@@ -1,3 +1,4 @@
+import { AgentTeamVisibilityService } from './agent-team-visibility.service';
 import { AgentTeamObserver } from './agent-team-observer.service';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -143,7 +144,10 @@ beforeEach(() => {
   runtime.resumeThread.mockReset();
   pending.readPending.mockReset().mockReturnValue({ requests: [] });
   controls = new AgentTeamControlsService(
-    new AgentTeamsService(store, identities),
+    new AgentTeamsService(store, identities, {
+      assert() {},
+      canRead: () => true,
+    } as unknown as AgentTeamVisibilityService),
     identities,
     history as unknown as ThreadHistoryService,
     runtime as unknown as ThreadsService,
@@ -344,4 +348,27 @@ it('refuses an ambiguous duplicate plan marker instead of choosing a turn', asyn
   const result = await controls.reconcile(actor(), 'p', planned.id);
   expect(result).toMatchObject({ state: 'unknown', nativeTurnId: null });
   expect(runtime.startTurn).not.toHaveBeenCalled();
+});
+it('does not present a newer unrelated coordinator or child approval as this mission’s request', () => {
+  store.bindChildTurn('child', 'child-turn');
+  const correct = {
+    instanceId: 'correct',
+    threadId: 'parent',
+    turnId: 'parent-turn',
+    generation: 1,
+    status: 'pending',
+  };
+  pending.readPending.mockReturnValue({
+    requests: [
+      { ...correct, instanceId: 'different-parent', turnId: 'new-parent-turn' },
+      {
+        ...correct,
+        instanceId: 'different-child',
+        threadId: 'child',
+        turnId: 'new-child-turn',
+      },
+      correct,
+    ],
+  });
+  expect(controls.details(actor(), 'p', teamId).requests).toEqual([correct]);
 });

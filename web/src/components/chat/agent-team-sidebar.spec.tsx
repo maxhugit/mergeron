@@ -4,11 +4,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AgentTeamSidebar } from './agent-team-sidebar';
 import { teamFixture } from '@/test/agent-team.fixture';
 import i18n, { i18nReady } from '@/i18n';
-const api = vi.hoisted(() => ({ list: vi.fn(), read: vi.fn() }));
+const api = vi.hoisted(() => ({
+  list: vi.fn(),
+  read: vi.fn(),
+  context: vi.fn(),
+}));
 vi.mock('@/lib/agent-teams-api', async (original) => ({
   ...(await original<typeof import('@/lib/agent-teams-api')>()),
   listAgentTeams: api.list,
   readAgentTeam: api.read,
+  readTeamContext: api.context,
 }));
 beforeEach(async () => {
   await i18nReady;
@@ -17,6 +22,12 @@ beforeEach(async () => {
     .mockReset()
     .mockResolvedValue({ teams: [teamFixture()], launchAvailable: false });
   api.read.mockReset().mockResolvedValue(teamFixture());
+  api.context.mockReset().mockResolvedValue({
+    boards: [],
+    deliverables: [],
+    tasks: [],
+    truncated: false,
+  });
 });
 afterEach(cleanup);
 function mount(
@@ -84,4 +95,29 @@ it('renders agent-supplied output as text without executable markup', async () =
     await screen.findByText('<img src=x onerror=alert(1)>'),
   ).toBeInTheDocument();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+it('opens an older linked mission directly without falling back to the latest team', async () => {
+  const old = {
+    ...teamFixture(),
+    id: 'old-team',
+    objective: 'Mission ancienne',
+  };
+  old.assignments[0].instructions = 'Consignes de la mission ancienne';
+  api.read.mockImplementation((_project: string, id: string) =>
+    Promise.resolve(id === 'old-team' ? old : teamFixture()),
+  );
+  mount({ initialTeamId: 'old-team' });
+  expect(
+    await screen.findByText('Consignes de la mission ancienne'),
+  ).toBeInTheDocument();
+  expect(api.read).toHaveBeenCalledWith(
+    'p',
+    'old-team',
+    expect.any(AbortSignal),
+  );
+  expect(api.read).not.toHaveBeenCalledWith(
+    'p',
+    'team',
+    expect.any(AbortSignal),
+  );
 });
