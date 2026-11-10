@@ -13,6 +13,7 @@ import {
 } from '@/components/settings/settings-panel';
 import { ProjectPanelNavigation } from './project-panel-navigation';
 import { PreviewLifetimeSelect } from './preview-lifetime-select';
+import { PreviewPrerequisites } from './preview-prerequisites';
 
 interface Settings {
   profile: PreviewProfile;
@@ -24,6 +25,7 @@ interface Settings {
     storage?: PreviewStorageLimits;
   };
   viewer: { enabled: boolean };
+  prerequisites?: { available: boolean; missingConfiguration: string[] };
 }
 export function ProjectPreviewSettings({ projectId }: { projectId: string }) {
   const { t } = useTranslation('previews');
@@ -116,14 +118,16 @@ function Editor({
           <p className="text-sm text-muted-foreground">
             {t('settingsDescription')}
           </p>
-          {(!data.capabilities.enabled || !data.viewer.enabled) && (
-            <p
-              role="status"
-              className="rounded border border-amber-500 p-3 text-sm"
-            >
-              {t('setupRequired')}
-            </p>
-          )}
+          <PreviewPrerequisites
+            reasons={
+              data.prerequisites?.missingConfiguration ?? [
+                ...(!data.capabilities.enabled
+                  ? ['manager_not_configured']
+                  : []),
+                ...(!data.viewer.enabled ? ['viewer_not_ready'] : []),
+              ]
+            }
+          />
           <p className="text-sm">
             {t('domain')}:{' '}
             {data.capabilities.domain
@@ -152,6 +156,11 @@ function Editor({
           {profile.agentManaged && (
             <fieldset className="min-w-0 space-y-2 rounded border p-3">
               <legend className="px-1 text-sm">{t('agentRuntimes')}</legend>
+              {!data.capabilities.runtimes.length && (
+                <p className="text-sm text-muted-foreground">
+                  {t('prerequisiteNoRuntimes')}
+                </p>
+              )}
               {data.capabilities.runtimes.map((runtime) => (
                 <label
                   className="flex items-center gap-2 text-sm"

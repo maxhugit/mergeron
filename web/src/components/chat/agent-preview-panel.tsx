@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import { PreviewStorageMeters } from '../projects/preview-storage-meters';
+import { PreviewPrerequisites } from '../projects/preview-prerequisites';
 import type { AgentPreview } from './agent-preview-dialog';
 
 const ContainerTerminal = lazy(() =>
@@ -67,6 +68,24 @@ export function AgentPreviewPanel({
     !!preview &&
     ['running', 'starting', 'failed', 'stopping'].includes(preview.state);
   const runId = preview?.runId;
+  const prerequisites = useQuery({
+    queryKey: [...key, 'prerequisites'],
+    queryFn: ({ signal }) =>
+      projectsApi<{
+        available: boolean;
+        missingConfiguration: string[];
+        preparation?: { required?: boolean };
+      }>(prefix + '/prerequisites', { signal }),
+    enabled: active,
+    staleTime: 15000,
+    refetchInterval: active ? 15000 : false,
+    refetchIntervalInBackground: false,
+    retry: false,
+  });
+  const launchReady =
+    !prerequisites.isError &&
+    prerequisites.data?.available === true &&
+    prerequisites.data.preparation?.required !== true;
   const containers = useQuery({
     queryKey: [...key, 'containers', runId],
     queryFn: () =>
@@ -226,7 +245,7 @@ export function AgentPreviewPanel({
           <>
             <Button
               size="sm"
-              disabled={busy}
+              disabled={busy || (!running && !launchReady)}
               onClick={() => {
                 if (running && !window.confirm(t('stopConfirm'))) return;
                 setMode('logs');
@@ -249,7 +268,7 @@ export function AgentPreviewPanel({
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || !preview}
+              disabled={busy || !preview || !launchReady}
               onClick={() => {
                 if (window.confirm(t('recreateConfirm'))) {
                   setMode('logs');
@@ -334,11 +353,27 @@ export function AgentPreviewPanel({
           {notice}
         </p>
       )}
+      <div className="max-h-[45%] shrink-0 overflow-y-auto px-3">
+        <PreviewPrerequisites
+          reasons={prerequisites.data?.missingConfiguration ?? []}
+          checking={prerequisites.isPending}
+          failed={prerequisites.isError}
+          recipeRequired={prerequisites.data?.preparation?.required}
+        />
+      </div>
       {!present && !query.isPending && !query.isError ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
           <FlaskConical className="size-6" />
           <h3 className="font-medium text-foreground">{t('emptyTitle')}</h3>
-          <p>{t(session.isAdministrator ? 'emptyHelp' : 'emptyReadOnly')}</p>
+          <p>
+            {t(
+              !launchReady
+                ? 'prerequisitesBlockedHelp'
+                : session.isAdministrator
+                  ? 'emptyHelp'
+                  : 'emptyReadOnly',
+            )}
+          </p>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">

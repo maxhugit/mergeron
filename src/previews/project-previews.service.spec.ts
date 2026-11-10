@@ -475,6 +475,42 @@ describe('project-scoped generic preview service', () => {
     );
   });
 
+  it('reports the same configuration prerequisites in settings and agent discovery without execution', async () => {
+    const f = delegated();
+    f.config.set('MERGERON_PREVIEWS_ENABLED', 'false');
+    f.config.set('MERGERON_PREVIEW_DOMAIN', '');
+    f.request.mockResolvedValue({ enabled: false, runtimes: [] });
+    const settings = await f.run(() => f.service.settings('p'));
+    const discovery = await f.run(() => f.service.discovery('p', 't'));
+    expect(settings.prerequisites).toEqual({
+      available: false,
+      missingConfiguration: discovery.missingConfiguration,
+    });
+    expect(settings.prerequisites.missingConfiguration).toEqual([
+      'server_disabled',
+      'preview_domain_missing',
+      'manager_not_configured',
+      'agent_runtimes_missing',
+    ]);
+    expect(JSON.stringify(settings)).not.toContain(
+      'MANUAL_SECRET_NOT_INHERITED',
+    );
+    expect(
+      f.request.mock.calls.every(([operation]) => operation === 'capabilities'),
+    ).toBe(true);
+  });
+
+  it('keeps an unavailable Manager distinct from a missing runtime in project settings', async () => {
+    const f = delegated();
+    f.request.mockRejectedValue(new Error('PREVIEW_MANAGER_UNAVAILABLE'));
+    const settings = await f.run(() => f.service.settings('p'));
+    expect(settings.prerequisites).toEqual({
+      available: false,
+      missingConfiguration: ['manager_unavailable'],
+    });
+    expect(f.request).toHaveBeenCalledExactlyOnceWith('capabilities');
+  });
+
   it('distinguishes missing configuration from an absent instance without launching', async () => {
     const f = setup();
     const result = await f.run(() => f.service.discovery('p', 't'));

@@ -41,6 +41,7 @@ import contract, {
   type PreviewProfile,
 } from '../../runtime/preview-profile.cjs';
 import { PreviewManagerClient } from './preview-manager-client';
+import { previewConfigurationPrerequisites } from './preview-prerequisites';
 import storage from '../../runtime/preview-storage.cjs';
 import { previewSnapshot, previewSourceFingerprint } from './preview-snapshot';
 import { IdentityService } from '../auth/identity.service';
@@ -574,10 +575,25 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     } catch {
       /* Explicit unavailable status; no fallback execution. */
     }
+    const profile = row ? this.decrypt(row.encryptedProfile, projectId) : null;
+    const { reasons } = previewConfigurationPrerequisites({
+      platformEnabled:
+        this.config.get<string>('MERGERON_PREVIEWS_ENABLED') === 'true',
+      domain: this.config.get<string>('MERGERON_PREVIEW_DOMAIN'),
+      viewerReady: this.gateway?.server.listening === true,
+      capabilities:
+        capabilities.error === 'PREVIEW_MANAGER_UNAVAILABLE'
+          ? null
+          : capabilities,
+      profile,
+      profileConfigured: Boolean(row),
+    });
     return {
-      profile: contract.safeProfile(
-        row ? this.decrypt(row.encryptedProfile, projectId) : {},
-      ),
+      profile: contract.safeProfile(profile ?? {}),
+      prerequisites: {
+        available: reasons.length === 0,
+        missingConfiguration: reasons,
+      },
       revision: row?.revision ?? null,
       capabilities,
       viewer: {
@@ -718,65 +734,26 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     // Recheck the caller and binding after awaiting the Manager. No snapshot
     // from another project or a revoked conversation may enter the next turn.
     const scope = this.scope(projectId, threadId);
-    const reasons: string[] = [];
     const domain = this.config.get<string>('MERGERON_PREVIEW_DOMAIN');
     const platformEnabled =
       this.config.get<string>('MERGERON_PREVIEWS_ENABLED') === 'true';
-    if (!platformEnabled) reasons.push('server_disabled');
-    if (!domain) reasons.push('preview_domain_missing');
-    if (platformEnabled && !this.gateway?.server.listening)
-      reasons.push('viewer_not_ready');
-    if (!capabilities) reasons.push('manager_unavailable');
-    else {
-      if (capabilities.enabled !== true) reasons.push('manager_not_configured');
-      if (domain && capabilities.domain !== domain)
-        reasons.push('preview_domain_mismatch');
-    }
-    const runtimes = new Set(
-      (Array.isArray(capabilities?.runtimes) ? capabilities.runtimes : [])
-        .map((value: unknown) =>
-          value && typeof value === 'object'
-            ? (value as { id?: unknown }).id
-            : undefined,
-        )
-        .filter(
-          (id): id is string =>
-            typeof id === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(id),
-        ),
-    );
     const recipe = this.stored(projectId);
     let profile: PreviewProfile | null = null;
-    if (!recipe) reasons.push('project_profile_missing');
-    else {
+    if (recipe) {
       try {
         profile = this.decrypt(recipe.encryptedProfile, projectId);
       } catch {
-        reasons.push('project_profile_unreadable');
+        /* Report unreadable configuration without exposing its contents. */
       }
     }
-    if (profile) {
-      if (!profile.enabled) reasons.push('project_disabled');
-      if (!profile.agentManaged && !profile.start.trim())
-        reasons.push('start_command_missing');
-      if (
-        profile.agentManaged &&
-        capabilities &&
-        !profile.agentRuntimes.some((id) => runtimes.has(id))
-      )
-        reasons.push('agent_runtimes_missing');
-      if (
-        !profile.agentManaged &&
-        capabilities &&
-        !runtimes.has(profile.runtime)
-      )
-        reasons.push('runtime_not_allowed');
-      if (
-        capabilities &&
-        !profile.agentManaged &&
-        profile.services.some((service) => !runtimes.has(service.runtime))
-      )
-        reasons.push('service_runtime_not_allowed');
-    }
+    const { reasons, runtimes } = previewConfigurationPrerequisites({
+      platformEnabled,
+      domain,
+      viewerReady: this.gateway?.server.listening === true,
+      capabilities,
+      profile,
+      profileConfigured: Boolean(recipe),
+    });
     const source =
       this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
     if (!source) reasons.push('working_directory_missing');
