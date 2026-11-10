@@ -10,6 +10,7 @@ fournisseur SSO particulier n’est imposé.
 **[Ouvrir le sommaire de toute la documentation](docs/README.md)** : guides
 d’utilisation, installation, administration, architecture et références techniques.
 
+- [Dernières améliorations et corrections](docs/dernieres-evolutions.md).
 - [Utiliser Mergeron et son guide intégré](docs/guide-utilisateur.md).
 - [Installer Mergeron](docs/installation.md).
 - [Architecture, relais d’accès web et mises à jour](docs/architecture.md).

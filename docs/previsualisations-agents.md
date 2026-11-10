@@ -61,6 +61,19 @@ démarrer dans une image Linux autorisée, avec un port HTTP principal. Le profi
 du projet définit ses commandes et ses services ; aucun lancement n’est codé
 spécialement pour le dépôt Mergeron.
 
+## Comprendre les prérequis de démarrage
+
+Les paramètres du projet et l’onglet Environnement de test affichent les
+prérequis manquants. Le contrôle distingue l’autorisation du projet de
+l’activation du service global, de la disponibilité/configuration du Manager,
+du domaine d’aperçu, de l’accès de consultation et des runtimes autorisés. Une
+commande de démarrage ou un profil manquant doit aussi être corrigé.
+
+Démarrer reste indisponible si le contrôle ne peut pas être lu ou si un
+prérequis manque. L’arrêt d’une instance déjà existante reste une action
+distincte. Corriger la configuration indiquée ne nécessite pas de désactiver
+TLS, le proxy ou la sandbox.
+
 ## Configurer le domaine et le proxy une seule fois
 
 Dans la zone DNS active de `example.com`, créer un CNAME dont le sous-domaine est
