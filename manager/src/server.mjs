@@ -379,7 +379,10 @@ const server = http.createServer(async (request, response) => {
       const operation = request.url.slice('/v1/previews/'.length),
         body = await readJsonBody(request);
       if (operation === 'capabilities')
-        return json(response, 200, previews.capabilities());
+        return json(response, 200, {
+          ...previews.capabilities(),
+          prerequisites: await previews.prerequisites(),
+        });
       if (
         !ready ||
         installing ||

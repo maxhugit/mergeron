@@ -952,3 +952,41 @@ test('agent deletion purges previous runs and preserves other agents', async () 
     true,
   );
 });
+
+test('deployment preflight diagnoses identity, Docker and missing images without creating resources', async () => {
+  const { manager, docker } = await fixture();
+  assert.deepEqual(await manager.prerequisites(), []);
+  const inspect = docker.inspectContainer.bind(docker);
+  docker.inspectContainer = async (id) => {
+    const c = await inspect(id);
+    if (id === 'stack-ui') return { ...c, Config: { Labels: {} }, Mounts: [] };
+    if (id === 'self') return { ...c, Config: { Labels: {} } };
+    return c;
+  };
+  docker.version = '27.5.0';
+  docker.inspectImage = async () => {
+    throw Object.assign(Error('private registry detail'), { statusCode: 404 });
+  };
+  const reasons = await manager.prerequisites();
+  assert.deepEqual(reasons, [
+    'docker_version_unsupported',
+    'application_identity_invalid',
+    'workspace_mount_invalid',
+    'manager_identity_invalid',
+    'runtime_image_missing',
+  ]);
+  assert.equal(docker.created.length, 0);
+  assert.equal(JSON.stringify(reasons).includes('private registry'), false);
+});
+
+test('default Manager identity uses the scoped canonical name rather than a stale hostname', async () => {
+  const f = await fixture();
+  const manager = new PreviewManager({
+    docker: f.docker,
+    manifest: f.manager.manifest,
+    configuration: f.manager.configuration,
+    env: f.manager.env,
+  });
+  await manager.ready;
+  assert.equal(manager.self, 'stack-manager');
+});

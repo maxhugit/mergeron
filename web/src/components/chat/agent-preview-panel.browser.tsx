@@ -284,6 +284,9 @@ test('missing server prerequisites explain the block without allowing a start', 
     'server_disabled',
     'preview_domain_missing',
     'agent_runtimes_missing',
+    'application_identity_invalid',
+    'manager_identity_invalid',
+    'runtime_image_missing',
   ];
   mount();
   const notice = await screen.findByRole('status', {
@@ -294,6 +297,8 @@ test('missing server prerequisites explain the block without allowing a start', 
   );
   expect(notice).toHaveTextContent('MERGERON_PREVIEW_DOMAIN');
   expect(notice).toHaveTextContent('sélectionner au moins une technologie');
+  expect(notice).toHaveTextContent('labels');
+  expect(notice).toHaveTextContent('disponible localement');
   const start = screen.getByRole('button', { name: 'Démarrer' });
   expect(start).toBeDisabled();
   fireEvent.click(start);

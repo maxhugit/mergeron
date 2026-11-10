@@ -62,6 +62,12 @@ export class ManagerReplacement {
     )
       throw new Error('updateManagerUpgradeRequired');
     const original = specification(inspect, inspect.Image);
+    // A replacement must receive its own generated hostname. Keeping the old
+    // one leaves HOSTNAME pointing at a container that will be removed.
+    original.Hostname = '';
+    original.Env = (original.Env ?? []).filter(
+      (entry) => !entry.startsWith('HOSTNAME='),
+    );
     delete original.NetworkingConfig; // NetworkMode none is authoritative; never attach an endpoint.
     const identity = {
       id: inspect.Id,
