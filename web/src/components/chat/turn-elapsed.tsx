@@ -24,12 +24,12 @@ export function TurnElapsed({
   const seconds = Math.floor(elapsed / 1000);
   const duration = `${Math.floor(seconds / 60)} min ${String(seconds % 60).padStart(2, '0')} s`;
   const label = running
-    ? 'agentElapsedRunning'
+    ? t('inProgress')
     : entry.status === 'failed'
-      ? 'agentElapsedFailed'
+      ? t('agentElapsedFailed')
       : entry.status === 'interrupted'
-        ? 'agentElapsedInterrupted'
-        : 'agentElapsedCompleted';
+        ? t('agentElapsedInterrupted')
+        : t('transferStatusSuccess');
   return (
     <div
       className="flex items-center gap-1.5 text-xs text-muted-foreground"
@@ -37,7 +37,7 @@ export function TurnElapsed({
     >
       <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
       <span>
-        {t(label)} · {duration}
+        {label} · {duration}
       </span>
     </div>
   );

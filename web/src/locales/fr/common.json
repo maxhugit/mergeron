@@ -1682,8 +1682,6 @@
   "projectShortDescription": "Description courte",
   "projectShortDescriptionHint": "Facultative, sur plusieurs lignes · 1 000 caractères maximum.",
   "groupTechnicalActivities": "Regrouper les activités techniques",
-  "agentElapsedRunning": "En cours",
-  "agentElapsedCompleted": "Terminé",
   "agentElapsedInterrupted": "Interrompu",
   "agentElapsedFailed": "En erreur",
   "technicalActivityGroup_one": "Activités techniques · {{count}} opération",
