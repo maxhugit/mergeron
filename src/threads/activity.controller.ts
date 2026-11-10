@@ -22,16 +22,17 @@ export class ActivityController {
   async read(@Req() request: IdentityRequest) {
     // Failed metadata must not prevent reading independent operations/build info.
     const snapshot = await this.metadata.read().catch(() => null);
+    const waitingIds = new Set(
+      this.pending.listPending().map((item) => item.threadId),
+    );
+    // Only current work needs access checks; historical idle conversations do not
+    // turn a permanent status bar into a repeated authorization scan.
     const visible = (snapshot?.entries ?? []).filter(
       ({ thread, archived }) =>
         !archived &&
+        (thread.status.type === 'active' || waitingIds.has(thread.id)) &&
         canReadThread(thread.id) &&
         (!thread.forkedFromId || canReadThread(thread.forkedFromId)),
-    );
-    const waitingIds = new Set(
-      this.pending
-        .listPending(visible.map(({ thread }) => thread.id))
-        .map((item) => item.threadId),
     );
     const agents = visible.flatMap(({ thread }) => {
       const flags =

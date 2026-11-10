@@ -216,3 +216,27 @@ it('reports configured environment and preserves stale metadata explicitly', asy
   expect(result.agents.stale).toBe(true);
   expect(result.installation.environment).toBe('development');
 });
+
+it('does not recheck the entire idle history on every activity read', async () => {
+  metadata.read.mockResolvedValue({
+    entries: [
+      ...Array.from({ length: 1000 }, (_, i) => entry('idle-' + i, 'idle')),
+      entry('working'),
+    ],
+    freshness: { stale: false, refreshedAt: 123 },
+  });
+  pending.listPending.mockReturnValue([{ threadId: 'idle-4' }]);
+  const canReadThread = vi.fn(
+    (identity: unknown, id: string) => Boolean(identity) && id !== 'hidden',
+  );
+  const identities = { canReadThread };
+  const result = await accessContext.run(
+    { identity: person as never, identities: identities as never },
+    () => controller.read(request()),
+  );
+  expect(result.agents).toMatchObject({ running: 1, waiting: 1, total: 2 });
+  expect(canReadThread.mock.calls.map((call) => call[1])).toEqual([
+    'idle-4',
+    'working',
+  ]);
+});
