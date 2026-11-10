@@ -260,10 +260,17 @@ export interface TurnFailure {
   misalignmentExplanation: string | null;
 }
 
+/** Content already displayed when a human intervention interrupts a turn. */
+export interface ResponseBoundary {
+  items: Record<string, number>;
+}
+
 /** A user message, system message, structured failure, or full AI turn. */
 export type TimelineEntry =
   | {
       kind: 'interaction';
+      responseBoundary?: ResponseBoundary;
+      userInput?: boolean;
       requestId: string;
       instanceId: string;
       turnId?: string;
@@ -276,6 +283,7 @@ export type TimelineEntry =
       /** Optimistic submission identity retained until the native echo arrives. */
       localId?: string;
       steering?: boolean;
+      responseBoundary?: ResponseBoundary;
       images?: string[];
       /** Turn this message opened; absent only before `turn/started`. */
       turnId?: string;
@@ -291,6 +299,8 @@ export type TimelineEntry =
   | { kind: 'turnFailure'; turnId: string; failure: TurnFailure }
   | {
       kind: 'turn';
+      /** Presentation-only fragment; never written back into runtime history. */
+      presentation?: { key: string; last: boolean };
       turnId: string;
       items: TurnItem[];
       completed: boolean;

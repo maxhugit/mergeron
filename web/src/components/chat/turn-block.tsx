@@ -79,7 +79,14 @@ function ItemBody({
   // userInputRequests keyed by requestId — find matching entry by itemId.
   const userInputRequest = useTimelineStore((s) => {
     const match = Object.values(s.userInputRequests).filter(
-      (req) => req.turnId === turnId && req.itemId === item.itemId,
+      (req) =>
+        req.turnId === turnId &&
+        req.itemId === item.itemId &&
+        !s.timeline.some(
+          (row) =>
+            row.kind === 'interaction' &&
+            row.instanceId === pendingRequestKey(req),
+        ),
     );
     return match.find((req) => req.status === 'pending') ?? match[0] ?? null;
   });
@@ -253,6 +260,8 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
   const displayMode = useAgentDisplayStore((s) =>
     threadId ? (s.byThread[threadId] ?? 'collapsed') : 'collapsed',
   );
+  const timeline = useTimelineStore((s) => s.timeline);
+  const lastFragment = entry.presentation?.last !== false;
   const userInputRequests = useTimelineStore((s) => s.userInputRequests);
   const activeTurnId = useTimelineStore((s) => s.activeTurnId);
   // Select this turn's approvals, not the whole map: approvals are keyed by
@@ -270,8 +279,24 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
   );
   // Render user-input requests whose itemId doesn't match any existing turn item.
   const itemIds = new Set(entry.items.map((item) => item.itemId));
+  const canonicalTurn = timeline.find(
+    (row) => row.kind === 'turn' && row.turnId === entry.turnId,
+  );
+  const canonicalItemIds = new Set(
+    canonicalTurn?.kind === 'turn'
+      ? canonicalTurn.items.map((item) => item.itemId)
+      : entry.items.map((item) => item.itemId),
+  );
   const unattachedInputs = Object.values(userInputRequests).filter(
-    (req) => req.turnId === entry.turnId && !itemIds.has(req.itemId),
+    (req) =>
+      lastFragment &&
+      req.turnId === entry.turnId &&
+      !canonicalItemIds.has(req.itemId) &&
+      !timeline.some(
+        (row) =>
+          row.kind === 'interaction' &&
+          row.instanceId === pendingRequestKey(req),
+      ),
   );
   // Group this turn's approvals once. One request id can share an itemId with
   // another (zsh-exec-bridge subcommands, stdin callbacks), so an item maps to
@@ -283,7 +308,8 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
   const unattachedApprovals: ApprovalRequest[] = [];
   for (const approval of approvals) {
     if (!itemIds.has(approval.itemId)) {
-      unattachedApprovals.push(approval);
+      if (lastFragment && !canonicalItemIds.has(approval.itemId))
+        unattachedApprovals.push(approval);
       continue;
     }
     const existing = approvalsByItemId.get(approval.itemId);
@@ -347,7 +373,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
   // can arrive incomplete with nothing running — both would spin forever. The
   // active turn is the authoritative signal. Pending request cards are excluded
   // too: the agent is waiting on the user then, not thinking.
-  const isRunning = activeTurnId === entry.turnId;
+  const isRunning = lastFragment && activeTurnId === entry.turnId;
   const showPlaceholder =
     isRunning &&
     displayGroups.length === 0 &&
@@ -427,7 +453,9 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
           </TechnicalDetails>
         )}
 
-        {entry.completed && <TurnTokenFooter turnId={entry.turnId} />}
+        {lastFragment && entry.completed && (
+          <TurnTokenFooter turnId={entry.turnId} />
+        )}
 
         {showPlaceholder && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

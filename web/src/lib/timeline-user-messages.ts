@@ -1,4 +1,5 @@
-import type { TimelineEntry } from '@/types/timeline';
+import { captureResponseBoundary } from './conversation-segments';
+import type { ResponseBoundary, TimelineEntry } from '@/types/timeline';
 import type { NormalizedUserMessage } from './thread-item-normalizer';
 
 export type UserEntry = Extract<TimelineEntry, { kind: 'user' }>;
@@ -15,6 +16,7 @@ export function upsertTimelineUserMessage(
   timeline: TimelineEntry[],
   turnId: string,
   message: NormalizedUserMessage,
+  boundary?: ResponseBoundary,
 ): TimelineEntry[] {
   const incoming: UserEntry = {
     kind: 'user',
@@ -93,7 +95,13 @@ export function upsertTimelineUserMessage(
         : lastTurnIndex >= 0
           ? lastTurnIndex + 1
           : next.length;
-    next.splice(index, 0, { ...incoming, ...(steering && { steering: true }) });
+    next.splice(index, 0, {
+      ...incoming,
+      ...(steering && {
+        steering: true,
+        responseBoundary: boundary ?? captureResponseBoundary(timeline, turnId),
+      }),
+    });
   }
   return next;
 }

@@ -105,6 +105,10 @@ function reconcileTurnRows(
         ...row,
         ...(counterpart.itemId && { itemId: counterpart.itemId }),
         ...(counterpart.steering && { steering: true }),
+        ...(!row.responseBoundary &&
+          counterpart.responseBoundary && {
+            responseBoundary: counterpart.responseBoundary,
+          }),
       };
     }
     const counterpart = pageByKind.get(row.kind);

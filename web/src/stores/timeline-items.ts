@@ -1,5 +1,9 @@
+import { responseBoundary } from '@/lib/conversation-segments';
 /** Conversation timeline items. */
-import { ensureInteractionEntry } from '@/lib/interaction-timeline';
+import {
+  ensureUserInputEntry,
+  ensureInteractionEntry,
+} from '@/lib/interaction-timeline';
 import {
   type TimelineEntry,
   type TurnItem,
@@ -70,7 +74,8 @@ export function ensureRequestTurnEntries(
     timeline,
   );
   return Object.values(userInputs).reduce(
-    (next, request) => ensureTurnEntry(next, request.turnId),
+    (next, request) =>
+      ensureUserInputEntry(ensureTurnEntry(next, request.turnId), request),
     withApprovals,
   );
 }
@@ -151,13 +156,19 @@ export function applyPersistedItems(
     // Page-local ids must not collide with another turn's fallback ids.
     normalizeThreadItem(item, true, `${turnId}:${index}`),
   );
-  const timeline = normalized.reduce(
-    (timeline, item) =>
-      item.kind === 'userMessage'
-        ? upsertTimelineUserMessage(timeline, turnId, item.message)
-        : timeline,
-    runtime.timeline,
-  );
+  let timeline = runtime.timeline;
+  const preceding: TurnItem[] = [];
+  for (const item of normalized) {
+    if (item.kind === 'userMessage') {
+      timeline = upsertTimelineUserMessage(
+        timeline,
+        turnId,
+        item.message,
+        responseBoundary(preceding),
+      );
+    } else if (item.kind === 'render' || item.kind === 'unknown')
+      preceding.push(item.item);
+  }
   return {
     ...runtime,
     timeline: timeline.map((entry) => {
