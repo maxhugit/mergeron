@@ -1,5 +1,36 @@
 import type { PreviewProfile } from '../../runtime/preview-profile.cjs';
 
+/** Public deployment reason codes; unknown or malformed results fail closed. */
+export function previewManagerPrerequisites(
+  capabilities: Record<string, unknown> | null,
+): string[] {
+  // Older Managers omit this additive field. New Managers report only public
+  // reason codes: never expose their Docker errors, paths or environment here.
+  const reasons: string[] = [];
+  const managerReasons = capabilities?.prerequisites;
+  if (managerReasons !== undefined) {
+    const known = new Set([
+      'docker_version_unsupported',
+      'manager_docker_unavailable',
+      'application_identity_invalid',
+      'workspace_mount_invalid',
+      'manager_identity_invalid',
+      'manager_helper_volumes_unsupported',
+      'runtime_image_unsupported',
+      'runtime_image_missing',
+    ]);
+    if (
+      !Array.isArray(managerReasons) ||
+      managerReasons.some(
+        (value: unknown) => typeof value !== 'string' || !known.has(value),
+      )
+    )
+      reasons.push('manager_preflight_failed');
+    else reasons.push(...(managerReasons as string[]));
+  }
+  return reasons;
+}
+
 /** Same read-only prerequisite checks for project settings and agent discovery. */
 export function previewConfigurationPrerequisites(input: {
   platformEnabled: boolean;
@@ -20,6 +51,7 @@ export function previewConfigurationPrerequisites(input: {
     if (domain && capabilities.domain !== domain)
       reasons.push('preview_domain_mismatch');
   }
+  reasons.push(...previewManagerPrerequisites(capabilities));
   const runtimes = new Set(
     (Array.isArray(capabilities?.runtimes) ? capabilities.runtimes : [])
       .map((value: unknown) =>

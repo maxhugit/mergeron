@@ -131,5 +131,14 @@
   "prerequisiteWorkingDirectoryAccessDenied": "Agent: access to its working directory is denied; check its reference and permissions.",
   "prerequisiteRecipeRequired": "Agent: delegation is enabled, but the agent must prepare its recipe using approved technologies before the first start.",
   "prerequisiteNoRuntimes": "No technology is available. An administrator must first declare approved images in the Manager.",
-  "prerequisiteUnknown": "A prerequisite prevents startup. Contact the project administrator."
+  "prerequisiteUnknown": "A prerequisite prevents startup. Contact the project administrator.",
+  "prerequisiteDockerVersion": "Docker Engine 28 or later is required for test environments.",
+  "prerequisiteManagerDocker": "The Manager cannot verify its Docker Engine. Check its access and logs.",
+  "prerequisiteApplicationIdentity": "The Mergeron container lacks its expected managed identity. Ask the installation administrator to check its labels.",
+  "prerequisiteWorkspaceMount": "The workspace mount does not match the Manager’s configured directory. Check mounts without moving data.",
+  "prerequisiteManagerIdentity": "The Manager cannot find a container with its expected identity. Check its name and labels.",
+  "prerequisiteManagerVolumes": "The Manager image declares volumes incompatible with test helpers. Use a compatible Manager image.",
+  "prerequisiteRuntimeImageUnsupported": "An approved test image is not a compatible Linux image. Check the Manager catalog.",
+  "prerequisiteRuntimeImageMissing": "An approved test image is not available locally. The administrator must load the approved digest.",
+  "prerequisiteManagerPreflight": "The Manager preflight did not return a valid result. Check its version and logs."
 }

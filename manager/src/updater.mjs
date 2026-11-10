@@ -335,7 +335,7 @@ export async function probeRestoreParent(root) {
   };
 }
 
-export function specification(inspect, image, component) {
+export function specification(inspect, image, component, managedStack) {
   const endpoints = Object.fromEntries(
     Object.entries(inspect.NetworkSettings.Networks).map(([name, endpoint]) => [
       name,
@@ -347,8 +347,22 @@ export function specification(inspect, image, component) {
       },
     ]),
   );
+  const labels = { ...inspect.Config.Labels };
+  if (managedStack && component?.id) {
+    const expected = {
+      'io.mergeron.managed': 'true',
+      'io.mergeron.stack': managedStack,
+      'io.mergeron.component': component.id,
+    };
+    for (const [key, value] of Object.entries(expected)) {
+      if (labels[key] !== undefined && labels[key] !== value)
+        throw new Error('updateComponentIdentityChanged');
+      labels[key] = value;
+    }
+  }
   return {
     ...inspect.Config,
+    ...(managedStack && { Labels: labels }),
     Image: image,
     HostConfig:
       component?.id === 'browser'
@@ -1469,6 +1483,7 @@ export class TransactionalUpdater {
           inspect,
           imageIds[item.component] ?? previous,
           component,
+          this.manifest.stack,
         );
         target.HostConfig = agentVisualSandbox(target.HostConfig, {
           environment: this.manifest.environment,

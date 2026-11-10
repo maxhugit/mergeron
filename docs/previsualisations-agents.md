@@ -570,3 +570,28 @@ environnement ne peut démarrer pendant la suppression de son agent.
 Cette fonctionnalité nécessite la mise à jour de l’application **et** du Manager.
 Elle ne supprime pas les ressources GitHub publiées ni la configuration de
 prévisualisation commune au projet.
+
+## Contrôle de l’installation avant le lancement
+
+Le Manager expose aussi des prérequis de déploiement en lecture seule : Docker
+28 ou ultérieur, identité gérée de l’application, montage `/workspaces` attendu,
+identité du Manager et disponibilité locale des images Linux autorisées. Ces
+contrôles ne téléchargent aucune image et ne créent aucun conteneur. Leurs raisons
+publiques sont affichées dans le projet et transmises au MCP, sans chemins privés,
+variables d’environnement ni erreurs Docker brutes. Une réponse mal formée bloque
+le démarrage ; les Managers plus anciens sans ce champ restent compatibles.
+
+Une mise à jour d’un composant adopté rétablit ses labels d’identité manquants,
+mais refuse une identité déjà revendiquée par une autre stack. Le remplacement
+du Manager ne conserve pas l’ancien `HOSTNAME` ; les aperçus retrouvent le Manager
+par le nom canonique de leur stack et revérifient son identité. Aucun contrôle de
+labels, de montage ou de sandbox n’est supprimé.
+
+Pour tester le code d’une copie Git, choisir **Sources → menu de la copie →
+Utiliser comme référence de l’agent**. Principal peut contenir les documents du
+projet sans son application : une recette `npm ci` y échoue si le verrou npm n’y
+est pas présent. La copie doit être prête, enregistrée et réservée à cet agent.
+Les copies situées sous `.mergeron-system/sources` restent utilisables à cette
+condition ; les autres dossiers système, les copies révoquées, celles d’un autre
+agent et les métadonnées `.git` restent interdits. Le snapshot garde ses contrôles
+sans suivi de liens et ses exclusions des secrets.
