@@ -72,10 +72,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           .get();
         if (scheduled && scheduled.reason !== 'MONITOR_USER_TAKEOVER') return;
         const status = note.params.turn.status;
-        if (status === 'completed' || status === 'failed')
+        if (status === 'failed')
           this.recordThread(
             note.params.threadId,
-            status === 'completed' ? 'completed' : 'error',
+            'error',
             `turn:${note.params.threadId}:${note.params.turn.id}`,
           );
       }
@@ -138,6 +138,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     );
   }
   recordThread(threadId: string, kind: string, eventKey: string) {
+    if (kind === 'completed') return;
     const thread = this.db
       .select()
       .from(projectAgentThreads)
@@ -180,6 +181,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       .where(
         and(
           eq(inbox.personId, id),
+          sql`${inbox.kind} <> 'completed'`,
           sql`${inbox.createdAt} > ${Date.now() - days * DAY}`,
         ),
       )

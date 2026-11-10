@@ -83,7 +83,7 @@ afterEach(() => {
   db.sqlite.close();
 });
 const who = (id = 'member') => ids.resolvePerson(id);
-it('records completion and attention without any push subscription and deduplicates replayed events', () => {
+it('ignores successful completions and records attention without any push subscription', () => {
   manager.emit('notification', {
     method: 'turn/completed',
     params: { threadId: 't', turn: { id: 'turn1', status: 'completed' } },
@@ -103,7 +103,7 @@ it('records completion and attention without any push subscription and deduplica
       .list(who())
       .items.map((n) => n.kind)
       .sort(),
-  ).toEqual(['completed', 'question']);
+  ).toEqual(['question']);
   expect(service.list(who('outsider')).unread).toBe(0);
 });
 it('rechecks project rights for lists, counts, individual mutations and mark-all', () => {
@@ -125,7 +125,7 @@ it('rechecks project rights for lists, counts, individual mutations and mark-all
   ).toBeNull();
 });
 it('does not allow another person to mark a notification as read', () => {
-  service.recordThread('t', 'completed', 'event');
+  service.recordThread('t', 'approval', 'event');
   const n = service.list(who()).items[0];
   expect(() => service.read(who('admin'), n.id, true)).toThrow();
   service.read(who(), n.id, true);
@@ -135,7 +135,7 @@ it('does not allow another person to mark a notification as read', () => {
   expect(service.list(who()).unread).toBe(1);
 });
 it('keeps retention per person, cleans read and unread records, and never deletes conversations', () => {
-  service.recordThread('t', 'completed', 'event');
+  service.recordThread('t', 'approval', 'event');
   db.db
     .update(inboxNotifications)
     .set({ createdAt: Date.now() - 2 * 86400000 })
@@ -194,4 +194,27 @@ it('records turn failures and does not notify for ephemeral or interrupted turns
     params: { threadId: 't', turn: { id: 'b', status: 'failed' } },
   });
   expect(service.list(who()).items[0].kind).toBe('error');
+});
+
+it('excludes historical completion notifications from lists and unread counts', () => {
+  service.recordThread('t', 'completed', 'ignored');
+  expect(db.db.select().from(inboxNotifications).all()).toHaveLength(0);
+  db.db
+    .insert(inboxNotifications)
+    .values({
+      id: 'legacy-completion',
+      personId: 'member',
+      projectId: 'p',
+      threadId: 't',
+      kind: 'completed',
+      message: '',
+      eventKey: 'legacy',
+      createdAt: Date.now(),
+    })
+    .run();
+  service.recordThread('t', 'approval', 'approval');
+  expect(service.list(who()).items.map((n) => n.kind)).toEqual(['approval']);
+  expect(service.list(who()).unread).toBe(1);
+  expect(service.list(who(), 'unread').items).toHaveLength(1);
+  expect(service.list(who(), 'read').items).toHaveLength(0);
 });

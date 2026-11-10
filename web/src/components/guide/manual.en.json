@@ -200,7 +200,7 @@
             "title": "Open, read and return to an agent",
             "paragraphs": [
               "The bell left of Account opens a right panel. Its header stays fixed while only the list scrolls. The panel remains open when changing agents.",
-              "Events include completed work, failures, approval requests, questions and interface errors. Errors are red. Clicking marks the event read and opens its agent or project."
+              "Events include failures, approval requests, questions and interface errors. Successful work completion does not appear in the notification center. Errors are red. Clicking marks the event read and opens its agent or project."
             ]
           },
           {
