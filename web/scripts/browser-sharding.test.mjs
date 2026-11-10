@@ -7,7 +7,72 @@ import {
   runBrowserTests,
   webkitSpecifications,
   withoutShard,
+  retryableWebkitDisconnect,
 } from './run-browser-tests.mjs';
+
+const disconnected =
+  '[vitest] Browser connection was closed while running tests. Was the page closed unexpectedly?';
+test('only a pure runner disconnect is eligible for a fresh full WebKit attempt', () => {
+  assert.equal(
+    retryableWebkitDisconnect({ status: 1, stderr: disconnected }),
+    true,
+  );
+  for (const failure of [
+    'AssertionError: wrong value',
+    'FAIL browser test',
+    'Tests  1 failed | 4 passed',
+    'Test Files 2 failed',
+    'Test timed out',
+  ])
+    assert.equal(
+      retryableWebkitDisconnect({
+        status: 1,
+        stderr: disconnected + '\n' + failure,
+      }),
+      false,
+    );
+  assert.equal(
+    retryableWebkitDisconnect({
+      status: null,
+      signal: 'SIGTERM',
+      stderr: disconnected,
+    }),
+    false,
+  );
+});
+test('retries only the disconnected isolated specification once and preserves failures and evidence', async () => {
+  for (const lastStatus of [0, 1]) {
+    const calls = [],
+      evidence = [];
+    const status = await runBrowserTests({
+      args: ['--shard=1/2'],
+      discover: async () => ['/web/one.browser.tsx', '/web/two.browser.tsx'],
+      remove() {},
+      log() {},
+      preserveEvidence() {
+        evidence.push('save');
+        return () => evidence.push('restore');
+      },
+      execute(_node, args, options) {
+        calls.push({ args, file: options.env.MERGERON_WEBKIT_SPEC });
+        if (calls.length === 2) return { status: 1, stderr: disconnected };
+        if (calls.length === 3)
+          return { status: lastStatus, stderr: lastStatus ? disconnected : '' };
+        return { status: 0 };
+      },
+    });
+    assert.equal(calls.length, 4);
+    assert.deepEqual(calls[1], calls[2]);
+    assert.equal(calls[2].file, '/web/one.browser.tsx');
+    assert.equal(calls[3].file, '/web/two.browser.tsx');
+    assert.equal(
+      calls[1].args.some((arg) => arg.startsWith('--shard')),
+      false,
+    );
+    assert.deepEqual(evidence, ['save', 'restore']);
+    assert.equal(status, lastStatus);
+  }
+});
 
 // Use the installed Vitest sequencer and actual fixture discovery, without
 // starting a browser. Static YAML checks alone cannot prove shard coverage.

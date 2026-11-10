@@ -32,3 +32,8 @@ document.querySelector('#disconnect').addEventListener('click', async () => {
   });
   status.textContent = 'Instance déconnectée. Tous les partages sont révoqués.';
 });
+// The stored origin and listeners must be ready before the user can type or
+// submit. Module top-level await can finish after the page becomes actionable.
+field.disabled = false;
+document.querySelector('#authorize').disabled = false;
+document.querySelector('#disconnect').disabled = false;
