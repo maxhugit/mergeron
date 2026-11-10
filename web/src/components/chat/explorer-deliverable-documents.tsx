@@ -15,6 +15,7 @@ import { useDocumentOrganization } from '@/lib/document-organization';
 import type { Deliverable, DeliverableDocument } from '@/lib/deliverables-api';
 import { DeliverableDocuments } from '@/components/projects/deliverable-documents';
 import { showSnackbar } from '@/stores/snackbar-store';
+import type { DeliverableGitState } from '@/lib/deliverable-git-state';
 
 /** Registered documents only: no filesystem navigation or general-purpose mutations. */
 export function ExplorerDeliverableDocuments({
@@ -25,8 +26,12 @@ export function ExplorerDeliverableDocuments({
   onFile,
   refresh,
   hideDisplayControl = false,
+  documentState,
+  onSynchronize,
 }: {
   hideDisplayControl?: boolean;
+  documentState?: (document: DeliverableDocument) => DeliverableGitState;
+  onSynchronize?: (document: DeliverableDocument) => void;
   item: Deliverable;
   base: string;
   personId?: string | null;
@@ -37,6 +42,7 @@ export function ExplorerDeliverableDocuments({
   useFileWatch(item.directory);
   const { t } = useTranslation('deliverables');
   const { t: common } = useTranslation();
+  const { t: workspaces } = useTranslation('workspaces');
   const preference = useAgentDocumentView(personId, agentThreadId);
   const organization = useDocumentOrganization(
     preference.mode === 'labels' ? base : undefined,
@@ -52,48 +58,77 @@ export function ExplorerDeliverableDocuments({
   const documents = item.documents.filter(
     (document) => document.deletedAt === null,
   );
-  const row = (document: DeliverableDocument) => (
-    <DeliverableDocuments
-      key={document.id}
-      item={item}
-      base={base}
-      contextDocument={document}
-      disabled={!['draft', 'in_constitution'].includes(item.lifecycleStatus)}
-      refresh={refresh}
-      onAttachToChat={() =>
-        window.dispatchEvent(
-          new CustomEvent('codex-webui:attach-file', {
-            detail: { name: document.name, path: document.sourcePath },
-          }),
-        )
-      }
-      menuLabel={document.name}
-      onError={() => showSnackbar(common('unableToUpdateDocument'), 'error')}
-    >
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-muted"
-        onClick={() => onFile(document.sourcePath)}
-        title={document.name}
+  const row = (document: DeliverableDocument) => {
+    const state = documentState?.(document);
+    const issue =
+      state === 'error'
+        ? 'error'
+        : state === 'pending' || state === 'review'
+          ? 'pending'
+          : null;
+    const hint =
+      state === 'error'
+        ? workspaces('deliverableGitDocumentError')
+        : state === 'review'
+          ? workspaces('deliverableGitDocumentReview')
+          : state === 'pending'
+            ? workspaces('deliverableGitDocumentPending')
+            : undefined;
+    const Version = issue && onSynchronize ? 'button' : 'span';
+    return (
+      <DeliverableDocuments
+        key={document.id}
+        item={item}
+        base={base}
+        contextDocument={document}
+        disabled={!['draft', 'in_constitution'].includes(item.lifecycleStatus)}
+        refresh={refresh}
+        onAttachToChat={() =>
+          window.dispatchEvent(
+            new CustomEvent('codex-webui:attach-file', {
+              detail: { name: document.name, path: document.sourcePath },
+            }),
+          )
+        }
+        menuLabel={document.name}
+        onError={() => showSnackbar(common('unableToUpdateDocument'), 'error')}
       >
-        {/\.html?$/i.test(document.name) ||
-        /^mockup-.*\.zip$/i.test(document.name) ? (
-          <PanelsTopLeft className="h-4 w-4 shrink-0 text-primary" />
-        ) : (
-          <FileText className="h-4 w-4 shrink-0 text-primary" />
-        )}
-        <span className="min-w-0 flex-1 truncate">{document.name}</span>
-        <span
-          className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-muted-foreground"
-          aria-label={common('versionNumber', {
-            number: document.currentVersionNumber,
-          })}
-        >
-          V{document.currentVersionNumber}
-        </span>
-      </button>
-    </DeliverableDocuments>
-  );
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded px-2 text-xs">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded py-2 text-left text-xs hover:bg-muted"
+            onClick={() => onFile(document.sourcePath)}
+            title={document.name}
+          >
+            {/\.html?$/i.test(document.name) ||
+            /^mockup-.*\.zip$/i.test(document.name) ? (
+              <PanelsTopLeft className="h-4 w-4 shrink-0 text-primary" />
+            ) : (
+              <FileText className="h-4 w-4 shrink-0 text-primary" />
+            )}
+            <span className="min-w-0 flex-1 truncate">{document.name}</span>
+          </button>
+          <Version
+            {...(issue && onSynchronize
+              ? {
+                  type: 'button' as const,
+                  onClick: () => onSynchronize(document),
+                }
+              : {})}
+            className={`shrink-0 rounded px-1.5 py-0.5 font-mono ${issue === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200' : issue === 'pending' ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200' : 'bg-muted text-muted-foreground'}`}
+            title={hint}
+            aria-label={
+              common('versionNumber', {
+                number: document.currentVersionNumber,
+              }) + (hint ? ` · ${hint}` : '')
+            }
+          >
+            V{document.currentVersionNumber}
+          </Version>
+        </div>
+      </DeliverableDocuments>
+    );
+  };
   const group = (id: string, name: string, members: DeliverableDocument[]) => (
     <section key={id}>
       <button

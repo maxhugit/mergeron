@@ -6,7 +6,7 @@ import {
 import { useAgentDocumentView } from '@/hooks/use-agent-document-view';
 import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import {
   Package,
   PackagePlus,
@@ -38,6 +38,11 @@ import {
 import { projectsApi, type ProjectSummary } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import { showSnackbar } from '@/stores/snackbar-store';
+const DocumentGitDialog = lazy(() =>
+  import('./document-git-dialog').then((module) => ({
+    default: module.DocumentGitDialog,
+  })),
+);
 
 /** Deliverable inventory with versioned document actions, independent from the file explorer. */
 export function ExplorerDeliverables({
@@ -83,6 +88,12 @@ export function ExplorerDeliverables({
     ),
   );
   const session = usePlatformSession();
+  const repairScope = JSON.stringify([project.id, agentThreadId]);
+  const [repair, setRepair] = useState<{
+    scope: string;
+    documentId: string;
+    name: string;
+  } | null>(null);
   const client = useQueryClient();
   const { t } = useTranslation('deliverables');
   const { t: common } = useTranslation();
@@ -132,6 +143,42 @@ export function ExplorerDeliverables({
     (!(session.data?.personId && agentThreadId) && opened.id === id);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {repair?.scope === repairScope && (
+        <Suspense fallback={null}>
+          <DocumentGitDialog
+            key={`${repairScope}:${sync.selectedId}`}
+            projectId={project.id}
+            documentId={repair.documentId}
+            name={repair.name}
+            options={
+              sync.selectedId && sync.data?.boards[0]?.settings
+                ? {
+                    boardId: sync.data.boards[0].id,
+                    copyId: sync.selectedId,
+                    directory:
+                      sync.copy?.directory ??
+                      sync.data.boards[0].settings.directory,
+                    restrictedIds: sync.data.boards[0].settings.restrictedIds,
+                  }
+                : undefined
+            }
+            onClose={() => setRepair(null)}
+            onFile={(path) => {
+              onFile(path);
+              setRepair(null);
+            }}
+            onDone={() => {
+              setRepair(null);
+              sync.refresh();
+              void client.invalidateQueries({
+                queryKey: ['project-deliverables'],
+              });
+              void client.invalidateQueries({ queryKey: ['deliverables'] });
+              showSnackbar(work('gitDocumentResolved'), 'info');
+            }}
+          />
+        </Suspense>
+      )}
       <DeliverableGitBanner
         sync={sync}
         projectId={project.id}
@@ -370,6 +417,16 @@ export function ExplorerDeliverables({
               {isOpened(item.id) && (
                 <div className="min-w-0 border-t">
                   <ExplorerDeliverableDocuments
+                    onSynchronize={(document) =>
+                      setRepair({
+                        scope: repairScope,
+                        documentId: document.id,
+                        name: document.name,
+                      })
+                    }
+                    documentState={(document) =>
+                      sync.documentState(item.id, document.id, document.name)
+                    }
                     hideDisplayControl
                     item={item}
                     base={`/${project.id}/resources/${board.data!.resource.id}/deliverables`}

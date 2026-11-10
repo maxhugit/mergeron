@@ -196,6 +196,7 @@ function GitDeliverablesConfiguration({
   const [adoptFolders, setAdoptFolders] = useState(false);
   const [renameFolders, setRenameFolders] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [partial, setPartial] = useState(false);
   const options = {
     boardId: board.id,
     copyId,
@@ -209,6 +210,8 @@ function GitDeliverablesConfiguration({
       action: 'preview' | 'apply' | 'disable' | 'configure',
     ) => {
       setSuccess(false);
+      setPartial(false);
+      let hasRemaining = false;
       if (action === 'configure') {
         await post(projectId, '/configure', {
           boardId: board.id,
@@ -221,15 +224,30 @@ function GitDeliverablesConfiguration({
         return;
       } else if (action === 'apply') {
         if (!preview) return;
-        await post(projectId, '/apply', {
-          options,
-          fingerprint: preview.fingerprint,
-        });
+        const result = await post<{ remaining?: Preview['changes'] }>(
+          projectId,
+          '/apply',
+          {
+            options,
+            fingerprint: preview.fingerprint,
+          },
+        );
+        hasRemaining =
+          result?.remaining?.some((change) => change.action !== 'excluded') ===
+          true;
+        setPartial(hasRemaining);
         setRenameFolders(false);
+        if (hasRemaining)
+          setPreview(
+            await post<Preview>(projectId, '/preview', {
+              ...options,
+              renameFolders: false,
+            }),
+          );
       } else if (action === 'disable')
         await post(projectId, `/${encodeURIComponent(board.id)}/disable`, {});
-      setPreview(null);
-      setSuccess(true);
+      if (!hasRemaining) setPreview(null);
+      setSuccess(!hasRemaining);
       await Promise.all([
         client.invalidateQueries({ queryKey: key(projectId) }),
         client.invalidateQueries({ queryKey: projectsQueryKey }),
@@ -241,6 +259,7 @@ function GitDeliverablesConfiguration({
   const dirty = () => {
     setPreview(null);
     setSuccess(false);
+    setPartial(false);
     mutation.reset();
   };
   return (
@@ -365,6 +384,14 @@ function GitDeliverablesConfiguration({
         </p>
       )}
       {success && <p role="status">{t('gitDeliverablesSaved')}</p>}
+      {partial && (
+        <p
+          role="status"
+          className="rounded bg-orange-100 p-2 text-orange-900 dark:bg-orange-950 dark:text-orange-200"
+        >
+          {t('gitDeliverablesPartial')}
+        </p>
+      )}
       {preview && (
         <section
           className="space-y-2 rounded-lg border p-3"
@@ -442,7 +469,11 @@ function GitDeliverablesConfiguration({
             disabled={!preview.canApply || mutation.isPending}
             onClick={() => mutation.mutate('apply')}
           >
-            {t('gitDeliverablesConfirm')}
+            {t(
+              preview.changes.some((change) => change.action === 'conflict')
+                ? 'gitDeliverablesConfirmClean'
+                : 'gitDeliverablesConfirm',
+            )}
           </Button>
         )}
       </div>

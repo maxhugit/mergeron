@@ -8,14 +8,19 @@ import { GitDeliverablesDiscovery } from './git-deliverables-discovery';
 let fixture: ReturnType<typeof catalogFixture>;
 let writes: { url: string; body: Record<string, unknown> }[];
 let conflict: boolean;
+let partial: boolean;
+let applied: boolean;
 beforeEach(() => {
   fixture = catalogFixture();
   writes = [];
   conflict = false;
+  partial = false;
+  applied = false;
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
       if (init?.method === 'POST') {
+        if (url.endsWith('/apply')) applied = true;
         writes.push({
           url,
           body: JSON.parse(
@@ -27,7 +32,7 @@ beforeEach(() => {
             url.endsWith('/preview')
               ? {
                   fingerprint: 'reviewed-plan',
-                  canApply: !conflict,
+                  canApply: !conflict || (partial && !applied),
                   changes: [
                     {
                       deliverable: 'Cadrage',
@@ -39,7 +44,21 @@ beforeEach(() => {
                     },
                   ],
                 }
-              : { enabled: true },
+              : {
+                  enabled: true,
+                  ...(partial
+                    ? {
+                        remaining: [
+                          {
+                            deliverable: 'Cadrage',
+                            document: 'notes.md',
+                            action: 'conflict',
+                            reason: 'document_changed_both',
+                          },
+                        ],
+                      }
+                    : {}),
+                },
           ),
         );
       }
@@ -242,7 +261,7 @@ it('requires explicit opt-in and review, excludes restricted content and cancels
     ),
   );
 });
-it('does not allow applying a conflict', async () => {
+it('does not allow applying only conflicting documents', async () => {
   conflict = true;
   const user = userEvent.setup();
   fixture.render(
@@ -251,9 +270,38 @@ it('does not allow applying a conflict', async () => {
   await user.click(await screen.findByRole('switch'));
   await user.click(screen.getByRole('button', { name: 'Preview changes' }));
   expect(
-    await screen.findByRole('button', { name: 'Confirm and synchronize' }),
+    await screen.findByRole('button', {
+      name: 'Apply documents without conflicts',
+    }),
   ).toBeDisabled();
   expect(writes).toHaveLength(1);
+});
+it('applies safe documents while keeping remaining conflicts visible instead of reporting full success', async () => {
+  conflict = true;
+  partial = true;
+  const user = userEvent.setup();
+  fixture.render(
+    <GitDeliverablesSettings projectId="p" preferredCopyId="copy" />,
+  );
+  await user.click(await screen.findByRole('switch'));
+  await user.click(screen.getByRole('button', { name: 'Preview changes' }));
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Apply documents without conflicts',
+    }),
+  );
+  expect(
+    await screen.findByText(
+      'Documents without conflicts were synchronized. The remaining differences are listed below for review; no automatic overwrite.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByText('Cadrage / notes.md')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Apply documents without conflicts' }),
+  ).toBeDisabled();
+  expect(writes.filter((write) => write.url.endsWith('/apply'))).toHaveLength(
+    1,
+  );
 });
 it('recognizes a repository automatically without sending an import until requested', async () => {
   const user = userEvent.setup();

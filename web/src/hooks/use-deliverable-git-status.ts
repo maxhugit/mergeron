@@ -3,7 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/projects-api';
 import { key, url, type Status } from '@/lib/git-deliverables-api';
 import { useGitCopyLiveUpdates } from './use-git-copy-live-updates';
-import { deliverableGitState } from '@/lib/deliverable-git-state';
+import {
+  deliverableGitState,
+  documentGitState,
+} from '@/lib/deliverable-git-state';
 
 export function useDeliverableGitStatus(
   projectId: string,
@@ -94,6 +97,16 @@ export function useDeliverableGitStatus(
     checking,
     state: (itemId?: string) =>
       deliverableGitState(data, selectedId, itemId, checking, failed),
+    documentState: (itemId: string, documentId: string, name: string) =>
+      documentGitState(
+        data,
+        selectedId,
+        itemId,
+        documentId,
+        name,
+        checking,
+        failed,
+      ),
     refresh: () => {
       void summary.refetch();
       if (selectedId && enabled) void detail.refetch();

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { deliverableGitState } from './deliverable-git-state';
+import { deliverableGitState, documentGitState } from './deliverable-git-state';
 import type { Status } from './git-deliverables-api';
 function data(): Status {
   return {
@@ -38,6 +38,66 @@ function data(): Status {
     },
   };
 }
+it('isolates version states by document and never inherits a sibling conflict or copy pending flag', () => {
+  const value = data();
+  value.copies[0].pending = true;
+  value.copies[0].lastError = 'GIT_DELIVERABLES_REVIEW_REQUIRED';
+  value.proposal!.changes = [
+    {
+      deliverable: 'Cadrage',
+      deliverableId: 'a',
+      action: 'conflict',
+      reason: 'metadata_baseline_missing',
+    },
+    {
+      deliverable: 'Cadrage',
+      deliverableId: 'a',
+      document: 'one.md',
+      documentId: 'one',
+      action: 'conflict',
+      reason: 'document_changed_both',
+    },
+    {
+      deliverable: 'Cadrage',
+      deliverableId: 'a',
+      document: 'two.md',
+      documentId: 'two',
+      action: 'export',
+      reason: 'new_document',
+    },
+    {
+      deliverable: 'Other',
+      deliverableId: 'b',
+      document: 'three.md',
+      documentId: 'other',
+      action: 'conflict',
+      reason: 'document_changed_both',
+    },
+  ];
+  expect(documentGitState(value, 'copy', 'a', 'one', 'one.md')).toBe('error');
+  expect(documentGitState(value, 'copy', 'a', 'two', 'two.md')).toBe('pending');
+  expect(documentGitState(value, 'copy', 'a', 'three', 'three.md')).toBe(
+    'ready',
+  );
+  value.proposal!.changes.push({
+    deliverable: 'Cadrage',
+    deliverableId: 'a',
+    document: 'four.md',
+    documentId: 'four',
+    action: 'import',
+    reason: 'document',
+  });
+  expect(documentGitState(value, 'copy', 'a', 'four', 'four.md')).toBe(
+    'review',
+  );
+  expect(
+    documentGitState(value, 'copy', 'a', 'two', 'two.md', false, true),
+  ).toBe('error');
+  value.copies[0].context!.head = 'changed';
+  expect(documentGitState(value, 'copy', 'a', 'three', 'three.md')).toBe(
+    'pending',
+  );
+});
 it('never treats a timestamp, stale context, active verification or failed refresh as current proof', () => {
   const value = data();
   expect(deliverableGitState(value, 'copy')).toBe('ready');

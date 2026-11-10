@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { Logger } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import {
   createTestDatabase,
   type TestDatabase,
@@ -172,6 +173,346 @@ describe('Mergeron-first Git projection policy', () => {
     await service.apply('p', { options, fingerprint: preview.fingerprint });
     return preview;
   }
+  async function namedDocument(id: string, name: string, text: string) {
+    async function* data() {
+      await Promise.resolve();
+      yield { filename: name, stream: Readable.from(text) };
+    }
+    await deliverables.uploadDocuments('p', 'board', id, data(), {});
+    return deliverables
+      .documents('p', 'board', id)
+      .find((document) => document.name === name)!;
+  }
+  it.each(['mergeron', 'git'] as const)(
+    'resolves only the confirmed document toward %s and preserves the replaced content',
+    async (direction) => {
+      const item = await deliverables.create('p', 'board', {
+        title: 'Resolve one',
+      });
+      const doc = await upload(item.id, 'common');
+      await sync();
+      await upload(item.id, 'Mergeron chosen', doc.id);
+      const folder = path.join(
+        repo,
+        'livrables',
+        readableDeliverableFolder(item.title),
+      );
+      const target = path.join(folder, 'notes.md');
+      await fs.writeFile(target, 'Git chosen');
+      await namedDocument(
+        item.id,
+        'unrelated.md',
+        'not part of this correction',
+      );
+      const preview = await service.previewDocument('p', {
+        options,
+        documentId: doc.id,
+      });
+      expect(preview.actions).toEqual(['mergeron', 'git']);
+      expect(preview.mergeron.sha256).not.toBe(preview.git.sha256);
+      await expect(
+        service.apply('p', {
+          options,
+          fingerprint: preview.fingerprint,
+          resolution: { documentId: doc.id, direction },
+        }),
+      ).rejects.toThrow();
+      const result = await service.apply('p', {
+        options,
+        fingerprint: preview.fingerprint,
+        resolution: {
+          documentId: doc.id,
+          direction,
+          confirmation: 'CONFIRM_DOCUMENT_RESOLUTION',
+        },
+      });
+      const current = deliverables
+        .documents('p', 'board', item.id)
+        .find((candidate) => candidate.id === doc.id)!;
+      const chosen =
+        direction === 'mergeron' ? 'Mergeron chosen' : 'Git chosen';
+      expect(await fs.readFile(target, 'utf8')).toBe(chosen);
+      expect(await fs.readFile(current.sourcePath, 'utf8')).toBe(chosen);
+      await expect(
+        fs.stat(path.join(folder, 'unrelated.md')),
+      ).rejects.toThrow();
+      expect(result.remaining).toContainEqual(
+        expect.objectContaining({ action: 'export', document: 'unrelated.md' }),
+      );
+      if (direction === 'mergeron') {
+        const recovery = path.join(
+          repo,
+          '.git',
+          'mergeron-deliverable-recovery',
+        );
+        const files = await fs.readdir(recovery);
+        const retained = files.find((file) => !file.endsWith('.json'))!;
+        expect(await fs.readFile(path.join(recovery, retained), 'utf8')).toBe(
+          'Git chosen',
+        );
+      } else {
+        expect(current.currentVersionNumber).toBe(3);
+        expect(
+          await fs.readFile(
+            current.versions.find((version) => version.number === 2)!
+              .snapshotPath,
+            'utf8',
+          ),
+        ).toBe('Mergeron chosen');
+      }
+      await expect(
+        service.apply('p', {
+          options,
+          fingerprint: preview.fingerprint,
+          resolution: {
+            documentId: doc.id,
+            direction,
+            confirmation: 'CONFIRM_DOCUMENT_RESOLUTION',
+          },
+        }),
+      ).rejects.toThrow('GIT_DELIVERABLES_CHANGED');
+    },
+  );
+  it('refuses a stale comparison, an unrelated document or an ignored path for document correction', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Protection',
+    });
+    const doc = await upload(item.id, 'common');
+    await sync();
+    await expect(
+      service.previewDocument('p', { options, documentId: 'unknown' }),
+    ).rejects.toThrow('GIT_DELIVERABLES_DOCUMENT_UNAVAILABLE');
+    const preview = await service.previewDocument('p', {
+      options,
+      documentId: doc.id,
+    });
+    const target = path.join(repo, 'livrables', 'protection', 'notes.md');
+    await fs.writeFile(target, 'late edit');
+    await expect(
+      service.apply('p', {
+        options,
+        fingerprint: preview.fingerprint,
+        resolution: {
+          documentId: doc.id,
+          direction: 'mergeron',
+          confirmation: 'CONFIRM_DOCUMENT_RESOLUTION',
+        },
+      }),
+    ).rejects.toThrow('GIT_DELIVERABLES_CHANGED');
+    await fs.writeFile(
+      path.join(repo, '.gitignore'),
+      'livrables/protection/notes.md\n',
+    );
+    const blocked = await service.previewDocument('p', {
+      options,
+      documentId: doc.id,
+    });
+    expect(blocked.actions).toEqual([]);
+    await expect(
+      service.apply('p', {
+        options,
+        fingerprint: blocked.fingerprint,
+        resolution: {
+          documentId: doc.id,
+          direction: 'mergeron',
+          confirmation: 'CONFIRM_DOCUMENT_RESOLUTION',
+        },
+      }),
+    ).rejects.toThrow('GIT_DELIVERABLES_RESOLUTION_UNAVAILABLE');
+    expect(await fs.readFile(target, 'utf8')).toBe('late edit');
+  });
+  it('explicitly imports a safe document without resolving or overwriting its conflicting sibling', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Independent imports',
+    });
+    const blocked = await upload(item.id, 'common first');
+    const incoming = await namedDocument(
+      item.id,
+      'incoming.md',
+      'common incoming',
+    );
+    await sync();
+    await upload(item.id, 'local first', blocked.id);
+    const folder = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+    );
+    await fs.writeFile(path.join(folder, 'notes.md'), 'conflicting Git first');
+    await fs.writeFile(path.join(folder, 'incoming.md'), 'new Git incoming');
+    const plan = await service.preview('p', options);
+    expect(plan.canApply).toBe(true);
+    const result = await service.apply('p', {
+      options,
+      fingerprint: plan.fingerprint,
+    });
+    const documents = deliverables.documents('p', 'board', item.id);
+    const imported = documents.find((doc) => doc.id === incoming.id)!;
+    expect(imported.currentVersionNumber).toBe(2);
+    expect(await fs.readFile(imported.sourcePath, 'utf8')).toBe(
+      'new Git incoming',
+    );
+    expect(
+      await fs.readFile(
+        documents.find((doc) => doc.id === blocked.id)!.sourcePath,
+        'utf8',
+      ),
+    ).toBe('local first');
+    expect(await fs.readFile(path.join(folder, 'notes.md'), 'utf8')).toBe(
+      'conflicting Git first',
+    );
+    expect(result.remaining).toContainEqual(
+      expect.objectContaining({ action: 'conflict', document: 'notes.md' }),
+    );
+    expect(result.changes).toContainEqual(
+      expect.objectContaining({ action: 'import', document: 'incoming.md' }),
+    );
+    expect(result.changes.some((change) => change.action === 'conflict')).toBe(
+      false,
+    );
+  });
+  it('automatically exports clean sibling documents and other deliverables while preserving a conflicting document', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Cadrage' });
+    const blocked = await upload(item.id, 'common');
+    await sync();
+    await upload(item.id, 'Mergeron changed', blocked.id);
+    const folder = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+    );
+    await fs.writeFile(path.join(folder, 'notes.md'), 'Git changed');
+    const clean = await namedDocument(
+      item.id,
+      'new.md',
+      'independent document',
+    );
+    const other = await deliverables.create('p', 'board', {
+      title: 'Maquette',
+    });
+    await upload(other.id, 'independent mockup');
+    service.onModuleInit();
+    service.reconcile('p');
+    await vi.waitFor(
+      async () => {
+        expect(await fs.readFile(path.join(folder, 'new.md'), 'utf8')).toBe(
+          'independent document',
+        );
+        expect(
+          await fs.readFile(
+            path.join(repo, 'livrables', 'maquette', 'notes.md'),
+            'utf8',
+          ),
+        ).toBe('independent mockup');
+        expect((await service.status('p', 'copy')).active).toBe(false);
+      },
+      { timeout: 5000, interval: 50 },
+    );
+    expect(await fs.readFile(path.join(folder, 'notes.md'), 'utf8')).toBe(
+      'Git changed',
+    );
+    const remaining = await service.preview('p', options);
+    expect(remaining.changes).toContainEqual(
+      expect.objectContaining({ action: 'conflict', document: 'notes.md' }),
+    );
+    expect(
+      remaining.changes.some((change) => change.documentId === clean.id),
+    ).toBe(false);
+    expect(
+      remaining.changes.some((change) => change.deliverableId === other.id),
+    ).toBe(false);
+    expect((await service.status('p', 'copy')).copies[0].lastError).toBe(
+      'GIT_DELIVERABLES_REVIEW_REQUIRED',
+    );
+  });
+  it('exports new documents without adopting unverified deliverable metadata or overwriting an untracked collision', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Unknown baseline',
+    });
+    await upload(item.id, 'identical content');
+    await sync();
+    const folder = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+    );
+    const metadataPath = path.join(folder, 'livrable.json');
+    const original = JSON.parse(await fs.readFile(metadataPath, 'utf8')) as {
+      description: string;
+    };
+    original.description = 'Unreviewed Git description';
+    await fs.writeFile(metadataPath, JSON.stringify(original));
+    const row = database.db
+      .select()
+      .from(schema.projectResources)
+      .where(eq(schema.projectResources.id, 'board'))
+      .get()!;
+    const config = structuredClone(row.config);
+    const settings = config.gitDeliverables as {
+      copies: Record<
+        string,
+        { bindings: Record<string, unknown>; branches?: unknown }
+      >;
+    };
+    settings.copies.copy.bindings = {};
+    delete settings.copies.copy.branches;
+    database.db
+      .update(schema.projectResources)
+      .set({ config })
+      .where(eq(schema.projectResources.id, 'board'))
+      .run();
+    const safe = await namedDocument(item.id, 'safe.md', 'safe content');
+    const collision = await namedDocument(
+      item.id,
+      'collision.md',
+      'local collision',
+    );
+    await namedDocument(item.id, 'ignored.md', 'never export ignored content');
+    await fs.writeFile(
+      path.join(repo, '.gitignore'),
+      'livrables/unknown-baseline/ignored.md\n',
+    );
+    await fs.writeFile(
+      path.join(folder, 'collision.md'),
+      'untracked Git content',
+    );
+    const plan = await service.preview('p', options);
+    expect(plan.changes).toContainEqual(
+      expect.objectContaining({
+        action: 'conflict',
+        reason: 'metadata_baseline_missing',
+      }),
+    );
+    expect(plan.changes).toContainEqual(
+      expect.objectContaining({ action: 'conflict', documentId: collision.id }),
+    );
+    await service.apply('p', { options, fingerprint: plan.fingerprint }, true);
+    expect(await fs.readFile(path.join(folder, 'safe.md'), 'utf8')).toBe(
+      'safe content',
+    );
+    expect(await fs.readFile(path.join(folder, 'collision.md'), 'utf8')).toBe(
+      'untracked Git content',
+    );
+    await expect(fs.stat(path.join(folder, 'ignored.md'))).rejects.toThrow();
+    const manifest = JSON.parse(await fs.readFile(metadataPath, 'utf8')) as {
+      description: string;
+      documents: { path: string }[];
+    };
+    expect(manifest.description).toBe('Unreviewed Git description');
+    expect(manifest.documents.map((document) => document.path)).toContain(
+      'safe.md',
+    );
+    expect(manifest.documents.map((document) => document.path)).not.toContain(
+      'collision.md',
+    );
+    const remaining = await service.preview('p', options);
+    expect(
+      remaining.changes.some((change) => change.documentId === safe.id),
+    ).toBe(false);
+    expect(remaining.changes).toContainEqual(
+      expect.objectContaining({ action: 'conflict', documentId: collision.id }),
+    );
+  });
   it('exports a Mergeron change when Git is still the common version', async () => {
     const item = await deliverables.create('p', 'board', { title: 'Outgoing' });
     const doc = await upload(item.id, 'common v1');

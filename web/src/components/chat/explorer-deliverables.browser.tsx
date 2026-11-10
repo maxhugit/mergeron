@@ -16,8 +16,29 @@ import '@/index.css';
 vi.mock('@/hooks/use-deliverable-git-status', () => ({
   useDeliverableGitStatus: () => ({
     copies: [],
+    selectedId: 'copy',
+    copy: {
+      id: 'copy',
+      name: 'Test copy',
+      directory: 'livrables',
+      context: { branch: 'refs/heads/main', head: 'sha' },
+    },
+    data: {
+      boards: [
+        {
+          id: 'board',
+          settings: {
+            enabled: true,
+            directory: 'livrables',
+            restrictedIds: [],
+          },
+        },
+      ],
+    },
     checking: false,
     state: () => 'off',
+    documentState: (_item: string, id: string) =>
+      id === 'conflict' ? 'error' : id === 'pending' ? 'pending' : 'ready',
     refresh: () => {},
     select: () => {},
   }),
@@ -127,6 +148,128 @@ afterEach(() => {
   cleanup();
   document.documentElement.classList.remove('dark');
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+test('colors only the affected document versions, with explanatory tooltips on mobile and desktop', async () => {
+  const original = item.documents;
+  item.documents = [
+    original[0],
+    ...['conflict', 'pending'].map((id) => ({
+      ...original[0],
+      id,
+      name:
+        id === 'conflict' ? 'Document en conflit.md' : 'Document à exporter.md',
+      currentVersionNumber: 2,
+    })),
+  ];
+  try {
+    const corrections: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith('/document-preview'))
+          return new Response(
+            JSON.stringify({
+              fingerprint: 'reviewed',
+              version: 2,
+              context: { branch: 'refs/heads/main', head: 'sha' },
+              mergeron: {
+                path: '/retained/conflict.md',
+                sha256: 'a'.repeat(64),
+                size: 10,
+              },
+              git: {
+                path: '/copy/conflict.md',
+                exists: true,
+                sha256: 'b'.repeat(64),
+                size: 12,
+              },
+              actions: ['mergeron', 'git'],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        if (url.endsWith('/apply'))
+          corrections.push(JSON.parse(String(init?.body)));
+        return new Response('{}', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }),
+    );
+    for (const width of [390, 1180]) {
+      await page.viewport(width, 820);
+      const view = render(
+        <QueryClientProvider client={new QueryClient()}>
+          <div
+            className="bg-background text-foreground"
+            style={{ width: 'min(100%, 400px)', padding: 8 }}
+          >
+            <ExplorerDeliverables
+              project={
+                {
+                  id: 'p',
+                  resources: [],
+                  workspaces: [],
+                } as unknown as ProjectSummary
+              }
+              agentThreadId="agent"
+              onFile={() => {}}
+              pending={false}
+            />
+          </div>
+        </QueryClientProvider>,
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: /^Dossier de conception/ }),
+      );
+      expect(
+        screen.getByLabelText(
+          /Version 2 · Synchronisation de ce document bloquée/,
+        ),
+      ).toHaveClass('bg-red-100');
+      expect(
+        screen.getByLabelText(/Version 2 · Export de ce document en attente/),
+      ).toHaveClass('bg-orange-100');
+      expect(screen.getByLabelText('Version 7')).toHaveClass('bg-muted');
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+        document.documentElement.clientWidth,
+      );
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/document-sync-colors-${width}.png`,
+      });
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /Version 2 · Synchronisation de ce document bloquée/,
+        }),
+      );
+      expect(
+        await screen.findByRole('dialog', {
+          name: 'Synchronisation du document',
+        }),
+      ).toBeVisible();
+      expect(
+        screen.getByText('Document en conflit.md', { selector: 'p' }),
+      ).toBeVisible();
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/document-sync-dialog-${width}.png`,
+      });
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Conserver la version Mergeron' }),
+      );
+      expect(corrections).toHaveLength(width === 390 ? 0 : 1);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Confirmer la correction' }),
+      );
+      await vi.waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', { name: 'Synchronisation du document' }),
+        ).toBeNull(),
+      );
+      view.unmount();
+    }
+  } finally {
+    item.documents = original;
+  }
 });
 test.each([390, 1180])(
   'lists versioned documents without filesystem navigation at %ipx',

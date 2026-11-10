@@ -48,6 +48,7 @@ import {
   relativeGitDirectory,
   writeGitFile,
   removeGitFile,
+  retainGitFile,
   type GitDeliverableManifest,
 } from '../deliverables/git-deliverables-format';
 import { WorkspaceGitService } from './workspace-git.service';
@@ -100,6 +101,7 @@ type Change = {
   deliverable: string;
   deliverableId?: string;
   document?: string;
+  documentId?: string;
   action: 'import' | 'export' | 'conflict' | 'excluded' | 'rename';
   reason: string;
 };
@@ -961,11 +963,14 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         action: Change['action'],
         reason: string,
         document?: string,
+        documentId?: string,
       ) =>
         changes.push({
           deliverable: title,
           deliverableId: l?.item.id,
           document,
+          documentId:
+            documentId ?? l?.documents.find((d) => d.name === document)?.id,
           action,
           reason,
         });
@@ -986,11 +991,20 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           const latest = doc.versions.find(
             (v) => v.number === doc.currentVersionNumber,
           );
-          if (!latest || latest.size > largeGitDocument)
+          if (!latest || latest.size > largeGitDocument) {
             add('conflict', 'large_file_requires_lfs', doc.name);
+            continue;
+          }
           const existing = await read(`${folders.get(id)!}/${doc.name}`);
-          if (existing.hash && existing.hash !== latest?.sha256)
+          if (existing.hash && existing.hash !== latest.sha256) {
             add('conflict', 'untracked_file_collision', doc.name);
+            continue;
+          }
+          add('export', 'new_document', doc.name, doc.id);
+          const entry = l.manifest.documents.find(
+            (entry) => entry.path === doc.name,
+          )!;
+          documentActions.set(JSON.stringify([id, entry.id]), 'export');
         }
         continue;
       }
@@ -1092,6 +1106,37 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
         const localHash = latest?.sha256;
+        if (d && rd && ld && ld.path !== rd.path) {
+          const metadataChange = changes.find(
+            (change) =>
+              change.deliverableId === l?.item.id &&
+              !change.document &&
+              [
+                'metadata',
+                'known_older_metadata',
+                'metadata_baseline_missing',
+                'metadata_changed_both',
+              ].includes(change.reason),
+          );
+          add(
+            metadataChange?.action === 'import'
+              ? 'import'
+              : metadataChange?.action === 'export'
+                ? 'export'
+                : 'conflict',
+            'document_path_changed',
+            ld.path,
+            d.id,
+          );
+          if (metadataChange?.action === 'conflict') continue;
+        }
+        if (!rd && d && ld) {
+          const occupied = await read(`${r.folder}/${ld.path}`);
+          if (occupied.hash && occupied.hash !== localHash) {
+            add('conflict', 'untracked_file_collision', ld.path, d.id);
+            continue;
+          }
+        }
         if (remoteFile?.hash === localHash && localHash) continue;
         const knownOlder = d?.versions.some(
           (v) =>
@@ -1155,12 +1200,22 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         Buffer.from(targets.join('\0') + '\0'),
       );
       evidence.push(['ignored', ignored]);
-      if (ignored)
+      for (const ignoredPath of ignored.split('\0').filter(Boolean)) {
+        const owner = [...local.entries()].find(([id]) =>
+          ignoredPath.startsWith(folders.get(id)! + '/'),
+        );
+        const document = owner?.[1].documents.find(
+          (doc) => ignoredPath === `${folders.get(owner[0])}/${doc.name}`,
+        );
         changes.push({
-          deliverable: options.directory,
+          deliverable: owner?.[1].manifest.title ?? options.directory,
+          deliverableId: owner?.[1].item.id,
+          document: document?.name,
+          documentId: document?.id,
           action: 'conflict',
           reason: 'ignored_by_git',
         });
+      }
     }
     await this.assertGitContext(root, context);
     for (const entry of local.values())
@@ -1222,12 +1277,167 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       })),
       copyId: plan.options.copyId,
       context: plan.context,
-      canApply: !plan.changes.some((c) => c.action === 'conflict'),
+      canApply:
+        !plan.changes.some((c) => c.action === 'conflict') ||
+        this.actionableDocuments(plan).size > 0,
     };
   }
-  async apply(p: string, body: { options?: unknown; fingerprint?: unknown }) {
+  private documentTarget(
+    plan: Awaited<ReturnType<GitDeliverablesService['build']>>,
+    documentId: string,
+  ) {
+    for (const [id, local] of plan.local) {
+      const document = local.documents.find(
+        (document) => document.id === documentId,
+      );
+      if (!document) continue;
+      const entry = local.manifest.documents.find(
+        (entry) => entry.path === document.name,
+      )!;
+      const remote = plan.remotes.get(id);
+      const remoteEntry = remote?.manifest.documents.find(
+        (candidate) => candidate.id === entry.id,
+      );
+      const relative = `${remote?.folder ?? plan.folders.get(id)!}/${remoteEntry?.path ?? entry.path}`;
+      const file = plan.files.get(relative);
+      const latest = document.versions.find(
+        (version) => version.number === document.currentVersionNumber,
+      );
+      if (!latest)
+        throw new BadRequestException('GIT_DELIVERABLES_DOCUMENT_UNAVAILABLE');
+      const blocked =
+        (local.item.confidentiality === 'restricted' &&
+          !plan.options.restrictedIds.includes(local.item.id)) ||
+        (remoteEntry && remoteEntry.path !== document.name) ||
+        latest.size > largeGitDocument ||
+        file?.hash?.startsWith('large:') ||
+        file?.bytes
+          ?.subarray(0, 100)
+          .toString()
+          .startsWith('version https://git-lfs.github.com/spec/v1') ||
+        plan.changes.some(
+          (change) =>
+            change.action === 'conflict' &&
+            (!change.deliverableId ||
+              (change.deliverableId === local.item.id &&
+                ((!change.document &&
+                  ![
+                    'metadata_baseline_missing',
+                    'metadata_changed_both',
+                  ].includes(change.reason)) ||
+                  (change.document === document.name &&
+                    ![
+                      'document_changed_both',
+                      'untracked_file_collision',
+                      'missing_file',
+                      'removed_in_git',
+                    ].includes(change.reason))))),
+        );
+      const actions: ('mergeron' | 'git')[] = [];
+      if (!blocked) {
+        actions.push('mergeron');
+        if (
+          remoteEntry &&
+          file?.bytes &&
+          !['finalized', 'archived'].includes(local.item.lifecycleStatus)
+        )
+          actions.push('git');
+      }
+      return {
+        id,
+        key: JSON.stringify([id, entry.id]),
+        local,
+        document,
+        relative,
+        file,
+        latest,
+        actions,
+      };
+    }
+    throw new BadRequestException('GIT_DELIVERABLES_DOCUMENT_UNAVAILABLE');
+  }
+  async previewDocument(p: string, body: unknown) {
+    requireExecutionAccess();
+    const parsed = z
+      .strictObject({
+        options: z.unknown(),
+        documentId: z.string().min(1).max(100),
+      })
+      .safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException(
+        'GIT_DELIVERABLES_DOCUMENT_REQUEST_INVALID',
+      );
+    const input = parsed.data;
+    const options = this.options(input.options);
+    if (!options.copyId)
+      throw new BadRequestException('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
+    const plan = await this.build(p, options);
+    const target = this.documentTarget(plan, input.documentId);
+    return {
+      fingerprint: plan.fingerprint,
+      context: plan.context,
+      copyId: plan.options.copyId,
+      documentId: target.document.id,
+      name: target.document.name,
+      version: target.document.currentVersionNumber,
+      mergeron: {
+        path: target.document.sourcePath,
+        sha256: target.latest.sha256,
+        size: target.latest.size,
+      },
+      git: {
+        path: join(plan.root, target.relative),
+        exists: !!target.file?.bytes,
+        sha256: target.file?.hash ?? null,
+        size: target.file?.bytes?.length ?? null,
+      },
+      actions: target.actions,
+    };
+  }
+  private actionableDocuments(
+    plan: Awaited<ReturnType<GitDeliverablesService['build']>>,
+    exportsOnly = false,
+  ) {
+    const result = new Set<string>();
+    for (const [key, action] of plan.documentActions) {
+      if (exportsOnly && action === 'import') continue;
+      const [id, documentId] = JSON.parse(key) as [string, string];
+      const local = plan.local.get(id);
+      if (!local) continue;
+      const entry = local.manifest.documents.find(
+        (entry) => entry.id === documentId,
+      );
+      const remote = plan.remotes
+        .get(id)
+        ?.manifest.documents.find((entry) => entry.id === documentId);
+      if (entry && remote && entry.path !== remote.path) continue;
+      const blocked = plan.changes.some(
+        (change) =>
+          change.action === 'conflict' &&
+          (!change.deliverableId ||
+            (change.deliverableId === local.item.id &&
+              (change.document
+                ? change.document === entry?.path ||
+                  change.document === remote?.path
+                : ![
+                    'metadata_baseline_missing',
+                    'metadata_changed_both',
+                  ].includes(change.reason)))),
+      );
+      if (!blocked) result.add(key);
+    }
+    return result;
+  }
+  async apply(
+    p: string,
+    body: { options?: unknown; fingerprint?: unknown; resolution?: unknown },
+    independentExports = false,
+  ) {
     requireExecutionAccess();
     const options = this.options(body?.options);
+    if (body.resolution !== undefined && !options.copyId)
+      throw new BadRequestException('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
     if (this.busy.has(options.boardId))
       throw new ConflictException('GIT_DELIVERABLES_BUSY');
     this.busy.set(options.boardId, Symbol());
@@ -1244,7 +1454,70 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           plan.fingerprint !== body.fingerprint
         )
           throw new ConflictException('GIT_DELIVERABLES_CHANGED');
-        if (plan.changes.some((c) => c.action === 'conflict'))
+        const parsedResolution =
+          body.resolution === undefined
+            ? undefined
+            : z
+                .strictObject({
+                  documentId: z.string().min(1).max(100),
+                  direction: z.enum(['mergeron', 'git']),
+                  confirmation: z.literal('CONFIRM_DOCUMENT_RESOLUTION'),
+                })
+                .safeParse(body.resolution);
+        if (parsedResolution && !parsedResolution.success)
+          throw new BadRequestException(
+            'GIT_DELIVERABLES_DOCUMENT_REQUEST_INVALID',
+          );
+        const resolution = parsedResolution?.success
+          ? parsedResolution.data
+          : undefined;
+        const selected = resolution
+          ? this.documentTarget(plan, resolution.documentId)
+          : undefined;
+        if (selected && resolution) {
+          if (
+            !options.copyId ||
+            !selected.actions.includes(resolution.direction)
+          )
+            throw new BadRequestException(
+              'GIT_DELIVERABLES_RESOLUTION_UNAVAILABLE',
+            );
+          plan.documentActions.clear();
+          plan.documentActions.set(
+            selected.key,
+            resolution.direction === 'git' ? 'import' : 'export',
+          );
+          plan.changes = plan.changes.filter(
+            (change) =>
+              !(
+                change.deliverableId === selected.local.item.id &&
+                (change.documentId === selected.document.id ||
+                  change.document === selected.document.name)
+              ),
+          );
+          plan.changes.push({
+            deliverable: selected.local.item.title,
+            deliverableId: selected.local.item.id,
+            document: selected.document.name,
+            documentId: selected.document.id,
+            action: resolution.direction === 'git' ? 'import' : 'export',
+            reason: 'document_resolution',
+          });
+        }
+        const conflicts = plan.changes.some(
+          (change) => change.action === 'conflict',
+        );
+        const actionable = this.actionableDocuments(plan, independentExports);
+        const partialDocuments =
+          independentExports || conflicts || !!resolution;
+        if (conflicts && !independentExports && !actionable.size)
+          throw new ConflictException('GIT_DELIVERABLES_CONFLICTS');
+        if (
+          partialDocuments &&
+          plan.changes.some(
+            (change) => change.action === 'conflict' && !change.deliverableId,
+          )
+        )
           throw new ConflictException('GIT_DELIVERABLES_CONFLICTS');
         const settings: Settings = {
           ...options,
@@ -1258,6 +1531,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         const recoveries: { document: string; path: string }[] = [];
         try {
           for (const move of plan.folderMoves) {
+            if (partialDocuments) continue;
             await this.assertGitContext(plan.root, plan.context);
             const from = await gitChild(plan.root, move.from);
             const to = await gitChild(plan.root, move.to);
@@ -1294,15 +1568,36 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             ...plan.remotes.keys(),
           ])) {
             let l = plan.local.get(id);
+            if (selected && id !== selected.id) continue;
             if (l) this.assertLocal(p, options.boardId, l);
             await this.assertGitContext(plan.root, plan.context);
             const r = plan.remotes.get(id);
+            const itemChanges = plan.changes.filter(
+              (change) => change.deliverableId === l?.item.id,
+            );
+            const metadataIssue = (change: Change) =>
+              !change.document &&
+              ['metadata_baseline_missing', 'metadata_changed_both'].includes(
+                change.reason,
+              );
+            if (
+              partialDocuments &&
+              (!l ||
+                itemChanges.some(
+                  (change) =>
+                    change.action === 'conflict' &&
+                    !change.document &&
+                    !metadataIssue(change),
+                ))
+            )
+              continue;
             if (
               l?.item.confidentiality === 'restricted' &&
               !options.restrictedIds.includes(l.item.id)
             )
               continue;
             const remotePreferred =
+              !partialDocuments &&
               r &&
               (!l ||
                 settings.bindings[id]?.pendingImport ||
@@ -1340,8 +1635,17 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               this.save(p, options.boardId, settings);
             }
             if (!l) continue;
+            const preserveMetadata =
+              partialDocuments &&
+              r &&
+              (!!resolution ||
+                itemChanges.some(
+                  (change) =>
+                    metadataIssue(change) ||
+                    (change.action === 'import' && !change.document),
+                ));
             const manifest = structuredClone(
-              remotePreferred ? r.manifest : l.manifest,
+              remotePreferred || preserveMetadata ? r.manifest : l.manifest,
             );
             const folder = r?.folder ?? plan.folders.get(id)!;
             const binding = settings.bindings[id] ?? {
@@ -1374,10 +1678,80 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 .filter(
                   ([key, action]) =>
                     (JSON.parse(key) as [string, string])[0] === id &&
-                    action === 'delete',
+                    action === 'delete' &&
+                    (!partialDocuments || actionable.has(key)),
                 )
                 .map(([key]) => (JSON.parse(key) as [string, string])[1]),
             );
+            const safeExports = new Set<string>();
+            if (partialDocuments) {
+              for (const entry of l.manifest.documents) {
+                if (selected && JSON.stringify([id, entry.id]) !== selected.key)
+                  continue;
+                const doc = l.documents.find((doc) => doc.name === entry.path);
+                const remote = r?.manifest.documents.find(
+                  (remote) => remote.id === entry.id,
+                );
+                const blocked = itemChanges.some(
+                  (change) =>
+                    change.action === 'conflict' &&
+                    ((change.documentId && change.documentId === doc?.id) ||
+                      (change.document &&
+                        (change.document === entry.path ||
+                          change.document === remote?.path))),
+                );
+                const retained = doc?.versions.find(
+                  (version) => version.number === doc.currentVersionNumber,
+                );
+                const verifiedEqual =
+                  remote &&
+                  retained?.sha256 ===
+                    plan.files.get(`${r!.folder}/${remote.path}`)?.hash;
+                if (
+                  !blocked &&
+                  (!remote || remote.path === entry.path) &&
+                  (verifiedEqual ||
+                    (actionable.has(JSON.stringify([id, entry.id])) &&
+                      plan.documentActions.get(
+                        JSON.stringify([id, entry.id]),
+                      ) === 'export'))
+                )
+                  safeExports.add(entry.id);
+              }
+              if (!independentExports) {
+                for (const [key, action] of plan.documentActions) {
+                  const [deliverableId, documentId] = JSON.parse(key) as [
+                    string,
+                    string,
+                  ];
+                  if (
+                    deliverableId === id &&
+                    action === 'import' &&
+                    actionable.has(key)
+                  )
+                    safeExports.add(documentId);
+                }
+              }
+              if (!r && !safeExports.size) continue;
+              // Keep unreviewed metadata and blocked documents exactly as declared in Git.
+              manifest.documents = structuredClone(r?.manifest.documents ?? []);
+              manifest.labels = [
+                ...new Set([...manifest.labels, ...(r?.manifest.labels ?? [])]),
+              ];
+              for (const entry of l.manifest.documents.filter((entry) =>
+                safeExports.has(entry.id),
+              )) {
+                const position = manifest.documents.findIndex(
+                  (remote) => remote.id === entry.id,
+                );
+                if (position < 0) {
+                  manifest.documents.push(structuredClone(entry));
+                  manifest.labels = [
+                    ...new Set([...manifest.labels, ...entry.labels]),
+                  ];
+                }
+              }
+            }
             for (const docId of deletedIds) {
               const remoteEntry = r?.manifest.documents.find(
                 (d) => d.id === docId,
@@ -1410,8 +1784,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 manifest.documents.push(d);
             for (const d of l.manifest.documents)
               if (!manifest.documents.some((m) => m.id === d.id))
-                manifest.documents.push(d);
+                if (!partialDocuments) manifest.documents.push(d);
             for (const entry of manifest.documents) {
+              if (partialDocuments && !safeExports.has(entry.id)) continue;
               let doc = this.deliverables
                 .documents(p, options.boardId, l.item.id)
                 .find(
@@ -1484,7 +1859,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                     {
                       documentId: doc?.id,
                       expectedVersion: doc?.currentVersionNumber,
-                      comment: 'Git import',
+                      comment: resolution
+                        ? 'Git document conflict resolution'
+                        : 'Git import',
                     },
                   ),
                 );
@@ -1507,6 +1884,20 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 : (plan.files.get(target)?.hash ?? null);
               if ((original ? digest(original) : null) !== expected)
                 throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+              if (
+                resolution?.direction === 'mergeron' &&
+                original &&
+                digest(original) !== version.sha256
+              ) {
+                const recovery = await retainGitFile(
+                  plan.root,
+                  target,
+                  digest(original),
+                );
+                recoveries.push({ document: target, path: recovery });
+                await this.assertGitContext(plan.root, plan.context);
+                this.assertLocal(p, options.boardId, l);
+              }
               if (!original || digest(original) !== version.sha256)
                 await writeGitFile(
                   plan.root,
@@ -1538,6 +1929,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 ),
               );
             await this.assertGitContext(plan.root, plan.context);
+            manifest.labels.sort();
+            manifest.documents.sort((a, b) => a.id.localeCompare(b.id));
+            manifest.documents.forEach((document) => document.labels.sort());
             const raw = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
             await writeGitFile(
               plan.root,
@@ -1557,17 +1951,19 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             }
             binding.folder = folder;
             const metadata = metadataHash(manifest);
-            binding.metadataHistory = [
-              ...new Set([
-                ...(binding.metadataHistory ?? []),
-                binding.metadata,
-              ]),
-            ]
-              .filter(
-                (hash) => /^[a-f0-9]{64}$/.test(hash) && hash !== metadata,
-              )
-              .slice(-32);
-            binding.metadata = metadata;
+            if (!partialDocuments || metadata === metadataHash(l.manifest)) {
+              binding.metadataHistory = [
+                ...new Set([
+                  ...(binding.metadataHistory ?? []),
+                  binding.metadata,
+                ]),
+              ]
+                .filter(
+                  (hash) => /^[a-f0-9]{64}$/.test(hash) && hash !== metadata,
+                )
+                .slice(-32);
+              binding.metadata = metadata;
+            }
             binding.pendingImport = false;
             binding.pendingExport = false;
             settings.bindings[id] = binding;
@@ -1592,8 +1988,31 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           );
           await this.assertGitContext(plan.root, plan.context);
           settings.lastSyncAt = Date.now();
+          // The mutation gate and board lock are already held by this operation.
+          const remaining = partialDocuments
+            ? (await this.buildUnlocked(p, options)).changes
+            : [];
+          const appliedChanges = partialDocuments
+            ? plan.changes.filter(
+                (change) =>
+                  !['conflict', 'excluded'].includes(change.action) &&
+                  !remaining.some(
+                    (other) =>
+                      other.deliverableId === change.deliverableId &&
+                      other.document === change.document &&
+                      other.action === change.action &&
+                      other.reason === change.reason,
+                  ),
+              )
+            : plan.changes;
+          settings.lastError = remaining.some((change) =>
+            ['conflict', 'import', 'rename'].includes(change.action),
+          )
+            ? 'GIT_DELIVERABLES_REVIEW_REQUIRED'
+            : null;
           this.save(p, options.boardId, settings);
-          this.completePending(p, options.boardId, copy.id, plan.generation);
+          if (!remaining.some((change) => change.action !== 'excluded'))
+            this.completePending(p, options.boardId, copy.id, plan.generation);
           const actor = currentAccess()?.identity;
           this.db
             .insert(projectActivity)
@@ -1606,8 +2025,10 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               label: options.directory,
               details: {
                 copyId: options.copyId,
-                changes: plan.changes,
+                changes: appliedChanges,
                 recoveries,
+                remaining,
+                ...(resolution ? { resolution } : {}),
               },
               actorPersonId: actor?.personId ?? null,
               actorName: actor?.name ?? 'Mergeron',
@@ -1616,8 +2037,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
             .run();
           return {
             enabled: true,
-            changes: plan.changes,
+            changes: appliedChanges,
             lastSyncAt: settings.lastSyncAt,
+            remaining,
           };
         } catch (e) {
           settings.lastError = errorCode(e);
@@ -1667,17 +2089,25 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
                 this.copyStates(this.settings(p, r))[copy.id]?.generation ?? 0;
               const preview = await this.preview(p, options);
               // Never import in the background, commit, pull or push automatically.
-              if (
-                !preview.canApply ||
-                preview.changes.some((c) => c.action === 'import')
-              )
-                throw new ConflictException('GIT_DELIVERABLES_REVIEW_REQUIRED');
               if (preview.changes.some((c) => c.action === 'export')) {
-                await this.apply(p, {
-                  options,
-                  fingerprint: preview.fingerprint,
-                });
+                await this.apply(
+                  p,
+                  {
+                    options,
+                    fingerprint: preview.fingerprint,
+                  },
+                  true,
+                );
               } else {
+                if (
+                  !preview.canApply ||
+                  preview.changes.some((c) =>
+                    ['import', 'rename'].includes(c.action),
+                  )
+                )
+                  throw new ConflictException(
+                    'GIT_DELIVERABLES_REVIEW_REQUIRED',
+                  );
                 const state = this.forCopy(p, r, copy.id, preview.context);
                 if (state) this.save(p, r, { ...state, lastError: null });
                 this.completePending(p, r, copy.id, generation);

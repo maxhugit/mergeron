@@ -13,6 +13,7 @@ vi.mock('@/hooks/use-deliverable-git-status', () => ({
       copies: [],
       checking: false,
       state: () => 'off',
+      documentState: () => 'off',
       refresh: () => {},
       select: () => {},
     };

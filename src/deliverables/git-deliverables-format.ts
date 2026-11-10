@@ -216,6 +216,41 @@ export async function writeGitFile(
   }
 }
 
+/** Preserve reviewed conflict bytes privately before an explicitly confirmed replacement. */
+export async function retainGitFile(
+  root: string,
+  relative: string,
+  expected: string,
+): Promise<string> {
+  const current = await readGitFile(root, relative);
+  if (!current || digest(current) !== expected)
+    throw new ConflictException('GIT_DELIVERABLES_CHANGED');
+  const git = path.join(root, '.git');
+  const entry = await fs.lstat(git);
+  if (!entry.isDirectory() || entry.isSymbolicLink())
+    throw new BadRequestException('GIT_DELIVERABLES_UNSAFE_PATH');
+  const directory = path.join(git, 'mergeron-deliverable-recovery');
+  await fs
+    .mkdir(directory, { mode: 0o700 })
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error;
+    });
+  const info = await fs.lstat(directory);
+  if (!info.isDirectory() || info.isSymbolicLink() || info.mode & 0o077)
+    throw new BadRequestException('GIT_DELIVERABLES_UNSAFE_PATH');
+  const name = randomUUID();
+  await fs.writeFile(path.join(directory, name), current, {
+    flag: 'wx',
+    mode: 0o600,
+  });
+  await fs.writeFile(
+    path.join(directory, name + '.json'),
+    JSON.stringify({ source: relative, reviewedSha256: expected }),
+    { flag: 'wx', mode: 0o600 },
+  );
+  return '.git/mergeron-deliverable-recovery/' + name;
+}
+
 /** Remove only the reviewed bytes, retaining an atomic, private recovery copy.
  * A late edit or branch change restores the moved file without replacing a new target.
  */
