@@ -9,13 +9,28 @@ import { localExecutionSelection } from '@/lib/project-execution-location';
  * its toolbar, leaving no way back — with a spinner nothing could clear.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render as renderUI,
+  screen,
+} from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkspaceTree } from './workspace-tree';
 import type { WorkspaceTreeHandle } from './workspace-tree';
-import { createRef } from 'react';
+import { createRef, type ReactNode } from 'react';
 import { useFileBrowserState } from '@/components/files/file-browser-context';
 import { useFilesStore } from '@/stores/files-store';
 import { useLayoutStore } from '@/stores/layout-store';
+
+const client = new QueryClient();
+function render(ui: ReactNode) {
+  return renderUI(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 const addRoot = vi.hoisted(() => vi.fn());
 const session = vi.hoisted(() => ({ isAdministrator: false }));
@@ -76,6 +91,7 @@ function renderTree(cwd: string | null = '/w') {
 }
 
 beforeEach(() => {
+  client.clear();
   session.isAdministrator = false;
   addRoot.mockReset().mockResolvedValue({});
   useFilesStore.setState({

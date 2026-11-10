@@ -1,7 +1,12 @@
+import {
+  useProjectExplorerTab,
+  type ExplorerTab,
+} from '@/hooks/use-project-explorer-tab';
 import { ExplorerTasks } from './explorer-tasks';
 import { ExplorerDeliverables } from './explorer-deliverables';
 /** Right-hand explorer with a divider preview: dragging never reflows the transcript. */
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -80,9 +85,31 @@ export function WorkspaceTree({
   const browserStore = useFileBrowserStoreApi();
   const { t: tw } = useTranslation('workspaces');
   const session = usePlatformSession();
-  const [view, setView] = useState<
-    'folders' | 'deliverables' | 'tasks' | 'sources'
-  >('folders');
+  const preference = useProjectExplorerTab(session.data?.personId, project?.id);
+  const owner = JSON.stringify([
+    session.data?.personId,
+    project?.id,
+    agentThreadId,
+  ]);
+  // Contextual reveals belong to the current agent, while only explicit tab
+  // clicks change this person's preferred tab across the project's agents.
+  const [selection, setSelection] = useState<{
+    owner: string;
+    view: ExplorerTab;
+    kind: 'manual' | 'context';
+  } | null>(null);
+  const setView = useCallback(
+    (view: ExplorerTab) => setSelection({ owner, view, kind: 'context' }),
+    [owner],
+  );
+  const requestedView =
+    selection?.owner === owner ? selection.view : preference.tab;
+  const hasTasks = project?.resources.some(
+    (resource) => resource.type === 'task_board',
+  );
+  const view =
+    requestedView === 'tasks' && !hasTasks ? 'folders' : requestedView;
+  const preferenceLoading = preference.loading && selection?.owner !== owner;
   const [revealDeliverable, setRevealDeliverable] = useState<string | null>(
     null,
   );
@@ -126,7 +153,7 @@ export function WorkspaceTree({
     };
     window.addEventListener('mergeron:explorer-work', open);
     return () => window.removeEventListener('mergeron:explorer-work', open);
-  }, [agentThreadId, project]);
+  }, [agentThreadId, project, setView]);
   const [sourceStore] = useState(createFilesStore);
   const aliases = useDeliverableDirectoryAliases(project);
   const [folderConnectionId, setFolderConnectionId] = useState<string | null>(
@@ -279,9 +306,20 @@ export function WorkspaceTree({
                   type="button"
                   role="tab"
                   aria-selected={view === kind}
+                  disabled={preference.loading || preference.saving}
                   className={`flex min-w-0 flex-1 items-center justify-center gap-1 border-b-2 px-1 py-3 text-xs ${view === kind ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
                   onClick={() => {
-                    setView(kind);
+                    setSelection({ owner, view: kind, kind: 'manual' });
+                    void preference.select(kind).then((saved) => {
+                      if (saved)
+                        setSelection((current) =>
+                          current?.owner === owner &&
+                          current.kind === 'manual' &&
+                          current.view === kind
+                            ? null
+                            : current,
+                        );
+                    });
                     if (kind === 'folders')
                       browserStore.getState().setRootDir(foldersRoot);
                   }}
@@ -302,10 +340,26 @@ export function WorkspaceTree({
           </div>
         </>
       )}
+      {project && preference.error && (
+        <p
+          role="status"
+          className="shrink-0 px-3 py-2 text-xs text-muted-foreground"
+        >
+          {tw('explorerTabPreferenceUnavailable')}
+        </p>
+      )}
       {/* Never compare the browsed root to cwd: entering folders and going up
           both change it. The adoption receipt prevents showing a prior
           conversation's tree while this one's metadata/request is pending. */}
-      {project ? (
+      {project && preferenceLoading ? (
+        <div
+          role="status"
+          className="flex min-h-0 flex-1 items-center justify-center"
+          aria-label={t('loading')}
+        >
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        </div>
+      ) : project ? (
         view === 'deliverables' ? (
           <ExplorerDeliverables
             preferredGitResourceId={gitResourceId}

@@ -11,10 +11,18 @@ import { LocalAuthService } from './local-auth.service';
 import { OidcAuthService } from './oidc-auth.service';
 import { InitialAdminController } from './initial-admin.controller';
 import { InitialAdminService } from './initial-admin.service';
+import {
+  ProjectExplorerPreferencesController,
+  ProjectExplorerPreferencesService,
+} from './project-explorer-preferences';
 
 @Module({
   imports: [JwtModule.register({}), DatabaseModule],
-  controllers: [AuthController, InitialAdminController],
+  controllers: [
+    AuthController,
+    InitialAdminController,
+    ProjectExplorerPreferencesController,
+  ],
   providers: [
     AuthService,
     InitialAdminService,
@@ -23,6 +31,7 @@ import { InitialAdminService } from './initial-admin.service';
     OidcAuthService,
     IdentityService,
     PlatformAccessGuard,
+    ProjectExplorerPreferencesService,
   ],
   exports: [
     AuthService,
