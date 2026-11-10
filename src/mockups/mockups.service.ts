@@ -20,8 +20,10 @@ import {
   conversationMockupRevisions as revisions,
   projectAgentThreads,
   projectAgentToolRequests as receipts,
+  projectDeliverableDocuments as documents,
 } from '../database/schema';
 import { DeliverablesService } from '../deliverables/deliverables.service';
+import { mockupArchive } from './mockup-archive';
 import {
   MAX_MOCKUP_BYTES,
   MAX_MOCKUP_REVISIONS,
@@ -202,6 +204,25 @@ export class MockupsService {
       const source = this.read(projectId, threadId, value.id, value.revision);
       // Validate the existing target before recording an uncertain external write.
       this.deliverables.get(projectId, value.resourceId, value.deliverableId);
+      let filename = `mockup-${value.id}.zip`;
+      if (value.documentId) {
+        const document = this.db
+          .select()
+          .from(documents)
+          .where(
+            and(
+              eq(documents.id, value.documentId),
+              eq(documents.deliverableId, value.deliverableId),
+            ),
+          )
+          .get();
+        if (!document || document.deletedAt !== null)
+          throw new NotFoundException('Document not found');
+        if (!document.name.toLowerCase().endsWith('.zip'))
+          throw new BadRequestException('MOCKUP_ARCHIVE_NEW_DOCUMENT_REQUIRED');
+        filename = document.name;
+      }
+      const archive = mockupArchive(source);
       this.db
         .insert(receipts)
         .values({
@@ -214,10 +235,9 @@ export class MockupsService {
           createdAt: Date.now(),
         })
         .run();
-      const filename = `mockup-${value.id}.html`;
       async function* uploads() {
         await Promise.resolve();
-        yield { filename, stream: Readable.from([source.html]) };
+        yield { filename, stream: Readable.from([archive]) };
       }
       const result = await this.deliverables.uploadDocuments(
         projectId,

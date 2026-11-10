@@ -28,6 +28,9 @@ const ArchiveViewer = lazy(() =>
 const CodeViewer = lazy(() =>
   import('./code-viewer').then((module) => ({ default: module.CodeViewer })),
 );
+const HtmlViewer = lazy(() =>
+  import('./html-viewer').then((module) => ({ default: module.HtmlViewer })),
+);
 const DocxViewer = lazy(() =>
   import('./docx-viewer').then((module) => ({ default: module.DocxViewer })),
 );
@@ -79,7 +82,9 @@ export function FileContentViewer({
   // Line navigation is the text editor's alone. Deciding that here, where the
   // viewer is chosen, keeps a competing file-type table out of the markdown
   // parser — and a line meant for a PDF must not drift into a page number.
-  const honoursLine = category === 'code' && previewSource.kind === 'file';
+  const honoursLine =
+    (category === 'code' || category === 'html') &&
+    previewSource.kind === 'file';
   const reveal = useWorkspaceStore((s) => s.fileViews[viewId]?.reveal);
   const consumeReveal = useWorkspaceStore((s) => s.consumeReveal);
   useEffect(() => {
@@ -99,6 +104,18 @@ export function FileContentViewer({
     viewer = <OnlyOfficeViewer filePath={filePath} readOnly={readOnly} />;
   } else {
     switch (category) {
+      case 'html':
+        viewer = (
+          <HtmlViewer
+            key={filePath}
+            source={previewSource}
+            documentId={documentId}
+            viewId={viewId}
+            active={active}
+            readOnly={readOnly}
+          />
+        );
+        break;
       case 'image':
         viewer = <ImageViewer filePath={filePath} source={previewSource} />;
         break;

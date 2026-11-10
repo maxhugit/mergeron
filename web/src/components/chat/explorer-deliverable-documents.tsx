@@ -6,6 +6,7 @@ import {
   FileText,
   Folder,
   Loader2,
+  PanelsTopLeft,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFileWatch } from '@/hooks/use-file-watch';
@@ -75,7 +76,12 @@ export function ExplorerDeliverableDocuments({
         onClick={() => onFile(document.sourcePath)}
         title={document.name}
       >
-        <FileText className="h-4 w-4 shrink-0 text-primary" />
+        {/\.html?$/i.test(document.name) ||
+        /^mockup-.*\.zip$/i.test(document.name) ? (
+          <PanelsTopLeft className="h-4 w-4 shrink-0 text-primary" />
+        ) : (
+          <FileText className="h-4 w-4 shrink-0 text-primary" />
+        )}
         <span className="min-w-0 flex-1 truncate">{document.name}</span>
         <span
           className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-muted-foreground"

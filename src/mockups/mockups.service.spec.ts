@@ -11,12 +11,16 @@ import {
   projectAgentThreads,
   conversationMockups,
   conversationMockupRevisions,
+  projectResources,
+  projectDeliverables,
+  projectDeliverableDocuments,
 } from '../database/schema';
 import { IdentityService } from '../auth/identity.service';
 import { accessContext } from '../auth/access-context';
 import type { FileUploadInput } from '../files/files.service';
 import type { DeliverablesService } from '../deliverables/deliverables.service';
 import { MockupsService } from './mockups.service';
+import { unzipSync, strFromU8 } from 'fflate';
 import {
   MAX_MOCKUP_BYTES,
   MAX_MOCKUP_REVISIONS,
@@ -285,6 +289,15 @@ describe('conversation mockups', () => {
         'board',
         'deliverable',
       ]);
+      for await (const file of retained.uploadDocuments.mock.calls[0][3]) {
+        expect(file.filename).toBe(`mockup-${ref.id}.zip`);
+        const chunks: Buffer[] = [];
+        for await (const chunk of file.stream)
+          chunks.push(Buffer.from(chunk as Uint8Array));
+        expect(strFromU8(unzipSync(Buffer.concat(chunks))['index.html'])).toBe(
+          '<button>Simulated checkout</button>',
+        );
+      }
       retained.uploadDocuments.mockRejectedValueOnce(
         new Error('Uncertain transfer'),
       );
@@ -306,7 +319,41 @@ describe('conversation mockups', () => {
         title: 'Newer',
         html: '<p>Newer revision</p>',
       });
-      let saved = '';
+      database.db
+        .insert(projectResources)
+        .values({
+          id: 'board',
+          projectId: 'p',
+          type: 'deliverable_board',
+          name: 'Deliverables',
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      database.db
+        .insert(projectDeliverables)
+        .values({
+          id: 'deliverable',
+          resourceId: 'board',
+          title: 'Mockups',
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      database.db
+        .insert(projectDeliverableDocuments)
+        .values({
+          id: 'document',
+          deliverableId: 'deliverable',
+          name: 'renamed-mockup.zip',
+          format: 'zip',
+          sourcePath: '/retained.zip',
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      const saved: Buffer[] = [];
+      let filename = '';
       retained.uploadDocuments.mockImplementationOnce(
         async (
           _p: string,
@@ -316,8 +363,11 @@ describe('conversation mockups', () => {
           options: { beforeCommit?: () => void },
         ) => {
           options.beforeCommit?.();
-          for await (const file of uploads)
-            for await (const part of file.stream) saved += String(part);
+          for await (const file of uploads) {
+            filename = file.filename;
+            for await (const part of file.stream)
+              saved.push(Buffer.from(part as Uint8Array));
+          }
           return { files: [] };
         },
       );
@@ -331,11 +381,45 @@ describe('conversation mockups', () => {
         requestId: 'version-save',
         userRequest: 'Save this approved revision as a new document version',
       });
-      expect(saved).toBe('<button>Simulated checkout</button>');
+      const entries = unzipSync(Buffer.concat(saved));
+      expect(filename).toBe('renamed-mockup.zip');
+      expect(Object.keys(entries)).toEqual([
+        'index.html',
+        'mergeron-mockup.json',
+      ]);
+      expect(strFromU8(entries['index.html'])).toBe(
+        '<button>Simulated checkout</button>',
+      );
+      expect(
+        JSON.parse(strFromU8(entries['mergeron-mockup.json'])),
+      ).toMatchObject({
+        type: 'mergeron.mockup.archive',
+        version: 1,
+        entrypoint: 'index.html',
+        reference: { revision: ref.revision, number: 1 },
+      });
       expect(retained.uploadDocuments.mock.calls[0][4]).toMatchObject({
         documentId: 'document',
         expectedVersion: 3,
         comment: 'Mockup revision 1',
       });
+      database.db
+        .update(projectDeliverableDocuments)
+        .set({ name: 'legacy.html', format: 'html' })
+        .where(eq(projectDeliverableDocuments.id, 'document'))
+        .run();
+      await expect(
+        tool('publish', {
+          id: ref.id,
+          revision: ref.revision,
+          resourceId: 'board',
+          deliverableId: 'deliverable',
+          documentId: 'document',
+          expectedVersion: 3,
+          requestId: 'legacy-save',
+          userRequest: 'Save as ZIP',
+        }),
+      ).rejects.toThrow('MOCKUP_ARCHIVE_NEW_DOCUMENT_REQUIRED');
+      expect(retained.uploadDocuments).toHaveBeenCalledTimes(1);
     }));
 });
