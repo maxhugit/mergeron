@@ -25,6 +25,65 @@ Les livrables et leurs historiques Mergeron continuent de fonctionner sans Git.
 
 Les bases de comparaison et les correspondances sont conservées séparément pour
 chaque copie. Une synchronisation ne remplace pas celles des autres agents.
+
+## Synchronisation par document
+
+Un conflit sur un document ne bloque plus les autres documents du même livrable,
+ni ceux des autres livrables. L’export automatique traite les documents dont le
+contenu est vérifié et laisse les fichiers divergents intacts. Un fichier inconnu
+occupant un chemin ou exclu par `.gitignore` reste protégé ; les autres exports
+peuvent continuer. Les métadonnées de livrable non vérifiées ne sont pas remplacées
+pour forcer un export. Seules les références nécessaires aux documents exportés
+sont ajoutées à `livrable.json`.
+
+Les imports restent explicites. Si la comparaison contient aussi des conflits,
+**Appliquer les documents sans conflit** permet de valider les documents sûrs.
+Le résultat affiche les écarts restants, sans prétendre que toute la copie est à
+jour. Les opérations portant sur une branche, une copie, un index partagé invalide,
+les droits ou les chemins autorisés continuent de bloquer les écritures concernées.
+Les empreintes et versions sont revérifiées avant les écritures ; aucun commit,
+pull ou push n’est ajouté automatiquement.
+
+Dans l’explorateur des livrables, le fond du badge **V1**, **V2**… est orange pour
+un document à exporter ou un import à examiner, rouge pour un conflit ou une erreur
+bloquante. Un document vérifié conserve son badge neutre même si un autre document
+de sa copie est bloqué. Le survol et le libellé accessible précisent le problème ;
+la couleur n’est pas le seul indicateur.
+
+Cliquer sur un badge orange ou rouge ouvre **Synchronisation du document**, sans
+passer par les paramètres Git du projet. La fenêtre indique le document, sa version
+Mergeron, la branche et les empreintes comparées, avec des liens vers les deux
+fichiers. **Conserver la version Mergeron** prépare l’export ; **Importer la version
+Git** prépare une nouvelle version documentaire. **Confirmer la correction** est
+une seconde action explicite, liée à l’empreinte affichée au moment du choix.
+Une édition, un changement de branche ou une révocation de droits impose une
+nouvelle comparaison. Une protection de chemin, `.gitignore`, un pointeur LFS ou
+une limite de taille ne peuvent pas être contournés par cette fenêtre.
+
+Le remplacement explicite d’un fichier Git conserve d’abord ses octets dans un
+répertoire privé `.git/mergeron-deliverable-recovery`, avec le chemin d’origine et
+l’empreinte vérifiée ; cette récupération est référencée dans l’activité du projet.
+Un import conserve les versions Mergeron précédentes dans l’historique normal.
+Le choix ne s’applique qu’au document sélectionné. Les autres documents restent
+inchangés et leurs éventuels écarts continuent d’être signalés.
+
+Techniquement, `POST /api/projects/:projectId/git-deliverables/document-preview`
+compare `options` (dont la copie explicite) et `documentId`. La correction passe
+par `/apply` avec cette empreinte et `resolution: { documentId, direction,
+confirmation: "CONFIRM_DOCUMENT_RESOLUTION" }` ; `direction` vaut `mergeron` ou
+`git`. Le serveur reconstruit le plan sous le verrou Git, contrôle les droits,
+les versions et les contenus, puis limite l’écriture au document choisi.
+
+Les indicateurs et corrections des livrables se trouvent dans **Livrables**.
+Le bloc dédié a été retiré de **Sources → Git local** ; cette zone conserve les
+opérations Git sur les fichiers, branches et commits.
+
+Le message « Organisation différente sans référence commune vérifiée » concerne
+`livrable.json` : titre, description, liste de documents et étiquettes. Il ne prouve
+pas que le contenu d’un document commun est différent. Une version commune doit
+être établie par comparaison des contenus ; elle n’est jamais inventée pour
+supprimer une alerte.
+
 Les anciens réglages et fichiers restent conservés ; une ancienne cible partagée
 n’est plus utilisée pour les écritures automatiques. Le dossier ne peut pas changer
 silencieusement dès qu’une copie possède des correspondances enregistrées.

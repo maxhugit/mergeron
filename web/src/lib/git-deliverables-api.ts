@@ -54,6 +54,7 @@ export type Preview = {
     deliverable: string;
     deliverableId?: string;
     document?: string;
+    documentId?: string;
     action: string;
     reason: string;
   }[];

@@ -32,9 +32,15 @@ export class GitDeliverablesController {
   @Post('apply')
   apply(
     @Param('projectId') p: string,
-    @Body() body: { options?: unknown; fingerprint?: unknown },
+    @Body()
+    body: { options?: unknown; fingerprint?: unknown; resolution?: unknown },
   ) {
     return this.service.apply(p, body);
+  }
+  @Post('document-preview')
+  @Header('Cache-Control', 'private, no-store')
+  documentPreview(@Param('projectId') p: string, @Body() body: unknown) {
+    return this.service.previewDocument(p, body);
   }
   @Post(':boardId/disable')
   disable(@Param('projectId') p: string, @Param('boardId') r: string) {

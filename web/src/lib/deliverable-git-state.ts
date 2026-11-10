@@ -58,3 +58,60 @@ export function deliverableGitState(
   if (changes.some((change) => change.action === 'excluded')) return 'excluded';
   return 'ready';
 }
+
+/** A blocked sibling never changes the status of this document's verified bytes. */
+export function documentGitState(
+  data: Status | undefined,
+  copyId: string | undefined,
+  itemId: string,
+  documentId: string,
+  name: string,
+  checking = false,
+  failed = false,
+): DeliverableGitState {
+  const overall = deliverableGitState(data, copyId, itemId, checking, failed);
+  if (
+    !data ||
+    [
+      'off',
+      'noCopy',
+      'checking',
+      'syncing',
+      'error',
+      'readOnly',
+      'excluded',
+    ].includes(overall)
+  )
+    return overall;
+  const copy = data.copies.find((copy) => copy.id === copyId);
+  const proposal = data.proposal;
+  if (
+    !proposal ||
+    !copy?.context ||
+    proposal.context?.branch !== copy.context.branch ||
+    proposal.context?.head !== copy.context.head
+  )
+    return overall;
+  const changes = proposal.changes.filter(
+    (change) =>
+      change.deliverableId === itemId &&
+      (change.documentId === documentId ||
+        (!change.documentId && change.document === name)),
+  );
+  const structural = proposal.changes.some(
+    (change) =>
+      change.action === 'conflict' &&
+      !change.document &&
+      (!change.deliverableId ||
+        (change.deliverableId === itemId &&
+          !['metadata_baseline_missing', 'metadata_changed_both'].includes(
+            change.reason,
+          ))),
+  );
+  if (structural || changes.some((change) => change.action === 'conflict'))
+    return 'error';
+  if (changes.some((change) => ['import', 'rename'].includes(change.action)))
+    return 'review';
+  if (changes.some((change) => change.action === 'export')) return 'pending';
+  return 'ready';
+}

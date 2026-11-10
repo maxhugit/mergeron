@@ -109,7 +109,7 @@ test.each([
         );
         expect(
           await screen.findByRole('button', {
-            name: 'Confirmer et synchroniser',
+            name: 'Appliquer les documents sans conflit',
           }),
         ).toBeDisabled();
         const deletion = await screen.findByText(
