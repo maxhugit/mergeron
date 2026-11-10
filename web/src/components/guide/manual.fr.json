@@ -200,7 +200,7 @@
             "title": "Ouvrir, lire et retrouver un agent",
             "paragraphs": [
               "La cloche à gauche du compte ouvre un panneau à droite. Son en-tête reste fixe ; seule la liste défile. Le panneau reste ouvert lorsque vous changez d’agent.",
-              "Les événements comprennent fins de travail, échecs, demandes d’approbation, questions et erreurs de l’interface. Les erreurs sont rouges. Cliquer marque la notification comme lue et ouvre l’agent ou le projet concerné."
+              "Les événements comprennent les échecs, demandes d’approbation, questions et erreurs de l’interface. Les fins de travail réussies ne figurent pas dans le centre de notifications. Les erreurs sont rouges. Cliquer marque la notification comme lue et ouvre l’agent ou le projet concerné."
             ]
           },
           {
