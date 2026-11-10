@@ -568,5 +568,6 @@
   "gitDocumentUseMergeron": "Keep Mergeron version",
   "gitDocumentUseGit": "Import Git version",
   "gitDocumentChanged": "The correction failed or the data changed. Refresh the comparison before trying again.",
-  "gitDocumentResolved": "Document correction recorded."
+  "gitDocumentResolved": "Document correction recorded.",
+  "explorerTabPreferenceUnavailable": "The preferred project tab cannot be loaded or saved right now. Navigation remains available."
 }

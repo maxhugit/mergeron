@@ -26,6 +26,16 @@ old cache, ignores superseded replies, and shows the requested directory even
 when registration fails so its own read error stays visible. It never clears
 the root first, preserving expansion and selection for the same directory.
 
+The right explorer's selected tab is saved on the connected person's profile,
+separately for each project, through `GET/PATCH /api/auth/me/project-explorer/:projectId`.
+All agents in that project share the choice, including after reloading or signing
+in on another device. An explicit tab click saves the preference; revealing a
+task, deliverable or directory from a contextual action changes only the current
+view. An unavailable tab falls back to Folders without overwriting the saved
+choice. Failed saves are shown and navigation remains usable. Project access and
+the person identity are checked on every read and write; this preference grants
+no additional access and stores no conversation or document content.
+
 `ConversationFrame` and its scroller keep the same React identity across sibling
 view changes. Inactive surfaces retain geometry using `visibility` and `inert`;
 portalled controls observe the surface activity context and close on withdrawal.
