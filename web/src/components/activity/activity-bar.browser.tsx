@@ -14,6 +14,7 @@ import { ActivityBar, ActivityButton } from './activity-bar';
 import { useConnectionStore } from '@/stores/connection-store';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
+import { waitForDialogClose } from '@/test/wait-for-dialog-close';
 const navigation = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigation.navigate,
@@ -76,7 +77,7 @@ async function setup(width: number) {
   );
   useConnectionStore.setState({ connected: true });
   client = new QueryClient();
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <ActivityProvider owner="synthetic">
         <div style={{ height: '100dvh' }} className="flex min-h-0 flex-col">
@@ -107,10 +108,11 @@ async function setup(width: number) {
     </QueryClientProvider>,
   );
   await waitFor(() => expect(client.isFetching()).toBe(0));
+  return view;
 }
 for (const width of [1280, 820, 390])
   test(`status bar and menu at ${width}px`, async () => {
-    await setup(width);
+    const view = await setup(width);
     const bar = screen.queryByTestId('platform-activity-bar');
     if (width === 390) expect(bar).toBeNull();
     else {
@@ -138,22 +140,34 @@ for (const width of [1280, 820, 390])
     fireEvent.click(
       screen.getAllByRole('button', { name: 'État et activité' })[0],
     );
-    const dialog = await screen.findByRole('dialog', {
-      name: 'État et activité',
-    });
-    await waitFor(() => expect(getComputedStyle(dialog).opacity).toBe('1'));
+    await screen.findByRole('dialog', { name: 'État et activité' });
+    await expect
+      .poll(
+        () =>
+          getComputedStyle(
+            screen.getByRole('dialog', { name: 'État et activité' }),
+          ).opacity,
+      )
+      .toBe('1');
+    const dialog = screen.getByRole('dialog', { name: 'État et activité' });
     expect(dialog.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       window.innerHeight,
     );
     fireEvent.keyDown(dialog, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitForDialogClose(dialog, view.container);
     fireEvent.click(
       screen.getAllByRole('button', { name: 'État et activité' })[0],
     );
-    const reopened = await screen.findByRole('dialog', {
-      name: 'État et activité',
-    });
-    await waitFor(() => expect(getComputedStyle(reopened).opacity).toBe('1'));
+    await screen.findByRole('dialog', { name: 'État et activité' });
+    await expect
+      .poll(
+        () =>
+          getComputedStyle(
+            screen.getByRole('dialog', { name: 'État et activité' }),
+          ).opacity,
+      )
+      .toBe('1');
+    const reopened = screen.getByRole('dialog', { name: 'État et activité' });
     expect(screen.getByText('Agent à confirmer')).toBeTruthy();
     expect(screen.getByText(/mises à jour du serveur/)).toBeTruthy();
     await page.screenshot({
@@ -175,7 +189,7 @@ for (const width of [1280, 820, 390])
       to: '/t/$threadId',
       params: { threadId: 'waiting-agent' },
     });
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitForDialogClose(reopened, view.container);
     expect(
       (screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement)
         .value,
