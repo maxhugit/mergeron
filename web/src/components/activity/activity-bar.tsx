@@ -27,7 +27,7 @@ import { useActivity } from './activity-state';
 export function ActivityButton() {
   const state = useActivity();
   const breakpoint = useBreakpoint();
-  const { t } = useTranslation();
+  const { t } = useTranslation(['activity', 'common'], { nsMode: 'fallback' });
   if (!state || breakpoint === 'desktop') return null;
   const waiting = !state.data?.agents.stale
     ? state.data?.agents.waiting
@@ -56,7 +56,7 @@ export function ActivityButton() {
 }
 function ActivityDetails() {
   const state = useActivity()!;
-  const { t } = useTranslation();
+  const { t } = useTranslation(['activity', 'common'], { nsMode: 'fallback' });
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const data = state.data;
@@ -230,7 +230,7 @@ function ConnectionIcon() {
 export function ActivityBar() {
   const state = useActivity();
   const breakpoint = useBreakpoint();
-  const { t } = useTranslation();
+  const { t } = useTranslation(['activity', 'common'], { nsMode: 'fallback' });
   if (!state) return null;
   const data = state.data;
   const countsKnown = data && !data.agents.stale;

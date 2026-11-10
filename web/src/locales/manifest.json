@@ -33,6 +33,7 @@
     "runtimeSettings",
     "mockups",
     "headerControls",
-    "notifications"
+    "notifications",
+    "activity"
   ]
 }
