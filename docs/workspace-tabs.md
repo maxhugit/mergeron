@@ -396,3 +396,26 @@ L’aperçu des tâches et la sidebar affichent l’avancement global du parent 
 par le serveur, qui inclut toutes ses sous-tâches, pas seulement celles de l’agent.
 Un échec de sauvegarde conserve la valeur non enregistrée et propose de réessayer
 ou d’actualiser ; aucune modification concurrente n’est écrasée silencieusement.
+
+## Barre d’état et activité
+
+Sur ordinateur, une barre de 28 pixels reste sous l’ensemble de l’espace de
+travail. Elle indique la connexion temps réel, les agents actifs ou en attente,
+les opérations suivies et l’environnement avec la version installée de
+l’application. Cliquer sur la barre ouvre le détail et permet de rejoindre
+l’agent concerné. Une intervention est comptée par agent, même si plusieurs
+questions attendent sa réponse.
+
+Sur tablette, la barre est compacte et peut être masquée depuis le menu
+**État et activité**. Ce choix est conservé sur cet appareil, séparément pour
+chaque profil. Sur mobile, aucune barre permanente ne prend de place : le
+bouton Activité de l’en-tête ouvre le même détail dans un panneau inférieur.
+Son badge indique les agents qui attendent une intervention.
+
+Les compteurs respectent les droits du profil connecté. Les opérations suivies
+sont les traitements audio/vidéo de ce compte et les préparations d’environnements
+de test accessibles ; ils n’incluent pas les mises à jour du serveur. Le détail
+le précise. Les listes sont limitées à 30 lignes, avec un total complet. Une
+lecture indisponible ou périmée n’est jamais présentée comme zéro agent actif.
+Le renouvellement des données est mutualisé, réagit aux signaux de conversation
+et se fait toutes les 15 secondes au premier plan, sans réveiller de conteneur.

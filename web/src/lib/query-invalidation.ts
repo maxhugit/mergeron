@@ -91,6 +91,7 @@ function scheduleInvalidate(
  */
 export function invalidateThreadListSoon(queryClient: QueryClient): void {
   scheduleInvalidate(queryClient, 'threadList', [
+    ['platform-activity'],
     threadsListOverviewQueryKey(),
     threadsListThreadsQueryKey(),
     threadsListBranchTreesQueryKey(),

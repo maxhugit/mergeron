@@ -1,3 +1,5 @@
+import { ActivityProvider } from '@/components/activity/activity-provider';
+import { ActivityBar } from '@/components/activity/activity-bar';
 import { NotificationCenter } from '@/components/notifications/notification-center';
 import { ProfileTextSizeApplier } from '@/components/account/profile-text-size';
 /**
@@ -92,8 +94,8 @@ function AuthenticatedContent() {
     session.error instanceof AuthIdentityChangedError ||
     Boolean(
       verified &&
-        retained &&
-        sessionOwner(retained) !== sessionOwner(session.data!),
+      retained &&
+      sessionOwner(retained) !== sessionOwner(session.data!),
     );
   if (verified && !changed && session.data !== retained)
     setRetained(session.data!);
@@ -472,76 +474,83 @@ function AuthenticatedWorkspace({
   }, [isDesktop, setSidebarOpen]);
 
   return (
-    <TooltipProvider>
-      <ProfileTextSizeApplier sizes={profileTextSizes} />
-      <div className="flex h-full overflow-hidden bg-background">
-        {/* Desktop: inline sidebar with collapse animation */}
-        {isDesktop && (
-          <aside
-            id={SIDEBAR_REGION_ID}
-            className={cn(
-              'relative z-10 shrink-0 overflow-hidden border-r border-[var(--glass-border-subtle)] transition-[width] duration-200 ease-in-out',
-              desktopSidebarCollapsed ? 'w-0 border-r-0' : 'w-64',
+    <ActivityProvider owner={browserOwner}>
+      <TooltipProvider>
+        <ProfileTextSizeApplier sizes={profileTextSizes} />
+        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            {/* Desktop: inline sidebar with collapse animation */}
+            {isDesktop && (
+              <aside
+                id={SIDEBAR_REGION_ID}
+                className={cn(
+                  'relative z-10 shrink-0 overflow-hidden border-r border-[var(--glass-border-subtle)] transition-[width] duration-200 ease-in-out',
+                  desktopSidebarCollapsed ? 'w-0 border-r-0' : 'w-64',
+                )}
+              >
+                <div className="flex h-full w-64 flex-col">
+                  {administrationView && isAdministrator ? (
+                    <SettingsSidebar />
+                  ) : (
+                    <ThreadSidebar />
+                  )}
+                </div>
+              </aside>
             )}
-          >
-            <div className="flex h-full w-64 flex-col">
-              {administrationView && isAdministrator ? (
-                <SettingsSidebar />
-              ) : (
-                <ThreadSidebar />
-              )}
-            </div>
-          </aside>
-        )}
 
-        {/* Mobile/Tablet: sidebar as Sheet overlay */}
-        {!isDesktop && (
-          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent
-              side="left"
-              className="mobile-sidebar-sheet !w-[280px] p-0 sm:!max-w-[320px]"
-              showCloseButton={false}
-            >
-              <SheetTitle className="sr-only">{t('navigation')}</SheetTitle>
-              {administrationView && isAdministrator ? (
-                <SettingsSidebar />
-              ) : (
-                <ThreadSidebar />
-              )}
-            </SheetContent>
-          </Sheet>
-        )}
+            {/* Mobile/Tablet: sidebar as Sheet overlay */}
+            {!isDesktop && (
+              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                <SheetContent
+                  side="left"
+                  className="mobile-sidebar-sheet !w-[280px] p-0 sm:!max-w-[320px]"
+                  showCloseButton={false}
+                >
+                  <SheetTitle className="sr-only">{t('navigation')}</SheetTitle>
+                  {administrationView && isAdministrator ? (
+                    <SettingsSidebar />
+                  ) : (
+                    <ThreadSidebar />
+                  )}
+                </SheetContent>
+              </Sheet>
+            )}
 
-        {/* Isolated so nothing in this column can paint over the sidebar —
+            {/* Isolated so nothing in this column can paint over the sidebar —
             measured: without it, a positive z-index here covers the sidebar.
             Note this also makes the column a backdrop root, so a
             `backdrop-filter` inside it samples nothing. That is why the
             composer is an opaque surface rather than a glass one; the
             transcript fades out under it instead. See chat-input.tsx. */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col isolate">
-          {!pathname.startsWith('/t/') && <ChatHeader />}
-          <CodexStatusBanner />
-          <DetachedDocumentRecovery />
-          {adminOnlyView && !isAdministrator ? (
-            <div role="alert" className="p-6">
-              {t('administratorAccessRequired')}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col isolate">
+              {!pathname.startsWith('/t/') && <ChatHeader />}
+              <CodexStatusBanner />
+              <DetachedDocumentRecovery />
+              {adminOnlyView && !isAdministrator ? (
+                <div role="alert" className="p-6">
+                  {t('administratorAccessRequired')}
+                </div>
+              ) : (
+                <>
+                  <Outlet />
+                  <AgentWorkspaceHost
+                    activeThreadId={
+                      /^\/t\/([^/]+)\/?$/.exec(pathname)?.[1] ?? null
+                    }
+                  />
+                </>
+              )}
+              {isAdministrator && (
+                <GlobalFilesHost active={pathname === '/files'} />
+              )}
             </div>
-          ) : (
-            <>
-              <Outlet />
-              <AgentWorkspaceHost
-                activeThreadId={/^\/t\/([^/]+)\/?$/.exec(pathname)?.[1] ?? null}
-              />
-            </>
-          )}
-          {isAdministrator && (
-            <GlobalFilesHost active={pathname === '/files'} />
-          )}
+          </div>
+          <ActivityBar />
         </div>
-      </div>
-      <TerminalHost />
-      <NotificationCenter />
-      <SnackbarContainer />
-    </TooltipProvider>
+        <TerminalHost />
+        <NotificationCenter />
+        <SnackbarContainer />
+      </TooltipProvider>
+    </ActivityProvider>
   );
 }
