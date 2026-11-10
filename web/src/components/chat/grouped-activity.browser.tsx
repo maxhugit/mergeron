@@ -67,6 +67,11 @@ test.each([390, 1100])(
     expect(clock).toBeVisible();
     const response = document.querySelector('[data-agent-response]')!;
     expect(clock.closest('[data-agent-response]')).toBeNull();
+    const clockRow = clock.closest('[data-turn-elapsed]')!;
+    const bubble = document.querySelector('[data-agent-bubble]')!;
+    expect(clockRow.getBoundingClientRect().left).toBe(
+      bubble.getBoundingClientRect().left,
+    );
     expect(clock.getBoundingClientRect().bottom).toBeLessThan(
       response.getBoundingClientRect().top,
     );

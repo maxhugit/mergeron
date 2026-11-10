@@ -371,7 +371,9 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
 
   return (
     <div className="mb-6 min-w-0 space-y-2">
-      <TurnElapsed entry={entry} running={isRunning} />
+      <div className="ml-11">
+        <TurnElapsed entry={entry} running={isRunning} />
+      </div>
       <div className="flex min-w-0 gap-3" data-agent-response>
         <Avatar className="mt-1 h-8 w-8 shrink-0">
           <AvatarFallback className="glass-1 bg-transparent">
@@ -380,7 +382,10 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
         </Avatar>
 
         <div className="min-w-0 flex-1">
-          <div className="glass-1 min-w-0 space-y-2 rounded-2xl px-4 py-3">
+          <div
+            className="glass-1 min-w-0 space-y-2 rounded-2xl px-4 py-3"
+            data-agent-bubble
+          >
             {planVisible && entry.plan && (
               <PlanPanel plan={entry.plan} completed={entry.completed} />
             )}
