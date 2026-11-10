@@ -353,6 +353,7 @@
   "notScheduled": "Not scheduled",
   "lastActivity": "Last activity",
   "conversationsAreAvailableInTheSidebar": "Conversations are available in the sidebar.",
+  "activityChangesWithin14DaysRiskOverdueWorkOrAnAgentErrorToWatchADeadlineWithin7a44255b7": "Activity: changes within 14 days. Risk: overdue work or an agent error. To watch: a deadline within 7 days or AI work awaiting validation.",
   "workloadIsEstimatedFromRemainingProgressSubtasksReplaceTheirParentEstimateMissid4ed162a": "Workload is estimated from remaining progress. Subtasks replace their parent estimate. Missing estimates are not counted. Progress is the average of top-level tasks.",
   "updatedAt": "Updated at",
   "automaticRefreshEveryMinute": "Automatic refresh every minute",

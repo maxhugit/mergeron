@@ -353,6 +353,7 @@
   "notScheduled": "Non planifiée",
   "lastActivity": "Dernière activité",
   "conversationsAreAvailableInTheSidebar": "Les conversations sont accessibles depuis la barre latérale.",
+  "activityChangesWithin14DaysRiskOverdueWorkOrAnAgentErrorToWatchADeadlineWithin7a44255b7": "Activité : modifications dans les 14 derniers jours. Risque : élément en retard ou agent en erreur. À surveiller : échéance sous 7 jours ou travail IA à valider.",
   "workloadIsEstimatedFromRemainingProgressSubtasksReplaceTheirParentEstimateMissid4ed162a": "La charge est estimée selon l’avancement restant. Les sous-tâches remplacent l’estimation de leur parent. Les estimations manquantes ne sont pas comptées. L’avancement est la moyenne des tâches principales.",
   "updatedAt": "Actualisé à",
   "automaticRefreshEveryMinute": "Actualisation automatique chaque minute",

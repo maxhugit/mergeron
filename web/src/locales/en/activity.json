@@ -1,5 +1,4 @@
 {
-  "activityChangesWithin14DaysRiskOverdueWorkOrAnAgentErrorToWatchADeadlineWithin7a44255b7": "Activity: changes within 14 days. Risk: overdue work or an agent error. To watch: a deadline within 7 days or AI work awaiting validation.",
   "activityTitle": "Status and activity",
   "activityDescription": "Connection, agents and running operations available to your account.",
   "activityConnectionConnected": "Real-time connection established",

@@ -1,5 +1,4 @@
 {
-  "activityChangesWithin14DaysRiskOverdueWorkOrAnAgentErrorToWatchADeadlineWithin7a44255b7": "Activité : modifications dans les 14 derniers jours. Risque : élément en retard ou agent en erreur. À surveiller : échéance sous 7 jours ou travail IA à valider.",
   "activityTitle": "État et activité",
   "activityDescription": "Connexion, agents et opérations en cours accessibles à votre compte.",
   "activityConnectionConnected": "Connexion temps réel établie",
