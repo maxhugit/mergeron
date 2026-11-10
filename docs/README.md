@@ -10,6 +10,9 @@ Pour situer le code, consulter les [répertoires racine du dépôt](../README.md
 - [Maquettes interactives](interactive-mockups.md) : valider une interface dans un
   onglet de conversation et conserver une version dans un livrable.
 
+Les [dernières évolutions fusionnées](dernieres-evolutions.md) résument les
+corrections récentes et leurs parcours, en complément des versions taguées.
+
 ## Installer et exploiter sur Docker
 
 Le [premier administrateur et ses contrôles techniques](initial-admin-setup.md)

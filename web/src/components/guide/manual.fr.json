@@ -63,6 +63,13 @@
               }
             ],
             "warning": "Une réponse IA, une tâche terminée et un document approuvé ne sont pas équivalents. La validation du résultat reste une décision humaine."
+          },
+          {
+            "title": "Évolutions récentes et version installée",
+            "paragraphs": [
+              "Les dernières évolutions du guide incluent la lecture des réponses autour des relances et questions, la correction Git par document, les maquettes archivées et les prérequis de test explicites.",
+              "Consultez Serveur → Version actuelle pour connaître le code réellement installé. La frise Historique des versions décrit les tags publiés ; les corrections fusionnées après le dernier tag ne font pas encore partie de ce tag. Une fusion ne met pas automatiquement votre installation à jour."
+            ]
           }
         ],
         "related": [
@@ -200,7 +207,8 @@
             "title": "Ouvrir, lire et retrouver un agent",
             "paragraphs": [
               "La cloche à gauche du compte ouvre un panneau à droite. Son en-tête reste fixe ; seule la liste défile. Le panneau reste ouvert lorsque vous changez d’agent.",
-              "Les événements comprennent les échecs, demandes d’approbation, questions et erreurs de l’interface. Les fins de travail réussies ne figurent pas dans le centre de notifications. Les erreurs sont rouges. Cliquer marque la notification comme lue et ouvre l’agent ou le projet concerné."
+              "Les événements comprennent les échecs, demandes d’approbation, questions et erreurs de l’interface. Les fins de travail réussies ne figurent pas dans le centre de notifications. Les erreurs sont rouges. Cliquer marque la notification comme lue et ouvre l’agent ou le projet concerné.",
+              "Le panneau commence en haut de la fenêtre et utilise sa hauteur disponible ; son en-tête reste fixe et la liste défile séparément."
             ]
           },
           {
@@ -649,6 +657,13 @@
               "Les détails techniques peuvent être repliés, mais les erreurs connues et décisions en attente restent visibles. Une attente de confirmation n’est pas nécessairement une panne."
             ],
             "warning": "Arrêter un agent, retirer un accès ou quitter une session n’annule pas les effets déjà acceptés sur les fichiers ou services externes."
+          },
+          {
+            "title": "Questions et reprise du travail",
+            "paragraphs": [
+              "Les questions de l’agent et les sollicitations MCP restent visibles au point où elles ont interrompu la réponse. Répondre permet la reprise sous cette intervention ; cela ne déplace pas la carte au bas de toute la réponse.",
+              "Une carte déjà traitée reste un repère de lecture. Si sa demande a expiré, utilisez l’action proposée pour préparer une réponse normale dans le brouillon, puis envoyez-la explicitement. Préparer une réponse ne réactive pas l’ancienne autorisation."
+            ]
           }
         ],
         "related": [
@@ -675,7 +690,7 @@
             "actions": [
               {
                 "label": "Sans détails techniques",
-                "effect": "Regroupe l’activité technique derrière une ligne dépliable sans supprimer les réponses."
+                "effect": "Masque les activités techniques courantes sans retirer les réponses, erreurs et demandes qui nécessitent votre attention."
               },
               {
                 "label": "Détails repliés",
@@ -699,6 +714,14 @@
             "title": "Lire une conversation en affichage compact",
             "paragraphs": [
               "Les questions et réponses longues restent dans la largeur disponible de l’écran. Le texte se replie ; un tableau ou un bloc de code peut conserver son propre défilement horizontal, sans élargir toute la conversation. Vous pouvez ainsi relire les grandes instructions sur téléphone."
+            ]
+          },
+          {
+            "title": "Garder le fil pendant une intervention",
+            "paragraphs": [
+              "Lorsque vous envoyez une précision pendant la rédaction, le début de réponse reste au-dessus de votre message et la suite apparaît en dessous. Le même principe s’applique aux cartes de question : après votre réponse, la continuation se lit sous la carte, qui reste à sa place.",
+              "Cette séparation est visuelle : elle ne crée ni nouveau tour d’exécution ni nouvelle branche. Plusieurs interventions peuvent couper le même message de l’agent. Les outils et autorisations ne sont pas recopiés dans chaque fragment.",
+              "Les limites déjà observées sont conservées lors d’une reconnexion ou d’un changement d’agent. Une relance refusée est retirée et les morceaux de réponse se rejoignent. Un historique rechargé utilise les positions natives disponibles ; la position exacte d’une ancienne question ne peut pas être retrouvée si son outil manque dans l’historique et que ce navigateur ne l’a jamais reçue."
             ]
           }
         ],
@@ -960,6 +983,26 @@
               "Dans Environnement de test, Exécution regroupe l’activation et la recette manuelle ou la gestion par les agents. Ressources et durée contient la durée, la mémoire, les CPU et les informations de stockage. Configuration avancée contient les variables et les services JSON du profil manuel.",
               "Les changements restent présents entre les sous-onglets. Enregistrer le profil et Annuler restent en bas du panneau. Le profil enregistré s’applique à un environnement recréé ; les technologies autorisées et les valeurs masquées existantes sont conservées."
             ]
+          },
+          {
+            "title": "Comprendre un démarrage indisponible",
+            "paragraphs": [
+              "Autoriser les environnements de test dans le projet ne suffit pas à activer leur infrastructure. Mergeron vérifie aussi le service global, le Manager, le domaine des aperçus, l’accès de consultation et les runtimes autorisés.",
+              "Les prérequis manquants sont indiqués dans les paramètres du projet et dans l’onglet de test. Une commande de démarrage ou un runtime non autorisé peut également bloquer la recette. Corrigez le prérequis indiqué au lieu de désactiver les protections.",
+              "Tant que ces prérequis ne sont pas vérifiés, Démarrer reste indisponible. Une erreur de lecture du contrôle n’est pas assimilée à une autorisation. L’arrêt d’une instance existante conserve son propre parcours."
+            ]
+          },
+          {
+            "title": "Procédure complète avant le premier lancement",
+            "steps": [
+              "L’administrateur de l’hôte active MERGERON_PREVIEWS_ENABLED et configure le même MERGERON_PREVIEW_DOMAIN dans l’application et le Manager, avec MERGERON_PUBLIC_URL en HTTPS. Ces variables doivent être réellement appliquées aux conteneurs.",
+              "Il configure le DNS wildcard, le certificat HTTPS et le routage des aperçus, puis le catalogue MERGERON_PREVIEW_IMAGES du Manager. Les images autorisées sont épinglées par digest et présentes localement ; l’agent ne reçoit pas le socket Docker.",
+              "Dans Paramètres du projet → Environnement de test → Exécution, autorisez le test et, pour le mode délégué, laissez les agents préparer et gérer leur environnement. Sélectionnez au moins une technologie proposée par le Manager, ajustez les ressources et la durée, puis enregistrez.",
+              "Vérifiez le dossier de référence de l’agent et ses droits : il doit contenir les sources et être autorisé. Dans une session administrateur en écriture, demandez à l’agent de préparer puis démarrer le test.",
+              "L’agent utilise project_preview_read (status) pour lire les prérequis, project_preview_prepare pour enregistrer sa recette, puis project_preview_manage (start) pour lancer. La recette indique les commandes, le port HTTP et la page de contrôle ; le serveur écoute sur 0.0.0.0 dans le runtime.",
+              "Consultez les logs et attendez l’état prêt avec une URL disponible. Ouvrir l’aperçu vérifie vos droits. Une fusion de PR n’est pas nécessaire à ce lancement ; la durée choisie ou un arrêt explicite termine ensuite le test."
+            ],
+            "warning": "Cocher l’autorisation du projet ne configure ni le Manager, ni le DNS, ni HTTPS. « Manager non configuré » peut désigner uniquement son service d’aperçus désactivé. En cas de prérequis manquant, corrigez le réglage indiqué sans désactiver TLS, le proxy ou la sandbox."
           }
         ],
         "related": [
@@ -1298,6 +1341,14 @@
               "Vérifiez la conversation et la pièce jointe dans son brouillon, complétez votre demande puis envoyez-la explicitement.",
               "Les menus regroupent les actions de document, de fichier et Git selon le contexte ; joindre un document ne modifie ni sa version ni sa validation."
             ]
+          },
+          {
+            "title": "Conserver et rouvrir une maquette interactive",
+            "paragraphs": [
+              "Sur votre demande, l’agent peut publier une révision de maquette dans un livrable. Cette publication crée toujours une archive ZIP, même pour un unique fichier HTML. Elle contient la page index.html et un manifeste qui identifie la révision publiée.",
+              "Cliquer sur cette archive reconnue ouvre son aperçu interactif. Les vues de code source et des fichiers de l’archive permettent d’inspecter ce qui a été enregistré. L’aperçu correspond à cette version du document, pas à une révision de conversation ultérieure.",
+              "Les images, styles et scripts doivent actuellement être intégrés au HTML autonome. La publication ne collecte pas automatiquement des fichiers JS ou des images voisins sur disque. Les ressources externes et l’accès à Mergeron restent bloqués par la sandbox. Les anciens exports HTML restent lisibles ; une nouvelle publication ZIP crée un document distinct lorsque le format historique l’exige."
+            ]
           }
         ],
         "related": [
@@ -1490,6 +1541,17 @@
               "La confirmation est liée à la branche et au commit examinés. Le tableau des copies conserve les erreurs et les exports en attente séparément. Une copie en conflit ne bloque pas les autres. Après un redémarrage, utilisez Examiner les livrables Git pour reprendre avec vos droits actuels. Une modification refusée pendant une synchronisation peut être réessayée ensuite. Un ancien contenu Git reconnu dans les versions conservées est réexporté depuis Mergeron ; un contenu Git inconnu reste à examiner et les changements des deux côtés provoquent un conflit. La comparaison repose sur le contenu, jamais sur la date du fichier. Dans la barre latérale Livrables, Git local affiche la copie, la branche et l’état de chaque livrable. Un clic ouvre le détail. À jour localement ne signifie pas commité ni publié sur GitHub ; une nouvelle vérification ou une erreur retire le vert précédent."
             ],
             "warning": "Une synchronisation n’est ni une validation humaine ni un push Git. Examinez les conflits et conservez les sauvegardes nécessaires avant de confirmer les échanges."
+          },
+          {
+            "title": "Corriger un document sans bloquer les autres",
+            "paragraphs": [
+              "La synchronisation est indépendante par document, dans la copie et la branche de cet agent. Un document en conflit peut rester à examiner pendant que les autres exports vérifiés continuent. Les métadonnées et fichiers inconnus ne sont pas remplacés pour forcer le transfert.",
+              "Dans Livrables, le fond du badge de version est orange lorsqu’un export, un import ou une revue reste en attente ; il est rouge pour un conflit ou une erreur bloquante. Un fond neutre, à lui seul, ne prouve pas qu’un document a été commité ou publié.",
+              "Cliquez sur la version orange ou rouge pour ouvrir la fenêtre dédiée au document : comparez les versions et les fichiers, choisissez la version Mergeron à conserver dans Git ou la version Git à importer, puis confirmez la correction examinée. Les choix dépendent de vos droits et des protections du fichier.",
+              "La confirmation est revérifiée côté serveur. Si la branche, le contenu ou la version change entre-temps, relisez la comparaison. Remplacer un fichier Git conserve son contenu précédent en récupération privée ; importer crée une nouvelle version Mergeron sans effacer les anciennes. Les documents voisins restent inchangés.",
+              "Lorsque la comparaison globale le propose, Appliquer les documents sans conflit traite les opérations sûres et laisse les écarts restants visibles. Une application partielle ne signifie pas que toute la copie est synchronisée."
+            ],
+            "warning": "Une couleur orange n’autorise aucun écrasement. Les fichiers protégés, ignorés, hors chemin autorisé ou dépassant les limites ne sont pas forcés. La synchronisation des livrables se gère dans Livrables ; Sources reste consacré aux opérations Git."
           }
         ],
         "related": [
