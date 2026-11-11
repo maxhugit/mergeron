@@ -1,3 +1,11 @@
+export type PreviewSource =
+  | { type: 'agent_reference' }
+  | {
+      type: 'git_copy';
+      connectionId: string;
+      copyId: string;
+      subdirectory: string;
+    };
 export interface PreviewProfile {
   enabled: boolean;
   agentManaged: boolean;
@@ -35,6 +43,7 @@ export type AgentPreviewRecipe = Pick<
   | 'updateMode'
 >;
 declare const value: {
+  source(input: unknown): PreviewSource;
   LIFETIME_MINUTES: readonly (number | null)[];
   lifetime(input: unknown): number | null;
   ID: RegExp;

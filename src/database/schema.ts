@@ -397,6 +397,18 @@ export const agentPreviewRecipes = sqliteTable('agent_preview_recipes', {
 });
 
 /** One preview slot per work-agent family. No credentials or transport URLs. */
+export const agentPreviewSources = sqliteTable('agent_preview_sources', {
+  agentId: text('agent_id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  source: text('source', { mode: 'json' })
+    .$type<import('../../runtime/preview-profile.cjs').PreviewSource>()
+    .notNull(),
+  revision: text('revision').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 export const agentPreviews = sqliteTable('agent_previews', {
   agentId: text('agent_id').primaryKey(),
   threadId: text('thread_id').notNull(),
@@ -407,6 +419,9 @@ export const agentPreviews = sqliteTable('agent_previews', {
   runId: text('run_id').notNull(),
   requestId: text('request_id').notNull(),
   sourcePath: text('source_path').notNull(),
+  source: text('source', { mode: 'json' }).$type<
+    import('../../runtime/preview-profile.cjs').PreviewSource
+  >(),
   sourceSha: text('source_sha'),
   sourceFingerprint: text('source_fingerprint'),
   ownerPersonId: text('owner_person_id'),

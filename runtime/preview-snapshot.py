@@ -1,5 +1,6 @@
 """Bounded USTAR export. All source traversal uses no-follow directory FDs."""
 import hashlib
+import argparse
 import io
 import json
 import os
@@ -8,7 +9,7 @@ import stat
 import sys
 import tarfile
 
-EXCLUDED = re.compile(r"^(?:\.git|\.env(?:\..*)?|\.ssh|\.codex|\.aws|\.docker|\.kube|\.config|\.local|\.npmrc|\.yarnrc(?:\.yml)?|\.netrc|\.pypirc|\.gitconfig|\.secrets|credentials|id_rsa|id_ed25519|authorized_keys|\.mergeron.*|\.webui|\.agent-document-drafts|node_modules|\.venv|venv|\.cache|\.next|\.pytest_cache|__pycache__|dist|build|coverage|artifacts)$", re.I)
+EXCLUDED = re.compile(r"^(?:\.git|\.env(?:\..*)?|\.ssh|\.codex|\.aws|\.docker|\.kube|\.config|\.local|\.npmrc|\.yarnrc(?:\.yml)?|\.netrc|\.pypirc|\.gitconfig|\.secrets|secrets|credentials|id_rsa|id_ed25519|authorized_keys|\.mergeron.*|\.webui|\.agent-document-drafts|node_modules|\.venv|venv|\.cache|\.next|\.nuxt|\.turbo|\.output|\.vite|\.parcel-cache|test-results|playwright-report|screenshots|captures|\.pytest_cache|__pycache__|dist|build|coverage|artifacts)$", re.I)
 # A nested module such as src/logs is source code, not the root output logs/.
 # Keep only source-code files there: never broaden this exception to JSON,
 # NDJSON, text logs, archives or the otherwise excluded secret/data names.
@@ -119,17 +120,38 @@ def read_file(root, item):
 
 
 def main():
-    root = open_root(sys.argv[1])
+    parser = argparse.ArgumentParser()
+    parser.add_argument('source')
+    parser.add_argument('--check', action='store_true')
+    parser.add_argument('--prefix', choices=['application'], default='')
+    parser.add_argument('--directory', default='.')
+    parser.add_argument('--package-required', action='store_true')
+    parser.add_argument('--lockfile-required', action='store_true')
+    args = parser.parse_args()
+    if args.directory != '.' and (args.directory.startswith('/') or any(
+            p in ('', '.', '..') or EXCLUDED.match(p) or '\\' in p
+            for p in args.directory.split('/'))):
+        fail('PREVIEW_INVALID_DIRECTORY')
+    root = open_root(args.source)
     try:
         items = inventory(root)
+        names = {row[1] for row in items if row[0] == 'f'}
+        def required(name):
+            return name if args.directory == '.' else args.directory + '/' + name
+        if args.package_required and required('package.json') not in names:
+            fail('PREVIEW_PACKAGE_JSON_MISSING')
+        if args.lockfile_required and not any(required(n) in names for n in ('package-lock.json', 'npm-shrinkwrap.json')):
+            fail('PREVIEW_LOCKFILE_MISSING')
+        if args.directory != '.' and not any(n.startswith(args.directory + '/') for n in names):
+            fail('PREVIEW_APPLICATION_FILES_MISSING')
         if not any(row[0] == "f" for row in items):
             fail("PREVIEW_EMPTY_SOURCE")
-        if len(sys.argv) == 3 and sys.argv[2] == "--check":
+        if args.check:
             print(json.dumps({"fingerprint": hashlib.sha256(json.dumps(items).encode()).hexdigest()}))
             return
         with tarfile.open(fileobj=sys.stdout.buffer, mode="w|", format=tarfile.USTAR_FORMAT) as archive:
             for row in [["d", ".", 0, 0, 0, 0, 0, 0]] + items:
-                entry = tarfile.TarInfo(row[1])
+                entry = tarfile.TarInfo((args.prefix + ('/' + row[1] if row[1] != '.' else '')) if args.prefix else row[1])
                 entry.uid = entry.gid = 11002
                 entry.mtime = 0
                 entry.mode = 0o700 if row[0] == "d" or row[7] else 0o600

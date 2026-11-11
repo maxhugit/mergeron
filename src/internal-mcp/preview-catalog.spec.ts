@@ -94,3 +94,28 @@ it('advertises the lifetime operation and the exact duration choices', () => {
       }).success,
     ).toBe(false);
 });
+
+it('advertises explicit Git source selection, not arbitrary paths or mounts', () => {
+  const input = INTERNAL_MCP_TOOLS.find(
+    (t) => t.name === 'project_preview_manage',
+  )!.input;
+  expect(
+    input.safeParse({
+      operation: 'source',
+      source: {
+        type: 'git_copy',
+        connectionId: 'git',
+        copyId: 'copy',
+        subdirectory: '.',
+      },
+      expectedRevision: null,
+    }).success,
+  ).toBe(true);
+  expect(
+    input.safeParse({
+      operation: 'source',
+      source: { type: 'git_copy', path: '/workspaces/private' },
+      expectedRevision: null,
+    }).success,
+  ).toBe(false);
+});

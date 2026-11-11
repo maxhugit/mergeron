@@ -24,6 +24,7 @@ const api = vi.hoisted(() => ({
   missing: [] as string[],
   prerequisitesFailed: false,
   recipeRequired: false,
+  showSources: false,
 }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: api.admin }),
@@ -48,6 +49,22 @@ vi.mock('@/lib/projects-api', () => ({
         available: api.missing.length === 0,
         missingConfiguration: api.missing,
         preparation: { required: api.recipeRequired },
+        ...(api.showSources
+          ? {
+              sources: {
+                source: { type: 'agent_reference' },
+                revision: null,
+                copies: [
+                  {
+                    type: 'git_copy',
+                    connectionId: 'connection',
+                    copyId: 'local-copy',
+                    subdirectory: '.',
+                  },
+                ],
+              },
+            }
+          : {}),
       };
     }
     if (path.endsWith('/start')) api.running = true;
@@ -125,6 +142,7 @@ beforeEach(async () => {
   api.missing = [];
   api.prerequisitesFailed = false;
   api.recipeRequired = false;
+  api.showSources = false;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -339,4 +357,50 @@ test('read-only viewers have no execution or terminal controls', async () => {
   await screen.findByRole('button', { name: /Application/ });
   expect(screen.queryByRole('button', { name: 'Arrêter' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Terminal' })).toBeNull();
+});
+
+test.each([1180, 390])(
+  'explicit owned Git source selector fits %spx and sends ids without filesystem paths',
+  async (width) => {
+    await page.viewport(width, 800);
+    api.running = false;
+    api.showSources = true;
+    mount();
+    const selector = await screen.findByLabelText(
+      'Source de l’environnement de test',
+    );
+    fireEvent.change(selector, { target: { value: 'local-copy' } });
+    const subdirectory = screen.getByLabelText('Sous-dossier');
+    fireEvent.change(subdirectory, { target: { value: 'web' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Appliquer' }));
+    await waitFor(() =>
+      expect(
+        api.calls.some(
+          (c) => c.path.endsWith('/source') && c.body.expectedRevision === null,
+        ),
+      ).toBe(true),
+    );
+    expect(
+      api.calls.find((c) => c.path.endsWith('/source'))!.body.source,
+    ).toEqual({
+      type: 'git_copy',
+      connectionId: 'connection',
+      copyId: 'local-copy',
+      subdirectory: 'web',
+    });
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/preview-git-source-${width}.png`,
+    });
+  },
+);
+test('source changes are disabled during an active runtime', async () => {
+  api.showSources = true;
+  mount();
+  expect(
+    await screen.findByLabelText('Source de l’environnement de test'),
+  ).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Appliquer' })).toBeDisabled();
 });

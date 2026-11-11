@@ -54,7 +54,8 @@ export class PreviewInspector {
         .map(async (o) => {
           const c = await m.owned(o.id, r, o.component);
           let cpuPercent = null,
-            memoryBytes = null;
+            memoryBytes = null,
+            memory = null;
           if (c.State?.Running) {
             try {
               const s = await m.docker.request(
@@ -82,6 +83,24 @@ export class PreviewInspector {
                   0,
                   used - (s.memory_stats?.stats?.inactive_file ?? 0),
                 );
+              const bytes = (value) =>
+                Number.isFinite(value) && value >= 0 ? value : null;
+              // Raw cgroup usage includes charged tmpfs pages. File and shmem
+              // overlap: expose components, never sum them as separate usage.
+              memory = {
+                usageBytes: bytes(used),
+                limitBytes: bytes(
+                  s.memory_stats?.limit ?? c.HostConfig?.Memory,
+                ),
+                anonymousBytes: bytes(
+                  s.memory_stats?.stats?.anon ?? s.memory_stats?.stats?.rss,
+                ),
+                fileBytes: bytes(
+                  s.memory_stats?.stats?.file ?? s.memory_stats?.stats?.cache,
+                ),
+                sharedBytes: bytes(s.memory_stats?.stats?.shmem),
+                oomKilled: c.State?.OOMKilled === true,
+              };
             } catch {
               /* Missing metrics are unknown, never zero. */
             }
@@ -95,6 +114,7 @@ export class PreviewInspector {
             startedAt: c.State?.StartedAt ?? null,
             cpuPercent,
             memoryBytes,
+            memory,
             terminalAvailable:
               c.State?.Running === true &&
               application(o.component) &&

@@ -27,6 +27,7 @@ import {
   projectPreviewProfiles,
   agentPreviews,
   agentPreviewRecipes,
+  agentPreviewSources,
   projectWorkspaceCopies,
   projectWorkspaces,
   projectGitCopyOwners,
@@ -42,6 +43,7 @@ import { ActiveFoldersService } from '../active-folders/active-folders.service';
 import { workAgentId } from '../projects/git-copy-ownership';
 import contract, {
   type PreviewProfile,
+  type PreviewSource,
 } from '../../runtime/preview-profile.cjs';
 import { PreviewManagerClient } from './preview-manager-client';
 import {
@@ -63,6 +65,10 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   private gateway?: PreviewGateway;
   private timer?: ReturnType<typeof setInterval>;
   private synchronizing = false;
+  private readonly pendingSources = new Map<
+    string,
+    { fingerprint: string; since: number }
+  >();
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: AppDatabase,
     private readonly config: ConfigService,
@@ -96,6 +102,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   }
   async onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+    this.pendingSources.clear();
     await this.gateway?.close();
   }
   private async authorizePreview(
@@ -111,12 +118,17 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     this.identities.requireActive(identity);
     this.identities.requireProject(identity, grant.projectId);
     this.identities.requireThread(identity, grant.threadId);
+    const permittedSource = accessContext.run(
+      { identity, identities: this.identities },
+      () => this.resolveSource(grant.projectId, grant.threadId),
+    );
     const row = this.row(workAgentId(this.db, grant.threadId));
     if (
       !row ||
       row.projectId !== grant.projectId ||
       row.previewId !== grant.previewId ||
       row.runId !== grant.runId ||
+      row.sourcePath !== permittedSource.path ||
       row.state !== 'running'
     )
       throw new ForbiddenException('PREVIEW_ACCESS_DENIED');
@@ -283,15 +295,41 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
           recipe.revision
         )
           throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
-        const active =
-          this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
+        const active = this.resolveSource(projectId, threadId).path;
         if (active !== row.sourcePath)
           throw new ConflictException('PREVIEW_SOURCE_CHANGED');
       };
       check();
-      const fingerprint = await previewSourceFingerprint(row.sourcePath, check);
-      if (fingerprint === row.sourceFingerprint)
+      const selected = this.resolveSource(projectId, threadId);
+      const options = this.snapshotOptions(profile, selected.prefix);
+      const fingerprint = await previewSourceFingerprint(
+        row.sourcePath,
+        check,
+        options,
+      );
+      if (fingerprint === row.sourceFingerprint) {
+        this.pendingSources.delete(scope.agentId);
+        if (row.error)
+          this.db
+            .update(agentPreviews)
+            .set({ error: null })
+            .where(eq(agentPreviews.agentId, scope.agentId))
+            .run();
         return this.status(projectId, threadId);
+      }
+      // Polling is portable across bind mounts and catches external editor writes.
+      // Require a quiet sample before exporting a burst of related file events.
+      if (!manual) {
+        const pending = this.pendingSources.get(scope.agentId);
+        if (pending?.fingerprint !== fingerprint) {
+          this.pendingSources.set(scope.agentId, {
+            fingerprint,
+            since: Date.now(),
+          });
+          return;
+        }
+        if (Date.now() - pending.since < 500) return;
+      }
       snapshotId = randomUUID();
       const target = this.snapshotDirectory(projectId, snapshotId);
       await fs.mkdir(target, { mode: 0o700 });
@@ -299,9 +337,11 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         row.sourcePath,
         path.join(target, 'source.tar'),
         check,
+        options,
       );
       if (
-        fingerprint !== (await previewSourceFingerprint(row.sourcePath, check))
+        fingerprint !==
+        (await previewSourceFingerprint(row.sourcePath, check, options))
       )
         throw new ConflictException('PREVIEW_SOURCE_CHANGED');
       check();
@@ -328,6 +368,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         .run();
       await this.removeSnapshot(projectId, snapshotId);
       snapshotId = undefined;
+      this.pendingSources.delete(scope.agentId);
       return this.status(projectId, threadId);
     } finally {
       if (snapshotId) await this.removeSnapshot(projectId, snapshotId);
@@ -418,7 +459,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   private recipeBinding(projectId: string, agentId: string) {
     return JSON.stringify(['agent', projectId, agentId]);
   }
-  private effectiveProfile(projectId: string, agentId: string) {
+  private baseProfile(projectId: string, agentId: string) {
     const policy = this.stored(projectId);
     if (!policy) throw new ConflictException('PREVIEW_CONFIGURATION_REQUIRED');
     const approved = this.decrypt(policy.encryptedProfile, projectId);
@@ -437,6 +478,206 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         ),
       ),
       revision: policy.revision + ':' + recipe.revision,
+    };
+  }
+  private sourceSelection(agentId: string) {
+    return this.db
+      .select()
+      .from(agentPreviewSources)
+      .where(eq(agentPreviewSources.agentId, agentId))
+      .get();
+  }
+  private effectiveProfile(projectId: string, agentId: string) {
+    const base = this.baseProfile(projectId, agentId);
+    const selection = this.sourceSelection(agentId);
+    if (selection && selection.projectId !== projectId)
+      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+    return {
+      ...base,
+      revision: base.revision + (selection ? ':' + selection.revision : ''),
+    };
+  }
+  private resolveSource(
+    projectId: string,
+    threadId: string,
+    selection?: PreviewSource,
+  ) {
+    const scope = this.scope(projectId, threadId);
+    const source = contract.source(
+      selection ??
+        this.sourceSelection(scope.agentId)?.source ?? {
+          type: 'agent_reference',
+        },
+    );
+    let root: string;
+    if (source.type === 'git_copy') {
+      const copy = this.db
+        .select()
+        .from(projectWorkspaceCopies)
+        .where(eq(projectWorkspaceCopies.id, source.copyId))
+        .get();
+      if (
+        !copy ||
+        copy.id !== source.copyId ||
+        copy.sourceResourceId !== source.connectionId ||
+        copy.projectId !== projectId ||
+        copy.state !== 'ready'
+      )
+        throw new ForbiddenException('PREVIEW_GIT_COPY_ACCESS_DENIED');
+      const workspace = this.db
+        .select()
+        .from(projectWorkspaces)
+        .where(eq(projectWorkspaces.id, copy.localWorkspaceId))
+        .get();
+      const owner = this.db
+        .select()
+        .from(projectGitCopyOwners)
+        .where(eq(projectGitCopyOwners.copyId, copy.id))
+        .get();
+      const expected = path.join(
+        '/workspaces',
+        projectId,
+        '.mergeron-system',
+        'sources',
+        source.connectionId,
+        'copies',
+        source.copyId,
+      );
+      if (
+        !workspace ||
+        workspace.projectId !== projectId ||
+        path.resolve(workspace.path) !== expected ||
+        !owner ||
+        owner.projectId !== projectId ||
+        owner.copyId !== copy.id ||
+        workAgentId(this.db, owner.agentThreadId) !== scope.agentId
+      )
+        throw new ForbiddenException('PREVIEW_GIT_COPY_ACCESS_DENIED');
+      root = path.resolve(expected, source.subdirectory);
+      if (!this.previewSourceAllowed(projectId, threadId, root))
+        throw new ForbiddenException('PREVIEW_GIT_COPY_ACCESS_DENIED');
+    } else {
+      root = this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
+      if (!root || !this.previewSourceAllowed(projectId, threadId, root))
+        throw new ConflictException('PREVIEW_SOURCE_REQUIRED');
+    }
+    this.identities.requireWorkspacePath(
+      root,
+      false,
+      currentAccess()!.identity,
+    );
+    return {
+      source,
+      path: root,
+      prefix: source.type === 'git_copy' ? 'application' : undefined,
+    };
+  }
+  sourceSettings(projectId: string, threadId: string) {
+    const scope = this.scope(projectId, threadId);
+    const selected = this.sourceSelection(scope.agentId);
+    if (selected && selected.projectId !== projectId)
+      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+    const copies = this.db
+      .select()
+      .from(projectWorkspaceCopies)
+      .where(
+        and(
+          eq(projectWorkspaceCopies.projectId, projectId),
+          eq(projectWorkspaceCopies.state, 'ready'),
+        ),
+      )
+      .all();
+    return {
+      source: selected?.source ?? { type: 'agent_reference' },
+      revision: selected?.revision ?? null,
+      copies: copies.flatMap((copy) => {
+        const source = {
+          type: 'git_copy' as const,
+          connectionId: copy.sourceResourceId,
+          copyId: copy.id,
+          subdirectory: '.',
+        };
+        try {
+          this.resolveSource(projectId, threadId, source);
+          return [{ ...source, name: copy.name, branch: copy.branch }];
+        } catch {
+          return [];
+        }
+      }),
+    };
+  }
+  selectSource(
+    projectId: string,
+    threadId: string,
+    input: Record<string, unknown>,
+    assertActive: () => void = () => {},
+  ) {
+    if (
+      Object.keys(input).some(
+        (k) =>
+          ![
+            'source',
+            'expectedRevision',
+            'tool',
+            'operation',
+            'requestId',
+          ].includes(k),
+      )
+    )
+      throw new BadRequestException('PREVIEW_INVALID_REQUEST');
+    const scope = this.scope(projectId, threadId);
+    requireExecutionAccess();
+    assertActive();
+    let source: PreviewSource;
+    const identity = currentAccess()!.identity;
+    if (
+      identity.kind !== 'person' ||
+      !identity.personId ||
+      identity.impersonation
+    )
+      throw new ForbiddenException('PREVIEW_PERSONAL_SESSION_REQUIRED');
+    try {
+      source = contract.source(input.source);
+    } catch {
+      throw new BadRequestException('PREVIEW_INVALID_SOURCE');
+    }
+    if (this.locks.has(scope.agentId))
+      throw new ConflictException('PREVIEW_BUSY');
+    const instance = this.row(scope.agentId);
+    if (instance && instance.projectId !== projectId)
+      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+    if (instance && instance.state !== 'stopped')
+      throw new ConflictException('PREVIEW_STOP_BEFORE_SOURCE_CHANGE');
+    this.resolveSource(projectId, threadId, source);
+    const current = this.sourceSelection(scope.agentId);
+    if (input.expectedRevision !== (current?.revision ?? null))
+      throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
+    const row = {
+      agentId: scope.agentId,
+      projectId,
+      source,
+      revision: randomUUID(),
+      updatedAt: Date.now(),
+    };
+    this.db
+      .insert(agentPreviewSources)
+      .values(row)
+      .onConflictDoUpdate({ target: agentPreviewSources.agentId, set: row })
+      .run();
+    return this.sourceSettings(projectId, threadId);
+  }
+  private snapshotOptions(profile: PreviewProfile, prefix?: string) {
+    const packageRequired =
+      profile.runtime === 'node' &&
+      /(?:npm|pnpm|yarn|next)(?:\s|$)/.test(
+        profile.install + ' ' + profile.start,
+      );
+    return {
+      prefix,
+      directory: profile.directory,
+      packageRequired,
+      lockfileRequired:
+        packageRequired && /npm\s+ci(?:\s|$)/.test(profile.install),
     };
   }
   /** Persistent project delegation, not an agent-selected execution capability. */
@@ -703,7 +944,11 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         runId: row.runId,
         state: observed.state,
         error: observed.error ?? row.error,
+        source: row.source ?? {
+          type: 'agent_reference',
+        },
         sourcePath: row.sourcePath,
+        syncError: row.error ?? observed.error ?? null,
         sourceSha: row.sourceSha,
         profileRevision: row.profileRevision,
         expiresAt: observed.expiresAt ?? null,
@@ -750,11 +995,15 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
             '.docker',
             '.kube',
             '.secrets',
-          ].includes(p),
+          ].includes(p.toLowerCase()),
         )
     )
       return false;
-    if (!target.split(path.sep).some((p) => p.startsWith('.mergeron')))
+    if (
+      !target
+        .split(path.sep)
+        .some((p) => p.toLowerCase().startsWith('.mergeron'))
+    )
       return true;
     const agentId = workAgentId(this.db, threadId);
     return this.db
@@ -810,7 +1059,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         return !path
           .relative(root, target)
           .split(path.sep)
-          .some((p) => p.startsWith('.mergeron'));
+          .some((p) => p.toLowerCase().startsWith('.mergeron'));
       });
   }
 
@@ -844,18 +1093,14 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       profile,
       profileConfigured: Boolean(recipe),
     });
-    const source =
-      this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
-    if (!source) reasons.push('working_directory_missing');
-    else if (!this.previewSourceAllowed(projectId, threadId, source))
-      reasons.push('working_directory_protected');
-    else {
-      try {
-        const access = currentAccess()!;
-        access.identities.requireWorkspacePath(source, false, access.identity);
-      } catch {
-        reasons.push('working_directory_access_denied');
-      }
+    try {
+      this.resolveSource(projectId, threadId);
+    } catch (error) {
+      reasons.push(
+        error instanceof Error && error.message === 'PREVIEW_SOURCE_REQUIRED'
+          ? 'working_directory_protected'
+          : 'working_directory_access_denied',
+      );
     }
     // Keep only the public instance summary. In particular, an arbitrary URL
     // or an authorization token must never be injected as an agent instruction.
@@ -933,6 +1178,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         effective?.profile.updateMode ??
         (profile?.agentManaged ? null : profile?.updateMode) ??
         null,
+      sources: this.sourceSettings(projectId, threadId),
       preparation: {
         projectAuthorized: profile?.enabled === true && profile.agentManaged,
         policyRevision: recipe?.revision ?? null,
@@ -966,6 +1212,8 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       },
       preview: status.preview
         ? {
+            source: status.preview.source,
+            syncError: status.preview.syncError,
             state: [
               'preparing',
               'starting',
@@ -1086,11 +1334,9 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       if (existing && refresh)
         await this.manager.request('stop', { runId: existing.runId });
       check();
-      const source =
-        this.folders.resolveAgent(threadId) ?? scope.agent!.workspacePath;
-      if (!source || !this.previewSourceAllowed(projectId, threadId, source))
-        throw new ConflictException('PREVIEW_SOURCE_REQUIRED');
-      this.identities.requireWorkspacePath(source, false, identity);
+      const selected = this.resolveSource(projectId, threadId);
+      const source = selected.path;
+      const options = this.snapshotOptions(profile, selected.prefix);
       const runId = randomUUID(),
         previewId = existing?.previewId ?? randomUUID(),
         now = Date.now();
@@ -1115,6 +1361,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         runId,
         requestId,
         sourcePath: source,
+        source: selected.source,
         profileRevision: recipe.revision,
         state: 'preparing',
         error: null,
@@ -1122,49 +1369,55 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         createdAt: now,
         updatedAt: now,
       };
-      this.db
-        .insert(agentPreviews)
-        .values(row)
-        .onConflictDoUpdate({ target: agentPreviews.agentId, set: row })
-        .run();
+      let submitted = false;
       try {
         const checkSource = () => {
           check();
-          if (
-            (this.folders.resolveAgent(threadId) ??
-              this.scope(projectId, threadId).agent!.workspacePath) !== source
-          )
+          if (this.resolveSource(projectId, threadId).path !== source)
             throw new ConflictException('PREVIEW_SOURCE_CHANGED');
           this.identities.requireWorkspacePath(source, false, identity);
         };
         const sourceFingerprint = await previewSourceFingerprint(
           source,
           checkSource,
+          options,
         );
         const snapshot = await previewSnapshot(
           source,
           path.join(target, 'source.tar'),
           checkSource,
+          options,
         );
         checkSource();
         if (
           sourceFingerprint !==
-          (await previewSourceFingerprint(source, checkSource))
+          (await previewSourceFingerprint(source, checkSource, options))
         )
           throw new ConflictException('PREVIEW_SOURCE_CHANGED');
         checkSource();
         this.db
-          .update(agentPreviews)
-          .set({ sourceSha: snapshot.sha256 })
-          .where(eq(agentPreviews.agentId, scope.agentId))
+          .insert(agentPreviews)
+          .values({ ...row, sourceSha: snapshot.sha256 })
+          .onConflictDoUpdate({
+            target: agentPreviews.agentId,
+            set: { ...row, sourceSha: snapshot.sha256 },
+          })
           .run();
+        submitted = true;
         const result = await this.manager.request('start', {
           projectId,
           agentId: scope.agentId,
           previewId,
           runId,
           sourceSha: snapshot.sha256,
-          profile,
+          profile: selected.prefix
+            ? {
+                ...profile,
+                directory:
+                  selected.prefix +
+                  (profile.directory === '.' ? '' : '/' + profile.directory),
+              }
+            : profile,
         });
         this.db
           .update(agentPreviews)
@@ -1182,11 +1435,12 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
           error instanceof Error && /^PREVIEW_[A-Z_]+$/.test(error.message)
             ? error.message
             : 'PREVIEW_START_FAILED';
-        this.db
-          .update(agentPreviews)
-          .set({ state: 'unknown', error: message, updatedAt: Date.now() })
-          .where(eq(agentPreviews.agentId, scope.agentId))
-          .run();
+        if (submitted)
+          this.db
+            .update(agentPreviews)
+            .set({ state: 'unknown', error: message, updatedAt: Date.now() })
+            .where(eq(agentPreviews.agentId, scope.agentId))
+            .run();
         throw new ConflictException(message);
       } finally {
         await this.removeSnapshot(projectId, runId);
@@ -1275,6 +1529,9 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         tx.delete(agentPreviews)
           .where(eq(agentPreviews.agentId, threadId))
           .run();
+        tx.delete(agentPreviewSources)
+          .where(eq(agentPreviewSources.agentId, threadId))
+          .run();
         tx.delete(agentPreviewRecipes)
           .where(eq(agentPreviewRecipes.agentId, threadId))
           .run();
@@ -1295,6 +1552,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       if (row.projectId !== projectId)
         throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
       await this.manager.request('stop', { runId: row.runId });
+      this.pendingSources.delete(scope.agentId);
       return this.status(projectId, threadId);
     } finally {
       this.locks.delete(scope.agentId);
@@ -1362,11 +1620,20 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     const allowed =
       input.tool === 'project_preview_prepare'
         ? ['tool', 'requestId', 'recipe', 'policyRevision', 'expectedRevision']
-        : ['tool', 'operation', 'requestId', 'lifetimeMinutes'];
+        : [
+            'tool',
+            'operation',
+            'requestId',
+            'lifetimeMinutes',
+            'source',
+            'expectedRevision',
+          ];
     if (Object.keys(input).some((k) => !allowed.includes(k)))
       throw new BadRequestException('PREVIEW_INVALID_REQUEST');
     if (input.tool === 'project_preview_prepare')
       return this.prepare(projectId, threadId, input, assertActive);
+    if (input.operation === 'source')
+      return this.selectSource(projectId, threadId, input, assertActive);
     if (input.operation === 'status')
       return this.discovery(projectId, threadId);
     if (input.operation === 'logs') return this.logs(projectId, threadId);
