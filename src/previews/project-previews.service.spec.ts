@@ -11,6 +11,7 @@ import {
   projectPreviewProfiles,
   agentPreviews,
   agentPreviewRecipes,
+  agentPreviewSources,
   projectWorkspaceCopies,
   projectWorkspaces,
   projectGitCopyOwners,
@@ -25,6 +26,7 @@ import type { PreviewManagerClient } from './preview-manager-client';
 import { PreviewGateway } from '../../runtime/preview-gateway.cjs';
 import fs from 'node:fs/promises';
 import storage from '../../runtime/preview-storage.cjs';
+import { previewSnapshot, previewSourceFingerprint } from './preview-snapshot';
 vi.mock('node:fs/promises', () => ({
   default: {
     mkdir: vi.fn(() => Promise.resolve()),
@@ -1283,5 +1285,225 @@ describe('preview sources in the managed project layout', () => {
         'working_directory_protected',
       );
     }
+  });
+  it('selects by ids, pins the root independently of the active folder, and rebases the runtime', async () => {
+    const f = selected('t', 'ready', '/workspaces/p/dossiers');
+    const source = {
+      type: 'git_copy',
+      connectionId: 'git',
+      copyId: 'copy',
+      subdirectory: '.',
+    };
+    const choice = f.run(() =>
+      f.service.selectSource('p', 't', { source, expectedRevision: null }),
+    );
+    expect(choice.source).toEqual(source);
+    expect(choice.copies).toEqual([expect.objectContaining(source)]);
+    expect(f.rows.get(agentPreviewSources)?.revision).toBe(choice.revision);
+    f.run(() =>
+      f.service.saveSettings('p', {
+        expectedRevision: null,
+        profile: {
+          enabled: true,
+          runtime: 'node',
+          directory: '.',
+          install: 'npm ci',
+          start: 'npm run dev -- --port 3000',
+          updateMode: 'hot',
+        },
+      }),
+    );
+    Object.assign(f.service, { gateway: { server: { listening: true } } });
+    f.request.mockImplementation((operation, input) =>
+      Promise.resolve(
+        operation === 'capabilities'
+          ? { enabled: true, domain: 'preview.example.org' }
+          : { ...input, state: 'running', ready: true, httpStatus: 200 },
+      ),
+    );
+    await f.run(() => f.service.start('p', 't', 'source-test'));
+    expect(f.rows.get(agentPreviews)?.sourcePath).toBe(root);
+    const start = f.request.mock.calls.find(([op]) => op === 'start')![1]!;
+    expect((start.profile as { directory: string }).directory).toBe(
+      'application',
+    );
+    expect(vi.mocked(previewSnapshot)).toHaveBeenLastCalledWith(
+      root,
+      expect.any(String),
+      expect.any(Function),
+      expect.objectContaining({
+        prefix: 'application',
+        packageRequired: true,
+        lockfileRequired: true,
+      }),
+    );
+    vi.mocked(previewSourceFingerprint)
+      .mockResolvedValueOnce('changed')
+      .mockResolvedValueOnce('changed');
+    await f.run(() => f.service.synchronize('p', 't'));
+    expect(f.request.mock.calls.some(([op]) => op === 'sync')).toBe(true);
+    expect(
+      f.request.mock.calls.filter(([op]) => ['start', 'stop'].includes(op)),
+    ).toHaveLength(1);
+    expect(() =>
+      f.run(() =>
+        f.service.selectSource('p', 't', {
+          source,
+          expectedRevision: choice.revision,
+        }),
+      ),
+    ).toThrow('PREVIEW_STOP_BEFORE_SOURCE_CHANGE');
+    f.rows.get(projectGitCopyOwners)!.agentThreadId = 'other';
+    await expect(f.run(() => f.service.synchronize('p', 't'))).rejects.toThrow(
+      'PREVIEW_GIT_COPY_ACCESS_DENIED',
+    );
+  });
+  it('refuses wrong ids, other projects, other conversations, traversal, stale updates and nonadministrators', () => {
+    const source = {
+      type: 'git_copy',
+      connectionId: 'git',
+      copyId: 'copy',
+      subdirectory: '.',
+    };
+    for (const mutate of [
+      (f: ReturnType<typeof selected>) => {
+        f.rows.get(projectWorkspaceCopies)!.projectId = 'other';
+      },
+      (f: ReturnType<typeof selected>) => {
+        f.rows.get(projectGitCopyOwners)!.agentThreadId = 'other';
+      },
+      (f: ReturnType<typeof selected>) => {
+        f.rows.get(projectWorkspaceCopies)!.state = 'revoked';
+      },
+      (f: ReturnType<typeof selected>) => {
+        f.rows.get(projectWorkspaces)!.path = root + '-other';
+      },
+    ]) {
+      const f = selected();
+      mutate(f);
+      expect(() =>
+        f.run(() =>
+          f.service.selectSource('p', 't', { source, expectedRevision: null }),
+        ),
+      ).toThrow('PREVIEW_GIT_COPY_ACCESS_DENIED');
+      expect(f.run(() => f.service.sourceSettings('p', 't')).copies).toEqual(
+        [],
+      );
+    }
+    const f = selected();
+    for (const change of [
+      { copyId: 'another' },
+      { connectionId: 'another' },
+      { subdirectory: '../other' },
+      { subdirectory: '.git' },
+      { subdirectory: '/absolute' },
+    ]) {
+      expect(() =>
+        f.run(() =>
+          f.service.selectSource('p', 't', {
+            source: { ...source, ...change },
+            expectedRevision: null,
+          }),
+        ),
+      ).toThrow();
+    }
+    f.run(() =>
+      f.service.selectSource('p', 't', { source, expectedRevision: null }),
+    );
+    expect(() =>
+      f.run(() =>
+        f.service.selectSource('p', 't', { source, expectedRevision: null }),
+      ),
+    ).toThrow('PREVIEW_CONFIGURATION_CHANGED');
+    f.identity.role = 'standard';
+    expect(() =>
+      f.run(() =>
+        f.service.selectSource('p', 't', { source, expectedRevision: null }),
+      ),
+    ).toThrow();
+  });
+
+  it('coalesces automatic edits and rechecks ownership without restarting the runtime', async () => {
+    const f = selected();
+    const source = {
+      type: 'git_copy',
+      connectionId: 'git',
+      copyId: 'copy',
+      subdirectory: '.',
+    };
+    const selectedSource = f.run(() =>
+      f.service.selectSource('p', 't', { source, expectedRevision: null }),
+    );
+    f.run(() =>
+      f.service.saveSettings('p', {
+        expectedRevision: null,
+        profile: { enabled: true, start: 'node server.js', updateMode: 'hot' },
+      }),
+    );
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      threadId: 't',
+      projectId: 'p',
+      runId: 'run',
+      state: 'running',
+      sourcePath: root,
+      sourceFingerprint: 'initial',
+      profileRevision:
+        String(f.rows.get(projectPreviewProfiles)!.revision) +
+        ':' +
+        selectedSource.revision,
+    });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    vi.mocked(previewSourceFingerprint).mockResolvedValue('changed');
+    try {
+      await f.run(() => f.service.synchronize('p', 't', false));
+      clock.mockReturnValue(1100);
+      await f.run(() => f.service.synchronize('p', 't', false));
+      expect(f.request.mock.calls.filter(([op]) => op === 'sync')).toHaveLength(
+        0,
+      );
+      clock.mockReturnValue(3000);
+      await f.run(() => f.service.synchronize('p', 't', false));
+      expect(f.request.mock.calls.filter(([op]) => op === 'sync')).toHaveLength(
+        1,
+      );
+      expect(
+        f.request.mock.calls.some(([op]) => ['start', 'stop'].includes(op)),
+      ).toBe(false);
+    } finally {
+      clock.mockRestore();
+      vi.mocked(previewSourceFingerprint).mockResolvedValue('fingerprint');
+    }
+  });
+  it('refuses an absent lockfile before creating a runtime slot and allows correcting the source', async () => {
+    const f = selected();
+    f.run(() =>
+      f.service.saveSettings('p', {
+        expectedRevision: null,
+        profile: { enabled: true, install: 'npm ci', start: 'npm run dev' },
+      }),
+    );
+    Object.assign(f.service, { gateway: { server: { listening: true } } });
+    vi.mocked(previewSourceFingerprint).mockRejectedValueOnce(
+      new Error('PREVIEW_LOCKFILE_MISSING'),
+    );
+    await expect(
+      f.run(() => f.service.start('p', 't', 'missing-lock')),
+    ).rejects.toThrow('PREVIEW_LOCKFILE_MISSING');
+    expect(f.request.mock.calls.some(([op]) => op === 'start')).toBe(false);
+    expect(f.rows.has(agentPreviews)).toBe(false);
+    expect(() =>
+      f.run(() =>
+        f.service.selectSource('p', 't', {
+          source: {
+            type: 'git_copy',
+            connectionId: 'git',
+            copyId: 'copy',
+            subdirectory: '.',
+          },
+          expectedRevision: null,
+        }),
+      ),
+    ).not.toThrow();
   });
 });

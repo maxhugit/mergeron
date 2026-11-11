@@ -595,3 +595,92 @@ Les copies situées sous `.mergeron-system/sources` restent utilisables à cette
 condition ; les autres dossiers système, les copies révoquées, celles d’un autre
 agent et les métadonnées `.git` restent interdits. Le snapshot garde ses contrôles
 sans suivi de liens et ses exclusions des secrets.
+
+## Développer depuis une copie Git locale gérée
+
+Dans **Environnement de test**, le sélecteur **Source de l’environnement de test**
+propose le dossier de référence ou les copies Git prêtes réservées à cet agent.
+Sélectionnez la copie et, si nécessaire, un sous-dossier relatif, puis **Appliquer**.
+Arrêtez une instance existante avant de changer de source. La sélection est
+conservée pour la famille de conversations de l’agent ; changer ensuite son
+simple dossier de référence ne change pas la copie Git explicitement choisie.
+
+Le MCP expose le même choix : lisez `project_preview_read` avec
+`operation: "status"`, puis utilisez `project_preview_manage` :
+
+```json
+{
+  "operation": "source",
+  "source": {
+    "type": "git_copy",
+    "connectionId": "identifiant-connexion",
+    "copyId": "identifiant-copie",
+    "subdirectory": "."
+  },
+  "expectedRevision": null
+}
+```
+
+Les identifiants autorisés sont dans `sources.copies` et la révision à transmettre
+dans `sources.revision` (`null` au premier choix). Le serveur résout lui-même le
+chemin enregistré, exige la même réservation d’agent et le même projet, et revalide
+ces droits pendant l’export, la synchronisation et l’accès au navigateur.
+Aucun chemin hôte ni accès général à `.mergeron-system` n’est accordé.
+
+La racine de cette copie ou de son sous-dossier est exportée dans
+`/workspace/application`. Le `directory` de la recette reste relatif à cette
+racine : utilisez `"."` pour une application située à la racine de la copie,
+et `npm run dev -- --port 3000` pour Next.js. N’inscrivez plus le chemin interne
+`.mergeron-system/sources/...` dans `directory`. Auparavant, exporter le projet
+principal puis démarrer dans ce chemin créait un répertoire vide : le filtre
+`EXCLUDED` de `runtime/preview-snapshot.py` écarte volontairement les dossiers
+`.mergeron*` imbriqués. Il continue à le faire ; seule la racine résolue et
+contrôlée d’une copie est exportée directement.
+
+En mode `hot`, un inventaire borné du disque est relu toutes les deux secondes.
+Deux échantillons stables regroupent les éditions rapprochées. L’export utilise
+les fichiers présents, jamais `HEAD`, l’index ni une liste de fichiers suivis.
+Créations, modifications, suppressions et renommages sont répercutés ; seuls les
+fichiers changés sont réécrits dans le volume, sans réinstallation, redémarrage
+ni remplacement du conteneur. Le serveur de développement assure le HMR ; ses
+WebSockets passent par le gateway et le relais avec les mêmes contrôles d’accès.
+
+Les métadonnées `.git`, secrets connus (`.env*`, clés privées, configurations
+personnelles), dépendances `node_modules`, sorties `.next`, caches, captures et
+artefacts restent exclus. Les liens symboliques, liens physiques et traversées
+`..` sont refusés. Les suppressions ciblent uniquement les fichiers de l’export
+précédent ; aucun nettoyage récursif des dépendances générées n’est effectué.
+
+Un lancement Node utilisant npm/pnpm/yarn/Next exige un `package.json` exportable.
+`npm ci` exige aussi `package-lock.json` ou `npm-shrinkwrap.json`. Les erreurs
+`PREVIEW_PACKAGE_JSON_MISSING`, `PREVIEW_LOCKFILE_MISSING`,
+`PREVIEW_APPLICATION_FILES_MISSING` ou `PREVIEW_INVALID_DIRECTORY` interrompent
+la préparation avant l’appel de démarrage au Manager. Un changement de manifeste
+ou de lockfile signale `requiresRestart` : vérifiez les dépendances puis utilisez
+**Recréer**, explicitement, pour réinstaller dans un environnement neuf.
+
+L’état HTTP réel, la source choisie, `lastSyncedAt`, `syncError` et
+`requiresRestart` restent consultables dans l’état de l’aperçu/MCP. La boucle ne
+fait aucun fetch, commit, push ou déploiement distant. Après validation, utilisez
+les actions Git habituelles sur la copie locale d’origine pour commiter et
+pousser sur demande.
+
+### Mémoire : diagnostic distinct du choix de source
+
+Le diagnostic mémoire du conteneur sélectionné montre sa charge cgroup brute,
+sa limite, les pages anonymes, les pages de fichiers et la mémoire partagée quand
+Docker les fournit. Une donnée indisponible reste inconnue. Les pages tmpfs
+imputées au conteneur font partie de la charge totale ; les compteurs fichiers
+et mémoire partagée se recouvrent et ne doivent pas être additionnés. Le panneau
+**Stockage** mesure séparément les volumes sources, dépendances, caches,
+temporaires et données. Les tailles maximales des volumes ne sont pas une
+réservation de RAM. Un `PREVIEW_MEMORY_LIMIT` reste distinct d’un répertoire vide
+ou d’un manque de stockage ; aucune limite n’est augmentée automatiquement.
+
+Les tests vérifient l’export d’un vrai dépôt local avec éditions non commitées,
+fichiers non suivis et suppressions, les exclusions, le refus des autres copies,
+le regroupement des éditions et la migration de la sélection. Le smoke test
+Docker sur runner GitHub isolé vérifie `/workspace/application`, les créations
+et suppressions, le même processus et ses dépendances, le signalement séparé
+d’une modification de dépendances et le transport WebSocket. Il ne doit jamais
+être lancé contre le daemon Unraid de dev ou de production.

@@ -81,7 +81,16 @@
     "failed": "Failed"
   },
   "notStarted": "Not started",
-  "source": "Synchronized source",
+  "source": {
+    "label": "Test environment source",
+    "agentReference": "Agent reference folder",
+    "gitCopy": "Local Git copy · {{id}}",
+    "subdirectory": "Subdirectory",
+    "apply": "Apply",
+    "stopFirst": "Stop the environment before changing its source.",
+    "localOnly": "Local files, including uncommitted changes. No automatic fetch, commit or push.",
+    "failed": "Source denied or settings changed. Refresh and try again."
+  },
   "lastSync": "Last synchronization",
   "expiry": "Automatic stop",
   "dependenciesChanged": "Dependencies changed. Recreate the environment to run installation and build again.",
@@ -140,5 +149,10 @@
   "prerequisiteManagerVolumes": "The Manager image declares volumes incompatible with test helpers. Use a compatible Manager image.",
   "prerequisiteRuntimeImageUnsupported": "An approved test image is not a compatible Linux image. Check the Manager catalog.",
   "prerequisiteRuntimeImageMissing": "An approved test image is not available locally. The administrator must load the approved digest.",
-  "prerequisiteManagerPreflight": "The Manager preflight did not return a valid result. Check its version and logs."
+  "prerequisiteManagerPreflight": "The Manager preflight did not return a valid result. Check its version and logs.",
+  "memoryDiagnostics": {
+    "title": "Selected container memory diagnostics",
+    "sample": "Total charge: {{usageBytes}} / {{limitBytes}} MiB · Anonymous: {{anonymousBytes}} · Files: {{fileBytes}} · Shared: {{sharedBytes}} MiB",
+    "explanation": "Total charge includes tmpfs charged to this container. File and shared memory overlap: do not add them. Dependency and cache storage is detailed under Storage. No limit is increased automatically."
+  }
 }

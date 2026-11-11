@@ -67,6 +67,14 @@ test('only journaled, label-checked containers are listed, no environment or Doc
   assert.equal(list.containers.length, 3);
   assert.equal(list.containers[0].cpuPercent, 80);
   assert.equal(list.containers[0].memoryBytes, 300);
+  assert.deepEqual(list.containers[0].memory, {
+    usageBytes: 400,
+    limitBytes: null,
+    anonymousBytes: null,
+    fileBytes: null,
+    sharedBytes: null,
+    oomKilled: false,
+  });
   assert.equal(list.containers[1].terminalAvailable, false);
   assert.equal(list.containers[2].terminalAvailable, true);
   assert.ok(!JSON.stringify(list).includes('test-secret'));

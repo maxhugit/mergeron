@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import tar from 'tar-stream';
+import { execFileSync } from 'node:child_process';
 import { previewSnapshot, previewSourceFingerprint } from './preview-snapshot';
 
 const roots: string[] = [];
@@ -195,4 +196,109 @@ describe('filtered preview sources', () => {
     ).rejects.toThrow('revoked');
     expect(await fs.readdir(f.root)).toEqual(['source']);
   });
+});
+
+it('exports a managed Git working tree, not HEAD/index, and preserves native Git operations', async () => {
+  const f = await fixture();
+  const source = path.join(
+    f.source,
+    '.mergeron-system/sources/connection/copies/copy',
+  );
+  await fs.mkdir(source, { recursive: true });
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: source, encoding: 'utf8' }).trim();
+  git('init', '--quiet');
+  git('config', 'user.email', 'fixture@example.invalid');
+  git('config', 'user.name', 'Fixture');
+  await fs.writeFile(path.join(source, 'package.json'), '{"name":"fixture"}');
+  await fs.writeFile(path.join(source, 'package-lock.json'), '{}');
+  await fs.writeFile(path.join(source, 'component.js'), 'before');
+  await fs.writeFile(path.join(source, 'removed.js'), 'remove');
+  git('add', '.');
+  git('commit', '--quiet', '-m', 'initial');
+  const head = git('rev-parse', 'HEAD');
+  await fs.writeFile(path.join(source, 'component.js'), 'dirty');
+  await fs.writeFile(path.join(source, 'new.js'), 'untracked');
+  await fs.unlink(path.join(source, 'removed.js'));
+  await fs.writeFile(path.join(source, '.env.local'), 'secret');
+  for (const directory of [
+    'node_modules',
+    '.next',
+    'captures',
+    'screenshots',
+    'secrets',
+    '.cache',
+  ]) {
+    await fs.mkdir(path.join(source, directory));
+    await fs.writeFile(path.join(source, directory, 'private'), 'not exported');
+  }
+  const options = {
+    prefix: 'application',
+    packageRequired: true,
+    lockfileRequired: true,
+  };
+  await previewSnapshot(source, f.destination, () => {}, options);
+  const exported = await read(f.destination);
+  expect(
+    exported.find((e) => e.name === 'application/component.js')?.text,
+  ).toBe('dirty');
+  expect(exported.find((e) => e.name === 'application/new.js')?.text).toBe(
+    'untracked',
+  );
+  expect(
+    exported
+      .filter((e) => !e.name.endsWith('/'))
+      .map((e) => e.name)
+      .sort(),
+  ).toEqual([
+    'application/component.js',
+    'application/new.js',
+    'application/package-lock.json',
+    'application/package.json',
+  ]);
+  expect(git('rev-parse', 'HEAD')).toBe(head);
+  expect(git('status', '--porcelain')).toContain('?? new.js');
+  // Validation can subsequently be recorded through the original local Git copy.
+  git('add', 'component.js', 'new.js', 'removed.js');
+  git('commit', '--quiet', '-m', 'validated local changes');
+  expect(git('rev-parse', 'HEAD')).not.toBe(head);
+  const remote = path.join(f.root, 'fixture-remote.git');
+  execFileSync('git', ['init', '--bare', '--quiet', remote]);
+  git('remote', 'add', 'fixture', remote);
+  git('push', '--quiet', 'fixture', 'HEAD:refs/heads/validated');
+  expect(
+    execFileSync(
+      'git',
+      ['--git-dir', remote, 'rev-parse', 'refs/heads/validated'],
+      { encoding: 'utf8' },
+    ).trim(),
+  ).toBe(git('rev-parse', 'HEAD'));
+});
+it('rejects missing manifests before npm and never exports a symlinked managed root', async () => {
+  const f = await fixture();
+  await fs.writeFile(path.join(f.source, 'index.js'), 'app');
+  await expect(
+    previewSnapshot(f.source, f.destination, () => {}, {
+      prefix: 'application',
+      packageRequired: true,
+    }),
+  ).rejects.toThrow('PREVIEW_PACKAGE_JSON_MISSING');
+  await fs.writeFile(path.join(f.source, 'package.json'), '{}');
+  await expect(
+    previewSourceFingerprint(f.source, () => {}, {
+      packageRequired: true,
+      lockfileRequired: true,
+    }),
+  ).rejects.toThrow('PREVIEW_LOCKFILE_MISSING');
+  await fs.symlink(f.source, path.join(f.root, 'copy'));
+  await expect(
+    previewSourceFingerprint(path.join(f.root, 'copy'), () => {}, {
+      prefix: 'application',
+    }),
+  ).rejects.toThrow('PREVIEW_UNSAFE_SOURCE');
+  await expect(
+    previewSourceFingerprint(f.source, () => {}, {
+      directory: '.mergeron-system/app',
+    }),
+  ).rejects.toThrow('PREVIEW_INVALID_DIRECTORY');
 });

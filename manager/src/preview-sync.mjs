@@ -59,6 +59,34 @@ try {
   }
   let changed = 0,
     removed = 0;
+  for (const name of spec.removed) {
+    let dst;
+    try {
+      dst = parent(root, name, false);
+      // unlink never follows a symlink and never recursively deletes directories.
+      fs.unlinkSync(dst.path);
+      removed++;
+      // Only remove empty ancestors of files from our previous manifest.
+      // Never recursively delete runtime-generated dependencies or caches.
+      const parts = name.split('/');
+      for (let n = parts.length - 1; n > 0; n--) {
+        let dir;
+        try {
+          dir = parent(root, parts.slice(0, n).join('/'), false);
+          fs.rmdirSync(dir.path);
+        } catch (e) {
+          if (['ENOTEMPTY', 'EEXIST'].includes(e.code)) break;
+          if (e.code !== 'ENOENT') throw e;
+        } finally {
+          if (dir) fs.closeSync(dir.fd);
+        }
+      }
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+    } finally {
+      if (dst) fs.closeSync(dst.fd);
+    }
+  }
   for (const item of spec.entries) {
     if (item.type !== 'file' || !/^[a-f0-9]{64}$/.test(item.sha256))
       throw Error('PREVIEW_UNSAFE_SYNC');
@@ -130,19 +158,6 @@ try {
       if (temp) fs.unlinkSync(temp);
       fs.closeSync(src.fd);
       fs.closeSync(dst.fd);
-    }
-  }
-  for (const name of spec.removed) {
-    let dst;
-    try {
-      dst = parent(root, name, false);
-      // unlink never follows a symlink and never recursively deletes directories.
-      fs.unlinkSync(dst.path);
-      removed++;
-    } catch (e) {
-      if (e.code !== 'ENOENT') throw e;
-    } finally {
-      if (dst) fs.closeSync(dst.fd);
     }
   }
   console.log(JSON.stringify({ changed, removed }));

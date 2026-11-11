@@ -16,6 +16,10 @@ import { usePlatformSession } from '@/lib/platform-session';
 import { PreviewStorageMeters } from '../projects/preview-storage-meters';
 import { PreviewPrerequisites } from '../projects/preview-prerequisites';
 import type { AgentPreview } from './agent-preview-dialog';
+import {
+  PreviewSourceSelect,
+  type PreviewSources,
+} from './preview-source-select';
 
 const ContainerTerminal = lazy(() =>
   import('./preview-container-terminal').then((m) => ({
@@ -30,6 +34,14 @@ export interface PreviewContainer {
   startedAt: string | null;
   cpuPercent: number | null;
   memoryBytes: number | null;
+  memory?: {
+    usageBytes: number | null;
+    limitBytes: number | null;
+    anonymousBytes: number | null;
+    fileBytes: number | null;
+    sharedBytes: number | null;
+    oomKilled: boolean;
+  } | null;
   terminalAvailable: boolean;
 }
 export function AgentPreviewPanel({
@@ -75,6 +87,7 @@ export function AgentPreviewPanel({
         available: boolean;
         missingConfiguration: string[];
         preparation?: { required?: boolean };
+        sources?: PreviewSources;
       }>(prefix + '/prerequisites', { signal }),
     enabled: active,
     staleTime: 15000,
@@ -212,6 +225,15 @@ export function AgentPreviewPanel({
       aria-label={t('title')}
       className="@container flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
     >
+      {session.isAdministrator && prerequisites.data?.sources && (
+        <PreviewSourceSelect
+          key={projectId + threadId + prerequisites.data.sources.revision}
+          projectId={projectId}
+          threadId={threadId}
+          sources={prerequisites.data.sources}
+          disabled={busy || (!!preview && preview.state !== 'stopped')}
+        />
+      )}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
         <label className="flex items-center gap-2 text-xs">
           {t('lifetime')}
@@ -325,6 +347,9 @@ export function AgentPreviewPanel({
         <span role="status" className="rounded bg-muted px-2 py-0.5">
           {state}
         </span>
+        {typeof preview?.httpStatus === 'number' && (
+          <span>HTTP {preview.httpStatus}</span>
+        )}
         {preview?.expiresAt && (
           <span className="ml-auto text-muted-foreground">
             {t('expiry')}:{' '}
@@ -352,6 +377,25 @@ export function AgentPreviewPanel({
         <p role="status" className="shrink-0 px-3 py-1 text-xs">
           {notice}
         </p>
+      )}
+      {item?.memory && (
+        <details className="shrink-0 border-b px-3 py-2 text-xs">
+          <summary>{t('memoryDiagnostics.title')}</summary>
+          <p>
+            {t(
+              'memoryDiagnostics.sample',
+              Object.fromEntries(
+                Object.entries(item.memory).map(([k, v]) => [
+                  k,
+                  typeof v === 'number' ? (v / 1024 ** 2).toFixed(1) : '—',
+                ]),
+              ),
+            )}
+          </p>
+          <p className="text-muted-foreground">
+            {t('memoryDiagnostics.explanation')}
+          </p>
+        </details>
       )}
       <div className="max-h-[45%] shrink-0 overflow-y-auto px-3">
         <PreviewPrerequisites

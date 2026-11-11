@@ -18,6 +18,9 @@ import { PreviewStorageSummary } from '../projects/preview-storage-summary';
 import { PreviewLifetimeSelect } from '../projects/preview-lifetime-select';
 
 export interface AgentPreview {
+  source?: import('../../../../runtime/preview-profile.cjs').PreviewSource;
+  syncError?: string | null;
+  httpStatus?: number | null;
   state: string;
   url: string | null;
   sourcePath: string;

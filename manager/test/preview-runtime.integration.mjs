@@ -109,7 +109,16 @@ function archive(files) {
   return Buffer.concat([...buffers, Buffer.alloc(1024)]);
 }
 function snapshot(projectId, files, snapshotId = randomUUID()) {
-  const data = archive(files),
+  const data = archive(
+      projectId === 'node-project'
+        ? Object.fromEntries(
+            Object.entries(files).map(([name, content]) => [
+              'application/' + name,
+              content,
+            ]),
+          )
+        : files,
+    ),
     target =
       '/host-test/workspace/.mergeron-system/' +
       projectId +
@@ -192,7 +201,7 @@ if (process.env.COREPACK_HOME !== '/cache/corepack' || process.env.npm_config_st
 // A real allocation beyond the former 256 MiB ceiling, not a sparse truncate.
 const cacheProbe=fs.openSync('/cache/storage-regression','wx');
 try { const block=Buffer.alloc(1024*1024,1); for(let i=0;i<270;i++) fs.writeSync(cacheProbe,block); } finally { fs.closeSync(cacheProbe); }
-const s=http.createServer(async(req,res)=>{if(req.url==='/probe-private'){let reachable=false;try{await fetch('http://${controllerIp}:8173/',{signal:AbortSignal.timeout(1000)});reachable=true;}catch{}res.end(JSON.stringify({reachable}));return;}if(req.url==='/plant-link'){fs.mkdirSync('/tmp/isolated-target',{recursive:true});fs.writeFileSync('/tmp/isolated-target/file.txt','keep');fs.symlinkSync('/tmp/isolated-target','nested');res.end('planted');return;}if(req.url==='/verify-link'){res.end(fs.readFileSync('/tmp/isolated-target/file.txt'));return;}res.setHeader('content-type','text/html');res.setHeader('x-test-cookie',req.headers.cookie||'');res.setHeader('x-test-auth',req.headers.authorization||'');res.end(fs.readFileSync('index.html'));});
+const s=http.createServer(async(req,res)=>{if(req.url==='/files'){res.end(JSON.stringify({newFile:fs.existsSync('new-untracked.txt'),oldFile:fs.existsSync('old-file.txt'),dependency:require('is-number')(42),pid:process.pid,cwd:process.cwd()}));return;}if(req.url==='/probe-private'){let reachable=false;try{await fetch('http://${controllerIp}:8173/',{signal:AbortSignal.timeout(1000)});reachable=true;}catch{}res.end(JSON.stringify({reachable}));return;}if(req.url==='/plant-link'){fs.mkdirSync('/tmp/isolated-target',{recursive:true});fs.writeFileSync('/tmp/isolated-target/file.txt','keep');fs.symlinkSync('/tmp/isolated-target','nested');res.end('planted');return;}if(req.url==='/verify-link'){res.end(fs.readFileSync('/tmp/isolated-target/file.txt'));return;}res.setHeader('content-type','text/html');res.setHeader('x-test-cookie',req.headers.cookie||'');res.setHeader('x-test-auth',req.headers.authorization||'');res.end(fs.readFileSync('index.html'));});
 s.on('upgrade',(req,socket)=>{const accept=crypto.createHash('sha1').update(req.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write('HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Accept: '+accept+'\\r\\n\\r\\n');});s.listen(Number(process.env.PORT),'0.0.0.0');`;
 try {
   dummy = (
@@ -231,6 +240,7 @@ try {
   const a = snapshot('node-project', {
       'server.js': server,
       'index.html': '<h1>Uncommitted Node project A</h1>',
+      'old-file.txt': 'will be deleted',
       'package.json': JSON.stringify({
         private: true,
         packageManager: 'pnpm@10.18.3',
@@ -246,6 +256,7 @@ try {
       profile: {
         enabled: true,
         runtime: 'node',
+        directory: 'application',
         install:
           'timeout 60s corepack pnpm@10.18.3 install --ignore-scripts --lockfile=false --reporter=append-only\nnode -e "if (!require(\'is-number\')(42)) process.exit(1)"',
         start: 'node server.js',
@@ -436,7 +447,17 @@ try {
     next = snapshot('node-project', {
       'server.js': server,
       'index.html': '<h1>Updated without commit or restart</h1>',
+      'new-untracked.txt': 'new file from local disk',
+      'package.json': JSON.stringify({
+        private: true,
+        packageManager: 'pnpm@10.18.3',
+        dependencies: { 'is-number': '7.0.0' },
+      }),
     });
+  const beforeFiles = JSON.parse(
+    (await request('http://127.0.0.1:8173/files', { headers })).text,
+  );
+  assert.equal(beforeFiles.cwd, '/workspace/application');
   console.log('Fixture phase: hot sync');
   await manager.sync({
     runId: input.runId,
@@ -445,8 +466,35 @@ try {
   });
   assert.equal(manager.records.get(input.runId).runtimeId, runtime);
   await ready('http://127.0.0.1:8173/', { headers }, 'Updated without commit');
+  const afterFiles = JSON.parse(
+    (await request('http://127.0.0.1:8173/files', { headers })).text,
+  );
+  assert.equal(afterFiles.pid, beforeFiles.pid);
+  assert.equal(afterFiles.newFile, true);
+  assert.equal(afterFiles.oldFile, false);
+  assert.equal(afterFiles.dependency, true);
+  assert.equal(manager.records.get(input.runId).requiresRestart, false);
   results.push(
-    'Source update visible at the same URL without recreating the runtime',
+    'Hot source update/new untracked file/deletion at /workspace/application with the same process, dependencies, URL and container',
+  );
+  const dependencyEdit = snapshot('node-project', {
+    'server.js': server,
+    'index.html': '<h1>Dependency edit awaits recreation</h1>',
+    'package.json': '{"private":true}',
+  });
+  await manager.sync({
+    runId: input.runId,
+    snapshotId: dependencyEdit.snapshotId,
+    sourceSha: dependencyEdit.sourceSha,
+  });
+  assert.equal(manager.records.get(input.runId).requiresRestart, true);
+  assert.equal(
+    JSON.parse((await request('http://127.0.0.1:8173/files', { headers })).text)
+      .pid,
+    beforeFiles.pid,
+  );
+  results.push(
+    'Dependency edit is reported distinctly without automatic installation or process restart',
   );
   const privateProbe = await request('http://127.0.0.1:8173/probe-private', {
     headers,

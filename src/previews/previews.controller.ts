@@ -3,6 +3,19 @@ import { ProjectPreviewsService } from './project-previews.service';
 @Controller('projects/:projectId')
 export class PreviewsController {
   constructor(private readonly previews: ProjectPreviewsService) {}
+  @Get('agents/:threadId/preview/source') source(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+  ) {
+    return this.previews.sourceSettings(p, t);
+  }
+  @Put('agents/:threadId/preview/source') selectSource(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+    @Body() input: Record<string, unknown>,
+  ) {
+    return this.previews.selectSource(p, t, input);
+  }
   @Get('test-environment') settings(@Param('projectId') p: string) {
     return this.previews.settings(p);
   }

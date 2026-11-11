@@ -81,7 +81,16 @@
     "failed": "Échec"
   },
   "notStarted": "Non démarré",
-  "source": "Source synchronisée",
+  "source": {
+    "label": "Source de l’environnement de test",
+    "agentReference": "Dossier de référence de l’agent",
+    "gitCopy": "Copie Git locale · {{id}}",
+    "subdirectory": "Sous-dossier",
+    "apply": "Appliquer",
+    "stopFirst": "Arrêtez l’environnement avant de changer de source.",
+    "localOnly": "Fichiers locaux, y compris non commités. Aucun fetch, commit ni push automatique.",
+    "failed": "Source refusée ou réglages modifiés. Actualisez puis réessayez."
+  },
   "lastSync": "Dernière synchronisation",
   "expiry": "Arrêt automatique",
   "dependenciesChanged": "Les dépendances ont changé. Recréez l’environnement pour réexécuter l’installation et la compilation.",
@@ -140,5 +149,10 @@
   "prerequisiteManagerVolumes": "L’image du Manager déclare des volumes incompatibles avec les services techniques de test. Utilisez une image Manager compatible.",
   "prerequisiteRuntimeImageUnsupported": "Une image de test autorisée n’est pas une image Linux compatible. Vérifiez le catalogue du Manager.",
   "prerequisiteRuntimeImageMissing": "Une image de test approuvée n’est pas disponible localement. L’administrateur doit charger le digest autorisé.",
-  "prerequisiteManagerPreflight": "Le contrôle préalable du Manager n’a pas fourni un résultat valide. Vérifiez sa version et ses journaux."
+  "prerequisiteManagerPreflight": "Le contrôle préalable du Manager n’a pas fourni un résultat valide. Vérifiez sa version et ses journaux.",
+  "memoryDiagnostics": {
+    "title": "Diagnostic mémoire du conteneur sélectionné",
+    "sample": "Charge totale : {{usageBytes}} / {{limitBytes}} Mio · Anonyme : {{anonymousBytes}} · Fichiers : {{fileBytes}} · Mémoire partagée : {{sharedBytes}} Mio",
+    "explanation": "La charge totale inclut le tmpfs imputé au conteneur. Fichiers et mémoire partagée se recouvrent : ne pas les additionner. Le stockage des dépendances et caches est détaillé dans Stockage. Aucune limite n’est augmentée automatiquement."
+  }
 }

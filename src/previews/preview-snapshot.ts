@@ -7,11 +7,32 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
 const helper = path.resolve(__dirname, '../../runtime/preview-snapshot.py');
-function capture(source: string, check: boolean, authorize: () => void) {
+export interface SnapshotOptions {
+  prefix?: string;
+  directory?: string;
+  packageRequired?: boolean;
+  lockfileRequired?: boolean;
+}
+function capture(
+  source: string,
+  check: boolean,
+  authorize: () => void,
+  options: SnapshotOptions,
+) {
   authorize();
   const child = spawn(
     'python3',
-    ['-I', helper, source, ...(check ? ['--check'] : [])],
+    [
+      '-I',
+      helper,
+      source,
+      ...(check ? ['--check'] : []),
+      ...(options.prefix ? ['--prefix', options.prefix] : []),
+      '--directory',
+      options.directory ?? '.',
+      ...(options.packageRequired ? ['--package-required'] : []),
+      ...(options.lockfileRequired ? ['--lockfile-required'] : []),
+    ],
     {
       env: { PATH: process.env.PATH ?? '/usr/bin:/bin', LANG: 'C.UTF-8' },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -57,8 +78,9 @@ function capture(source: string, check: boolean, authorize: () => void) {
 export async function previewSourceFingerprint(
   source: string,
   authorize: () => void = () => {},
+  options: SnapshotOptions = {},
 ) {
-  const { child, done } = capture(source, true, authorize);
+  const { child, done } = capture(source, true, authorize, options);
   let text = '';
   for await (const chunk of child.stdout) {
     text += String(chunk);
@@ -77,8 +99,9 @@ export async function previewSnapshot(
   source: string,
   destination: string,
   authorize: () => void = () => {},
+  options: SnapshotOptions = {},
 ) {
-  const { child, done } = capture(source, false, authorize);
+  const { child, done } = capture(source, false, authorize, options);
   const tmp = destination + '.tmp',
     hash = createHash('sha256');
   let bytes = 0,

@@ -41,6 +41,38 @@ function directory(value = '.') {
     invalid();
   return value;
 }
+function source(value) {
+  object(value, ['type', 'connectionId', 'copyId', 'subdirectory']);
+  if (value.type === 'agent_reference') {
+    object(value, ['type']);
+    return { type: 'agent_reference' };
+  }
+  if (
+    value.type !== 'git_copy' ||
+    typeof value.connectionId !== 'string' ||
+    !ID.test(value.connectionId) ||
+    typeof value.copyId !== 'string' ||
+    !ID.test(value.copyId)
+  )
+    invalid();
+  const subdirectory = directory(value.subdirectory);
+  if (
+    subdirectory
+      .split('/')
+      .some((p) =>
+        /^\.mergeron|^(?:\.git|\.ssh|\.codex|\.aws|\.docker|\.kube|\.secrets|secrets|credentials|node_modules|\.next|\.cache|artifacts|\.env(?:\..*)?)$/i.test(
+          p,
+        ),
+      )
+  )
+    invalid();
+  return {
+    type: 'git_copy',
+    connectionId: value.connectionId,
+    copyId: value.copyId,
+    subdirectory,
+  };
+}
 function environment(value = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
   object(value, Object.keys(value));
@@ -229,6 +261,7 @@ function lifetime(value) {
   return value;
 }
 module.exports = {
+  source,
   LIFETIME_MINUTES,
   lifetime,
   ID,
