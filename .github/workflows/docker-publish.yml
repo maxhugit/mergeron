@@ -29,6 +29,10 @@ jobs:
 
   transcription-publish:
     needs: [quality-gate, transcription-build]
+    if: >-
+      !cancelled() &&
+      needs.quality-gate.result == 'success' &&
+      needs.transcription-build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,6 +122,10 @@ jobs:
 
   browser-publish:
     needs: [quality-gate, browser-build]
+    if: >-
+      !cancelled() &&
+      needs.quality-gate.result == 'success' &&
+      needs.browser-build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -558,6 +566,12 @@ jobs:
 
   promote:
     needs: [quality-gate, build, manager-build, cli-runtime]
+    if: >-
+      !cancelled() &&
+      needs.quality-gate.result == 'success' &&
+      needs.build.result == 'success' &&
+      needs.manager-build.result == 'success' &&
+      needs.cli-runtime.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -584,7 +598,13 @@ jobs:
         run: bash scripts/promote-image-pair.sh
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      !cancelled() && startsWith(github.ref, 'refs/tags/v') &&
+      needs.build.result == 'success' &&
+      needs.manager-build.result == 'success' &&
+      needs.promote.result == 'success' &&
+      needs.browser-publish.result == 'success' &&
+      needs.transcription-publish.result == 'success'
     needs: [build, manager-build, promote, browser-publish, transcription-publish]
     runs-on: ubuntu-latest
     permissions:
