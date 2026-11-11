@@ -85,6 +85,7 @@ export async function decideReuse({
     );
     if (
       !Number.isSafeInteger(workflow?.id) ||
+      workflow.id <= 0 ||
       workflow.path !== workflowPath ||
       workflow.state !== 'active'
     )
@@ -96,14 +97,13 @@ export async function decideReuse({
     if (
       !Array.isArray(runs?.workflow_runs) ||
       runs.workflow_runs.length > 100 ||
-      runs.total_count > 100
+      runs.total_count !== runs.workflow_runs.length ||
+      !runs.workflow_runs.every((run) => trustedIdentity(run, context))
     )
       return full('ambiguous_runs');
     // Inspect the newest main invocation, not any older green run behind a
     // failed/cancelled/pending rerun. A PR result is never evidence for a tag.
-    const candidates = runs.workflow_runs.filter((run) =>
-      trustedIdentity(run, context),
-    );
+    const candidates = [...runs.workflow_runs];
     candidates.sort((a, b) => b.id - a.id);
     const selected = candidates[0];
     if (!selected || String(selected.id) === String(currentRunId))

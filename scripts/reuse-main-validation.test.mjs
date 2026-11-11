@@ -289,3 +289,13 @@ test('the actual CLI emits a full-suite decision for main without needing creden
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('an unexpected identity in the main-run inventory is not silently ignored', async () => {
+  const f = fixture();
+  f.state.listed.push({ ...f.state.run, id: 124, head_branch: 'untrusted' });
+  assert.equal((await decideReuse(f.options)).reuse, false);
+  assert.equal(
+    f.calls.some((c) => c.endsWith('/actions/runs/123')),
+    false,
+  );
+});
