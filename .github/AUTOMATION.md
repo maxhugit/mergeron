@@ -15,6 +15,9 @@ avant sa fusion et de publier des composants identifiables par leur révision.
   est vérifiée avec le séquenceur Vitest installé.
 - `workflows/docker-publish.yml` construit, vérifie et promeut les images de
   l’application, du Manager et du navigateur, ainsi que les publications associées.
+  Pour un tag du même SHA récemment publié sur `main`, un contrôle de preuve
+  peut réutiliser les tests source ; sinon la suite complète est exécutée.
+  Les images stables et leurs protections sont toujours vérifiées de nouveau.
 - `workflows/cleanup-ghcr.yml` applique la politique de conservation du registre.
 - `ISSUE_TEMPLATE/`, le [modèle de pull request](PULL_REQUEST_TEMPLATE.md) et `release.yml` structurent les
   demandes, les revues et les notes de version.

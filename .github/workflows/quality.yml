@@ -97,6 +97,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_markdown_links.py
           pnpm check:release
           pnpm test:release
+          node --test scripts/reuse-main-validation.test.mjs
           node --test manager/test/*.test.mjs
           node --test runtime/*.test.cjs
           python3 -m unittest discover -s scripts -p 'test_*vex.py'

@@ -28,7 +28,7 @@ jobs:
       publish: true
 
   transcription-publish:
-    needs: [quality, transcription-build]
+    needs: [quality-gate, transcription-build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -117,7 +117,7 @@ jobs:
           bash scripts/smoke-test-browser-image.sh "$IMAGE_REF"
 
   browser-publish:
-    needs: [quality, browser-build]
+    needs: [quality-gate, browser-build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -140,7 +140,51 @@ jobs:
           done <<< "$TAGS"
           docker buildx imagetools create "${args[@]}" "ghcr.io/maxhugit/mergeron-browser@$DIGEST"
 
+  source-validation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse: ${{ steps.proof.outputs.reuse }}
+      run_id: ${{ steps.proof.outputs.run_id }}
+      attempt: ${{ steps.proof.outputs.attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify recent main source validation for this exact commit
+        id: proof
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/reuse-main-validation.mjs
+
+  quality-gate:
+    needs: [source-validation, quality]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require verified main evidence or a complete fresh source suite
+        env:
+          PROOF_RESULT: ${{ needs.source-validation.result }}
+          REUSE: ${{ needs.source-validation.outputs.reuse }}
+          PROOF_RUN: ${{ needs.source-validation.outputs.run_id }}
+          PROOF_ATTEMPT: ${{ needs.source-validation.outputs.attempt }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+        run: |
+          test "$PROOF_RESULT" = success
+          if [ "$REUSE" = true ]; then
+            [[ "$PROOF_RUN" =~ ^[1-9][0-9]*$ ]] || exit 1
+            [[ "$PROOF_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || exit 1
+            test "$QUALITY_RESULT" = skipped
+          else
+            test "$REUSE" = false
+            test "$QUALITY_RESULT" = success
+          fi
+
   quality:
+    needs: source-validation
+    if: needs.source-validation.outputs.reuse != 'true'
     permissions:
       contents: read
       packages: write
@@ -513,7 +557,7 @@ jobs:
           if-no-files-found: warn
 
   promote:
-    needs: [quality, build, manager-build, cli-runtime]
+    needs: [quality-gate, build, manager-build, cli-runtime]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -541,7 +585,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, manager-build, promote, transcription-publish]
+    needs: [build, manager-build, promote, browser-publish, transcription-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
