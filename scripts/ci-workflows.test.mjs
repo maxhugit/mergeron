@@ -985,3 +985,56 @@ test('tag source reuse requires a successful proof or a complete fresh suite bef
   );
   assert.match(quality, /node --test scripts\/reuse-main-validation.test.mjs/);
 });
+
+test('a deliberately reused/skipped quality suite does not skip promotions behind its successful gate', () => {
+  const targets = {
+    'browser-publish': ['quality-gate', 'browser-build'],
+    'transcription-publish': ['quality-gate', 'transcription-build'],
+    promote: ['quality-gate', 'build', 'manager-build', 'cli-runtime'],
+    release: [
+      'build',
+      'manager-build',
+      'promote',
+      'browser-publish',
+      'transcription-publish',
+    ],
+  };
+  for (const [name, required] of Object.entries(targets)) {
+    const block = job(publish, name);
+    const condition = block
+      .match(/^    if: >-\n((?:      .+\n)+)/m)?.[1]
+      .trim();
+    assert.ok(condition, name);
+    // A status function explicitly overrides GitHub's inherited success()
+    // condition. Never bypass the actual result of a required gate/build.
+    assert.match(condition, /!cancelled\(\)/, name);
+    const baseline = Object.fromEntries(required.map((id) => [id, 'success']));
+    const evaluate = (
+      changes = {},
+      cancelled = false,
+      ref = 'refs/tags/v0.8.1',
+    ) => {
+      const results = { quality: 'skipped', ...baseline, ...changes };
+      const expression = condition.replace(
+        /needs\.([\w-]+)\.result/g,
+        (_, id) => JSON.stringify(results[id] ?? 'skipped'),
+      );
+      return runInNewContext(expression, {
+        cancelled: () => cancelled,
+        startsWith: (s, p) => s.startsWith(p),
+        github: { ref },
+      });
+    };
+    assert.equal(evaluate(), true, name);
+    assert.equal(evaluate({}, true), false, name);
+    for (const id of required)
+      for (const result of ['failure', 'cancelled', 'skipped', null])
+        assert.equal(
+          evaluate({ [id]: result }),
+          false,
+          `${name}: ${id}=${result}`,
+        );
+    if (name === 'release')
+      assert.equal(evaluate({}, false, 'refs/heads/main'), false);
+  }
+});
