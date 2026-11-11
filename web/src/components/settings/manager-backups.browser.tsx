@@ -12,6 +12,27 @@ import '@/index.css';
 
 vi.mock('./update-monitor-api', () => ({
   ensureUpdateMonitor: () => Promise.resolve(),
+  readUpdateMonitor: async () => ({
+    observedAt: '2026-11-06T22:14:33Z',
+    operation: {
+      id: 'fixture',
+      status: 'succeeded',
+      phase: 'complete',
+      stages: [
+        'preparing',
+        'stopping',
+        'backingUp',
+        'replacing',
+        'checkingHealth',
+        'committing',
+      ],
+      events: Array.from({ length: 100 }, () => ({
+        at: '2026-11-06T22:14:33Z',
+        phase: 'replacing',
+        status: 'running',
+      })),
+    },
+  }),
 }));
 vi.mock('./use-category-settings', () => ({
   useCategorySettings: () => ({
@@ -186,21 +207,21 @@ test.each([
       </QueryClientProvider>,
     );
     try {
-      await waitFor(() =>
-        expect(
-          document.querySelector('iframe')!.contentDocument?.body.textContent,
-        ).toContain('Suivi synthétique'),
-      );
+      await screen.findByRole('heading', { name: 'Mise à jour réussie' });
+      expect(document.querySelector('iframe')).toBeNull();
       const dialog = screen.getByRole('dialog');
       await waitFor(() => expect(getComputedStyle(dialog).opacity).toBe('1'));
       expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(
-        height * 0.85 + 1,
+        height * 0.9 + 1,
       );
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/update-dialog-initial-${width}-${height}.png`,
+      });
       const journal = screen.getByRole('region', {
         name: 'Journal de l’opération',
       });
       expect(journal.getBoundingClientRect().height).toBeGreaterThanOrEqual(
-        224,
+        128,
       );
       const log = screen.getByRole('log');
       expect(log.scrollHeight).toBeGreaterThan(log.clientHeight);
@@ -209,8 +230,9 @@ test.each([
       const footerTop = screen
         .getByRole('button', { name: 'Fermer' })
         .getBoundingClientRect().top;
-      const body =
-        dialog.querySelector('iframe')!.parentElement!.parentElement!;
+      const body = dialog.querySelector<HTMLElement>(
+        '[data-update-monitor-body]',
+      )!;
       body.scrollTop = body.scrollHeight;
       expect(
         screen.getByRole('button', { name: 'Fermer' }).getBoundingClientRect()

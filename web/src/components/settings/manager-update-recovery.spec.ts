@@ -110,3 +110,36 @@ it('ignores malformed receipts rather than restoring an unrelated operation', ()
   );
   expect(readManagerUpdateReceipt()).toBeNull();
 });
+
+it('keeps the independent Manager phase, observation and step plan while dropping private fields', () => {
+  const startedAt = Date.now();
+  saveManagerUpdateReceipt({
+    startedAt,
+    independentMonitor: true,
+    operationId: 'current',
+    excludedOperationId: null,
+    snapshot: {
+      id: 'current',
+      phase: 'managerChecking',
+      status: 'running',
+      images: { private: 'SECRET' },
+      previousImages: {},
+      backupRetained: false,
+      monitorObservedAt: '2026-11-11T00:00:00Z',
+      monitorStages: ['preparing', 'managerChecking'],
+      events: [
+        {
+          at: '2026-11-11T00:00:00Z',
+          phase: 'managerReplacing',
+          status: 'running',
+        },
+      ],
+    },
+  });
+  expect(readManagerUpdateReceipt()?.snapshot).toMatchObject({
+    phase: 'managerChecking',
+    monitorObservedAt: '2026-11-11T00:00:00Z',
+    monitorStages: ['preparing', 'managerChecking'],
+  });
+  expect(JSON.stringify(readManagerUpdateReceipt())).not.toContain('SECRET');
+});

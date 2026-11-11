@@ -172,6 +172,10 @@ jobs:
           pnpm --dir web exec node scripts/install-test-browsers.mjs --with-deps chromium webkit
           pnpm --dir web test:browser --shard=${{ matrix.shard }}/2
 
+      - name: Verify independent update monitoring through application downtime
+        if: matrix.part == 'frontend-browser' && matrix.shard == 1
+        run: pnpm --dir web exec node scripts/verify-update-monitor.mjs .vitest-screenshots/update-monitor
+
       - name: Test OnlyOffice assistant once
         if: matrix.part == 'frontend-browser' && matrix.shard == 1
         run: node scripts/test-onlyoffice-assistant.mjs

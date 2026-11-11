@@ -26,6 +26,8 @@ const gateway = createUpdateGateway({
 await new Promise((r) => gateway.listen(0, '127.0.0.1', r));
 const url = `http://localhost:${gateway.address().port}`;
 const reports = [];
+// The independent page must work with no application process for the whole test.
+await new Promise((r) => upstream.close(r));
 try {
   for (const [engine, launcher] of [
     ['chromium', chromium],
@@ -58,7 +60,7 @@ try {
             startedAt: new Date().toISOString(),
             events: [],
           });
-          await page.goto(url + '/_mergeron-update/?exclude=previous');
+          await page.goto(url + '/_mergeron-update/?exclude=previous&lang=fr');
           await page
             .getByText('En attente du démarrage de la nouvelle opération…', {
               exact: true,
@@ -100,13 +102,145 @@ try {
               await page.locator('#events li').count(),
               events.length,
             );
+            if (phase === 'managerReplacing' && width === 1280) {
+              const previousState = await page.locator('#state').innerText();
+              const previousObserved = await page
+                .locator('#observed')
+                .innerText();
+              let fault = 503;
+              await page.route('**/_mergeron-update/status', (route) =>
+                fault
+                  ? route.fulfill({
+                      status: fault,
+                      contentType: 'application/json',
+                      body: '{}',
+                    })
+                  : route.continue(),
+              );
+              await page.waitForFunction(() =>
+                document
+                  .querySelector('#connection')
+                  .textContent.includes('Connexion au suivi interrompue'),
+              );
+              assert.equal(
+                await page.locator('#state').innerText(),
+                previousState,
+              );
+              assert.equal(
+                await page.locator('#observed').innerText(),
+                previousObserved,
+              );
+              assert.equal(
+                await page.locator('#events li').count(),
+                events.length,
+              );
+              fault = 401;
+              await page.waitForFunction(() =>
+                document
+                  .querySelector('#connection')
+                  .textContent.includes('session administrateur'),
+              );
+              assert.equal(
+                await page.locator('#state').innerText(),
+                previousState,
+              );
+              fault = 0;
+              await page.waitForFunction(
+                () =>
+                  document.querySelector('#connection').textContent ===
+                  'Suivi connecté',
+              );
+              await page.unroute('**/_mergeron-update/status');
+            }
             if (phase === 'managerChecking')
               await page.screenshot({
                 path: join(output, `${engine}-${width}.png`),
                 fullPage: true,
               });
           }
-          assert.match(await page.locator('#state').innerText(), /Réussie/);
+          assert.match(
+            await page.locator('#state').innerText(),
+            /Mise à jour réussie/,
+          );
+          for (const [status, phase, label, checkpoint] of [
+            ['rolledBack', 'complete', 'Version précédente restaurée', false],
+            [
+              'recoveryRequired',
+              'managerRolledBack',
+              'Intervention nécessaire',
+              false,
+            ],
+            ['succeeded', 'complete', 'Sauvegarde créée', true],
+          ]) {
+            await publishMonitor(directory, {
+              id: 'current',
+              status,
+              phase,
+              checkpoint,
+              startedAt,
+              events,
+            });
+            await page.reload();
+            await page
+              .getByRole('heading', { name: label, exact: true })
+              .waitFor();
+            if (status !== 'succeeded')
+              assert.notEqual(
+                await page.locator('#track').getAttribute('aria-valuenow'),
+                await page.locator('#track').getAttribute('aria-valuemax'),
+              );
+          }
+          await publishMonitor(directory, {
+            id: 'current',
+            phase: 'stopping',
+            status: 'running',
+            startedAt,
+            events: events.slice(0, 1),
+          });
+          await page.reload();
+          await page
+            .getByRole('heading', { name: 'Arrêt des services', exact: true })
+            .waitFor();
+          await publishMonitor(directory, {
+            id: 'other',
+            phase: 'complete',
+            status: 'succeeded',
+            startedAt,
+            events: [],
+          });
+          await page.waitForFunction(() =>
+            document
+              .querySelector('#connection')
+              .textContent.includes('Une autre opération est courante'),
+          );
+          assert.equal(
+            await page.locator('#state').innerText(),
+            'Arrêt des services',
+          );
+          assert.equal(await page.locator('#events li').count(), 1);
+          await writeFile(
+            join(directory, 'state.json'),
+            JSON.stringify({
+              observedAt: new Date().toISOString(),
+              operation: {
+                id: 'current',
+                phase: 'replacing',
+                status: 'running',
+                events: [
+                  { at: startedAt, phase: 'replacing', status: 'running' },
+                ],
+              },
+            }),
+          );
+          await page.reload();
+          await page
+            .getByRole('heading', {
+              name: 'Installation des services',
+              exact: true,
+            })
+            .waitFor();
+          assert.equal(await page.locator('#progress').isHidden(), true);
+          assert.equal(await page.locator('#events li').count(), 1);
           reports.push({
             engine,
             width,
@@ -121,10 +255,9 @@ try {
       await browser.close();
     }
   }
-  await new Promise((r) => upstream.close(r));
   const response = await fetch(url + '/', { headers: { Accept: 'text/html' } });
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /Mise à jour de Mergeron/);
+  assert.match(await response.text(), /Suivi de la mise à jour/);
   await writeFile(
     join(output, 'report.json'),
     JSON.stringify(reports, null, 2) + '\n',

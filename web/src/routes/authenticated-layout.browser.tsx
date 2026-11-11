@@ -844,9 +844,18 @@ test.each([390, 1280])(
         if (path.includes('/_mergeron-update/status'))
           return new Response(
             JSON.stringify({
+              observedAt: new Date().toISOString(),
               operation: {
                 id: '12345678-1234-1234-1234-123456789abc',
                 status: offline ? 'running' : 'succeeded',
+                phase: offline ? 'managerChecking' : 'complete',
+                events: [
+                  {
+                    at: new Date().toISOString(),
+                    phase: 'managerChecking',
+                    status: 'running',
+                  },
+                ],
               },
             }),
             { headers: { 'Content-Type': 'application/json' } },
@@ -887,10 +896,11 @@ test.each([390, 1280])(
       offline = true;
       await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
       await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' });
-      await waitFor(() =>
-        expect(
-          document.querySelector('iframe')?.contentDocument?.body.textContent,
-        ).toContain('Suivi synthétique'),
+      await screen.findByRole('heading', { name: 'Vérification du Manager' });
+      expect(document.querySelector('iframe')).toBeNull();
+      expect(screen.getAllByRole('log')).toHaveLength(1);
+      expect(screen.getByRole('log')).toHaveTextContent(
+        'Vérification du Manager',
       );
       expect(screen.queryByRole('textbox')).toBeNull();
       expect(

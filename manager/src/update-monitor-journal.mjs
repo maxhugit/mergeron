@@ -38,6 +38,23 @@ async function createGrant(directory, now) {
   await writeMonitorFile(directory, 'access.json', grants);
   return { token, expiresAt };
 }
+/** Public plan only: no backup paths, identities or container details. */
+export function monitorStages(operation) {
+  const stages = ['preparing', 'stopping'];
+  if (!['none-v1', 'development-none-v1'].includes(operation.backupPolicy))
+    stages.push('backingUp');
+  if (operation.restoreSource) stages.push('restoring');
+  if (!operation.checkpoint) stages.push('replacing');
+  stages.push('checkingHealth', 'committing');
+  if (
+    operation.managerPending ||
+    operation.managerTarget ||
+    operation.phase?.startsWith('manager') ||
+    operation.events?.some((event) => event.phase?.startsWith('manager'))
+  )
+    stages.push('managerPending', 'managerReplacing', 'managerChecking');
+  return stages;
+}
 /** Deliberate allowlist: never publish actor, Docker specs, paths, errors or backup details. */
 export async function publishMonitor(directory, operation) {
   if (operation.managerPending && operation.status === 'succeeded')
@@ -53,6 +70,8 @@ export async function publishMonitor(directory, operation) {
       phase: safeWord(operation.phase),
       status: safeWord(operation.status),
       startedAt: operation.startedAt,
+      checkpoint: operation.checkpoint === true,
+      stages: monitorStages(operation),
       events: (operation.events ?? []).slice(-200).map((event) => ({
         at: event.at,
         phase: safeWord(event.phase),

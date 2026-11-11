@@ -156,6 +156,7 @@ function updateReceipt() {
       id: 'operation',
       status: 'running',
       phase: 'backingUp',
+      monitorObservedAt: new Date().toISOString(),
       backupRetained: false,
       images: {},
       previousImages: {},
@@ -178,15 +179,21 @@ it('renders the retained update monitor synchronously during restart, without au
   expect(
     screen.getByRole('dialog', { name: 'Update progress' }),
   ).toBeInTheDocument();
-  expect(document.querySelector('iframe')).toHaveAttribute(
-    'src',
-    expect.stringContaining('operation=operation'),
-  );
+  expect(document.querySelector('iframe')).toBeNull();
+  expect(screen.getAllByRole('log')).toHaveLength(1);
+  expect(
+    screen.getByRole('link', { name: 'Open independent update monitoring' }),
+  ).toHaveAttribute('href', expect.stringContaining('operation=operation'));
   expect(screen.getByRole('log')).toHaveTextContent('Saving application data');
-  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Minimize' })).toBeDisabled();
   expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
   expect(screen.queryByText('cached@example.test')).not.toBeInTheDocument();
   expect(fetch).toHaveBeenCalledTimes(1);
+  expect(
+    fetch.mock.calls.every(
+      ([url, init]) => url === '/_mergeron-update/status' && !init?.method,
+    ),
+  ).toBe(true);
   expect(fetch).toHaveBeenCalledWith(
     '/_mergeron-update/status',
     expect.objectContaining({ credentials: 'same-origin', redirect: 'manual' }),
@@ -317,12 +324,18 @@ it('keeps the independent monitor visible while retained identity is paused befo
       <AuthenticatedLayout />
     </QueryClientProvider>,
   );
-  expect(document.querySelector('iframe')).toHaveAttribute(
-    'src',
-    expect.stringContaining('operation=operation'),
-  );
+  expect(document.querySelector('iframe')).toBeNull();
+  expect(screen.getAllByRole('log')).toHaveLength(1);
+  expect(
+    screen.getByRole('link', { name: 'Open independent update monitoring' }),
+  ).toHaveAttribute('href', expect.stringContaining('operation=operation'));
   expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
-  expect(fetch).not.toHaveBeenCalled();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(
+    fetch.mock.calls.every(
+      ([url, init]) => url === '/_mergeron-update/status' && !init?.method,
+    ),
+  ).toBe(true);
   view.unmount();
   client.clear();
 });
@@ -330,13 +343,23 @@ it('keeps the independent monitor visible while retained identity is paused befo
 it('discovers an authorized running update from another tab without a local receipt', async () => {
   sessionFailure(new AuthResourceError('Restarting', 503));
   const id = '12345678-1234-1234-1234-123456789abc';
-  const fetch = vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValue(
-      new Response(JSON.stringify({ operation: { id, status: 'running' } }), {
-        headers: { 'content-type': 'application/json' },
-      }),
-    );
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          observedAt: new Date().toISOString(),
+          operation: {
+            id,
+            status: 'running',
+            phase: 'managerChecking',
+            events: [],
+          },
+        }),
+        {
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+  );
   const client = new QueryClient();
   const view = render(
     <QueryClientProvider client={client}>
@@ -344,12 +367,18 @@ it('discovers an authorized running update from another tab without a local rece
     </QueryClientProvider>,
   );
   await screen.findByRole('dialog', { name: 'Update progress' });
-  expect(document.querySelector('iframe')).toHaveAttribute(
-    'src',
-    expect.stringContaining('operation=' + id),
-  );
+  expect(document.querySelector('iframe')).toBeNull();
+  await screen.findByRole('heading', { name: 'Checking Manager health' });
+  expect(
+    screen.getByRole('link', { name: 'Open independent update monitoring' }),
+  ).toHaveAttribute('href', expect.stringContaining('operation=' + id));
   expect(screen.queryByText('Protected workspace')).not.toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(
+    fetch.mock.calls.every(
+      ([url, init]) => url === '/_mergeron-update/status' && !init?.method,
+    ),
+  ).toBe(true);
   expect(fetch.mock.calls[0][0]).toBe('/_mergeron-update/status');
   view.unmount();
   client.clear();
@@ -377,4 +406,44 @@ it('does not discover updates to bypass a genuine access denial', () => {
   expect(fetch).not.toHaveBeenCalled();
   expect(document.querySelector('iframe')).toBeNull();
   view.unmount();
+});
+
+it('keeps an existing operation pinned instead of replacing its receipt through cross-tab discovery during SSO recovery', async () => {
+  updateReceipt();
+  sessionFailure(new AuthResourceError('Restarting', 503));
+  const network = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            observedAt: new Date().toISOString(),
+            operation: {
+              id: '12345678-1234-1234-1234-123456789abc',
+              phase: 'managerChecking',
+              status: 'running',
+              events: [],
+            },
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        ),
+    );
+  const client = new QueryClient();
+  const view = render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedLayout />
+    </QueryClientProvider>,
+  );
+  await screen.findByText(/Another operation is current/);
+  expect(screen.getByRole('log')).toHaveTextContent('Saving application data');
+  expect(
+    screen.getByRole('link', { name: 'Open independent update monitoring' }),
+  ).toHaveAttribute('href', expect.stringContaining('operation=operation'));
+  expect(
+    screen.queryByRole('heading', { name: 'Checking Manager health' }),
+  ).toBeNull();
+  expect(network).toHaveBeenCalledTimes(1);
+  expect(network.mock.calls[0][0]).toBe('/_mergeron-update/status');
+  view.unmount();
+  client.clear();
 });

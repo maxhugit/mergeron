@@ -107,6 +107,9 @@ export function ManagerUpdateControls({
   const [progressOpen, setProgressOpen] = useState(
     Boolean(status.update?.busy || receipt),
   );
+  const [progressActive, setProgressActive] = useState(
+    receipt?.snapshot?.status === 'running',
+  );
   const [progressSession, setProgressSession] = useState(
     receipt?.startedAt ?? 0,
   );
@@ -164,9 +167,11 @@ export function ManagerUpdateControls({
     setExcludedOperationId(action === 'apply' ? (operation?.id ?? null) : null);
     setProgressSession(startedAt);
     setProgressOpen(true);
+    setProgressActive(true);
     mutation.mutate({ action, input });
   };
   const busy =
+    progressActive ||
     status.update?.busy ||
     mutation.isPending ||
     (progressOperation?.status === 'running' &&
@@ -507,9 +512,13 @@ export function ManagerUpdateControls({
       <ManagerUpdateProgressDialog
         independent={status.capabilities?.independentMonitor === true}
         open={progressOpen}
+        onMinimize={() => setProgressOpen(false)}
+        onRunningChange={setProgressActive}
+        monitorInBackground={progressActive && !progressOpen}
         onOpenChange={(open) => {
           setProgressOpen(open);
           if (!open) {
+            setProgressActive(false);
             saveManagerUpdateReceipt(null);
             void client.invalidateQueries({ queryKey: componentUpdatesKey });
           }
