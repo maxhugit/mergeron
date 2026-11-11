@@ -218,6 +218,29 @@ try {
             'Arrêt des services',
           );
           assert.equal(await page.locator('#events li').count(), 1);
+          await writeFile(
+            join(directory, 'state.json'),
+            JSON.stringify({
+              observedAt: new Date().toISOString(),
+              operation: {
+                id: 'current',
+                phase: 'replacing',
+                status: 'running',
+                events: [
+                  { at: startedAt, phase: 'replacing', status: 'running' },
+                ],
+              },
+            }),
+          );
+          await page.reload();
+          await page
+            .getByRole('heading', {
+              name: 'Installation des services',
+              exact: true,
+            })
+            .waitFor();
+          assert.equal(await page.locator('#progress').isHidden(), true);
+          assert.equal(await page.locator('#events li').count(), 1);
           reports.push({
             engine,
             width,

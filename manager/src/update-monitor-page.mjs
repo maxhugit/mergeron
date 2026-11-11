@@ -153,28 +153,21 @@ function monitorClient() {
     $('notice').dataset.error = String(
       op.status === 'rolledBack' || op.status === 'recoveryRequired',
     );
-    const knownStages = [
-      'preparing',
-      'stopping',
-      'backingUp',
-      'replacing',
-      'checkingHealth',
-      'committing',
-    ];
-    if (
+    // Old producers do not describe their plan. Their phase/journal remain usable,
+    // but a six-step fallback could falsely imply that a Dev backup took place.
+    const managerUpdate =
       op.phase.startsWith('manager') ||
-      op.events.some((event) => event.phase.startsWith('manager'))
-    )
-      knownStages.push('managerPending', 'managerReplacing', 'managerChecking');
+      op.events.some((event) => event.phase.startsWith('manager'));
     const stages =
       Array.isArray(op.stages) &&
+      op.stages.length > 0 &&
       op.stages.length <= 12 &&
       op.stages.every(word)
         ? op.stages
-        : knownStages;
+        : [];
     const index = stages.indexOf(op.phase),
       complete = op.status === 'succeeded';
-    $('progress').hidden = false;
+    $('progress').hidden = stages.length === 0;
     $('track').setAttribute('aria-label', t.title);
     $('track').setAttribute('aria-valuemax', String(stages.length));
     $('track').setAttribute('aria-valuetext', $('state').textContent);
@@ -226,7 +219,7 @@ function monitorClient() {
           const label = document.createElement('span');
           label.textContent =
             event.phase === 'complete' &&
-            stages.includes('managerReplacing') &&
+            managerUpdate &&
             (!terminal || index < events.length - 1)
               ? t.applicationComplete
               : phaseLabel(event.phase);

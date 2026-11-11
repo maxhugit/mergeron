@@ -52,7 +52,9 @@ suivi** permet de la rouvrir ; **Fermer** n’efface le reçu qu’après un ét
 terminal. Le lien indépendant ouvre le même journal dans une page autonome,
 sans bundle applicatif ni bibliothèque distante.
 
-La nouvelle fenêtre peut lire les projections des relais déjà installés. Leur
+La nouvelle fenêtre peut lire les projections des relais déjà installés. Si un
+ancien producteur ne fournit ni plan ni politique connue, elle affiche son étape
+et son journal sans inventer une sauvegarde accomplie ni un nombre d’étapes. Leur
 page autonome conserve son ancienne présentation jusqu’à une maintenance
 explicite de ces relais ; une mise à jour de l’application ou du Manager ne les
 remplace pas automatiquement. Les nouvelles pages autonomes utilisent une

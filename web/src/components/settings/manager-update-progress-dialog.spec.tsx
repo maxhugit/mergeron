@@ -477,10 +477,7 @@ it('does not let a stale API completion override an ongoing independent Manager 
   await screen.findByRole('heading', { name: 'Remplacement du Manager' });
   expect(screen.queryByText('Mise à jour réussie')).toBeNull();
   expect(screen.getAllByRole('log')).toHaveLength(1);
-  expect(screen.getByRole('progressbar')).not.toHaveAttribute(
-    'aria-valuenow',
-    '9',
-  );
+  expect(screen.queryByRole('progressbar')).toBeNull();
 });
 
 it('does not flash a stale API success before receiving the first independent observation', async () => {
@@ -579,4 +576,37 @@ it('continues read-only independent monitoring while minimized and reports its t
     fetcher.mock.calls.every(([url]) => url === '/_mergeron-update/status'),
   ).toBe(true);
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it('reads legacy independent projections without inventing a backup or a step plan', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      input === '/_mergeron-update/status'
+        ? json({
+            observedAt: '2026-10-25T09:01:00Z',
+            operation: {
+              ...operation,
+              phase: 'replacing',
+              events: [
+                {
+                  at: '2026-10-25T09:01:00Z',
+                  phase: 'replacing',
+                  status: 'running',
+                },
+              ],
+            },
+          })
+        : json({ available: false }),
+    ),
+  );
+  fixture.render(
+    <ManagerUpdateProgressDialog {...props} independent operation={null} />,
+  );
+  await screen.findByRole('heading', { name: 'Remplacement des conteneurs' });
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.queryByText('Sauvegarder')).toBeNull();
+  expect(screen.getByRole('log')).toHaveTextContent(
+    'Remplacement des conteneurs',
+  );
 });

@@ -136,6 +136,7 @@ export async function readUpdateMonitor(
         ? { checkpoint: op.checkpoint }
         : {}),
       ...(Array.isArray(op.stages) &&
+      op.stages.length > 0 &&
       op.stages.length <= 12 &&
       op.stages.every(word)
         ? { stages: [...op.stages] }

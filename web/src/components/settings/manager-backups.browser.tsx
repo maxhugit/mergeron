@@ -18,6 +18,14 @@ vi.mock('./update-monitor-api', () => ({
       id: 'fixture',
       status: 'succeeded',
       phase: 'complete',
+      stages: [
+        'preparing',
+        'stopping',
+        'backingUp',
+        'replacing',
+        'checkingHealth',
+        'committing',
+      ],
       events: Array.from({ length: 100 }, () => ({
         at: '2026-11-06T22:14:33Z',
         phase: 'replacing',

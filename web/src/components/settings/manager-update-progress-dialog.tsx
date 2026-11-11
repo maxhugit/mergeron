@@ -258,6 +258,15 @@ export function ManagerUpdateProgressDialog({
           'managerChecking',
         ]
       : legacyStages);
+  // Legacy public projections omit the plan: keep their journal, never invent completed backup steps.
+  const planKnown =
+    !independent ||
+    Boolean(
+      operation?.monitorStages?.length ||
+      operation?.backupPolicy ||
+      operation?.checkpoint ||
+      operation?.restoreSource,
+    );
   const stage = phase ? stages.indexOf(phase) : -1;
   const completed = operation?.status === 'succeeded';
   const interrupted = operation?.status === 'recoveryRequired';
@@ -391,7 +400,7 @@ export function ManagerUpdateProgressDialog({
               </p>
             )}
           </section>
-          {operation && !superseded && (
+          {operation && !superseded && planKnown && (
             <section
               className="shrink-0 space-y-2"
               aria-label={t('managerUpdateProgressTitle')}

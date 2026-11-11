@@ -118,6 +118,7 @@ function sanitizeSnapshot(value: unknown): ManagerUpdateOperation | null {
       ? { monitorObservedAt: snapshot.monitorObservedAt }
       : {}),
     ...(Array.isArray(snapshot.monitorStages) &&
+    snapshot.monitorStages.length > 0 &&
     snapshot.monitorStages.length <= 12 &&
     snapshot.monitorStages.every((phase) => phases.has(phase))
       ? { monitorStages: snapshot.monitorStages }
