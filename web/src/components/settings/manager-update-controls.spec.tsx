@@ -297,7 +297,7 @@ it('reopens the completed update after the authenticated workspace was remounted
   expect(readManagerUpdateReceipt()).toBeNull();
 });
 
-it('keeps progress locked during an active update without cancelling or replaying it', async () => {
+it('reduces and reopens active progress without cancelling, losing the receipt or replaying it', async () => {
   const update = {
     busy: true,
     operation: {
@@ -339,11 +339,24 @@ it('keeps progress locked during an active update without cancelling or replayin
   await waitFor(() =>
     expect(readManagerUpdateReceipt()?.operationId).toBe('active'),
   );
-  expect(screen.getByRole('button', { name: 'Fermer' })).toBeDisabled();
-  await user.click(screen.getByRole('button', { name: 'Fermer' }));
+  expect(screen.getByRole('button', { name: 'Réduire' })).toBeEnabled();
+  await user.click(screen.getByRole('button', { name: 'Réduire' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Suivi de la mise à jour' }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(readManagerUpdateReceipt()?.operationId).toBe('active');
+  expect(
+    screen.getByRole('button', { name: /^Mettre à jour$/ }),
+  ).toBeDisabled();
+  await user.click(
+    screen.getByRole('button', { name: 'Voir le suivi et les logs' }),
+  );
   expect(
     await screen.findByRole('dialog', { name: 'Suivi de la mise à jour' }),
   ).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Fermer' })).toBeNull();
   expect(
     fetch.mock.calls.filter(([, init]) => init?.method === 'POST'),
   ).toHaveLength(2);

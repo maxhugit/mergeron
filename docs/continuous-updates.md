@@ -16,7 +16,8 @@ SameSite=Strict limité au chemin `/_mergeron-update`. Les secrets ne passent
 jamais dans l’URL ou le stockage local du navigateur.
 
 `GET /_mergeron-update/status` exige ce cookie. Le service ne lit qu’un répertoire
-de projections : identifiant d’opération, état, étape et horodatages. Aucun
+de projections : identifiant d’opération, état, étape, plan des étapes, type
+sauvegarde seule et horodatages. Aucun
 acteur, chemin de sauvegarde, message Docker ou environnement n’y est copié.
 La projection est écrite par renommage atomique à chaque étape de la transaction.
 Une coupure du producteur conserve la dernière observation ; elle ne signifie
@@ -27,6 +28,35 @@ HTTP 200. Les API fonctionnelles répondent temporairement 503 et Retry-After ;
 les écritures ne sont jamais rejouées automatiquement. Les WebSockets applicatifs
 peuvent se fermer lors du redémarrage : la continuité concerne l’accès HTTP et
 le suivi, pas l’exécution de toutes les fonctions pendant une migration SQLite.
+
+## Fenêtre unifiée
+
+La fenêtre de suivi lit directement le journal indépendant : l’API de Mergeron
+ne peut plus remplacer son étape courante par un état ancien pendant le
+redémarrage. Les étapes portent des noms et suivent le plan réel (sauvegarde
+seule, restauration, absence de sauvegarde en Dev, remplacement du Manager).
+Elles n’estiment pas le temps restant. La dernière observation reçue reste
+visible si la connexion au suivi est interrompue. Une réponse HTML de connexion,
+un cookie expiré ou une autre opération ne sont jamais présentés comme un
+avancement ; l’identifiant de la première opération reçue est conservé.
+
+Le journal indépendant reste lisible avec son cookie existant pendant la
+vérification SSO ; aucun nouvel accès administrateur n’est demandé tant que
+cette vérification est suspendue. Les détails techniques sont repliables et
+proviennent exclusivement de l’API protégée. L’interface distingue une réussite,
+un retour arrière, une interruption et une intervention nécessaire.
+
+**Réduire** masque la fenêtre tout en conservant le reçu de reprise dans cet
+onglet. Cela n’annule pas l’opération et ne rejoue aucune écriture. **Voir le
+suivi** permet de la rouvrir ; **Fermer** n’efface le reçu qu’après un état
+terminal. Le lien indépendant ouvre le même journal dans une page autonome,
+sans bundle applicatif ni bibliothèque distante.
+
+La nouvelle fenêtre peut lire les projections des relais déjà installés. Leur
+page autonome conserve son ancienne présentation jusqu’à une maintenance
+explicite de ces relais ; une mise à jour de l’application ou du Manager ne les
+remplace pas automatiquement. Les nouvelles pages autonomes utilisent une
+présentation claire/sombre et responsive cohérente avec la fenêtre.
 
 ## Installation explicite sur l’hôte
 
@@ -148,8 +178,10 @@ node scripts/verify-update-monitor.mjs /tmp/mergeron-monitor-visual
 
 Ce contrôle utilise uniquement des serveurs HTTP locaux synthétiques. Il vérifie
 Chromium et WebKit à 390 et 1280 pixels, l’attente d’une nouvelle opération,
-les étapes du remplacement du Manager, la réussite confirmée et l’absence de
-débordement horizontal. Il conserve les captures et `report.json`. Le contrôle
+les étapes du remplacement du Manager, la perte puis la reprise de connexion,
+un cookie expiré, la réussite confirmée, le retour arrière, une sauvegarde seule,
+le refus de changer d’opération et l’absence de débordement horizontal. Il est
+également exécuté par le premier shard navigateur en CI. Il conserve les captures et `report.json`. Le contrôle
 HTTP final arrête le serveur applicatif local et exige toujours une réponse 200
 de la page de maintenance. Ces simulations complètent les tests transactionnels ;
 elles ne remplacent pas l’essai d’une mise à jour réelle sur la dev.

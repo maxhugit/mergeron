@@ -77,6 +77,11 @@ function sanitizeSnapshot(value: unknown): ManagerUpdateOperation | null {
   if (!value || typeof value !== 'object') return null;
   const snapshot = value as ManagerUpdateOperation;
   const phases = new Set([
+    'managerPending',
+    'managerReplacing',
+    'managerChecking',
+    'managerRolledBack',
+    'restoring',
     'preparing',
     'stopping',
     'backingUp',
@@ -90,9 +95,13 @@ function sanitizeSnapshot(value: unknown): ManagerUpdateOperation | null {
   if (
     typeof snapshot.id !== 'string' ||
     snapshot.id.length > 128 ||
-    !['running', 'succeeded', 'rolledBack', 'recoveryRequired'].includes(
-      snapshot.status,
-    ) ||
+    ![
+      'running',
+      'succeeded',
+      'rolledBack',
+      'recoveryRequired',
+      'cancelled',
+    ].includes(snapshot.status) ||
     !phases.has(snapshot.phase) ||
     !Array.isArray(snapshot.events)
   )
@@ -102,6 +111,17 @@ function sanitizeSnapshot(value: unknown): ManagerUpdateOperation | null {
     phase: snapshot.phase,
     status: snapshot.status,
     backupRetained: snapshot.backupRetained === true,
+    checkpoint: snapshot.checkpoint === true,
+    ...(typeof snapshot.monitorObservedAt === 'string' &&
+    snapshot.monitorObservedAt.length <= 40 &&
+    Number.isFinite(Date.parse(snapshot.monitorObservedAt))
+      ? { monitorObservedAt: snapshot.monitorObservedAt }
+      : {}),
+    ...(Array.isArray(snapshot.monitorStages) &&
+    snapshot.monitorStages.length <= 12 &&
+    snapshot.monitorStages.every((phase) => phases.has(phase))
+      ? { monitorStages: snapshot.monitorStages }
+      : {}),
     ...([
       'development-none-v1',
       'production-essential-v1',

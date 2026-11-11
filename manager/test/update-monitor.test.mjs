@@ -251,3 +251,69 @@ test('keeps existing gateway replicas untouched when an upgrade has not been dra
   );
   assert.equal(stopped, false);
 });
+
+test('publishes an accurate bounded step plan without execution or backup details', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'monitor-plan-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const operation = {
+    id: 'planned',
+    phase: 'preparing',
+    status: 'running',
+    events: [],
+    backupPolicy: 'development-none-v1',
+    managerPending: true,
+    restoreSource: '/private/backup',
+    secret: 'PRIVATE',
+  };
+  await publishMonitor(directory, operation);
+  const data = JSON.parse(
+    await readFile(join(directory, 'state.json'), 'utf8'),
+  );
+  assert(!JSON.stringify(data).includes('/private/backup'));
+  assert(!JSON.stringify(data).includes('PRIVATE'));
+  assert(!data.operation.stages.includes('backingUp'));
+  assert(data.operation.stages.includes('restoring'));
+  assert.deepEqual(data.operation.stages.slice(-3), [
+    'managerPending',
+    'managerReplacing',
+    'managerChecking',
+  ]);
+  await publishMonitor(directory, {
+    ...operation,
+    checkpoint: true,
+    managerPending: false,
+    restoreSource: null,
+    backupPolicy: 'essential-v1',
+  });
+  const checkpoint = JSON.parse(
+    await readFile(join(directory, 'state.json'), 'utf8'),
+  ).operation;
+  assert.equal(checkpoint.checkpoint, true);
+  assert.deepEqual(checkpoint.stages, [
+    'preparing',
+    'stopping',
+    'backingUp',
+    'checkingHealth',
+    'committing',
+  ]);
+});
+
+test('does not publish application success as global success while the Manager is still pending', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'monitor-manager-pending-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await publishMonitor(directory, {
+    id: 'current',
+    phase: 'complete',
+    status: 'succeeded',
+    managerPending: true,
+    managerTarget: 'PRIVATE_IMAGE',
+    events: [],
+  });
+  const data = JSON.parse(
+    await readFile(join(directory, 'state.json'), 'utf8'),
+  );
+  assert.equal(data.operation.status, 'running');
+  assert.equal(data.operation.phase, 'managerPending');
+  assert(data.operation.stages.includes('managerChecking'));
+  assert(!JSON.stringify(data).includes('PRIVATE_IMAGE'));
+});

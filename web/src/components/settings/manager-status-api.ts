@@ -120,6 +120,9 @@ export interface ManagerStatus {
       builds?: Record<string, { from: InstalledBuild; to: InstalledBuild }>;
       restoreSource?: string | null;
       checkpoint?: boolean;
+      /** Public progress plan from the independent monitor, never execution input. */
+      monitorStages?: string[];
+      monitorObservedAt?: string;
       hostObservation?: boolean;
       status:
         | 'running'

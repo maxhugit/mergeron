@@ -66,6 +66,7 @@ it('shows five real stages and no backup stage for a development transaction', a
   fixture.render(
     <ManagerUpdateProgressDialog {...props} operation={current} />,
   );
+  fireEvent.click(screen.getByText('Détails techniques'));
   expect(
     await screen.findByText(/Dev : aucune sauvegarde de données/),
   ).toBeVisible();
@@ -167,7 +168,7 @@ it('retains progress without any protected request and blocks dismissal while se
   const dialog = await screen.findByRole('dialog');
   expect(screen.getByRole('log')).toHaveTextContent('Sauvegarde des données');
   expect(screen.getByText(/votre identité vérifiée/)).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Fermer' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Réduire' })).toBeDisabled();
   fireEvent.keyDown(dialog, { key: 'Escape' });
   expect(close).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
@@ -300,8 +301,282 @@ it('keeps an incomplete historical monitor locked while a newer operation is act
   vi.stubGlobal('fetch', fetch);
   fixture.render(<ManagerUpdateProgressDialog {...props} />);
   await waitFor(() => expect(fetch).toHaveBeenCalled());
-  expect(screen.getByRole('button', { name: 'Fermer' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Réduire' })).toBeDisabled();
   expect(
     screen.queryByText('Ce suivi n’est plus l’opération courante'),
   ).not.toBeInTheDocument();
+});
+
+it('uses only the independent phase/journal while the normal API is stale, unavailable or identity verification is paused', async () => {
+  const current = {
+    ...operation,
+    phase: 'managerReplacing',
+    events: [
+      ...operation.events,
+      {
+        at: '2026-10-25T09:01:00Z',
+        phase: 'managerReplacing',
+        status: 'running',
+      },
+    ],
+  };
+  let snapshot: unknown = {
+    observedAt: '2026-10-25T09:01:00Z',
+    operation: current,
+  };
+  let unavailable = false;
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    if (input === '/_mergeron-update/status') {
+      if (unavailable) throw new TypeError('network unavailable');
+      return json(snapshot);
+    }
+    return json(response({ ...operation, phase: 'preparing', events: [] }));
+  });
+  vi.stubGlobal('fetch', fetcher);
+  fixture.render(
+    <ManagerUpdateProgressDialog {...props} independent monitoringPaused />,
+  );
+  expect(
+    await screen.findByRole('heading', { name: 'Remplacement du Manager' }),
+  ).toBeVisible();
+  expect(screen.getAllByRole('log')).toHaveLength(1);
+  expect(document.querySelector('iframe')).toBeNull();
+  expect(within(screen.getByRole('log')).getAllByRole('listitem')).toHaveLength(
+    3,
+  );
+  expect(
+    fetcher.mock.calls.every(([url]) => url === '/_mergeron-update/status'),
+  ).toBe(true);
+  unavailable = true;
+  await act(async () => {
+    await fixture.queryClient.refetchQueries({
+      queryKey: ['administration', 'independent-update-progress', 1],
+    });
+  });
+  expect(
+    screen.getByRole('heading', { name: 'Remplacement du Manager' }),
+  ).toBeVisible();
+  expect(
+    (await screen.findAllByText(/Connexion au suivi interrompue/)).length,
+  ).toBeGreaterThan(0);
+  expect(screen.getByText(/Dernière donnée reçue à/)).toHaveTextContent(
+    new Date('2026-10-25T09:01:00Z').toLocaleTimeString('fr'),
+  );
+  unavailable = false;
+  snapshot = {
+    observedAt: '2026-10-25T09:02:00Z',
+    operation: { ...current, phase: 'complete', status: 'rolledBack' },
+  };
+  await act(async () => {
+    await fixture.queryClient.refetchQueries({
+      queryKey: ['administration', 'independent-update-progress', 1],
+    });
+  });
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Version précédente restaurée',
+    }),
+  ).toBeVisible();
+  expect(screen.queryByText('Mise à jour réussie')).not.toBeInTheDocument();
+});
+
+it('does not replace a pinned independent operation with another journal', async () => {
+  let current = { ...operation };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      input === '/_mergeron-update/status'
+        ? json({ observedAt: '2026-10-25T09:01:00Z', operation: current })
+        : json(response(operation)),
+    ),
+  );
+  fixture.render(<ManagerUpdateProgressDialog {...props} independent />);
+  await screen.findByText(/Suivi indépendant connecté/);
+  current = {
+    ...operation,
+    id: 'another-operation',
+    phase: 'complete',
+    status: 'succeeded',
+    events: [],
+  };
+  await act(async () => {
+    await fixture.queryClient.refetchQueries({
+      queryKey: ['administration', 'independent-update-progress', 1],
+    });
+  });
+  expect(screen.getByRole('log')).toHaveTextContent('Sauvegarde des données');
+  expect(screen.queryByText('Mise à jour réussie')).not.toBeInTheDocument();
+  expect(
+    (await screen.findAllByText(/Une autre opération est courante/)).length,
+  ).toBeGreaterThan(0);
+});
+
+it('reduces a running monitor without closing or clearing its recovery receipt', async () => {
+  const { saveManagerUpdateReceipt, readManagerUpdateReceipt } =
+    await import('./manager-update-recovery');
+  const session = Date.now();
+  saveManagerUpdateReceipt({
+    startedAt: session,
+    operationId: operation.id,
+    excludedOperationId: null,
+    independentMonitor: true,
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json(response(operation))),
+  );
+  const minimize = vi.fn(),
+    close = vi.fn();
+  fixture.render(
+    <ManagerUpdateProgressDialog
+      {...props}
+      session={session}
+      onMinimize={minimize}
+      onOpenChange={close}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Réduire' }));
+  expect(minimize).toHaveBeenCalledOnce();
+  expect(close).not.toHaveBeenCalled();
+  expect(readManagerUpdateReceipt()?.operationId).toBe(operation.id);
+  saveManagerUpdateReceipt(null);
+});
+
+it('never claims a preparation phase while waiting for the first independent journal', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      input === '/_mergeron-update/status'
+        ? json({ observedAt: '2026-10-25T09:00:00Z', operation: null })
+        : json({ available: false }),
+    ),
+  );
+  fixture.render(
+    <ManagerUpdateProgressDialog {...props} independent operation={null} />,
+  );
+  await screen.findByText('Suivi indépendant connecté');
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.queryByText('Opération en cours')).not.toBeInTheDocument();
+});
+
+it('does not let a stale API completion override an ongoing independent Manager replacement', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      input === '/_mergeron-update/status'
+        ? json({
+            observedAt: '2026-10-25T09:01:00Z',
+            operation: { ...operation, phase: 'managerReplacing' },
+          })
+        : json(
+            response({ ...operation, status: 'succeeded', phase: 'complete' }),
+          ),
+    ),
+  );
+  fixture.render(<ManagerUpdateProgressDialog {...props} independent />);
+  await screen.findByRole('heading', { name: 'Remplacement du Manager' });
+  expect(screen.queryByText('Mise à jour réussie')).toBeNull();
+  expect(screen.getAllByRole('log')).toHaveLength(1);
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute(
+    'aria-valuenow',
+    '9',
+  );
+});
+
+it('does not flash a stale API success before receiving the first independent observation', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      input === '/_mergeron-update/status'
+        ? new Response('{}', { status: 503 })
+        : json(
+            response({ ...operation, status: 'succeeded', phase: 'complete' }),
+          ),
+    ),
+  );
+  fixture.render(
+    <ManagerUpdateProgressDialog
+      {...props}
+      operation={{ ...operation, status: 'succeeded', phase: 'complete' }}
+      independent
+    />,
+  );
+  await screen.findByText(/Connexion au suivi interrompue/);
+  expect(screen.queryByText('Mise à jour réussie')).toBeNull();
+  expect(screen.queryByRole('progressbar')).toBeNull();
+});
+
+it('labels application completion as intermediate while the independent Manager verification is pending', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      input === '/_mergeron-update/status'
+        ? json({
+            observedAt: '2026-10-25T09:01:00Z',
+            operation: {
+              ...operation,
+              phase: 'managerPending',
+              events: [
+                {
+                  at: '2026-10-25T09:01:00Z',
+                  phase: 'complete',
+                  status: 'succeeded',
+                },
+              ],
+            },
+          })
+        : json({ available: false }),
+    ),
+  );
+  fixture.render(<ManagerUpdateProgressDialog {...props} independent />);
+  expect(
+    await screen.findByText(
+      'Application mise à jour — vérification du Manager à suivre',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText('Mise à jour réussie')).toBeNull();
+});
+
+it('continues read-only independent monitoring while minimized and reports its terminal state', async () => {
+  let current = { ...operation };
+  const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+    input === '/_mergeron-update/status'
+      ? json({ observedAt: '2026-10-25T09:01:00Z', operation: current })
+      : json({ available: false }),
+  );
+  vi.stubGlobal('fetch', fetcher);
+  const active = vi.fn();
+  fixture.render(
+    <ManagerUpdateProgressDialog
+      {...props}
+      open={false}
+      independent
+      monitoringPaused
+      monitorInBackground
+      onRunningChange={active}
+    />,
+  );
+  await waitFor(() => expect(active).toHaveBeenCalledWith(true));
+  await waitFor(() =>
+    expect(
+      fixture.queryClient.getQueryData([
+        'administration',
+        'independent-update-progress',
+        1,
+        operation.id,
+        null,
+      ]),
+    ).toBeDefined(),
+  );
+  current = { ...operation, status: 'succeeded', phase: 'complete' };
+  await act(async () => {
+    await fixture.queryClient.refetchQueries({
+      queryKey: ['administration', 'independent-update-progress', 1],
+    });
+  });
+  await waitFor(() => expect(active).toHaveBeenLastCalledWith(false));
+  expect(
+    fetcher.mock.calls.every(([url]) => url === '/_mergeron-update/status'),
+  ).toBe(true);
+  expect(screen.queryByRole('dialog')).toBeNull();
 });
