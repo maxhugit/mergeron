@@ -179,10 +179,13 @@ function SessionRecovery({
     (session.isPending ||
       (session.paused && !session.isError) ||
       (session.isError && reconnecting));
-  const discoveredUpdate = useUpdateDiscovery(canShowUpdate && reconnecting);
+  const updateReceipt = canShowUpdate ? readManagerUpdateReceipt() : null;
+  const discoveredUpdate = useUpdateDiscovery(
+    canShowUpdate && reconnecting && !updateReceipt,
+  );
   // A receipt/discovery only restores progress display, never the workspace.
   if (canShowUpdate) {
-    const receipt = discoveredUpdate ?? readManagerUpdateReceipt();
+    const receipt = updateReceipt ?? discoveredUpdate;
     // This recovery view must already be loaded before the server goes offline.
     // A lazy import here would require a network request precisely during downtime.
     if (receipt) return <ManagerUpdateReconnecting receipt={receipt} />;
