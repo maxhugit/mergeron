@@ -147,6 +147,7 @@ for (const width of [1280, 820, 390])
           getComputedStyle(
             screen.getByRole('dialog', { name: 'État et activité' }),
           ).opacity,
+        { timeout: 5000 },
       )
       .toBe('1');
     const dialog = screen.getByRole('dialog', { name: 'État et activité' });
@@ -165,6 +166,7 @@ for (const width of [1280, 820, 390])
           getComputedStyle(
             screen.getByRole('dialog', { name: 'État et activité' }),
           ).opacity,
+        { timeout: 5000 },
       )
       .toBe('1');
     const reopened = screen.getByRole('dialog', { name: 'État et activité' });

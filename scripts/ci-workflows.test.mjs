@@ -473,13 +473,13 @@ test('browser preparation is parallel but moving tags remain gated by quality', 
   assert.match(build, /ignore-unfixed: false/);
   assert.match(build, /smoke-test-browser-image\.sh/);
   assert.doesNotMatch(build, /imagetools create/);
-  assert.match(promote, /needs: \[quality, browser-build\]/);
+  assert.match(promote, /needs: \[quality-gate, browser-build\]/);
   assert.match(promote, /needs\.browser-build\.outputs\.digest/);
   assert.match(promote, /imagetools create/);
   assert.match(publish, /cancel-in-progress: false/);
   assert.match(
     job(publish, 'promote'),
-    /needs: \[quality, build, manager-build, cli-runtime\]/,
+    /needs: \[quality-gate, build, manager-build, cli-runtime\]/,
   );
   assert.match(job(publish, 'promote'), /scripts\/promote-image-pair\.sh/);
 });
@@ -919,4 +919,69 @@ test('browser/backend and transcription runners prepare signed Ubuntu downloads 
     read('scripts/configure-ci-apt.py'),
     /AllowUnauthenticated|AllowInsecureRepositories|Verify-Peer.*false|trusted=yes/,
   );
+});
+
+test('tag source reuse requires a successful proof or a complete fresh suite before every promotion', () => {
+  const source = job(publish, 'source-validation');
+  assert.match(source, /actions: read/);
+  assert.match(source, /node scripts\/reuse-main-validation\.mjs/);
+  assert.doesNotMatch(source, /continue-on-error:/);
+  const validation = job(publish, 'quality');
+  assert.match(validation, /needs: source-validation/);
+  assert.match(
+    validation,
+    /if: needs\.source-validation\.outputs\.reuse != 'true'/,
+  );
+  assert.match(validation, /uses: \.\/.github\/workflows\/quality.yml/);
+  const gate = job(publish, 'quality-gate');
+  assert.match(gate, /needs: \[source-validation, quality\]/);
+  assert.match(gate, /if: always\(\)/);
+  const script = gate.split('        run: |\n')[1].replace(/^          /gm, '');
+  const baseline = {
+    PROOF_RESULT: 'success',
+    REUSE: 'false',
+    PROOF_RUN: '',
+    PROOF_ATTEMPT: '',
+    QUALITY_RESULT: 'success',
+  };
+  const run = (changes) =>
+    spawnSync('bash', ['-e', '-c', script], {
+      env: { ...process.env, ...baseline, ...changes },
+    }).status;
+  assert.equal(run({}), 0);
+  assert.equal(
+    run({
+      REUSE: 'true',
+      PROOF_RUN: '123',
+      PROOF_ATTEMPT: '2',
+      QUALITY_RESULT: 'skipped',
+    }),
+    0,
+  );
+  for (const proof of ['failure', 'skipped', 'cancelled', ''])
+    assert.notEqual(run({ PROOF_RESULT: proof }), 0);
+  for (const result of ['failure', 'cancelled', 'skipped', ''])
+    assert.notEqual(run({ QUALITY_RESULT: result }), 0);
+  for (const reuse of ['', 'TRUE', 'unknown'])
+    assert.notEqual(run({ REUSE: reuse }), 0);
+  for (const variable of ['PROOF_RUN', 'PROOF_ATTEMPT']) {
+    for (const value of ['', '0', 'invalid'])
+      assert.notEqual(
+        run({
+          REUSE: 'true',
+          PROOF_RUN: '123',
+          PROOF_ATTEMPT: '2',
+          QUALITY_RESULT: 'skipped',
+          [variable]: value,
+        }),
+        0,
+      );
+  }
+  for (const name of ['browser-publish', 'transcription-publish', 'promote'])
+    assert.match(job(publish, name), /needs: \[quality-gate,/);
+  assert.match(
+    job(publish, 'release'),
+    /needs: \[build, manager-build, promote, browser-publish, transcription-publish\]/,
+  );
+  assert.match(quality, /node --test scripts\/reuse-main-validation.test.mjs/);
 });

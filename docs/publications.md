@@ -95,10 +95,38 @@ deux paquets ou dont la version majeure n’est pas `0`.
 
 ## Validation et publication
 
-Le tag relance la totalité des contrôles de source, construit une candidate
-immuable, vérifie ses dépendances, ses vulnérabilités, son démarrage et ses
-métadonnées. La candidate n’est promue vers les tags stables qu’après réussite
-de ces contrôles.
+Les PR et les merges sur `main` conservent la suite complète des tests de
+source. Les commits testés ne sont pas identiques : une PR est vérifiée avec
+sa base de fusion, puis le commit réellement intégré sur `main` est validé.
+
+Pour un tag stable, le workflow peut réutiliser cette dernière validation de
+source au lieu de relancer une troisième fois le backend, le frontend et les
+deux séries Chromium/WebKit. Cette optimisation exige simultanément :
+
+- le **même SHA complet**, dans le même dépôt et le même workflow de publication ;
+- un lancement `push` sur `main`, jamais une PR, un fork, un autre tag ou un
+  déclenchement manuel ;
+- la plus récente invocation de ce commit sur `main`, achevée avec succès,
+  démarrée depuis moins de 24 heures ;
+- une tentative identifiée, avec chacun des jobs source, leurs agrégateurs,
+  les constructions, le runtime CLI et les promotions attendues réussis ;
+- une seconde vérification que cette tentative n’a pas changé pendant la
+  lecture des preuves.
+
+Un job obligatoire `quality-gate` bloque toutes les promotions en l’absence
+soit de cette preuve, soit d’une nouvelle suite complète réussie. Si GitHub est
+indisponible, si les permissions API sont insuffisantes, si les métadonnées sont
+inattendues ou si un job est absent, annulé, ignoré ou en échec, la suite complète
+est relancée. Les décisions et le numéro de lancement/tentative réutilisés sont
+visibles dans le résumé du workflow. Une erreur du mécanisme lui-même bloque
+la publication : elle ne vaut jamais validation.
+
+Les images stables sont **toujours reconstruites et contrôlées** pour leur canal
+et leurs métadonnées propres : scans de vulnérabilités actualisés, démarrage,
+Office, SSH/Git, protections documentaires, paire Application/Manager et
+sandbox CLI. Provenance, SBOM et compensation de promotion restent actifs.
+Une image `edge` n’est pas simplement rebaptisée `stable`. Tous les composants
+doivent être promus avant la création de la GitHub Release.
 
 La GitHub Release est ensuite créée avec les notes générées depuis toutes les
 PR fusionnées depuis la version précédente. `.github/release.yml` regroupe ces
