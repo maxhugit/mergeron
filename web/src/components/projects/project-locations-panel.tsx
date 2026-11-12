@@ -28,7 +28,9 @@ export function ProjectLocationsPanel({
   onAddLocal: () => void;
   onDetachLocal: (id: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['workspaces', 'common'], {
+    nsMode: 'fallback',
+  });
   const client = useQueryClient();
   const inventory = useQuery({
     queryKey: ['project-locations', project.id],

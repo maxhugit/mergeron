@@ -60,7 +60,9 @@ export function WorkspaceCreationDialog({
   onCreateExternal: (input: ExternalWorkspaceInput) => void;
   mode?: 'all' | 'local' | 'connection';
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['workspaces', 'common'], {
+    nsMode: 'fallback',
+  });
   const [source, setSource] = useState<SourceType | null>(
     mode === 'local' ? 'local' : null,
   );

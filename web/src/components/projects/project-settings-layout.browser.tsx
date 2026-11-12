@@ -309,7 +309,8 @@ afterEach(() => {
   client.clear();
   document.documentElement.classList.remove('dark');
 });
-const label = (key: string) => i18n.t(translationKey(key));
+const label = (key: string) =>
+  i18n.t(translationKey(key), { ns: ['workspaces', 'common'] });
 async function tab(key: string) {
   await page.getByRole('tab', { name: label(key), exact: true }).click();
 }
