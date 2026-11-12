@@ -395,6 +395,21 @@ export function normalizeThreadItem(
           type: 'commandExecution',
           content: stringValue(item.aggregatedOutput, stringValue(item.text)),
           command: nullableString(item.command) ?? undefined,
+          readPaths: Array.isArray(item.commandActions)
+            ? [
+                ...new Set(
+                  item.commandActions.flatMap((action: unknown) => {
+                    if (!action || typeof action !== 'object') return [];
+                    const value = action as Record<string, unknown>;
+                    return value.type === 'read' &&
+                      typeof value.path === 'string' &&
+                      value.path.trim()
+                      ? [value.path]
+                      : [];
+                  }),
+                ),
+              ]
+            : undefined,
           exitCode: nullableNumber(item.exitCode) ?? undefined,
         },
       };
@@ -408,6 +423,7 @@ export function normalizeThreadItem(
         item: {
           ...base,
           type: 'fileChange',
+          status: nullableString(item.status) ?? undefined,
           content: stringValue(item.text),
           fileChanges,
           filePath: first?.path,
@@ -621,6 +637,7 @@ export function mergeTurnItem(
             ...incoming,
             content: incoming.content || existing.content,
             command: incoming.command ?? existing.command,
+            readPaths: incoming.readPaths ?? existing.readPaths,
             exitCode: incoming.exitCode ?? existing.exitCode,
           }
         : incoming;
@@ -641,6 +658,7 @@ export function mergeTurnItem(
             content: incoming.content || existing.content,
             // A payload that carries no changes must not erase the set already
             // shown; a payload that carries them is authoritative for all of it.
+            status: incoming.status ?? existing.status,
             fileChanges: incoming.fileChanges?.length
               ? incoming.fileChanges
               : existing.fileChanges,
