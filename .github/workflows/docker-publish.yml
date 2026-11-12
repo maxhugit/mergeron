@@ -206,7 +206,8 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
       candidate: ${{ steps.candidate.outputs.tags }}
       tags: ${{ steps.meta.outputs.tags }}
-    runs-on: ubuntu-latest
+    # Match quality.yml's supported host baseline for nested Bubblewrap probes.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -534,7 +535,7 @@ jobs:
 
   cli-runtime:
     needs: [build, manager-build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
