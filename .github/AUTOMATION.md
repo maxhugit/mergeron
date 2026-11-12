@@ -26,13 +26,14 @@ La publication d’une image n’est pas une mise à jour d’une installation e
 Ne jamais remplacer un contrôle en échec par sa désactivation. Les permissions,
 versions épinglées et séparations entre caches de PR et de `main` sont des protections.
 
+Les jobs de l’image applicative et de validation CLI sont épinglés sur le runner
+GitHub `ubuntu-24.04`, en PR comme en publication. Ils vérifient des espaces de noms
+Bubblewrap imbriqués : un changement de politique AppArmor de `ubuntu-latest`
+(Ubuntu 26.04) a bloqué ces sondes. Ce choix de runner conserve les tests, les
+profils, les montages protégés et les restrictions du conteneur ; il ne désactive
+aucune protection sur l’hôte ou dans l’image publiée. Une migration du runner doit
+valider ces sondes avant de changer cette référence.
+
 Voir [Versions et publications](../docs/publications.md) et
 [Contribuer](../CONTRIBUTING.md). Les mesures et protections sont détaillées dans
 [Performance et stabilité du code](../docs/performance-et-stabilite.md).
-
-Les jobs qui vérifient le sandbox natif imbriqué (image Application et CLI,
-avant fusion et pendant la publication) utilisent explicitement `ubuntu-24.04`.
-Le changement d'hôte derrière `ubuntu-latest` ne doit pas modifier implicitement
-les conditions de validation de Bubblewrap et des espaces de noms utilisateur.
-Une migration de cette base nécessite de vérifier de nouveau ces mêmes tests ;
-les protections Docker, les assertions et les scans restent obligatoires.

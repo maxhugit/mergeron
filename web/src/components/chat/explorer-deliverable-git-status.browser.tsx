@@ -30,8 +30,14 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-export function Panel() {
-  const sync = useDeliverableGitStatus('p', 'agent', 'source', 'revision');
+export function Panel({ canResume = false }: { canResume?: boolean }) {
+  const sync = useDeliverableGitStatus(
+    'p',
+    'agent',
+    'source',
+    'revision',
+    canResume,
+  );
   return (
     <div className="flex h-[700px] flex-col overflow-hidden rounded border bg-background text-foreground">
       <DeliverableGitBanner sync={sync} projectId="p" canManage={false}>
@@ -142,6 +148,53 @@ function status(): Status {
     },
   };
 }
+test('resumes a missing document on opening Livrables and leaves the conflicting sibling visible', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  await page.viewport(1100, 900);
+  const current = status();
+  current.proposal!.canApply = true;
+  current.proposal!.changes.push({
+    deliverable: 'Cadrage 2',
+    deliverableId: 'b',
+    document: 'mockup.html',
+    action: 'export',
+    reason: 'new_document',
+  });
+  vi.mocked(projectsApi).mockImplementation(async (_path, init) => {
+    if (init?.method === 'POST') {
+      expect(_path).toBe('/p/git-deliverables/reconcile');
+      expect(JSON.parse(init.body as string)).toEqual({ copyId: 'copy' });
+      current.proposal!.fingerprint = 'after-export';
+      current.proposal!.changes = current.proposal!.changes.filter(
+        (change) => change.action !== 'export',
+      );
+      return { scheduled: true } as never;
+    }
+    return structuredClone(current) as never;
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <Panel canResume />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getAllByTitle('À jour localement')).toHaveLength(23),
+  );
+  expect(screen.getAllByTitle('À examiner')).toHaveLength(1);
+  expect(
+    vi
+      .mocked(projectsApi)
+      .mock.calls.filter(([, init]) => init?.method === 'POST'),
+  ).toHaveLength(1);
+  await page.screenshot({
+    path: '../../../.vitest-screenshots/deliverables-auto-resume.png',
+  });
+  client.clear();
+});
 test.each([390, 1100])(
   'shows the selected copy and branch, internal scrolling, per-item state and read-only details at %ipx',
   async (width) => {

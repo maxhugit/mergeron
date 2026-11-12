@@ -27,6 +27,8 @@ import type { WorkspaceResourcesService } from './workspace-resources.service';
 import type { GitMutationGateService } from '../threads/git-mutation-gate.service';
 import type { SettingsService } from '../settings/settings.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
+import { accessContext } from '../auth/access-context';
+import type { PlatformIdentity } from '../auth/identity.service';
 
 describe('Mergeron-first Git projection policy', () => {
   let database: TestDatabase,
@@ -424,6 +426,159 @@ describe('Mergeron-first Git projection policy', () => {
     expect((await service.status('p', 'copy')).copies[0].lastError).toBe(
       'GIT_DELIVERABLES_REVIEW_REQUIRED',
     );
+  });
+  it('resumes only the requested copy and exports absent documents despite conflicts, without importing or recreating locally deleted files', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Cadrage' });
+    const blocked = await upload(item.id, 'shared baseline');
+    const incoming = await namedDocument(item.id, 'incoming.md', 'baseline');
+    await namedDocument(item.id, 'removed.md', 'retained in Mergeron');
+    await sync();
+    const folder = path.join(repo, 'livrables', 'cadrage');
+    await upload(item.id, 'Mergeron changed', blocked.id);
+    await fs.writeFile(path.join(folder, 'notes.md'), 'Git changed');
+    await fs.writeFile(path.join(folder, 'incoming.md'), 'Git-only edit');
+    await fs.rm(path.join(folder, 'removed.md'));
+    await namedDocument(item.id, 'safe.md', 'new document');
+    await namedDocument(item.id, 'collision.md', 'Mergeron content');
+    await fs.writeFile(path.join(folder, 'collision.md'), 'untracked Git edit');
+    const mockup = await deliverables.create('p', 'board', {
+      title: 'Maquette',
+    });
+    await namedDocument(mockup.id, 'mockup.html', '<h1>New mockup</h1>');
+    const otherRepo = path.join(root, 'other-agent');
+    await fs.mkdir(otherRepo);
+    execFileSync('git', ['init', '--quiet', otherRepo]);
+    copyViews.push({
+      ...copyViews[0],
+      id: 'other-copy',
+      localPath: otherRepo,
+      ownerAgentIds: ['other-agent'],
+      ownerThreadIds: ['other-agent'],
+    });
+    // Reproduce a retained review state without a live queue after restart.
+    const board = database.db
+      .select()
+      .from(schema.projectResources)
+      .where(eq(schema.projectResources.id, 'board'))
+      .get()!;
+    const config = structuredClone(board.config);
+    const settings = config.gitDeliverables as {
+      copies: Record<string, { pending: boolean; lastError: string | null }>;
+    };
+    settings.copies.copy.pending = true;
+    settings.copies.copy.lastError = 'GIT_DELIVERABLES_REVIEW_REQUIRED';
+    database.db
+      .update(schema.projectResources)
+      .set({ config })
+      .where(eq(schema.projectResources.id, 'board'))
+      .run();
+    const apply = vi.spyOn(service, 'apply');
+    service.onModuleInit();
+    expect((await service.status('p')).active).toBe(false);
+    service.reconcile('p', { copyId: 'copy' });
+    service.reconcile('p', { copyId: 'copy' });
+    expect((await service.status('p')).active).toBe(true);
+    await vi.waitFor(
+      async () => {
+        expect(await fs.readFile(path.join(folder, 'safe.md'), 'utf8')).toBe(
+          'new document',
+        );
+        expect(
+          await fs.readFile(
+            path.join(repo, 'livrables', 'maquette', 'mockup.html'),
+            'utf8',
+          ),
+        ).toBe('<h1>New mockup</h1>');
+        expect((await service.status('p')).active).toBe(false);
+      },
+      { timeout: 5000, interval: 50 },
+    );
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(await fs.readFile(path.join(folder, 'notes.md'), 'utf8')).toBe(
+      'Git changed',
+    );
+    expect(await fs.readFile(path.join(folder, 'collision.md'), 'utf8')).toBe(
+      'untracked Git edit',
+    );
+    expect(await fs.readFile(path.join(folder, 'incoming.md'), 'utf8')).toBe(
+      'Git-only edit',
+    );
+    expect(await fs.readFile(incoming.sourcePath, 'utf8')).toBe('baseline');
+    await expect(fs.stat(path.join(folder, 'removed.md'))).rejects.toThrow();
+    await expect(fs.stat(path.join(otherRepo, 'livrables'))).rejects.toThrow();
+    const remaining = await service.preview('p', options);
+    expect(remaining.changes).toContainEqual(
+      expect.objectContaining({ action: 'conflict', document: 'notes.md' }),
+    );
+    expect(remaining.changes).toContainEqual(
+      expect.objectContaining({ action: 'import', document: 'incoming.md' }),
+    );
+    expect(
+      remaining.changes.some((change) => change.deliverableId === mockup.id),
+    ).toBe(false);
+    // Export only changes the working tree, never the index or commit history.
+    expect(
+      execFileSync('git', ['-C', repo, 'diff', '--cached', '--name-only'], {
+        encoding: 'utf8',
+      }),
+    ).toBe('');
+    expect(
+      execFileSync('git', ['-C', repo, 'rev-list', '--all'], {
+        encoding: 'utf8',
+      }),
+    ).toBe('');
+  }, 15_000);
+  it('rejects invalid or unavailable reconciliation targets before scheduling a write', async () => {
+    service.onModuleInit();
+    for (const body of [
+      { copyId: 'unknown' },
+      { copyId: '' },
+      { copyId: 'copy', path: '/other' },
+    ])
+      expect(() => service.reconcile('p', body)).toThrow();
+    copyViews[0].accessMode = 'read_only';
+    expect(() => service.reconcile('p', { copyId: 'copy' })).toThrow(
+      'GIT_DELIVERABLES_AGENT_COPY_REQUIRED',
+    );
+    expect((await service.status('p', 'copy')).active).toBe(false);
+  });
+  it('rechecks project access and agent ownership for scoped reconciliation', () => {
+    const requireProject = vi.fn();
+    const requireAdministrator = vi.fn();
+    const access = {
+      identity: {} as PlatformIdentity,
+      identities: {
+        requireProject,
+        requireAdministrator,
+      } as unknown as IdentityService,
+      localAgentThreadId: 'different-agent',
+    };
+    accessContext.run(access, () => {
+      expect(() => service.reconcile('p', { copyId: 'copy' })).toThrow(
+        'GIT_DELIVERABLES_AGENT_COPY_REQUIRED',
+      );
+    });
+    requireProject.mockImplementation(() => {
+      throw new Error('PROJECT_FORBIDDEN');
+    });
+    accessContext.run(access, () => {
+      expect(() => service.reconcile('p', { copyId: 'copy' })).toThrow(
+        'PROJECT_FORBIDDEN',
+      );
+    });
+    expect(requireAdministrator).toHaveBeenCalledTimes(2);
+  });
+  it('does not export if the selected copy becomes read-only while its job is queued', async () => {
+    const item = await deliverables.create('p', 'board', { title: 'Pending' });
+    await upload(item.id, 'must remain in Mergeron');
+    service.onModuleInit();
+    service.reconcile('p', { copyId: 'copy' });
+    copyViews[0].accessMode = 'read_only';
+    await vi.waitFor(
+      async () => expect((await service.status('p')).active).toBe(false),
+      { timeout: 5000, interval: 50 },
+    );
+    await expect(fs.stat(path.join(repo, 'livrables'))).rejects.toThrow();
   });
   it('exports new documents without adopting unverified deliverable metadata or overwriting an untracked collision', async () => {
     const item = await deliverables.create('p', 'board', {

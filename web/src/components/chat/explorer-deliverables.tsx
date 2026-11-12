@@ -65,6 +65,7 @@ export function ExplorerDeliverables({
   pending: boolean;
 }) {
   const boards = useDeliverableBoards(project);
+  const session = usePlatformSession();
   const sync = useDeliverableGitStatus(
     project.id,
     agentThreadId,
@@ -86,8 +87,8 @@ export function ExplorerDeliverables({
           ]) ?? [],
       ),
     ),
+    session.isAdministrator,
   );
-  const session = usePlatformSession();
   const repairScope = JSON.stringify([project.id, agentThreadId]);
   const [repair, setRepair] = useState<{
     scope: string;
