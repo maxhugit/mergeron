@@ -5,4 +5,8 @@
 abi <abi/4.0>,
 profile mergeron-document-isolation-ci flags=(unconfined) {
   userns,
+  # Keep both bwrap layers in this disposable fixture's named profile.
+  # A runner's executable-attached bwrap profile can otherwise transition its
+  # child into unpriv_bwrap and reject the second (native) user namespace.
+  /usr/bin/bwrap ix,
 }
