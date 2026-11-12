@@ -414,3 +414,22 @@ placeholder, unanchored command approvals and token footer. Question cards are
 rendered once as standalone interventions; the item renderer retains a fallback
 for legacy requests with no standalone row. None of the fragments are persisted
 as additional turns or submitted back to the agent.
+
+### Files in technical activity
+
+Expanded technical disclosures show a compact file list before the operation
+logs and diffs: structured command reads plus every file in a native change set
+(create, update, delete). Paths are deduplicated by action inside each group and
+partial item updates preserve prior read evidence. Pending or failed operations
+are identified separately. Paths are plain text and never trigger a file read.
+
+This is a presentation of runtime-reported evidence, not a filesystem audit.
+Arbitrary shell/Python scripts and tools without structured file metadata cannot
+provide an exhaustive list of accessed files. The UI does not infer successful
+reads/writes from command text, output or model prose.
+
+Inspected-image activity is included in technical groups and the file-read list.
+Its thumbnail/path opens the existing image viewer in a responsive dialog with
+zoom and rotation. Preview requests keep the normal authenticated file endpoint;
+unavailable or inaccessible files show the viewer's error state. The activity
+never grants access to a file or opens an arbitrary external URL.

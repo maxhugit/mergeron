@@ -80,6 +80,8 @@ export interface CommandExecutionTurnItem extends TurnItemBase {
   type: 'commandExecution';
   content: string;
   command?: string;
+  /** Structured read actions reported by the runtime, not parsed from shell text. */
+  readPaths?: string[];
   exitCode?: number;
 }
 
@@ -102,6 +104,7 @@ export interface FileChangeEntry {
 export interface FileChangeTurnItem extends TurnItemBase {
   type: 'fileChange';
   content: string;
+  status?: string;
   /** Every proposed file in this change set, in payload order. */
   fileChanges?: FileChangeEntry[];
   /** First change, retained for the collapsed single-file header. */
