@@ -111,10 +111,16 @@ test('Manager publication tests use the same explicit Node runtime as source val
   const version = source.match(/node-version:\s*(\d+\.\d+\.\d+)/)?.[1];
   assert.ok(version, 'Source validation must select a precise Node version');
   const major = version.split('.')[0];
-  assert.match(read('Dockerfile.manager'), new RegExp(`FROM node:${major}-bookworm-slim AS manager-files`));
+  assert.match(
+    read('Dockerfile.manager'),
+    new RegExp(`FROM node:${major}-bookworm-slim AS manager-files`),
+  );
   assert.match(manager, /uses: actions\/setup-node@[0-9a-f]{40}/);
   assert.ok(manager.includes(`node-version: ${version}`));
-  assert.ok(manager.indexOf('uses: actions/setup-node@') < manager.indexOf('name: Test the observe-only manager'));
+  assert.ok(
+    manager.indexOf('uses: actions/setup-node@') <
+      manager.indexOf('name: Test the observe-only manager'),
+  );
   assert.match(manager, /node --test manager\/test\/\*\.test\.mjs/);
   assert.match(manager, /node --test runtime\/\*\.test\.cjs/);
   assert.doesNotMatch(manager, /continue-on-error:\s*true|--test-name-pattern/);
