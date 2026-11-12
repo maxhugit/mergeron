@@ -34,6 +34,13 @@ profils, les montages protégés et les restrictions du conteneur ; il ne désac
 aucune protection sur l’hôte ou dans l’image publiée. Une migration du runner doit
 valider ces sondes avant de changer cette référence.
 
+Les tests du Manager exécutés avant publication utilisent la même version précise
+de Node 22 que la validation source, conformément à son image Node 22. La version
+de Node préinstallée sur le runner n’est pas un contrat de runtime : Node 24 a
+notamment révélé une différence de précision des horodatages dans les tests de
+restauration. Les assertions de sauvegarde restent intégrales ; aucun arrondi ni
+tolérance supplémentaire ne remplace ce choix explicite de runtime.
+
 Voir [Versions et publications](../docs/publications.md) et
 [Contribuer](../CONTRIBUTING.md). Les mesures et protections sont détaillées dans
 [Performance et stabilité du code](../docs/performance-et-stabilite.md).
