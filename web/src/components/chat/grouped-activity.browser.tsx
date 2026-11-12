@@ -30,7 +30,8 @@ test.each([390, 1100])(
       type: 'commandExecution',
       itemId: id,
       completed: true,
-      command: 'git status --short',
+      command: 'cat src/app.ts',
+      readPaths: ['src/app.ts'],
       content: 'Working tree clean',
       exitCode: 0,
     });
@@ -54,7 +55,17 @@ test.each([390, 1100])(
               durationMs: 154000,
               items: [
                 command('one'),
-                command('two'),
+                {
+                  type: 'fileChange',
+                  itemId: 'patch',
+                  content: '',
+                  completed: true,
+                  status: 'completed',
+                  fileChanges: [
+                    { path: 'docs/guide.md', diff: '', changeKind: 'add' },
+                    { path: 'src/index.ts', diff: '', changeKind: 'update' },
+                  ],
+                },
                 message,
                 command('three'),
               ],
@@ -83,6 +94,10 @@ test.each([390, 1100])(
       fireEvent(panel, new Event('toggle'));
     });
     expect(panel.querySelectorAll('[data-transcript-item]')).toHaveLength(2);
+    expect(screen.getByText('src/app.ts')).toBeVisible();
+    expect(screen.getByText('Lecture')).toBeVisible();
+    expect(screen.getByText('Création')).toBeVisible();
+    expect(screen.getByText('Modification')).toBeVisible();
     expect(screen.getByText(message.content)).toBeVisible();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     await page.screenshot({

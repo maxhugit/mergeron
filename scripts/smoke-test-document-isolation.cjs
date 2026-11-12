@@ -89,6 +89,7 @@ try {
       fs.writeFileSync(process.env[key]+'/probe','writable');
     }
     const cp=require('child_process');
+    try { console.log('CI protected process AppArmor label:', fs.readFileSync('/proc/self/attr/current','utf8').trim()); } catch (error) { if (error.code !== 'ENOENT' && error.code !== 'EINVAL') throw error; }
     const emptySources=root+'/empty-system/sources';
     assert.equal(fs.existsSync(root+'/empty-system/private-state'),false);
     assert.deepEqual(fs.readdirSync(emptySources),[]);

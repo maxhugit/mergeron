@@ -1,8 +1,19 @@
 # Disposable CI fixture only, never installed on a deployment host.
-# Ubuntu restricts user namespaces even for the generic "unconfined" label.
-# Docker still applies cap-drop ALL, seccomp, no-new-privileges, no network,
-# a read-only root and RAM-only writable mounts to this fixture.
+# Match the fixture's intended Unraid/no-AppArmor environment without changing
+# any host-wide policy. Docker retains cap-drop ALL, seccomp, no-new-privileges,
+# no network, a read-only root and RAM-only writable mounts.
 abi <abi/4.0>,
-profile mergeron-document-isolation-ci flags=(unconfined) {
+profile mergeron-document-isolation-ci flags=(attach_disconnected,mediate_deleted) {
   userns,
+  capability,
+  network,
+  file,
+  mount,
+  umount,
+  pivot_root,
+  ptrace,
+  signal,
+  # Unlike an unconfined label, a named enforcing profile with inherited exec
+  # does not attach the runner's bwrap -> unpriv_bwrap transition on exec.
+  /** ix,
 }

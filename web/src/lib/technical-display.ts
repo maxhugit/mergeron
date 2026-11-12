@@ -24,6 +24,7 @@ export function isTechnicalItem(item: TurnItem): boolean {
     return false;
   return [
     'reasoning',
+    'imageView',
     'commandExecution',
     'mcpToolCall',
     'functionCallOutput',
