@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
-import { ProjectLocationsIntro } from './project-locations-intro';
+import { ProjectLocationsPanel } from './project-locations-panel';
+import { WorkspaceTransfers } from '@/components/chat/sidebar/workspace-transfers';
 const GitDeliverablesSettings = lazy(() =>
   import('./git-deliverables-settings').then((m) => ({
     default: m.GitDeliverablesSettings,
@@ -13,16 +14,7 @@ const ProjectPreviewSettings = lazy(() =>
   })),
 );
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Bot,
-  Boxes,
-  Folder,
-  FolderPlus,
-  Loader2,
-  Plug,
-  Save,
-  Unlink,
-} from 'lucide-react';
+import { Boxes, FolderPlus, Loader2, Plug, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PeopleManager } from './people-manager';
 import { ProjectPeopleConfigurationPanel } from './project-people-configuration';
@@ -38,7 +30,6 @@ import {
 } from './workspace-creation-dialog';
 import { usePlatformSession } from '@/lib/platform-session';
 import { ExternalWorkspaceResources } from '@/components/chat/sidebar/external-workspace-resources';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { modelsListModelsOptions } from '@/generated/api/@tanstack/react-query.gen';
@@ -80,7 +71,7 @@ export function ProjectSettingsPanel({
   const [agentTab, setAgentTab] = useState('configuration');
   const [integrationTab, setIntegrationTab] = useState('mcp');
   const [peopleTab, setPeopleTab] = useState('organization');
-  const [workspaceTab, setWorkspaceTab] = useState('local');
+  const [workspaceTab, setWorkspaceTab] = useState('external');
   const [knowledgeFile, setKnowledgeFile] = useState('AGENTS.md');
   const [mcpServerIds, setMcpServerIds] = useState<string[]>(
     project.mcpServerIds ?? [],
@@ -118,7 +109,10 @@ export function ProjectSettingsPanel({
 
   const refresh = async () => {
     setError('');
-    await client.invalidateQueries({ queryKey: projectsQueryKey });
+    await Promise.all([
+      client.invalidateQueries({ queryKey: projectsQueryKey }),
+      client.invalidateQueries({ queryKey: ['project-locations', project.id] }),
+    ]);
   };
   const fail = (reason: unknown) =>
     setError(
@@ -259,8 +253,9 @@ export function ProjectSettingsPanel({
         value={workspaceTab}
         onChange={setWorkspaceTab}
         items={[
-          { id: 'local', label: 'projectWorkspaces' },
           { id: 'external', label: 'externalResources' },
+          { id: 'local', label: 'projectLocationsTab' },
+          { id: 'transfers', label: 'workspaceTransfers' },
           { id: 'git-deliverables', label: 'gitDeliverablesTitle' },
         ]}
       />
@@ -398,93 +393,16 @@ export function ProjectSettingsPanel({
                 <GitDeliverablesSettings projectId={project.id} />
               </Suspense>
             )}
-            <div hidden={workspaceTab !== 'local'} className="space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold">{t('manageWorkspaces')}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {t(
-                      'thePrimaryWorkspaceIsPermanentAddOrDetachSecondaryWorkspacesWithoutDeletingThei69867b01',
-                    )}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => setWorkspaceCreationOpen(true)}
-                >
-                  <FolderPlus className="h-4 w-4" />
-                  {t('addAWorkspace')}
-                </Button>
-              </div>
-              <ProjectLocationsIntro />
-              {project.workspaces.map((workspace) => {
-                const agents = (project.agentThreads ?? []).filter(
-                  (thread) => thread.workspacePath === workspace.path,
-                );
-                return (
-                  <div
-                    key={workspace.id}
-                    className="space-y-3 rounded-lg border p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <div className="min-w-40 flex-1">
-                        <div className="flex items-center gap-2 font-medium">
-                          <span className="truncate">{workspace.name}</span>
-                          <Badge variant="secondary">
-                            {t(
-                              workspace.primary
-                                ? 'primaryWorkspace'
-                                : 'secondaryWorkspace',
-                            )}
-                          </Badge>
-                        </div>
-                        <div
-                          className="truncate font-mono text-[11px] text-muted-foreground"
-                          title={workspace.path}
-                        >
-                          {workspace.path}
-                        </div>
-                      </div>
-                      {!workspace.primary && (
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            disabled={pending}
-                            onClick={() => detachWorkspace.mutate(workspace.id)}
-                          >
-                            <Unlink className="h-3.5 w-3.5" />
-                            {t('detach')}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="ml-7 space-y-1.5 border-l pl-3">
-                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {t('associatedConversations')} ({agents.length})
-                      </div>
-                      {agents.length === 0 ? (
-                        <p className="text-xs italic text-muted-foreground">
-                          {t('noAssociatedConversation')}
-                        </p>
-                      ) : (
-                        agents.map((thread) => (
-                          <div
-                            key={thread.threadId}
-                            className="flex min-w-0 items-center gap-2 text-xs"
-                          >
-                            <Bot className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">{thread.title}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div hidden={workspaceTab !== 'local'}>
+              <ProjectLocationsPanel
+                project={project}
+                pending={pending}
+                onAddLocal={() => setWorkspaceCreationOpen(true)}
+                onDetachLocal={(id) => detachWorkspace.mutate(id)}
+              />
+            </div>
+            <div hidden={workspaceTab !== 'transfers'}>
+              <WorkspaceTransfers project={project} />
             </div>
             <div hidden={workspaceTab !== 'external'}>
               <div className="mb-4 flex justify-end">
@@ -494,7 +412,7 @@ export function ProjectSettingsPanel({
                   onClick={() => setWorkspaceCreationOpen(true)}
                 >
                   <FolderPlus className="h-4 w-4" />
-                  {t('addAWorkspace')}
+                  {t('addAConnection')}
                 </Button>
               </div>
               <ExternalWorkspaceResources
@@ -710,6 +628,7 @@ export function ProjectSettingsPanel({
       {workspaceCreationOpen && (
         <WorkspaceCreationDialog
           open
+          mode={workspaceTab === 'external' ? 'connection' : 'local'}
           pending={addWorkspace.isPending || addExternalWorkspace.isPending}
           onClose={() => setWorkspaceCreationOpen(false)}
           onCreateLocal={(path) => addWorkspace.mutate(path)}

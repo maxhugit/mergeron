@@ -23,6 +23,9 @@ const emptyExternalForm = {
   password: '',
   knownHosts: '',
   allowInsecure: false,
+  agentEnabled: true,
+  privateKey: '',
+  passphrase: '',
 };
 
 export interface ExternalWorkspaceInput {
@@ -32,10 +35,13 @@ export interface ExternalWorkspaceInput {
   rootPath: string;
   accessMode: string;
   allowInsecure: boolean;
+  agentEnabled?: boolean;
   secret?: {
     username: string;
     password: string;
     knownHosts: string;
+    privateKey?: string;
+    passphrase?: string;
   };
 }
 
@@ -45,15 +51,19 @@ export function WorkspaceCreationDialog({
   onClose,
   onCreateLocal,
   onCreateExternal,
+  mode = 'all',
 }: {
   open: boolean;
   pending: boolean;
   onClose: () => void;
   onCreateLocal: (path: string) => void;
   onCreateExternal: (input: ExternalWorkspaceInput) => void;
+  mode?: 'all' | 'local' | 'connection';
 }) {
   const { t } = useTranslation();
-  const [source, setSource] = useState<SourceType | null>(null);
+  const [source, setSource] = useState<SourceType | null>(
+    mode === 'local' ? 'local' : null,
+  );
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [form, setForm] = useState(emptyExternalForm);
 
@@ -114,7 +124,8 @@ export function WorkspaceCreationDialog({
       return;
     }
     if (!external || !form.name.trim() || !form.address.trim()) return;
-    const hasSecret = form.username || form.password || form.knownHosts;
+    const hasSecret =
+      form.username || form.password || form.knownHosts || form.privateKey;
     onCreateExternal({
       name: form.name.trim(),
       type: external,
@@ -122,11 +133,14 @@ export function WorkspaceCreationDialog({
       rootPath: form.rootPath.trim() || '/',
       accessMode: form.accessMode,
       allowInsecure: external === 'ftp' && form.allowInsecure,
+      agentEnabled: form.agentEnabled,
       secret: hasSecret
         ? {
             username: form.username,
             password: form.password,
             knownHosts: form.knownHosts,
+            privateKey: form.privateKey || undefined,
+            passphrase: form.passphrase || undefined,
           }
         : undefined,
     });
@@ -137,51 +151,69 @@ export function WorkspaceCreationDialog({
       {open && (
         <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] min-w-0 overflow-y-auto sm:max-w-2xl">
           <DialogHeader className="min-w-0 pr-8">
-            <DialogTitle>{t('addAWorkspace')}</DialogTitle>
+            <DialogTitle>
+              {t(
+                mode === 'connection'
+                  ? 'addAConnection'
+                  : mode === 'local'
+                    ? 'addLocalLocation'
+                    : 'addAWorkspace',
+              )}
+            </DialogTitle>
           </DialogHeader>
 
           {!source ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {sourceOptions.map((option, index) => {
-                const Icon = option.icon;
-                return (
-                  <Fragment key={option.type}>
-                    {index === 0 && (
-                      <h3 className="col-span-full text-sm font-semibold">
-                        {t('projectWorkspaces')}
-                      </h3>
-                    )}
-                    {index === 1 && (
-                      <h3 className="col-span-full mt-2 text-sm font-semibold">
-                        {t('externalResources')}
-                      </h3>
-                    )}
-                    <button
-                      type="button"
-                      className="flex min-w-0 items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-accent/40"
-                      onClick={() => setSource(option.type)}
-                    >
-                      <span className="shrink-0 rounded-md bg-primary/10 p-2 text-primary">
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block font-medium">
-                          {option.label}
+              {sourceOptions
+                .filter(
+                  (option) => mode !== 'connection' || option.type !== 'local',
+                )
+                .map((option, index) => {
+                  const Icon = option.icon;
+                  return (
+                    <Fragment key={option.type}>
+                      {mode === 'all' && index === 0 && (
+                        <h3 className="col-span-full text-sm font-semibold">
+                          {t('projectWorkspaces')}
+                        </h3>
+                      )}
+                      {mode === 'all' && index === 1 && (
+                        <h3 className="col-span-full mt-2 text-sm font-semibold">
+                          {t('externalResources')}
+                        </h3>
+                      )}
+                      <button
+                        type="button"
+                        className="flex min-w-0 items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-accent/40"
+                        onClick={() => setSource(option.type)}
+                      >
+                        <span className="shrink-0 rounded-md bg-primary/10 p-2 text-primary">
+                          <Icon className="h-5 w-5" />
                         </span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {option.description}
+                        <span className="min-w-0">
+                          <span className="block font-medium">
+                            {option.label}
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {option.description}
+                          </span>
                         </span>
-                      </span>
-                    </button>
-                  </Fragment>
-                );
-              })}
+                      </button>
+                    </Fragment>
+                  );
+                })}
             </div>
           ) : source === 'local' ? (
             <div className="space-y-3">
-              <Button variant="ghost" size="sm" onClick={() => setSource(null)}>
-                ← {t('chooseAnotherSource')}
-              </Button>
+              {mode !== 'local' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSource(null)}
+                >
+                  ← {t('chooseAnotherSource')}
+                </Button>
+              )}
               <DirectorySelectionTree
                 selectedPath={selectedPath}
                 onSelectedPathChange={setSelectedPath}
@@ -285,6 +317,19 @@ export function WorkspaceCreationDialog({
                 </label>
                 {(external === 'ssh' || external === 'sftp') && (
                   <label className="grid min-w-0 gap-1 text-sm font-medium sm:col-span-2">
+                    {t('connectionPrivateKey')}
+                    <textarea
+                      className={`${field} min-h-24 font-mono`}
+                      autoComplete="off"
+                      value={form.privateKey}
+                      onChange={(event) =>
+                        setForm({ ...form, privateKey: event.target.value })
+                      }
+                    />
+                  </label>
+                )}
+                {(external === 'ssh' || external === 'sftp') && (
+                  <label className="grid min-w-0 gap-1 text-sm font-medium sm:col-span-2">
                     {t('knownHosts')}
                     <textarea
                       className="min-h-20 w-full min-w-0 resize-y rounded-md border border-input bg-background p-3 font-mono text-xs"
@@ -316,6 +361,28 @@ export function WorkspaceCreationDialog({
                   {t('githubRepositoryConnectionHint')}
                 </p>
               )}
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.agentEnabled}
+                  onChange={(event) =>
+                    setForm({ ...form, agentEnabled: event.target.checked })
+                  }
+                />
+                <span>
+                  {t('connectionAvailableToAgent')}
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {t(
+                      external === 'ssh'
+                        ? 'sshAgentAccessHelp'
+                        : 'connectionOnlyHelp',
+                    )}
+                  </span>
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {t('connectionScopeHelp')}
+              </p>
             </div>
           )}
 
@@ -326,10 +393,22 @@ export function WorkspaceCreationDialog({
             {source && (
               <Button
                 className="h-auto min-h-9 min-w-0 whitespace-normal text-center"
-                disabled={pending || !canSubmit}
+                disabled={
+                  pending ||
+                  !canSubmit ||
+                  (external === 'ftp' && !form.allowInsecure)
+                }
                 onClick={submit}
               >
-                {pending ? t('loading') : t('addAWorkspace')}
+                {pending
+                  ? t('loading')
+                  : t(
+                      mode === 'connection'
+                        ? 'addAConnection'
+                        : mode === 'local'
+                          ? 'addLocalLocation'
+                          : 'addAWorkspace',
+                    )}
               </Button>
             )}
           </DialogFooter>

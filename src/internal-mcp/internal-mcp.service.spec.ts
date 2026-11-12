@@ -1445,6 +1445,12 @@ describe('native internal MCP over HTTP', () => {
     expect(connection.config.tools).not.toHaveProperty(
       'project_git_local_manage',
     );
+    expect(connection.config.tools).not.toHaveProperty(
+      'project_connection_manage',
+    );
+    expect(connection.config.tools).not.toHaveProperty(
+      'use_project_connection',
+    );
     expect(connection.config.tools).toHaveProperty(
       'agent_monitor_manage.approval_mode',
       'approve',
