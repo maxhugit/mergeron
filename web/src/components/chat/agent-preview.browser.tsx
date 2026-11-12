@@ -454,14 +454,16 @@ test('the initial launch preserves an administrator’s configured unlimited def
         ).value,
     )
     .toBe('never');
-  fireEvent.click(screen.getByRole('button', { name: 'Démarrer' }));
+  await page.getByRole('button', { name: 'Démarrer', exact: true }).click();
   const confirmation = await screen.findByRole('button', {
     name: 'Confirmer le démarrage',
   });
   await expect
     .poll(() => (confirmation as HTMLButtonElement).disabled)
     .toBe(false);
-  fireEvent.click(confirmation);
+  await page
+    .getByRole('button', { name: 'Confirmer le démarrage', exact: true })
+    .click();
   await expect.poll(() => data.bodies.length).toBe(1);
   expect(data.bodies[0]).toMatchObject({
     path: '/project/agents/agent/preview/start',

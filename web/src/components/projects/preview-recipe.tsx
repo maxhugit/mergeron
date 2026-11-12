@@ -285,8 +285,6 @@ function RecipeDialog({
                 });
                 void client.invalidateQueries({
                   queryKey: ['preview-recipe', projectId, threadId],
-                  refetchOnWindowFocus: false,
-                  refetchOnReconnect: false,
                 });
               }}
             />
