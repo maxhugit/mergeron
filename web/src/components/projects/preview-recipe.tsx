@@ -103,9 +103,13 @@ export function PreviewLaunchDialog({
     staleTime: 0,
     retry: false,
   });
+  // Confirmation can arrive before the opening animation finishes (keyboard,
+  // cached recipe). Remove the modal root on close so its focus/aria locks
+  // cannot depend on a WebKit exit-animation event that may never arrive.
+  if (!action) return null;
   return (
     <Dialog
-      open={!!action}
+      open
       onOpenChange={(value) => {
         if (!value && !busy) onClose();
       }}

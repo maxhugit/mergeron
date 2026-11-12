@@ -232,6 +232,11 @@ for (const width of [1280, 390]) {
       expectedRevision: 'policy:recipe:source',
       lifetimeMinutes: 300,
     });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(document.body.hasAttribute('data-scroll-locked')).toBe(false),
+    );
+    expect(screen.getByRole('button', { name: 'Démarrer' })).toBeTruthy();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
   });
 }
