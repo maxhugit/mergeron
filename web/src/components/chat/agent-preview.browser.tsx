@@ -32,7 +32,26 @@ vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: data.administrator }),
 }));
 vi.mock('@/lib/projects-api', () => ({
+  projectsQueryKey: ['projects'],
   projectsApi: async (path: string, init?: RequestInit) => {
+    if (!path) return { projects: [] };
+    if (path.endsWith('/test-environment/recipes')) return { agents: [] };
+    if (path.endsWith('/recipe'))
+      return {
+        revision: 'launch-revision',
+        stale: false,
+        sourcePath: '/workspaces/project',
+        profile: {
+          runtime: 'node',
+          directory: '.',
+          port: 3000,
+          install: 'npm ci',
+          build: '',
+          start: 'npm run dev',
+          services: [],
+        },
+      };
+
     if (init?.body) {
       const body = JSON.parse(String(init.body));
       data.bodies.push({ path, value: body });
@@ -436,6 +455,13 @@ test('the initial launch preserves an administrator’s configured unlimited def
     )
     .toBe('never');
   fireEvent.click(screen.getByRole('button', { name: 'Démarrer' }));
+  const confirmation = await screen.findByRole('button', {
+    name: 'Confirmer le démarrage',
+  });
+  await expect
+    .poll(() => (confirmation as HTMLButtonElement).disabled)
+    .toBe(false);
+  fireEvent.click(confirmation);
   await expect.poll(() => data.bodies.length).toBe(1);
   expect(data.bodies[0]).toMatchObject({
     path: '/project/agents/agent/preview/start',

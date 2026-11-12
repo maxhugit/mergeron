@@ -1,7 +1,7 @@
 import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
 import { workAgentId } from '../projects/git-copy-ownership';
 import { describe, it, expect, vi } from 'vitest';
-import { ForbiddenException } from '@nestjs/common';
+import { HttpException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { accessContext } from '../auth/access-context';
 import type { AppDatabase } from '../database/database.constants';
@@ -187,6 +187,328 @@ describe('project-scoped generic preview service', () => {
     };
     return { ...f, input };
   }
+  it('reports a confirmed missing run without discarding its configuration or mislabelling the Manager', async () => {
+    const f = configured();
+    const row = {
+      agentId: 't',
+      threadId: 't',
+      projectId: 'p',
+      runId: 'old-run',
+      previewId: 'stable-preview',
+      state: 'failed',
+      error: null,
+      sourcePath: '/workspaces/source',
+    };
+    f.rows.set(agentPreviews, row);
+    f.request.mockRejectedValue(new HttpException('PREVIEW_NOT_FOUND', 409));
+    expect(await f.run(() => f.service.status('p', 't'))).toMatchObject({
+      preview: {
+        state: 'stopped',
+        error: 'PREVIEW_NOT_FOUND',
+        ready: false,
+        url: null,
+      },
+    });
+    expect(f.rows.get(agentPreviews)).toEqual(row);
+    expect(f.rows.has(projectPreviewProfiles)).toBe(true);
+    f.request.mockRejectedValue(new Error('ECONNREFUSED'));
+    expect(await f.run(() => f.service.status('p', 't'))).toMatchObject({
+      preview: {
+        state: 'failed',
+        error: 'PREVIEW_MANAGER_UNAVAILABLE',
+        ready: false,
+      },
+    });
+  });
+  for (const refresh of [false, true])
+    it(`recreates an explicitly missing run on a new request (refresh=${refresh})`, async () => {
+      const f = configured();
+      f.rows.set(agentPreviews, {
+        agentId: 't',
+        threadId: 't',
+        projectId: 'p',
+        runId: 'old-run',
+        previewId: 'stable-preview',
+        state: 'failed',
+        requestId: 'old-request',
+        profileRevision: f.rows.get(projectPreviewProfiles)!.revision,
+      });
+      let live: Record<string, unknown> = {};
+      f.request.mockImplementation((op, input) => {
+        if (op === 'capabilities')
+          return Promise.resolve({
+            enabled: true,
+            domain: 'preview.example.org',
+          });
+        if ((op === 'status' || op === 'stop') && input?.runId === 'old-run')
+          return Promise.reject(new HttpException('PREVIEW_NOT_FOUND', 409));
+        if (op === 'start')
+          live = { ...input, state: 'starting', ready: false };
+        return Promise.resolve(live);
+      });
+      await f.run(() => f.service.start('p', 't', 'new-request', refresh));
+      const started = f.request.mock.calls.find(([op]) => op === 'start')![1]!;
+      expect(started.runId).not.toBe('old-run');
+      expect(started.previewId).toBe('stable-preview');
+      expect(started.projectId).toBe('p');
+      expect(started.agentId).toBe('t');
+      expect(f.rows.has(projectPreviewProfiles)).toBe(true);
+    });
+  for (const failure of [
+    new Error('ECONNRESET'),
+    new Error('PREVIEW_NOT_FOUND'),
+    new HttpException('PREVIEW_BUSY', 409),
+  ])
+    it(`does not recreate an uncertain previous run: ${failure.message}`, async () => {
+      const f = configured();
+      f.rows.set(agentPreviews, {
+        agentId: 't',
+        projectId: 'p',
+        runId: 'old-run',
+        state: 'unknown',
+        requestId: 'old-request',
+      });
+      f.request.mockImplementation((op) => {
+        if (op === 'capabilities')
+          return Promise.resolve({
+            enabled: true,
+            domain: 'preview.example.org',
+          });
+        return Promise.reject(failure);
+      });
+      await expect(
+        f.run(() => f.service.start('p', 't', 'new-request')),
+      ).rejects.toThrow(failure.message);
+      expect(f.request.mock.calls.some(([op]) => op === 'start')).toBe(false);
+      expect(f.rows.get(agentPreviews)!.runId).toBe('old-run');
+    });
+  it('keeps an identical request idempotent even after the Manager forgets its run', async () => {
+    const f = configured();
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId: 'old-run',
+      state: 'failed',
+      requestId: 'same-request',
+      profileRevision: f.rows.get(projectPreviewProfiles)!.revision,
+    });
+    f.request.mockImplementation((op) => {
+      if (op === 'capabilities')
+        return Promise.resolve({
+          enabled: true,
+          domain: 'preview.example.org',
+        });
+      return Promise.reject(new HttpException('PREVIEW_NOT_FOUND', 409));
+    });
+    await f.run(() => f.service.start('p', 't', 'same-request'));
+    expect(
+      f.request.mock.calls.some(([op]) => op === 'start' || op === 'stop'),
+    ).toBe(false);
+  });
+  it('shows a masked recipe and lets a human update commands without inheriting project secrets or raising caps', async () => {
+    const f = delegated();
+    await f.run(() => f.service.prepare('p', 't', f.input, () => {}));
+    expect(f.run(() => f.service.preparedAgents('p'))).toEqual({
+      agents: [{ threadId: 't' }],
+    });
+    const configuration = f.run(() => f.service.launchConfiguration('p', 't'));
+    expect(configuration.profile).toMatchObject({
+      start: 'npm run dev',
+      env: { MODE: '[stored]' },
+      memoryMb: 256,
+      cpus: 1,
+    });
+    expect(JSON.stringify(configuration)).not.toContain(
+      'MANUAL_SECRET_NOT_INHERITED',
+    );
+    const {
+      runtime,
+      directory,
+      install,
+      build,
+      start,
+      port,
+      path,
+      updateMode,
+      env,
+      services,
+    } = configuration.profile!;
+    const recipe = {
+      runtime,
+      directory,
+      install,
+      build,
+      start,
+      port,
+      path,
+      updateMode,
+      env,
+      services,
+    };
+    const input = {
+      policyRevision: configuration.policyRevision,
+      expectedRevision: configuration.recipeRevision,
+      requestId: 'human-edit',
+      recipe: { ...recipe, start: 'npm run dev -- --port 4000', port: 4000 },
+    };
+    await f.run(() => f.service.saveAgentRecipe('p', 't', input));
+    const updated = f.run(() => f.service.launchConfiguration('p', 't'));
+    expect(updated.profile).toMatchObject({
+      start: 'npm run dev -- --port 4000',
+      port: 4000,
+      env: { MODE: '[stored]' },
+      memoryMb: 256,
+    });
+    expect(f.service['effectiveProfile']('p', 't').profile.env).toEqual({
+      MODE: 'test',
+    });
+    await expect(
+      f.run(() =>
+        f.service.saveAgentRecipe('p', 't', {
+          ...input,
+          requestId: 'stale-edit',
+          recipe: { ...recipe, port: 5000 },
+        }),
+      ),
+    ).rejects.toThrow('PREVIEW_CONFIGURATION_CHANGED');
+    await expect(
+      f.run(() =>
+        f.service.start(
+          'p',
+          't',
+          'stale-launch',
+          false,
+          () => {},
+          undefined,
+          configuration.revision,
+        ),
+      ),
+    ).rejects.toThrow('PREVIEW_CONFIGURATION_CHANGED');
+    expect(f.request.mock.calls.some(([op]) => op === 'start')).toBe(false);
+    await expect(
+      f.run(() =>
+        f.service.saveAgentRecipe('p', 't', {
+          ...input,
+          expectedRevision: updated.recipeRevision,
+          requestId: 'raise-caps',
+          recipe: { ...recipe, memoryMb: 8192 },
+        }),
+      ),
+    ).rejects.toThrow('PREVIEW_INVALID_CONFIGURATION');
+    expect(() =>
+      f.run(() => f.service.launchConfiguration('p', 'other')),
+    ).toThrow();
+    f.identity.role = 'standard';
+    expect(() =>
+      f.run(() => f.service.launchConfiguration('p', 't')),
+    ).toThrow();
+    expect(() => f.run(() => f.service.preparedAgents('p'))).toThrow();
+    expect(() =>
+      f.run(() => f.service.saveAgentRecipe('p', 't', input)),
+    ).toThrow();
+  });
+  it('permits recipe repair after confirmed absence, but retains running and uncertain-run guards', async () => {
+    const f = delegated();
+    await f.run(() => f.service.prepare('p', 't', f.input, () => {}));
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId: 'old-run',
+      state: 'failed',
+    });
+    const input = {
+      ...f.input,
+      requestId: 'repair',
+      expectedRevision: f.rows.get(agentPreviewRecipes)!.revision,
+      recipe: { ...f.input.recipe, start: 'node server.js' },
+    };
+    f.request.mockImplementation((op) => {
+      if (op === 'status')
+        return Promise.reject(new HttpException('PREVIEW_NOT_FOUND', 409));
+      return Promise.resolve({
+        enabled: true,
+        domain: 'preview.example.org',
+        runtimes: [{ id: 'node' }],
+      });
+    });
+    await f.run(() => f.service.prepare('p', 't', input, () => {}));
+    expect(
+      f.run(() => f.service.launchConfiguration('p', 't')).profile!.start,
+    ).toBe('node server.js');
+    f.request.mockRejectedValue(new Error('ECONNRESET'));
+    await expect(
+      f.run(() =>
+        f.service.prepare(
+          'p',
+          't',
+          {
+            ...input,
+            requestId: 'uncertain',
+            expectedRevision: f.rows.get(agentPreviewRecipes)!.revision,
+            recipe: f.input.recipe,
+          },
+          () => {},
+        ),
+      ),
+    ).rejects.toThrow('ECONNRESET');
+  });
+  it('binds the reviewed launch to the exact recipe and source revisions', async () => {
+    const f = delegated();
+    await f.run(() => f.service.prepare('p', 't', f.input, () => {}));
+    const configuration = f.run(() => f.service.launchConfiguration('p', 't'));
+    expect(configuration.revision).toBe(
+      f.service['effectiveProfile']('p', 't').revision,
+    );
+    f.rows.set(agentPreviewSources, {
+      agentId: 't',
+      projectId: 'p',
+      revision: 'new-source',
+      source: { type: 'agent_reference' },
+    });
+    await expect(
+      f.run(() =>
+        f.service.start(
+          'p',
+          't',
+          'stale-source',
+          false,
+          () => {},
+          undefined,
+          configuration.revision,
+        ),
+      ),
+    ).rejects.toThrow('PREVIEW_CONFIGURATION_CHANGED');
+    expect(f.request.mock.calls.some(([op]) => op === 'start')).toBe(false);
+    f.rows.get(projectPreviewProfiles)!.revision = 'changed-policy';
+    const stale = f.run(() => f.service.launchConfiguration('p', 't'));
+    expect(stale.stale).toBe(true);
+    expect(stale.profile!.start).toBe('npm run dev');
+  });
+  it('rejects mismatched old run identities before creating a replacement', async () => {
+    const f = configured();
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      projectId: 'p',
+      runId: 'old',
+      state: 'stopped',
+    });
+    f.request.mockImplementation((op) =>
+      Promise.resolve(
+        op === 'capabilities'
+          ? { enabled: true, domain: 'preview.example.org' }
+          : {
+              runId: 'old',
+              projectId: 'other',
+              agentId: 't',
+              state: 'stopped',
+            },
+      ),
+    );
+    await expect(
+      f.run(() => f.service.start('p', 't', 'new-request')),
+    ).rejects.toThrow('PREVIEW_IDENTITY_CHANGED');
+    expect(f.request.mock.calls.some(([op]) => op === 'start')).toBe(false);
+  });
   it('prepares a private per-agent recipe, with idempotency and optimistic revisions', async () => {
     const f = delegated();
     const result = await f.run(() =>
