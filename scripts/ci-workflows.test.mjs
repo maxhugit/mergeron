@@ -105,6 +105,27 @@ const job = (workflow, name) => {
   return match[1];
 };
 
+test('Manager publication tests use the same explicit Node runtime as source validation and its image', () => {
+  const source = job(quality, 'checks');
+  const manager = job(publish, 'manager-build');
+  const version = source.match(/node-version:\s*(\d+\.\d+\.\d+)/)?.[1];
+  assert.ok(version, 'Source validation must select a precise Node version');
+  const major = version.split('.')[0];
+  assert.match(
+    read('Dockerfile.manager'),
+    new RegExp(`FROM node:${major}-bookworm-slim AS manager-files`),
+  );
+  assert.match(manager, /uses: actions\/setup-node@[0-9a-f]{40}/);
+  assert.ok(manager.includes(`node-version: ${version}`));
+  assert.ok(
+    manager.indexOf('uses: actions/setup-node@') <
+      manager.indexOf('name: Test the observe-only manager'),
+  );
+  assert.match(manager, /node --test manager\/test\/\*\.test\.mjs/);
+  assert.match(manager, /node --test runtime\/\*\.test\.cjs/);
+  assert.doesNotMatch(manager, /continue-on-error:\s*true|--test-name-pattern/);
+});
+
 test('stacked PRs receive the full validation without a main-only trigger filter', () => {
   assert.match(quality, /^  pull_request:\s*\n  workflow_dispatch:/m);
   requireBackendCoverage(
