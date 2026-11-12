@@ -18,8 +18,8 @@ export class GitDeliverablesController {
     return this.service.status(p, c);
   }
   @Post('reconcile')
-  reconcile(@Param('projectId') p: string) {
-    return this.service.reconcile(p);
+  reconcile(@Param('projectId') p: string, @Body() body?: unknown) {
+    return this.service.reconcile(p, body);
   }
   @Post('configure')
   configure(@Param('projectId') p: string, @Body() body: unknown) {

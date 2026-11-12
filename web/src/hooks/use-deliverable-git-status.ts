@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/projects-api';
-import { key, url, type Status } from '@/lib/git-deliverables-api';
+import { key, post, url, type Status } from '@/lib/git-deliverables-api';
+import { useSessionPaused } from '@/lib/session-recovery';
 import { useGitCopyLiveUpdates } from './use-git-copy-live-updates';
 import {
   deliverableGitState,
@@ -13,7 +14,11 @@ export function useDeliverableGitStatus(
   agentId: string | undefined,
   preferredResourceId: string | null | undefined,
   revision: string,
+  canResume = false,
 ) {
+  const client = useQueryClient();
+  const paused = useSessionPaused();
+  const lastResume = useRef<string | null>(null);
   const scope = JSON.stringify([projectId, agentId, preferredResourceId]);
   const [review, setReview] = useState<{
     scope: string;
@@ -77,11 +82,70 @@ export function useDeliverableGitStatus(
     },
     refetchIntervalInBackground: false,
   });
+  const { mutate: resume, ...resumption } = useMutation({
+    mutationFn: (request: { projectId: string; copyId: string }) =>
+      post(request.projectId, '/reconcile', { copyId: request.copyId }),
+    retry: false,
+    onSuccess: (_data, request) =>
+      client.invalidateQueries({ queryKey: key(request.projectId) }),
+  });
+  useEffect(() => {
+    if (paused) {
+      lastResume.current = null;
+      return;
+    }
+    const status = detail.data;
+    const proposal = status?.proposal;
+    const selected = status?.copies.find((copy) => copy.id === selectedId);
+    if (
+      !enabled ||
+      !canResume ||
+      !selectedId ||
+      !selected?.eligible ||
+      !selected.writable ||
+      !selected.owned ||
+      detail.isFetching ||
+      detail.isError ||
+      status?.active ||
+      status?.discoveryError ||
+      !proposal?.canApply ||
+      !selected.context ||
+      !proposal.context ||
+      selected.context.branch !== proposal.context.branch ||
+      selected.context.head !== proposal.context.head ||
+      !proposal.changes.some((change) => change.action === 'export')
+    )
+      return;
+    // Resume once per verified plan, including on remount/reconnect. A blocked
+    // sibling must not prevent clean exports, or cause an endless POST loop.
+    const token = JSON.stringify([scope, selectedId, proposal.fingerprint]);
+    if (lastResume.current === token) return;
+    lastResume.current = token;
+    resume({ projectId, copyId: selectedId });
+  }, [
+    projectId,
+    scope,
+    selectedId,
+    enabled,
+    canResume,
+    paused,
+    detail.data,
+    detail.dataUpdatedAt,
+    detail.isFetching,
+    detail.isError,
+    resume,
+  ]);
+  const resumingSelected =
+    resumption.variables?.projectId === projectId &&
+    resumption.variables.copyId === selectedId;
   const checking =
+    (resumingSelected && resumption.isPending) ||
     summary.isFetching ||
     (Boolean(selectedId && enabled) && (detail.isPending || detail.isFetching));
   const failed =
-    summary.isError || (enabled && Boolean(selectedId) && detail.isError);
+    (resumingSelected && resumption.isError) ||
+    summary.isError ||
+    (enabled && Boolean(selectedId) && detail.isError);
   const data =
     selectedId && enabled ? (detail.data ?? summary.data) : summary.data;
   return {
@@ -108,6 +172,7 @@ export function useDeliverableGitStatus(
         failed,
       ),
     refresh: () => {
+      lastResume.current = null;
       void summary.refetch();
       if (selectedId && enabled) void detail.refetch();
     },

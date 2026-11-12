@@ -135,6 +135,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
     this.stopped = true;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    this.queued.clear();
     this.git.onWorkingCopyChanged = undefined;
     this.copies.onCopyReady = undefined;
     this.deliverables.onGitChange = undefined;
@@ -166,7 +167,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       }
     };
   }
-  private scheduleProject(p: string) {
+  private scheduleProject(p: string, copyId?: string) {
     try {
       requireProjectAccess(p);
       for (const board of this.db
@@ -183,7 +184,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           !board.config.internal &&
           (board.config.gitDeliverables as Settings | undefined)?.enabled
         )
-          this.enqueue(p, board.id);
+          this.enqueue(p, board.id, 500, copyId);
       }
     } catch {
       new Logger(GitDeliverablesService.name).warn(
@@ -191,10 +192,19 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       );
     }
   }
-  reconcile(p: string) {
+  reconcile(p: string, body: unknown = {}) {
     requireExecutionAccess();
     requireProjectAccess(p);
-    this.scheduleProject(p);
+    const parsed = z
+      .strictObject({ copyId: z.string().min(1).max(100).optional() })
+      .safeParse(body ?? {});
+    if (!parsed.success)
+      throw new BadRequestException('GIT_DELIVERABLES_INVALID_SETTINGS');
+    // A browser may resume only the selected writable, owned copy. Recheck it
+    // inside the deferred job as well, in case access changes after scheduling.
+    const { copyId } = parsed.data;
+    if (copyId) this.target(p, copyId);
+    this.scheduleProject(p, copyId);
     return { scheduled: true };
   }
   private board(p: string, r: string) {
@@ -643,7 +653,20 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       discoveryError,
       proposal,
       active: Boolean(
-        board && (this.busy.has(board.id) || this.planning.has(board.id)),
+        board &&
+        (this.busy.has(board.id) ||
+          this.planning.has(board.id) ||
+          [...this.queued].some((key) => {
+            const [boardId, , queuedCopyId] = JSON.parse(key) as [
+              string,
+              string | null,
+              string | null,
+            ];
+            return (
+              boardId === board.id &&
+              (!copyId || !queuedCopyId || queuedCopyId === copyId)
+            );
+          })),
       ),
       verifiedAt: proposal ? Date.now() : null,
     };
@@ -2055,10 +2078,11 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       this.busy.delete(options.boardId);
     }
   }
-  private enqueue(p: string, r: string, delay = 500) {
+  private enqueue(p: string, r: string, delay = 500, copyId?: string) {
     const key = JSON.stringify([
       r,
       currentAccess()?.localAgentThreadId ?? null,
+      copyId ?? null,
     ]);
     if (this.stopped || this.queued.has(key)) return;
     const settings = this.settings(p, r);
@@ -2073,7 +2097,8 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
           const current = this.settings(p, r);
           if (!current?.enabled) return;
           const actor = currentAccess()?.localAgentThreadId;
-          const copies = actor ? [this.target(p)] : this.eligible(p);
+          const copies =
+            actor || copyId ? [this.target(p, copyId)] : this.eligible(p);
           if (!copies.length)
             throw new ConflictException('GIT_DELIVERABLES_AGENT_COPY_REQUIRED');
           let retry = false;
@@ -2133,7 +2158,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               );
             }
           }
-          if (retry) this.enqueue(p, r, 5000);
+          if (retry) this.enqueue(p, r, 5000, copyId);
         } catch (e) {
           let current: Settings | null = null;
           try {
@@ -2152,7 +2177,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
               'GIT_DELIVERABLES_BUSY',
             ].includes(errorCode(e))
           ) {
-            this.enqueue(p, r, 5000);
+            this.enqueue(p, r, 5000, copyId);
             return;
           }
           new Logger(GitDeliverablesService.name).warn(
