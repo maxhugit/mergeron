@@ -209,12 +209,20 @@ describe('project-scoped generic preview service', () => {
         url: null,
       },
     });
-    expect(f.rows.get(agentPreviews)).toEqual(row);
+    expect(f.rows.get(agentPreviews)).toEqual({ ...row, state: 'stopped' });
+    expect(() =>
+      f.run(() =>
+        f.service.selectSource('p', 't', {
+          source: { type: 'agent_reference' },
+          expectedRevision: null,
+        }),
+      ),
+    ).not.toThrow();
     expect(f.rows.has(projectPreviewProfiles)).toBe(true);
     f.request.mockRejectedValue(new Error('ECONNREFUSED'));
     expect(await f.run(() => f.service.status('p', 't'))).toMatchObject({
       preview: {
-        state: 'failed',
+        state: 'stopped',
         error: 'PREVIEW_MANAGER_UNAVAILABLE',
         ready: false,
       },

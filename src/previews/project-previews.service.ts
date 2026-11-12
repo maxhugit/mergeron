@@ -1091,9 +1091,28 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       this.db
         .update(agentPreviews)
         .set({ state: String(observed.state) })
-        .where(eq(agentPreviews.agentId, row.agentId))
+        .where(
+          and(
+            eq(agentPreviews.agentId, row.agentId),
+            eq(agentPreviews.runId, row.runId),
+          ),
+        )
         .run();
     } catch (error) {
+      if (this.missingRun(error)) {
+        // Reconcile only the observed run. A late read must not mark a newly
+        // created replacement stopped. Retain the recipe, source and history.
+        this.db
+          .update(agentPreviews)
+          .set({ state: 'stopped' })
+          .where(
+            and(
+              eq(agentPreviews.agentId, row.agentId),
+              eq(agentPreviews.runId, row.runId),
+            ),
+          )
+          .run();
+      }
       observed = this.missingRun(error)
         ? { state: 'stopped', error: 'PREVIEW_NOT_FOUND' }
         : {
