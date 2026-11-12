@@ -36,6 +36,17 @@ peuvent continuer. Les métadonnées de livrable non vérifiées ne sont pas rem
 pour forcer un export. Seules les références nécessaires aux documents exportés
 sont ajoutées à `livrable.json`.
 
+Après une interruption ou un redémarrage, ouvrir la vue **Livrables** avec un
+compte administrateur relance automatiquement les exports sûrs de la copie
+sélectionnée, après une nouvelle comparaison. Un document présent dans Mergeron,
+absent de cette copie et sans trace d’un export antérieur est exporté sans
+confirmation. Un autre document en conflit ne bloque pas cet export. Les fichiers
+Git modifiés, les collisions avec des fichiers non suivis et les suppressions
+locales de documents déjà exportés restent à examiner ; aucun import, commit ou
+push n’est déclenché par cette reprise. Une session en cours de renouvellement ou
+un accès en lecture seule ne lance aucune reprise. Un même diagnostic ne relance
+pas continuellement une opération bloquée ; **Actualiser** permet de réessayer.
+
 Les imports restent explicites. Si la comparaison contient aussi des conflits,
 **Appliquer les documents sans conflit** permet de valider les documents sûrs.
 Le résultat affiche les écarts restants, sans prétendre que toute la copie est à
