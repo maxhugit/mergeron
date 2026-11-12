@@ -1038,3 +1038,25 @@ test('a deliberately reused/skipped quality suite does not skip promotions behin
       assert.equal(evaluate({}, false, 'refs/heads/main'), false);
   }
 });
+
+test('native nested sandbox checks use the same explicit Linux baseline before merge and publication', () => {
+  for (const [workflow, name] of [
+    [quality, 'image'],
+    [quality, 'cli-runtime'],
+    [publish, 'build'],
+    [publish, 'cli-runtime'],
+  ]) {
+    assert.match(job(workflow, name), /runs-on: ubuntu-24\.04\n/);
+    assert.doesNotMatch(job(workflow, name), /runs-on: ubuntu-latest/);
+  }
+  assert.ok(
+    job(quality, 'image').includes(
+      'bash scripts/smoke-test-document-isolation.sh',
+    ),
+  );
+  assert.ok(
+    job(publish, 'build').includes(
+      'bash scripts/smoke-test-document-isolation.sh',
+    ),
+  );
+});

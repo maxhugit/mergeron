@@ -29,3 +29,10 @@ versions épinglées et séparations entre caches de PR et de `main` sont des pr
 Voir [Versions et publications](../docs/publications.md) et
 [Contribuer](../CONTRIBUTING.md). Les mesures et protections sont détaillées dans
 [Performance et stabilité du code](../docs/performance-et-stabilite.md).
+
+Les jobs qui vérifient le sandbox natif imbriqué (image Application et CLI,
+avant fusion et pendant la publication) utilisent explicitement `ubuntu-24.04`.
+Le changement d'hôte derrière `ubuntu-latest` ne doit pas modifier implicitement
+les conditions de validation de Bubblewrap et des espaces de noms utilisateur.
+Une migration de cette base nécessite de vérifier de nouveau ces mêmes tests ;
+les protections Docker, les assertions et les scans restent obligatoires.
