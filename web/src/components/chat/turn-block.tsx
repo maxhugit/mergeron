@@ -1,3 +1,4 @@
+import { TechnicalFileList } from './technical-file-list';
 import { TurnElapsed } from './turn-elapsed';
 import { useTechnicalGrouping } from '@/hooks/use-group-technical';
 import { MockupCard } from '@/components/mockups/mockup-card';
@@ -445,6 +446,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
                       : '')
                   }
                 >
+                  <TechnicalFileList items={group.items} />
                   {content}
                 </TechnicalDetails>
               ) : (

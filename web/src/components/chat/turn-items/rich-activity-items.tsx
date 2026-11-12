@@ -1,3 +1,12 @@
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ImageViewer } from '@/components/files/viewers/image-viewer';
+import { buildFileServeUrl } from '@/auth-token';
 /** Renderers for sub-agent, search, image, sleep, and future activity items. */
 import {
   Bot,
@@ -128,17 +137,53 @@ export function WebSearchItem({
   );
 }
 
-/** Shows that the agent inspected an image path without making it clickable. */
+/** Open inspected images through the existing authenticated file viewer. */
 export function ImageViewItem({
   item,
 }: {
   item: Extract<TurnItem, { type: 'imageView' }>;
 }) {
   const { t } = useTranslation();
+  const [thumbnailError, setThumbnailError] = useState(false);
   return (
     <ActivityMarker icon={Eye} completed={item.completed}>
-      {t('viewedImage')}
-      {item.path && ` · ${item.path}`}
+      {item.path ? (
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-2 text-left hover:underline"
+              title={item.path}
+            >
+              {!thumbnailError && (
+                <img
+                  src={buildFileServeUrl(item.path)}
+                  alt=""
+                  loading="lazy"
+                  className="h-10 w-14 shrink-0 rounded border object-contain"
+                  onError={() => setThumbnailError(true)}
+                />
+              )}
+              <span className="min-w-0 break-all">
+                {t('viewedImage')} · {item.path}
+              </span>
+            </button>
+          </DialogTrigger>
+          <DialogContent
+            className="flex h-[85dvh] w-[95vw] min-w-0 flex-col sm:max-w-5xl"
+            aria-describedby={undefined}
+          >
+            <DialogTitle className="min-w-0 break-all pr-6 text-sm">
+              {item.path}
+            </DialogTitle>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <ImageViewer filePath={item.path} />
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : (
+        t('viewedImage')
+      )}
     </ActivityMarker>
   );
 }
