@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TurnItem } from '@/types/timeline';
 import { technicalFileActivity } from '@/lib/technical-file-activity';
 export function TechnicalFileList({ items }: { items: TurnItem[] }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['workspaces', 'common']);
   const files = technicalFileActivity(items);
   if (!files.length) return null;
   return (
@@ -34,10 +34,10 @@ export function TechnicalFileList({ items }: { items: TurnItem[] }) {
             <span className="shrink-0 text-muted-foreground">
               ·{' '}
               {file.state === 'running'
-                ? t('inProgress')
+                ? t('inProgress', { ns: 'common' })
                 : file.state === 'declined'
-                  ? t('declined')
-                  : t('agentElapsedFailed')}
+                  ? t('declined', { ns: 'common' })
+                  : t('agentElapsedFailed', { ns: 'common' })}
             </span>
           )}
         </li>

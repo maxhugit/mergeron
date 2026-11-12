@@ -1685,10 +1685,5 @@
   "agentElapsedInterrupted": "Interrupted",
   "agentElapsedFailed": "Failed",
   "technicalActivityGroup_one": "Technical activity · {{count}} operation",
-  "technicalActivityGroup_other": "Technical activity · {{count}} operations",
-  "technicalFilesTitle": "Files involved",
-  "technicalFileRead": "File read",
-  "technicalFileCreate": "File creation",
-  "technicalFileUpdate": "File modification",
-  "technicalFileDelete": "File deletion"
+  "technicalActivityGroup_other": "Technical activity · {{count}} operations"
 }
