@@ -1,6 +1,10 @@
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import type {
+  ChildProcessWithoutNullStreams,
+  SpawnOptionsWithoutStdio,
+} from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -13,7 +17,16 @@ import type { IdentityService } from '../auth/identity.service';
 import { WorkspaceResourcesService } from './workspace-resources.service';
 import { ProjectRemoteToolsService } from './project-remote-tools.service';
 
-const processMock = vi.hoisted(() => ({ spawn: vi.fn() }));
+const processMock = vi.hoisted(() => ({
+  spawn:
+    vi.fn<
+      (
+        program: string,
+        args: string[],
+        options: SpawnOptionsWithoutStdio,
+      ) => ChildProcessWithoutNullStreams
+    >(),
+}));
 vi.mock('node:child_process', () => ({ spawn: processMock.spawn }));
 let database: TestDatabase,
   resources: WorkspaceResourcesService,
@@ -71,7 +84,7 @@ beforeEach(() => {
       child.stdout.emit('data', Buffer.from(output));
       child.emit('close', 0);
     });
-    return child;
+    return child as unknown as ChildProcessWithoutNullStreams;
   });
 });
 afterEach(() => database.sqlite.close());
