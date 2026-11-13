@@ -4270,3 +4270,141 @@ export type McpServersStartOauthLoginResponses = {
 };
 
 export type McpServersStartOauthLoginResponse = McpServersStartOauthLoginResponses[keyof McpServersStartOauthLoginResponses];
+
+
+export type AgentPreferencesDto = {
+  personId: string;
+  instructions: string;
+  language: "message" | "fr" | "en";
+};
+
+export type AgentContextSourceDto = {
+  kind: string;
+  revision: string;
+  files?: Array<string>;
+  commit?: string | null;
+};
+
+export type AgentContextEventDto = {
+  id: string;
+  trigger: string;
+  state: string;
+  revision: string | null;
+  sources: Array<AgentContextSourceDto>;
+  createdAt: number;
+};
+
+export type AgentContextStatusDto = {
+  threadId: string;
+  copyId: string | null;
+  version: number;
+  events: Array<AgentContextEventDto>;
+};
+
+export type AgentInstructionSourceInputDto = {
+  copyId: string | null;
+  version: number;
+};
+
+export type GitInstructionFileDto = {
+  path: string;
+  text: string;
+};
+
+export type GitInstructionPreviewDto = {
+  files: Array<GitInstructionFileDto>;
+  commit: string;
+  revision: string;
+};
+
+export type AgentContextProfileData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/agent-context/profile";
+};
+
+export type AgentContextProfileResponses = {
+  200: AgentPreferencesDto;
+};
+
+export type AgentContextProfileResponse =
+  AgentContextProfileResponses[keyof AgentContextProfileResponses];
+
+export type AgentContextSaveProfileData = {
+  body: AgentPreferencesDto;
+  path?: never;
+  query?: never;
+  url: "/api/agent-context/profile";
+};
+
+export type AgentContextSaveProfileResponses = {
+  200: AgentPreferencesDto;
+};
+
+export type AgentContextSaveProfileResponse =
+  AgentContextSaveProfileResponses[keyof AgentContextSaveProfileResponses];
+
+export type AgentContextStatusData = {
+  body?: never;
+  path: {
+    threadId: string;
+  };
+  query?: never;
+  url: "/api/agent-context/agents/{threadId}";
+};
+
+export type AgentContextStatusResponses = {
+  200: AgentContextStatusDto;
+};
+
+export type AgentContextStatusResponse =
+  AgentContextStatusResponses[keyof AgentContextStatusResponses];
+
+export type AgentContextAssociateData = {
+  body: AgentInstructionSourceInputDto;
+  path: {
+    threadId: string;
+  };
+  query?: never;
+  url: "/api/agent-context/agents/{threadId}/source";
+};
+
+export type AgentContextAssociateResponses = {
+  200: AgentContextStatusDto;
+};
+
+export type AgentContextAssociateResponse =
+  AgentContextAssociateResponses[keyof AgentContextAssociateResponses];
+
+export type AgentContextPreviewData = {
+  body?: never;
+  path: {
+    threadId: string;
+  };
+  query?: never;
+  url: "/api/agent-context/agents/{threadId}/preview";
+};
+
+export type AgentContextPreviewResponses = {
+  200: GitInstructionPreviewDto;
+};
+
+export type AgentContextPreviewResponse =
+  AgentContextPreviewResponses[keyof AgentContextPreviewResponses];
+
+export type AgentContextVerifyData = {
+  body?: never;
+  path: {
+    threadId: string;
+  };
+  query?: never;
+  url: "/api/agent-context/agents/{threadId}/verify";
+};
+
+export type AgentContextVerifyResponses = {
+  200: AgentContextStatusDto;
+};
+
+export type AgentContextVerifyResponse =
+  AgentContextVerifyResponses[keyof AgentContextVerifyResponses];

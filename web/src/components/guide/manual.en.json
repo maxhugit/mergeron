@@ -870,6 +870,15 @@
               "Agent management separates Configuration, Shared project knowledge, Proposals and Integrations. Instructions, knowledge and decisions each have a file tab; drafts remain when switching between them. Save writes all three files together with the observed revision; Cancel discards the local draft.",
               "Proposals show each before/after directly, with no open or close button. Review actions remain next to their proposal. Save proposal edits before accepting. An outdated proposal or an unsaved manual knowledge draft blocks acceptance. Reload and Previous/Next remain available."
             ]
+          },
+          {
+            "title": "Associate and track agent instructions",
+            "paragraphs": [
+              "Common instructions remain in Settings → Codex → Instructions. My profile → Agent preferences defines the language and personal preferences used for your exchanges, including shared agents.",
+              "In the agent’s right sidebar, Sources tab, open the repository menu and choose Use a copy as instruction source. Select a ready Git copy in the project; the active directory does not change. Project shared knowledge and Git files remain separate.",
+              "Agent instructions shows the Git preview, fingerprints and journal. Checked does not mean supplied: a manual check sends nothing to the model. The server reads sources before each exchange; MCP supplies context on project_context_read, while the non-MCP path sends it directly.",
+              "After detected compaction, context must be restored on the next MCP call or exchange. The agent requests scoped AGENTS files with instructionDirectory before working in a subdirectory. An unavailable associated source blocks a new exchange; restore access or remove the association. Instructions never change permissions."
+            ]
           }
         ],
         "related": [

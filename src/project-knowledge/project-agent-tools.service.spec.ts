@@ -1,3 +1,4 @@
+import { AgentContextService } from './agent-context.service';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -241,14 +242,24 @@ describe('project context and business tools', () => {
     const activeFolders = {
       get: vi.fn(() => ({ effectivePath: root + '/deliverable' })),
     };
-    const reader = new ProjectAgentToolsService(database.db, deliverables, {
+    const modules = {
       get: (key: unknown) => {
+        if (key === AgentContextService)
+          return new AgentContextService(
+            database.db,
+            modules as unknown as ModuleRef,
+          );
         if (key === AgentInstructionsService) return { context: () => common };
         if (key === ProjectKnowledgeService) return knowledge;
         if (key === ActiveFoldersService) return activeFolders;
         throw Error('Optional provider unavailable');
       },
-    } as unknown as ModuleRef);
+    };
+    const reader = new ProjectAgentToolsService(
+      database.db,
+      deliverables,
+      modules as unknown as ModuleRef,
+    );
     const read = () =>
       asPerson('admin', () => reader.execute('agent', { tool: 'get_context' }));
     const before = database.db

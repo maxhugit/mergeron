@@ -1,3 +1,4 @@
+import { AgentContextService } from '../project-knowledge/agent-context.service';
 import { MockupsService } from '../mockups/mockups.service';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
@@ -349,8 +350,13 @@ describe('native internal MCP over HTTP', () => {
       monitorStore,
       { accessForSchedule: monitorAccess } as unknown as AgentMonitorRuntime,
     );
-    tools = new ProjectAgentToolsService(database.db, deliverables, {
+    const contextModules = {
       get: (token: unknown) => {
+        if (token === AgentContextService)
+          return new AgentContextService(
+            database.db,
+            contextModules as unknown as ModuleRef,
+          );
         if (token === AgentInstructionsService)
           return { context: () => 'Current administration instructions' };
         if (token === ProjectKnowledgeService)
@@ -370,7 +376,12 @@ describe('native internal MCP over HTTP', () => {
                 ? new MockupsService(database.db, deliverables)
                 : domain;
       },
-    } as unknown as ModuleRef);
+    };
+    tools = new ProjectAgentToolsService(
+      database.db,
+      deliverables,
+      contextModules as unknown as ModuleRef,
+    );
     localBrowser = new LocalBrowserService();
     service = new InternalMcpService(
       tools,

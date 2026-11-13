@@ -137,7 +137,7 @@ function safeMediaUrl(value: unknown, media: 'image' | 'audio'): string {
  * a marker embedded in the person's own message. Supports historical ordering. */
 function withoutInternalContext(text: string): string {
   const envelope =
-    /^(?:\r?\n)*<(mergeron_agent_instructions|mergeron_context_refresh|mergeron_agent_monitor|mergeron_project_context|project_shared_knowledge|project_deliverable_context|document_publication)>\r?\n[\s\S]*?\r?\n<\/\1>(?:\r?\n)*/;
+    /^(?:\r?\n)*<(agent_profile_preferences|agent_git_instructions|mergeron_agent_instructions|mergeron_context_refresh|mergeron_agent_monitor|mergeron_project_context|project_shared_knowledge|project_deliverable_context|document_publication)>\r?\n[\s\S]*?\r?\n<\/\1>(?:\r?\n)*/;
   let match: RegExpExecArray | null;
   while ((match = envelope.exec(text))) text = text.slice(match[0].length);
   return text;

@@ -2083,3 +2083,60 @@ export const inboxPreferences = sqliteTable(
     check('inbox_retention_range', sql`${t.retentionDays} between 1 and 365`),
   ],
 );
+
+/** Personal agent preferences, never filesystem or execution grants. */
+export const personAgentInstructions = sqliteTable(
+  'person_agent_instructions',
+  {
+    personId: text('person_id')
+      .primaryKey()
+      .references(() => people.id, { onDelete: 'cascade' }),
+    instructions: text('instructions').notNull().default(''),
+    language: text('language').notNull().default('message'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+);
+
+/** Stable work-agent association; retained copy ID makes removed sources explicit. */
+export const agentInstructionSources = sqliteTable(
+  'agent_instruction_sources',
+  {
+    threadId: text('thread_id')
+      .primaryKey()
+      .references(() => projectAgentThreads.threadId, { onDelete: 'cascade' }),
+    copyId: text('copy_id'),
+    version: integer('version').notNull().default(1),
+    updatedAt: integer('updated_at').notNull(),
+  },
+);
+
+/** Metadata only: no instruction text or personal preference content in the journal. */
+export const agentContextEvents = sqliteTable(
+  'agent_context_events',
+  {
+    id: text('id').primaryKey(),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => projectAgentThreads.threadId, { onDelete: 'cascade' }),
+    trigger: text('trigger').notNull(),
+    state: text('state').notNull(),
+    revision: text('revision'),
+    sources: text('sources', { mode: 'json' })
+      .$type<
+        Array<{
+          kind: string;
+          revision: string;
+          files?: string[];
+          commit?: string | null;
+        }>
+      >()
+      .notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    index('idx_agent_context_events_thread').on(
+      table.threadId,
+      table.createdAt,
+    ),
+  ],
+);

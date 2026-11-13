@@ -22,7 +22,9 @@ demandée après compaction, changement de tâche/référence ou doute sur la fr
 Les listes et détails complémentaires restent accessibles par les outils dédiés.
 
 Le serveur choisit le projet et la personne d’après le tour authentifié : aucun
-chemin ni identifiant de projet n’est accepté par cet outil. Il ne modifie ni les
+identifiant de projet ou de copie n’est accepté par cet outil. L’argument relatif
+`instructionDirectory` peut uniquement ajouter les fichiers AGENTS d’un domaine
+de la copie Git déjà associée. Il ne modifie ni les
 permissions, ni la mémoire, ni les affectations. Un changement de rattachement
 ou une révocation pendant la lecture fait échouer la réponse. Les règles et le
 brouillon de publication versionnée restent préparés séparément à chaque tour.
@@ -675,3 +677,7 @@ Pour un agent affecté à plusieurs sous-tâches, les événements du moteur ne 
 pas toutes les sous-tâches « À faire » commencées ou en revue. L’agent explicite
 la sous-tâche sur laquelle il travaille via l’outil ; l’avancement reste une donnée
 métier et la validation du livrable reste distincte.
+
+Les préférences de profil, la source Git indépendante du dossier actif, les
+reçus de transmission et le schéma de rafraîchissement sont détaillés dans
+[Consignes des agents](consignes-agents.md).

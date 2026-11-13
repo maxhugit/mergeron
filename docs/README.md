@@ -145,3 +145,5 @@ avant de supposer qu’une ancienne version stable possède toutes ces fonctions
 - [Centre de notifications : fonctionnement, droits et conservation](notifications.md)
 
 - [Historique des versions dans le guide](historique-des-versions.md) : frise publiée et procédure de maintenance FR/EN.
+
+- [Consignes des agents : profil, projet, source Git et rafraîchissement](consignes-agents.md)

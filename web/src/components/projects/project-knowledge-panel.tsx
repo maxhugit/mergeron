@@ -37,6 +37,7 @@ export function ProjectKnowledgePanel({
   selectedFile?: string;
 }) {
   const { t } = useTranslation();
+  const { t: tw } = useTranslation('workspaces');
   const client = useQueryClient();
   const key = ['project-knowledge', projectId];
   const draftKey = ['project-knowledge-draft', projectId];
@@ -106,6 +107,9 @@ export function ProjectKnowledgePanel({
     <section className="space-y-5 pb-3">
       <div hidden={view === 'proposals'}>
         <h3 className="font-semibold">{t('sharedProjectKnowledge')}</h3>
+        <p className="mt-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+          {tw('contextProjectSeparation')}
+        </p>
         <p className="mt-1 text-sm text-muted-foreground">
           {t(
             'theseFilesAreReadAtEachNewExchangeIncludingInSecondaryWorkspacesSavedChangesApp86cf98f9',

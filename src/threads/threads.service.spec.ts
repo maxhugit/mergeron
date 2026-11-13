@@ -992,6 +992,47 @@ describe('ThreadsService', () => {
     );
   });
 
+  it('verifies instruction sources before dispatch, supplies direct context only after acknowledgement and fails closed', async () => {
+    const snapshot = {
+      threadId: 't1',
+      associationVersion: 1,
+      copyId: 'copy',
+      revision: 'revision',
+      sources: [],
+      context: '<agent_git_instructions>\nRules\n</agent_git_instructions>',
+    };
+    const context = {
+      prepare: vi.fn().mockResolvedValue(snapshot),
+      supplied: vi.fn(),
+    };
+    Object.assign(service, { agentContext: context });
+    mockProjectConnections.policyForThread.mockResolvedValue({
+      projectId: 'p',
+      readOnly: false,
+    });
+    mockInternalMcp.prepare.mockReturnValue(null);
+    mockCodex.request.mockResolvedValue({ turn: { id: 'accepted' } });
+    await service.startTurn({
+      threadId: 't1',
+      input: [{ type: 'text', text: 'Work', text_elements: [] }],
+    });
+    expect(context.prepare).toHaveBeenCalledWith('t1', 'turn');
+    expect(context.supplied).toHaveBeenCalledWith(snapshot, 'turn');
+    expect(mockCodex.request.mock.calls.at(-1)?.[0]).toBe('turn/start');
+    expect(JSON.stringify(mockCodex.request.mock.calls.at(-1)?.[1])).toContain(
+      'Rules',
+    );
+    mockCodex.request.mockClear();
+    context.prepare.mockRejectedValueOnce(new Error('Source unavailable'));
+    await expect(
+      service.startTurn({ threadId: 't1', input: [] }),
+    ).rejects.toThrow('Source unavailable');
+    expect(mockCodex.request).not.toHaveBeenCalledWith(
+      'turn/start',
+      expect.anything(),
+    );
+  });
+
   it('uses a short MCP reminder each turn while preserving publication, user text and attachments', async () => {
     const common = vi.fn(() => 'Long private common rules');
     Object.assign(service, {
