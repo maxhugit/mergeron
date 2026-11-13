@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowRightLeft, Eye, Play, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
   projectsApi,
   type ProjectSummary,
-  type ProjectWorkspaceResourceSummary,
   type ProjectWorkspaceTransferRunSummary,
   type ProjectWorkspaceTransferSummary,
 } from '@/lib/projects-api';
@@ -29,8 +29,13 @@ const emptyForm = {
 
 export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
   const { t } = useTranslation();
-  const [resources, setResources] = useState<ProjectWorkspaceResourceSummary[]>(
-    [],
+  const inventory = useQuery({
+    queryKey: ['project-locations', project.id],
+    queryFn: ({ signal }) => getProjectLocations(project.id, signal),
+  });
+  const resources = useMemo(
+    () => (inventory.data ? locationResourceViews(inventory.data) : []),
+    [inventory.data],
   );
   const [transfers, setTransfers] = useState<ProjectWorkspaceTransferSummary[]>(
     [],
@@ -41,22 +46,18 @@ export function WorkspaceTransfers({ project }: { project: ProjectSummary }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
-    const [inventory, result] = await Promise.all([
-      getProjectLocations(project.id),
-      projectsApi<{
-        transfers: Array<
-          Omit<
-            ProjectWorkspaceTransferSummary,
-            'sourceResourceId' | 'destinationWorkspaceId'
-          > & {
-            sourceLocationId: string | null;
-            destinationLocationId: string | null;
-          }
-        >;
-        runs: ProjectWorkspaceTransferRunSummary[];
-      }>(locationTransfersPath(project.id)),
-    ]);
-    setResources(locationResourceViews(inventory));
+    const result = await projectsApi<{
+      transfers: Array<
+        Omit<
+          ProjectWorkspaceTransferSummary,
+          'sourceResourceId' | 'destinationWorkspaceId'
+        > & {
+          sourceLocationId: string | null;
+          destinationLocationId: string | null;
+        }
+      >;
+      runs: ProjectWorkspaceTransferRunSummary[];
+    }>(locationTransfersPath(project.id));
     setTransfers(
       result.transfers.map(
         ({ sourceLocationId, destinationLocationId, ...rest }) => ({

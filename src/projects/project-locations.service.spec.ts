@@ -195,14 +195,16 @@ it('scopes connection mutations and normalized ID resolution to their project', 
     address: 'https://example.test/a.git',
   });
   expect(created.connection.protocol).toBe('git');
-  expect(created.location.connectionId).toBe(created.connection.id);
+  expect(created).not.toHaveProperty('location');
+  expect(inventory.list('p').locations).toHaveLength(1);
+  const scope = inventory.connectionScope('p', created.connection.id);
   expect(() => controller.disable('other', created.connection.id)).toThrow(
     'Project connection not found',
   );
-  expect(() => inventory.resourceId('other', created.location.id)).toThrow(
+  expect(() => inventory.resourceId('other', scope.id)).toThrow(
     'Project location not found',
   );
-  expect(() => inventory.workspaceId('p', created.location.id)).toThrow(
+  expect(() => inventory.workspaceId('p', scope.id)).toThrow(
     'local destination',
   );
   expect(() =>
@@ -241,4 +243,95 @@ it('never calls the filesystem for remote, unknown or escaping location selectio
     'relative directory',
   );
   expect(readDirectory).not.toHaveBeenCalled();
+});
+
+it.each(['ssh', 'sftp', 'ftps', 'ftp', 'git'])(
+  'registers a standalone %s connection without declaring a folder',
+  (type) => {
+    const controller = new ProjectConnectionsController(
+      inventory,
+      resources,
+      {} as WorkspaceCopiesService,
+    );
+    const created = controller.create('p', {
+      name: 'Standalone',
+      type,
+      address:
+        type === 'git'
+          ? 'https://example.test/repo.git'
+          : type + '://example.test',
+      allowInsecure: type === 'ftp',
+      agentEnabled: true,
+    });
+    expect(inventory.list('p').locations).toHaveLength(1);
+    expect(inventory.list('p').connections).toContainEqual(
+      expect.objectContaining({
+        id: created.connection.id,
+        agentEnabled: true,
+      }),
+    );
+    controller.update('p', created.connection.id, {
+      name: 'Renamed',
+      agentEnabled: false,
+    });
+    expect(inventory.list('p').locations).toHaveLength(1);
+    expect(inventory.list('p').connections[0].agentEnabled).toBe(false);
+  },
+);
+
+it('reuses one connection and its encrypted credentials for several separately declared remote folders', () => {
+  const controller = new ProjectConnectionsController(
+    inventory,
+    resources,
+    {} as WorkspaceCopiesService,
+  );
+  const c = controller.create('p', {
+    name: 'Files',
+    type: 'sftp',
+    address: 'sftp://example.test',
+    rootPath: '/srv',
+    accessMode: 'read_write',
+    secret: { password: 'shared-test-secret' },
+  }).connection;
+  const a = inventory.attachRemote(
+    'p',
+    { connectionId: c.id, name: 'App', path: '/srv/app' },
+    resources,
+  );
+  const b = inventory.attachRemote(
+    'p',
+    { connectionId: c.id, name: 'Docs', path: '/srv/docs' },
+    resources,
+  );
+  expect(inventory.list('p').connections).toHaveLength(1);
+  expect(inventory.list('p').locations).toHaveLength(3);
+  expect(
+    resources.resolveForTransfer('p', inventory.resourceId('p', a.id)),
+  ).toMatchObject({
+    resource: { rootPath: '/srv/app', address: 'sftp://example.test' },
+    secret: { password: 'shared-test-secret' },
+  });
+  expect(inventory.location('p', b.id).connectionId).toBe(c.id);
+  expect(() =>
+    inventory.attachRemote(
+      'p',
+      { connectionId: c.id, name: 'Escape', path: '/elsewhere' },
+      resources,
+    ),
+  ).toThrow('outside');
+  expect(() =>
+    inventory.attachRemote(
+      'other',
+      { connectionId: c.id, name: 'Other', path: '/srv' },
+      resources,
+    ),
+  ).toThrow();
+  resources.update('p', c.id, { secret: { password: 'rotated-test-secret' } });
+  expect(
+    resources.resolveForTransfer('p', inventory.resourceId('p', a.id)).secret
+      ?.password,
+  ).toBe('rotated-test-secret');
+  controller.detach('p', c.id);
+  expect(inventory.list('p').locations).toHaveLength(1);
+  expect(inventory.list('p').connections).toHaveLength(0);
 });

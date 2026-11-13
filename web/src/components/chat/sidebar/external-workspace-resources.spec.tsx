@@ -126,6 +126,7 @@ it('edits the existing connection with a write-only token, preserving address an
         body: JSON.stringify({
           name: 'Git Test',
           expectedAddress: resource.address,
+          agentEnabled: true,
           secret: { token: 'fake-token-for-test' },
         }),
       }),
@@ -155,6 +156,7 @@ it('preserves stored credentials when saving with an empty token field', async (
         body: JSON.stringify({
           name: 'Renamed',
           expectedAddress: resource.address,
+          agentEnabled: true,
         }),
       }),
     ),

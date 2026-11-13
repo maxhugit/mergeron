@@ -185,6 +185,7 @@ export const prepareProjectGitOperationInput = z.discriminatedUnion(
   ],
 );
 export const projectConnectionTools = [
+  'use_project_connection',
   'track_project_pull_request',
   'list_project_connections',
   'create_project_git_copy',

@@ -116,3 +116,10 @@ suivis séparément des constats concernant `sshd`.
 - jeton interne entre Nginx et Codex ;
 - secret OnlyOffice ;
 - jetons OAuth et MCP.
+
+
+## Accès distants des agents
+
+Une connexion de projet n’est ni un dossier de travail ni une autorisation implicite d’exécution. Les opérations SSH/SFTP/FTP/FTPS des agents exigent l’activation explicite de cette disponibilité, un tour administrateur modifiable sans impersonation et une approbation du transport. Les commandes SSH exigent aussi le mode lecture et écriture ; elles ne sont pas isolées par la racine autorisée aux fichiers. Le compte distant doit imposer les droits adaptés à l’usage.
+
+Les identifiants sont chiffrés côté serveur ; les fichiers temporaires de clé, empreintes et configuration ont des permissions privées et sont retirés après usage. SSH ignore la configuration utilisateur, les agents d’authentification ambiants et les redirections ; les empreintes sont vérifiées strictement. Aucun hôte ni identifiant n’est fourni par l’agent. Les sorties et la durée sont bornées, la révocation est revérifiée et les demandes sont réservées avant l’envoi pour empêcher une répétition après un résultat incertain. FTPS conserve la validation TLS ; FTP reste un choix explicitement non chiffré.

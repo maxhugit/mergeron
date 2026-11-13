@@ -108,3 +108,10 @@ L'exécution exige l'identifiant de cet aperçu et vérifie les empreintes de la
 Les ressources locales et les copies Git sont lues directement. SFTP, FTP et FTPS sont préparés dans un instantané local avant l'aperçu ; les secrets restent dans un fichier de configuration temporaire inaccessible aux agents et ne figurent pas dans la ligne de commande. SFTP peut recevoir une ligne `known_hosts` chiffrée avec les autres secrets afin de vérifier l'hôte. SSH ne permet toujours aucune commande distante et un dépôt Git distant doit d'abord posséder une copie de travail.
 
 Le gestionnaire d'automatisations accepte une règle de transfert comme cible. Une exécution d'analyse produit uniquement l'aperçu. Une action soumise à validation applique exactement cet aperçu après approbation ; une règle explicitement configurée sans approbation peut l'appliquer durant l'exécution planifiée. Chaque aperçu, succès, conflit et échec est conservé dans l'historique du transfert et dans l'activité du projet.
+
+
+## Évolution : connexions indépendantes et accès distants explicites
+
+L’interface distingue maintenant Connexions externes, Emplacements, Transferts et Livrables Git. Le comportement détaillé figure dans [les paramètres du projet](interface-parametres-projet.md). Une nouvelle connexion ne déclare plus automatiquement de dossier ; les copies Git se gèrent avec les emplacements locaux. Les dossiers distants réutilisent la connexion et ses secrets.
+
+L’exclusion de l’exécution SSH mentionnée dans les étapes historiques ci-dessus est remplacée par une autorisation explicite, désactivée sur les anciennes connexions non Git. Le nouvel outil distant applique les règles décrites dans [le contexte des agents](contexte-et-outils-agents.md) et [la politique de sécurité](../SECURITY.md). Il ne change jamais le dossier de travail local de l’agent.

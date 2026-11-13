@@ -12,6 +12,12 @@ export interface ProjectConnection {
   protocol: Exclude<ProjectWorkspaceResourceSummary['type'], 'local'>;
   address: string | null;
   enabled: boolean;
+  agentEnabled?: boolean;
+  fileScope?: {
+    rootPath: string;
+    accessMode: 'read_only' | 'read_write';
+    capabilities: ProjectWorkspaceResourceSummary['capabilities'];
+  } | null;
   connectionState: Exclude<
     ProjectWorkspaceResourceSummary['connectionState'],
     'local'
@@ -99,7 +105,39 @@ export function connectionResourceViews(inventory: ProjectLocationInventory) {
       (item) => item.connectionId === connection.id,
     );
     const view = views.find((item) => item.id === location?.id);
-    return view ? [{ ...view, id: connection.id, name: connection.name }] : [];
+    if (view && !connection.fileScope)
+      return [
+        {
+          ...view,
+          id: connection.id,
+          name: connection.name,
+          agentEnabled: connection.agentEnabled,
+        },
+      ];
+    return [
+      {
+        id: connection.id,
+        projectId: connection.projectId,
+        name: connection.name,
+        type: connection.protocol,
+        address: connection.address,
+        rootPath: connection.fileScope?.rootPath ?? '/',
+        accessMode: connection.fileScope?.accessMode ?? 'read_only',
+        capabilities: connection.fileScope?.capabilities ?? {
+          read: true,
+          write: false,
+          execute: false as const,
+        },
+        enabled: connection.enabled,
+        connectionState: connection.connectionState,
+        lastCheckedAt: connection.lastCheckedAt,
+        hasSecret: connection.hasSecret,
+        localWorkspaceId: null,
+        localPath: null,
+        lastError: null,
+        agentEnabled: connection.agentEnabled,
+      },
+    ];
   });
 }
 

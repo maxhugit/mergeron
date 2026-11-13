@@ -49,6 +49,19 @@ const mockupWrite: ToolPolicy = {
 };
 
 const definitions = {
+  use_project_connection: {
+    name: 'project_connection_manage',
+    title: 'Connections — Use an authorized remote connection',
+    titleFr: 'Connexions — Utiliser un accès distant autorisé',
+    handler: 'project',
+    policy: {
+      ...gitWrite,
+      administratorOnly: true,
+      forbidImpersonation: true,
+      destructive: true,
+      idempotent: false,
+    },
+  },
   project_mockup_create: {
     name: 'project_mockup_create',
     title: 'Mockups — Create an interactive mockup',

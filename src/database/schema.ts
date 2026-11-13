@@ -1369,6 +1369,9 @@ export const projectConnections = sqliteTable(
       .notNull(),
     address: text('address'),
     enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+    agentEnabled: integer('agent_enabled', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     connectionState: text('connection_state')
       .$type<'untested' | 'connected' | 'unreachable' | 'disabled'>()
       .notNull(),
@@ -1402,6 +1405,8 @@ export const projectLocations = sqliteTable(
       .$type<'managed_local' | 'attached_local' | 'remote'>()
       .notNull(),
     path: text('path').notNull(),
+    // Compatibility roots authorize a connection; only declared folders are shown.
+    declared: integer('declared', { mode: 'boolean' }).notNull().default(true),
     localWorkspaceId: text('local_workspace_id'),
     connectionId: text('connection_id'),
     legacyResourceId: text('legacy_resource_id').references(

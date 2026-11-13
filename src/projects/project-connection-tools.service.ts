@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Optional,
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { createHash, randomUUID } from 'node:crypto';
@@ -32,6 +33,7 @@ import {
   prepareProjectGitOperationInput,
   trackProjectPullRequestInput,
 } from './project-connection-tools.schema';
+import { ProjectRemoteToolsService } from './project-remote-tools.service';
 
 /** Bound project operations; no credential, arbitrary host, shell or local-path argument. */
 @Injectable()
@@ -42,6 +44,7 @@ export class ProjectConnectionToolsService {
     private readonly copies: WorkspaceCopiesService,
     private readonly git: WorkspaceGitService,
     private readonly actions: WorkspaceGitActionsService,
+    @Optional() private readonly remote?: ProjectRemoteToolsService,
   ) {}
 
   async execute(
@@ -69,6 +72,16 @@ export class ProjectConnectionToolsService {
     };
     check();
     const { tool, ...raw } = input;
+    if (tool === 'use_project_connection') {
+      if (!this.remote || !turnId)
+        throw new ForbiddenException('NO_ACTIVE_TURN');
+      return this.remote.execute(projectId, threadId, raw, () => {
+        const access = check();
+        access.identities.requireAdministrator(access.identity);
+        if (access.identity.impersonation)
+          throw new ForbiddenException('ACCESS_DENIED');
+      });
+    }
     if (tool === 'track_project_pull_request') {
       if (!turnId)
         throw new ForbiddenException('PR_AUTHENTICATED_TURN_REQUIRED');
@@ -104,9 +117,7 @@ export class ProjectConnectionToolsService {
       const copies = this.copies.list(projectId);
       return {
         items: all.slice(offset, offset + 50).map((c) => {
-          const root = inventory.locations.find(
-            (l) => l.connectionId === c.id && l.kind === 'remote',
-          );
+          const root = this.locations.connectionScope(projectId, c.id);
           return {
             id: c.id,
             name: c.name,
@@ -117,7 +128,10 @@ export class ProjectConnectionToolsService {
             hasSecret: c.hasSecret,
             // Endpoints and raw lastError are intentionally not returned.
             operations:
-              c.enabled && root?.capabilities.read && c.protocol === 'git'
+              c.enabled &&
+              c.agentEnabled &&
+              root?.capabilities.read &&
+              c.protocol === 'git'
                 ? [
                     'read_project_git',
                     'create_project_git_copy',
@@ -126,7 +140,9 @@ export class ProjectConnectionToolsService {
                       ? ['prepare_project_git', 'publish_project_git']
                       : []),
                   ]
-                : [],
+                : c.enabled && c.agentEnabled && c.protocol !== 'git'
+                  ? ['use_project_connection']
+                  : [],
             copies: copies
               .filter(
                 (copy) =>
@@ -158,11 +174,12 @@ export class ProjectConnectionToolsService {
         const connection = inventory.connections.find(
           (c) => c.id === args.connectionId,
         );
-        const root = inventory.locations.find(
-          (l) => l.connectionId === args.connectionId && l.kind === 'remote',
-        );
+        const root = connection
+          ? this.locations.connectionScope(projectId, connection.id)
+          : undefined;
         if (
           !connection?.enabled ||
+          !connection.agentEnabled ||
           connection.protocol !== 'git' ||
           !root?.capabilities.read
         )
@@ -267,10 +284,15 @@ export class ProjectConnectionToolsService {
     const connection = inventory.connections.find(
       (c) => c.id === args.connectionId,
     );
-    const root = inventory.locations.find(
-      (l) => l.connectionId === args.connectionId && l.kind === 'remote',
-    );
-    if (!connection || !connection.enabled || !root?.capabilities.read)
+    const root = connection
+      ? this.locations.connectionScope(projectId, connection.id)
+      : undefined;
+    if (
+      !connection ||
+      !connection.enabled ||
+      !connection.agentEnabled ||
+      !root?.capabilities.read
+    )
       throw new ForbiddenException('PROJECT_CONNECTION_UNAVAILABLE');
     if (connection.protocol !== 'git')
       throw new BadRequestException('PROJECT_CONNECTION_UNSUPPORTED');
@@ -278,9 +300,10 @@ export class ProjectConnectionToolsService {
       check();
       const current = this.locations.list(projectId);
       const latest = current.connections.find((c) => c.id === connection.id);
-      const location = current.locations.find((l) => l.id === root.id);
+      const location = this.locations.connectionScope(projectId, connection.id);
       if (
         !latest?.enabled ||
+        !latest.agentEnabled ||
         latest.protocol !== 'git' ||
         latest.address !== connection.address ||
         latest.updatedAt !== connection.updatedAt ||
@@ -402,9 +425,10 @@ export class ProjectConnectionToolsService {
         throw new ForbiddenException('ACCESS_DENIED');
       const fresh = this.locations.list(projectId);
       const latest = fresh.connections.find((c) => c.id === connection.id);
-      const location = fresh.locations.find((l) => l.id === root.id);
+      const location = this.locations.connectionScope(projectId, connection.id);
       if (
         !latest?.enabled ||
+        !latest.agentEnabled ||
         latest.protocol !== 'git' ||
         latest.address !== connection.address ||
         latest.updatedAt !== connection.updatedAt ||

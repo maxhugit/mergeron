@@ -1,10 +1,14 @@
 import {
   ConflictException,
+  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
+import { posix } from 'node:path';
+import { requireExecutionAccess } from '../auth/access-context';
+import { WorkspaceResourcesService } from './workspace-resources.service';
 import { requireProjectAccess } from '../auth/access-context';
 import { copyAgentIds, copyAgentThreadIds } from './git-copy-ownership';
 import { DRIZZLE_DB, type AppDatabase } from '../database/database.constants';
@@ -51,7 +55,97 @@ export class ProjectLocationsService {
       .get();
     if (!connection)
       throw new NotFoundException('Project connection not found');
+    const adapter = this.db
+      .select()
+      .from(projectLocations)
+      .where(eq(projectLocations.legacyResourceId, id))
+      .get();
+    if (adapter && adapter.connectionId !== id)
+      throw new NotFoundException('Project connection not found');
     return connection;
+  }
+
+  /** Internal file-access scope, independently of any declared project folder. */
+  connectionScope(projectId: string, id: string) {
+    this.connection(projectId, id);
+    const scope = this.db
+      .select()
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.projectId, projectId),
+          eq(projectLocations.legacyResourceId, id),
+          eq(projectLocations.connectionId, id),
+        ),
+      )
+      .get();
+    if (!scope)
+      throw new ConflictException('Project connection scope is unavailable');
+    return scope;
+  }
+
+  undeclare(projectId: string, id: string) {
+    requireExecutionAccess();
+    const location = this.location(projectId, id);
+    if (location.kind !== 'remote')
+      throw new ConflictException('A remote folder is required');
+    this.db
+      .update(projectLocations)
+      .set({ declared: false })
+      .where(
+        and(
+          eq(projectLocations.id, id),
+          eq(projectLocations.projectId, projectId),
+        ),
+      )
+      .run();
+    return { ok: true, filesDeleted: false };
+  }
+
+  /** Reuse access and secrets; a new folder never widens the connection scope. */
+  attachRemote(
+    projectId: string,
+    input: Record<string, unknown>,
+    resources: WorkspaceResourcesService,
+  ) {
+    requireExecutionAccess();
+    if (typeof input.connectionId !== 'string')
+      throw new BadRequestException('A connection is required');
+    const connection = this.connection(projectId, input.connectionId);
+    if (!connection.enabled || connection.protocol === 'git')
+      throw new ConflictException('An enabled file connection is required');
+    const source = resources.get(projectId, connection.id);
+    if (
+      typeof input.path !== 'string' ||
+      !input.path.startsWith('/') ||
+      input.path.includes('\0') ||
+      input.path.includes('\\') ||
+      input.path.split('/').includes('..')
+    )
+      throw new BadRequestException('An absolute remote directory is required');
+    const path = posix.normalize(input.path);
+    const root = posix.resolve('/', source.rootPath);
+    if (path !== root && !path.startsWith(root === '/' ? '/' : root + '/'))
+      throw new BadRequestException(
+        'Folder is outside the allowed connection root',
+      );
+    return this.db.transaction(() => {
+      const adapter = resources.create(projectId, {
+        name: input.name,
+        type: source.type,
+        address: source.address,
+        rootPath: path,
+        accessMode: source.accessMode,
+        allowInsecure: source.type === 'ftp',
+        agentEnabled: false,
+      });
+      this.db
+        .update(projectLocations)
+        .set({ connectionId: connection.id })
+        .where(eq(projectLocations.legacyResourceId, adapter.id))
+        .run();
+      return this.location(projectId, `remote:${adapter.id}`);
+    });
   }
 
   /** Only this boundary translates normalized identifiers to persistence adapters. */
@@ -118,7 +212,7 @@ export class ProjectLocationsService {
       .from(projectWorkspaceCopies)
       .where(eq(projectWorkspaceCopies.projectId, projectId))
       .all();
-    const connections = this.db
+    const allConnections = this.db
       .select()
       .from(projectConnections)
       .where(eq(projectConnections.projectId, projectId))
@@ -128,6 +222,12 @@ export class ProjectLocationsService {
       .from(projectLocations)
       .where(eq(projectLocations.projectId, projectId))
       .all();
+    const connections = allConnections.filter(
+      (c) =>
+        !locations.some(
+          (l) => l.legacyResourceId === c.id && l.connectionId !== c.id,
+        ),
+    );
     return {
       modelVersion: 1,
       copies: copies.map((copy) => {
@@ -159,28 +259,59 @@ export class ProjectLocationsService {
           state: connection?.enabled ? copy.state : ('revoked' as const),
         };
       }),
-      connections: this.db
-        .select()
-        .from(projectConnections)
-        .where(eq(projectConnections.projectId, projectId))
-        .all()
-        .map((connection) => ({
-          ...connection,
-          hasSecret: Boolean(
-            this.db
-              .select({ id: projectWorkspaceSecrets.resourceId })
-              .from(projectWorkspaceSecrets)
-              .where(eq(projectWorkspaceSecrets.resourceId, connection.id))
-              .get(),
-          ),
-        })),
+      connections: connections.map((connection) => ({
+        ...connection,
+        fileScope: (() => {
+          const scope = locations.find(
+            (l) => l.legacyResourceId === connection.id,
+          );
+          return scope
+            ? {
+                rootPath: scope.path,
+                accessMode: scope.accessMode,
+                capabilities: scope.capabilities,
+              }
+            : null;
+        })(),
+        hasSecret: Boolean(
+          this.db
+            .select({ id: projectWorkspaceSecrets.resourceId })
+            .from(projectWorkspaceSecrets)
+            .where(eq(projectWorkspaceSecrets.resourceId, connection.id))
+            .get(),
+        ),
+      })),
       locations: this.db
         .select()
         .from(projectLocations)
         .where(eq(projectLocations.projectId, projectId))
         .all()
+        .filter((location) => location.declared)
         .map((location) => ({
           ...location,
+          ...(location.connectionId
+            ? (() => {
+                const scope = locations.find(
+                  (l) => l.legacyResourceId === location.connectionId,
+                );
+                return scope
+                  ? {
+                      accessMode:
+                        scope.accessMode === 'read_only'
+                          ? ('read_only' as const)
+                          : location.accessMode,
+                      capabilities: {
+                        read:
+                          location.capabilities.read && scope.capabilities.read,
+                        write:
+                          location.capabilities.write &&
+                          scope.capabilities.write,
+                        execute: false as const,
+                      },
+                    }
+                  : {};
+              })()
+            : {}),
           workingCopyId:
             copies.find(
               (copy) => copy.localWorkspaceId === location.localWorkspaceId,
