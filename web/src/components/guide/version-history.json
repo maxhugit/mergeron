@@ -1,5 +1,23 @@
 [
   {
+    "tag": "v0.8.3",
+    "date": "2026-11-13",
+    "highlights": {
+      "fr": [
+        "Approbations plus explicites : objectif de la demande, outil MCP concerné et paramètres consultables avant de décider.",
+        "Renouvellement sécurisé du contexte MCP après un message supplémentaire ou une approbation humaine, sans augmenter les droits ni rejouer les commandes incertaines.",
+        "Livrables Git : distinction entre un export en attente et un transfert en cours, avec protection des exports devenus non autorisés.",
+        "Consignes de contribution versionnées pour le backend, l’interface et le déploiement, avec une séparation expliquée entre consignes du dépôt et contexte partagé du projet."
+      ],
+      "en": [
+        "Clearer approvals show the request purpose, the MCP tool involved and inspectable arguments before a decision.",
+        "Secure MCP context renewal after additional user input or human approval, without increasing permissions or replaying commands with uncertain outcomes.",
+        "Git deliverables distinguish queued exports from active transfers and protect exports whose authorization has been revoked.",
+        "Versioned contribution instructions for the backend, frontend and deployment, explaining the separation between repository instructions and shared project context."
+      ]
+    }
+  },
+  {
     "tag": "v0.8.2",
     "date": "2026-11-13",
     "highlights": {
