@@ -6,9 +6,11 @@ import { DatabaseModule } from '../database/database.module';
 import { ThreadDeletionModule } from '../thread-deletion/thread-deletion.module';
 import { PendingApprovalsController } from './pending-approvals.controller';
 import { PendingApprovalsService } from './pending-approvals.service';
+import { InternalMcpModule } from '../internal-mcp/internal-mcp.module';
 
 @Module({
   imports: [
+    InternalMcpModule,
     CodexModule,
     DatabaseModule,
     ThreadDeletionModule,

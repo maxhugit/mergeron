@@ -54,6 +54,9 @@ import { AgentMonitorsService } from '../agent-monitors/agent-monitors.service';
 import { AgentMonitorRuntime } from '../agent-monitors/agent-monitor-runtime.service';
 import { AgentInstructionsService } from '../settings/agent-instructions.service';
 import { ProjectKnowledgeService } from '../project-knowledge/project-knowledge.service';
+import { PendingApprovalsService } from '../pending-approvals/pending-approvals.service';
+import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
+import { createRequestManager } from '../pending-approvals/request-owner.testing';
 
 describe('native internal MCP over HTTP', () => {
   let database: TestDatabase;
@@ -73,6 +76,7 @@ describe('native internal MCP over HTTP', () => {
   let ownCopies: Array<Record<string, unknown>>;
   const cloneConnection = vi.fn();
   let notify: (note: ServerNotification) => void;
+  let restart: () => void;
   const clients: Client[] = [];
   const setThreadName = vi
     .fn<(id: string, name: string) => Promise<void>>()
@@ -377,7 +381,9 @@ describe('native internal MCP over HTTP', () => {
         ) => {
           notify = listener;
         },
-        addLifecycleListener: vi.fn(),
+        addLifecycleListener: (listener: () => void) => {
+          restart = listener;
+        },
       } as unknown as CodexProcessManager,
       new CatalogAdmissionService(),
       localBrowser,
@@ -1371,6 +1377,285 @@ describe('native internal MCP over HTTP', () => {
         })
       ).isError,
     ).toBe(true);
+  });
+
+  it('renews an expired same-turn lease on authenticated input after multiple calls and compaction, then starts a fresh turn', async () => {
+    const { client } = await connect();
+    let now = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    activate();
+    const read = () =>
+      client.callTool({ name: 'project_context_read', arguments: {} });
+    expect((await read()).isError).not.toBe(true);
+    expect((await read()).isError).not.toBe(true);
+    notify({
+      method: 'thread/compacted',
+      params: { threadId: 'agent', turnId: 'turn-1' },
+    } as unknown as ServerNotification);
+    now += 3600001;
+    expect(JSON.stringify(await read())).toContain('NO_ACTIVE_TURN');
+    expect(service.prepareRenewal('agent', 'turn-1')).toBeNull();
+    expect(
+      asPerson('admin', () => service.prepareRenewal('agent', 'wrong-turn')),
+    ).toBeNull();
+    asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1')?.commit(),
+    );
+    expect((await read()).isError).not.toBe(true);
+    expect((await read()).isError).not.toBe(true);
+    notify({
+      method: 'turn/completed',
+      params: {
+        threadId: 'agent',
+        turn: { id: 'turn-1', status: 'completed' },
+      },
+    } as unknown as ServerNotification);
+    expect(
+      asPerson('admin', () => service.prepareRenewal('agent', 'turn-1')),
+    ).toBeNull();
+    asPerson('admin', () =>
+      service.prepare('agent', 'p', true)?.bind('turn-2'),
+    );
+    expect((await read()).isError).not.toBe(true);
+  });
+
+  it('renews after a long human approval wait before dispatch, without replaying an answered request', async () => {
+    const { client } = await connect();
+    let now = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    activate();
+    const transport = createRequestManager();
+    const pending = new PendingApprovalsService(
+      database.db,
+      transport.manager,
+      new ThreadDeletionRegistryService(),
+      new CatalogAdmissionService(),
+      undefined,
+      service,
+    );
+    pending.onModuleInit();
+    transport.receive({
+      id: 17,
+      method: 'mcpServer/elicitation/request',
+      params: {
+        threadId: 'agent',
+        turnId: 'turn-1',
+        serverName: 'mergeron_internal',
+        mode: 'form',
+        message: 'Allow tool?',
+        _meta: { codex_approval_kind: 'mcp_tool_call' },
+        requestedSchema: { type: 'object', properties: {} },
+      },
+    });
+    now += 3600001;
+    const instance = pending.listPending()[0].instanceId;
+    try {
+      asPerson('admin', () =>
+        pending.respondToRequest('17', instance, {
+          action: 'accept',
+          content: {},
+        }),
+      );
+      expect(
+        (await client.callTool({ name: 'project_context_read', arguments: {} }))
+          .isError,
+      ).not.toBe(true);
+      expect(() =>
+        asPerson('admin', () =>
+          pending.respondToRequest('17', instance, {
+            action: 'accept',
+            content: {},
+          }),
+        ),
+      ).toThrow('already been handled');
+      expect(transport.wire).toHaveBeenCalledTimes(1);
+    } finally {
+      transport.close();
+    }
+  });
+
+  it('never upgrades a read-only running turn or resets the same-turn call budget', async () => {
+    const { client } = await connect();
+    activate('admin', false);
+    asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1', true)?.commit(),
+    );
+    expect(
+      JSON.stringify(
+        await client.callTool({
+          name: 'project_task_create',
+          arguments: createTask,
+        }),
+      ),
+    ).toContain('READ_ONLY');
+    const read = () => client.callTool({ name: 'project_get', arguments: {} });
+    for (let i = 0; i < 100; i++) expect((await read()).isError).not.toBe(true);
+    asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1')?.commit(),
+    );
+    expect(JSON.stringify(await read())).toContain('RATE_LIMIT');
+  });
+
+  it('rejects stale renewal tickets, access loss and revoked contexts', async () => {
+    const { client } = await connect();
+    activate();
+    expect(() =>
+      asPerson('reader', () => service.prepareRenewal('agent', 'turn-1')),
+    ).toThrow();
+    const ticket = asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1'),
+    );
+    service.revoke('agent');
+    ticket?.commit();
+    expect(
+      JSON.stringify(
+        await client.callTool({ name: 'project_get', arguments: {} }),
+      ),
+    ).toContain('NO_ACTIVE_TURN');
+    expect(
+      asPerson('admin', () => service.prepareRenewal('agent', 'turn-1')),
+    ).toBeNull();
+    activate();
+    const stale = asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1'),
+    );
+    activate('admin', false);
+    stale?.commit();
+    expect(
+      JSON.stringify(
+        await client.callTool({
+          name: 'project_task_create',
+          arguments: createTask,
+        }),
+      ),
+    ).toContain('READ_ONLY');
+    const lost = asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1'),
+    );
+    database.db
+      .update(people)
+      .set({ active: false })
+      .where(eq(people.id, 'admin'))
+      .run();
+    expect(() => lost?.commit()).toThrow();
+    expect(
+      (await client.callTool({ name: 'project_get', arguments: {} })).isError,
+    ).toBe(true);
+  });
+
+  it('invalidates in-flight mutations on renewal and preserves the serialization barrier', async () => {
+    const { client } = await connect();
+    activate();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const effect = vi.fn();
+    const execute = vi
+      .spyOn(tools, 'execute')
+      .mockImplementationOnce(async (_t, _a, assertActive) => {
+        entered();
+        await wait;
+        assertActive!();
+        effect();
+        return {};
+      });
+    const old = client.callTool({
+      name: 'project_task_create',
+      arguments: createTask,
+    });
+    await started;
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 3600001);
+    asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1')?.commit(),
+    );
+    const next = client.callTool({ name: 'project_get', arguments: {} });
+    release();
+    expect(JSON.stringify(await old)).toContain('NO_ACTIVE_TURN');
+    expect(effect).not.toHaveBeenCalled();
+    expect((await next).isError).not.toBe(true);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenNthCalledWith(
+      1,
+      'agent',
+      expect.objectContaining({ requestId: createTask.requestId }),
+      expect.any(Function),
+      'turn-1',
+      true,
+    );
+  });
+
+  it('keeps an unexpired in-flight operation valid when the same person adds input', async () => {
+    const { client } = await connect();
+    let now = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    activate();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = tools.execute.bind(
+      tools,
+    ) as ProjectAgentToolsService['execute'];
+    vi.spyOn(tools, 'execute').mockImplementationOnce(async (...args) => {
+      entered();
+      await wait;
+      args[2]!();
+      return original(...args);
+    });
+    const running = client.callTool({ name: 'project_get', arguments: {} });
+    await started;
+    now += 1800000;
+    asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1')?.commit(),
+    );
+    now += 1800001;
+    release();
+    expect((await running).isError).not.toBe(true);
+    const ticket = asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1'),
+    );
+    restart();
+    ticket?.commit();
+    expect(
+      asPerson('admin', () => service.prepareRenewal('agent', 'turn-1')),
+    ).toBeNull();
+    expect(
+      JSON.stringify(
+        await client.callTool({ name: 'project_get', arguments: {} }),
+      ),
+    ).toContain('NO_ACTIVE_TURN');
+  });
+
+  it('retains mutation receipts and request fingerprints across expiry and renewal', async () => {
+    const { client } = await connect();
+    let now = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    activate();
+    const call = (args = createTask) =>
+      client.callTool({ name: 'project_task_create', arguments: args });
+    const first = await call();
+    expect(first.isError).not.toBe(true);
+    now += 3600001;
+    expect(JSON.stringify(await call())).toContain('NO_ACTIVE_TURN');
+    asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1')?.commit(),
+    );
+    expect(await call()).toEqual(first);
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(1);
+    expect(
+      (await call({ ...createTask, title: 'different payload' })).isError,
+    ).toBe(true);
+    expect(database.db.select().from(projectTasks).all()).toHaveLength(1);
   });
 
   it('authenticates every HTTP call, rejects browser origins and bounds requests', async () => {

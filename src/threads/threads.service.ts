@@ -985,21 +985,30 @@ export class ThreadsService {
     const sandbox = this.settingsObserver?.readSecurityPolicy(
       params.threadId,
     ).sandboxPolicy;
-    const lease = policy
-      ? this.internalMcp?.prepare(
+    const writes =
+      !policy?.readOnly &&
+      (sandbox?.type === 'workspaceWrite' ||
+        sandbox?.type === 'dangerFullAccess');
+    const lease =
+      transferred && policy
+        ? this.internalMcp?.prepare(params.threadId, policy.projectId, writes)
+        : null;
+    lease?.bind(params.expectedTurnId);
+    const renewal = !transferred
+      ? this.internalMcp?.prepareRenewal(
           params.threadId,
-          policy.projectId,
-          !policy.readOnly &&
-            (sandbox?.type === 'workspaceWrite' ||
-              sandbox?.type === 'dangerFullAccess'),
+          params.expectedTurnId,
+          writes,
         )
       : null;
-    lease?.bind(params.expectedTurnId);
     try {
-      return await this.codex.request<v2.TurnSteerResponse>(
+      const response = await this.codex.request<v2.TurnSteerResponse>(
         'turn/steer',
         params,
       );
+      if (response.turnId === params.expectedTurnId) renewal?.commit();
+      else lease?.abort();
+      return response;
     } catch (error) {
       lease?.abort();
       throw error;

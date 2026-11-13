@@ -486,12 +486,32 @@ La configuration native conserve le secret nécessaire à la connexion ; l’ind
 de recherche du serveur utilise son empreinte SHA-256.
 
 La connexion est stable mais ne suffit pas à exécuter un outil : une autorisation
-de tour active est nécessaire. Elle dure au maximum une heure et 100 appels,
-et est liée à la personne authentifiée, au projet et à la conversation.
+de tour active est nécessaire. Elle est liée à la personne authentifiée, au projet
+et à la conversation, avec une validité d’une heure et un plafond de 100 appels
+par tour. Un message supplémentaire accepté par le moteur pour le même tour ou
+une réponse humaine positive à une demande encore en attente renouvelle cette
+heure après vérification de l’identité et des accès. Le plafond d’appels n’est pas
+remis à zéro et les droits d’écriture du tour ne sont jamais augmentés par ce
+renouvellement. Les approbations automatiques, appels d’outils, notifications et
+compactions ne prolongent pas l’autorisation.
 Elle est suspendue à la fin du tour et révoquée lors d’un arrêt, échec,
 archivage, fermeture, suppression ou redémarrage du moteur. Un nouvel échange
-prépare ses permissions propres. Les continuations suivent les notifications
-de cycle de vie authentifiées.
+prépare ses permissions propres. Une autorisation révoquée, un tour terminé ou
+remplacé ne peuvent pas être réactivés par une ancienne approbation ou une réponse
+de commande arrivée en retard.
+
+Une longue attente peut donc produire `NO_ACTIVE_TURN`, y compris sur une lecture.
+Ajouter un message au tour encore actif renouvelle le contexte sans recharger la
+page ; si le tour est terminé, il faut en démarrer un nouveau. Les journaux du
+serveur distinguent l’expiration, la révocation, la fin du tour, le remplacement,
+l’absence de liaison et l’annulation, avec les identifiants projet/agent/tour,
+sans enregistrer les arguments privés des outils.
+
+Le renouvellement ne relance aucune commande. Une opération commencée sous une
+autorisation expirée ou sous une autre identité ne récupère pas les nouveaux
+droits : inspecter ses effets locaux et distants avant toute reprise. Conserver
+le **même `requestId` et le même contenu** pour une éventuelle reprise de mutation ;
+une absence de résultat confirmé ne prouve pas que la commande n’a rien fait.
 
 Chaque appel revérifie l’identité actuelle, l’accès au projet/conversation et son
 rattachement. Les créations revérifient ces conditions avant commit, notamment
@@ -608,7 +628,6 @@ avant de proposer le téléchargement. La publication du MP3 dans un livrable
 existant suit le mécanisme de versions et requiert une demande humaine explicite,
 un tour administrateur avec écriture et un `requestId` stable. Une publication
 incertaine ne doit jamais être rejouée avec une autre clé.
-
 
 ## Pilotage des tâches et sous-tâches par l’agent (MCP 1.12.0)
 

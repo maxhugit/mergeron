@@ -108,7 +108,11 @@ describe('ThreadsService', () => {
   const mockActiveFolders = { resolveAgent: vi.fn() };
   const mockProjectTools = { context: vi.fn() };
   const mockAgentDefaults = { forNewAgent: vi.fn() };
-  const mockInternalMcp = { prepare: vi.fn(), revoke: vi.fn() };
+  const mockInternalMcp = {
+    prepare: vi.fn(),
+    prepareRenewal: vi.fn(),
+    revoke: vi.fn(),
+  };
   const mockSettings = { readSecurityPolicy: vi.fn() };
   const mockPreferences = { forTurn: vi.fn() };
 
@@ -167,6 +171,7 @@ describe('ThreadsService', () => {
     mockPreferences.forTurn.mockReset().mockReturnValue({});
     mockCodex.request.mockReset();
     mockInternalMcp.prepare.mockReset().mockReturnValue(null);
+    mockInternalMcp.prepareRenewal.mockReset().mockReturnValue(null);
     mockInternalMcp.revoke.mockReset();
     mockSettings.readSecurityPolicy
       .mockReset()
@@ -1196,6 +1201,46 @@ describe('ThreadsService', () => {
       expectedTurnId: 'turn1',
       input: [{ type: 'text', text: 'keep going' }],
     });
+  });
+
+  it('renews ordinary human steering only after Core accepts the same turn, bounded by its sandbox', async () => {
+    mockProjectConnections.policyForThread.mockResolvedValue({
+      projectId: 'p',
+      readOnly: false,
+    });
+    mockSettings.readSecurityPolicy.mockReturnValue({
+      sandboxPolicy: { type: 'workspaceWrite' },
+    });
+    const commit = vi.fn();
+    mockInternalMcp.prepareRenewal.mockReturnValue({ commit });
+    mockCodex.request.mockImplementationOnce(() => {
+      expect(commit).not.toHaveBeenCalled();
+      return Promise.resolve({ turnId: 'turn1' });
+    });
+    const params = { threadId: 't1', expectedTurnId: 'turn1', input: [] };
+    await service.steerTurn(params);
+    expect(mockInternalMcp.prepareRenewal).toHaveBeenCalledWith(
+      't1',
+      'turn1',
+      true,
+    );
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(mockInternalMcp.prepare).not.toHaveBeenCalled();
+    commit.mockClear();
+    mockSettings.readSecurityPolicy.mockReturnValue({
+      sandboxPolicy: { type: 'readOnly' },
+    });
+    mockCodex.request.mockResolvedValueOnce({ turnId: 'other' });
+    await service.steerTurn(params);
+    expect(mockInternalMcp.prepareRenewal).toHaveBeenLastCalledWith(
+      't1',
+      'turn1',
+      false,
+    );
+    expect(commit).not.toHaveBeenCalled();
+    mockCodex.request.mockRejectedValueOnce(new Error('stale'));
+    await expect(service.steerTurn(params)).rejects.toThrow('stale');
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('should call turn/interrupt', async () => {
