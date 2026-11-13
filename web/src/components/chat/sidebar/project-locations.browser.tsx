@@ -31,9 +31,29 @@ vi.mock(
 );
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
-  projectsApi: vi.fn().mockImplementation(async () =>
-    locationInventoryFixture({
+  projectsApi: vi.fn().mockImplementation(async () => {
+    const inventory = locationInventoryFixture({
       resources: [
+        ...[
+          { id: 'main', name: 'Principal', path: '/workspaces/p' },
+          { id: 'other', name: 'Code local', path: '/source/project' },
+        ].map((w) => ({
+          id: w.id,
+          projectId: 'p',
+          localWorkspaceId: w.id,
+          name: w.name,
+          type: 'local' as const,
+          address: null,
+          rootPath: '/',
+          accessMode: 'read_write' as const,
+          capabilities: { read: true, write: true, execute: false as const },
+          enabled: true,
+          connectionState: 'local' as const,
+          lastCheckedAt: null,
+          lastError: null,
+          hasSecret: false,
+          localPath: w.path,
+        })),
         {
           id: 'git',
           projectId: 'p',
@@ -53,8 +73,10 @@ vi.mock('@/lib/projects-api', () => ({
         },
       ],
       copies: [],
-    } as GitInventory),
-  ),
+    } as GitInventory);
+    inventory.locations[0].kind = 'managed_local';
+    return inventory;
+  }),
 }));
 afterEach(cleanup);
 test.each([390, 1180])(
@@ -158,14 +180,27 @@ test.each([390, 1001])(
       </QueryClientProvider>,
     );
     expect(
-      screen.getByRole('heading', {
-        name: 'Gérer les emplacements et connexions',
-      }),
+      screen.getByRole('heading', { name: 'Connexions externes' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('tab', { name: 'Connexions externes' }),
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Connexions externes',
+      'Emplacements',
+      'Transferts de fichiers',
+      'Livrables Git',
+    ]);
+    await page.getByRole('tab', { name: 'Emplacements', exact: true }).click();
+    expect(
+      screen.getByRole('heading', { name: /^Emplacements$/ }),
     ).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'Emplacements locaux' }),
     ).toBeVisible();
     expect(screen.getByText('Espace local géré')).toBeVisible();
+    expect(screen.getByText('Code local')).toBeVisible();
+    expect(screen.getByText('/source/project')).toBeVisible();
     await page
       .getByRole('tab', { name: i18n.t('externalResources'), exact: true })
       .click();
@@ -182,12 +217,12 @@ test.each([390, 1001])(
     });
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Ajouter un emplacement ou une connexion',
+        name: 'Ajouter une connexion',
       }),
     );
     expect(
       screen.getByRole('dialog', {
-        name: 'Ajouter un emplacement ou une connexion',
+        name: 'Ajouter une connexion',
       }),
     ).toBeVisible();
     expect(modelQuery).not.toHaveBeenCalled();
