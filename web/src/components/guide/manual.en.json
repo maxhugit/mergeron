@@ -963,6 +963,13 @@
             ]
           },
           {
+            "title": "Verify the displayed generation and CSS",
+            "paragraphs": [
+              "Generation and browser verification shows the transferred-file receipt: Git copy, observed commit, fingerprint including uncommitted changes and synchronization time. Verify in the browser opens a diagnostic using your Mergeron preview access; the site login session remains separate.",
+              "The diagnostic compares the current source with the receipt and loaded CSS with fresh server responses. It identifies older generations and incomplete checks. The compiled generation remains unknown unless the application provides the expected HTML/CSS markers. HTTP 200 does not confirm rendering. An element selector and computed style value can be checked before and after reloading."
+            ]
+          },
+          {
             "title": "Logs, storage and temporary data",
             "paragraphs": [
               "The tab lists this instance’s containers with their state and available measurements. Select a container to read its logs; application container terminals are administrator-only. Storage details usage, space and available inodes when measurable.",

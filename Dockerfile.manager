@@ -34,7 +34,7 @@ COPY manager/scripts/bundle-archive.mjs ./scripts/bundle-archive.mjs
 RUN npm run build:archive
 COPY manager/stack-manifest.json ./
 COPY manager/src ./src
-COPY runtime/preview-profile.cjs runtime/preview-archive.cjs runtime/preview-storage.cjs /opt/runtime/
+COPY runtime/preview-profile.cjs runtime/preview-archive.cjs runtime/preview-storage.cjs runtime/preview-receipt.cjs /opt/runtime/
 COPY deployment/browser/public-proxy.mjs /opt/deployment/browser/public-proxy.mjs
 COPY runtime/managed-cli.cjs /opt/runtime/managed-cli.cjs
 COPY --from=codex-runtime-files /bundle/ ./codex-runtime/

@@ -675,3 +675,8 @@ Pour un agent affecté à plusieurs sous-tâches, les événements du moteur ne 
 pas toutes les sous-tâches « À faire » commencées ou en revue. L’agent explicite
 la sous-tâche sur laquelle il travaille via l’outil ; l’avancement reste une donnée
 métier et la validation du livrable reste distincte.
+
+Le statut des previews expose aussi le reçu de la source synchronisée (génération,
+copie Git, commit observé, empreinte et date). Ce reçu ne confirme pas la
+compilation ni le rendu navigateur. Le [diagnostic de génération](environnement-test.md#vérifier-la-génération-affichée)
+utilise une session personnelle autorisée sans remettre de jeton à l’agent.

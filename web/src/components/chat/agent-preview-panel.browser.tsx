@@ -114,6 +114,15 @@ vi.mock('@/lib/projects-api', () => ({
             state: api.startupTimeout ? 'failed' : 'running',
             ready: !api.startupTimeout,
             url: api.startupTimeout ? null : 'https://test.preview.example/',
+            receipt: {
+              schemaVersion: 1,
+              generation: '11111111-1111-4111-8111-111111111111',
+              archiveSha: 'a'.repeat(64),
+              sourceFingerprint: 'b'.repeat(64),
+              gitCommit: 'c'.repeat(40),
+              copyId: 'fixture-copy',
+              syncedAt: 123,
+            },
             sourcePath: '/workspace',
             error: api.startupTimeout ? 'PREVIEW_STARTUP_TIMEOUT' : null,
             expiresAt: null,
@@ -428,3 +437,25 @@ test('source changes are disabled during an active runtime', async () => {
   ).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Appliquer' })).toBeDisabled();
 });
+
+test.each([1180, 390])(
+  'shows the synchronization receipt without overflowing at %ipx',
+  async (width) => {
+    await page.viewport(width, 844);
+    render(
+      <QueryClientProvider client={client}>
+        <AgentPreviewPanel projectId="p" threadId="t" active />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Génération et vérification navigateur');
+    fireEvent.click(screen.getByText('Génération et vérification navigateur'));
+    expect(await screen.findByText('fixture-copy')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Vérifier dans le navigateur' }),
+    ).toBeEnabled();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/preview-receipt-${width}.png`,
+    });
+  },
+);

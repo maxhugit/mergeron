@@ -4270,3 +4270,27 @@ export type McpServersStartOauthLoginResponses = {
 };
 
 export type McpServersStartOauthLoginResponse = McpServersStartOauthLoginResponses[keyof McpServersStartOauthLoginResponses];
+
+export type PreviewVerificationOpenDto = {
+    url: string;
+    /**
+     * Expiry as Unix milliseconds
+     */
+    expiresAt: number;
+};
+
+export type PreviewsVerifyData = {
+    body?: never;
+    path: {
+        projectId: string;
+        threadId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/verify';
+};
+
+export type PreviewsVerifyResponses = {
+    201: PreviewVerificationOpenDto;
+};
+
+export type PreviewsVerifyResponse = PreviewsVerifyResponses[keyof PreviewsVerifyResponses];

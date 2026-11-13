@@ -963,6 +963,13 @@
             ]
           },
           {
+            "title": "Vérifier la génération et le CSS affichés",
+            "paragraphs": [
+              "Génération et vérification navigateur présente le reçu des fichiers transférés : copie Git, commit observé, empreinte incluant les changements non commités et date de synchronisation. Vérifier dans le navigateur ouvre un diagnostic avec votre accès Mergeron à la preview ; la session de connexion du site reste indépendante.",
+              "Le diagnostic compare la source actuelle au reçu et les feuilles CSS chargées aux réponses fraîches du serveur. Il signale les anciennes générations et les contrôles incomplets. La génération compilée reste inconnue si l’application ne fournit pas les marqueurs HTML/CSS attendus. Un HTTP 200 ne confirme pas le rendu. Un sélecteur et une valeur de style calculé peuvent être vérifiés avant puis après rechargement."
+            ]
+          },
+          {
             "title": "Logs, stockage et données temporaires",
             "paragraphs": [
               "L’onglet liste les conteneurs de cette instance avec leur état et les mesures disponibles. Sélectionnez un conteneur pour lire ses logs ; le terminal des conteneurs applicatifs est réservé aux administrateurs. Stockage détaille les consommations, l’espace et les inodes disponibles quand ils peuvent être mesurés.",

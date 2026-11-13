@@ -1,3 +1,4 @@
+import { PreviewReceiptSummary } from '../projects/preview-receipt-summary';
 import { lazy, Suspense, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -407,6 +408,17 @@ export function AgentPreviewPanel({
         <p role="status" className="shrink-0 px-3 py-1 text-xs">
           {notice}
         </p>
+      )}
+      {preview && (
+        <div className="shrink-0 px-3 py-1">
+          <PreviewReceiptSummary
+            receipt={preview.receipt}
+            projectId={projectId}
+            threadId={threadId}
+            address={preview.url}
+            disabled={!running || !preview.ready || query.isError}
+          />
+        </div>
       )}
       {item?.memory && (
         <details className="shrink-0 border-b px-3 py-2 text-xs">

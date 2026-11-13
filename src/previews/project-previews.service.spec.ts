@@ -1837,3 +1837,89 @@ describe('preview sources in the managed project layout', () => {
     ).not.toThrow();
   });
 });
+
+describe('preview receipt provenance', () => {
+  it('only exposes the Manager receipt matching the authorized source, copy and archive', async () => {
+    const f = setup();
+    f.run(() =>
+      f.service.saveSettings('p', {
+        expectedRevision: null,
+        profile: { enabled: true, runtime: 'node', start: 'node server.js' },
+      }),
+    );
+    const receipt = {
+      schemaVersion: 1,
+      generation: '11111111-1111-4111-8111-111111111111',
+      archiveSha: 'a'.repeat(64),
+      sourceFingerprint: 'b'.repeat(64),
+      copyId: null,
+      gitCommit: null,
+      syncedAt: 123,
+    };
+    f.rows.set(agentPreviews, {
+      agentId: 't',
+      threadId: 't',
+      projectId: 'p',
+      previewId: 'preview',
+      runId: 'run',
+      sourcePath: '/workspaces/source',
+      source: { type: 'agent_reference' },
+      sourceSha: receipt.archiveSha,
+      sourceFingerprint: receipt.sourceFingerprint,
+      state: 'running',
+      createdAt: 1,
+      updatedAt: 1,
+      profileRevision: f.rows.get(projectPreviewProfiles)!.revision,
+    });
+    let observed: Record<string, unknown> = {
+      runId: 'run',
+      projectId: 'p',
+      agentId: 't',
+      state: 'running',
+      receipt,
+    };
+    f.request.mockImplementation(() => Promise.resolve(observed));
+    expect(
+      (await f.run(() => f.service.status('p', 't'))).preview?.receipt,
+    ).toEqual(receipt);
+    for (const patch of [
+      { copyId: 'another-copy' },
+      { archiveSha: 'f'.repeat(64) },
+      { sourceFingerprint: 'e'.repeat(64) },
+      { syncedAt: null },
+    ]) {
+      observed = { ...observed, receipt: { ...receipt, ...patch } };
+      expect(
+        (await f.run(() => f.service.status('p', 't'))).preview?.receipt,
+      ).toBeNull();
+    }
+    observed = { ...observed, receipt: undefined };
+    expect(
+      (await f.run(() => f.service.status('p', 't'))).preview?.receipt,
+    ).toBeNull();
+    const grant = {
+      projectId: 'p',
+      threadId: 't',
+      runId: 'run',
+      previewId: 'preview',
+      identity: f.identity,
+    };
+    vi.mocked(previewSourceFingerprint).mockResolvedValueOnce(
+      receipt.sourceFingerprint,
+    );
+    expect(
+      await f.service['verifySource'](grant, { ...receipt, schemaVersion: 1 }),
+    ).toBe(true);
+    vi.mocked(previewSourceFingerprint).mockResolvedValueOnce('changed');
+    expect(
+      await f.service['verifySource'](grant, { ...receipt, schemaVersion: 1 }),
+    ).toBe(false);
+    vi.mocked(previewSourceFingerprint).mockImplementationOnce(async () => {
+      f.identity.active = false;
+      return receipt.sourceFingerprint;
+    });
+    await expect(
+      f.service['verifySource'](grant, { ...receipt, schemaVersion: 1 }),
+    ).rejects.toThrow(ForbiddenException);
+  });
+});

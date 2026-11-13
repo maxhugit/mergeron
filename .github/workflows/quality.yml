@@ -151,6 +151,7 @@ jobs:
           node node_modules/playwright-core/cli.js install --with-deps chromium webkit
           node scripts/test-local-browser-extension.mjs
           node scripts/test-local-browser-webkit.mjs
+          node scripts/test-preview-verification.mjs
 
       - name: Test complete backend suite
         if: matrix.part == 'backend'

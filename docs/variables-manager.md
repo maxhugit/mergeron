@@ -134,3 +134,9 @@ erreur réseau du Manager moderne reste une erreur, sans démarrage alternatif n
 `MERGERON_UPDATE_MONITOR_ENABLED` vaut `false` par défaut. Activer `true` seulement après installation et vérification des deux relais HTTP indépendants et de leur routage TLS ; voir [le suivi des mises à jour](continuous-updates.md). Cette activation fait établir une session de suivi avant les mises à jour.
 
 Les relais utilisent uniquement `MERGERON_PUBLIC_HOST` (nom public exact), `MERGERON_GATEWAY_UPSTREAM` (ingress interne fixe) et `MERGERON_MONITOR_DIRECTORY` (`/monitor`, projection publique montée en lecture seule). Ces trois variables ne vont pas sur le conteneur applicatif.
+
+Le runtime de preview reçoit aussi `MERGERON_PREVIEW_RECEIPT_PATH`, chemin réservé
+vers l’entrée de génération écrite après synchronisation. Cette variable est
+créée par le Manager, non configurable par la recette et sans secret. Le
+[contrat de vérification de génération](environnement-test.md#contrat-de-marqueurs-applicatifs)
+décrit son utilisation et ses limites ; elle ne modifie aucun volume ni réseau.

@@ -168,5 +168,17 @@
   "reviewRecipe": "Review and edit",
   "recipeEditHelp": "Stop the environment before editing its recipe. Changes apply at the next startup and do not modify project files.",
   "saveRecipe": "Save recipe",
-  "missingRun": "This previous environment no longer exists. Its configuration and your files are retained. Click Start to recreate it."
+  "missingRun": "This previous environment no longer exists. Its configuration and your files are retained. Click Start to recreate it.",
+  "verification": {
+    "title": "Generation and browser verification",
+    "help": "The receipt confirms synchronized files. Compilation and displayed CSS are verified separately in the browser.",
+    "generation": "Synchronized generation",
+    "copy": "Git copy",
+    "noCopy": "Agent reference (no declared Git copy)",
+    "commit": "Observed commit",
+    "fingerprint": "Exported file fingerprint, including uncommitted changes",
+    "unknown": "Not verified",
+    "missing": "Receipt unavailable. An older instance or incompatible Manager cannot confirm the generation.",
+    "open": "Verify in the browser"
+  }
 }

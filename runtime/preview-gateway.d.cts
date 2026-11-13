@@ -11,11 +11,17 @@ export interface PreviewTransport {
   token: string;
   publicHost: string;
   expiresAt: number;
+  receipt?: import('./preview-receipt.cjs').PreviewReceipt | null;
+  syncError?: unknown;
 }
 export class PreviewGateway {
   constructor(input: {
     domain: string;
     authorize(grant: PreviewGrant): Promise<PreviewTransport>;
+    verifySource?(
+      grant: PreviewGrant,
+      receipt: import('./preview-receipt.cjs').PreviewReceipt,
+    ): Promise<boolean | null>;
     now?: () => number;
   });
   server: import('node:http').Server;

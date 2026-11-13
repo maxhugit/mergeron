@@ -53,6 +53,8 @@ import {
 } from './preview-prerequisites';
 import storage from '../../runtime/preview-storage.cjs';
 import { previewSnapshot, previewSourceFingerprint } from './preview-snapshot';
+import receipts from '../../runtime/preview-receipt.cjs';
+import { previewGitCommit, sourceReceipt } from './preview-source-receipt';
 import { IdentityService } from '../auth/identity.service';
 import {
   PreviewGateway,
@@ -63,6 +65,7 @@ import {
 @Injectable()
 export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   private readonly locks = new Set<string>();
+  private readonly verifyingSources = new Set<string>();
   private gateway?: PreviewGateway;
   private timer?: ReturnType<typeof setInterval>;
   private synchronizing = false;
@@ -91,6 +94,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     this.gateway = new PreviewGateway({
       domain,
       authorize: (grant) => this.authorizePreview(grant),
+      verifySource: (grant, receipt) => this.verifySource(grant, receipt),
     });
     await new Promise<void>((resolve, reject) => {
       this.gateway!.server.once('error', reject);
@@ -157,9 +161,11 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       token: result.token,
       publicHost: result.publicHost,
       expiresAt: result.expiresAt,
+      receipt: this.verifiedReceipt(row, result.receipt),
+      syncError: row.error ?? result.error ?? null,
     };
   }
-  async open(projectId: string, threadId: string) {
+  async open(projectId: string, threadId: string, verify = false) {
     const scope = this.scope(projectId, threadId),
       identity = currentAccess()!.identity;
     const row = this.row(scope.agentId);
@@ -183,7 +189,10 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         runId: row.runId,
         identity,
       },
-      effective.profile.path,
+      verify
+        ? '/.__mergeron_preview/verify?path=' +
+            encodeURIComponent(effective.profile.path)
+        : effective.profile.path,
     );
   }
   private snapshotDirectory(projectId: string, snapshotId: string) {
@@ -195,6 +204,94 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       'previews',
       snapshotId,
     );
+  }
+  private async verifySource(
+    grant: PreviewGrant,
+    receipt: import('../../runtime/preview-receipt.cjs').PreviewReceipt,
+  ) {
+    if (
+      this.verifyingSources.has(grant.runId) ||
+      this.verifyingSources.size >= 2
+    )
+      return null;
+    this.verifyingSources.add(grant.runId);
+    try {
+      const identity = this.identities.current(grant.identity);
+      return await accessContext.run(
+        { identity, identities: this.identities },
+        async () => {
+          const row = this.row(workAgentId(this.db, grant.threadId));
+          if (
+            !row ||
+            row.runId !== grant.runId ||
+            !this.verifiedReceipt(row, receipt)
+          )
+            return false;
+          const selected = this.resolveSource(grant.projectId, grant.threadId);
+          const check = () => {
+            const current = this.identities.current(identity);
+            this.identities.requireActive(current);
+            this.identities.requireProject(current, grant.projectId);
+            this.identities.requireThread(current, grant.threadId);
+            const latest = this.row(row.agentId);
+            if (
+              !latest ||
+              latest.runId !== row.runId ||
+              !this.verifiedReceipt(latest, receipt) ||
+              this.resolveSource(grant.projectId, grant.threadId).path !==
+                row.sourcePath ||
+              this.effectiveProfile(grant.projectId, row.agentId).revision !==
+                row.profileRevision
+            )
+              throw new ForbiddenException('PREVIEW_ACCESS_DENIED');
+          };
+          const profile = this.effectiveProfile(
+            grant.projectId,
+            row.agentId,
+          ).profile;
+          const fingerprint = await previewSourceFingerprint(
+            selected.path,
+            check,
+            this.snapshotOptions(profile, selected.prefix),
+          );
+          const head = await previewGitCommit(
+            this.sourceGitRoot(grant.projectId, selected.source),
+          );
+          check();
+          return (
+            fingerprint === receipt.sourceFingerprint &&
+            head === receipt.gitCommit
+          );
+        },
+      );
+    } finally {
+      this.verifyingSources.delete(grant.runId);
+    }
+  }
+  private sourceGitRoot(projectId: string, source: PreviewSource) {
+    return source.type === 'git_copy'
+      ? path.join(
+          '/workspaces',
+          projectId,
+          '.mergeron-system',
+          'sources',
+          source.connectionId,
+          'copies',
+          source.copyId,
+        )
+      : null;
+  }
+  private verifiedReceipt(
+    row: typeof agentPreviews.$inferSelect,
+    value: unknown,
+  ) {
+    const receipt = receipts.safeReceipt(value, row.sourceSha);
+    return receipt &&
+      receipt.sourceFingerprint === row.sourceFingerprint &&
+      receipt.copyId ===
+        (row.source?.type === 'git_copy' ? row.source.copyId : null)
+      ? receipt
+      : null;
   }
   private async removeSnapshot(
     projectId: string,
@@ -303,20 +400,24 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       check();
       const selected = this.resolveSource(projectId, threadId);
       const options = this.snapshotOptions(profile, selected.prefix);
+      const gitRoot = this.sourceGitRoot(projectId, selected.source);
+      const gitCommit = await previewGitCommit(gitRoot);
       const fingerprint = await previewSourceFingerprint(
         row.sourcePath,
         check,
         options,
       );
       if (fingerprint === row.sourceFingerprint) {
-        this.pendingSources.delete(scope.agentId);
-        if (row.error)
-          this.db
-            .update(agentPreviews)
-            .set({ error: null })
-            .where(eq(agentPreviews.agentId, scope.agentId))
-            .run();
-        return this.status(projectId, threadId);
+        const current = await this.status(projectId, threadId);
+        if (
+          !current.preview?.receipt ||
+          current.preview.receipt.gitCommit === gitCommit
+        ) {
+          this.pendingSources.delete(scope.agentId);
+          // A successful source hash is not proof that a failed partial transfer
+          // was repaired. Keep that error until a complete sync succeeds.
+          if (!row.error) return current;
+        }
       }
       // Polling is portable across bind mounts and catches external editor writes.
       // Require a quiet sample before exporting a burst of related file events.
@@ -346,10 +447,19 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       )
         throw new ConflictException('PREVIEW_SOURCE_CHANGED');
       check();
+      if (gitCommit !== (await previewGitCommit(gitRoot)))
+        throw new ConflictException('PREVIEW_SOURCE_CHANGED');
+      const receipt = sourceReceipt(
+        snapshot.sha256,
+        fingerprint,
+        selected.source.type === 'git_copy' ? selected.source.copyId : null,
+        gitCommit,
+      );
       const result = await this.manager.request('sync', {
         runId: row.runId,
         snapshotId,
         sourceSha: snapshot.sha256,
+        receipt,
       });
       this.db
         .update(agentPreviews)
@@ -1137,6 +1247,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         sourcePath: row.sourcePath,
         syncError: row.error ?? observed.error ?? null,
         sourceSha: row.sourceSha,
+        receipt: this.verifiedReceipt(row, observed.receipt),
         profileRevision: row.profileRevision,
         expiresAt: observed.expiresAt ?? null,
         lifetimeMinutes: observed.lifetimeMinutes,
@@ -1400,6 +1511,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       preview: status.preview
         ? {
             source: status.preview.source,
+            receipt: status.preview.receipt,
             syncError: status.preview.syncError,
             state: [
               'preparing',
@@ -1586,6 +1698,8 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
           checkSource,
           options,
         );
+        const gitRoot = this.sourceGitRoot(projectId, selected.source);
+        const gitCommit = await previewGitCommit(gitRoot);
         const snapshot = await previewSnapshot(
           source,
           path.join(target, 'source.tar'),
@@ -1599,6 +1713,14 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         )
           throw new ConflictException('PREVIEW_SOURCE_CHANGED');
         checkSource();
+        if (gitCommit !== (await previewGitCommit(gitRoot)))
+          throw new ConflictException('PREVIEW_SOURCE_CHANGED');
+        const receipt = sourceReceipt(
+          snapshot.sha256,
+          sourceFingerprint,
+          selected.source.type === 'git_copy' ? selected.source.copyId : null,
+          gitCommit,
+        );
         this.db
           .insert(agentPreviews)
           .values({ ...row, sourceSha: snapshot.sha256 })
@@ -1614,6 +1736,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
           previewId,
           runId,
           sourceSha: snapshot.sha256,
+          receipt,
           profile: selected.prefix
             ? {
                 ...profile,
