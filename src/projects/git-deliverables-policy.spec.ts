@@ -575,7 +575,14 @@ describe('Mergeron-first Git projection policy', () => {
     const item = await deliverables.create('p', 'board', { title: 'Pending' });
     await upload(item.id, 'must remain in Mergeron');
     service.onModuleInit();
+    service.configure('p', {
+      boardId: 'board',
+      directory: 'livrables',
+      restrictedIds: [],
+      enabled: true,
+    });
     service.reconcile('p', { copyId: 'copy' });
+    expect((await service.status('p')).queued).toBe(true);
     copyViews[0].accessMode = 'read_only';
     await vi.waitFor(
       async () =>
