@@ -1914,9 +1914,9 @@ describe('preview receipt provenance', () => {
     expect(
       await f.service['verifySource'](grant, { ...receipt, schemaVersion: 1 }),
     ).toBe(false);
-    vi.mocked(previewSourceFingerprint).mockImplementationOnce(async () => {
+    vi.mocked(previewSourceFingerprint).mockImplementationOnce(() => {
       f.identity.active = false;
-      return receipt.sourceFingerprint;
+      return Promise.resolve(receipt.sourceFingerprint);
     });
     await expect(
       f.service['verifySource'](grant, { ...receipt, schemaVersion: 1 }),
