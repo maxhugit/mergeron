@@ -3,6 +3,7 @@ import {
   OnModuleDestroy,
   ServiceUnavailableException,
   Optional,
+  Logger,
 } from '@nestjs/common';
 import { LocalAgentsService } from '../local-agents/local-agents.service';
 import {
@@ -51,11 +52,13 @@ interface Lease {
   turnId?: string;
   completed?: boolean;
   processing: Promise<unknown>;
+  reportedFailures?: Set<string>;
 }
 
 /** Native MCP endpoint: independent loopback listener, no browser/API-key bypass. */
 @Injectable()
 export class InternalMcpService implements OnModuleDestroy {
+  private readonly logger = new Logger(InternalMcpService.name);
   private server?: Server;
   private starting?: Promise<string>;
   private origin?: string;
@@ -206,6 +209,79 @@ export class InternalMcpService implements OnModuleDestroy {
     if (lease) lease.revoked = true;
   }
 
+  /**
+   * Capture fresh human authority, then commit only after their input is accepted.
+   * Expiry can be renewed; a stopped/completed/replaced turn cannot be revived.
+   * Neither model activity nor compaction nor automatic approvals call this path.
+   */
+  prepareRenewal(threadId: string, turnId: string, writes?: boolean) {
+    const cap = this.threads.get(threadId);
+    const previous = cap?.lease;
+    const access = currentAccess();
+    if (
+      !cap ||
+      !previous ||
+      !access ||
+      access.identity.kind !== 'person' ||
+      previous.turnId !== turnId ||
+      previous.revoked ||
+      previous.completed
+    )
+      return null;
+    const authorize = () => {
+      const identity = access.identities.current(access.identity);
+      access.identities.requireActive(identity);
+      access.identities.requireAdministrator(identity);
+      access.identities.requireThread(identity, threadId);
+      access.identities.requireProject(identity, cap.projectId);
+      this.tools.assertProject(threadId, cap.projectId);
+      return identity;
+    };
+    authorize();
+    return {
+      commit: () => {
+        if (
+          this.threads.get(threadId) !== cap ||
+          cap.lease !== previous ||
+          previous.turnId !== turnId ||
+          previous.revoked ||
+          previous.completed
+        )
+          return;
+        const identity = authorize();
+        const nextWrites = previous.writes && writes !== false;
+        const samePerson =
+          previous.access.identity.kind === 'person' &&
+          previous.access.identity.personId === identity.personId &&
+          previous.access.identity.impersonation?.sessionId ===
+            identity.impersonation?.sessionId;
+        if (
+          samePerson &&
+          Date.now() <= previous.expiresAt &&
+          nextWrites === previous.writes
+        ) {
+          // A still-valid operation keeps its original authority. Fresh input
+          // must not cancel an in-flight call by the same person unnecessarily.
+          previous.expiresAt = Date.now() + 3600000;
+          return;
+        }
+        previous.revoked = true;
+        cap.lease = {
+          access: { ...access, identity },
+          // A running turn cannot gain filesystem rights from edited preferences.
+          writes: nextWrites,
+          expiresAt: Date.now() + 3600000,
+          calls: previous.calls,
+          revoked: false,
+          turnId,
+          // Keep serialization with uncertain/in-flight operations. Their captured
+          // lease is revoked; they must never resume under the new person's rights.
+          processing: previous.processing,
+        };
+      },
+    };
+  }
+
   private async execute(
     cap: Capability,
     name: string,
@@ -216,17 +292,39 @@ export class InternalMcpService implements OnModuleDestroy {
     const tool = resolveInternalMcpTool(name);
     if (!tool) throw new Error('UNKNOWN_TOOL');
     const check = () => {
-      if (
-        !cap.threadId ||
-        !lease ||
-        !lease.turnId ||
-        lease.completed ||
-        lease.revoked ||
-        cap.lease !== lease ||
-        Date.now() > lease.expiresAt ||
-        signal.aborted
-      )
+      const reason =
+        !cap.threadId || !lease || !lease.turnId
+          ? 'unbound'
+          : lease.completed
+            ? 'completed'
+            : cap.lease !== lease
+              ? 'replaced'
+              : lease.revoked
+                ? 'revoked'
+                : Date.now() > lease.expiresAt
+                  ? 'expired'
+                  : signal.aborted
+                    ? 'cancelled'
+                    : null;
+      if (reason) {
+        // Safe metadata only: never arguments, commands, tokens or SSH details.
+        if (!lease?.reportedFailures?.has(reason)) {
+          lease?.reportedFailures?.add(reason);
+          if (lease && !lease.reportedFailures)
+            lease.reportedFailures = new Set([reason]);
+          this.logger.warn(
+            {
+              threadId: cap.threadId,
+              projectId: cap.projectId,
+              turnId: lease?.turnId,
+              reason,
+            },
+            'Internal MCP turn unavailable',
+          );
+        }
         throw new Error('NO_ACTIVE_TURN');
+      }
+      if (!lease || !cap.threadId) throw new Error('NO_ACTIVE_TURN');
       const identity = lease.access.identities.current(lease.access.identity);
       lease.access.identities.requireActive(identity);
       lease.access.identities.requireThread(identity, cap.threadId);
@@ -419,7 +517,10 @@ export class InternalMcpService implements OnModuleDestroy {
                   text: JSON.stringify({
                     code,
                     message:
-                      'Check project access, configured connection, manager, arguments and observed state. For any mutation retry keep the SAME requestId and payload. An unknown outcome may already have succeeded: inspect local and remote state and never automatically retry with a new ID. Never claim unconfirmed success.',
+                      (code === 'NO_ACTIVE_TURN'
+                        ? 'The authenticated turn context is expired or unavailable. Fresh user input or a human approval can renew the same active turn; a stopped or completed turn requires a new turn. Do not retry automatically. '
+                        : 'Check project access, configured connection, manager, arguments and observed state. ') +
+                      'For any mutation retry keep the SAME requestId and payload. An unknown outcome may already have succeeded: inspect local and remote state and never automatically retry with a new ID. Never claim unconfirmed success.',
                   }),
                 },
               ],

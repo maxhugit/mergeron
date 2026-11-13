@@ -8,6 +8,7 @@ import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletio
 import { CatalogAdmissionService } from '../codex/catalog/catalog-admission.service';
 import { PendingApprovalsService } from './pending-approvals.service';
 import { createRequestManager } from './request-owner.testing';
+import type { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { executionTurn } from '../threads/thread-execution.testing';
 import {
   permissionApprovalFixture,
@@ -34,12 +35,15 @@ function fixture() {
   const preferences = new ThreadExecutionPreferencesService(db.db);
   const deletion = new ThreadDeletionRegistryService();
   const catalog = new CatalogAdmissionService();
+  const renewal = { commit: vi.fn() };
+  const mcp = { prepareRenewal: vi.fn(() => renewal) };
   const service = new PendingApprovalsService(
     db.db,
     transport.manager,
     deletion,
     catalog,
     preferences,
+    mcp as unknown as InternalMcpService,
   );
   service.onModuleInit();
   const select = (mode: 'automatic' | 'manual') => {
@@ -72,6 +76,8 @@ function fixture() {
     deletion,
     catalog,
     service,
+    mcp,
+    renewal,
     select,
     start,
     close() {
@@ -104,6 +110,7 @@ it('automatically accepts only the selected agent turn and persists attribution 
       resolvedBy: 'automatic:agent-policy',
     });
     expect(admitted).not.toHaveBeenCalled();
+    expect(f.mcp.prepareRenewal).not.toHaveBeenCalled();
     f.transport.receive(request());
     expect(f.transport.wire).toHaveBeenCalledTimes(1);
     f.start('b');
@@ -114,6 +121,54 @@ it('automatically accepts only the selected agent turn and persists attribution 
       '2',
       '3',
     ]);
+  } finally {
+    f.close();
+  }
+});
+
+it('renews only a validated positive human decision, after durable submission and before transmission', () => {
+  const f = fixture();
+  try {
+    f.start();
+    f.transport.receive(request());
+    f.service.respondToRequest('1', f.service.listPending()[0].instanceId, {
+      action: 'decline',
+      content: null,
+    });
+    expect(f.mcp.prepareRenewal).not.toHaveBeenCalled();
+    f.transport.receive(request(2));
+    const row = f.service.listPending()[0];
+    expect(() =>
+      f.service.respondToRequest('2', row.instanceId, {
+        action: 'accept',
+        content: { unexpected: true },
+      }),
+    ).toThrow();
+    expect(f.mcp.prepareRenewal).not.toHaveBeenCalled();
+    f.renewal.commit.mockImplementation(() => {
+      expect(
+        f.db
+          .select()
+          .from(pendingServerRequests)
+          .where(eq(pendingServerRequests.instanceId, row.instanceId))
+          .get()?.status,
+      ).toBe('submitted');
+      expect(f.transport.wire).toHaveBeenCalledTimes(1);
+    });
+    f.service.respondToRequest('2', row.instanceId, {
+      action: 'accept',
+      content: {},
+    });
+    expect(f.mcp.prepareRenewal).toHaveBeenCalledExactlyOnceWith('a', 'turn');
+    expect(f.renewal.commit).toHaveBeenCalledTimes(1);
+    expect(f.transport.wire).toHaveBeenCalledTimes(2);
+    expect(() =>
+      f.service.respondToRequest('2', row.instanceId, {
+        action: 'accept',
+        content: {},
+      }),
+    ).toThrow();
+    expect(f.mcp.prepareRenewal).toHaveBeenCalledTimes(1);
   } finally {
     f.close();
   }

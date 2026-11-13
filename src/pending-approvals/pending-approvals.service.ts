@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ThreadExecutionPreferencesService } from '../threads/thread-execution-preferences.service';
+import { InternalMcpService } from '../internal-mcp/internal-mcp.service';
 import { automaticToolApproval } from './automatic-tool-approval';
 import { Subject } from 'rxjs';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -72,6 +73,7 @@ export class PendingApprovalsService implements OnModuleInit {
     private readonly catalogAdmission: CatalogAdmissionService,
     @Optional()
     private readonly preferences?: ThreadExecutionPreferencesService,
+    @Optional() private readonly internalMcp?: InternalMcpService,
   ) {
     this.codexManager.setServerRequestHandler((owned) => {
       if (!this.initialized) return false;
@@ -198,7 +200,7 @@ export class PendingApprovalsService implements OnModuleInit {
         // Reuse the same immutable identity, durable-before-send transaction,
         // catalog gate and connection-bound response path as a human decision.
         try {
-          return this.respondToRequest(
+          return this.submitResponse(
             row.requestId,
             row.instanceId,
             automatic,
@@ -274,6 +276,16 @@ export class PendingApprovalsService implements OnModuleInit {
     result: unknown,
     clientId?: string,
   ): PendingServerRequestDto {
+    return this.submitResponse(requestId, instanceId, result, clientId, true);
+  }
+
+  private submitResponse(
+    requestId: string,
+    instanceId: unknown,
+    result: unknown,
+    clientId?: string,
+    humanInput = false,
+  ): PendingServerRequestDto {
     if (!nonempty(instanceId))
       throw BusinessException.badRequest(
         ErrorCode.approvals.instanceRequired,
@@ -330,6 +342,18 @@ export class PendingApprovalsService implements OnModuleInit {
         ErrorCode.approvals.serverNotConnected,
         'The original server request is no longer connected',
       );
+    const response = record(encoded);
+    const positive =
+      response?.action === 'accept' ||
+      !!response?.answers ||
+      (response?.decision !== undefined &&
+        response.decision !== 'decline' &&
+        response.decision !== 'cancel') ||
+      Object.keys(record(response?.permissions) ?? {}).length > 0;
+    const renewal =
+      humanInput && positive && row.turnId
+        ? this.internalMcp?.prepareRenewal(row.threadId, row.turnId)
+        : null;
     const now = Date.now();
     // This autocommit is deliberately complete before any stdio bytes are sent.
     const update = this.db
@@ -352,6 +376,9 @@ export class PendingApprovalsService implements OnModuleInit {
         'Pending request was already handled',
       );
     try {
+      // A durable human decision renews authority before Core can dispatch its
+      // approved call. Automatic policies and negative decisions never renew it.
+      renewal?.commit();
       owner.respond(encoded);
     } catch {
       // A transport exception cannot prove that zero bytes reached app-server.
