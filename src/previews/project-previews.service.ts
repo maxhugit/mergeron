@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   ConflictException,
   NotFoundException,
+  HttpException,
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -489,12 +490,9 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   }
   private effectiveProfile(projectId: string, agentId: string) {
     const base = this.baseProfile(projectId, agentId);
-    const selection = this.sourceSelection(agentId);
-    if (selection && selection.projectId !== projectId)
-      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
     return {
       ...base,
-      revision: base.revision + (selection ? ':' + selection.revision : ''),
+      revision: this.effectiveRevision(projectId, agentId, base.revision),
     };
   }
   private resolveSource(
@@ -750,12 +748,19 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       const instance = this.row(scope.agentId);
       if (instance && instance.projectId !== projectId)
         throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
-      if (
-        instance &&
-        instance.projectId === projectId &&
-        instance.state !== 'stopped'
-      )
-        throw new ConflictException('PREVIEW_STOP_BEFORE_PREPARE');
+      if (instance && instance.state !== 'stopped') {
+        const observed = await this.allowMissing(() =>
+          this.manager.request('status', { runId: instance.runId }),
+        );
+        if (
+          observed &&
+          (observed.state !== 'stopped' ||
+            observed.runId !== instance.runId ||
+            observed.projectId !== projectId ||
+            observed.agentId !== scope.agentId)
+        )
+          throw new ConflictException('PREVIEW_STOP_BEFORE_PREPARE');
+      }
       const capabilities = await this.manager.request('capabilities', {}, 1500);
       assertActive();
       if (this.scope(projectId, threadId).agentId !== scope.agentId)
@@ -894,6 +899,163 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       .run();
     return { profile: contract.safeProfile(profile), revision };
   }
+  /** Only an explicit response from the Manager proves absence. Transport
+   * failures, identity mismatches and an unknown outcome must remain blocking. */
+  private missingRun(error: unknown) {
+    return (
+      error instanceof HttpException &&
+      error.getStatus() === 409 &&
+      error.getResponse() === 'PREVIEW_NOT_FOUND'
+    );
+  }
+  private async allowMissing<T>(request: () => Promise<T>): Promise<T | null> {
+    try {
+      return await request();
+    } catch (error) {
+      if (this.missingRun(error)) return null;
+      throw error;
+    }
+  }
+  preparedAgents(projectId: string) {
+    this.scope(projectId);
+    requireExecutionAccess();
+    const seen = new Set<string>();
+    return {
+      agents: this.db
+        .select()
+        .from(projectAgentThreads)
+        .where(eq(projectAgentThreads.projectId, projectId))
+        .all()
+        .filter((agent) => {
+          if (agent.projectId !== projectId || agent.archivedAt) return false;
+          try {
+            this.scope(projectId, agent.threadId);
+          } catch {
+            return false;
+          }
+          const id = workAgentId(this.db, agent.threadId);
+          if (seen.has(id) || !this.agentRecipe(projectId, id)) return false;
+          seen.add(id);
+          return true;
+        })
+        .map((agent) => ({ threadId: agent.threadId })),
+    };
+  }
+  launchConfiguration(projectId: string, threadId: string) {
+    const scope = this.scope(projectId, threadId);
+    requireExecutionAccess();
+    const policy = this.stored(projectId);
+    if (!policy) throw new ConflictException('PREVIEW_CONFIGURATION_REQUIRED');
+    const approved = this.decrypt(policy.encryptedProfile, projectId);
+    const stored = this.agentRecipe(projectId, scope.agentId);
+    // A stale recipe remains inspectable/editable after a policy change, but
+    // cannot launch until it has been saved against the current policy.
+    const recipe =
+      approved.agentManaged && stored
+        ? contract.agentRecipe(
+            this.decryptValue(
+              stored.encryptedRecipe,
+              this.recipeBinding(projectId, scope.agentId),
+            ),
+          )
+        : null;
+    const profile = approved.agentManaged
+      ? recipe
+        ? contract.profile({
+            ...recipe,
+            enabled: approved.enabled,
+            memoryMb: approved.memoryMb,
+            cpus: approved.cpus,
+            lifetimeMinutes: approved.lifetimeMinutes,
+          })
+        : null
+      : approved;
+    return {
+      profile: profile ? contract.safeProfile(profile) : null,
+      policyRevision: policy.revision,
+      recipeRevision: stored?.revision ?? null,
+      revision: profile
+        ? this.effectiveRevision(
+            projectId,
+            scope.agentId,
+            policy.revision,
+            approved.agentManaged ? stored?.revision : undefined,
+          )
+        : null,
+      agentManaged: approved.agentManaged,
+      stale:
+        approved.agentManaged && stored?.policyRevision !== policy.revision,
+      ...this.configurationSource(projectId, threadId),
+    };
+  }
+  private configurationSource(projectId: string, threadId: string) {
+    try {
+      return {
+        sourcePath: this.resolveSource(projectId, threadId).path,
+        sourceError: null,
+      };
+    } catch {
+      return { sourcePath: null, sourceError: 'PREVIEW_SOURCE_REQUIRED' };
+    }
+  }
+  private effectiveRevision(
+    projectId: string,
+    agentId: string,
+    policy: string,
+    recipe?: string,
+  ) {
+    const selection = this.sourceSelection(agentId);
+    if (selection && selection.projectId !== projectId)
+      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
+    return (
+      policy +
+      (recipe ? ':' + recipe : '') +
+      (selection ? ':' + selection.revision : '')
+    );
+  }
+  saveAgentRecipe(
+    projectId: string,
+    threadId: string,
+    input: Record<string, unknown>,
+  ) {
+    const scope = this.scope(projectId, threadId);
+    requireExecutionAccess();
+    const stored = this.agentRecipe(projectId, scope.agentId);
+    const old = stored
+      ? contract.agentRecipe(
+          this.decryptValue(
+            stored.encryptedRecipe,
+            this.recipeBinding(projectId, scope.agentId),
+          ),
+        )
+      : null;
+    // Resolve masked values exclusively from this agent's recipe, never the
+    // manual project profile or another agent. Validation still runs in prepare.
+    const recipe = structuredClone(input.recipe) as Record<string, unknown>;
+    const restore = (env: unknown, previous?: Record<string, string>) => {
+      if (!env || typeof env !== 'object' || Array.isArray(env)) return;
+      for (const [key, value] of Object.entries(env))
+        if (value === '[stored]') {
+          if (!previous || !(key in previous))
+            throw new BadRequestException('PREVIEW_SECRET_MISSING');
+          (env as Record<string, unknown>)[key] = previous[key];
+        }
+    };
+    if (recipe && typeof recipe === 'object') {
+      restore(recipe.env, old?.env);
+      if (Array.isArray(recipe.services))
+        for (const service of recipe.services as unknown[]) {
+          if (service && typeof service === 'object') {
+            const item = service as Record<string, unknown>;
+            restore(
+              item.env,
+              old?.services.find((s) => s.name === item.name)?.env,
+            );
+          }
+        }
+    }
+    return this.prepare(projectId, threadId, { ...input, recipe }, () => {});
+  }
   private row(agentId: string) {
     return this.db
       .select()
@@ -929,13 +1091,38 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       this.db
         .update(agentPreviews)
         .set({ state: String(observed.state) })
-        .where(eq(agentPreviews.agentId, row.agentId))
+        .where(
+          and(
+            eq(agentPreviews.agentId, row.agentId),
+            eq(agentPreviews.runId, row.runId),
+          ),
+        )
         .run();
-    } catch {
-      observed = {
-        state: row.state,
-        error: row.error ?? 'PREVIEW_MANAGER_UNAVAILABLE',
-      };
+    } catch (error) {
+      if (this.missingRun(error)) {
+        // Reconcile only the observed run. A late read must not mark a newly
+        // created replacement stopped. Retain the recipe, source and history.
+        this.db
+          .update(agentPreviews)
+          .set({ state: 'stopped' })
+          .where(
+            and(
+              eq(agentPreviews.agentId, row.agentId),
+              eq(agentPreviews.runId, row.runId),
+            ),
+          )
+          .run();
+      }
+      observed = this.missingRun(error)
+        ? { state: 'stopped', error: 'PREVIEW_NOT_FOUND' }
+        : {
+            state: row.state,
+            error:
+              error instanceof Error &&
+              error.message === 'PREVIEW_IDENTITY_CHANGED'
+                ? 'PREVIEW_IDENTITY_CHANGED'
+                : 'PREVIEW_MANAGER_UNAVAILABLE',
+          };
     }
     return {
       defaultLifetimeMinutes,
@@ -1259,6 +1446,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     refresh = false,
     assertActive: () => void = () => {},
     lifetimeMinutes?: unknown,
+    expectedRevision?: unknown,
   ) {
     const scope = this.scope(projectId, threadId);
     requireExecutionAccess();
@@ -1280,6 +1468,11 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     try {
       const recipe = this.effectiveProfile(projectId, scope.agentId);
       const profile = { ...recipe.profile };
+      if (
+        expectedRevision !== undefined &&
+        expectedRevision !== recipe.revision
+      )
+        throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
       if (lifetimeMinutes !== undefined) {
         try {
           profile.lifetimeMinutes = contract.lifetime(lifetimeMinutes);
@@ -1319,20 +1512,31 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         return this.status(projectId, threadId);
       }
       if (existing && !refresh) {
-        const status = await this.manager.request('status', {
-          runId: existing.runId,
-        });
+        const status = await this.allowMissing(() =>
+          this.manager.request('status', {
+            runId: existing.runId,
+          }),
+        );
         check();
-        if (['running', 'starting'].includes(String(status.state))) {
+        if (
+          status &&
+          (status.runId !== existing.runId ||
+            status.projectId !== projectId ||
+            status.agentId !== scope.agentId)
+        )
+          throw new ConflictException('PREVIEW_IDENTITY_CHANGED');
+        if (status && ['running', 'starting'].includes(String(status.state))) {
           if (existing.profileRevision !== recipe.revision)
             throw new ConflictException('PREVIEW_CONFIGURATION_CHANGED');
           return this.status(projectId, threadId);
         }
-        if (status.state !== 'stopped')
+        if (status && status.state !== 'stopped')
           throw new ConflictException('PREVIEW_RECREATE_REQUIRED');
       }
       if (existing && refresh)
-        await this.manager.request('stop', { runId: existing.runId });
+        await this.allowMissing(() =>
+          this.manager.request('stop', { runId: existing.runId }),
+        );
       check();
       const selected = this.resolveSource(projectId, threadId);
       const source = selected.path;
@@ -1551,7 +1755,9 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       if (!row) return { preview: null };
       if (row.projectId !== projectId)
         throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
-      await this.manager.request('stop', { runId: row.runId });
+      await this.allowMissing(() =>
+        this.manager.request('stop', { runId: row.runId }),
+      );
       this.pendingSources.delete(scope.agentId);
       return this.status(projectId, threadId);
     } finally {

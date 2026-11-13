@@ -13,6 +13,7 @@ import {
 } from '@/components/settings/settings-panel';
 import { ProjectPanelNavigation } from './project-panel-navigation';
 import { PreviewLifetimeSelect } from './preview-lifetime-select';
+import { PreparedPreviewRecipes } from './preview-recipe';
 import { PreviewPrerequisites } from './preview-prerequisites';
 
 interface Settings {
@@ -192,6 +193,9 @@ function Editor({
                 {t('agentLimitsHelp')}
               </p>
             </fieldset>
+          )}
+          {profile.agentManaged && (
+            <PreparedPreviewRecipes projectId={projectId} disabled={dirty} />
           )}
           <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
             {!profile.agentManaged && (
