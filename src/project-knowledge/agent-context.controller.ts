@@ -10,6 +10,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Header,
   Param,
   Patch,
   Post,
@@ -21,6 +22,7 @@ export class AgentContextController {
   constructor(private readonly context: AgentContextService) {}
 
   @ApiOkResponse({ type: AgentPreferencesDto })
+  @Header('Cache-Control', 'no-store')
   @Get('profile')
   profile() {
     return this.context.profile();
@@ -28,6 +30,7 @@ export class AgentContextController {
 
   @ApiOkResponse({ type: AgentPreferencesDto })
   @ApiBody({ type: AgentPreferencesDto })
+  @Header('Cache-Control', 'no-store')
   @Patch('profile')
   saveProfile(
     @Body()
@@ -41,6 +44,7 @@ export class AgentContextController {
   }
 
   @ApiOkResponse({ type: AgentContextStatusDto })
+  @Header('Cache-Control', 'no-store')
   @Get('agents/:threadId')
   status(@Param('threadId') threadId: string) {
     return this.context.status(threadId);
@@ -48,6 +52,7 @@ export class AgentContextController {
 
   @ApiOkResponse({ type: AgentContextStatusDto })
   @ApiBody({ type: AgentInstructionSourceInputDto })
+  @Header('Cache-Control', 'no-store')
   @Patch('agents/:threadId/source')
   associate(
     @Param('threadId') threadId: string,
@@ -57,6 +62,7 @@ export class AgentContextController {
   }
 
   @ApiOkResponse({ type: GitInstructionPreviewDto })
+  @Header('Cache-Control', 'no-store')
   @Get('agents/:threadId/preview')
   preview(@Param('threadId') threadId: string) {
     return this.context.preview(threadId);
@@ -64,6 +70,7 @@ export class AgentContextController {
 
   @ApiOkResponse({ type: AgentContextStatusDto })
   @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
   @Post('agents/:threadId/verify')
   async verify(@Param('threadId') threadId: string) {
     await this.context.prepare(threadId, 'manual');
