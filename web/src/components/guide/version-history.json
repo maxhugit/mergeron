@@ -1,5 +1,53 @@
 [
   {
+    "tag": "v0.8.2",
+    "date": "2026-11-13",
+    "highlights": {
+      "fr": [
+        "Connexions externes, emplacements, transferts et livrables Git réunis dans quatre onglets ; les copies Git se gèrent dans Emplacements.",
+        "Accès SSH, SFTP, FTPS et FTP utilisables par les agents sans déclarer de dossier distant, avec activation explicite et identifiants conservés sur le serveur.",
+        "Activité des fichiers et ouverture des images inspectées dans la conversation ; récupération des aperçus manquants, recettes actualisées et reprise des exports de documents vers Git."
+      ],
+      "en": [
+        "External connections, locations, transfers and Git deliverables organized into four tabs; Git copies are managed under Locations.",
+        "Agents can use SSH, SFTP, FTPS and FTP without declaring a remote folder, with explicit enablement and credentials retained on the server.",
+        "File activity and inspected image viewing in conversations; recovery of missing previews, refreshed recipes and resumed document exports to Git."
+      ]
+    }
+  },
+  {
+    "tag": "v0.8.1",
+    "date": "2026-11-11",
+    "highlights": {
+      "fr": [
+        "Suivi des mises à jour unifié et fiabilisé.",
+        "Aperçus reliés à une copie Git locale avec synchronisation à chaud.",
+        "Publication stable fiabilisée et réutilisation des tests source déjà validés sur le même commit."
+      ],
+      "en": [
+        "Unified, more reliable update tracking.",
+        "Previews connected to a local Git copy with hot synchronization.",
+        "More reliable stable publishing, reusing source tests already validated on the same commit."
+      ]
+    }
+  },
+  {
+    "tag": "v0.8.0",
+    "date": "2026-11-11",
+    "highlights": {
+      "fr": [
+        "Activités techniques regroupées dans la conversation, chronomètre des réponses et affichage adapté aux petits écrans.",
+        "Notifications centrées sur les événements nécessitant votre attention et reprise de la réponse de l’agent sous les relances et questions.",
+        "Synchronisation des livrables par document, correction des conflits depuis les versions et prérequis des aperçus mieux expliqués."
+      ],
+      "en": [
+        "Grouped technical activity in conversations, response timers and layouts adapted to smaller screens.",
+        "Notifications focused on events requiring attention, with agent responses resuming below follow-ups and questions.",
+        "Per-document deliverable synchronization, conflict resolution from versions and clearer preview prerequisites."
+      ]
+    }
+  },
+  {
     "tag": "v0.7.5",
     "date": "2026-11-09",
     "highlights": {
