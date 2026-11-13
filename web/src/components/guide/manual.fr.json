@@ -850,7 +850,7 @@
             "title": "Découvrir les connexions du projet avec MCP",
             "paragraphs": [
               "L’agent peut appeler project_connection_list pour découvrir les connexions configurées dans son projet : nom, protocole, activation, mode d’accès et copies lui appartenant. Les secrets restent côté serveur. Le contexte projet lui indique ces outils au prochain échange, y compris pour un agent existant.",
-              "project_git_read consulte GitHub avec les identifiants de la connexion : branches, fichiers, PR et checks. Il inspecte aussi l’état, les différences et les commits de sa propre copie locale. Les connexions SSH/SFTP/FTP/FTPS sont visibles dans l’inventaire, mais ne donnent pas d’exécution terminal par ce canal.",
+              "project_git_read consulte GitHub avec les identifiants de la connexion : branches, fichiers, PR et checks. Il inspecte aussi l’état, les différences et les commits de sa propre copie locale. Pour SSH/SFTP/FTPS/FTP, activez explicitement la disponibilité pour les agents dans Connexions externes. project_connection_manage utilise alors les identifiants côté serveur sans dossier associé : commandes SSH ou opérations de fichiers compatibles. Un tour administrateur modifiable, hors simulation, et l’approbation du transport sont requis ; les commandes SSH et les écritures exigent le mode lecture-écriture.",
               "Sur demande humaine explicite, project_git_publish peut pousser un commit déjà créé par HTTPS, sans forçage, puis créer une PR GitHub. L’agent doit relire local_status et fournir la branche, le SHA et l’empreinte observés. Aucun stage, commit, merge ou déploiement n’est implicite. Une copie propre à l’agent, un tour modifiable, les droits administrateur hors simulation et une connexion en lecture-écriture sont obligatoires ; les autres agents actifs bloquent la publication.",
               "Un requestId stable évite les doubles envois. Si le résultat est incertain, vérifier le distant avant toute nouvelle demande. Une capacité affichée n’est jamais une autorisation humaine. Paramètres → MCP interne présente les outils, paramètres et exemples réellement enregistrés."
             ]
@@ -1690,14 +1690,14 @@
           {
             "title": "Connexion ou fichiers locaux ?",
             "paragraphs": [
-              "Une connexion externe conserve ses paramètres et permet les vues et transferts compatibles avec son protocole. Son contenu reste distant tant qu’une opération explicite ne le copie pas dans un emplacement local du projet.",
-              "Les copies locales sont distinctes de leur source. Parcourir la connexion ou actualiser son affichage n’est pas un envoi de vos fichiers locaux vers le serveur distant."
+              "Dans Emplacements et connexions, les onglets sont Connexions externes, Emplacements, Transferts puis Livrables Git. Connexions externes conserve les accès GitHub/Git, SSH, SFTP, FTPS et FTP ; un accès distant peut être enregistré sans dossier associé.",
+              "Emplacements regroupe les dossiers locaux, les copies Git et les dossiers distants déclarés. Les actions sur les copies Git, leurs branches et leurs conversations sont disponibles ici. Plusieurs dossiers distants peuvent réutiliser une même connexion et ses identifiants."
             ]
           },
           {
             "title": "Préparer un transfert",
             "steps": [
-              "Configurez la connexion dans le projet, avec le protocole et les identifiants nécessaires, puis vérifiez son activation.",
+              "Dans Connexions externes, configurez et activez l’accès avec le protocole et les identifiants nécessaires. Pour une copie de fichiers, déclarez ensuite les dossiers utiles dans Emplacements et ouvrez Transferts.",
               "Sélectionnez la source et la destination de la copie ou du transfert proposé.",
               "Lisez l’aperçu, les règles de synchronisation et les conflits avant confirmation.",
               "Consultez le résultat et l’historique du transfert avant de relancer une opération en échec."

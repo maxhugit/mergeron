@@ -850,7 +850,7 @@
             "title": "Discover project connections with MCP",
             "paragraphs": [
               "The agent can call project_connection_list to discover connections configured in its project: name, protocol, enablement, access mode and its own copies. Credentials stay server-side. Project context advertises these tools on the next turn, including for existing agents.",
-              "project_git_read uses the connection’s credentials to read GitHub branches, files, PRs and checks. It also inspects status, diffs and commits in the agent’s own copy. SSH/SFTP/FTP/FTPS connections are listed but do not grant terminal execution through this channel.",
+              "project_git_read uses the connection’s credentials to read GitHub branches, files, PRs and checks, and inspect status, diffs and commits in the agent’s own copy. For SSH/SFTP/FTPS/FTP, explicitly enable agent availability under External connections. project_connection_manage then uses server-held credentials without an associated folder for SSH commands or supported file operations. A writable administrator turn without impersonation and transport approval are required; SSH commands and writes require read-write access.",
               "On an explicit human request, project_git_publish can push an existing commit over HTTPS without force, then create a GitHub PR. The agent must read local_status and provide the observed branch, SHA and fingerprint. No stage, commit, merge or deployment is implicit. The agent must own the copy, have a writable turn, administrator authority outside impersonation and a read-write connection; other running agents block publication.",
               "A stable requestId prevents duplicate dispatch. If the outcome is uncertain, inspect the remote state before requesting another operation. An available capability is never human authorization. Settings → Internal MCP shows the registered tools, parameters and examples."
             ]
@@ -1690,14 +1690,14 @@
           {
             "title": "Connection or local files?",
             "paragraphs": [
-              "A remote connection stores settings and offers protocol-specific views and transfers. Files remain remote until an explicit operation copies them into a project’s local location.",
-              "Local copies are distinct from their source. Browsing or refreshing a connection is not an upload of your local files."
+              "Locations and connections contains External connections, Locations, Transfers, then Git deliverables. External connections stores GitHub/Git, SSH, SFTP, FTPS and FTP access; remote access can be saved without an associated folder.",
+              "Locations groups local folders, Git copies and declared remote folders. Actions for Git copies, their branches and conversations are available here. Several remote folders can reuse the same connection and credentials."
             ]
           },
           {
             "title": "Prepare a transfer",
             "steps": [
-              "Configure and enable the project connection using the required protocol and credentials.",
+              "Under External connections, configure and enable access with the required protocol and credentials. For file copies, declare the required folders under Locations, then open Transfers.",
               "Choose the proposed copy or transfer source and destination.",
               "Review the preview, synchronization rules and conflicts before confirmation.",
               "Read the transfer result and history before repeating a failed operation."
