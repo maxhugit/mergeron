@@ -64,6 +64,7 @@ vi.mock('@/lib/project-integrations-queries', () => ({
 vi.mock('@/lib/projects-api', () => ({
   projectsQueryKey: ['projects'],
   projectsApi: async (path = '', init?: RequestInit) => {
+    if (path.endsWith('/test-environment/recipes')) return { agents: [] };
     const files = {
       'AGENTS.md': 'Instructions de contrôle.\n'.repeat(35),
       'CONNAISSANCES.md': 'Faits de contrôle.',

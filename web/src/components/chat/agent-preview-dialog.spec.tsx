@@ -13,7 +13,10 @@ import i18n, { i18nReady } from '@/i18n';
 
 const api = vi.hoisted(() => vi.fn());
 const session = vi.hoisted(() => ({ isAdministrator: true }));
-vi.mock('@/lib/projects-api', () => ({ projectsApi: api }));
+vi.mock('@/lib/projects-api', () => ({
+  projectsApi: api,
+  projectsQueryKey: ['projects'],
+}));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => session,
 }));

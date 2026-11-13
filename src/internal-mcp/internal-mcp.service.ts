@@ -395,6 +395,19 @@ export class InternalMcpService implements OnModuleDestroy {
                 'GIT_REMOTE_REJECTED',
                 'GIT_NETWORK_UNAVAILABLE',
                 'GIT_TLS_ERROR',
+                'PREVIEW_NOT_FOUND',
+                'PREVIEW_MANAGER_UNAVAILABLE',
+                'PREVIEW_MANAGER_TIMEOUT',
+                'PREVIEW_CONFIGURATION_CHANGED',
+                'PREVIEW_RECREATE_REQUIRED',
+                'PREVIEW_PREPARATION_REQUIRED',
+                'PREVIEW_STOP_BEFORE_PREPARE',
+                'PREVIEW_DEPLOYMENT_NOT_READY',
+                'PREVIEW_NOT_CONFIGURED',
+                'PREVIEW_BUSY',
+                'PREVIEW_SOURCE_REQUIRED',
+                'PREVIEW_SOURCE_CHANGED',
+                'PREVIEW_DISABLED',
               ].includes(error.message)
                 ? error.message
                 : 'ACCESS_DENIED_OR_CREATION_UNCONFIRMED';

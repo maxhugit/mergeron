@@ -154,5 +154,19 @@
     "title": "Diagnostic mémoire du conteneur sélectionné",
     "sample": "Charge totale : {{usageBytes}} / {{limitBytes}} Mio · Anonyme : {{anonymousBytes}} · Fichiers : {{fileBytes}} · Mémoire partagée : {{sharedBytes}} Mio",
     "explanation": "La charge totale inclut le tmpfs imputé au conteneur. Fichiers et mémoire partagée se recouvrent : ne pas les additionner. Le stockage des dépendances et caches est détaillé dans Stockage. Aucune limite n’est augmentée automatiquement."
-  }
+  },
+  "launchReview": "Commandes prévues avant démarrage",
+  "launchReviewHelp": "Vérifiez la recette enregistrée avant de lancer l’environnement de cet agent.",
+  "launchCommandsHelp": "Ces commandes seront exécutées dans l’environnement isolé. Les variables enregistrées restent masquées. Si la recette ou la source change, le lancement est refusé : rouvrez cette fenêtre pour relire la configuration.",
+  "confirmLaunch": "Confirmer le démarrage",
+  "noCommand": "Aucune commande",
+  "preparedRecipes": "Recettes préparées par les agents",
+  "preparedRecipesHelp": "Chaque agent conserve sa propre recette. Vous pouvez la consulter et la modifier ; les limites et les technologies autorisées du projet restent appliquées.",
+  "savePolicyFirst": "Enregistrez les réglages du projet avant de modifier une recette.",
+  "recipeMissing": "Aucune recette préparée. Demandez à un agent de préparer son environnement.",
+  "recipeStale": "Les règles du projet ont changé. Vérifiez et enregistrez cette recette avant le prochain lancement.",
+  "reviewRecipe": "Consulter et modifier",
+  "recipeEditHelp": "Arrêtez l’environnement avant de modifier sa recette. Les changements s’appliqueront au prochain démarrage ; ils ne modifient pas les fichiers du projet.",
+  "saveRecipe": "Enregistrer la recette",
+  "missingRun": "Cet ancien environnement n’existe plus. Sa configuration et vos fichiers sont conservés. Cliquez sur Démarrer pour le recréer."
 }

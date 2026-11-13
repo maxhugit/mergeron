@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import { PreviewStorageMeters } from '../projects/preview-storage-meters';
+import { PreviewLaunchDialog } from '../projects/preview-recipe';
 import { PreviewPrerequisites } from '../projects/preview-prerequisites';
 import type { AgentPreview } from './agent-preview-dialog';
 import {
@@ -62,6 +63,9 @@ export function AgentPreviewPanel({
   const [terminalBinding, setTerminalBinding] = useState('');
   const [duration, setDuration] = useState<number | null | undefined>();
   const [notice, setNotice] = useState('');
+  const [launchAction, setLaunchAction] = useState<'start' | 'refresh' | null>(
+    null,
+  );
   const prefix = `/${projectId}/agents/${threadId}/preview`,
     key = ['agent-preview', projectId, threadId];
   const query = useQuery({
@@ -133,14 +137,29 @@ export function AgentPreviewPanel({
         : preview.lifetimeMinutes
       : duration;
   const operation = useMutation({
-    mutationFn: (action: 'start' | 'stop' | 'refresh' | 'sync') =>
-      projectsApi(prefix + '/' + action, {
+    mutationFn: (
+      input:
+        | 'start'
+        | 'stop'
+        | 'refresh'
+        | 'sync'
+        | { action: 'start' | 'refresh'; revision: string },
+    ) => {
+      const action = typeof input === 'string' ? input : input.action;
+      return projectsApi(prefix + '/' + action, {
         method: 'POST',
         body: JSON.stringify({
           requestId: crypto.randomUUID(),
           lifetimeMinutes: chosenDuration,
+          ...(['start', 'refresh'].includes(action)
+            ? {
+                expectedRevision:
+                  typeof input === 'string' ? undefined : input.revision,
+              }
+            : {}),
         }),
-      }),
+      });
+    },
     onSettled: () => client.invalidateQueries({ queryKey: key }),
   });
   const lifetime = useMutation({
@@ -225,6 +244,20 @@ export function AgentPreviewPanel({
       aria-label={t('title')}
       className="@container flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
     >
+      <PreviewLaunchDialog
+        projectId={projectId}
+        threadId={threadId}
+        action={launchAction}
+        busy={operation.isPending}
+        onClose={() => setLaunchAction(null)}
+        onConfirm={(revision) => {
+          if (launchAction) {
+            setMode('logs');
+            operation.mutate({ action: launchAction, revision });
+            setLaunchAction(null);
+          }
+        }}
+      />
       {session.isAdministrator && prerequisites.data?.sources && (
         <PreviewSourceSelect
           key={projectId + threadId + prerequisites.data.sources.revision}
@@ -271,13 +304,11 @@ export function AgentPreviewPanel({
               onClick={() => {
                 if (running && !window.confirm(t('stopConfirm'))) return;
                 setMode('logs');
-                operation.mutate(
-                  running
-                    ? 'stop'
-                    : preview?.state === 'failed'
-                      ? 'refresh'
-                      : 'start',
-                );
+                if (running) operation.mutate('stop');
+                else
+                  setLaunchAction(
+                    preview?.state === 'failed' ? 'refresh' : 'start',
+                  );
               }}
             >
               {running ? (
@@ -292,10 +323,7 @@ export function AgentPreviewPanel({
               variant="outline"
               disabled={busy || !preview || !launchReady}
               onClick={() => {
-                if (window.confirm(t('recreateConfirm'))) {
-                  setMode('logs');
-                  operation.mutate('refresh');
-                }
+                setLaunchAction('refresh');
               }}
             >
               <RotateCw className="size-4" />
@@ -369,7 +397,9 @@ export function AgentPreviewPanel({
             lifetime.error?.message ||
             (preview?.error === 'PREVIEW_STARTUP_TIMEOUT'
               ? t('startupTimeout')
-              : preview?.error) ||
+              : preview?.error === 'PREVIEW_NOT_FOUND'
+                ? t('missingRun')
+                : preview?.error) ||
             t('unavailable')}
         </p>
       )}

@@ -25,6 +25,24 @@ export class PreviewsController {
   ) {
     return this.previews.saveSettings(p, input);
   }
+  @Get('test-environment/recipes') preparedAgents(
+    @Param('projectId') p: string,
+  ) {
+    return this.previews.preparedAgents(p);
+  }
+  @Get('agents/:threadId/preview/recipe') recipe(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+  ) {
+    return this.previews.launchConfiguration(p, t);
+  }
+  @Put('agents/:threadId/preview/recipe') saveRecipe(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+    @Body() input: Record<string, unknown>,
+  ) {
+    return this.previews.saveAgentRecipe(p, t, input);
+  }
   @Get('agents/:threadId/preview') status(
     @Param('projectId') p: string,
     @Param('threadId') t: string,
@@ -46,7 +64,12 @@ export class PreviewsController {
   @Post('agents/:threadId/preview/start') start(
     @Param('projectId') p: string,
     @Param('threadId') t: string,
-    @Body() input: { requestId?: unknown; lifetimeMinutes?: unknown },
+    @Body()
+    input: {
+      requestId?: unknown;
+      lifetimeMinutes?: unknown;
+      expectedRevision?: unknown;
+    },
   ) {
     return this.previews.start(
       p,
@@ -55,6 +78,7 @@ export class PreviewsController {
       false,
       () => {},
       input.lifetimeMinutes,
+      input.expectedRevision,
     );
   }
   @Get('agents/:threadId/preview/containers') containers(
@@ -80,7 +104,12 @@ export class PreviewsController {
   @Post('agents/:threadId/preview/refresh') refresh(
     @Param('projectId') p: string,
     @Param('threadId') t: string,
-    @Body() input: { requestId?: unknown; lifetimeMinutes?: unknown },
+    @Body()
+    input: {
+      requestId?: unknown;
+      lifetimeMinutes?: unknown;
+      expectedRevision?: unknown;
+    },
   ) {
     return this.previews.start(
       p,
@@ -89,12 +118,17 @@ export class PreviewsController {
       true,
       () => {},
       input.lifetimeMinutes,
+      input.expectedRevision,
     );
   }
   @Put('agents/:threadId/preview/lifetime') lifetime(
     @Param('projectId') p: string,
     @Param('threadId') t: string,
-    @Body() input: { requestId?: unknown; lifetimeMinutes?: unknown },
+    @Body()
+    input: {
+      requestId?: unknown;
+      lifetimeMinutes?: unknown;
+    },
   ) {
     return this.previews.setLifetime(p, t, input);
   }

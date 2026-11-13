@@ -154,5 +154,19 @@
     "title": "Selected container memory diagnostics",
     "sample": "Total charge: {{usageBytes}} / {{limitBytes}} MiB · Anonymous: {{anonymousBytes}} · Files: {{fileBytes}} · Shared: {{sharedBytes}} MiB",
     "explanation": "Total charge includes tmpfs charged to this container. File and shared memory overlap: do not add them. Dependency and cache storage is detailed under Storage. No limit is increased automatically."
-  }
+  },
+  "launchReview": "Commands planned before startup",
+  "launchReviewHelp": "Review the saved recipe before starting this agent’s environment.",
+  "launchCommandsHelp": "These commands run in the isolated environment. Stored variables remain masked. Startup is rejected if the recipe or source changes: reopen this dialog to review the configuration.",
+  "confirmLaunch": "Confirm startup",
+  "noCommand": "No command",
+  "preparedRecipes": "Recipes prepared by agents",
+  "preparedRecipesHelp": "Each agent keeps its own recipe. You can review and edit it; the project’s resource limits and approved runtimes still apply.",
+  "savePolicyFirst": "Save the project settings before editing a recipe.",
+  "recipeMissing": "No prepared recipe. Ask an agent to prepare its environment.",
+  "recipeStale": "The project policy has changed. Review and save this recipe before the next startup.",
+  "reviewRecipe": "Review and edit",
+  "recipeEditHelp": "Stop the environment before editing its recipe. Changes apply at the next startup and do not modify project files.",
+  "saveRecipe": "Save recipe",
+  "missingRun": "This previous environment no longer exists. Its configuration and your files are retained. Click Start to recreate it."
 }

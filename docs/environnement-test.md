@@ -81,6 +81,29 @@ de production dans ce dossier.
 
 ## Recette de prévisualisation Mergeron
 
+Dans les paramètres du projet, onglet **Environnement de test → Exécution**,
+la section **Recettes préparées par les agents** reste accessible lorsque la
+préparation par les agents est activée. **Consulter et modifier** ouvre la recette
+d'un agent : runtime, dossier relatif, installation, compilation, démarrage,
+port, page, mode de mise à jour et services de test. Arrêter l'environnement avant
+de modifier sa recette. Les limites du projet et les technologies autorisées
+restent imposées ; les variables masquées `[stored]` conservent leur valeur pour
+cet agent uniquement. Les secrets du profil manuel ne sont jamais hérités.
+
+**Démarrer** et **Recréer** affichent les commandes enregistrées, y compris celles
+des services, avant confirmation. Si la recette ou la sélection de source change
+pendant cette lecture, le serveur refuse le lancement : rouvrir la fenêtre pour
+relire la nouvelle configuration. Un changement des règles du projet nécessite
+également de vérifier et enregistrer de nouveau la recette de l'agent.
+
+Si le Manager confirme `PREVIEW_NOT_FOUND`, l'ancien environnement n'existe plus.
+Mergeron conserve sa configuration et ses fichiers, affiche un état arrêté et
+permet une nouvelle création à la demande avec un nouvel identifiant de requête.
+Une même requête reste idempotente. Une panne réseau ou une réponse ambiguë
+ne prouve pas l'absence : Mergeron refuse alors de créer un environnement de
+remplacement et signale l'indisponibilité du Manager. Aucun nettoyage de données
+réelles n'est nécessaire pour réparer une référence périmée.
+
 Préparer la recette par les outils MCP officiels avec les révisions observées :
 
 | Champ      | Valeur                                     |

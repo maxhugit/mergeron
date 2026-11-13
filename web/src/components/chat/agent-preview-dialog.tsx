@@ -15,6 +15,7 @@ import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import type { PreviewStorageStatus } from '../../../../runtime/preview-storage.cjs';
 import { PreviewStorageSummary } from '../projects/preview-storage-summary';
+import { PreviewLaunchDialog } from '../projects/preview-recipe';
 import { PreviewLifetimeSelect } from '../projects/preview-lifetime-select';
 
 export interface AgentPreview {
@@ -53,6 +54,9 @@ export function AgentPreviewDialog({
     undefined,
   );
   const addressId = useId();
+  const [launchAction, setLaunchAction] = useState<'start' | 'refresh' | null>(
+    null,
+  );
   const [copyResult, setCopyResult] = useState<{
     url: string;
     status: 'copied' | 'failed';
@@ -76,16 +80,28 @@ export function AgentPreviewDialog({
     refetchInterval: showLogs ? 5000 : false,
   });
   const mutation = useMutation({
-    mutationFn: (operation: 'start' | 'sync' | 'refresh' | 'stop') =>
-      projectsApi(prefix + '/' + operation, {
+    mutationFn: (
+      input:
+        | 'start'
+        | 'sync'
+        | 'refresh'
+        | 'stop'
+        | { action: 'start' | 'refresh'; revision: string },
+    ) => {
+      const operation = typeof input === 'string' ? input : input.action;
+      return projectsApi(prefix + '/' + operation, {
         method: 'POST',
         body: JSON.stringify({
           requestId: crypto.randomUUID(),
+          ...(typeof input === 'object'
+            ? { expectedRevision: input.revision }
+            : {}),
           ...(['start', 'refresh'].includes(operation)
             ? { lifetimeMinutes: selectedDuration }
             : {}),
         }),
-      }),
+      });
+    },
     onSettled: () => client.invalidateQueries({ queryKey: key }),
   });
   const preview = query.data?.preview,
@@ -164,131 +180,191 @@ export function AgentPreviewDialog({
     }
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="min-w-0 max-h-[85dvh] grid-cols-1 overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription>{t('description')}</DialogDescription>
-        </DialogHeader>
-        <p role="status" className="text-sm">
-          {t('state')}:{' '}
-          {query.isPending
-            ? t('loading')
-            : preview
-              ? preview.state === 'running' && !preview.ready
-                ? t('waitingForHttp')
-                : ({
-                    starting: t('states.starting'),
-                    running: t('states.running'),
-                    stopping: t('states.stopping'),
-                    stopped: t('states.stopped'),
-                    failed: t('states.failed'),
-                  }[preview.state] ?? t('unavailable'))
-              : t('notStarted')}
-        </p>
-        {query.isError && <p role="alert">{t('unavailable')}</p>}
-        {address && (
-          <section
-            aria-labelledby={addressId + '-label'}
-            className="min-w-0 space-y-2 rounded-lg border bg-muted/30 p-3"
-          >
-            <label
-              id={addressId + '-label'}
-              htmlFor={addressId}
-              className="block text-sm font-medium"
+    <>
+      <PreviewLaunchDialog
+        projectId={projectId}
+        threadId={threadId}
+        action={launchAction}
+        busy={mutation.isPending}
+        onClose={() => setLaunchAction(null)}
+        onConfirm={(revision) => {
+          if (launchAction) {
+            mutation.mutate({ action: launchAction, revision });
+            setLaunchAction(null);
+          }
+        }}
+      />
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="min-w-0 max-h-[85dvh] grid-cols-1 overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t('title')}</DialogTitle>
+            <DialogDescription>{t('description')}</DialogDescription>
+          </DialogHeader>
+          <p role="status" className="text-sm">
+            {t('state')}:{' '}
+            {query.isPending
+              ? t('loading')
+              : preview
+                ? preview.state === 'running' && !preview.ready
+                  ? t('waitingForHttp')
+                  : ({
+                      starting: t('states.starting'),
+                      running: t('states.running'),
+                      stopping: t('states.stopping'),
+                      stopped: t('states.stopped'),
+                      failed: t('states.failed'),
+                    }[preview.state] ?? t('unavailable'))
+                : t('notStarted')}
+          </p>
+          {query.isError && <p role="alert">{t('unavailable')}</p>}
+          {address && (
+            <section
+              aria-labelledby={addressId + '-label'}
+              className="min-w-0 space-y-2 rounded-lg border bg-muted/30 p-3"
             >
-              {t('address')}
-            </label>
-            <Input
-              id={addressId}
-              value={address}
-              readOnly
-              className="min-w-0 font-mono text-xs"
-              onFocus={(event) => event.currentTarget.select()}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void openPreview()}>
-                <ExternalLink aria-hidden="true" className="size-4" />
-                {t('open')}
-              </Button>
-              <Button variant="outline" onClick={() => void copyAddress()}>
-                <Copy aria-hidden="true" className="size-4" />
-                {t('copyAddress')}
-              </Button>
+              <label
+                id={addressId + '-label'}
+                htmlFor={addressId}
+                className="block text-sm font-medium"
+              >
+                {t('address')}
+              </label>
+              <Input
+                id={addressId}
+                value={address}
+                readOnly
+                className="min-w-0 font-mono text-xs"
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => void openPreview()}>
+                  <ExternalLink aria-hidden="true" className="size-4" />
+                  {t('open')}
+                </Button>
+                <Button variant="outline" onClick={() => void copyAddress()}>
+                  <Copy aria-hidden="true" className="size-4" />
+                  {t('copyAddress')}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('addressHelp')}
+              </p>
+              {copyResult?.url === address && (
+                <p
+                  role={copyResult.status === 'copied' ? 'status' : 'alert'}
+                  className="text-xs"
+                >
+                  {t(
+                    copyResult.status === 'copied'
+                      ? 'addressCopied'
+                      : 'copyFailed',
+                  )}
+                </p>
+              )}
+            </section>
+          )}
+          {preview && (
+            <>
+              <p className="break-all text-xs text-muted-foreground">
+                {t('source.label')}: {preview.sourcePath}
+              </p>
+              {preview.storage && (
+                <PreviewStorageSummary {...preview.storage} />
+              )}
+              {preview.lastSyncedAt && (
+                <p className="text-xs">
+                  {t('lastSync')}:{' '}
+                  {new Intl.DateTimeFormat(i18n.language, {
+                    timeStyle: 'medium',
+                  }).format(preview.lastSyncedAt)}
+                </p>
+              )}
+              {preview.expiresAt && (
+                <p className="text-xs">
+                  {t('expiry')}:{' '}
+                  {new Intl.DateTimeFormat(i18n.language, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  }).format(preview.expiresAt)}
+                </p>
+              )}
+              {active && preview.expiresAt === null && (
+                <p className="text-xs">
+                  {t('expiry')}: {t('never')}
+                </p>
+              )}
+              {preview.requiresRestart && (
+                <p
+                  role="status"
+                  className="rounded border border-amber-500 p-2 text-sm"
+                >
+                  {t('dependenciesChanged')}
+                </p>
+              )}
+              {preview.error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {preview.error === 'PREVIEW_STARTUP_TIMEOUT'
+                    ? t('startupTimeout')
+                    : preview.error}
+                </p>
+              )}
+            </>
+          )}
+          {session.isAdministrator && (
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+              <PreviewLifetimeSelect
+                value={selectedDuration}
+                onChange={setDuration}
+                disabled={
+                  query.isPending ||
+                  query.isError ||
+                  mutation.isPending ||
+                  lifetime.isPending
+                }
+              />
+              {active && (
+                <Button
+                  variant="outline"
+                  disabled={
+                    query.isPending ||
+                    query.isError ||
+                    mutation.isPending ||
+                    lifetime.isPending
+                  }
+                  onClick={() => lifetime.mutate()}
+                >
+                  {t('applyLifetime')}
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                {t('lifetimeHelp')}
+              </p>
+              {lifetime.isError && (
+                <p
+                  role="alert"
+                  className="text-sm text-destructive sm:col-span-2"
+                >
+                  {lifetime.error.message}
+                </p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">{t('addressHelp')}</p>
-            {copyResult?.url === address && (
-              <p
-                role={copyResult.status === 'copied' ? 'status' : 'alert'}
-                className="text-xs"
-              >
-                {t(
-                  copyResult.status === 'copied'
-                    ? 'addressCopied'
-                    : 'copyFailed',
-                )}
-              </p>
-            )}
-          </section>
-        )}
-        {preview && (
-          <>
-            <p className="break-all text-xs text-muted-foreground">
-              {t('source')}: {preview.sourcePath}
-            </p>
-            {preview.storage && <PreviewStorageSummary {...preview.storage} />}
-            {preview.lastSyncedAt && (
-              <p className="text-xs">
-                {t('lastSync')}:{' '}
-                {new Intl.DateTimeFormat(i18n.language, {
-                  timeStyle: 'medium',
-                }).format(preview.lastSyncedAt)}
-              </p>
-            )}
-            {preview.expiresAt && (
-              <p className="text-xs">
-                {t('expiry')}:{' '}
-                {new Intl.DateTimeFormat(i18n.language, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                }).format(preview.expiresAt)}
-              </p>
-            )}
-            {active && preview.expiresAt === null && (
-              <p className="text-xs">
-                {t('expiry')}: {t('never')}
-              </p>
-            )}
-            {preview.requiresRestart && (
-              <p
-                role="status"
-                className="rounded border border-amber-500 p-2 text-sm"
-              >
-                {t('dependenciesChanged')}
-              </p>
-            )}
-            {preview.error && (
-              <p role="alert" className="text-sm text-destructive">
-                {preview.error === 'PREVIEW_STARTUP_TIMEOUT'
-                  ? t('startupTimeout')
-                  : preview.error}
-              </p>
-            )}
-          </>
-        )}
-        {session.isAdministrator && (
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-            <PreviewLifetimeSelect
-              value={selectedDuration}
-              onChange={setDuration}
-              disabled={
-                query.isPending ||
-                query.isError ||
-                mutation.isPending ||
-                lifetime.isPending
-              }
-            />
-            {active && (
+          )}
+          <div className="flex flex-wrap gap-2">
+            {session.isAdministrator &&
+              (!preview || preview.state === 'stopped') && (
+                <Button
+                  disabled={
+                    query.isPending ||
+                    query.isError ||
+                    mutation.isPending ||
+                    lifetime.isPending
+                  }
+                  onClick={() => setLaunchAction('start')}
+                >
+                  {t('startButton')}
+                </Button>
+              )}
+            {session.isAdministrator && active && (
               <Button
                 variant="outline"
                 disabled={
@@ -297,114 +373,72 @@ export function AgentPreviewDialog({
                   mutation.isPending ||
                   lifetime.isPending
                 }
-                onClick={() => lifetime.mutate()}
+                onClick={() => mutation.mutate('sync')}
               >
-                {t('applyLifetime')}
+                {t('sync')}
               </Button>
             )}
-            <p className="text-xs text-muted-foreground sm:col-span-2">
-              {t('lifetimeHelp')}
-            </p>
-            {lifetime.isError && (
-              <p
-                role="alert"
-                className="text-sm text-destructive sm:col-span-2"
-              >
-                {lifetime.error.message}
-              </p>
-            )}
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {session.isAdministrator &&
-            (!preview || preview.state === 'stopped') && (
+            {session.isAdministrator && preview && (
               <Button
+                variant="outline"
                 disabled={
                   query.isPending ||
                   query.isError ||
                   mutation.isPending ||
                   lifetime.isPending
                 }
-                onClick={() => mutation.mutate('start')}
+                onClick={() => {
+                  setLaunchAction('refresh');
+                }}
               >
-                {t('startButton')}
+                {t('recreate')}
               </Button>
             )}
-          {session.isAdministrator && active && (
-            <Button
-              variant="outline"
-              disabled={
-                query.isPending ||
-                query.isError ||
-                mutation.isPending ||
-                lifetime.isPending
-              }
-              onClick={() => mutation.mutate('sync')}
-            >
-              {t('sync')}
-            </Button>
-          )}
-          {session.isAdministrator && preview && (
-            <Button
-              variant="outline"
-              disabled={
-                query.isPending ||
-                query.isError ||
-                mutation.isPending ||
-                lifetime.isPending
-              }
-              onClick={() => {
-                if (window.confirm(t('recreateConfirm')))
-                  mutation.mutate('refresh');
-              }}
-            >
-              {t('recreate')}
-            </Button>
-          )}
-          {session.isAdministrator && active && (
-            <Button
-              variant="destructive"
-              disabled={
-                query.isPending ||
-                query.isError ||
-                mutation.isPending ||
-                lifetime.isPending
-              }
-              onClick={() => {
-                if (window.confirm(t('stopConfirm'))) mutation.mutate('stop');
-              }}
-            >
-              {t('stop')}
-            </Button>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">{t('hotHelp')}</p>
-        {(mutation.isError || openError) && (
-          <p role="alert" className="text-sm text-destructive">
-            {openError || mutation.error?.message}
-          </p>
-        )}
-        {preview && (
-          <>
-            <Button
-              variant="ghost"
-              className="h-auto min-h-8 min-w-0 max-w-full whitespace-normal py-1.5"
-              onClick={() => setShowLogs((v) => !v)}
-            >
-              {t('logs')}
-            </Button>
-            {showLogs && (
-              <pre
-                aria-label={t('logs')}
-                className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded border p-3 text-xs"
+            {session.isAdministrator && active && (
+              <Button
+                variant="destructive"
+                disabled={
+                  query.isPending ||
+                  query.isError ||
+                  mutation.isPending ||
+                  lifetime.isPending
+                }
+                onClick={() => {
+                  if (window.confirm(t('stopConfirm'))) mutation.mutate('stop');
+                }}
               >
-                {logs.data?.text ??
-                  (logs.isError ? t('unavailable') : t('loading'))}
-              </pre>
+                {t('stop')}
+              </Button>
             )}
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+          </div>
+          <p className="text-xs text-muted-foreground">{t('hotHelp')}</p>
+          {(mutation.isError || openError) && (
+            <p role="alert" className="text-sm text-destructive">
+              {openError || mutation.error?.message}
+            </p>
+          )}
+          {preview && (
+            <>
+              <Button
+                variant="ghost"
+                className="h-auto min-h-8 min-w-0 max-w-full whitespace-normal py-1.5"
+                onClick={() => setShowLogs((v) => !v)}
+              >
+                {t('logs')}
+              </Button>
+              {showLogs && (
+                <pre
+                  aria-label={t('logs')}
+                  className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded border p-3 text-xs"
+                >
+                  {logs.data?.text ??
+                    (logs.isError ? t('unavailable') : t('loading'))}
+                </pre>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

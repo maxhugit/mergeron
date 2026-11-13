@@ -40,7 +40,26 @@ const items: PreviewContainer[] = Array.from({ length: 6 }, (_, i) => ({
   terminalAvailable: true,
 }));
 vi.mock('@/lib/projects-api', () => ({
+  projectsQueryKey: ['projects'],
   projectsApi: async (path: string, init?: RequestInit) => {
+    if (!path) return { projects: [] };
+    if (path.endsWith('/test-environment/recipes')) return { agents: [] };
+    if (path.endsWith('/recipe'))
+      return {
+        revision: 'launch-revision',
+        stale: false,
+        sourcePath: '/workspaces/project',
+        profile: {
+          runtime: 'node',
+          directory: '.',
+          port: 3000,
+          install: 'npm ci',
+          build: '',
+          start: 'npm run dev',
+          services: [],
+        },
+      };
+
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     api.calls.push({ path, body });
     if (path.endsWith('/prerequisites')) {
@@ -288,6 +307,11 @@ test('not started is a useful empty state and inactive panels do not poll', asyn
     screen.getByRole('button', { name: 'Ouvrir l’aperçu' }),
   ).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Démarrer' }));
+  const confirm = await screen.findByRole('button', {
+    name: 'Confirmer le démarrage',
+  });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
   await screen.findByRole('button', { name: /Application/ });
   cleanup();
   client.clear();
