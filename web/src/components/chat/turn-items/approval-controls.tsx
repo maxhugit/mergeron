@@ -1,3 +1,4 @@
+import { ApprovalPurpose } from '../approval-purpose';
 import { translationKey } from '@/locales/translation-key';
 /**
  * The parts of an approval that are not its command text.
@@ -97,6 +98,7 @@ export function ApprovalDetails({ approval }: { approval: ApprovalRequest }) {
 
   return (
     <>
+      <ApprovalPurpose request={approval} />
       {approval.negativeOnlyReason && (
         <p role="alert" className="text-xs text-amber-600">
           {t(translationKey(approval.negativeOnlyReason))}

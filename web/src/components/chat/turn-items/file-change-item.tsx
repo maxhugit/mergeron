@@ -1,3 +1,4 @@
+import { ApprovalPurpose } from '../approval-purpose';
 /**
  * Renders a file change item with collapsible diff and inline approval controls.
  * Default collapsed — header shows file path, approval status, and +/- stats.
@@ -139,6 +140,12 @@ export function FileChangeItem({ item, approval }: Props) {
           )}
         />
       </button>
+
+      {approval && (
+        <div className="px-3 py-2">
+          <ApprovalPurpose request={approval} />
+        </div>
+      )}
 
       {/* Pending approval bar */}
       {isPending && (

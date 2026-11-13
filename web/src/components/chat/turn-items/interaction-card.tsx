@@ -1,3 +1,4 @@
+import { ApprovalPurpose } from '../approval-purpose';
 import { pendingRequestKey } from '@/lib/pending-request-identity';
 import { UserInputCard } from './user-input-card';
 import { translationKey } from '@/locales/translation-key';
@@ -140,6 +141,7 @@ function ElicitationField({
 /** Displays one proposal and submits only deliberate grants or validated form input. */
 export function InteractionCard({ request }: { request: ApprovalRequest }) {
   const { t } = useTranslation();
+  const { t: labels } = useTranslation('workspaces');
   const { send, submitting } = useRequestResponse(request);
   const [selected, setSelected] = useState<string[]>([]);
   const [sessionScope, setSessionScope] = useState(false);
@@ -174,13 +176,11 @@ export function InteractionCard({ request }: { request: ApprovalRequest }) {
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4" />
         <span className="font-medium">
-          {t(
-            translationKey(
-              prompt.kind === 'permissions'
-                ? 'Permission request'
-                : 'MCP input request',
-            ),
-          )}
+          {prompt.kind === 'permissions'
+            ? labels('approvalPermissionTitle')
+            : prompt.tool
+              ? labels('approvalMcpToolTitle')
+              : labels('approvalMcpInputTitle')}
         </span>
         <span className="ml-auto">
           <ApprovalStatusBadge approval={request} />
@@ -191,9 +191,20 @@ export function InteractionCard({ request }: { request: ApprovalRequest }) {
           {t('requestedBy')}: <strong>{prompt.serverName}</strong>
         </p>
       )}
-      {prompt.message && (
-        <p className="whitespace-pre-wrap break-words">{prompt.message}</p>
-      )}
+      <ApprovalPurpose request={request} />
+      {prompt.message &&
+        (prompt.tool ? (
+          <details>
+            <summary className="cursor-pointer text-xs text-muted-foreground">
+              {labels('approvalOriginalMessage')}
+            </summary>
+            <p className="mt-1 whitespace-pre-wrap break-words text-xs">
+              {prompt.message}
+            </p>
+          </details>
+        ) : (
+          <p className="whitespace-pre-wrap break-words">{prompt.message}</p>
+        ))}
       {prompt.cwd && (
         <p>
           {t('workingDirectory')}: <code>{prompt.cwd}</code>
@@ -318,7 +329,9 @@ export function InteractionCard({ request }: { request: ApprovalRequest }) {
             <div className="flex flex-wrap gap-2">
               {prompt.supported && (
                 <Button size="sm" type="submit" disabled={disabled}>
-                  {t(translationKey(prompt.url ? 'Continue' : 'submit'))}
+                  {prompt.tool && prompt.fields.length === 0 && !prompt.url
+                    ? labels('approvalAllowOnce')
+                    : t(translationKey(prompt.url ? 'Continue' : 'submit'))}
                 </Button>
               )}
               <Button

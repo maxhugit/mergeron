@@ -1,3 +1,4 @@
+import { presentMcpTool } from './mcp-tool-presentation';
 /** Validates the pinned MCP primitive form grammar before offering any acceptance. */
 import type {
   ElicitationFieldDto,
@@ -225,8 +226,10 @@ export function presentElicitation(
       ? browserUrl(params.url)
       : null;
   const supported = fields !== null || url !== null;
+  const tool = presentMcpTool(params);
   return {
     kind: 'elicitation',
+    ...(tool ? { tool } : {}),
     supported,
     unsupportedReason: supported
       ? null

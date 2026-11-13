@@ -1611,7 +1611,16 @@ export type ElicitationFieldDto = {
     format?: string;
 };
 
+export type McpToolPresentationDto = {
+    titleFr?: string;
+    name: string | null;
+    title: string | null;
+    description: string | null;
+    argumentsJson: string | null;
+};
+
 export type InteractionPresentationDto = {
+    tool?: McpToolPresentationDto;
     kind: 'permissions' | 'elicitation';
     supported: boolean;
     unsupportedReason: string | null;
